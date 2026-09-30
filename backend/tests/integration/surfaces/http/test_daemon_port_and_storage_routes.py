@@ -96,8 +96,9 @@ async def test_the_port_routes_require_the_token(client):
     assert r.status_code == 401
 
 
-# revise-web-ui-ia: daemon "a port set from the settings page is pending until
-# restart" — the acceptance marker is added when the change is archived.
+@pytest.mark.acceptance(
+    spec="daemon", scenario="a port set from the settings page is pending until restart"
+)
 @pytest.mark.asyncio
 async def test_a_port_set_from_the_settings_page_is_pending_until_restart(client, home):
     holder = socket.socket()
@@ -160,8 +161,7 @@ def _write(path: Path, size: int) -> None:
     path.write_bytes(b"x" * size)
 
 
-# revise-web-ui-ia: daemon "the storage summary reports the four kinds" — the
-# acceptance marker is added when the change is archived.
+@pytest.mark.acceptance(spec="daemon", scenario="the storage summary reports the four kinds")
 @pytest.mark.asyncio
 async def test_the_storage_summary_reports_the_four_kinds(client, home):
     coffer = home / ".coffer"
@@ -207,6 +207,7 @@ async def test_the_storage_summary_reports_the_four_kinds(client, home):
     assert body["cache"] == {"bytes": 100}
 
 
+@pytest.mark.acceptance(spec="daemon", scenario="the storage summary reports the four kinds")
 @pytest.mark.asyncio
 async def test_a_vault_not_yet_created_reports_no_versions(client, home):
     async with client:
@@ -241,9 +242,10 @@ async def test_the_vault_block_names_the_newest_writer_and_the_sync_remote(clien
     assert vault["sync_configured"] is True
 
 
-# revise-web-ui-ia: web-ui "clearing the cache is confirmed and rebuilt" (the
-# backend half: only the memory tree and the transcript cache go) — the
-# acceptance marker is added when the change is archived.
+# web-ui "clearing the cache is confirmed and rebuilt" has its backend half here
+# (only the memory tree and the transcript cache go); DataSettings.test.tsx the page's.
+@pytest.mark.acceptance(spec="web-ui", scenario="clearing the cache is confirmed and rebuilt")
+@pytest.mark.acceptance(spec="daemon", scenario="clearing the cache leaves everything else")
 @pytest.mark.asyncio
 async def test_clearing_the_cache_touches_nothing_else(client, home, audit):
     coffer = home / ".coffer"
@@ -274,6 +276,7 @@ async def test_clearing_the_cache_touches_nothing_else(client, home, audit):
     assert audit.events == [("storage_cache_cleared", {"cleared_bytes": 150})]
 
 
+@pytest.mark.acceptance(spec="daemon", scenario="clearing the cache leaves everything else")
 @pytest.mark.asyncio
 async def test_clearing_is_refused_while_a_memory_pass_runs(client, home):
     from coffer.application.upkeep_runs import UPKEEP_RUNS

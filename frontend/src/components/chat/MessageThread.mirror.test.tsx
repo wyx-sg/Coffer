@@ -89,7 +89,7 @@ describe("MessageThread channel mirror", () => {
     });
   });
 
-  acceptance("chat", "the Chat page shows where a reply also goes", async () => {
+  acceptance("chat", "the Conversations page shows where a reply also goes", async () => {
     chatApiMock.getConversation.mockResolvedValue(
       withMirror({
         deliverable: true,

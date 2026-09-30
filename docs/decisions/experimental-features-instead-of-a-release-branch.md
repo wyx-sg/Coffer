@@ -20,9 +20,9 @@ Forces on the answer:
   tried here: `feature/workflow` needed a rebase of migration numbers,
   requirement titles and spec files every time `main` moved.
 - **The switch has to take effect without a restart.** The web UI offers no
-  daemon restart or shutdown control (spec web-ui "Leave daemon controls to the
-  CLI"). The desktop shell's offline banner has a Restart, but only when the
-  daemon is already unreachable, and the browser host has none at all.
+  shutdown control (spec web-ui "Keep daemon shutdown on the command line"), and
+  a restart — from Settings → Daemon or the desktop shell's offline banner — is a
+  deliberate act, not something flipping a feature should ask of the person.
 - **The database syncs.** Anything stored in `coffer.db` reaches every machine
   of the vault; a feature switched on for testing on one laptop must not switch
   on elsewhere.

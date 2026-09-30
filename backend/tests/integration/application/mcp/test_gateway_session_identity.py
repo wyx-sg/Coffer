@@ -216,8 +216,7 @@ async def test_a_built_in_call_gets_the_handshake_identity_or_none(
         await h.close()
 
 
-# revise-web-ui-ia: mcp-gateway "the invocation log names the calling agent" — the
-# acceptance marker is added when the change is archived.
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="the invocation log names the calling agent")
 @pytest.mark.asyncio
 async def test_the_invocation_log_records_the_session_agent_uid(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

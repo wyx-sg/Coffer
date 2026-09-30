@@ -178,3 +178,39 @@ def test_status_names_the_passes_in_flight(live_daemon):
 
     as_json = CliRunner().invoke(app, ["daemon", "status", "--json"])
     assert json.loads(as_json.stdout)["passes_in_flight"] == []
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="the status probe carries what the shell shows")
+def test_the_status_probe_carries_what_the_shell_shows(live_daemon, monkeypatch):
+    """Every fact the footer, Settings > Daemon and About show comes from the one
+    tokenless probe, and ``coffer daemon status --json`` agrees with it."""
+    import os
+
+    from coffer.surfaces.http import daemon_port
+
+    monkeypatch.setattr(daemon_port, "_PORT", 8000)
+    client, _info = cli_client.client_or_exit()
+    with client:
+        r = client.get("/daemon/status", headers={"X-Coffer-Token": ""})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ready"
+    assert body["port"] == 8000
+    assert body["started_at"]
+    assert body["version"]
+    assert body["executable"]
+    assert body["channel"] == "dev"
+    assert body["pid"] == os.getpid()
+    # A build from source carries no commit; the key is still answered.
+    assert "commit" in body
+    assert body["data_dir"] == "~/.coffer"
+    assert "connected_agents" in body
+
+    res = CliRunner().invoke(app, ["daemon", "status", "--json"])
+    assert res.exit_code == 0, res.output
+    cli = json.loads(res.stdout)
+    assert (cli["version"], cli["channel"], cli["port"]) == (
+        body["version"],
+        body["channel"],
+        body["port"],
+    )

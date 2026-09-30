@@ -212,8 +212,7 @@ describe("ModelProvidersPage", () => {
     },
   );
 
-  test("the provider library has no tabs", async () => {
-    // Scenario (revise-web-ui-ia): "the provider library has no tabs"
+  acceptance("provider-switching", "the provider library has no tabs", async () => {
     serve([makeProvider({ name: "official" })]);
     renderAt();
     // The open provider is one column — Used by, Endpoint, Models — with no

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-25
 **Deciders**: Yuxing Wu
-**Related**: spec chat ("Upload a file for a web message", "Send uploaded files with a web message", "Prune uploaded chat media on the retention cadence", "Attach files from the Chat page composer", "Show a message's attachments in the thread");
+**Related**: spec chat ("Upload a file for a web message", "Send uploaded files with a web message", "Prune uploaded chat media on the retention cadence", "Attach files from the Conversations page composer", "Show a message's attachments in the thread");
 [Channel Attachments](channel-attachments.md) (the reference-in-the-message design this reuses),
 [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md) (the send is fire-and-return),
 [Audit and Retention](audit-and-retention.md) (the age sweep)

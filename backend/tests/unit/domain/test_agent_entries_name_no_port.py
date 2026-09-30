@@ -1,7 +1,7 @@
 """Coffer's entries in an agent's config name no daemon port.
 
-revise-web-ui-ia: daemon "after a restart on a new port every agent reconnects"
-— the acceptance marker is added when the change is archived. A daemon that
+The restart itself is covered in
+``tests/integration/infrastructure/daemon/test_fixed_port.py``. A daemon that
 restarts on a new port needs no rewrite of any agent's configuration, because
 the MCP entry runs the shim and the delivery hook runs ``coffer memory hook``;
 both find the daemon through ``daemon.json`` when they run.

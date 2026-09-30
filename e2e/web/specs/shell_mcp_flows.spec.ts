@@ -399,8 +399,8 @@ acceptance(
   },
 );
 
-// --- the paste box's other forms (change revise-web-ui-ia; the scenario
-// markers are added when the change is archived) ---------------------------
+// --- the paste box's other forms (AddMcpServerDialog.test.tsx carries the
+// scenarios' acceptance markers) ----------------------------------------------
 
 test("pasting JSON with three servers opens the review and adds all three", async ({
   page,

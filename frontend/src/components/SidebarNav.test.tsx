@@ -2,10 +2,7 @@
 // The sidebar's information architecture, which is a product decision and not
 // a styling one: Overview, then five groups by what the user comes to do
 // (ADR sidebar-grouped-by-what-the-person-comes-to-do).
-//
-// Several markers below still name the scenarios of the role-grouped sidebar
-// the change revise-web-ui-ia replaces; they move to that change's scenario
-// names (noted beside each) when it is archived (its task 7.1).
+
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { acceptance } from "@/test/acceptance";
 import { render, waitFor, within } from "@testing-library/react";
@@ -108,8 +105,7 @@ function ungrouped(): string[] {
 }
 
 describe("SidebarNav", () => {
-  // revise-web-ui-ia: web-ui "each listed resource kind has one sidebar entry"
-  acceptance("web-ui", "resources holds one entry per kind with a list", () => {
+  acceptance("web-ui", "each listed resource kind has one sidebar entry", () => {
     renderNav();
 
     // Each listed resource kind has exactly one entry, filed by what the user
@@ -135,6 +131,13 @@ describe("SidebarNav", () => {
     expect(group("Context").map(([name]) => name)).toEqual(["Knowledge", "Memory"]);
     expect(group("Agents").map(([name]) => name)).toContain("Model providers");
     expect(group("Run").map(([name]) => name)).toContain("Channels");
+    // MCP servers and Custom tools are two entries opening two pages.
+    const href = (name: string) =>
+      Array.from(document.querySelectorAll("nav a"))
+        .find((a) => entryName(a as HTMLElement) === name)
+        ?.getAttribute("href");
+    expect(href("MCP servers")).toBe("/mcp-servers");
+    expect(href("Custom tools")).toBe("/custom-tools");
   });
 
   test("Overview sits above the groups, under no heading", () => {
@@ -199,8 +202,7 @@ function groupLabels(): string[] {
   return Array.from(document.querySelectorAll(".nav-group-label")).map((n) => n.textContent ?? "");
 }
 
-// revise-web-ui-ia: web-ui "the sidebar groups entries by what the user comes to do"
-acceptance("web-ui", "the sidebar groups agents, resources and system by role", () => {
+acceptance("web-ui", "the sidebar groups entries by what the user comes to do", () => {
   renderNav();
 
   expect(ungrouped()).toEqual(["Overview"]);
@@ -289,7 +291,7 @@ describe("the Sync attention dot", () => {
     expect(await findByTestId("nav-dot-sync")).toBeInTheDocument();
   });
 
-  // revise-web-ui-ia: web-ui "an entry without a signal never carries a dot"
+  // The badge scenarios' markers: SidebarNavAttention.test.tsx.
   test("only an entry whose kind declares a signal carries the dot, with an accessible name", async () => {
     syncStatus.mockReturnValue({
       data: { ...ON, held: 3, last_round: HELD },
@@ -366,12 +368,21 @@ describe("a switched-off experimental feature", () => {
     ]);
   });
 
-  // revise-web-ui-ia: web-ui "a group with every entry switched off leaves the sidebar"
-  test("a group with every entry switched off leaves its heading out", () => {
+  acceptance("web-ui", "a group with every entry switched off leaves the sidebar", () => {
     features.mockReturnValue({ fake_feature: true, fake_group: false });
     renderNav();
 
     expect(groupLabels()).toEqual(["Agents", "Run", "Capabilities", "Context", "System"]);
+    expect(groupLabels()).not.toContain("Fake group");
+    // The other headings keep their entries.
+    expect(group("Context").map(([name]) => name)).toEqual(["Knowledge", "Memory"]);
+    expect(group("System").map(([name]) => name)).toEqual([
+      "Secrets",
+      "Activity",
+      "Usage",
+      "Sync",
+      "Fake",
+    ]);
   });
 
   test("an entry whose feature is not known yet is left out rather than flashed in", () => {

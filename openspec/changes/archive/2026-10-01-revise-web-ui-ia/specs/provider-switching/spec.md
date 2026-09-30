@@ -22,28 +22,32 @@ independent speech-to-text default"), not through a `provider` subcommand.
 
 The web surfaces:
 
-- **Model providers** (route `/model-providers`, in the sidebar's AGENTS group, beside the agents whose models it serves) is
-  the connection library: one table of name / vendor / base URL / reach, an Add action and Delete per
-  row, and no tabs — no view of which agent runs on what and no Coffer's model tab, because an
-  agent's connection is shown and switched on that agent's Model tab and Coffer's own is chosen in
-  Settings › General. It has no per-row switch, because activation is per agent. A row MUST say what Coffer ITSELF
-  uses the connection for: the `internal_default` connection carries a "Coffer · background model"
-  badge and the `transcribe_default` connection a "Coffer · speech to text" badge, each with a hint
-  naming Settings › General as where it is changed, and the connection's detail header repeats them. The labels lead with
-  Coffer because a bare "Speech to text" reads as a capability of the provider rather than a job
-  Coffer gives it; the "Active" badge is a different fact — an agent is switched to the connection —
-  and its hint says so. The
-  vendor column and its filter are derived from `base_url` by matching the preset list (an unmatched
-  endpoint reads as Custom); the name column keeps the user's own name, and the row links to the
-  detail page by `uid`.
+- **Model providers** (route `/model-providers`, in the sidebar's Agents group, beside the agents whose models it serves) is
+  the connection library: a list of connections beside the open one, and no tabs — no view of which
+  agent runs on what and no Coffer's model tab, because an agent's connection is shown and switched on
+  that agent's Model tab and Coffer's own is chosen in Settings › General. The page header carries
+  Add; the page opens on the first connection, and with none it is a welcome panel. Each row shows
+  the connection's vendor mark, its name, its protocol and what it offers (its curated model count,
+  or all models), and the marks of the agents switched to it; a filter narrows the list over name,
+  title, endpoint and description, and the list's order is the fallback order (see "Order providers,
+  and fail over in that order"). It has no per-row switch, because activation is per agent, and no
+  per-row reach or delete: both are on the open connection's header. A row MUST say what Coffer
+  ITSELF uses the connection for: the `internal_default` connection carries a "Coffer · background
+  model" badge and the `transcribe_default` connection a "Coffer · speech to text" badge, each with
+  a hint naming Settings › General as where it is changed, and the connection's Used by repeats
+  them. The labels lead with Coffer because a bare "Speech to text" reads as a capability of the
+  provider rather than a job Coffer gives it; an agent's mark on a row is a different fact — that
+  agent is switched to the connection. The vendor mark is derived from `base_url` by matching the
+  preset list (an unmatched endpoint gets Coffer's neutral provider glyph); the name is the user's
+  own, and the row links to the detail page by `uid`.
 - The add-connection dialog asks for the protocol rather than detecting it: it offers provider
   presets (OpenAI / Anthropic / Google Gemini / DeepSeek / OpenRouter / Ollama) that fill in the
   endpoint and protocol, plus Custom, which reveals a manual protocol selector; the CLI takes
   `--protocol`. The dialog surfaces test-connection and list-models with an inline, not-yet-saved
   secret.
-- The connection detail page (`/model-providers/<uid>`, addressed by `uid` because a connection can be renamed) has no tabs: it is one column — Used by, Endpoint, Models — and an old `/model-providers/<uid>/models` link opens it. Its header carries the shared
+- The connection detail page (`/model-providers/<uid>`, addressed by `uid` because a connection can be renamed) has no tabs: it is one column — Used by, Endpoint, Models. Its header carries the shared
   scope control — the single place the connection's reach and its enabled state are both shown and
-  changed. **Used by** is read-only: each agent switched to the connection,
+  changed — with Test, Edit and a menu holding Delete. **Used by** is read-only: each agent switched to the connection,
   with the model it runs, opening that agent's Model tab (`/agents/<type>/model`); and Coffer's engine and Speech to text
   when the connection is flagged for them, each opening `/settings/general`. Used by carries no
   switch, activate or revert control: an agent's connection is switched only on its Model tab.
@@ -51,8 +55,9 @@ The web surfaces:
   the connections that reach that agent and narrowed by `enabled`. The tab carries **Provider**
   (the built-in login or a connection), **Model** and **Effort** — for Claude Code, plus a **Model per
   tier** section (Opus, Sonnet, Haiku, and Fable only when the connection lists a Fable model) while
-  the agent is not on its built-in login (see "Suggest a model for each Claude Code tier"); for
-  Codex, Effort offers the chosen model's own levels and is hidden when it has none. It carries no
+  the agent is not on its built-in login (see "Suggest a model for each Claude Code tier"). Effort
+  offers the chosen model's own levels and is hidden when it has none; on the built-in login the
+  Model is the agent's own default, shown rather than offered. It carries no
   other model setting — no context-window, output-limit, subagent, fallback, thinking or fast-mode
   control — because what else a model needs Coffer derives and writes itself. While the agent is on
   a connection, the tab also shows, read-only, which provider is tried next if that connection
@@ -79,7 +84,7 @@ The web surfaces:
 #### Scenario: the connections page lists profiles and their compatible agents
 - **GIVEN** the connections page is rendered with two mock connections whose reach differs,
 - **WHEN** the page renders,
-- **THEN** it lists both connections with their endpoints, marks the active one, and shows each connection's reach in the Reach column's own control — not as a second column repeating it in words — with NO per-row "Switch" action, because activation is per-agent on the agent's Model tab (TypeScript acceptance test).
+- **THEN** it lists both connections, marks the one an agent is switched to with that agent's mark, and shows the open connection's endpoint and its reach in the header's shared control — not as a second column repeating it in words — with NO per-row "Switch" action, because activation is per-agent on the agent's Model tab (TypeScript acceptance test).
 
 #### Scenario: the library names the connections Coffer itself uses
 - **GIVEN** connection A is the internal-engine default, connection B is the speech-to-text default, and connection C carries neither flag
@@ -148,7 +153,8 @@ travel through `POST` / `PATCH /api/v1/providers` with the rest of the curated e
 the endpoint where it reports them, and are otherwise entered by the user; an unknown value is left
 out of the stored document rather than guessed.
 
-The connection's Models section shows and edits them.
+The add-connection dialog shows each listed model's window where the endpoint reports it and keeps
+it on the curated entry; on the web they are not edited after that, only over REST.
 
 #### Scenario: a curated model keeps its window and levels
 - **GIVEN** a connection whose curated model `gpt-x` records no window
@@ -169,10 +175,9 @@ Claude Code, Coffer sets `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` and
 for Codex the window goes into the catalogue entry. Coffer never runs Codex with `--oss`, which can
 pull models.
 
-When the runtime does not report a chosen model's window, the Model tab MUST show a required
-**Context window** field before the choice can be confirmed, and it MUST warn when the window is
-below 64k tokens, which agents' own compaction and tools cannot work well within. Neither
-compatibility key is a field the user sets.
+When the runtime does not report a model's window, the curated entry records none and the
+projection leaves the window out rather than guessing one (see "Record a context window and effort
+levels with each curated model"). Neither compatibility key is a field the user sets.
 
 #### Scenario: create a keyless local runtime connection
 - **GIVEN** an Ollama runtime answering on a loopback port
@@ -192,10 +197,9 @@ compatibility key is a field the user sets.
 #### Scenario: a local model's window is read from the runtime
 - **GIVEN** a local model connection whose runtime serves `qwen-coder` with a 131072-token window
 - **WHEN** a Codex agent is switched to it with that model
-- **THEN** the catalogue entry carries a 131072-token window with compaction at 90% of it, and no Context window field is shown
+- **THEN** the catalogue entry carries a 131072-token window with compaction at 90% of it
 
-#### Scenario: an unreadable window asks for one and warns when small
-- **GIVEN** a local model connection whose runtime does not report the window
-- **WHEN** the user picks it on the Model tab and enters 32000
-- **THEN** confirm stays disabled until a window is entered, and the tab warns that 32000 is below 64k
-- **AND** confirming writes that window
+#### Scenario: an unreported window is left out of the catalogue
+- **GIVEN** a local model connection whose runtime does not report the window of `qwen-coder`
+- **WHEN** a Codex agent is switched to it with that model
+- **THEN** the catalogue entry for `qwen-coder` carries no window and no compaction limit

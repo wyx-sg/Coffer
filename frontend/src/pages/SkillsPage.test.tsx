@@ -85,7 +85,9 @@ acceptance("skill-manager", "desktop and CLI cover every operation", async () =>
   expect(await screen.findByRole("dialog")).toBeInTheDocument();
 });
 
-acceptance("skill-manager", "the skills page lists only managed skills", async () => {
+// The Skills page half of "unmanaged skills are adopted only from the agent's
+// Skills tab"; the Skills tab half is in AgentSkillsTab.test.tsx.
+const listsOnlyManaged = async () => {
   renderSkillsPage("/skills");
   const rows = await libraryRows();
   // The daemon's list is the managed skills; the page adds nothing to it and
@@ -94,7 +96,13 @@ acceptance("skill-manager", "the skills page lists only managed skills", async (
   expect(rows[0]).toHaveTextContent("hello");
   expect(screen.queryByRole("button", { name: /adopt/i })).not.toBeInTheDocument();
   expect(skillsApi.list).toHaveBeenCalledTimes(1);
-});
+};
+acceptance("skill-manager", "the skills page lists only managed skills", listsOnlyManaged);
+acceptance(
+  "skill-manager",
+  "unmanaged skills are adopted only from the agent's Skills tab",
+  listsOnlyManaged,
+);
 
 acceptance("skill-manager", "the skills page lists only managed skills", async () => {
   // With no managed skill at all, the empty state points at the agents' own

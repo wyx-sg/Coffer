@@ -12,14 +12,14 @@ stream — so the cost of N channels and M agents is N + M, never N × M: a new
 channel type is one adapter plus one config schema and touches no agent or
 conversation code, and any agent registered on the turn platform is reachable
 from any channel with no channel-side change. The turn platform — conversations,
-the pending queue, the turn lifecycle and the web Chat page onto them — is spec
+the pending queue, the turn lifecycle and the Conversations page onto them — is spec
 `chat`; a channel consumes it and never reimplements it.
 
 This spec owns what every channel type shares. The per-platform mechanics live
 in its two children: [`channels/telegram`](telegram/spec.md) (the Bot API
 transport) and [`channels/seatalk`](seatalk/spec.md) (the SeaTalk websocket
 transport and SeaTalk's own message shapes). Watching and steering the same
-conversation from the browser is the web Chat page's, in spec `chat`. Channels
+conversation from the browser is the Conversations page's, in spec `chat`. Channels
 route to **managed** agents (Claude Code, Codex, …) only: [Coffer's Model Is an
 Internal Engine](../../../docs/decisions/coffer-model-is-an-internal-engine.md)
 retired the built-in agent as a chat persona, so it is an internal `coffer__*`
@@ -349,7 +349,7 @@ the audit log by channel with the sender. Those two are the whole
 channel-specific audit surface, alongside the automatic resource-lifecycle audit
 the framework records. Traffic MUST NOT be audited — a notification sent and a
 turn run are neither irreversible nor invisible afterwards, and the conversation
-and its messages, readable from the web Chat page (spec `chat`) and the REST
+and its messages, readable from the Conversations page (spec `chat`) and the REST
 API, are already their record.
 
 #### Scenario: notifications and turns leave no channel audit entry
@@ -929,7 +929,7 @@ Coffer-hosted channels MUST have a unified management surface. A management
 view lists every Coffer-hosted channel with its status, paired owner, agent, and
 health, mirroring the MCP-server / memory / skill management surfaces; each
 channel's secrets (bot tokens, app secrets) are held in the Coffer vault.
-Externally-hosted channels are out of scope (a non-goal).
+The Channels page holds each channel's setup, connection status and settings only: it shows no conversation history, and each channel links to the Conversations page filtered to that channel (spec [chat](../chat/spec.md) "Show every conversation on the Conversations page"). Externally-hosted channels are out of scope (a non-goal).
 
 #### Scenario: the management surface lists each Coffer-hosted channel with status, owner, agent, and health
 - **GIVEN** a registered and running Coffer-hosted channel with a paired owner
@@ -938,6 +938,11 @@ Externally-hosted channels are out of scope (a non-goal).
 - **THEN** it reports the channel's enabled status, its live health (adapter
   running), the paired owner, and the routed agent — mirroring the MCP-server /
   memory / skill management surfaces
+
+#### Scenario: a channel links to its conversations instead of showing them
+- **GIVEN** a SeaTalk channel with three conversations
+- **WHEN** the user opens it on the Channels page
+- **THEN** it shows its setup, connection status and settings and no conversation list, and its link opens the Conversations page filtered to that channel
 
 ### Requirement: Download the media a thread's messages carry
 Thread-history media MUST be downloaded, not flattened to a dead link. When the

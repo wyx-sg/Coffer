@@ -136,6 +136,28 @@ def test_a_detected_agent_is_registered_with_agent_add_and_never_discarded(
     assert "codex" not in [r["ref"] for r in _rows() if r["kind"] == "agent"]
 
 
+@pytest.mark.acceptance(spec="agent-registry", scenario="add an agent that has never run")
+def test_an_agent_that_has_never_run_is_listed_and_its_add_creates_the_directory(
+    daemon: TestClient, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    standard = tmp_path / ".codex"
+    assert not standard.exists()
+    put_programs_on_path(monkeypatch, tmp_path / "bin", {"codex": "codex-cli 0.155.1"})
+
+    codex = next(r for r in _rows() if r["kind"] == "agent" and r["ref"] == "codex")
+    assert (codex["state"], codex["addable"]) == ("installed_never_run", True)
+    assert "coffer agent add codex" in codex["detail"]
+    assert not standard.exists()
+
+    added = _run("agent", "add", "codex")
+    assert added.exit_code == 0, added.output
+    [agent] = daemon.get("/resources", params={"kind": "agent"}).json()["resources"]
+    assert daemon.get(f"/agents/{agent['uid']}").json()["config_dir"] == str(standard)
+    # Only what Coffer needs: its skills leaf.
+    assert [p.name for p in standard.iterdir()] == ["skills"]
+    assert any(e["resource_name"] == agent["name"] for e in audit(daemon, "resource_created"))
+
+
 # --- skill rows ------------------------------------------------------------------------
 
 

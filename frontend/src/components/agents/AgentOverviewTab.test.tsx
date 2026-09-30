@@ -13,6 +13,7 @@ import { MemoryRouter } from "react-router-dom";
 
 import { AgentOverviewTab, type OverviewActions } from "./AgentOverviewTab";
 import type { AgentOut, AgentTypeOut, CofferConnection, CofferHook } from "@/lib/api/agents";
+import { acceptance } from "@/test/acceptance";
 import { mockApiClient } from "@/test/mockApiClient";
 
 vi.mock("@/lib/api/call", async (importOriginal) => ({
@@ -254,9 +255,8 @@ describe("AgentOverviewTab — connection card", () => {
 });
 
 describe("AgentOverviewTab — summary, model, details, sessions", () => {
-  // Scenario (revise-web-ui-ia, agent-registry): "the agent detail page carries nine tabs"
-  // — Overview shows no Title or Name field, and its summary rows each open their tab.
-  test("summary rows count Coffer's and the agent's own, each opening its tab; no Title/Name", async () => {
+  // Overview shows no Title or Name field, and its summary rows each open their tab.
+  acceptance("agent-registry", "the agent detail page carries nine tabs", async () => {
     renderTab();
     const mcp = await screen.findByRole("link", { name: /MCP servers/ });
     expect(mcp).toHaveAttribute("href", "/agents/claude_code/mcp-servers");

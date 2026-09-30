@@ -50,8 +50,8 @@ class MemoryPartitionConfig(BaseModel):
 
 @dataclass(frozen=True)
 class PartitionSummary:
-    """One partition as the management surface lists it (see "Present partitions as a
-    table and a file tree").
+    """One partition as the management surface lists it (see "Present a partition as its
+    memories").
 
     ``unresolvable`` is computed here rather than stored, and it is the whole of "Report
     unresolvable partitions": a partition whose repository is no longer on this disk can

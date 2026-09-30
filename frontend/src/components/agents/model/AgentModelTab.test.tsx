@@ -263,8 +263,8 @@ describe("AgentModelTab", () => {
     expect(screen.getByText(/api\.example\.com · key in Coffer’s vault/)).toBeInTheDocument();
   });
 
-  // Scenario (revise-web-ui-ia, provider-switching): "a Claude-id gateway matches each tier by name"
-  test("picking a connection stages a model and the tier suggestion; test, then confirm", async () => {
+  // Picking a connection stages a model and the tier suggestion; test, then confirm.
+  acceptance("provider-switching", "a Claude-id gateway matches each tier by name", async () => {
     serve({
       providers: [
         conn("gateway", {
@@ -306,15 +306,18 @@ describe("AgentModelTab", () => {
     });
   });
 
-  // Scenario (revise-web-ui-ia, provider-switching): "a non-Claude connection pins every tier to the model"
-  test("a non-Claude connection pins every tier to the model, with no Fable row", async () => {
-    serve({ providers: [conn("kimi", { models: text("kimi-k3", "kimi-k3-mini") })] });
-    renderTab();
-    fireEvent.click(await card(/kimi/));
-    for (const tier of [/^opus$/i, /^sonnet$/i, /^haiku$/i])
-      expect(screen.getByRole("combobox", { name: tier })).toHaveTextContent("kimi-k3");
-    expect(screen.queryByRole("combobox", { name: /^fable$/i })).toBeNull();
-  });
+  acceptance(
+    "provider-switching",
+    "a non-Claude connection pins every tier to the model",
+    async () => {
+      serve({ providers: [conn("kimi", { models: text("kimi-k3", "kimi-k3-mini") })] });
+      renderTab();
+      fireEvent.click(await card(/kimi/));
+      for (const tier of [/^opus$/i, /^sonnet$/i, /^haiku$/i])
+        expect(screen.getByRole("combobox", { name: tier })).toHaveTextContent("kimi-k3");
+      expect(screen.queryByRole("combobox", { name: /^fable$/i })).toBeNull();
+    },
+  );
 
   test("a failed test keeps confirm disabled and shows the message", async () => {
     serve({ providers: [conn("agnes", { models: text("agnes-2.0") })], testOk: false });
@@ -325,7 +328,6 @@ describe("AgentModelTab", () => {
     expect(confirmBtn()).toBeDisabled();
   });
 
-  // Scenario (revise-web-ui-ia, provider-switching): "the model tab shows only provider, model, effort and the tiers"
   test("Codex: Effort offers the catalogue's levels, and there is no tier section", async () => {
     serve({
       providers: [
@@ -400,5 +402,108 @@ describe("AgentModelTab", () => {
     await waitFor(() => expect(calls((p) => p === "/providers").length).toBeGreaterThan(before));
     expect(screen.queryByText(/Switch refused/)).toBeNull();
     expect(screen.getByRole("radio", { name: /agnes/ })).toHaveAttribute("aria-checked", "true");
+  });
+
+  acceptance(
+    "provider-switching",
+    "the model tab shows only provider, model, effort and the tiers",
+    async () => {
+      const noOtherSetting = () => {
+        expect(screen.queryByRole("spinbutton")).toBeNull();
+        expect(screen.queryByRole("textbox")).toBeNull();
+        expect(screen.queryByRole("switch")).toBeNull();
+        for (const label of [
+          /context window/i,
+          /output limit/i,
+          /subagent/i,
+          /thinking/i,
+          /fast mode/i,
+        ])
+          expect(screen.queryByText(label)).toBeNull();
+      };
+      serve({
+        providers: [
+          conn("kimi", {
+            is_active: true,
+            models: [{ id: "kimi-k3", modality: "text", effort_levels: ["low", "high"] }],
+          }),
+        ],
+      });
+      const claude = renderTab({ ...CLAUDE, model: "kimi-k3" });
+      expect(await screen.findByRole("radio", { name: /kimi/ })).toHaveAttribute(
+        "aria-checked",
+        "true",
+      );
+      expect(screen.getByRole("combobox", { name: /^model$/i })).toHaveTextContent("kimi-k3");
+      expect(screen.getByRole("radiogroup", { name: "Effort" })).toBeInTheDocument();
+      expect(screen.getByText("Model per tier")).toBeInTheDocument();
+      noOtherSetting();
+      claude.unmount();
+
+      serve({
+        providers: [
+          conn("openai", {
+            is_active: true,
+            protocol: "openai",
+            compatible_agents: ["codex"],
+            models: text("gpt-oss"),
+          }),
+        ],
+      });
+      renderTab({ ...CODEX, model: "gpt-oss" });
+      expect(await screen.findByRole("radio", { name: /openai/ })).toHaveAttribute(
+        "aria-checked",
+        "true",
+      );
+      expect(screen.getByRole("combobox", { name: /^model$/i })).toHaveTextContent("gpt-oss");
+      expect(screen.queryByRole("radiogroup", { name: "Effort" })).toBeNull();
+      expect(screen.queryByText("Model per tier")).toBeNull();
+      noOtherSetting();
+    },
+  );
+
+  acceptance("provider-switching", "an edited tier resets to the suggestion", async () => {
+    serve({ providers: [conn("kimi", { models: text("kimi-k3", "kimi-k3-mini") })] });
+    renderTab();
+    fireEvent.click(await card(/kimi/));
+    const haiku = () => screen.getByRole("combobox", { name: /^haiku$/i });
+    fireEvent.keyDown(haiku(), { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: "kimi-k3-mini" }));
+    await waitFor(() => expect(haiku()).toHaveTextContent("kimi-k3-mini"));
+
+    fireEvent.click(screen.getByRole("button", { name: /reset to suggested/i }));
+    await waitFor(() => expect(haiku()).toHaveTextContent(/^kimi-k3$/));
+
+    fireEvent.click(screen.getByRole("button", { name: /test connection/i }));
+    await waitFor(() => expect(confirmBtn()).toBeEnabled());
+    fireEvent.click(confirmBtn());
+    await waitFor(() => expect(calls((p) => p === "/providers/u-kimi/activate")).toHaveLength(1));
+    const [, patch] = calls((_p, m) => m === "PATCH")[0] as [string, { body: unknown }];
+    expect(patch.body).toMatchObject({
+      tier_models: { opus: "kimi-k3", sonnet: "kimi-k3", haiku: "kimi-k3" },
+    });
+  });
+
+  acceptance("provider-switching", "the built-in login shows no tiers", async () => {
+    serve({
+      catalogue: [
+        {
+          id: "claude-opus-5-5",
+          label: "Opus 5.5",
+          description: "",
+          efforts: ["low", "high"],
+          default_effort: "high",
+        },
+      ],
+    });
+    renderTab();
+    expect(await screen.findByRole("radio", { name: /built-in login/i })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(await screen.findByText("claude-opus-5-5 · Claude Code’s default")).toBeInTheDocument();
+    expect(await screen.findByRole("radiogroup", { name: "Effort" })).toBeInTheDocument();
+    expect(screen.queryByText("Model per tier")).toBeNull();
+    expect(screen.queryByRole("combobox", { name: /^haiku$/i })).toBeNull();
   });
 });

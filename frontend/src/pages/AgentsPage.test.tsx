@@ -90,41 +90,45 @@ describe("AgentsPage", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
-  // Scenario (revise-web-ui-ia, agent-registry): "the agents page shows both supported agents on first run"
-  // Scenario (revise-web-ui-ia, agent-registry): "adding an agent previews the change first"
-  test("first run offers Add both, previews both agents and writes only on confirm", async () => {
-    setDaemon(
-      fakeDaemon({ types: [typeRow({ type: "claude_code" }), typeRow({ type: "codex" })] }),
-    );
-    renderPage();
-    const addBoth = await screen.findByRole("button", { name: "Add both" });
-    expect(screen.getByText("2 detected, not added")).toBeInTheDocument();
-    expect(within(rowOf("Claude Code")).getByRole("button", { name: "Add" })).toBeInTheDocument();
-    expect(within(rowOf("Codex")).getByRole("button", { name: "Add" })).toBeInTheDocument();
-    expect(screen.getByText(/you review the exact lines/i)).toBeInTheDocument();
+  acceptance(
+    "agent-registry",
+    "the agents page shows both supported agents on first run",
+    async () => {
+      setDaemon(
+        fakeDaemon({ types: [typeRow({ type: "claude_code" }), typeRow({ type: "codex" })] }),
+      );
+      renderPage();
+      const addBoth = await screen.findByRole("button", { name: "Add both" });
+      expect(screen.getByText("2 detected, not added")).toBeInTheDocument();
+      expect(within(rowOf("Claude Code")).getByRole("button", { name: "Add" })).toBeInTheDocument();
+      expect(within(rowOf("Codex")).getByRole("button", { name: "Add" })).toBeInTheDocument();
+      expect(screen.getByText(/you review the exact lines/i)).toBeInTheDocument();
 
-    fireEvent.click(addBoth);
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("Connect 2 agents to Coffer")).toBeInTheDocument();
-    expect(within(dialog).getByTestId("change-summary")).toHaveTextContent("4 changes in 2 agents");
-    for (const path of ["~/.claude.json", "~/.claude/settings.json", "~/.codex/config.toml"]) {
-      expect(within(dialog).getAllByText(path).length).toBeGreaterThan(0);
-    }
-    expect(writes()).toEqual([]);
+      fireEvent.click(addBoth);
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText("Connect 2 agents to Coffer")).toBeInTheDocument();
+      expect(within(dialog).getByTestId("change-summary")).toHaveTextContent(
+        "4 changes in 2 agents",
+      );
+      for (const path of ["~/.claude.json", "~/.claude/settings.json", "~/.codex/config.toml"]) {
+        expect(within(dialog).getAllByText(path).length).toBeGreaterThan(0);
+      }
+      expect(writes()).toEqual([]);
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Apply 4 changes" }));
-    await waitFor(() => expect(within(dialog).getByText("Changes applied")).toBeInTheDocument());
-    expect(writes().map((c) => `${c.method} ${c.path}`)).toEqual([
-      "POST /agents",
-      "POST /agents/agt_1/coffer-connection",
-      "POST /agents",
-      "POST /agents/agt_2/coffer-connection",
-    ]);
-    expect(writes()[0].body).toEqual({ type: "claude_code" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
-    await waitFor(() => expect(screen.getByText("2 connected")).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: "Add both" })).not.toBeInTheDocument();
-  });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Apply 4 changes" }));
+      await waitFor(() => expect(within(dialog).getByText("Changes applied")).toBeInTheDocument());
+      expect(writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+        "POST /agents",
+        "POST /agents/agt_1/coffer-connection",
+        "POST /agents",
+        "POST /agents/agt_2/coffer-connection",
+      ]);
+      expect(writes()[0].body).toEqual({ type: "claude_code" });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+      await waitFor(() => expect(screen.getByText("2 connected")).toBeInTheDocument());
+      expect(screen.queryByRole("button", { name: "Add both" })).not.toBeInTheDocument();
+    },
+  );
 
   test("a failed agent fails on its own and Retry re-runs only it", async () => {
     setDaemon(
@@ -151,9 +155,8 @@ describe("AgentsPage", () => {
     expect(writes().at(-1)?.path).toBe("/agents/agt_2/coffer-connection");
   });
 
-  // Scenario (revise-web-ui-ia, agent-registry): "an agent that is not installed shows how to install it"
-  // Scenario (revise-web-ui-ia, agent-registry): "a leftover config directory reads as config left behind"
-  test("not installed and config left behind offer the install prompt and no Add", async () => {
+  // One page with both rows covers both scenarios: Claude Code not installed, Codex left behind.
+  const notInstalledAndLeftBehind = async () => {
     setDaemon(
       fakeDaemon({
         types: [
@@ -192,10 +195,19 @@ describe("AgentsPage", () => {
     expect(screen.getByRole("button", { name: "Reveal folder" })).toBeInTheDocument();
     // Not added, so nothing to remove from the list.
     expect(screen.queryByRole("button", { name: "Remove from list" })).not.toBeInTheDocument();
-  });
+  };
+  acceptance(
+    "agent-registry",
+    "an agent that is not installed shows how to install it",
+    notInstalledAndLeftBehind,
+  );
+  acceptance(
+    "agent-registry",
+    "a leftover config directory reads as config left behind",
+    notInstalledAndLeftBehind,
+  );
 
-  // Scenario (revise-web-ui-ia, agent-registry): "an installed agent that has never run can be added"
-  test("a never-run agent marks its directory not created and its add creates it", async () => {
+  acceptance("agent-registry", "an installed agent that has never run can be added", async () => {
     setDaemon(
       fakeDaemon({
         types: [
@@ -214,41 +226,49 @@ describe("AgentsPage", () => {
     expect(writes()).toEqual([]);
   });
 
-  // Scenario (revise-web-ui-ia, agent-registry): "repairing a partial connection previews the missing parts"
-  test("Repair previews only the missing part and connects the agent", async () => {
-    setDaemon(
-      fakeDaemon({
-        types: [typeRow({ type: "claude_code", uid: "agt_a" }), typeRow({ type: "codex" })],
-        connections: {
-          agt_a: {
-            state: "partial",
-            parts: [
-              { key: "mcp", installed: true, detail: "/bin/coffer" },
-              { key: "memory_hook", installed: false, detail: null },
-            ],
+  acceptance(
+    "agent-registry",
+    "repairing a partial connection previews the missing parts",
+    async () => {
+      setDaemon(
+        fakeDaemon({
+          types: [typeRow({ type: "claude_code", uid: "agt_a" }), typeRow({ type: "codex" })],
+          connections: {
+            agt_a: {
+              state: "partial",
+              parts: [
+                { key: "mcp", installed: true, detail: "/bin/coffer" },
+                { key: "memory_hook", installed: false, detail: null },
+              ],
+            },
           },
-        },
-      }),
-    );
-    renderPage();
-    const repair = await waitFor(() =>
-      within(rowOf("Claude Code")).getByRole("button", { name: "Repair" }),
-    );
-    await waitFor(() => expect(rowOf("Claude Code")).toHaveTextContent("Memory hook not written"));
-    fireEvent.click(repair);
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("Repair Claude Code’s connection")).toBeInTheDocument();
-    expect(within(dialog).getByTestId("change-summary")).toHaveTextContent("1 change in 1 agent");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Apply 1 change" }));
-    await waitFor(() => expect(within(dialog).getByText("Changes applied")).toBeInTheDocument());
-    expect(writes().map((c) => `${c.method} ${c.path}`)).toEqual([
-      "POST /agents/agt_a/coffer-connection",
-    ]);
-  });
+        }),
+      );
+      renderPage();
+      const repair = await waitFor(() =>
+        within(rowOf("Claude Code")).getByRole("button", { name: "Repair" }),
+      );
+      await waitFor(() =>
+        expect(rowOf("Claude Code")).toHaveTextContent("Memory hook not written"),
+      );
+      fireEvent.click(repair);
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText("Repair Claude Code’s connection")).toBeInTheDocument();
+      expect(within(dialog).getByTestId("change-summary")).toHaveTextContent("1 change in 1 agent");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Apply 1 change" }));
+      await waitFor(() => expect(within(dialog).getByText("Changes applied")).toBeInTheDocument());
+      expect(writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+        "POST /agents/agt_a/coffer-connection",
+      ]);
+      fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+      await waitFor(() =>
+        expect(within(rowOf("Claude Code")).getByText("Connected")).toBeInTheDocument(),
+      );
+    },
+  );
 
-  // Scenario (revise-web-ui-ia, agent-registry): "a row's menu offers a different config directory"
-  // Scenario (revise-web-ui-ia, agent-registry): "the agents page detects candidates without a detect action"
-  test("a row's menu offers a different config directory and there is no add dialog", async () => {
+  // Codex is installed_active and not added; Claude Code is added.
+  const rowMenuAndNoDetect = async () => {
     setDaemon(
       fakeDaemon({
         types: [typeRow({ type: "claude_code", uid: "agt_a" }), typeRow({ type: "codex" })],
@@ -274,7 +294,17 @@ describe("AgentsPage", () => {
       "Remove from Coffer",
     ]);
     expect(screen.queryByRole("textbox", { name: /name|title/i })).not.toBeInTheDocument();
-  });
+  };
+  acceptance(
+    "agent-registry",
+    "a row's menu offers a different config directory",
+    rowMenuAndNoDetect,
+  );
+  acceptance(
+    "agent-registry",
+    "the agents page detects candidates without a detect action",
+    rowMenuAndNoDetect,
+  );
 
   test("keeps the header up over skeleton rows while the types load", () => {
     vi.mocked(call).mockImplementation(() => new Promise(() => {}));

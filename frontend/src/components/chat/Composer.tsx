@@ -5,7 +5,7 @@
 // itself stays live, since a message sent mid-turn queues server-side. Files
 // attach through the paperclip, by dropping them on the composer, or by pasting
 // an image; each uploads at once and shows as a chip, and Send waits until every
-// upload is done (spec chat "Attach files from the Chat page composer"). A file
+// upload is done (spec chat "Attach files from the Conversations page composer"). A file
 // refused before upload is not a chip: one line under the box says why.
 import {
   forwardRef,

@@ -96,8 +96,8 @@ describe("a surface carries one name in the sidebar and on its page", () => {
   }
 });
 
-// revise-web-ui-ia: web-ui "a surface carries one name in the sidebar and on its page"
-test("zh names an agent 智能体 and never Agent", () => {
+// The scenario's AND: the zh group headings, and no zh string calls an agent "Agent".
+acceptance("web-ui", "a surface carries one name in the sidebar and on its page", () => {
   const values: string[] = [];
   const walk = (node: unknown) => {
     if (typeof node === "string") values.push(node);
@@ -115,6 +115,8 @@ test("zh names an agent 智能体 and never Agent", () => {
       .replace(/AgentSkills/g, ""),
   );
   expect(prose.filter((v) => /\bagents?\b|代理(?!的调用)/i.test(v))).toEqual([]);
-  expect(lookup(zh, "nav.group.agents")).toBe("智能体");
   expect(lookup(zh, "nav.agents")).toBe("智能体");
+  expect(
+    ["agents", "run", "capabilities", "context", "system"].map((g) => lookup(zh, `nav.group.${g}`)),
+  ).toEqual(["智能体", "运行", "能力", "上下文", "系统"]);
 });

@@ -223,13 +223,15 @@ async def test_an_installed_agent_without_a_config_dir_is_never_run(
     assert [(c.type, c.state, c.config_dir) for c in candidates] == [
         (AgentType.CLAUDE_CODE, DetectionState.INSTALLED_NEVER_RUN, str(tmp_path / ".claude"))
     ]
+    assert candidates[0].version == "2.1.281"
+    assert not (tmp_path / ".claude").exists()
     # Offered for adding: registering it creates the standard directory.
     assert candidates[0].addable
 
 
 @pytest.mark.acceptance(
     spec="agent-registry",
-    scenario="show a leftover config directory as not installed",
+    scenario="show a leftover config directory as config left behind",
 )
 async def test_a_config_dir_without_its_program_is_config_only(agent_bundle, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))

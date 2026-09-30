@@ -17,6 +17,7 @@ import pytest
 from coffer.infrastructure.mcp.tool_reach_repo import tool_reach_path
 from tests.support.boundary_daemon import BoundaryDaemon, prepare_home, running_daemon
 from tests.support.custom_tools import (
+    SECRET_NAME,
     SECRET_VALUE,
     Agent,
     create_group,
@@ -48,6 +49,7 @@ def api() -> Iterator[FakeHttpApi]:
 @pytest.mark.acceptance(
     spec="mcp-gateway", scenario="a custom tool reaches the agent under its group's prefix"
 )
+@pytest.mark.acceptance(spec="web-ui", scenario="an agent sees the group name as the tool prefix")
 def test_a_custom_tool_reaches_the_agent_under_its_prefix(daemon: BoundaryDaemon, api: FakeHttpApi):
     create_group(
         daemon,
@@ -65,6 +67,7 @@ def test_a_custom_tool_reaches_the_agent_under_its_prefix(daemon: BoundaryDaemon
 @pytest.mark.acceptance(
     spec="mcp-gateway", scenario="a custom tool call sends the rendered request with the secret"
 )
+@pytest.mark.acceptance(spec="web-ui", scenario="the secret never reaches the agent")
 def test_a_call_sends_the_rendered_request_with_the_secret(
     daemon: BoundaryDaemon, api: FakeHttpApi
 ):
@@ -74,7 +77,12 @@ def test_a_call_sends_the_rendered_request_with_the_secret(
         api.base_url + "/v2",
         [tool("get_invoice", "GET", "/invoices/{id}?status={status}")],
     )
-    result = Agent(daemon, CLAUDE).call("billing__get_invoice", {"id": "a/b"})
+    agent = Agent(daemon, CLAUDE)
+    # What the agent is offered carries neither the value nor the reference.
+    offered = json.dumps(agent.tools()["billing__get_invoice"])
+    assert SECRET_VALUE not in offered and SECRET_NAME not in offered
+    result = agent.call("billing__get_invoice", {"id": "a/b"})
+    assert SECRET_VALUE not in json.dumps(result) and SECRET_NAME not in json.dumps(result)
     assert result["result"].get("isError") in (None, False)
     assert text_of(result).startswith("HTTP 200 OK")
     seen = api.seen[-1]
@@ -125,6 +133,9 @@ def test_an_error_status_is_an_error_and_a_redirect_is_not_followed(
 
 @pytest.mark.acceptance(
     spec="mcp-gateway", scenario="a custom tool that changes data is annotated destructive"
+)
+@pytest.mark.acceptance(
+    spec="web-ui", scenario="a tool that changes data is annotated for the agent"
 )
 def test_a_tool_that_changes_data_is_annotated(daemon: BoundaryDaemon, api: FakeHttpApi):
     create_group(
@@ -188,6 +199,7 @@ def test_a_switched_off_tool_is_hidden_and_refused(daemon: BoundaryDaemon, api: 
 @pytest.mark.acceptance(
     spec="mcp-gateway", scenario="a reach override hides one tool from one agent"
 )
+@pytest.mark.acceptance(spec="web-ui", scenario="a tool's reach override narrows one tool")
 def test_a_reach_override_hides_one_tool_from_one_agent(daemon: BoundaryDaemon, api: FakeHttpApi):
     group = create_group(
         daemon,

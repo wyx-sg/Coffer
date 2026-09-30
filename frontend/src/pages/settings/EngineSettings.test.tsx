@@ -139,7 +139,7 @@ describe("EngineSettings", () => {
 
   acceptance(
     "internal-engine",
-    "Settings → Coffer's model shows and changes both halves",
+    "the general tab's coffer's model section shows and changes both halves",
     async () => {
       apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
       renderPage();
@@ -277,8 +277,7 @@ describe("EngineSettings", () => {
     },
   );
 
-  // Scenario (revise-web-ui-ia): "coffer's model is chosen in settings general"
-  test("the engine picker lists only the chosen provider's models and saves on selection", async () => {
+  acceptance("web-ui", "coffer's model is chosen in settings general", async () => {
     apiMock.list.mockResolvedValue({
       providers: [
         makeProvider({
@@ -306,8 +305,7 @@ describe("EngineSettings", () => {
     expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
   });
 
-  // Scenario (revise-web-ui-ia): "an unset picker says what coffer does without it"
-  test("an unset picker reads as not set and says what Coffer does without it", async () => {
+  acceptance("web-ui", "an unset picker says what coffer does without it", async () => {
     apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
     renderPage();
     await ready();
@@ -321,8 +319,7 @@ describe("EngineSettings", () => {
     for (const b of screen.getAllByRole("button", { name: /^test /i })) expect(b).toBeDisabled();
   });
 
-  // Scenario (revise-web-ui-ia): "testing a picker shows a failing pair inline"
-  test("a failing test on the engine reads as failing with the endpoint's error", async () => {
+  acceptance("web-ui", "testing a picker shows a failing pair inline", async () => {
     engineConfig = { ...engineConfig, model: "llama3.1:8b" };
     apiMock.list.mockResolvedValue({
       providers: [makeProvider({ name: "A", internal_default: true })],
@@ -371,8 +368,7 @@ describe("EngineSettings", () => {
     expect(screen.getAllByTestId("model-state")[0]).toHaveTextContent(/answering/i);
   });
 
-  // Scenario (revise-web-ui-ia, internal-engine): "a failed test leaves coffer's model as it was"
-  test("a failed speech-to-text test is shown inline and writes nothing", async () => {
+  acceptance("internal-engine", "a failed test leaves coffer's model as it was", async () => {
     engineConfig = { ...engineConfig, transcribe_model: "whisper-1" };
     apiMock.list.mockResolvedValue({
       providers: [
@@ -404,42 +400,65 @@ describe("EngineSettings", () => {
     );
   });
 
-  // Scenario (revise-web-ui-ia, internal-engine): "the general tab's coffer's model section shows and changes both halves"
-  test("the section shows the chosen pair and no upkeep, and each edit saves alone", async () => {
-    engineConfig = { ...engineConfig, model: "a-chat" };
-    apiMock.list.mockResolvedValue({
-      providers: [
-        makeProvider({
-          name: "A",
-          internal_default: true,
-          models: [
-            { id: "a-chat", modality: "text" },
-            { id: "a-big", modality: "text" },
-          ],
-        }),
-      ],
-    });
-    renderPage();
+  acceptance(
+    "internal-engine",
+    "the general tab's coffer's model section shows and changes both halves",
+    async () => {
+      engineConfig = { ...engineConfig, model: "a-chat", transcribe_model: "whisper-1" };
+      apiMock.list.mockResolvedValue({
+        providers: [
+          makeProvider({
+            name: "A",
+            internal_default: true,
+            models: [
+              { id: "a-chat", modality: "text" },
+              { id: "a-big", modality: "text" },
+            ],
+          }),
+          makeProvider({
+            name: "B",
+            transcribe_default: true,
+            models: [
+              { id: "whisper-1", modality: "audio" },
+              { id: "whisper-2", modality: "audio" },
+            ],
+          }),
+        ],
+      });
+      renderPage();
 
-    await ready();
-    const section = screen.getByTestId("coffer-model-section");
-    expect(within(section).getByRole("combobox", { name: /^model provider$/i })).toHaveTextContent(
-      "A",
-    );
-    expect(within(section).getByRole("combobox", { name: /^model$/i })).toHaveTextContent("a-chat");
-    // No upkeep switch, interval or curation owner: those live on the
-    // Knowledge and Memory pages. The one switch left is the price refresh.
-    expect(screen.queryAllByRole("switch").filter((s) => s.id !== "price-refresh")).toHaveLength(0);
-    expect(screen.queryByText(/curation runs on/i)).toBeNull();
+      await ready();
+      const section = screen.getByTestId("coffer-model-section");
+      expect(
+        within(section).getByRole("combobox", { name: /^model provider$/i }),
+      ).toHaveTextContent("A");
+      expect(within(section).getByRole("combobox", { name: /^model$/i })).toHaveTextContent(
+        "a-chat",
+      );
+      expect(screen.getByRole("combobox", { name: /^transcription model$/i })).toHaveTextContent(
+        "whisper-1",
+      );
+      // No upkeep switch, interval or curation owner: those live on the
+      // Knowledge and Memory pages. The one switch left is the price refresh.
+      expect(screen.queryAllByRole("switch").filter((s) => s.id !== "price-refresh")).toHaveLength(
+        0,
+      );
+      expect(screen.queryByText(/curation runs on/i)).toBeNull();
 
-    openSelect(/^model$/i);
-    fireEvent.click(screen.getByRole("option", { name: "a-big" }));
-    await waitFor(() => expect(setEngineModel).toHaveBeenCalledWith("a-big"));
+      openSelect(/^model$/i);
+      fireEvent.click(screen.getByRole("option", { name: "a-big" }));
+      await waitFor(() => expect(setEngineModel).toHaveBeenCalledWith("a-big"));
+      expect(setSttModel).not.toHaveBeenCalled();
 
-    // Only the edited values were written — nothing else moved.
-    expect(setBound).not.toHaveBeenCalled();
-    expect(setSttModel).not.toHaveBeenCalled();
-    expect(apiMock.setInternalDefault).not.toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
-  });
+      openSelect(/^transcription model$/i);
+      fireEvent.click(screen.getByRole("option", { name: "whisper-2" }));
+      await waitFor(() => expect(setSttModel).toHaveBeenCalledWith("whisper-2"));
+
+      // Only the edited values were written — nothing else moved.
+      expect(setEngineModel).toHaveBeenCalledTimes(1);
+      expect(setBound).not.toHaveBeenCalled();
+      expect(apiMock.setInternalDefault).not.toHaveBeenCalled();
+      expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
+    },
+  );
 });

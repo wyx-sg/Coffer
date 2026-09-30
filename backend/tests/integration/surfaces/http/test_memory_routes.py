@@ -209,6 +209,10 @@ def _binding_ceiling(text: str, *, room_for: int) -> int:
 # ----- partitions and notes -------------------------------------------------
 
 
+# The route half of the scenario; the page half is in MemoryDetailPage.test.tsx.
+@pytest.mark.acceptance(
+    spec="memory", scenario="provenance paths stay in the data, not on the page"
+)
 def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> None:
     _register_agent(client)
     repository = _repository(tmp_path)
@@ -262,6 +266,7 @@ def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> 
     assert detail["origins"][0]["agent"] == "claude-code"
     assert detail["origins"][0]["native_path"].endswith("/memory/python-lockfile.md")
     assert detail["origins"][0]["anchor"] == "python-lockfile"
+    assert detail["origins"][0]["captured_at"]
 
     # The personal entry went to `global` whichever repository it was learned
     # in — and that is what the session is given first ("File personal entries into global").

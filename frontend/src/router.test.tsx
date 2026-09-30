@@ -69,9 +69,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// revise-web-ui-ia: web-ui "the index opens Overview" — the marker moves to
-// that scenario when the change is archived (its task 7.2).
-acceptance("web-ui", "the index opens the Agents page", async () => {
+acceptance("web-ui", "the index opens Overview", async () => {
   const get = mockApi();
   const location = renderAt("/");
 

@@ -1,6 +1,6 @@
 // components/chat/Composer.attachments.test.tsx
-// The composer's attachments (spec chat "Attach files from the Chat page
-// composer"): picked, dropped and pasted files upload at once, show as chips,
+// The composer's attachments (spec chat "Attach files from the
+// Conversations page composer"): picked, dropped and pasted files upload at once, show as chips,
 // and hold Send until every upload is done.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { act, createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";

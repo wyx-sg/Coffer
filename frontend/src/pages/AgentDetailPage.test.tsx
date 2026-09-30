@@ -120,8 +120,9 @@ function renderAt(path = "/agents/claude_code") {
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentDetailPage", () => {
-  // Scenario (revise-web-ui-ia, agent-registry): "the agent detail page carries nine tabs"
-  test("nine tabs in order, each at its own path, the list tabs with their counts", () => {
+  // Tabs and paths here; Overview's summary rows and Config files' instructions
+  // file are asserted under the same scenario in their own tab tests.
+  acceptance("agent-registry", "the agent detail page carries nine tabs", () => {
     mockRoute();
     renderAt("/agents/claude_code/skills");
     const tabs = screen.getAllByRole("tab").map((tab) => tab.textContent);

@@ -1,4 +1,4 @@
-// src/components/palette/CommandPalette.test.tsx — the palette's scenarios (change revise-web-ui-ia, web-ui "Jump to any page or object from a command palette").
+// src/components/palette/CommandPalette.test.tsx — the palette's scenarios (spec web-ui "Jump to any page or object from a command palette").
 //
 // Only the network boundary is mocked: `getApiClient()` (resources, daemon
 // status) and `call()` (agents, skills, providers, knowledge, memory). The
@@ -9,6 +9,7 @@ import { useState } from "react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+import { acceptance } from "@/test/acceptance";
 import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 import { ApiError } from "@/lib/api/errors";
 import { CommandPalette } from "./CommandPalette";
@@ -85,7 +86,13 @@ afterEach(() => {
 
 function Where() {
   const location = useLocation();
-  return <div data-testid="location">{location.pathname}</div>;
+  const under = (location.state as { backgroundLocation?: { pathname: string } } | null)
+    ?.backgroundLocation?.pathname;
+  return (
+    <div data-testid="location" data-under={under ?? ""}>
+      {location.pathname}
+    </div>
+  );
 }
 
 function Harness() {
@@ -126,8 +133,7 @@ async function settled() {
 }
 
 describe("CommandPalette", () => {
-  // revise-web-ui-ia: web-ui "the palette jumps to a page"
-  test("typing 'act' and Enter opens /activity and closes the palette", async () => {
+  acceptance("web-ui", "the palette jumps to a page", async () => {
     renderPalette();
     type("act");
     expect(options()[0]).toBe("Activity");
@@ -137,8 +143,7 @@ describe("CommandPalette", () => {
     await waitFor(() => expect(screen.queryByRole("combobox")).not.toBeInTheDocument());
   });
 
-  // revise-web-ui-ia: web-ui "the palette jumps to an object"
-  test("an MCP server is found by its name and by its title, and opens its detail page", async () => {
+  acceptance("web-ui", "the palette jumps to an object", async () => {
     renderPalette();
     await settled();
     type("github");
@@ -152,8 +157,7 @@ describe("CommandPalette", () => {
     expect(screen.getByTestId("open")).toHaveTextContent("false");
   });
 
-  // revise-web-ui-ia: web-ui "the palette offers no actions"
-  test("the palette offers no actions: every entry navigates and none sends a write", async () => {
+  acceptance("web-ui", "the palette offers no actions", async () => {
     renderPalette();
     await settled();
     const pages = () => within(group("Pages")).getAllByRole("option");
@@ -188,15 +192,15 @@ describe("CommandPalette", () => {
     }
   });
 
-  // revise-web-ui-ia: web-ui "the palette leaves out switched-off features"
-  test("a switched-off feature's page is not listed", async () => {
+  acceptance("web-ui", "the palette leaves out switched-off features", async () => {
     renderPalette();
     await settled();
     type("fake page");
     expect(options()).toEqual([]);
   });
 
-  test("a switched-on feature's page is listed", async () => {
+  // The scenario's other half: switched on, the page is listed.
+  acceptance("web-ui", "the palette leaves out switched-off features", async () => {
     features = { fake_feature: true };
     renderPalette();
     await settled();
@@ -204,8 +208,7 @@ describe("CommandPalette", () => {
     expect(options()).toEqual(["Fake page"]);
   });
 
-  // revise-web-ui-ia: web-ui "the palette lists pages while objects load"
-  test("pages are listed and open while the object lists are still loading", async () => {
+  acceptance("web-ui", "the palette lists pages while objects load", async () => {
     for (const path of Object.keys(callAnswers)) callAnswers[path] = never;
     renderPalette();
     type("act");
@@ -215,8 +218,7 @@ describe("CommandPalette", () => {
     expect(screen.getByTestId("location")).toHaveTextContent("/activity");
   });
 
-  // revise-web-ui-ia: web-ui "a failing kind leaves the rest of the palette working"
-  test("a failing skills list shows its error while MCP servers and pages still work", async () => {
+  acceptance("web-ui", "a failing kind leaves the rest of the palette working", async () => {
     callAnswers["/skills"] = () => Promise.reject(new ApiError("INTERNAL_ERROR", "boom"));
     renderPalette();
     await settled();
@@ -230,8 +232,7 @@ describe("CommandPalette", () => {
     expect(screen.getByTestId("location")).toHaveTextContent("/mcp-servers/github-mcp");
   });
 
-  // revise-web-ui-ia: web-ui "the palette with the daemon offline"
-  test("with the daemon unreachable it lists pages only and says objects need the daemon", async () => {
+  acceptance("web-ui", "the palette with the daemon offline", async () => {
     daemonUp = false;
     renderPalette();
     expect(await screen.findByText(/Objects need the daemon/)).toBeInTheDocument();
@@ -240,8 +241,7 @@ describe("CommandPalette", () => {
     expect(call).not.toHaveBeenCalled();
   });
 
-  // revise-web-ui-ia: web-ui "the palette says when nothing matches"
-  test("a query nothing matches says there are no results", async () => {
+  acceptance("web-ui", "the palette says when nothing matches", async () => {
     renderPalette();
     await settled();
     type("zzqx");
@@ -249,13 +249,15 @@ describe("CommandPalette", () => {
     expect(screen.getByText("No results for “zzqx”")).toBeInTheDocument();
   });
 
-  // revise-web-ui-ia: web-ui "Jump to any page or object from a command palette" — Settings tabs
-  test("'data' and Enter opens Settings on the Data tab", () => {
+  // Spec web-ui "Jump to any page or object from a command palette": Settings tabs.
+  acceptance("web-ui", "the palette opens a Settings tab over the current page", () => {
     renderPalette();
     type("data");
     expect(options()[0]).toBe("Settings › Data");
     fireEvent.keyDown(input(), { key: "Enter" });
     expect(screen.getByTestId("location")).toHaveTextContent("/settings/data");
+    // The page the palette was opened from stays underneath the modal.
+    expect(screen.getByTestId("location")).toHaveAttribute("data-under", "/agents");
   });
 
   test("arrow keys move the selection and wrap; the input points at the selected row", () => {
@@ -272,7 +274,7 @@ describe("CommandPalette", () => {
     expect(last).toHaveAttribute("aria-selected", "true");
   });
 
-  test("an empty query shows the last choices under Recent above every page", async () => {
+  acceptance("web-ui", "an empty query shows recent choices above every page", async () => {
     renderPalette();
     await settled();
     expect(screen.queryByRole("group", { name: "Recent" })).not.toBeInTheDocument();

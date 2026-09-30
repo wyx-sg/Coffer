@@ -5,10 +5,10 @@
 **Deciders**: Yuxing Wu
 **Related**: [Resource Framework Upfront](resource-framework-upfront.md),
 [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md),
-spec web-ui "Group the sidebar by role",
-spec web-ui "Hold one Resources entry per listed resource kind",
 spec web-ui "List only shipped surfaces in the sidebar",
-spec web-ui "Keep the sidebar to its eleven entries",
+spec web-ui "Keep the sidebar to its fifteen entries" (which pinned eleven entries in three role
+groups until the change `revise-web-ui-ia` regrouped the sidebar; see
+[The Sidebar Is Grouped by What the Person Comes to Do](sidebar-grouped-by-what-the-person-comes-to-do.md)),
 PR #386
 
 ## Context
@@ -121,8 +121,8 @@ requires a new *role*, not a new kind.
 
 ## Consequences
 
-- The entry set is pinned by spec web-ui "Keep the sidebar to its eleven
-  entries"; adding a twelfth is a spec change, not a drive-by.
+- The entry set is pinned by a web-ui requirement (today spec web-ui "Keep the sidebar to its
+  fifteen entries"); adding one more is a spec change, not a drive-by.
 - Legacy routes (`/resources`, `/audit`, `/observability` and old settings
   paths) redirect rather than 404, so moving an entry never breaks a bookmark.
 - Consistency across bespoke pages is carried by shared components and the

@@ -95,8 +95,7 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("ClisPage", () => {
-  // scenario (web-ui, revise-web-ui-ia 7.14d): "the CLIs page lists problems first"
-  test("the CLIs page lists problems first", async () => {
+  acceptance("web-ui", "the CLIs page lists problems first", async () => {
     renderPage();
     await screen.findByRole("region", { name: "Needs you" });
     expect(group("Needs you")).toEqual(["jq", "gh", "gcloud"]);
@@ -131,11 +130,10 @@ describe("ClisPage", () => {
     expect(screen.queryByRole("region", { name: "Ready" })).toBeNull();
   });
 
-  // scenario (web-ui, revise-web-ui-ia 7.14d): "a CLI that needs the user offers a prompt for an agent"
-  test("a CLI that needs the user offers a prompt for an agent", async () => {
+  acceptance("web-ui", "a CLI that needs the user offers a prompt for an agent", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
-    renderPage("/clis/jq");
+    const { unmount } = renderPage("/clis/jq");
     const banner = await screen.findByTestId("cli-problem");
     expect(banner).toHaveTextContent("jq isn't installed — 2 skills affected");
     expect(banner).toHaveTextContent("gh-triage, log-digest will fail at the step that calls jq.");
@@ -154,10 +152,20 @@ describe("ClisPage", () => {
     await waitFor(() => expect(start).toBeEnabled());
     fireEvent.click(start);
     expect(await screen.findByTestId("draft")).toHaveTextContent(JQ_MISSING.handoff?.prompt ?? "");
+    unmount();
+
+    // With no managed agent available only Copy prompt is offered.
+    listAgents.mockResolvedValue({
+      agents: [{ agent_key: "claude_code", display_name: "Claude Code", available: false }],
+    });
+    renderPage("/clis/jq");
+    expect(await screen.findByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+    await waitFor(() => expect(listAgents).toHaveBeenCalledTimes(2));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByRole("button", { name: "Ask an agent" })).toBeNull();
   });
 
-  // scenario (web-ui, revise-web-ui-ia 7.14d): "check again after logging in"
-  test("check again after logging in", async () => {
+  acceptance("web-ui", "check again after logging in", async () => {
     const loggedIn = {
       ...GCLOUD_LOGGED_OUT,
       status: "ready" as const,

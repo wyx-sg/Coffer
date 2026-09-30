@@ -4,8 +4,8 @@
 A turn has to reach an agent the same way whoever asked for it — an IM channel,
 the web page, anything later. Chat is the **turn platform**: the agent-provider
 registry, the agent adapters, the conversation and message store, the turn
-lifecycle with its pending queue, the typed event stream — and the **web Chat
-page** that drives all of it, so the owner can watch and steer from a browser
+lifecycle with its pending queue, the typed event stream — and the web UI's
+**Conversations page** that drives all of it, so the owner can watch and steer from a browser
 what they started on a phone. The platform and the page are one capability
 because the page owns no state of its own: every row it renders and every
 control it offers belongs to the platform underneath it. A channel
@@ -23,7 +23,7 @@ client; a turn started from any surface is observable, interruptible and
 continuable from every other surface with no per-surface branch on the turn
 path; no turn ever ends silently, and a daemon killed mid-turn leaves no
 conversation showing a reply that will never arrive; and from a fresh install
-with one managed agent present, a user can open the Chat page, send a first
+with one managed agent present, a user can open the Conversations page, send a first
 message and receive a streamed reply without configuring a Coffer LLM
 connection first.
 
@@ -42,8 +42,8 @@ does not converge across machines. A channel keeps its own table mapping a chat
 thread to a conversation id; that pointer is soft, may dangle, and chat neither
 maintains nor validates it. Attachment bytes never enter chat's database. A
 file a channel downloaded lives in that channel's media directory, whose prune
-belongs to [channels](../channels/spec.md); a file attached on the Chat page is
-chat's own, uploaded to `~/.coffer/chat-media` and pruned by the same age rule.
+belongs to [channels](../channels/spec.md); a file attached on the Conversations page is
+chat's own, uploaded to `~/.coffer/content/chat-media` and pruned by the same age rule.
 Either way a conversation persists only the reference and reads the bytes at
 turn time.
 
@@ -226,7 +226,7 @@ than being named after boilerplate.
 A turn's own record is the conversation it ran in. The user message, the
 assistant message, its tool-call and tool-result blocks, its model and its
 token usage are all persisted (see "Persist conversations and messages in
-SQLite") and readable from the REST API and the Chat page, so "which agent did
+SQLite") and readable from the REST API and the Conversations page, so "which agent did
 what" is answerable after the fact from the timeline rather than from a second
 ledger. Turn activity MUST therefore NOT be written to the audit log: a turn is
 neither irreversible nor security-sensitive nor invisible afterwards, and an
@@ -543,26 +543,49 @@ history instead.
 - **THEN** it receives the latest pending-queue snapshot and no turn content,
   because that content is now loaded from history.
 
-### Requirement: Show every conversation on the Chat page
-The web UI MUST carry a **Chat page**: two columns, the conversation list on
-the left and the selected conversation's message thread with its draft surface
-on the right. The list MUST show every conversation in the vault not owned by
-another surface, whatever opened it — a conversation carrying an `owner` belongs
-to that surface, is left out of the list, and stays readable by id — so a
-conversation an IM channel created is listed, readable,
-watchable, and continuable from the page, and carries a badge naming the
-channel it is also reachable on. There is no web-only conversation kind: the
-page and the channel are two windows onto one timeline, driven by one owner,
-and an agent cannot tell which window a turn arrived through.
+### Requirement: Show every conversation on the Conversations page
+The web UI MUST carry a **Conversations** page (`/conversations`): the conversation list on the left and the selected conversation on the right. The list MUST show every
+conversation Coffer runs, whatever opened it — a conversation an IM channel (SeaTalk, Telegram)
+opened, and one opened from Coffer's own UI, which is modelled as a built-in source named
+**Coffer** — each row carrying a **source badge** naming its channel or Coffer, with filters by
+source and by agent. A channel's badge MUST also name where in the channel the conversation
+lives — a direct chat or a group (by its name when Coffer knows it), a thread or topic rather than
+the chat's main timeline, and a parallel thread's `🧵#N` mark — and every row of the list MUST show
+the latest message's words on one line and whether a turn is running in it (the narrower list beside
+an open conversation marks the running ones and leaves the line out). A channel's link to its
+conversations opens the list filtered to that channel, named in a chip that clears the filter. A conversation carrying an `owner` belongs to that surface, is left out of the
+list, and stays readable by id. A conversation's page MUST show the full exchange and a reply box
+that continues it, whichever source opened it; **New conversation** is a secondary action, and the
+page opens on the list rather than on a welcome or suggestions page, which it does not have. The
+composer carries no voice input: a voice message reaches an agent only through a channel, which
+transcribes it (see "Transcribe audio attachments when transcription is configured"). There is no
+web-only conversation kind: the page and the channel are two windows onto one timeline, driven by
+one owner, and an agent cannot tell which window a turn arrived through.
 
 #### Scenario: a channel's conversation is listed beside the web's with a badge
-- **GIVEN** one conversation started on the web page and one opened by an IM channel
-- **WHEN** the Chat page's conversation list renders
-- **THEN** both conversations are listed
-- **AND** only the channel's conversation carries a badge naming its channel
+- **GIVEN** one conversation started from Coffer's own UI and one opened by an IM channel
+- **WHEN** the Conversations page's list renders
+- **THEN** both conversations are listed, the first with a Coffer badge and the second with a badge naming its channel
+- **AND** filtering by that channel lists only the second
+
+#### Scenario: a row names the chat and thread it came from
+- **GIVEN** a conversation a SeaTalk direct chat opened, one a group thread opened, and one a `/thread` parallel conversation opened, whose turn is running
+- **WHEN** the Conversations page's list renders
+- **THEN** the first row's badge names SeaTalk and the direct chat, the second the group and its thread, and the third its `🧵#N` mark
+- **AND** each row shows its latest message's line, and the third is marked running
+
+#### Scenario: a channel's conversation is continued from the page
+- **GIVEN** a conversation a SeaTalk channel opened
+- **WHEN** the user opens it on the Conversations page and sends a reply
+- **THEN** the page shows the full exchange and the reply starts a turn in that same conversation
+
+#### Scenario: the page opens on the list with no welcome page
+- **GIVEN** conversations from two sources
+- **WHEN** the user opens `/conversations`
+- **THEN** it opens the Conversations list with New conversation as a secondary action, with no welcome or suggestions page and no voice-input control in the composer
 
 ### Requirement: Put the open conversation in the URL
-The open conversation MUST be part of the URL (`/chat/:id`), so a refresh, a
+The open conversation MUST be part of the URL (`/conversations/:id`), so a refresh, a
 deep link and a second tab all reopen the same thread. A link to a conversation
 that no longer exists MUST say so explicitly, with a way back to a new draft —
 never drop silently into the draft surface as though the link had been to
@@ -604,7 +627,7 @@ deliberately, not a thread that silently accepts a turn and unarchives itself.
 
 #### Scenario: an archived conversation opens read-only
 - **GIVEN** an archived conversation,
-- **WHEN** it is opened on the Chat page,
+- **WHEN** it is opened on the Conversations page,
 - **THEN** its history reads normally, the composer and the model/effort
   controls are disabled, and a restore control is offered.
 
@@ -777,17 +800,24 @@ not a prerequisite ([provider-switching](../provider-switching/spec.md), and
 #### Scenario: chat runs on the built-in model when no connection
 - **GIVEN** a running daemon with no Coffer LLM connection configured for the
   agent,
-- **WHEN** the Chat page is opened,
+- **WHEN** the Conversations page is opened,
 - **THEN** the draft surface is available with no blocking empty state, and a
   sent turn runs on the agent's own built-in model and login — a Coffer
   connection is an optional override, not a prerequisite.
 
 ### Requirement: Create the conversation on the first send
-The draft is not a conversation row. The page opens on a blank draft surface,
+The draft is not a conversation row. **New conversation** opens a blank draft surface,
 and the **first send** is what creates the conversation — so a user who opens
 the page and changes their mind leaves nothing behind. Where no managed agent
 is available at all, the draft MUST be replaced by a state saying how to get
-one rather than by a composer that can only fail.
+one rather than by a composer that can only fail, and the New conversation
+dialog MUST say the same. While no supported agent is installed on this machine
+that state MUST offer the daemon's install prompt (`GET /api/v1/agents/types`
+`install_handoff`, see [web-ui](../web-ui/spec.md) "Hand installing an agent to
+the person when none is found") through **Copy prompt** only — there is no agent
+of Coffer's to ask — and name no install command; once one is installed but
+none is added, it MUST link to the Agents page instead, where adding is
+Coffer's own action.
 
 When the conversation is created but the daemon refuses its first message (for
 example `ATTACHMENT_NOT_FOUND`), the message MUST NOT be lost: its text and
@@ -795,11 +825,17 @@ attachment chips are put back into the new conversation's composer and the
 refusal is shown in the thread's banner, without a Retry.
 
 #### Scenario: the draft creates the conversation on first send
-- **GIVEN** the Chat page with no conversation open,
+- **GIVEN** the Conversations page's New conversation draft,
 - **WHEN** the first message is sent from the draft surface,
 - **THEN** the conversation is created by that send and the turn runs in it;
   opening the draft and leaving creates nothing. With no managed agent
   available, the draft is replaced by a state saying how to get one.
+
+#### Scenario: with no managed agent the draft offers the install prompt to copy
+- **GIVEN** no supported agent installed on this machine, so no managed agent is available
+- **WHEN** the user opens the New conversation draft
+- **THEN** it offers Copy prompt with the daemon's install prompt, and no Ask an agent and no install command
+- **AND** once an agent is installed but not added, the same state links to the Agents page instead
 
 #### Scenario: a draft's first message refused after its conversation is created keeps its text and files
 - **GIVEN** the draft surface with typed text and an attached file
@@ -901,7 +937,7 @@ through its own hook instead, never both.
   that order; a conversation with no channel receives the model note only.
 
 ### Requirement: Search the conversation list by title
-The Chat page's conversation list MUST offer a search box that filters the
+The Conversations page's conversation list MUST offer a search box that filters the
 listed conversations by title as the owner types: a conversation stays listed
 when its title contains the query, compared case-insensitively with the query
 trimmed, and clearing the query lists every conversation again. The filter runs
@@ -928,7 +964,7 @@ list with no conversations at all shows its empty state and offers no search.
 - **THEN** it shows the empty-list message and no search box
 
 ### Requirement: Upload a file for a web message
-The web Chat page MUST be able to hand the daemon a file before sending the
+The Conversations page MUST be able to hand the daemon a file before sending the
 message that carries it. `POST /api/v1/chat/attachments` takes one file per
 call, stores its bytes under `~/.coffer/content/chat-media` — never in the chat
 database — and answers with an opaque id, the file's display name (its last
@@ -1044,8 +1080,8 @@ as unknown.
 - **THEN** the stale upload is deleted and the recent one is kept
 - **AND** the prune result reports one deleted file under `chat_media`
 
-### Requirement: Attach files from the Chat page composer
-The Chat page's composer MUST let the owner attach files three ways: an attach
+### Requirement: Attach files from the Conversations page composer
+The Conversations page's composer MUST let the owner attach files three ways: an attach
 button that opens the file picker, dropping files onto the composer, and
 pasting an image. While files are dragged over it, only the reply box changes
 — an accent border and the placeholder "Drop to attach" — with no overlay over
@@ -1062,7 +1098,7 @@ clears the chips, and the files travel with the message by the ids their
 uploads returned.
 
 #### Scenario: attaching a file shows a chip and sends it with the message
-- **GIVEN** an open conversation on the Chat page
+- **GIVEN** an open conversation on the Conversations page
 - **WHEN** the owner attaches a file with the attach button and sends a message
 - **THEN** a chip with the file's name and size appears, and the message is sent with that file's upload id
 - **AND** the chips are cleared after the send
@@ -1097,7 +1133,7 @@ references, a reload, a second tab and a message sent from a channel show the
 same chips. The path is never shown.
 
 #### Scenario: an attached file is shown in the thread after a reload
-- **GIVEN** a message sent from the Chat page with an attached file
+- **GIVEN** a message sent from the Conversations page with an attached file
 - **WHEN** the conversation is reloaded
 - **THEN** the message shows a chip naming the file under its text
 
@@ -1158,7 +1194,7 @@ own, so the process behaves as when the user runs the CLI themselves.
 - **THEN** it carries no `CLAUDE_CONFIG_DIR`, as when no agent of the type is registered
 
 ### Requirement: Mirror a web reply into the channel it came from
-A message the owner sends from the Chat page into a conversation an IM channel
+A message the owner sends from the Conversations page into a conversation an IM channel
 opened MUST also reach that channel, so the phone sees the whole conversation
 and not only its own half. The message goes to the chat and thread the
 conversation belongs to — never anywhere else, and never a group's main chat —
@@ -1183,24 +1219,24 @@ the channel kind.
 
 #### Scenario: a web reply reaches the channel chat marked as from Coffer
 - **GIVEN** a conversation a paired channel opened in a direct chat
-- **WHEN** the owner sends a message to it from the Chat page
+- **WHEN** the owner sends a message to it from the Conversations page
 - **THEN** the channel chat receives the message prefixed `(from Coffer) `, and
   the send answers `sent`
 
 #### Scenario: the agent's answer to a web reply is delivered to the channel
 - **GIVEN** a conversation a paired channel opened
-- **WHEN** the owner sends a message to it from the Chat page and the agent answers
+- **WHEN** the owner sends a message to it from the Conversations page and the agent answers
 - **THEN** the answer is delivered into the same channel chat and thread
 
 #### Scenario: a web reply to a group main-chat conversation stays in Coffer
 - **GIVEN** a conversation bound to a group's main chat
-- **WHEN** the owner sends a message to it from the Chat page
+- **WHEN** the owner sends a message to it from the Conversations page
 - **THEN** nothing is sent to the group, the send answers `kept`, and the turn
   still runs on the web
 
 #### Scenario: a reply the channel cannot send is kept and retried
 - **GIVEN** a conversation a channel opened, while that channel is not running
-- **WHEN** the owner sends a message to it from the Chat page, the agent answers,
+- **WHEN** the owner sends a message to it from the Conversations page, the agent answers,
   and the channel starts again
 - **THEN** the send answers `pending`, the conversation lists the reply as not
   delivered, and once the channel runs the reply and then the answer are
@@ -1213,12 +1249,12 @@ the channel kind.
   the platform and the thread's mark
 
 ### Requirement: Show where a reply will also be sent
-The Chat page MUST tell the owner, before they send, where a reply to a channel's
+The Conversations page MUST tell the owner, before they send, where a reply to a channel's
 conversation will also go — "Also sends to SeaTalk · 🧵#1 deploy check" — or that
 it will stay in Coffer, and MUST mark each reply the channel has not received yet
 as not delivered to that channel until it is.
 
-#### Scenario: the Chat page shows where a reply also goes
+#### Scenario: the Conversations page shows where a reply also goes
 - **GIVEN** an open conversation a channel opened, with one reply not yet delivered
 - **WHEN** the page renders its composer
 - **THEN** the composer says where the reply will also be sent, and the

@@ -24,8 +24,9 @@ delivers a complete CLI (`coffer secret set|get|list|rm|approvals|reject|scan|im
 and a complete route family (`/api/v1/secrets/*` plus `/api/v1/settings/secrets` and
 `/api/v1/settings/secret-boundary`) over its own files under `local/secret-boundary/`. Approving, revealing and writing a key
 backup have no CLI counterpart on purpose: each needs the desktop app's presence check, and the
-CLI names the app instead. Its only
-visual surface is Settings → Security, the master key's card; the secret fields themselves live in
+CLI names the app instead. Its visual
+surfaces are the Secrets page, which lists every stored and cited secret with what uses it, and
+Settings → Security, the master key's card; the secret fields themselves live in
 other capabilities' dialogs, because a secret is entered where the thing that needs it is
 configured. Token authentication and loopback-only binding on these routes are the daemon's rule,
 not this capability's. Carrying ciphertext and the master key to another machine is vault-sync's:

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ToastProvider } from "@/components/ui/toast";
 import type { StorageSummary } from "@/lib/hooks/useStorage";
+import { acceptance } from "@/test/acceptance";
 
 import { DataSettings } from "./DataSettings";
 
@@ -119,17 +120,17 @@ function mockApi({
 describe("DataSettings", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  // revise-web-ui-ia: web-ui "the data tab shows four blocks and no this-mac
-  // block" — the acceptance marker is added when the change is archived.
-  test("the data tab shows four blocks and no this-mac block", async () => {
+  acceptance("web-ui", "the data tab shows four blocks and no this-mac block", async () => {
     mockApi();
     render(wrap(<DataSettings />));
     const vault = await screen.findByTestId("settings-data-vault");
     await within(vault).findByText("12.4 MB · 1,382 versions");
     expect(within(vault).getByText("~/.coffer/vault")).toBeInTheDocument();
+    expect(within(vault).getByRole("button", { name: /open folder/i })).toBeInTheDocument();
     const local = screen.getByTestId("settings-data-local");
     expect(within(local).getByText(/not synced — back it up yourself/i)).toBeInTheDocument();
     expect(within(local).getByText("~/.coffer/chat-media")).toBeInTheDocument();
+    expect(within(local).getByRole("button", { name: /open folder/i })).toBeInTheDocument();
     const history = screen.getByTestId("settings-data-history");
     expect(within(history).getByText("48.2 MB")).toBeInTheDocument();
     expect(await within(history).findByText("Changes")).toBeInTheDocument();
@@ -140,6 +141,7 @@ describe("DataSettings", () => {
     expect(within(history).getByRole("button", { name: /clear expired data now/i })).toBeVisible();
     const cache = screen.getByTestId("settings-data-cache");
     expect(within(cache).getByText("96 MB")).toBeInTheDocument();
+    expect(within(cache).getByRole("button", { name: /^clear$/i })).toBeInTheDocument();
     expect(screen.queryByText(/this mac only/i)).toBeNull();
     expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
   });
@@ -199,10 +201,9 @@ describe("DataSettings", () => {
     expect(screen.queryByText("Latest version")).toBeNull();
   });
 
-  // revise-web-ui-ia: web-ui "clear expired now removes what retention has
-  // passed" (the page half: the confirmed prune reports what went) — the
-  // acceptance marker is added when the change is archived.
-  test("clear expired now asks first, then reports what went by its record name", async () => {
+  // The page half (the confirmed prune reports what went); the backend half
+  // is test_retention_routes.py.
+  acceptance("web-ui", "clear expired now removes what retention has passed", async () => {
     const { post } = mockApi();
     render(wrap(<DataSettings />));
     fireEvent.click(await screen.findByRole("button", { name: /clear expired data now/i }));
@@ -212,10 +213,8 @@ describe("DataSettings", () => {
     expect(await screen.findByText("Removed 12 rows from MCP calls")).toBeInTheDocument();
   });
 
-  // revise-web-ui-ia: web-ui "clearing the cache is confirmed and rebuilt"
-  // (the page half; the backend half is test_daemon_port_and_storage_routes) —
-  // the acceptance marker is added when the change is archived.
-  test("clearing the cache is confirmed, says what comes back, and closes only on success", async () => {
+  // The page half; the backend half is test_daemon_port_and_storage_routes.py.
+  acceptance("web-ui", "clearing the cache is confirmed and rebuilt", async () => {
     const { post } = mockApi();
     render(wrap(<DataSettings />));
     const cache = await screen.findByTestId("settings-data-cache");

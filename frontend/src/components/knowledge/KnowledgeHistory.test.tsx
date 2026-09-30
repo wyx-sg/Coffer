@@ -51,7 +51,7 @@ afterEach(() => {
 const historyAddress = `/knowledge/${UID}/history?file=${encodeURIComponent(GATEWAY.path)}`;
 
 describe("a document's History tab", () => {
-  test("lists versions with their writers, shows the diff and restores as a new version", async () => {
+  acceptance("web-ui", "the history tab lists versions with their writers", async () => {
     const created = {
       ...EDIT,
       version: "c0ffee01",
@@ -120,7 +120,7 @@ describe("a document's History tab", () => {
     expect(screen.queryByRole("button", { name: "Restore this version" })).toBeNull();
   });
 
-  test("a history that fails to load says so with a retry, and the Document tab still renders", async () => {
+  acceptance("web-ui", "a history that fails to load leaves the document readable", async () => {
     api.getHistory.mockRejectedValue(new ApiError("KNOWLEDGE_HISTORY_UNAVAILABLE", "no git"));
     renderKnowledge(historyAddress);
     expect(await screen.findByText("Couldn't read this document's history")).toBeInTheDocument();
@@ -135,31 +135,58 @@ describe("a document's History tab", () => {
 });
 
 describe("Recent changes", () => {
-  test("a cross-collection timeline, the items waiting with Curate now, and a collection filter", async () => {
-    api.curateCollection.mockResolvedValue({
-      collection: NAME,
-      status: "ok",
-      total: 1,
-      passes: [],
-    });
+  acceptance(
+    "web-ui",
+    "recent changes shows a cross-collection timeline with waiting items",
+    async () => {
+      api.curateCollection.mockResolvedValue({
+        collection: NAME,
+        status: "ok",
+        total: 1,
+        passes: [],
+      });
+      renderKnowledge("/knowledge");
+
+      // The pass names what it curated and links to what it changed.
+      const pass = await screen.findByRole("link", { name: "See the pass" });
+      expect(pass).toHaveAttribute("href", `/knowledge/changes/${PASS.version}`);
+      expect(screen.getByText("curated Codex's item into")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "gateway.md" })).toHaveAttribute(
+        "href",
+        `/knowledge/${UID}?file=${encodeURIComponent(GATEWAY.path)}`,
+      );
+      // The person's edit in the other collection links to its document.
+      expect(screen.getByRole("link", { name: "on-call.md" })).toHaveAttribute(
+        "href",
+        `/knowledge/${OTHER.uid}?file=${encodeURIComponent(`${OTHER.name}/on-call.md`)}`,
+      );
+
+      const waiting = screen.getByRole("region", { name: "Waiting to be curated" });
+      expect(within(waiting).getByText("Login retry")).toBeInTheDocument();
+      expect(within(waiting).getByRole("button", { name: "Curate now" })).toBeInTheDocument();
+
+      // Filtering to the other collection asks for its changes only.
+      api.listChanges.mockImplementation(async ({ collection }) => ({
+        changes: collection === OTHER.name ? [EDIT] : [PASS, EDIT],
+        waiting: [],
+        next_cursor: null,
+      }));
+      const filter = screen.getByRole("combobox", { name: "Collection" });
+      fireEvent.keyDown(filter, { key: "ArrowDown" });
+      fireEvent.click(await screen.findByRole("option", { name: OTHER.name }));
+      await waitFor(() =>
+        expect(api.listChanges).toHaveBeenLastCalledWith(
+          expect.objectContaining({ collection: OTHER.name }),
+        ),
+      );
+      await waitFor(() => expect(screen.queryByRole("link", { name: "See the pass" })).toBeNull());
+      expect(screen.getByRole("link", { name: "on-call.md" })).toBeInTheDocument();
+    },
+  );
+
+  test("a waiting item opens in its collection's inbox", async () => {
     renderKnowledge("/knowledge");
-
-    // The pass names what it curated and links to what it changed.
-    const pass = await screen.findByRole("link", { name: "See the pass" });
-    expect(pass).toHaveAttribute("href", `/knowledge/changes/${PASS.version}`);
-    expect(screen.getByText("curated Codex's item into")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "gateway.md" })).toHaveAttribute(
-      "href",
-      `/knowledge/${UID}?file=${encodeURIComponent(GATEWAY.path)}`,
-    );
-    // The person's edit in the other collection links to its document.
-    expect(screen.getByRole("link", { name: "on-call.md" })).toHaveAttribute(
-      "href",
-      `/knowledge/${OTHER.uid}?file=${encodeURIComponent(`${OTHER.name}/on-call.md`)}`,
-    );
-
-    const waiting = screen.getByRole("region", { name: "Waiting to be curated" });
-    expect(within(waiting).getByText("Login retry")).toBeInTheDocument();
+    const waiting = await screen.findByRole("region", { name: "Waiting to be curated" });
     fireEvent.click(within(waiting).getByRole("button", { name: "Open Login retry" }));
     expect(screen.getByTestId("where")).toHaveTextContent(`/knowledge/${UID}/inbox?file=`);
   });
@@ -195,7 +222,7 @@ describe("Recent changes", () => {
 });
 
 describe("a curation pass", () => {
-  test("shows each document it changed with its diff, and undoes the whole pass after asking", async () => {
+  acceptance("web-ui", "a pass is inspected and undone as a whole", async () => {
     api.undoPass.mockResolvedValue({
       ...PASS,
       version: "u9",

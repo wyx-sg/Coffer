@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 import { AgentConfigFilesTab } from "./AgentConfigFilesTab";
 import { agentsApi, type AgentOut, type ConfigFileInfo } from "@/lib/api/agents";
 import { ApiError } from "@/lib/api/errors";
+import { acceptance } from "@/test/acceptance";
 import "@/i18n";
 
 vi.mock("@/lib/hooks/useAgents", () => ({
@@ -148,9 +149,8 @@ afterEach(() => {
 });
 
 describe("AgentConfigFilesTab", () => {
-  // Scenario (revise-web-ui-ia, agent-registry): "the agent detail page carries nine tabs"
-  // — Config files lists the instructions file beside the settings files.
-  test("lists every allowlisted file grouped by where it lives, a missing one marked", () => {
+  // Config files lists the instructions file beside the settings files.
+  acceptance("agent-registry", "the agent detail page carries nine tabs", () => {
     stub();
     renderTab();
     expect(screen.getByText("settings.json")).toBeInTheDocument();

@@ -249,3 +249,46 @@ def test_planned_port_is_what_the_next_start_will_bind(monkeypatch: pytest.Monke
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59660")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59669")
     assert bootstrap.planned_port() is None
+
+
+@pytest.mark.acceptance(
+    spec="daemon", scenario="after a restart on a new port every agent reconnects"
+)
+def test_a_restart_on_a_new_port_is_found_with_no_agent_config_rewritten(
+    _isolated_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The daemon answering on one port and configured for another binds the new
+    one on restart, publishes it, and every Coffer entry in an agent's config —
+    which names no port — reaches it through the one discovery the CLI, the MCP
+    shim and the memory hook share."""
+    from coffer.domain.agent.config_files import ConfigFileFormat
+    from coffer.domain.agent.mcp_install import apply_install
+    from coffer.domain.memory.delivery import entry_command
+    from coffer.surfaces.cli._client import discover
+
+    shim = "/Users/u/.coffer/bin/coffer-mcp-shim"
+    mcp_entry = apply_install(ConfigFileFormat.JSON, "{}", shim, agent_uid="a-1")
+    hook = entry_command("a-1", cli="/Users/u/.coffer/bin/coffer")
+
+    monkeypatch.setattr(daemon_config, "DEFAULT_PORT", _STAND_IN_DEFAULT)
+    info, sock = bootstrap.acquire()  # the old start, on the (stand-in) default
+    old_port = info.port
+    sock.close()
+
+    daemon_config.write_fixed_port(_FIXED_PORT)
+    info, sock = bootstrap.acquire()  # the restart
+    try:
+        assert old_port != _FIXED_PORT
+        assert sock.getsockname() == ("127.0.0.1", _FIXED_PORT)
+        assert json.loads((_isolated_home / ".coffer" / "daemon.json").read_text())["port"] == (
+            _FIXED_PORT
+        )
+        found = discover()
+        assert found is not None and found.port == _FIXED_PORT
+    finally:
+        sock.close()
+
+    # Nothing an agent carries names a port, so nothing needs a rewrite.
+    for text in (json.dumps(json.loads(mcp_entry)["mcpServers"]["coffer"]), hook):
+        for port in (str(old_port), str(_FIXED_PORT), "127.0.0.1", "localhost", "--port"):
+            assert port not in text

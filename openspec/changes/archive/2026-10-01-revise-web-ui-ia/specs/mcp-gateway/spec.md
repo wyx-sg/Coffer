@@ -56,10 +56,8 @@ list-changed notifications) between clients and upstream MCP servers.
   prompts: the per-server capability view and the aggregate lists return that server's tools with an empty
   resources/prompts set (HTTP 200), not an error.
 - **Built-in tools.** Coffer's own built-in tools under the reserved `coffer__` prefix MUST be exactly
-  `coffer__search_tools` and `coffer__write`. `coffer__search_tools` MUST always be advertised in
-  `tools/list`. `coffer__write` MUST be advertised only while the `knowledge` experimental feature is
-  switched on ([experimental-features](../experimental-features/spec.md) "Withdraw what a switched-off feature put in front of agents"),
-  and its contract is [knowledge](../knowledge/spec.md)'s. A call to any other `coffer__` name MUST be
+  `coffer__search_tools` and `coffer__write`. Both MUST always be advertised in
+  `tools/list`; `coffer__write`'s contract is [knowledge](../knowledge/spec.md)'s. A call to any other `coffer__` name MUST be
   answered as an unknown tool.
 - **Built-in tool retrieval.** `coffer__search_tools`
   ([Tool Overload](../../../docs/decisions/tool-overload-tier-the-list-search-the-rest.md)) has the contract
@@ -109,9 +107,9 @@ list-changed notifications) between clients and upstream MCP servers.
 - **THEN** it receives at most `top_k` ranked real upstream tool schemas (upstream-only, with Coffer's own `coffer__` built-ins excluded), each named `<server>__<tool>`, the response reports `total_searched`, and the gateway records the invocation.
 
 #### Scenario: the gateway advertises exactly two built-in tools
-- **GIVEN** the `knowledge` experimental feature is switched on, and then switched off
-- **WHEN** a client lists tools through coffer each time, and calls `coffer__recall` and `coffer__diagnose`
-- **THEN** the `coffer__` tools listed the first time are exactly `coffer__search_tools` and `coffer__write`, and the second time exactly `coffer__search_tools`
+- **GIVEN** a client connected through coffer
+- **WHEN** it lists tools, and calls `coffer__recall` and `coffer__diagnose`
+- **THEN** the `coffer__` tools listed are exactly `coffer__search_tools` and `coffer__write`
 - **AND** both calls are answered as unknown tools
 
 #### Scenario: a server's page reads its tiering split

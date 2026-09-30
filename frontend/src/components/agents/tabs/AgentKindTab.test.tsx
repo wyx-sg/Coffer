@@ -51,7 +51,7 @@ function renderTab(rows: Row[] = ROWS, path = "/agents/codex/skills", extra = {}
 const names = () => screen.queryAllByRole("listitem").map((li) => li.textContent);
 
 describe("AgentKindTab", () => {
-  // Scenario (revise-web-ui-ia, agent-registry): "the owner filter narrows an installed-kind tab"
+  // Spec agent-registry "Filter an agent's installed kinds by owner" (the scenario itself is on the Skills tab).
   test("the owner filter narrows the rows and is kept in the URL", () => {
     renderTab();
     expect(names()).toEqual(["coffer-guide", "release-notes", "lint-fix"]);

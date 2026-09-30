@@ -1,5 +1,5 @@
-"""Reading a partition's directory as a file tree (spec memory "Present partitions as a
-table and a file tree").
+"""Reading a partition's directory as a file tree (spec memory "Present a partition as its
+memories").
 
 The partition surface shows Coffer's own writing as it is on disk: ``MEMORY.md``,
 the ``notes/`` folder of one Markdown file per topic, and ``RETIRED.md`` when
