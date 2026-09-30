@@ -1055,6 +1055,10 @@ name = "Kind-agnostic core does not import kind-specific code"
 type = "forbidden"
 source_modules = [
     "coffer.application.resource_service",
+    # The vault's files, repository and one write path serve every kind.
+    "coffer.domain.vault",
+    "coffer.application.vault",
+    "coffer.infrastructure.vault",
     "coffer.application.resource_scope_ops",
     "coffer.application.resource_enable_ops",
     "coffer.application.resource_delete_ops",
