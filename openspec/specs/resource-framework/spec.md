@@ -399,8 +399,9 @@ so has no narrower home. A spec that cannot honour it records the gap in its own
 ### Requirement: Carry an optional editable title on the kinds that have one
 A resource of a kind that carries a title MUST carry an optional **`title`**: free text of at
 most 80 characters that a person chooses for display, separate from the resource's `name`. The
-kinds with a title are those whose name is a label a person chose — `provider`, `channel`,
-`knowledge` and `memory`. `agent`, `mcp_server` and `skill` carry none: each is shown by its fixed
+kinds with a title are those whose name is a label a person chose — `provider`, `channel`
+and `memory`. A knowledge collection carries none: it is named by its folder, with an editable
+description ([knowledge](../knowledge/spec.md) "Name a collection by its folder and edit its description in place"). `agent`, `mcp_server`, `skill` and `knowledge` carry none: each is shown by its fixed
 name, and a non-empty title for one MUST be refused as a validation error (422) on registration
 and on update, with nothing changed. On a kind that carries one, the title MUST be editable
 through the kind-agnostic update (`PATCH /api/v1/resources/{uid}`) and through
