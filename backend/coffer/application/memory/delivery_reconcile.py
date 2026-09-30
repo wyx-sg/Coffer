@@ -171,8 +171,10 @@ class DeliveryHookTarget:
             return Decision(
                 Disposition.REPAIR,
                 "stale_command",
-                f"The installed hook's {names} is not what this build would install; "
-                "it is rewritten in place.",
+                # Read as-is on the Overview's Needs-you row when the rewrite
+                # does not take, so it says what is wrong, not what a pass does.
+                "Coffer's memory hook in this agent's settings no longer matches what "
+                f"Coffer installs (its {names} changed).",
             )
         if d.op is Op.REMOVE:
             # Every carried hook is wanted, so only a hook that appeared

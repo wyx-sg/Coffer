@@ -391,7 +391,8 @@ describe("SyncRunsTab — undoing a round", () => {
     render(<SyncRunsTab enabled />);
 
     fireEvent.click(undoButtons()[0]);
-    fireEvent.click(screen.getByRole("button", { name: /^undo round$/i }));
+    // The error is there from the start, so the confirm already reads "Try again".
+    fireEvent.click(screen.getByRole("button", { name: /^(undo round|try again)$/i }));
 
     expect(mutate).toHaveBeenCalled();
     expect(screen.getByRole("dialog")).toBeInTheDocument();

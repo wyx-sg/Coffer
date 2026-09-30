@@ -79,11 +79,17 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
     through it, never with a hand-built `navigate("/settings/…")`.
   - `components/palette/` — the palette: navigation only; objects come from
     each kind's existing list hook, never an aggregate route.
-  - `components/shell/` — `SidebarFooter` (Settings row, daemon state,
-    language); `useDaemonFooterState` reads the same `useDaemonStatus` poll as
-    `DaemonOfflineBanner` (no second timer); `AttentionDot`, fed by
+  - `components/shell/` — `SidebarFooter` (update card, Settings row, daemon
+    state) and the `VersionMenu` it opens (theme, language, docs, updates);
+    `daemonConnection.ts` — `useDaemonConnectionDriver`, mounted once in
+    `Layout`, turns the one `useDaemonStatus` poll into the ok / reconnecting /
+    offline phase with its backoff, and every reader (`useDaemonFooterState`,
+    `DaemonOfflineBanner`'s bar and offline state) calls `useDaemonConnection`
+    — no second timer; `paletteRequest.ts` for a page that opens the palette;
+    `AttentionDot` (a count badge, a dot on the rail), fed by
     `lib/hooks/useAttentionSignals.ts` — a kind that declares an attention
-    signal adds its hook to that map, keyed by its entry's route.
+    signal adds it to that map, keyed by its entry's route; informational
+    counts never become badges.
   - `components/SplitView` / `SplitDivider` + `lib/hooks/useResizableWidth.ts`
     for every resizable split; widths are per-browser conveniences.
   - `components/PlaceholderPage` — temporary, for sidebar pages not yet built.

@@ -36,10 +36,9 @@ class CollectionEntry:
     description: str
     document_count: int = 0
     pending_count: int = 0
-    #: The display title a person chose (spec resource-framework "Carry an optional
-    #: editable title on the kinds that have one"); ``None`` when unset, and a surface shows
-    #: the name in its place.
-    title: str | None = None
+    #: The collection directory's absolute path, so a surface can reveal it
+    #: ("Return absolute paths on reads"); empty where it was not read.
+    folder_path: str = ""
 
 
 @dataclass(frozen=True)

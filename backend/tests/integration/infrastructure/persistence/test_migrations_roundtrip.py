@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0116"
+HEAD_REVISION = "0134"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -243,6 +243,9 @@ EXPECTED_TABLES = {
     # 0114: what this machine last learned about a Git-imported skill's source
     # (spec skill-manager "Update a Git-imported skill from its source").
     "skill_source_status",
+    # 0134: the attention items ignored on this machine (spec web-ui "Let the
+    # user ignore an unconnected agent on Overview").
+    "attention_ignores",
 }
 
 # Below revision 0052 the two side tables still carry their pre-merge names
@@ -279,6 +282,8 @@ PRE_MERGE_TABLES = (
         "skill_source_status",
         # 0115 created this.
         "mcp_tool_reach",
+        # 0134 created this.
+        "attention_ignores",
     }
 ) | {
     # 0066 drops these at head; every revision below it still has them, and

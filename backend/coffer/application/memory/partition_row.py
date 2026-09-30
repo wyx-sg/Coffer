@@ -10,13 +10,15 @@ from __future__ import annotations
 
 import pathlib
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict
 
 from coffer.application.memory.aggregate import Placement
+from coffer.application.memory.distil import undistilled
 from coffer.domain.memory.partition import GLOBAL_PARTITION
 from coffer.domain.resource import Resource
-from coffer.infrastructure.memory import store
+from coffer.infrastructure.memory import paths, store
 
 
 class MemoryPartitionConfig(BaseModel):
@@ -74,6 +76,19 @@ class PartitionSummary:
     #: editable title on the kinds that have one"); ``None`` when unset, and a surface shows
     #: the name in its place.
     title: str | None = None
+    #: When a distil pass last finished over this partition, or ``None`` if none
+    #: has — what the table's Distil column and the header's "distilled 2 h ago"
+    #: read (spec memory "Present a partition as its memories").
+    distilled_at: datetime | None = None
+    #: One memory to show the partition by: the most recently updated one's line.
+    sample: str | None = None
+    #: The agents (resource names) this partition's memory came from.
+    sources: tuple[str, ...] = ()
+    #: Raw entries read from the agents that no distil pass has decided on yet,
+    #: and which agents they came from — "3 entries read from Codex, waiting to
+    #: distil".
+    waiting_entries: int = 0
+    waiting_agents: tuple[str, ...] = ()
 
 
 def placement_of(row: Resource) -> Placement:
@@ -93,15 +108,35 @@ def config_of(placement: Placement) -> dict[str, str]:
 
 
 def summary_of(row: Resource, placement: Placement) -> PartitionSummary:
+    notes = store.list_notes(row.name)
+    waiting = undistilled(row.name, notes, store.read_retired(row.name))
+    # The agents behind the partition: whoever a memory was learned from, and
+    # whoever left an entry no pass has distilled yet.
+    agents = {o.agent for note in notes for o in note.origins} | {e.agent for e in waiting}
+    newest = max(notes, key=lambda n: n.updated_at, default=None)
     return PartitionSummary(
         uid=row.uid,
         name=row.name,
         title=row.title,
         repository_key=placement.repository_key,
         repository_path=placement.repository_path,
-        note_count=len(store.list_notes(row.name)),
+        note_count=len(notes),
         unresolvable=is_unresolvable(placement),
+        distilled_at=_distilled_at(row.name),
+        sample=(newest.description or newest.title) if newest is not None else None,
+        sources=tuple(sorted(a for a in agents if a)),
+        waiting_entries=len(waiting),
+        waiting_agents=tuple(sorted({e.agent for e in waiting if e.agent})),
     )
+
+
+def _distilled_at(name: str) -> datetime | None:
+    """When a distil pass last finished here: every pass, mechanical or not,
+    ends by rewriting the index, and nothing else writes it."""
+    path = paths.index_path(name)
+    if not path.is_file():
+        return None
+    return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
 
 
 def is_unresolvable(placement: Placement) -> bool:

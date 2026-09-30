@@ -109,7 +109,7 @@ export function AgentBadge({
 
   if (!tooltip) return badge;
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>{badge}</TooltipTrigger>
         <TooltipContent>{tip}</TooltipContent>

@@ -23,6 +23,8 @@ _logger = logging.getLogger(__name__)
 
 _STATUS: dict[str, int] = {
     "RESOURCE_NOT_FOUND": 404,
+    # Nothing informational is listed under that key to ignore.
+    "ATTENTION_NOT_IGNORABLE": 409,
     # custom tools (spec mcp-gateway "Manage custom tools on REST and the command line")
     "CUSTOM_TOOL_NOT_FOUND": 404,
     "NOT_A_CUSTOM_TOOL_GROUP": 404,
@@ -220,6 +222,11 @@ _STATUS: dict[str, int] = {
     "KNOWLEDGE_VERSION_NOT_FOUND": 404,
     "KNOWLEDGE_NOT_A_PASS": 400,
     "KNOWLEDGE_UNDO_CONFLICT": 409,
+    # Restoring a delete (spec knowledge "Restore a deleted collection or
+    # document from Recent changes"): a change that deleted nothing is a wrong
+    # request, a path taken again a conflict.
+    "KNOWLEDGE_NOT_A_DELETE": 400,
+    "KNOWLEDGE_RESTORE_CONFLICT": 409,
     # Also the answer for a path that cannot name a document — the
     # collection itself, its README, or anything hidden (spec knowledge "Guard
     # every path through one module").

@@ -1,10 +1,17 @@
 // src/components/palette/paletteItems.test.ts — the palette's match and ranking rule.
 import { describe, expect, test } from "vitest";
 
-import { filterItems, matchRank, objectItem, objectPath, type PaletteItem } from "./paletteItems";
+import {
+  filterItems,
+  matchRank,
+  objectItem,
+  objectPath,
+  searchGroups,
+  type PaletteItem,
+} from "./paletteItems";
 
 function page(label: string, to: string): PaletteItem {
-  return { id: to, group: "pages", label, haystack: [label], target: { type: "route", to } };
+  return { id: to, kind: "page", label, haystack: [label], target: { type: "route", to } };
 }
 
 describe("matchRank", () => {
@@ -20,7 +27,7 @@ describe("matchRank", () => {
   });
 
   test("any haystack text may carry the match", () => {
-    const item = objectItem("mcpServer", { uid: "u1", name: "gh-server", title: "GitHub" }, "MCP");
+    const item = objectItem("mcpServer", { uid: "u1", name: "gh-server", title: "GitHub" });
     expect(matchRank(item, "git")).toBe(0);
     expect(matchRank(item, "server")).toBe(1);
   });
@@ -39,14 +46,14 @@ describe("filterItems", () => {
 
 describe("objectItem", () => {
   test("shows the title with the name after it and opens a skill by its fixed name", () => {
-    const item = objectItem("skill", { uid: "u1", name: "pdf tools", title: "PDF tools" }, "Skill");
+    const item = objectItem("skill", { uid: "u1", name: "pdf tools", title: "PDF tools" });
     expect(item.label).toBe("PDF tools");
     expect(item.detail).toBe("pdf tools");
     expect(item.target).toEqual({ type: "route", to: "/skills/pdf%20tools" });
   });
 
   test("an object without a title shows its name alone", () => {
-    const item = objectItem("agent", { uid: "a1", name: "claude", title: "  " }, "Agent");
+    const item = objectItem("agent", { uid: "a1", name: "claude", title: "  " });
     expect(item.label).toBe("claude");
     expect(item.detail).toBeUndefined();
     expect(item.haystack).toEqual(["claude"]);
@@ -67,8 +74,38 @@ describe("objectItem", () => {
   });
 
   test("a CLI opens its page by its command, and is found by its title too", () => {
-    const item = objectItem("cli", { uid: "gh", name: "gh", title: "GitHub CLI" }, "CLI");
+    const item = objectItem("cli", { uid: "gh", name: "gh", title: "GitHub CLI" });
     expect(item.target).toEqual({ type: "route", to: "/clis/gh" });
     expect(item.haystack).toEqual(["GitHub CLI", "gh"]);
+  });
+});
+
+describe("searchGroups", () => {
+  test("the best hit leads, then Pages, then one group per kind in sidebar order", () => {
+    const pages = [page("Skills", "/skills"), page("Secrets", "/secrets")];
+    const objects = [
+      objectItem("skill", { uid: "s1", name: "sentry-triage" }),
+      objectItem("mcpServer", { uid: "m1", name: "sentry" }),
+    ];
+    const groups = searchGroups(pages, objects, "s");
+    expect(groups.map((g) => g.key)).toEqual(["best", "pages", "mcpServer", "skill"]);
+    expect(groups[0].items.map((i) => i.id)).toEqual(["/skills"]);
+    expect(groups[1].items.map((i) => i.id)).toEqual(["/secrets"]);
+  });
+
+  test("an exact name wins Best match over an earlier prefix hit", () => {
+    const objects = [
+      objectItem("skill", { uid: "s1", name: "sentry-triage" }),
+      objectItem("mcpServer", { uid: "m1", name: "sentry" }),
+    ];
+    expect(searchGroups([], objects, "sentry")[0].items[0].id).toBe("mcpServer-m1");
+  });
+
+  test("nothing matching leaves no groups", () => {
+    expect(searchGroups([page("Usage", "/usage")], [], "zzz")).toEqual([]);
+  });
+
+  test("a secret opens the Secrets page, which has no detail route", () => {
+    expect(objectPath("secret", { uid: "API_KEY", name: "API_KEY" })).toBe("/secrets");
   });
 });

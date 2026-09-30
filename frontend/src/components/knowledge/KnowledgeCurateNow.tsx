@@ -33,7 +33,7 @@ export function KnowledgeCurateNow({ collectionUid }: Props) {
   return (
     <Button
       type="button"
-      variant="outline"
+      variant="ghost"
       size="sm"
       onClick={() => curate.mutate(null)}
       disabled={busy}

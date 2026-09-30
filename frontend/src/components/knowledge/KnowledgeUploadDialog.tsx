@@ -1,14 +1,17 @@
 // frontend/src/components/knowledge/KnowledgeUploadDialog.tsx
 //
-// Upload a document into a collection: Coffer converts it to Markdown and it
-// joins the collection's Inbox as an item, curated like any other (with no
-// model it is written as a document on the spot). The original file is not
-// kept. The chosen file, its size and the target collection are shown before
-// anything is sent; converting is its own state; a file that cannot be
-// converted is refused in the dialog, beside the file, with what to do.
-import { useEffect, useRef, useState } from "react";
+// Upload a document into a collection (boards 5.1.17, 5.1.18, 5.1.23,
+// 5.1.28): Coffer converts it to Markdown and it joins the collection's Inbox
+// as an item, curated like any other (with no model it is written as a
+// document on the spot). The original file is not kept. A file is dropped on
+// the zone or chosen; its name, kind and size and the target collection show
+// before anything is sent; converting is its own state. A file that cannot
+// become text is refused in the dialog, beside the file, with what to do
+// instead — a ZIP or anything over 20 MB before it is sent, a scanned PDF or
+// an unsupported type once the daemon has looked at it.
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { FileUp, X } from "lucide-react";
+import { AlertCircle, FileText, Loader2, Upload, X } from "lucide-react";
 
 import { KnowledgeCollectionSelect } from "@/components/knowledge/KnowledgeCollectionSelect";
 import { Button } from "@/components/ui/button";
@@ -22,10 +25,10 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
-import { translateApiError } from "@/lib/api/errors";
 import type { CollectionOut } from "@/lib/api/knowledge";
 import { useUploadKnowledgeFile } from "@/lib/hooks/useKnowledge";
-import { formatBytes } from "@/lib/utils";
+import { extensionOf, KINDS, refusalOf, refuseBeforeSending } from "@/lib/knowledge/uploadChecks";
+import { cn, formatBytes } from "@/lib/utils";
 
 interface Props {
   open: boolean;
@@ -41,6 +44,7 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [collection, setCollection] = useState("");
+  const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -52,22 +56,41 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  const choose = (chosen: File | null) => {
+    setFile(chosen);
+    upload.reset();
+  };
+  const early = file ? refuseBeforeSending(t, file) : null;
+  const refusal = early ?? (upload.error ? refusalOf(t, upload.error, file) : null);
+
   const send = () => {
-    if (!file) return;
+    if (!file || early) return;
     upload.mutate(
       { collection, file },
       {
         onSuccess: (doc) => {
           toast.success(
             doc.pending || !doc.path
-              ? t("knowledge.upload.pending", { title: doc.title })
-              : t("knowledge.upload.written", { title: doc.title, path: doc.path }),
+              ? t("knowledge.upload.pending", { name: file.name, collection })
+              : t("knowledge.upload.written", { name: file.name, path: doc.path }),
           );
           onOpenChange(false);
         },
       },
     );
   };
+
+  const onDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    choose(e.dataTransfer.files?.[0] ?? null);
+  };
+
+  const meta = file
+    ? upload.isPending
+      ? t("knowledge.upload.converting")
+      : [KINDS[extensionOf(file.name)], formatBytes(file.size)].filter(Boolean).join(" · ")
+    : "";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -78,34 +101,57 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
         </DialogHeader>
         <div className="space-y-4">
           {file ? (
-            <div className="flex items-center gap-3 rounded-md border border-border px-3 py-2">
-              <FileUp className="size-4 shrink-0 text-text-subtle" aria-hidden />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm">{file.name}</p>
-                <p className="text-xs text-text-subtle">
-                  {upload.isPending ? t("knowledge.upload.converting") : formatBytes(file.size)}
-                </p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5">
+                {upload.isPending ? (
+                  <Loader2 className="size-4 shrink-0 animate-spin text-text-subtle" aria-hidden />
+                ) : (
+                  <FileText className="size-4 shrink-0 text-text-subtle" aria-hidden />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm">{file.name}</p>
+                  <p className="text-xs text-text-subtle">{meta}</p>
+                </div>
+                {upload.isPending ? null : (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t("knowledge.upload.remove")}
+                    onClick={() => choose(null)}
+                  >
+                    <X aria-hidden />
+                  </Button>
+                )}
               </div>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t("knowledge.upload.remove")}
-                disabled={upload.isPending}
-                onClick={() => {
-                  setFile(null);
-                  upload.reset();
-                }}
-              >
-                <X aria-hidden />
-              </Button>
+              {refusal ? (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2.5 rounded-lg bg-danger-soft px-3 py-2.5"
+                >
+                  <AlertCircle className="mt-px size-3.5 shrink-0 text-danger" aria-hidden />
+                  <div className="flex min-w-0 flex-col gap-[3px]">
+                    <p className="text-sm font-label">{refusal.title}</p>
+                    <p className="text-xs leading-[1.45] text-text-muted">{refusal.body}</p>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : (
             <button
               type="button"
               onClick={() => input.current?.click()}
-              className="flex w-full flex-col items-center gap-1 rounded-md border border-dashed border-border px-4 py-6 text-center hover:bg-surface-hover"
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={onDrop}
+              className={cn(
+                "flex w-full flex-col items-center gap-1 rounded-lg border border-dashed border-border px-4 py-7 text-center transition-colors hover:bg-surface-hover",
+                dragging && "border-accent bg-accent-soft",
+              )}
             >
-              <FileUp className="size-5 text-text-subtle" aria-hidden />
+              <Upload className="size-5 text-text-subtle" aria-hidden />
               <span className="text-sm">{t("knowledge.upload.choose")}</span>
               <span className="text-xs text-text-subtle">{t("knowledge.upload.types")}</span>
             </button>
@@ -118,15 +164,9 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
             onChange={(e) => {
               const chosen = e.target.files?.[0] ?? null;
               e.target.value = "";
-              setFile(chosen);
-              upload.reset();
+              choose(chosen);
             }}
           />
-          {upload.error ? (
-            <p role="alert" className="text-sm text-danger">
-              {translateApiError(t, upload.error)}
-            </p>
-          ) : null}
           <div className="space-y-1.5">
             <Label htmlFor="knowledge-upload-collection" required>
               {t("knowledge.upload.into")}
@@ -140,10 +180,13 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t("common.cancel")}
           </Button>
-          <Button onClick={send} disabled={!file || !collection || upload.isPending}>
+          <Button
+            onClick={send}
+            disabled={!file || !collection || upload.isPending || refusal !== null}
+          >
             {upload.isPending ? t("knowledge.upload.uploading") : t("knowledge.upload.button")}
           </Button>
         </DialogFooter>

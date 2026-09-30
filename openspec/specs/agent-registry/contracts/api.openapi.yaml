@@ -1983,6 +1983,10 @@ components:
       type: object
     AgentTypesOut:
       properties:
+        install_handoff:
+          anyOf:
+          - $ref: '#/components/schemas/HandoffOut'
+          - type: 'null'
         types:
           items:
             $ref: '#/components/schemas/AgentTypeOut'
@@ -1990,6 +1994,7 @@ components:
           type: array
       required:
       - types
+      - install_handoff
       title: AgentTypesOut
       type: object
     CofferConnectionOut:
@@ -2312,6 +2317,18 @@ components:
       required:
       - error
       title: ErrorResponse
+      type: object
+    HandoffOut:
+      description: |-
+        A chore for the person's agent. ``prompt`` is the whole text to copy or
+        to pre-fill a new conversation with; Coffer never sends it itself.
+      properties:
+        prompt:
+          title: Prompt
+          type: string
+      required:
+      - prompt
+      title: HandoffOut
       type: object
     HookHealth:
       description: |-

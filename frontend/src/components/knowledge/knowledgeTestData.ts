@@ -14,19 +14,19 @@ export const NAME = "shopee";
 export const COLLECTION: CollectionOut = {
   uid: UID,
   name: NAME,
-  title: null,
   description: "How the shop is built.",
   document_count: 2,
   pending_count: 1,
+  folder_path: `/home/u/.coffer/knowledge/${NAME}`,
 };
 
 export const OTHER: CollectionOut = {
   uid: "kn-77aa",
   name: "runbooks",
-  title: null,
   description: "On-call runbooks.",
   document_count: 0,
   pending_count: 0,
+  folder_path: "/home/u/.coffer/knowledge/runbooks",
 };
 
 function file(path: string, over: Partial<FileOut> = {}): FileOut {

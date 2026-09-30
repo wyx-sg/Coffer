@@ -162,21 +162,35 @@ headings, page titles, buttons, dialogs and prose — never "Agent" or 代理.
 - **AND** in 中文 the group headings read 智能体, 运行, 能力, 上下文 and 系统, and no zh string names an agent as "Agent"
 
 ### Requirement: Show a self-clearing offline banner
-When an authenticated request fails to connect while the app is open, a
-daemon-offline banner MUST render above the workspace, naming the recovery the
-host can offer — in a browser the `coffer daemon start` command, in the desktop
-shell a Restart control, because only one of the two can spawn a daemon. The
-banner MUST clear itself once the daemon is reachable again, with no manual page
-reload. The banner owns the failure case; the shell footer reports the daemon's
-state at all times (see "Show the daemon's state in the shell footer"), and the
-two MUST agree: the footer never reads as running while the banner is shown.
+When the daemon's status probe stops answering while the app is open, the shell
+MUST first try to reconnect without taking the page away: it retries after 1, 2,
+4 and 8 seconds, and for the first 10 seconds of failures the page stays where
+it was, dimmed and not interactive, under a reconnecting bar at the top of the
+workspace that names the attempt, when the next one runs and that nothing is
+lost, with a Retry now control. After that the page MUST make way for an
+offline state in the workspace — the sidebar stays — naming the recovery the
+host can offer: in a browser the `coffer daemon start` command, in the desktop
+shell a Start daemon control, because only one of the two can spawn a daemon;
+both with Retry, when the next check runs and when the daemon last answered.
+Both MUST clear themselves once the daemon is reachable again, with no manual
+page reload: every query is read again and a toast says the app reconnected.
+The banner owns the failure case; the shell footer reports the daemon's state
+at all times (see "Show the daemon's state in the shell footer"), and the two
+MUST agree: the footer reads reconnecting under the bar and offline beside the
+offline state, never running.
 
 #### Scenario: daemon-offline banner appears when daemon is unreachable
 - **GIVEN** the daemon is not running (no reachable `127.0.0.1:<port>` from `~/.coffer/daemon.json`, or the file is absent)
 - **WHEN** the user has the app open and any authenticated request to the daemon fails to connect
-- **THEN** a daemon-offline banner renders at the top of the workspace naming the recovery the host can actually offer — in a browser, the `coffer daemon start` command to run, because the page cannot start a daemon; in the desktop shell, a Restart control, because it can
-- **AND** the shell footer reads as offline for as long as the banner is shown
-- **AND** the banner disappears automatically once the daemon becomes reachable again, without a manual page reload
+- **THEN** the reconnecting bar shows first, and after 10 seconds of failures the offline state renders in the workspace naming the recovery the host can actually offer — in a browser, the `coffer daemon start` command to run, because the page cannot start a daemon; in the desktop shell, a Start daemon control, because it can
+- **AND** the shell footer reads as offline for as long as the offline state is shown
+- **AND** the offline state disappears automatically once the daemon becomes reachable again, without a manual page reload
+
+#### Scenario: a daemon that comes back within seconds leaves the page in place
+- **GIVEN** a page open with a running daemon
+- **WHEN** the daemon stops answering and answers again within 10 seconds
+- **THEN** the page stays mounted under the reconnecting bar, dimmed and not interactive, while the retries run
+- **AND** once it answers the bar goes, every query is read again and a toast says the app reconnected
 
 ### Requirement: Organise Settings into five tabs
 Settings — the modal of "Open Settings as a modal from the sidebar footer" —
@@ -813,22 +827,35 @@ only as a redirect for old bookmarks: Coffer has no embedding configuration
 The shell MUST show the daemon's state at all times in a footer at the bottom of
 the sidebar, read from the daemon's status probe (spec
 [daemon](../daemon/spec.md) "Report the state the shell shows"). The footer MUST
-name one of four states in plain words — connecting (no answer yet), running,
-stopping (the daemon reports `draining`) or offline (it cannot be reached) — and,
-while running, the port it answers on. In the desktop shell, a daemon from a
-different app version MUST read as running with a version warning. Clicking the
-state MUST open the Settings modal on its Daemon tab over the current page. The
-labelled Settings row sits just above the state (see "Open Settings as a modal
-from the sidebar footer"). On the collapsed icon rail the state MUST shrink to
-an icon whose tooltip carries the same words, and the Settings row to its gear. Showing the state
-MUST NOT make starting the daemon the user's job: every surface that can start
-one still does so without asking.
+name one of five states in plain words — connecting (no answer yet), running,
+stopping (the daemon reports `draining`), reconnecting (the first seconds after
+it stopped answering, see "Show a self-clearing offline banner") or offline (it
+cannot be reached) — with the app's version beside it, and its accessible name
+MUST carry, while running, the port it answers on. In the desktop shell, a
+daemon from a different app version MUST read as running with a version
+warning. Clicking the state MUST open the version menu above it: its head names
+the version and the address the daemon answers on (or the state, when it is not
+running) and opens the Settings modal on its Daemon tab over the current page;
+below it the theme (Light, Dark, System, applied at once), the language (each
+locale named in its own language, applied at once), Documentation (the docs
+site) and Check for updates (Settings › About, where the desktop shell checks at
+once). The labelled Settings row sits just above the state (see "Open Settings
+as a modal from the sidebar footer"). On the collapsed icon rail the state MUST
+shrink to an icon whose tooltip carries the same words, and the Settings row to
+its gear. Showing the state MUST NOT make starting the daemon the user's job:
+every surface that can start one still does so without asking.
 
 #### Scenario: the footer shows a running daemon
 - **GIVEN** a daemon answering its status probe with `status: "ready"` on port 8000
 - **WHEN** the shell renders
-- **THEN** the sidebar footer reads that the daemon is running on port 8000
-- **AND** clicking it opens the Settings modal on its Daemon tab at `/settings/daemon`, over the page the user was on
+- **THEN** the sidebar footer reads that the daemon is running, with the app's version, and its accessible name names port 8000
+- **AND** clicking it opens the version menu, whose head names `127.0.0.1:8000` and opens the Settings modal on its Daemon tab at `/settings/daemon`, over the page the user was on
+
+#### Scenario: the version menu switches theme and language at once
+- **GIVEN** the version menu open from the footer
+- **WHEN** the user picks Dark, then 简体中文
+- **THEN** the whole shell turns dark and then reads in Chinese with no reload, each locale named in its own language
+- **AND** Documentation opens the docs site and Check for updates opens Settings › About
 
 #### Scenario: the footer says connecting before the first answer
 - **GIVEN** the shell has rendered and the daemon's status probe has not answered yet
@@ -839,7 +866,7 @@ one still does so without asking.
 - **GIVEN** the daemon cannot be reached
 - **WHEN** the footer renders
 - **THEN** it reads as offline while the offline banner is shown
-- **AND** clicking it still opens Settings → Daemon, which names the host's recovery
+- **AND** its version menu still opens Settings → Daemon, which names the host's recovery
 
 #### Scenario: the footer shows a stopping daemon
 - **GIVEN** a daemon whose status probe reports `status: "draining"`
@@ -925,7 +952,7 @@ elsewhere from any page, and from a search control in the sidebar. It MUST do
 one thing — take the user somewhere — and MUST NOT carry an action that changes
 state: no create, delete, enable, reach or run entry.
 
-It MUST list two groups, filtered together by what the user types:
+It lists two kinds of entry, filtered together by what the user types:
 
 - **Pages** — every sidebar entry and every Settings tab, by the names the
   sidebar and the tabs use (see "Call a surface by one name everywhere"). A
@@ -936,17 +963,24 @@ It MUST list two groups, filtered together by what the user types:
   "Carry an optional editable title on the kinds that have one") — each
   opening its detail page.
 
+With an empty query it MUST show **Recent** — the last few entries chosen in
+this browser, a convenience that is safe to lose — above every page. Under a
+query it MUST show the single best hit as **Best match** (an exact name first,
+then a match at the start of a name), then the other matching pages, then the
+matching objects in one group per kind, named as the kind's sidebar entry and
+in sidebar order, each group holding a few; typing more narrows them.
+
 A page or object of a switched-off experimental feature MUST NOT appear. The
 palette MUST read the list routes the pages already read and add no route of its
 own. Arrow keys MUST move the selection, Enter MUST open it, and Escape MUST
 close the palette and return focus where it was.
 
-The Pages group MUST be usable at once, whatever the daemon's state. While a
-kind's objects are loading, its group MUST say so; a kind whose list fails MUST
-show a readable error in its own group and leave the other groups working; while
-the daemon cannot be reached, the palette MUST list Pages only and say that
-objects need the daemon. A query that matches nothing MUST say so rather than
-show an empty panel.
+Pages MUST be usable at once, whatever the daemon's state. While the objects
+are loading, the palette MUST say so; a kind whose list fails MUST show a
+readable error in its own group and leave the other groups working; while the
+daemon cannot be reached, the palette MUST list Pages only and say that objects
+need the daemon. A query that matches nothing MUST say so, and what the palette
+searches, rather than show an empty panel.
 
 #### Scenario: the palette jumps to a page
 - **GIVEN** the app open on any page
@@ -956,14 +990,19 @@ show an empty panel.
 #### Scenario: the palette jumps to an object
 - **GIVEN** a registered MCP server, and a model provider whose title differs from its name
 - **WHEN** the user opens the palette and types part of the server's name, then part of the provider's name, then part of the provider's title
-- **THEN** the first query lists the server under Objects, and the second and third each list the provider
+- **THEN** the first query lists the server, and the second and third each list the provider
 - **AND** choosing the server opens `/mcp-servers/<name>`
 
 #### Scenario: the palette offers no actions
-- **GIVEN** the palette open with an empty query
-- **WHEN** every entry it can list is read
+- **GIVEN** the palette open with an empty query, and then with queries naming objects
+- **WHEN** every entry it lists is read
 - **THEN** each entry is a page or an object that navigates somewhere
 - **AND** choosing any of them sends no request that changes state
+
+#### Scenario: an empty query shows recent choices above every page
+- **GIVEN** the user chose an MCP server and then the Usage page from the palette
+- **WHEN** they open the palette again with an empty query
+- **THEN** Recent lists Usage and then the server, and every page is listed below it
 
 #### Scenario: the palette leaves out switched-off features
 - **GIVEN** a registered experimental feature that is switched off, owning a sidebar entry and a kind with a resource on disk
@@ -974,7 +1013,7 @@ show an empty panel.
 - **GIVEN** the palette opened before the object lists have answered
 - **WHEN** the user types a page's name
 - **THEN** the page is listed and can be opened
-- **AND** the Objects group says it is loading
+- **AND** the palette says the objects are loading
 
 #### Scenario: a failing kind leaves the rest of the palette working
 - **GIVEN** the skills list route failing and the MCP servers list answering
@@ -1044,39 +1083,50 @@ assistant's steps are the credentials capability's, specified with it.
 - **AND** the reveal records a `credential_read` audit entry carrying the reference only
 
 ### Requirement: Mark a sidebar entry whose kind needs attention
-A sidebar entry MUST carry a dot while the attention signal of the kind or tool
-behind it is raised, so something that needs the user is seen from wherever they
-are. It MUST be a dot and not a count — what is waiting is one situation to look
-at — rendered by one shared component, with an accessible name that says the
-entry needs attention, and it MUST stay visible on the collapsed icon rail. What
-raises a signal and what clears it belongs to the capability that owns the kind;
-today the one signal is Sync's (spec
-[vault-sync](../vault-sync/spec.md) "Say a vault needs a human where the user already is"),
-and a kind that declares a signal is marked by this same dot with no change to
-the sidebar. An entry whose kind declares no signal MUST NOT carry a dot, and a
-signal that has not loaded, or whose read failed, MUST leave no dot rather than
-an error in the sidebar.
+A sidebar entry MUST carry a count badge while the kind or tool behind it has
+things that need the user, so they are seen from wherever the user is. The
+sidebar speaks only through these badges, and only for things that need the
+user — failures, drift, a held vault, a required CLI that is missing, too old or
+not logged in; an informational count (how many servers, how many documents
+waiting in a knowledge collection's inbox) MUST NOT become a badge. The badge
+shows how many things need the user, toned danger while any of them is a
+failure and warning otherwise, rendered by one shared component with an
+accessible name that says the entry needs attention. On the collapsed icon rail
+it MUST shrink to a dot of the same tone on the icon, and the row's tooltip
+carries the count ("MCP servers · 1 failing").
 
-#### Scenario: an entry whose kind needs attention carries a dot
-- **GIVEN** a sync round held for confirmation
+What raises a signal and what clears it belongs to the capability that owns the
+kind: the entries of Agents, MCP servers, Skills and Channels count the
+non-informational items the cross-kind attention list reports for their kind
+(spec [resource-framework](../resource-framework/spec.md) "Report what needs a
+person across every kind"); Sync keeps its own signal, one situation cleared by
+visiting the page (spec [vault-sync](../vault-sync/spec.md) "Say a vault needs a
+human where the user already is"); CLIs counts the required commands that need
+the user. Knowledge and Memory carry no badge. An entry whose kind declares no
+signal MUST NOT carry a badge, and a signal that has not loaded, or whose read
+failed, MUST leave no badge rather than an error in the sidebar.
+
+#### Scenario: an entry whose kind needs attention carries a count badge
+- **GIVEN** a sync round held for confirmation, and two MCP servers the attention list reports, one of them failing
 - **WHEN** the user is on any page other than Sync
-- **THEN** the Sync entry carries the attention dot, with an accessible name saying it needs attention
+- **THEN** the Sync entry carries a badge of 1 and the MCP servers entry a danger badge of 2, each with an accessible name saying it needs attention
 - **AND** no other entry carries one
 
 #### Scenario: the attention dot stays on the collapsed rail
-- **GIVEN** the Sync entry carrying the attention dot
+- **GIVEN** the MCP servers entry carrying a badge for one failing server
 - **WHEN** the sidebar is collapsed to its icon rail
-- **THEN** the Sync icon still carries the dot
+- **THEN** the MCP servers icon carries a dot of the same tone, and its tooltip reads "MCP servers · 1 failing"
 
-#### Scenario: an entry without a signal never carries a dot
-- **GIVEN** every attention signal the kinds declare is raised
+#### Scenario: an entry without a signal never carries a badge
+- **GIVEN** every attention signal the kinds declare is raised, and documents waiting in a knowledge collection's inbox
 - **WHEN** the sidebar renders
-- **THEN** only the entries whose kinds declare a signal carry a dot
+- **THEN** only the entries whose kinds declare a signal carry a badge, and Knowledge carries none
+- **AND** an informational item of the attention list raises no badge
 
-#### Scenario: an unreadable signal leaves no dot
+#### Scenario: an unreadable signal leaves no badge
 - **GIVEN** the route behind a kind's attention signal failing, or not yet answered
 - **WHEN** the sidebar renders
-- **THEN** that entry carries no dot and the sidebar shows no error
+- **THEN** that entry carries no badge and the sidebar shows no error
 
 ### Requirement: Open Settings as a modal from the sidebar footer
 Settings MUST NOT be a navigation entry: it is not one of the sidebar's fifteen
@@ -1467,16 +1517,24 @@ where the item is dealt with. An attention source that failed MUST be named
 above the rows, saying that what it would report is missing. Rows MUST clear
 themselves as problems resolve: the page follows the daemon's event stream and
 rereads the list when an `attention` change arrives. **Health** follows: one
-tile per area whose backend exists and whose feature is switched on — Agents,
-Model providers, MCP servers, Skills, Channels, Knowledge, Memory and Sync —
-each with a status word drawn from that area's
-attention items, a count from its own list and a one-line summary, opening the
-area's page; an area with no backend yet has no tile. Each tile loads and fails
+tile per sidebar area whose feature is switched on — Agents, MCP servers,
+Skills, Knowledge, Memory, Model providers, Channels, Sync, Custom tools, CLIs,
+Secrets and Usage, in that order (Conversations show in Recent activity) —
+each with a status word drawn from that area's attention items (Secrets, which
+has no attention source, words its own list: a secret missing on this machine,
+one nothing uses; Usage shows its period and no health), a count from its own
+list and a one-line summary, opening the area's page; an area with no backend
+has no tile. Each tile loads and fails
 on its own: a failed tile says so with Retry and a link to its page while the
 rest of the page keeps working. **Recent activity** lists the last few changes
 with a link to Activity. With nothing needing the user the list is a calm "all
-good" card rather than an empty space, and with no agent registered the page
-opens on connecting the agents Coffer found.
+good" card rather than an empty space. With no agent registered the page is
+the first-run panel alone: the supported agents with their config folders and
+whether each was found on this machine, the found ones ticked, and **Review
+and connect** opening the connection review for the ticked ones (every file
+change shown before Coffer writes it); with none found it says so and its first
+step is **Scan again**; both offer adding an agent by hand, and the first step
+for what agents share follows.
 
 #### Scenario: overview lists what needs the user, most severe first
 - **GIVEN** an MCP server whose last test failed a day ago, an agent not connected since an hour ago and a warning from sync
@@ -1492,6 +1550,7 @@ opens on connecting the agents Coffer found.
 - **GIVEN** a vault with no agent registered
 - **WHEN** the user opens Overview
 - **THEN** the page offers to connect the supported agents, naming which were found on this machine, followed by the first step for what they share
+- **AND** with no supported agent found it says none was found and offers Scan again in place of connecting
 
 #### Scenario: one area failing to load leaves the rest of overview working
 - **GIVEN** the knowledge read fails while every other read answers
@@ -1501,7 +1560,7 @@ opens on connecting the agents Coffer found.
 #### Scenario: overview hides an area whose backend or feature is off
 - **GIVEN** an area owned by a registered experimental feature that is switched off
 - **WHEN** the user opens Overview
-- **THEN** there is no tile for that area, and no tile for Custom tools or CLIs
+- **THEN** there is no tile for that area, while Custom tools, CLIs, Secrets and Usage each have one
 
 #### Scenario: a resolved problem leaves overview on its own
 - **GIVEN** Overview open with one item in Needs you

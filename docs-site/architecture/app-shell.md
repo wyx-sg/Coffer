@@ -1,6 +1,6 @@
 ---
 title: App shell
-description: How the web UI's frame is organised — the sidebar grouped by intent, one list of names and routes, Settings as an addressable modal, the daemon footer, the navigation-only palette, attention dots, resizable splits and tab addresses — and why each works the way it does.
+description: How the web UI's frame is organised — the sidebar grouped by intent, one list of names and routes, Settings as an addressable modal, the daemon footer and its version menu, the connection states, the navigation-only palette, attention badges, resizable splits and tab addresses — and why each works the way it does.
 ---
 
 # App shell
@@ -13,7 +13,7 @@ The app shell is the frame every page of the web UI sits in: the sidebar, the co
 - **One name, one route, everywhere.** A surface is named and addressed once, and every place that shows it reads that one definition.
 - **Every view is an address.** What you are looking at — a page, a tab, the Settings window over a page — is in the URL, so a refresh, a bookmark or the Back button brings it back.
 - **One source per fact.** The footer and the offline banner read the same daemon status; the palette reads the same lists the pages read. Two readings of one fact would eventually disagree.
-- **The shell renders; capabilities decide.** The shell draws attention dots, gates experimental entries and lays out splits, but whether something needs attention or is switched on is decided by the capability that owns it.
+- **The shell renders; capabilities decide.** The shell draws attention badges, gates experimental entries and lays out splits, but whether something needs attention or is switched on is decided by the capability that owns it.
 
 ## The sidebar is grouped by what you come to do
 
@@ -62,27 +62,31 @@ The **Settings** row is highlighted only while the modal is open. It is labelled
 
 ## The footer reads the same status as the banner
 
-Below the Settings row, the footer names the daemon's state in plain words: connecting, running on its port, stopping, or offline. Clicking it opens **Settings → Daemon**.
+Below the Settings row, the footer names the daemon's state in plain words — connecting, running, stopping, reconnecting or offline — with the app's version beside it. Clicking it opens the **version menu**: its head names the version and the daemon's address and opens **Settings → Daemon**; below it sit the theme, the language, the documentation and **Check for updates**. Theme and language live there because they are the two preferences people change on the spot; Settings is for machine-level configuration visited rarely, so it is only the sidebar row and **⌘,**.
 
-The web UI already polls the daemon's status to decide when to show the [offline banner](/guides/web-ui#when-the-daemon-is-not-reachable). The footer reads that same poll and adds no timer of its own. This is not only economy: two timers would sample the daemon at different moments and could briefly disagree, with the banner saying offline while the footer still says running. Reading one source, and checking for a failure before trusting a cached answer, makes that impossible — the footer never reads as running while the banner is up.
+The web UI already polls the daemon's status every 30 seconds. One piece of the shell watches that poll: when it fails it retries after 1, 2, 4 and 8 seconds and publishes one connection phase — ok, reconnecting or offline — that every other part reads. The footer reads that same poll and phase and adds no timer of its own. This is not only economy: two timers would sample the daemon at different moments and could briefly disagree, with the workspace saying offline while the footer still says running. Reading one source, and checking for a failure before trusting a cached answer, makes that impossible.
 
-The footer reports; it does not ask you to act. Coffer starts its daemon by itself, so the state is there for reassurance and diagnosis, and the banner stays the one place that names a recovery.
+The footer reports; it does not ask you to act. Coffer starts its daemon by itself, so the state is there for reassurance and diagnosis, and the workspace's connection states stay the one place that names a recovery.
+
+## Losing the daemon keeps the page
+
+A daemon that restarts, or a laptop waking from sleep, drops the connection for a few seconds. Replacing the page with an error at the first failed probe would throw away what the user was reading and typing for a gap that heals itself. So for the first 10 seconds of failures the page stays mounted, dimmed and inert, under a **Reconnecting…** bar with **Retry now**; only after that does it make way for the offline screen that names the host's recovery — the `coffer daemon start` command in a browser, **Start daemon** in the desktop app. When the daemon answers again every query is read again and a **Reconnected** notice says so. Both states are drawn in the workspace, not floating over it, so the sidebar and the Settings window stay usable throughout.
 
 ## The palette is navigation only
 
-**⌘K** (**Ctrl+K**) or the **Search or jump to…** control opens the command palette. It lists **Pages** — every sidebar entry and Settings tab — and **Objects** — agents and the resources of every listed kind, matched by name (and by title on the kinds that carry one).
+**⌘K** (**Ctrl+K**) or the **Search or jump to…** control opens the command palette. It finds **Pages** — every sidebar entry and Settings tab — and **Objects** — agents and the resources of every listed kind, matched by name (and by title on the kinds that carry one). With nothing typed it shows the last few choices (**Recent**, kept in the browser) above every page; under a query the best hit leads, then pages, then objects grouped by kind.
 
 - **It only navigates.** Choosing an item opens a page; nothing in the palette creates, deletes or changes anything. Actions stay on the pages that own them, next to the context that makes them safe.
 - **It adds no search route.** Each kind's objects come from the same list query that kind's page already uses, so the palette reuses whatever is cached and fetches only what is not. There is no aggregate index that could fall behind the pages.
-- **Each kind stands alone.** Every kind loads on its own; one still loading says so in its group, and one that fails shows its own error while the others keep working.
+- **Each kind stands alone.** Every kind loads on its own; while they load the palette says so, and one that fails shows its own error while the others keep working.
 - **Pages never need the daemon.** They come from the one list of names and routes, so the palette is useful even while the daemon is offline; it then lists Pages only and says that objects need the daemon.
 - **It respects feature switches.** Pages and objects of a switched-off experimental feature do not appear.
 
 ## Attention signals belong to their capability
 
-An entry whose kind needs you carries a small dot — a dot rather than a count, because the sidebar's job is to say *where* to look, and the page says how much. The dot stays visible on the collapsed rail.
+An entry whose kind needs you carries a count badge — red while any of the things counted is a failure — and on the collapsed rail a dot of the same colour, with the count in the icon's tooltip. The sidebar speaks only through these badges, and only for things that need you: failures, drift, a held vault, a required CLI that is missing. An informational count — how many servers there are, how many documents wait in a knowledge collection's inbox — never becomes a badge, because a sidebar full of numbers stops saying where to look.
 
-The shell owns only the drawing. Whether a kind needs attention, and what clears it, is decided by the capability that owns the kind: today only Sync raises a signal, while a vault is held or failed, and visiting Sync clears it. The shell keeps one map from sidebar entry to signal, and a kind that wants a dot adds its signal to that map; the sidebar then marks it with the same dot and no other change. A signal that has not loaded, or whose read failed, simply shows no dot — the sidebar is never the place an error surfaces.
+The shell owns only the drawing. Whether a kind needs attention, and what clears it, is decided by the capability that owns the kind: Agents, MCP servers, Skills and Channels count what the daemon's cross-kind attention list (the list Overview's **Needs you** shows) reports for them; Sync keeps its own signal, cleared by visiting Sync; CLIs count the required commands that need you. The shell keeps one map from sidebar entry to signal, and a kind that wants a badge adds its signal to that map; the sidebar then marks it with the same badge and no other change. A signal that has not loaded, or whose read failed, simply shows no badge — the sidebar is never the place an error surfaces.
 
 ## Split views are resizable, per browser
 

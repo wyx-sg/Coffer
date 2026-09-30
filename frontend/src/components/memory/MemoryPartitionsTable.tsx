@@ -17,6 +17,8 @@
 // confirmation is hoisted to table level so closing it cannot click through
 // to the row.
 import { useState } from "react";
+import { AgentSources, distilState, sampleLine } from "@/components/memory/partitionFacts";
+import { useUpkeepRunsOf } from "@/lib/hooks/useUpkeep";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -36,9 +38,13 @@ interface Props {
 }
 
 export function MemoryPartitionsTable({ rows, isLoading = false }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [deleting, setDeleting] = useState<PartitionOut | null>(null);
+  const runs = useUpkeepRunsOf("memory");
+  const running = (uid: string) => runs.some((r) => r.name === uid);
+  // "All agents" means every agent that contributed to any partition.
+  const everyone = [...new Set(rows.flatMap((r) => r.sources))];
 
   const columns: Column<PartitionOut>[] = [
     {
@@ -50,13 +56,26 @@ export function MemoryPartitionsTable({ rows, isLoading = false }: Props) {
     {
       key: "path",
       header: t("memory.cols.path"),
+      className: "whitespace-nowrap",
+      cell: (r) => (
+        <span className="text-sm text-text-muted">
+          {r.repository_path ? abbreviateHomePath(r.repository_path) : t("memory.cols.global")}
+        </span>
+      ),
+    },
+    {
+      key: "sample",
+      header: t("memory.cols.sample"),
       className: "w-full min-w-[16rem]",
       cell: (r) => (
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="line-clamp-1 text-sm text-text-muted">
-            {r.repository_path ? abbreviateHomePath(r.repository_path) : t("memory.cols.global")}
-          </span>
-          {r.unresolvable ? <UnresolvableBadge /> : null}
+        <span
+          className={
+            r.sample
+              ? "line-clamp-1 text-sm text-text"
+              : "line-clamp-1 text-sm text-text-subtle"
+          }
+        >
+          {sampleLine(t, r)}
         </span>
       ),
     },
@@ -67,16 +86,29 @@ export function MemoryPartitionsTable({ rows, isLoading = false }: Props) {
       cell: (r) => <span className="tabular-nums">{r.note_count}</span>,
     },
     {
-      key: "actions",
-      header: "",
+      key: "sources",
+      header: t("memory.cols.sources"),
+      className: "whitespace-nowrap",
+      cell: (r) => <AgentSources agents={r.sources} everyone={everyone} />,
+    },
+    {
+      key: "distil",
+      header: t("memory.cols.distil"),
       className: "whitespace-nowrap text-right",
       cell: (r) =>
         r.unresolvable ? (
-          <RowDeleteButton
-            ariaLabel={`${t("common.delete")}: ${displayName(r)}`}
-            onDelete={() => setDeleting(r)}
-          />
-        ) : null,
+          <span className="inline-flex items-center gap-2">
+            <UnresolvableBadge />
+            <RowDeleteButton
+              ariaLabel={`${t("common.delete")}: ${displayName(r)}`}
+              onDelete={() => setDeleting(r)}
+            />
+          </span>
+        ) : (
+          <span className="text-xs text-text-muted">
+            {distilState(t, i18n.language, r, running(r.uid))}
+          </span>
+        ),
     },
   ];
 

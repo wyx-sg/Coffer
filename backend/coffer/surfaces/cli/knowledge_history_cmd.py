@@ -73,15 +73,36 @@ def register_history_commands(
     @app.command("restore")
     def restore(
         ctx: typer.Context,
-        path: str = typer.Argument(..., help="The document to restore"),
-        version: str = typer.Argument(..., help="The version to put back (from `history`)"),
+        path: str = typer.Argument("", help="The document to restore"),
+        version: str = typer.Argument("", help="The version to put back (from `history`)"),
+        deleted: str = typer.Option(
+            "",
+            "--deleted",
+            help="Bring back what this delete removed, a document or a whole collection "
+            "(the delete's version, from `changes`)",
+        ),
     ) -> None:
-        """Put one version of a document back, as a new version."""
+        """Put one version of a document back, as a new version — or, with
+        `--deleted`, bring back a deleted document or collection.
+
+        \f
+        Requirement "Restore a deleted collection or document from Recent changes".
+        """
+        if bool(deleted) == bool(path and version):
+            typer.echo("give PATH and VERSION, or --deleted VERSION", err=True)
+            raise typer.Exit(2)
         c, _info = _cli_client.client_or_exit()
         with c:
-            r = c.post("/knowledge/history/restore", json={"path": path, "version": version})
+            if deleted:
+                r = c.post(f"/knowledge/changes/{deleted}/restore")
+            else:
+                r = c.post("/knowledge/history/restore", json={"path": path, "version": version})
             _cli_client.check(r, verbose=_verbose(ctx))
-        typer.echo(f"restored {path} to {version[:10]}")
+        if deleted:
+            restored = ", ".join(d["path"] for d in r.json()["documents"])
+            typer.echo(f"restored what {deleted[:10]} deleted: {restored}")
+        else:
+            typer.echo(f"restored {path} to {version[:10]}")
 
     @app.command("changes")
     def changes(

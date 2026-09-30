@@ -279,7 +279,7 @@ A choice saves as soon as you make it; there is no Save button. A line under eac
 - **Set** — both halves are chosen and have not been tested during this visit.
 - **Answering** or **Failing** — the result of **Test**. For the engine, Test sends one small chat request to the chosen provider and model. For speech to text, a chat request would fail on a speech model, so Test instead asks the provider which models it serves: it passes when the list names your model and fails when it does not. A provider that answers but lists no models reads **Reachable**, because the model can't be checked. A failure shows the reason on that line and changes nothing: the pair stays as you chose it until you pick another one.
 
-Below the pickers, **Automatic upkeep** has one row per unattended pass, each with its own switch and interval.
+The passes Coffer runs on its own are switched on the pages they upkeep: curation from the **Automatic** control in the Knowledge header, reading and distilling memory from the one in the Memory header.
 
 **CLI:**
 

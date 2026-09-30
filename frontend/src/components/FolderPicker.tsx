@@ -6,9 +6,10 @@
 // dialog tool. Either way it hands back a real absolute path.
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronUp, Folder, Loader2 } from "lucide-react";
+import { ChevronUp, Folder } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -51,7 +52,7 @@ export function FolderPicker({
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" onClick={onBrowse}>
+      <Button type="button" variant="outline" className="shrink-0" onClick={onBrowse}>
         {label ?? t("picker.browse")}
       </Button>
       <FolderBrowserDialog
@@ -101,21 +102,21 @@ function FolderBrowserDialog({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="icon-sm"
               disabled={!data?.parent}
               onClick={() => data?.parent && setPath(data.parent)}
               aria-label={t("folderPicker.up")}
             >
-              <ChevronUp className="size-4" />
+              <ChevronUp aria-hidden />
             </Button>
             <span className="truncate font-mono text-xs text-muted-foreground">
               {data?.path ?? t("common.loading")}
             </span>
           </div>
-          <div className="h-64 overflow-y-auto rounded-md border">
+          <div className="h-64 overflow-y-auto rounded-lg border border-border">
             {browse.isPending ? (
-              <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
+              <div className="flex items-center gap-2 p-4 text-sm text-text-muted">
+                <Spinner />
                 {t("common.loading")}
               </div>
             ) : browse.isError ? (
@@ -129,9 +130,9 @@ function FolderBrowserDialog({
                     <button
                       type="button"
                       onClick={() => setPath(e.path)}
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
+                      className="flex h-control-md w-full items-center gap-2 px-3 text-left text-sm transition-colors duration-fast hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
                     >
-                      <Folder className="size-4 shrink-0 text-muted-foreground" />
+                      <Folder className="size-3.5 shrink-0 text-text-subtle" aria-hidden />
                       <span className="truncate">{e.name}</span>
                     </button>
                   </li>

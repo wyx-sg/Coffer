@@ -21,6 +21,11 @@ export const GLOBAL: PartitionOut = {
   repository_key: "",
   note_count: 12,
   unresolvable: false,
+  distilled_at: "2026-09-30T09:00:00Z",
+  sample: "Prefers Chinese replies; docs and commits in English",
+  sources: ["claude-code", "codex"],
+  waiting_entries: 0,
+  waiting_agents: [],
 };
 
 export const COFFER: PartitionOut = {
@@ -31,6 +36,11 @@ export const COFFER: PartitionOut = {
   repository_key: "remote:github.com/wyx-sg/coffer",
   note_count: 2,
   unresolvable: false,
+  distilled_at: "2026-09-30T08:00:00Z",
+  sample: "Use Node 20 for frontend vitest",
+  sources: ["claude-code", "codex"],
+  waiting_entries: 0,
+  waiting_agents: [],
 };
 
 /** A partition whose repository has been deleted from disk. */
@@ -42,6 +52,11 @@ export const GONE: PartitionOut = {
   repository_key: "path:/Users/dev/work/old-prototype",
   note_count: 6,
   unresolvable: true,
+  distilled_at: "2026-09-20T08:00:00Z",
+  sample: "Mock settlement server listens on 4010",
+  sources: ["claude-code"],
+  waiting_entries: 0,
+  waiting_agents: [],
 };
 
 const NOTE_BASE = {
@@ -50,6 +65,7 @@ const NOTE_BASE = {
   search_terms: [],
   created_at: "2026-09-20T10:00:00Z",
   updated_at: "2026-09-26T10:00:00Z",
+  agents: ["claude-code"],
 };
 
 export const NOTES: NoteListOut = {

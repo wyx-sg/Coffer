@@ -33,7 +33,8 @@ export type FileOut = Schemas["FileOut"];
  *  it is on disk, so none of it is sent. */
 export type FileSave = Schemas["FileSave"];
 
-/** One collection: a top-level folder, described by its own `README.md`. */
+/** One collection: a top-level folder, described by its own `README.md`. It
+ *  has no title — it is shown by its folder name. */
 export type CollectionOut = Schemas["CollectionOut"];
 
 export type CollectionListOut = Schemas["CollectionListOut"];
@@ -85,6 +86,9 @@ export type DocumentVersionOut = Schemas["DocumentVersionOut"];
 
 /** What one version did to a document, as a unified diff. */
 export type VersionDiffOut = Schemas["VersionDiffOut"];
+
+/** A document's body as one version left it. */
+export type VersionBodyOut = Schemas["VersionBodyOut"];
 
 /** Who wrote a change: `user`, `agent`, `curation`, `sync` or `disk`. */
 export type ChangeWriter = ChangeOut["writer"];

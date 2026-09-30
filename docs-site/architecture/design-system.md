@@ -53,6 +53,8 @@ Motion confirms cause and effect and never decorates. There are three durations 
 
 Keyboard focus is always visible and only appears for keyboard focus, never on a mouse click: a two-pixel accent ring with a gap, following the control's shape; text fields show an accent border with a soft halo instead.
 
+Waiting is shown where it happens and only when it lasts. A button that started an action keeps its width and label, swaps its icon for a small spinner and reads busy rather than disabled; a list that is loading keeps its header and fills with skeleton rows shaped like the real ones. Both appear only after a short delay, so an answer that comes back quickly never flashes a spinner. Tooltips name things and never hold actions: one opens after a moment of hover, at once on keyboard focus, and the next one opens without the wait while the pointer moves along a toolbar.
+
 ## Shared components
 
 The base controls — button, input, select, checkbox, switch, tabs, dialog, tooltip, popover, table, card, toast, skeleton, banner — are the design system's primitives, and pages are built from them rather than restyling their own. Above them sit a few components that carry ideas the whole product repeats. Each exists so one question has one answer everywhere.
@@ -66,6 +68,12 @@ The base controls — button, input, select, checkbox, switch, tabs, dialog, too
 **Change preview.** Before Coffer writes into files it does not own — repairing drift, connecting an agent, resolving a sync conflict — it can show the change first, in one preview: grouped by agent and by file, each file with its operation and line counts, a plain-words sentence per agent of what will happen, and the diff as the proof underneath. It has a state for every moment — computing, nothing to change, ready, applying, applied, and failed partway. When some changes fail, it stays open, says what did apply, and retries only the rest.
 
 **Empty state.** A tile, a title, one line of why, and one next action. An error in place of a list uses the same shape, toned for danger, with a retry and a way to diagnose.
+
+**Lists and tables.** Most pages are lists of hairline-separated rows. A table is used only where the reader compares columns — agents side by side, usage by provider, activity over time: sentence-case heads with no fill, rows tall enough for a sub-line, a ticked row reading as selected, a floating selection bar that lists safe actions before destructive ones, and no numbered pages: a long list shows its first rows with "Showing x of y" and grows with **Load N more**, N being the page size set in Settings.
+
+**Split view.** Every list-and-detail, tree-and-file and list-and-thread page can be resized by dragging its divider, and so can the sidebar. The divider is a hairline until the pointer reaches it, is a keyboard stop that arrow keys move, resets on a double-click, and remembers its width for this viewer.
+
+**Pickers.** A time range (a recent period or a custom range) for anything measured over time, and a folder for anything that runs in a directory: the chosen path in mono beside a Choose… button, and a folder that has since moved shown in error with the old path still visible.
 
 **The Coffer mark.** An open rounded square drawn with the navigation icons' own pen around a single accent dot — the product drawn from its own UI. It is the sidebar's brand and the browser tab's icon, and it follows the theme like everything else.
 
