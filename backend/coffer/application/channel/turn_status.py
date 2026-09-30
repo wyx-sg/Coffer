@@ -14,9 +14,11 @@ and WHAT it is doing now::
     ⏳ Grep · retry in e2e/
 
 The header ticks on the live surfaces' keep-alive cadence, so a long silent tool
-still shows time passing. Text the agent writes BETWEEN tool calls is narration
-("Let me check the logs"): it becomes the ``💬`` line rather than the answer.
-The final reply keeps it, with paragraph breaks (``ReplyText``).
+still shows time passing. In a group a step line names only the tool: everyone
+there reads it, and a tool's input can carry a command, a query or a path. Text
+the agent writes BETWEEN tool calls is narration ("Let me check the logs"): it
+becomes the ``💬`` line rather than the answer. The final reply keeps it, with
+paragraph breaks (``ReplyText``).
 
 Pure: no I/O, no platform schema, no clock of its own — ``now`` is handed in.
 """
@@ -72,6 +74,9 @@ class TurnStatus:
     #: Per channel ("show steps"): off keeps the header and narration but hides
     #: the step lines — e.g. in a busy group.
     show_steps: bool = True
+    #: "group" names only the tool on each step line — everyone in the group
+    #: reads it, and a tool's input can carry a command, a query or a path.
+    chat_kind: str = "direct"
     _lines: dict[str, str] = field(default_factory=dict)  # tool_use_id -> line
     _desc: dict[str, str] = field(default_factory=dict)  # tool_use_id -> descriptor
     failed: int = 0
@@ -82,7 +87,7 @@ class TurnStatus:
         return len(self._lines)
 
     def call(self, tool_use_id: str, tool_name: str, tool_input: object) -> None:
-        descriptor = _describe_tool(tool_name, tool_input)
+        descriptor = _describe_tool(tool_name, tool_input, chat_kind=self.chat_kind)
         self._desc[tool_use_id] = descriptor
         self._lines[tool_use_id] = _progress_line("⏳", tool_name, descriptor)
 

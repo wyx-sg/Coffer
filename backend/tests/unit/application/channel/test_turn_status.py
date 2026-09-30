@@ -72,3 +72,11 @@ def test_reply_text_joins_deltas_and_breaks_at_tool_boundaries() -> None:
 def test_a_snapshot_splits_into_its_block_and_its_answer() -> None:
     assert split_snapshot("⏳ Working · 3s\n─\nthe answer") == ("⏳ Working · 3s", "the answer")
     assert split_snapshot("⏳ Working · 3s") == ("⏳ Working · 3s", "")
+
+
+def test_a_group_step_line_names_only_the_tool() -> None:
+    status = TurnStatus(started=0.0, chat_kind="group")
+    status.call("t1", "Read", {"file_path": "/a/b/secret-plan.md"})
+    status.result("t1", "Read", error=False)
+
+    assert status.block(0.0).splitlines()[-1] == "✅ Read"

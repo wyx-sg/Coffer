@@ -537,6 +537,45 @@ async def test_sse_client_disconnect_does_not_dispose_session(
     assert session_id not in _ACTIVE_SESSIONS
 
 
+@pytest.mark.asyncio
+async def test_sse_client_disconnect_leaves_no_pending_queue_getter(
+    http_client: AsyncClient,
+) -> None:
+    """A client disconnect cancels the generator while it awaits
+    ``asyncio.wait``, which does not cancel the tasks it waits on. Those tasks
+    must be cancelled by the generator itself: a leftover ``queue.get()`` stays
+    parked on the session queue until the reaper drops the queue, and then the
+    garbage collector logs "Task was destroyed but it is pending!" for it.
+    """
+    import asyncio
+
+    from coffer.surfaces.http.mcp.dependencies import get_mcp_session_factory
+    from coffer.surfaces.http.mcp.protocol_routes import handle_get
+
+    init = await http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+    )
+    session_id = init.headers["mcp-session-id"]
+    resp = await handle_get(mcp_session_id=session_id, factory=get_mcp_session_factory())
+    gen = resp.body_iterator
+    await gen.__anext__()  # "connected" comment
+
+    parked = asyncio.ensure_future(gen.__anext__())
+    await asyncio.sleep(0.05)  # parked on queue.get() / stop_event.wait()
+    parked.cancel()
+    with suppress(asyncio.CancelledError):
+        await parked
+    await asyncio.sleep(0.05)
+
+    leaked = [
+        t
+        for t in asyncio.all_tasks()
+        if not t.done() and ("Queue.get" in repr(t) or "Event.wait" in repr(t))
+    ]
+    assert leaked == [], f"SSE disconnect leaked pending tasks: {leaked}"
+
+
 # ---------------------------------------------------------------------------
 # T4 — downstream notifications/initialized and ping
 # ---------------------------------------------------------------------------

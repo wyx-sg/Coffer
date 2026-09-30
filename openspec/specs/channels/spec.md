@@ -188,8 +188,16 @@ when the platform rate-limits outbound sends, sends back off and retry.
 #### Scenario: channel progress lines describe each tool call from its input
 - **GIVEN** a paired channel on an adapter that can edit messages
 - **WHEN** the agent invokes a tool during a turn
-- **THEN** the progress status line names the tool and a short descriptor drawn
-  from its input (e.g. the Bash description, the file basename for Read)
+- **THEN** the call's step line in the status block names the tool and a short
+  descriptor drawn from its input (e.g. the Bash description, the file basename
+  for Read) in a direct chat; a raw command, or an argument of a tool it has no
+  rule for, is never used as the descriptor
+
+#### Scenario: a group's progress lines name only the tool
+- **GIVEN** a paired group chat on an adapter that can edit messages
+- **WHEN** the agent invokes a tool during a turn
+- **THEN** the call's step line in the status block names the tool and nothing
+  from its input, because everyone in the group reads it
 
 ### Requirement: Answer the conversation commands from any paired chat
 Nine words are Coffer's commands in a paired chat, and nothing else: `/new`,
@@ -1319,6 +1327,20 @@ else in the thread. Group-*main* chatter is still never fetched.
 - **THEN** the thread's own messages are fetched through the direct-chat thread
   endpoint and folded into the turn, exactly as a group thread's are
 
+### Requirement: Say what a thread read cannot show
+SeaTalk's thread endpoints return only replies sent in the last 7 days, and never
+whisper or deleted messages; a root message is exempt from the window. A thread
+whose root predates the window therefore reads as its root plus recent replies,
+however long it looks in the app. The thread context MUST end with a note saying
+so whenever a returned message predates the window, so the agent reports what it
+could not see instead of answering as if the fragment were the whole thread.
+
+#### Scenario: a thread older than the platform's 7-day reach says what it cannot show
+- **GIVEN** a thread whose root was sent more than 7 days ago
+- **WHEN** its context is fetched for a turn
+- **THEN** the returned messages are followed by a note that SeaTalk returns only
+  the last 7 days of replies and that older messages are not shown
+
 ### Requirement: Track the bot's own standing in a group
 The bot's own standing in a group MUST be tracked. Platform events that change
 what a binding *is* rather than driving a turn arrive on a lifecycle callback
@@ -2029,11 +2051,12 @@ While a turn runs, its live surface MUST open with one status block the reader
 can take in at a glance: a header saying that the turn is working, for how long,
 and how many steps it has taken (`⏳ Working · 2m 14s · 7 steps`, with the
 failed count when there is one); the agent's latest narration as a `💬` line;
-and the newest three step lines, older ones collapsed into `+N earlier`. The
-answer written so far follows under a rule. The header MUST keep ticking while
-nothing else happens — a long silent tool still shows time passing — on the
-cadence the live surfaces already keep alive at, so the tick costs no extra
-traffic.
+and the newest three step lines, older ones collapsed into `+N earlier`. A step
+line names the tool, plus a short descriptor from its input in a direct chat
+only; a group's step lines carry nothing from the input. The answer written so
+far follows under a rule. The header MUST keep ticking while nothing else
+happens — a long silent tool still shows time passing — on the cadence the live
+surfaces already keep alive at, so the tick costs no extra traffic.
 
 Text the agent writes before a tool call is narration ("Let me check the
 logs"): once the tool call arrives it moves up into the `💬` line and the answer
