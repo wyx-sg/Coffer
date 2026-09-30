@@ -49,8 +49,8 @@ from coffer.infrastructure.persistence.repos import (
 from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.daemon_port import set_port
 from coffer.surfaces.http.daemon_routes import router as daemon_router
-from coffer.surfaces.http.daemon_routes import set_port
 from coffer.surfaces.http.mcp.dependencies import set_mcp_session_factory
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_router
 from coffer.surfaces.http.mcp.protocol_routes import shutdown_all_sessions
