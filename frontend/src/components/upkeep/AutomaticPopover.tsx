@@ -24,7 +24,7 @@ import type { UpkeepSetting } from "@/lib/api/internalEngine";
 import { cn } from "@/lib/utils";
 
 /** The intervals offered, in seconds. */
-export const INTERVAL_CHOICES = [
+const INTERVAL_CHOICES = [
   15 * 60,
   30 * 60,
   60 * 60,
@@ -40,7 +40,7 @@ const DEFAULT_VALUE = "default";
 type Translate = ReturnType<typeof useTranslation>["t"];
 
 /** "1 hour", "30 minutes", "1 day" — the interval as the picker names it. */
-export function intervalName(t: Translate, seconds: number): string {
+function intervalName(t: Translate, seconds: number): string {
   if (seconds % 86400 === 0) return t("upkeep.interval.days", { count: seconds / 86400 });
   if (seconds % 3600 === 0) return t("upkeep.interval.hours", { count: seconds / 3600 });
   return t("upkeep.interval.minutes", { count: Math.round(seconds / 60) });

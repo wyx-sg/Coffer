@@ -78,7 +78,7 @@ const HOOK_REASONS = new Set([
 ]);
 
 /** Whether an item is about Coffer's memory hook in one agent. */
-export function isHookItem(item: AttentionItem): boolean {
+function isHookItem(item: AttentionItem): boolean {
   return item.kind === "agent" && HOOK_REASONS.has(item.reason_code);
 }
 

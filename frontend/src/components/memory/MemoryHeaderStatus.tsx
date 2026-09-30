@@ -12,7 +12,7 @@ import { useMemoryReading } from "@/lib/hooks/useMemory";
 import { useUpkeepRun } from "@/lib/hooks/useUpkeep";
 
 /** The run Update memory holds while it works (backend `UPDATE_RUN`). */
-export const UPDATE_RUN = "update";
+const UPDATE_RUN = "update";
 
 /** Whether Update memory is running right now, by anyone's request. */
 export function useMemoryUpdateRunning(): boolean {

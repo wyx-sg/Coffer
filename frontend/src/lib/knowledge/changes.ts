@@ -88,7 +88,7 @@ const COLLECTION_OPERATIONS = new Set(["create", "baseline", "submit", "remove"]
 
 /** Whether a restore brought back a whole collection: it put back the
  *  collection's own README, which only a deleted collection loses. */
-export function isCollectionRestore(change: ChangeOut): boolean {
+function isCollectionRestore(change: ChangeOut): boolean {
   const name = change.collections[0];
   return (
     change.operation === "restore" &&

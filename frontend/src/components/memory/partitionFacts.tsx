@@ -18,7 +18,7 @@ function types(agents: readonly string[]): string[] {
 }
 
 /** True when `agents` covers every agent in `everyone` (and there is more than one). */
-export function isAllAgents(agents: readonly string[], everyone: readonly string[]): boolean {
+function isAllAgents(agents: readonly string[], everyone: readonly string[]): boolean {
   const all = types(everyone);
   const mine = types(agents);
   return all.length > 1 && all.every((a) => mine.includes(a));

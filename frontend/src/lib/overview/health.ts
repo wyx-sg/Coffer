@@ -9,7 +9,7 @@ import type { FeatureKey } from "@/lib/hooks/useFeatures";
 import type { AttentionItem } from "@/lib/hooks/useAttention";
 import type { StatusTone } from "@/components/status/statusTone";
 
-export type AreaId =
+type AreaId =
   | "agents"
   | "providers"
   | "mcpServers"
