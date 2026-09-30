@@ -112,8 +112,7 @@ beforeEach(() => {
 });
 
 describe("AddMcpServerDialog — paste box", () => {
-  // revise-web-ui-ia: web-ui "pasting JSON with three servers opens the review" — the acceptance marker is added when the change is archived.
-  test("three pasted servers open the review; adding registers each before its secrets", async () => {
+  acceptance("web-ui", "pasting JSON with three servers opens the review", async () => {
     renderDialog();
     paste(
       JSON.stringify({
@@ -143,8 +142,7 @@ describe("AddMcpServerDialog — paste box", () => {
     await waitFor(() => expect(posts("/resources/mcp_server/{uid}/test")).toHaveLength(3));
   });
 
-  // revise-web-ui-ia: web-ui "pasting a command line prefills a stdio server" — the acceptance marker is added when the change is archived.
-  test("a claude mcp add line prefills the stdio form, and Add opens the server's page", async () => {
+  acceptance("web-ui", "pasting a command line prefills a stdio server", async () => {
     renderDialog();
     paste(
       "claude mcp add github -e GITHUB_TOKEN=ghp_x -- npx -y @modelcontextprotocol/server-github",
@@ -171,8 +169,7 @@ describe("AddMcpServerDialog — paste box", () => {
     await waitFor(() => expect(posts("/resources/mcp_server/{uid}/test")).toHaveLength(1));
   });
 
-  // revise-web-ui-ia: web-ui "pasting a URL prefills a Streamable HTTP server" — the acceptance marker is added when the change is archived.
-  test("a URL prefills the HTTP form with a name from the host", async () => {
+  acceptance("web-ui", "pasting a URL prefills a Streamable HTTP server", async () => {
     renderDialog();
     paste("https://mcp.example.com/mcp");
     expect(await screen.findByText("Looks like a URL · Streamable HTTP")).toBeInTheDocument();
@@ -182,8 +179,7 @@ describe("AddMcpServerDialog — paste box", () => {
     expect(screen.getByText("URL (Streamable HTTP)")).toBeInTheDocument();
   });
 
-  // revise-web-ui-ia: web-ui "pasting Codex TOML reads its server tables" — the acceptance marker is added when the change is archived.
-  test("a Codex [mcp_servers.docs] table prefills the stdio form", async () => {
+  acceptance("web-ui", "pasting Codex TOML reads its server tables", async () => {
     renderDialog();
     paste(
       [
@@ -211,8 +207,7 @@ describe("AddMcpServerDialog — paste box", () => {
     ).toHaveAttribute("aria-pressed", "false");
   });
 
-  // revise-web-ui-ia: web-ui "unreadable input offers a manual type choice" — the acceptance marker is added when the change is archived.
-  test("unreadable input says so and offers stdio / HTTP, sending nothing", async () => {
+  acceptance("web-ui", "unreadable input offers a manual type choice", async () => {
     renderDialog();
     paste("Install the server first, then restart your editor.");
     expect(await screen.findByText("Couldn't read this — choose a type below")).toBeInTheDocument();
@@ -234,7 +229,18 @@ describe("AddMcpServerDialog — paste box", () => {
     expect(calls).toEqual([]);
   });
 
-  // revise-web-ui-ia: web-ui "the add dialog links to importing from agents" — the acceptance marker is added when the change is archived.
+  // The page half (one Add server action, no paste-JSON action) is
+  // ResourcesPage.test.tsx.
+  acceptance("web-ui", "the add dialog links to importing from agents", async () => {
+    renderDialog();
+    expect(
+      await screen.findByRole("button", { name: /^import from your agents/i }),
+    ).toBeInTheDocument();
+    // MCP servers only: no custom tool, neither an OpenAPI import nor a
+    // hand-made HTTP request.
+    expect(document.body.textContent).not.toMatch(/custom tool|OpenAPI|HTTP request/i);
+  });
+
   acceptance("web-ui", "the import review shows each file's diff before it imports", async () => {
     vi.mocked(agentsApi.mcpEntries).mockResolvedValue({
       items: [
@@ -413,9 +419,7 @@ describe("AddMcpServerDialog — form", () => {
 
   test("a secret held for approval (202) is said before the dialog lets go", async () => {
     postOverride = (path) =>
-      path === "/secrets"
-        ? { data: { approval: { id: "ap-1" } }, error: undefined }
-        : undefined;
+      path === "/secrets" ? { data: { approval: { id: "ap-1" } }, error: undefined } : undefined;
     renderDialog();
     paste("GITHUB_TOKEN=ghp_x npx -y @modelcontextprotocol/server-github");
     await continueWhenRead();

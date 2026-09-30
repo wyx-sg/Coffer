@@ -41,7 +41,6 @@ function renderNav() {
 afterEach(() => vi.clearAllMocks());
 
 describe("the CLIs attention dot", () => {
-  // scenario (web-ui, revise-web-ui-ia 7.14d): "overview flags a required CLI that needs attention" (the sidebar half)
   test("a required CLI that needs attention puts a dot on the CLIs entry", async () => {
     api.list.mockResolvedValue({ items: [GH_OUTDATED, UV_READY], warnings: [] });
     renderNav();

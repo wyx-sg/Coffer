@@ -35,6 +35,9 @@ def _openai_body(name: str = "gw", **over: object) -> dict[str, object]:
 @pytest.mark.acceptance(
     spec="provider-switching", scenario="switching back removes every key Coffer wrote"
 )
+# Back on the built-in login, settings.json carries no tier pin (the page half
+# of the scenario is in AgentModelTab.test.tsx).
+@pytest.mark.acceptance(spec="provider-switching", scenario="the built-in login shows no tiers")
 def test_switching_back_removes_every_key_coffer_wrote(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59841)
     cc_dir = _agent_dir(tmp_path, "cc")

@@ -7,7 +7,8 @@ import { ConversationsPage } from "./ConversationsPage";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { makeBinding, makeConversation } from "@/test/conversationFixtures";
 import { acceptance } from "@/test/acceptance";
-import type { Conversation } from "@/lib/api/chat";
+import type { Conversation, Message } from "@/lib/api/chat";
+import { contentBlock } from "@/lib/chat/contentBlock";
 import { ApiError } from "@/lib/api/errors";
 
 vi.mock("@/lib/api/chat", () => ({
@@ -152,11 +153,14 @@ describe("ConversationsPage list", () => {
     localStorage.clear();
   });
 
-  test("opens on the list — no welcome, no composer — with New conversation beside it", async () => {
+  // Opens on the list — no welcome, no composer — with New conversation beside it.
+  acceptance("chat", "the page opens on the list with no welcome page", async () => {
     chatApiMock.listConversations.mockResolvedValue({
       conversations: [makeConv({ title: "Fix reconnect" }), channelConv],
     });
-    renderPage("/conversations");
+    chatApiMock.getConversation.mockResolvedValue(makeConv({ title: "Fix reconnect" }));
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    const view = renderPage("/conversations");
     expect(await screen.findByRole("link", { name: "Fix reconnect" })).toHaveAttribute(
       "href",
       "/conversations/conv-1",
@@ -165,6 +169,65 @@ describe("ConversationsPage list", () => {
     expect(screen.getByText("3 new issues since yesterday")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /new conversation/i })).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /message input/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/welcome|suggestion/i)).not.toBeInTheDocument();
+    view.unmount();
+
+    // The composer of an open conversation has no voice input.
+    renderPage("/conversations/conv-1");
+    const composer = await screen.findByTestId("composer");
+    expect(
+      within(composer).queryByRole("button", { name: /voice|dictat|microphone|record/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  acceptance("chat", "a row names the chat and thread it came from", async () => {
+    const binding = (place: Partial<NonNullable<ReturnType<typeof makeBinding>["place"]>>) =>
+      makeBinding({
+        place: {
+          chat_kind: "direct",
+          thread: false,
+          parallel_mark: null,
+          chat_name: null,
+          ...place,
+        },
+      });
+    chatApiMock.listConversations.mockResolvedValue({
+      conversations: [
+        makeConv({
+          id: "dm",
+          title: "In the DM",
+          preview: "dm line",
+          channel_binding: binding({}),
+        }),
+        makeConv({
+          id: "grp",
+          title: "In the group thread",
+          preview: "group line",
+          channel_binding: binding({ chat_kind: "group", chat_name: "coffer-dev", thread: true }),
+        }),
+        makeConv({
+          id: "par",
+          title: "Parallel work",
+          preview: "parallel line",
+          running: true,
+          channel_binding: binding({ parallel_mark: "🧵#2 deploy check", thread: true }),
+        }),
+      ],
+    });
+    renderPage("/conversations");
+    const row = async (title: string) =>
+      (await screen.findByRole("link", { name: title })).closest("tr")!;
+    const dm = await row("In the DM");
+    expect(dm).toHaveTextContent("SeaTalk · DM");
+    expect(dm).toHaveTextContent("dm line");
+    expect(dm).not.toHaveTextContent("Running");
+    const grp = await row("In the group thread");
+    expect(grp).toHaveTextContent("SeaTalk · coffer-dev › thread");
+    expect(grp).toHaveTextContent("group line");
+    const par = await row("Parallel work");
+    expect(par).toHaveTextContent("🧵#2");
+    expect(par).toHaveTextContent("parallel line");
+    expect(par).toHaveTextContent("Running");
   });
 
   acceptance(
@@ -372,6 +435,40 @@ describe("ConversationsPage open conversation", () => {
     localStorage.clear();
   });
 
+  acceptance("chat", "a channel's conversation is continued from the page", async () => {
+    const msg = (seq: number, role: Message["role"], text: string): Message => ({
+      id: `m-${seq}`,
+      conversation_id: "conv-st",
+      seq,
+      role,
+      content: [contentBlock({ type: "text", text })],
+      status: "complete",
+      prompt_tokens: null,
+      completion_tokens: null,
+      model_id: null,
+      created_at: "2026-01-01T00:00:00Z",
+    });
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [channelConv] });
+    chatApiMock.getConversation.mockResolvedValue(channelConv);
+    chatApiMock.listMessages.mockResolvedValue({
+      messages: [
+        msg(1, "user", "Any new Sentry issues?"),
+        msg(2, "assistant", "Three since yesterday."),
+      ],
+    });
+    renderPage("/conversations/conv-st");
+    // The full exchange the channel had …
+    expect(await screen.findByText("Any new Sentry issues?")).toBeInTheDocument();
+    expect(await screen.findByText("Three since yesterday.")).toBeInTheDocument();
+    // … and a reply from the page is a turn in that same conversation.
+    const composer = await screen.findByTestId("composer");
+    send(within(composer).getByRole("textbox", { name: /message input/i }), "Which is worst?");
+    await waitFor(() =>
+      expect(chatApiMock.sendMessage).toHaveBeenCalledWith("conv-st", "Which is worst?", []),
+    );
+    expect(chatApiMock.createConversation).not.toHaveBeenCalled();
+  });
+
   test("/conversations/:id opens that conversation beside the list, headed by its source", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv(), channelConv] });
     chatApiMock.getConversation.mockResolvedValue(channelConv);
@@ -380,7 +477,9 @@ describe("ConversationsPage open conversation", () => {
     expect(await screen.findByRole("heading", { name: "Daily Sentry triage" })).toBeInTheDocument();
     // The list and the thread load on their own queries; wait for each.
     expect(await screen.findByRole("link", { name: /Test Conv/ })).toBeInTheDocument();
-    expect(await screen.findByText(/send a message to start the conversation/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/send a message to start the conversation/i),
+    ).toBeInTheDocument();
   });
 
   test("deleting a conversation from its menu asks for confirmation first", async () => {

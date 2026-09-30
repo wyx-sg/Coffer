@@ -191,3 +191,47 @@ def test_a_local_runtime_must_be_on_this_machine(tmp_path, monkeypatch):
             },
         )
     assert r.status_code == 422, r.text
+
+
+def _local_codex_catalogue_entry(tmp_path, monkeypatch, port: int, model: dict) -> dict:
+    """Switch a Codex agent to a local model connection curating ``model``,
+    and return the catalogue entry Coffer wrote for it."""
+    app = _app(tmp_path, monkeypatch, port)
+    cfg = _agent_dir(tmp_path, "cx")
+    with _client(app) as c:
+        cx = _register_agent(c, agent_type="codex", config_dir=cfg)
+        r = c.post(
+            "/api/v1/providers",
+            json={
+                "name": "lmstudio",
+                "protocol": "openai",
+                "base_url": "http://127.0.0.1:1234/v1",
+                "local_runtime": {"runtime": "lmstudio", "version": "0.4.1", "wires": ["openai"]},
+                "models": [model],
+            },
+        )
+        assert r.status_code == 201, r.text
+        c.patch(f"/api/v1/agents/{cx}", json={"model": model["id"]})
+        assert c.post(f"/api/v1/providers/{r.json()['uid']}/activate").status_code == 200
+    [entry] = json.loads((cfg / "coffer-model-catalog.json").read_text())["models"]
+    return dict(entry)
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching", scenario="a local model's window is read from the runtime"
+)
+def test_a_local_models_window_goes_into_the_codex_catalogue(tmp_path, monkeypatch):
+    entry = _local_codex_catalogue_entry(
+        tmp_path, monkeypatch, 59876, {"id": "qwen-coder", "context_window": 131072}
+    )
+    assert entry["context_window"] == entry["max_context_window"] == 131072
+    assert entry["auto_compact_token_limit"] == int(131072 * 0.9)
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching", scenario="an unreported window is left out of the catalogue"
+)
+def test_an_unreported_window_is_left_out_of_the_codex_catalogue(tmp_path, monkeypatch):
+    entry = _local_codex_catalogue_entry(tmp_path, monkeypatch, 59877, {"id": "qwen-coder"})
+    for key in ("context_window", "max_context_window", "auto_compact_token_limit"):
+        assert key not in entry

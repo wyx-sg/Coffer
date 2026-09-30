@@ -1,6 +1,6 @@
 // frontend/src/pages/sync/syncRunRows.ts
 //
-// What the Runs table renders: rounds, with stretches that say the same thing
+// What the rounds table renders: rounds, with stretches that say the same thing
 // folded into a single row.
 //
 // A timer-driven history repeats itself. Most rounds find nothing to do, and
@@ -16,7 +16,7 @@
 // about, and a row you can act on has no business hiding inside a summary.
 import type { SyncRound } from "@/lib/api/sync";
 
-/** One row of the Runs table: a single round, or a stretch that repeated. */
+/** One row of the rounds table: a single round, or a stretch that repeated. */
 export type SyncRunRow =
   | { kind: "run"; id: string; run: SyncRound }
   | { kind: "group"; id: string; status: string; runs: SyncRound[] };

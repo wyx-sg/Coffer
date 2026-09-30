@@ -2,7 +2,7 @@
 // The composer's attached files: each is uploaded the moment it is added
 // (POST /chat/attachments) and tracked as uploading → ready | failed, so the
 // composer can show a chip per file and hold Send until every upload is done
-// (spec chat "Attach files from the Chat page composer").
+// (spec chat "Attach files from the Conversations page composer").
 //
 // A file refused before it is sent — over the size limit, or past the
 // message's file count — never becomes a chip: it is dropped, and one line

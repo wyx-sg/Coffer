@@ -59,6 +59,8 @@ one.
 
 - `vault-sync`: the Sync page's tabs and views, merging with an agent, the refused-remote and
   git-missing hand-offs, the new route and the CLI options.
+- `web-ui`: the shared-table and sidebar requirements name Sync's new tabs. The rounds table has
+  no search or filter, and a round opens in a drawer.
 
 ## Impact
 

@@ -52,8 +52,7 @@ function renderTab(skillUid = "sk-gh-triage", requires = ["jq", "gcloud", "uv"])
 afterEach(() => vi.clearAllMocks());
 
 describe("SkillRequiresTab", () => {
-  // scenario (web-ui, revise-web-ui-ia 7.14d): "a skill's requirement links to its CLI"
-  test("a skill's requirement links to its CLI", async () => {
+  acceptance("web-ui", "a skill's requirement links to its CLI", async () => {
     const other = cli({
       command: "docker",
       needed_by: [{ skill_uid: "sk-other", skill_name: "other", min_version: null, why: null }],
@@ -84,18 +83,22 @@ describe("SkillRequiresTab", () => {
     expect(screen.getByTestId("where")).toHaveTextContent("/clis/gcloud");
   });
 
-  acceptance("web-ui", "the requires tab links to the CLIs page and hands a command to an agent", async () => {
-    api.list.mockResolvedValue({ items: [JQ_MISSING, GCLOUD_LOGGED_OUT], warnings: [] });
-    api.checkAll.mockResolvedValue({ items: [JQ_MISSING, GCLOUD_LOGGED_OUT], warnings: [] });
-    renderTab("sk-gh-triage", ["jq", "gcloud"]);
-    await screen.findByText("Not installed");
-    expect(screen.queryByRole("button", { name: /Install/ })).toBeNull();
-    expect(screen.getAllByRole("button", { name: "Copy prompt" }).length).toBeGreaterThan(0);
-    expect(screen.queryByText("gcloud auth login")).toBeNull();
-    expect(screen.queryByText(/brew/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
-    await waitFor(() => expect(api.checkAll).toHaveBeenCalledTimes(1));
-  });
+  acceptance(
+    "web-ui",
+    "the requires tab links to the CLIs page and hands a command to an agent",
+    async () => {
+      api.list.mockResolvedValue({ items: [JQ_MISSING, GCLOUD_LOGGED_OUT], warnings: [] });
+      api.checkAll.mockResolvedValue({ items: [JQ_MISSING, GCLOUD_LOGGED_OUT], warnings: [] });
+      renderTab("sk-gh-triage", ["jq", "gcloud"]);
+      await screen.findByText("Not installed");
+      expect(screen.queryByRole("button", { name: /Install/ })).toBeNull();
+      expect(screen.getAllByRole("button", { name: "Copy prompt" }).length).toBeGreaterThan(0);
+      expect(screen.queryByText("gcloud auth login")).toBeNull();
+      expect(screen.queryByText(/brew/)).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+      await waitFor(() => expect(api.checkAll).toHaveBeenCalledTimes(1));
+    },
+  );
 
   test("a skill that declares nothing says so", async () => {
     api.list.mockResolvedValue({ items: [UV_READY], warnings: [] });

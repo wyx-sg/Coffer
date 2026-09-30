@@ -192,6 +192,79 @@ No sync route returns the master key.
 - **WHEN** they are listed
 - **THEN** every method and path the requirement names is served, and none exports a key
 
+### Requirement: Fold consecutive quiet rounds into one row
+Consecutive rounds that changed **nothing** — no documents either way, no join,
+no failure, no locked ref — MUST be folded into one row reporting the span and
+the count. They are the majority, and one row each buries everything that
+matters; they MUST NOT be dropped, because they are the only evidence that a
+vault which stopped converging on Tuesday is not simply a vault with nothing to
+do. A round that failed once is noise; a round that has failed every hour since
+Tuesday is the answer.
+
+Repeats that are not quiet MUST fold the same way, by outcome: consecutive
+rounds that **failed**, and consecutive rounds **held** for confirmation, each
+fold into one counted row, because an expired secret is ten identical
+failures by morning and a held round is re-raised every hour until it is
+answered — neither is more true for being printed ten times. A round that
+applied or published documents MUST NOT fold, however many like it came before,
+and rounds of different outcomes MUST NOT fold together. A lone round MUST stay
+a row of its own. The **newest** round MUST never be folded: it is the state the
+vault is in now and the only round that may carry Undo or a hold's answers.
+
+#### Scenario: consecutive quiet rounds fold into one counted row
+- **GIVEN** a runs history holding a stretch of consecutive rounds that changed nothing
+- **WHEN** the Status tab renders
+- **THEN** the stretch is one row that reports its span and how many rounds it stands for
+- **AND** every round in it is still reachable from that row
+
+#### Scenario: repeated failures fold into one row and the newest round stands alone
+- **GIVEN** a runs history whose newest three rounds failed the same way, preceded by a round that published a document
+- **WHEN** the rounds table's rows are built
+- **THEN** the newest failure is a row of its own, the two failures before it are one row counting two, and the round that published is a row of its own
+- **AND** a stretch of consecutive rounds held for confirmation folds the same way beneath a newer round
+
+### Requirement: Check a remote before it is saved
+A person SHALL be able to ask what a remote holds before saving it — empty, a
+Coffer vault (with its layout), some other repository, unreachable or refused
+sign-in — through `POST /api/v1/sync/remote/check`, `coffer sync remote check`
+and the set-up form's "Check repository". Checking MUST keep nothing: no remote is
+stored and the vault is not touched.
+
+#### Scenario: a remote is checked before it is saved
+- **GIVEN** an empty remote, the same remote once a vault has been pushed to it, and a URL that does not exist
+- **WHEN** each is checked
+- **THEN** they read as empty, as a vault at the current layout, and as unreachable or refused with git's message
+- **AND** nothing about the stored remote changed
+
+### Requirement: Snapshot before checking out and roll a round back from it
+Bidirectional convergence writes the vault without a human in the loop, so two
+guards are normative. Before a round checks anything out it MUST tag this
+vault's `HEAD` as the pre-apply snapshot, `refs/tags/coffer/pre-apply/<time>`;
+the ten newest are kept. Rolling a round back MUST put back, as one new commit
+naming the snapshot it restored from, what that round changed here — and only
+that: a file edited after the round keeps the edit. The next round publishes the
+rollback like any other local change. A round that applied nothing, or that was
+itself a rollback, MUST be refused with nothing to roll back. A rollback shows
+what it will reverse and what it keeps before it runs (`GET
+/api/v1/sync/runs/{id}/rollback-plan`, `coffer sync rollback <round>` without
+`--yes`), and runs through `POST /api/v1/sync/runs/{id}/rollback`, `coffer sync
+rollback <round> --yes` and the Status tab's rounds.
+
+#### Scenario: a round can be rolled back
+- **GIVEN** a round that applied two files here, one of which was edited afterwards
+- **WHEN** the person rolls the round back
+- **THEN** the untouched file returns to its state before the round, the edited one keeps the edit, the newest commit names the snapshot it restored from, and the other machine takes the rollback on its next round
+
+#### Scenario: a round that applied nothing has nothing to roll back
+- **GIVEN** a round that only pushed, and a round that was a rollback
+- **WHEN** a rollback of either is asked for
+- **THEN** it is refused with nothing to roll back
+
+#### Scenario: a rollback shows its plan first
+- **GIVEN** a round that pulled a change
+- **WHEN** `coffer sync rollback <round>` runs and the person declines
+- **THEN** it has printed what it would reverse and changed nothing, and `--yes` rolls the round back
+
 ## REMOVED Requirements
 
 ### Requirement: Present a Sync page with Runs, Setup and Machines tabs

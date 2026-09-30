@@ -988,13 +988,13 @@ vault is in now and the only round that may carry Undo or a hold's answers.
 
 #### Scenario: consecutive quiet rounds fold into one counted row
 - **GIVEN** a runs history holding a stretch of consecutive rounds that changed nothing
-- **WHEN** the Runs tab renders
+- **WHEN** the Status tab renders
 - **THEN** the stretch is one row that reports its span and how many rounds it stands for
 - **AND** every round in it is still reachable from that row
 
 #### Scenario: repeated failures fold into one row and the newest round stands alone
 - **GIVEN** a runs history whose newest three rounds failed the same way, preceded by a round that published a document
-- **WHEN** the Runs table's rows are built
+- **WHEN** the rounds table's rows are built
 - **THEN** the newest failure is a row of its own, the two failures before it are one row counting two, and the round that published is a row of its own
 - **AND** a stretch of consecutive rounds held for confirmation folds the same way beneath a newer round
 
@@ -1239,7 +1239,7 @@ upgrades and joins it as a new machine.
 A person SHALL be able to ask what a remote holds before saving it — empty, a
 Coffer vault (with its layout), some other repository, unreachable or refused
 sign-in — through `POST /api/v1/sync/remote/check`, `coffer sync remote check`
-and the Setup tab's "Check repository". Checking MUST keep nothing: no remote is
+and the set-up form's "Check repository". Checking MUST keep nothing: no remote is
 stored and the vault is not touched.
 
 #### Scenario: a remote is checked before it is saved
@@ -1309,7 +1309,7 @@ itself a rollback, MUST be refused with nothing to roll back. A rollback shows
 what it will reverse and what it keeps before it runs (`GET
 /api/v1/sync/runs/{id}/rollback-plan`, `coffer sync rollback <round>` without
 `--yes`), and runs through `POST /api/v1/sync/runs/{id}/rollback`, `coffer sync
-rollback <round> --yes` and the Runs tab.
+rollback <round> --yes` and the Status tab's rounds.
 
 #### Scenario: a round can be rolled back
 - **GIVEN** a round that applied two files here, one of which was edited afterwards

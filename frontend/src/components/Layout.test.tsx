@@ -117,7 +117,6 @@ describe("Layout", () => {
     expect(screen.getByRole("link", { name: "Agents" })).toBeInTheDocument();
   });
 
-  // revise-web-ui-ia: web-ui "the Settings row opens Settings over the current page"
   test("the Settings row opens the modal over the page and is active only while it is open", () => {
     renderShell("/mcp-servers");
     const row = screen.getByRole("button", { name: "Settings" });
@@ -137,8 +136,7 @@ describe("Layout", () => {
     );
   });
 
-  // revise-web-ui-ia: web-ui "the keyboard shortcut opens Settings"
-  test("⌘, / Ctrl+, opens Settings on General, but not while typing", () => {
+  acceptance("web-ui", "the keyboard shortcut opens Settings", () => {
     renderShell("/activity");
     const input = document.createElement("input");
     document.body.appendChild(input);
@@ -150,6 +148,8 @@ describe("Layout", () => {
     fireEvent.keyDown(window, { key: ",", ctrlKey: true });
     fireEvent.keyDown(window, { key: ",", metaKey: true });
     expect(screen.getByTestId("where")).toHaveTextContent("/settings/general");
+    expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+    expect(screen.getByText("page body")).toBeInTheDocument();
   });
 
   test("⌘K / Ctrl+K and the sidebar search control open the palette", () => {
@@ -175,8 +175,7 @@ describe("Layout", () => {
     expect(screen.getByTestId("palette-open")).toBeInTheDocument();
   });
 
-  // revise-web-ui-ia: web-ui "a divider moves from the keyboard"
-  test("the sidebar is resized from its divider, within 200–300px, and remembered", () => {
+  acceptance("web-ui", "a divider moves from the keyboard", () => {
     const first = renderShell();
     const divider = screen.getByRole("separator", { name: "Resize the sidebar" });
     expect(divider).toHaveAttribute("aria-valuenow", "220");

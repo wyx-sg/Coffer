@@ -1,9 +1,10 @@
 // src/pages/CustomToolsPage.test.tsx — the Custom tools page: groups by health, one Add custom tool action,
 // the group page with no tabs, the tool drawer over it, and a hand-made request into an existing or a
 // new group (import and re-import: CustomToolsImport.test.tsx).
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
+import { acceptance } from "@/test/acceptance";
 import { api, billing, location, renderAt, resetCustomToolMocks } from "./customToolsTestHarness";
 
 vi.mock("@/lib/api/customTools", async (orig) => ({
@@ -48,8 +49,7 @@ vi.mock("@/lib/hooks/useAgents", () => ({
 beforeEach(resetCustomToolMocks);
 
 describe("CustomToolsPage", () => {
-  // scenario (web-ui, revise-web-ui-ia 7.14d): "the custom tools page lists groups by health"
-  test("lists groups by health, failing first, under one Add custom tool action with no script type", async () => {
+  acceptance("web-ui", "the custom tools page lists groups by health", async () => {
     renderAt("/custom-tools");
     const attention = await screen.findByRole("region", { name: "Needs attention" });
     const names = within(attention)
@@ -82,19 +82,21 @@ describe("CustomToolsPage", () => {
     expect(within(dialog).queryByText(/script/i)).not.toBeInTheDocument();
   });
 
-  // scenario (web-ui, revise-web-ui-ia): "the custom tools page with no group shows the first-run panel"
-  test("with no group the page is the first-run panel: no list, Add custom tool in header and body", async () => {
-    api.list.mockResolvedValue([]);
-    renderAt("/custom-tools");
-    expect(await screen.findByText("Turn any HTTP API into tools")).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText("Filter groups")).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Add custom tool" })).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: /Add one request by hand/ }));
-    expect(await screen.findByRole("dialog", { name: "New group" })).toBeInTheDocument();
-  });
+  acceptance(
+    "web-ui",
+    "the custom tools page with no group shows the first-run panel",
+    async () => {
+      api.list.mockResolvedValue([]);
+      renderAt("/custom-tools");
+      expect(await screen.findByText("Turn any HTTP API into tools")).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText("Filter groups")).not.toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "Add custom tool" })).toHaveLength(2);
+      fireEvent.click(screen.getByRole("button", { name: /Add one request by hand/ }));
+      expect(await screen.findByRole("dialog", { name: "New group" })).toBeInTheDocument();
+    },
+  );
 
-  // scenario (web-ui, revise-web-ui-ia 7.14d): "a group's page is one page with a tool drawer"
-  test("a group page is one page with definition, secret, reach, 24 h line and tools; a row opens the drawer with Test", async () => {
+  acceptance("web-ui", "a group's page is one page with a tool drawer", async () => {
     api.test.mockResolvedValue({
       ok: true,
       duration_ms: 180,
@@ -137,8 +139,7 @@ describe("CustomToolsPage", () => {
     expect(location()).toBe("/custom-tools/billing");
   });
 
-  // scenario (web-ui, revise-web-ui-ia 7.14d): "a tool's reach override narrows one tool"
-  test("saving a tool with a reach override PUTs the override", async () => {
+  acceptance("web-ui", "a tool's reach override narrows one tool", async () => {
     api.updateTool.mockResolvedValue(billing);
     api.setToolReach.mockResolvedValue(billing);
     renderAt("/custom-tools/billing");
@@ -160,8 +161,7 @@ describe("CustomToolsPage", () => {
     );
   });
 
-  // scenario (web-ui, revise-web-ui-ia 7.14d): "a hand-made request joins an existing group"
-  test("a request made by hand joins the existing group it names, and no import is offered there", async () => {
+  acceptance("web-ui", "a hand-made request joins an existing group", async () => {
     api.addTool.mockResolvedValue(billing);
     renderAt("/custom-tools");
     fireEvent.click(await screen.findByRole("button", { name: "Add custom tool" }));
@@ -192,8 +192,7 @@ describe("CustomToolsPage", () => {
     await waitFor(() => expect(location()).toBe("/custom-tools/billing"));
   });
 
-  // scenario (web-ui, revise-web-ui-ia): "a new group made by hand is saved with its first request"
-  test("a new group made by hand is saved only with its first request, tested without the secret", async () => {
+  acceptance("web-ui", "a new group made by hand is saved with its first request", async () => {
     api.testUnsaved.mockResolvedValue({
       ok: false,
       duration_ms: 0,

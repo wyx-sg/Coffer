@@ -140,6 +140,9 @@ def test_an_openapi_url_on_a_private_address_is_refused(daemon: BoundaryDaemon, 
 @pytest.mark.acceptance(
     spec="mcp-gateway", scenario="re-import applies additions and removals keeping switches"
 )
+@pytest.mark.acceptance(
+    spec="web-ui", scenario="re-importing a spec previews the operations it adds and removes"
+)
 def test_reimport_applies_additions_and_removals_keeping_switches(daemon: BoundaryDaemon):
     three = _FIVE[:3]
     reading = _read(daemon, _document(*three))

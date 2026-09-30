@@ -162,8 +162,7 @@ describe("ProviderDetailPage", () => {
     pendingApprovals.mockResolvedValue({ approvals: [] });
   });
 
-  test("a provider's used-by list is read-only", async () => {
-    // Scenario (revise-web-ui-ia): "a provider's used-by list is read-only"
+  acceptance("provider-switching", "a provider's used-by list is read-only", async () => {
     agentsState.data = [agent("claude_code", "claude-opus-4-1")];
     engineState.data = { model: "gpt-5-mini", transcribe_model: null };
     serve(
@@ -367,6 +366,18 @@ describe("ProviderDetailPage", () => {
     expect(api.update).toHaveBeenCalledWith(UID, { base_url: "https://gw/v2" });
     // The page stays where it is: its address is the uid.
     expect(where()).toBe(`/model-providers/${UID}`);
+  });
+
+  acceptance("web-ui", "a renamable kind keeps its uid in the address", async () => {
+    // Renamed from `work` to `work-proxy`; the saved address carries the uid.
+    serve(makeProvider({ name: "work-proxy" }));
+    renderPage(`/model-providers/${UID}`);
+
+    expect(
+      await screen.findByRole("heading", { name: "work-proxy", level: 2 }),
+    ).toBeInTheDocument();
+    expect(where()).toBe(`/model-providers/${UID}`);
+    expect(screen.queryByText(/not found/i)).toBeNull();
   });
 
   test("a taken name fails inline and nothing else is written", async () => {

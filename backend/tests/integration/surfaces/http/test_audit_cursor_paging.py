@@ -132,8 +132,9 @@ async def test_a_malformed_or_foreign_cursor_is_refused(env: _Env) -> None:
     assert (await env.read(kind="fake_kind", limit=1, cursor=issued)).status_code == 200
 
 
-# revise-web-ui-ia: resource-framework "a page carries the count of every matching row" —
-# the acceptance marker is added when the change is archived.
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="a page carries the count of every matching row"
+)
 async def test_a_page_carries_the_count_of_every_matching_row(env: _Env) -> None:
     for event, minutes, kind in (
         ("e1", 0, "fake_kind"),

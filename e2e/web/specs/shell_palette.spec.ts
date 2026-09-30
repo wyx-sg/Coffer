@@ -1,9 +1,9 @@
 // e2e/web/specs/shell_palette.spec.ts
 //
-// The ⌘K command palette in a real browser (change revise-web-ui-ia, spec
-// web-ui "Jump to any page or object from a command palette"): it jumps to a
-// page, to an object found by its name, and to a Settings tab over the current
-// page. Plain tests until the change is archived (its task 7.9).
+// The ⌘K command palette in a real browser (spec web-ui "Jump to any page or
+// object from a command palette"): it jumps to a page, to an object found by
+// its name, and to a Settings tab over the current page. Plain tests; the
+// component tests (CommandPalette.test.tsx) carry the scenarios' markers.
 
 import { expect, test, type Page } from "@playwright/test";
 import {

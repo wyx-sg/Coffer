@@ -64,10 +64,8 @@ test("nothing is clickable until the daemon has answered", () => {
   expect(screen.getByRole("switch", { name: /start at login/i })).toBeDisabled();
 });
 
-// The requirement behind this marker moves to the Daemon tab with change
-// revise-web-ui-ia ("the settings daemon tab sets when the daemon runs"); the
-// marker is renamed when the change is archived. The row now lives there.
-acceptance("web-ui", "the general tab sets when the daemon runs", async () => {
+// The row lives on the Daemon tab (DaemonSettings mounts it).
+acceptance("web-ui", "the settings daemon tab sets when the daemon runs", async () => {
   getMock.mockResolvedValue({
     data: { login_service_supported: true, login_service_installed: false },
   });

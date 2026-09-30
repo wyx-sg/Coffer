@@ -433,9 +433,10 @@ so has no narrower home. A spec that cannot honour it records the gap in its own
 A resource of a kind that carries a title MUST carry an optional **`title`**: free text of at
 most 80 characters that a person chooses for display, separate from the resource's `name`. The
 kinds with a title are those whose name is a label a person chose — `provider`, `channel`
-and `memory`. A knowledge collection carries none: it is named by its folder, with an editable
-description ([knowledge](../knowledge/spec.md) "Name a collection by its folder and edit its description in place"). `agent`, `mcp_server`, `skill` and `knowledge` carry none: each is shown by its fixed
-name, and a non-empty title for one MUST be refused as a validation error (422) on registration
+and `memory`. `agent`, `mcp_server`, `skill` and `knowledge` carry none: each is shown by its fixed
+name — a knowledge collection by its folder, with an editable description instead
+([knowledge](../knowledge/spec.md) "Name a collection by its folder and edit its description in place")
+— and a non-empty title for one MUST be refused as a validation error (422) on registration
 and on update, with nothing changed. On a kind that carries one, the title MUST be editable
 through the kind-agnostic update (`PATCH /api/v1/resources/{uid}`) and through
 `coffer <kind> edit <name> --title <text>`. An empty title MUST clear it. A title longer than 80
@@ -791,3 +792,16 @@ other filters, MUST be refused `400 CURSOR_INVALID`.
 - **GIVEN** a cursor issued for the audit log filtered by one kind
 - **WHEN** it is sent with another kind's filter, and a string that is not a cursor is sent as `cursor`
 - **THEN** both requests are refused `400 CURSOR_INVALID`
+
+### Requirement: Count a log's matching rows beside each page
+The audit log (`GET /api/v1/audit`) and the MCP invocation log (`GET /api/v1/mcp/invocations`,
+`GET /api/v1/resources/mcp_server/{uid}/invocations`) answers MUST carry `total`: the number of rows
+that match the request's filters across every page. The cursor and `limit` MUST NOT change it, so a
+client can say how many entries a filtered view holds without paging through all of them. It is
+counted with the same filters as the page (see "Page growing lists by an opaque cursor"), so the two
+cannot disagree about which rows are in the view.
+
+#### Scenario: a page carries the count of every matching row
+- **GIVEN** an audit log of five entries, three of them about one kind
+- **WHEN** it is read filtered to that kind with `limit=2`, and then with the answer's `next_cursor`
+- **THEN** both answers carry `total` 3

@@ -37,7 +37,6 @@ describe("SplitDivider", () => {
     expect(el).toHaveAttribute("aria-valuemax", "300");
   });
 
-  // revise-web-ui-ia: web-ui "a divider moves from the keyboard"
   test("→ three times then ← once moves two steps, never past the max", () => {
     render(<Harness />);
     const el = sep();

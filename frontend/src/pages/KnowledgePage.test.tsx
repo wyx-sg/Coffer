@@ -48,6 +48,29 @@ vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => undefined
 
 const api = vi.mocked(await import("@/lib/api/knowledge"));
 const upkeep = vi.mocked(await import("@/lib/api/upkeep"));
+const { internalEngineApi } = await import("@/lib/api/internalEngine");
+
+/** Coffer's engine config with a curate schedule, so the header's Automatic
+ *  control has a pass to show whenever the model is set. */
+function withCurateSchedule(model: string | null) {
+  vi.mocked(internalEngineApi.get).mockResolvedValue({
+    model,
+    curate_owner_machine_id: null,
+    default_model_timeout_s: 60,
+    model_timeout_s: null,
+    transcribe_model: null,
+    updated_at: null,
+    upkeep: {
+      curate: {
+        enabled: true,
+        interval_s: null,
+        default_interval_s: 3600,
+        last_pass_at: null,
+        next_pass_at: null,
+      },
+    },
+  });
+}
 
 beforeEach(() => {
   answerFromFixtures();
@@ -103,18 +126,25 @@ describe("the collection tree and the document pane", () => {
     expect(await screen.findByText("Login state is owned by account.session.")).toBeInTheDocument();
   });
 
-  test("the header reads documents, waiting and curated, and Waiting opens the Inbox", async () => {
-    renderKnowledge(`/knowledge/${UID}`);
-    const stats = await screen.findByTestId("knowledge-stats");
-    expect(stats).toHaveTextContent("Documents2");
-    expect(stats).toHaveTextContent("Waiting1");
-    await waitFor(() => expect(stats).toHaveTextContent(/Curated2 hours ago/));
-    // Curate now lives in the Inbox view, not in the header or on documents.
-    expect(screen.queryByRole("button", { name: "Curate now" })).toBeNull();
-    fireEvent.click(within(stats).getByRole("link", { name: "1" }));
-    expect(screen.getByTestId("where")).toHaveTextContent(`/knowledge/${UID}/inbox`);
-    expect(await screen.findByRole("button", { name: "Curate now" })).toBeInTheDocument();
-  });
+  acceptance(
+    "knowledge",
+    "the inbox node counts waiting items and holds the only trigger",
+    async () => {
+      withCurateSchedule("claude-haiku");
+      renderKnowledge(`/knowledge/${UID}`);
+      const stats = await screen.findByTestId("knowledge-stats");
+      expect(within(tree()).getByRole("button", { name: /Inbox/ })).toHaveTextContent("1");
+      expect(await screen.findByTestId("knowledge-automatic")).toBeInTheDocument();
+      expect(stats).toHaveTextContent("Documents2");
+      expect(stats).toHaveTextContent("Waiting1");
+      await waitFor(() => expect(stats).toHaveTextContent(/Curated2 hours ago/));
+      // Curate now lives in the Inbox view, not in the header or on documents.
+      expect(screen.queryByRole("button", { name: "Curate now" })).toBeNull();
+      fireEvent.click(within(stats).getByRole("link", { name: "1" }));
+      expect(screen.getByTestId("where")).toHaveTextContent(`/knowledge/${UID}/inbox`);
+      expect(await screen.findByRole("button", { name: "Curate now" })).toBeInTheDocument();
+    },
+  );
 
   test("a running curation reads its progress, from the daemon's run list by uid", async () => {
     upkeep.listUpkeepRuns.mockResolvedValue({
@@ -145,8 +175,9 @@ describe("the collection tree and the document pane", () => {
 });
 
 describe("with Coffer's model not set", () => {
-  test("there is no Inbox node and no Curate now, and one line links to Settings › General", async () => {
+  acceptance("knowledge", "no model shows no curation controls", async () => {
     answerFromFixtures({ modelSet: false });
+    withCurateSchedule(null);
     renderKnowledge(`/knowledge/${UID}`);
     const link = await screen.findByRole("button", { name: "Settings › General" });
     expect(
@@ -154,6 +185,7 @@ describe("with Coffer's model not set", () => {
     ).toBeInTheDocument();
     expect(within(tree()).queryByRole("button", { name: /Inbox/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Curate now" })).toBeNull();
+    expect(screen.queryByTestId("knowledge-automatic")).toBeNull();
     expect(screen.getByTestId("knowledge-stats")).not.toHaveTextContent("Waiting");
     fireEvent.click(link);
     expect(screen.getByTestId("where")).toHaveTextContent("/settings/general");
@@ -188,7 +220,7 @@ describe("the body-only editor", () => {
     expect(screen.queryByRole("textbox", { name: `Edit ${GATEWAY.path}` })).toBeNull();
   });
 
-  test("a stale save says the document changed on disk and offers Reload, Compare and Copy my text", async () => {
+  acceptance("knowledge", "a stale save offers reload and compare", async () => {
     api.saveFile.mockRejectedValue(
       new ApiError("KNOWLEDGE_FILE_CONFLICT", "changed on disk", {
         saved: false,
@@ -218,7 +250,7 @@ describe("the body-only editor", () => {
 });
 
 describe("Add a document", () => {
-  test("submits a title and body as an item into the chosen collection", async () => {
+  acceptance("knowledge", "add a document submits an item", async () => {
     api.submitMaterial.mockResolvedValue({
       status: "pending",
       collection: NAME,

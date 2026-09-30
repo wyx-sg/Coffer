@@ -62,7 +62,7 @@ describe("objectItem", () => {
   test("every kind has a detail route: an agent by type, by name where it is fixed, by uid where it is not", () => {
     const o = (uid: string) => ({ uid, name: `${uid}-name` });
     expect(objectPath("mcpServer", o("m1"))).toBe("/mcp-servers/m1-name");
-    // scenario (web-ui, revise-web-ui-ia 7.14d): "palette Objects include custom-tool groups"
+    // Custom tool groups are palette objects too, addressed by the group name.
     expect(objectPath("customTool", o("g1"))).toBe("/custom-tools/g1-name");
     expect(objectPath("skill", o("s1"))).toBe("/skills/s1-name");
     expect(objectPath("provider", o("p"))).toBe("/model-providers/p");

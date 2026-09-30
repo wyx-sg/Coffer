@@ -374,8 +374,7 @@ acceptance("web-ui", "activity row expands to its raw record", async () => {
   );
 });
 
-// revise-web-ui-ia: web-ui "a daemon log row opens in place".
-test("a daemon log row opens in place", async () => {
+acceptance("web-ui", "a daemon log row opens in place", async () => {
   mockApi({
     daemon: [
       {
@@ -486,9 +485,7 @@ acceptance("web-ui", "each activity tab reads its owner's route", async () => {
   expect(requested().every((p) => ALLOWED.has(p))).toBe(true);
 });
 
-// revise-web-ui-ia: web-ui "new records stream in at the top" — the marker is
-// added when the change is archived.
-test("new records stream in at the top", async () => {
+acceptance("web-ui", "new records stream in at the top", async () => {
   const { data } = mockApi({ invocations: [INVOCATION] });
   render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
   await screen.findByText(target("github.search_issues"));
@@ -510,8 +507,7 @@ test("new records stream in at the top", async () => {
   expect(screen.queryByRole("button", { name: /new$/ })).not.toBeInTheDocument();
 });
 
-// revise-web-ui-ia: web-ui "new records are held while the user reads".
-test("new records are held while the user reads", async () => {
+acceptance("web-ui", "new records are held while the user reads", async () => {
   const { data } = mockApi({ audit: [AUDIT_ENTRY] });
   render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
   await screen.findByText("Registered filesystem");
@@ -571,8 +567,7 @@ test("a new record the filters exclude is neither inserted nor counted", async (
   expect(screen.queryByRole("button", { name: /new$/ })).not.toBeInTheDocument();
 });
 
-// revise-web-ui-ia: web-ui "export from the menu honours the filters".
-test("export from the menu honours the filters", async () => {
+acceptance("web-ui", "export from the menu honours the filters", async () => {
   const { get } = mockApi({
     invocations: [
       { ...INVOCATION, id: 1, status: "error", error_message: "boom" },
@@ -788,8 +783,7 @@ test("a change of a kind this page has no words for still reads as a change", as
   expect(drawer.querySelector('[data-line="add"]')?.textContent).toContain("anthropic-api");
 });
 
-// revise-web-ui-ia: web-ui "who and kind choose several values".
-test("who and kind choose several values", async () => {
+acceptance("web-ui", "who and kind choose several values", async () => {
   mockApi({
     audit: [
       { ...AUDIT_ENTRY, id: 43, actor: "ui", resource_name: "linear" },

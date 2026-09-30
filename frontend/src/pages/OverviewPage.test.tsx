@@ -336,9 +336,8 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-// scenario (web-ui, revise-web-ui-ia): overview lists what needs the user, most severe first
 describe("overview lists what needs the user, most severe first", () => {
-  test("rows sort by severity then age, with reason, since and one action to the right page", async () => {
+  acceptance("web-ui", "overview lists what needs the user, most severe first", async () => {
     install({ attention: { ...EMPTY_ATTENTION, items: ITEMS } });
     renderPage();
     await within(needsYou()).findByText("jira");
@@ -409,13 +408,13 @@ describe("overview lists what needs the user, most severe first", () => {
   });
 });
 
-// scenario (web-ui, revise-web-ui-ia): overview shows a calm card when nothing needs the user
 describe("overview shows a calm card when nothing needs the user", () => {
-  test("no items and no source errors read Nothing needs you, with the checked time", async () => {
+  acceptance("web-ui", "overview shows a calm card when nothing needs the user", async () => {
     install();
     renderPage();
     expect(await screen.findByText("Nothing needs you")).toBeInTheDocument();
     expect(screen.getByText("Anything that needs you shows up here.")).toBeInTheDocument();
+    expect(needsYou().querySelector("time")).not.toBeNull();
     // Healthy tiles are quiet; the numbers still read.
     const mcp = await within(health()).findByRole("link", { name: "MCP servers" });
     await waitFor(() => expect(mcp).toHaveTextContent("All answering"));
@@ -432,9 +431,8 @@ describe("overview shows a calm card when nothing needs the user", () => {
   });
 });
 
-// scenario (web-ui, revise-web-ui-ia): overview welcomes a first run with the agents to connect
 describe("overview welcomes a first run with the agents to connect", () => {
-  test("no agents: the first-run panel replaces Needs you, Health and Recent activity", async () => {
+  acceptance("web-ui", "overview welcomes a first run with the agents to connect", async () => {
     install({ agents: [] });
     renderPage();
     expect(await screen.findByText("Connect your coding agents")).toBeInTheDocument();
@@ -481,9 +479,8 @@ describe("overview welcomes a first run with the agents to connect", () => {
   );
 });
 
-// scenario (web-ui, revise-web-ui-ia): one area failing to load leaves the rest of overview working
 describe("one area failing to load leaves the rest of overview working", () => {
-  test("the Skills tile shows its error while the other tiles render", async () => {
+  acceptance("web-ui", "one area failing to load leaves the rest of overview working", async () => {
     install({ failing: ["/skills"] });
     renderPage();
     const skills = await within(health()).findByRole("group", { name: "Skills" });
@@ -499,9 +496,8 @@ describe("one area failing to load leaves the rest of overview working", () => {
   });
 });
 
-// scenario (web-ui, revise-web-ui-ia): overview hides an area whose backend or feature is off
 describe("overview hides an area whose backend or feature is off", () => {
-  test("a switched-off feature has no tile; the system areas each have one", async () => {
+  acceptance("web-ui", "overview hides an area whose backend or feature is off", async () => {
     install({ features: { fake_feature: false } });
     renderPage();
     const region = health();
@@ -525,9 +521,8 @@ describe("overview hides an area whose backend or feature is off", () => {
   });
 });
 
-// scenario (web-ui, revise-web-ui-ia): a resolved problem leaves overview on its own
 describe("a resolved problem leaves overview on its own", () => {
-  test("an attention change on the event stream refetches the list", async () => {
+  acceptance("web-ui", "a resolved problem leaves overview on its own", async () => {
     const get = install({ attention: { ...EMPTY_ATTENTION, items: ITEMS.slice(1, 2) } });
     renderPage();
     expect(await within(needsYou()).findByText("github")).toBeInTheDocument();
@@ -609,4 +604,36 @@ acceptance("web-ui", "an ignored agent leaves needs you and is counted under it"
   fireEvent.click(await screen.findByRole("menuitem", { name: "Stop ignoring" }));
   await waitFor(() => expect(within(needsYou()).queryByText(/ignored/)).toBeNull());
   expect(within(needsYou()).getByText("Codex")).toBeInTheDocument();
+});
+
+acceptance("web-ui", "overview flags a required CLI that needs attention", async () => {
+  const outdated = {
+    kind: "cli",
+    uid: "gh",
+    title: "gh",
+    reason_code: "cli_outdated",
+    reason: "gh 2.30.0 is older than 2.40, needed by gh-triage.",
+    severity: "warning",
+    since: null,
+    action: { verb: "check", method: "POST", path: "/api/v1/clis/gh/check", body: null },
+  };
+  install({ attention: { ...EMPTY_ATTENTION, items: [outdated] } });
+  renderPage();
+  const name = await within(needsYou()).findByText("gh");
+  const row = name.closest("li") as HTMLElement;
+  expect(within(row).getByText(/older than 2\.40/)).toBeInTheDocument();
+  expect(within(row).getByRole("link", { name: /^gh/ })).toHaveAttribute("href", "/clis/gh");
+  expect(within(row).getByRole("link", { name: /^Check/ })).toHaveAttribute("href", "/clis/gh");
+
+  // Once the command is current the daemon's list has no such item, and the row goes.
+  state.attention = EMPTY_ATTENTION;
+  await waitFor(() => expect(listener).not.toBeNull());
+  act(() => {
+    listener?.({
+      type: "change",
+      change: { seq: 2, kind: "attention", id: null, rev: null, op: "upsert" },
+    });
+  });
+  expect(await screen.findByText("Nothing needs you")).toBeInTheDocument();
+  expect(within(needsYou()).queryByText("gh")).toBeNull();
 });

@@ -3,6 +3,7 @@ import "@/test/pointerEvent";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 
+import { acceptance } from "@/test/acceptance";
 import { blockLocalStorage } from "@/test/blockedStorage";
 
 import { DETAIL_MIN_WIDTH, LIST_MIN_WIDTH, listMaxWidth } from "@/lib/hooks/useResizableWidth";
@@ -65,8 +66,7 @@ describe("SplitView", () => {
     expect(sep()).toHaveAttribute("aria-valuemax", "700");
   });
 
-  // revise-web-ui-ia: web-ui "dragging a divider resizes and survives a reload"
-  test("a drag resizes and survives a remount on that storage key only", () => {
+  acceptance("web-ui", "dragging a divider resizes and survives a reload", () => {
     const first = renderSplit();
     drag(320, 420);
     expect(listPane()).toHaveStyle({ width: "420px" });
@@ -80,8 +80,7 @@ describe("SplitView", () => {
     expect(listPane()).toHaveStyle({ width: "320px" });
   });
 
-  // revise-web-ui-ia: web-ui "a divider cannot be dragged past a pane's minimum"
-  test("stops at 240, at 50% of the split, and where the detail would drop under 480", () => {
+  acceptance("web-ui", "a divider cannot be dragged past a pane's minimum", () => {
     const wide = renderSplit();
     drag(320, 0);
     expect(listPane()).toHaveStyle({ width: `${LIST_MIN_WIDTH}px` });
@@ -116,8 +115,7 @@ describe("SplitView", () => {
     expect(listPane()).toHaveStyle({ width: "650px" });
   });
 
-  // revise-web-ui-ia: web-ui "double-clicking a divider restores the default"
-  test("double-click restores the default, and the next mount opens at it", () => {
+  acceptance("web-ui", "double-clicking a divider restores the default", () => {
     const first = renderSplit();
     drag(320, 500);
     fireEvent.doubleClick(sep());
@@ -136,8 +134,7 @@ describe("SplitView", () => {
     expect(listPane()).toHaveStyle({ width: "304px" });
   });
 
-  // revise-web-ui-ia: web-ui "no stored width falls back to the default"
-  test("blocked storage: opens at the default, the drag still works, nothing throws", () => {
+  acceptance("web-ui", "no stored width falls back to the default", () => {
     const restore = blockLocalStorage("methods");
     try {
       renderSplit();

@@ -88,7 +88,7 @@ experimental feature:
   Skills           /skills            — what Coffer delivers to agents
   CLIs             /clis              — the command-line tools skills require
  CONTEXT
-  Knowledge        /knowledge         — the collections under ~/.coffer/knowledge/
+  Knowledge        /knowledge         — the collections under ~/.coffer/vault/knowledge/
   Memory           /memory            — the partitions aggregated from the agents' own stores
  SYSTEM
   Secrets          /secrets           — every stored secret and what uses it
@@ -205,10 +205,13 @@ than by how Coffer is built, and MUST open on General:
   an experimental feature — the Experimental features card (spec
   [experimental-features](../experimental-features/spec.md) "List and switch the features on the General tab").
 - **Security** (`/settings/security`) — what is about this machine only: where
-  the master encryption key lives, beside the database or in the OS keychain,
-  and the daemon's access token (see "Show, copy and rotate the access token on
-  Settings › Security"). It lists and edits no stored secret; those are on the Secrets page (see
-  "Manage stored secrets on the Secrets page").
+  the master encryption key lives — in a signed release its Keychain access
+  group; in a development build a file beside the database or the login
+  keychain, with the switch that moves it — with its backup, import and
+  fingerprint; the daemon's access token (see "Show, copy and rotate the access
+  token on Settings › Security"); and whether a secret waits for approval
+  before it goes somewhere new. It lists and edits no stored secret; those are
+  on the Secrets page (see "Manage stored secrets on the Secrets page").
 - **Data** (`/settings/data`) — what Coffer stores, by kind: Vault, Local content, History
   and Rebuildable cache (see "Group the Data tab by what kind of data it is").
 - **Daemon** (`/settings/daemon`) — the daemon's state and the controls a user
@@ -231,7 +234,7 @@ modal.
 #### Scenario: the security tab keeps only machine-level settings
 - **GIVEN** stored secrets cited by a registered MCP server and a model provider
 - **WHEN** the user opens `/settings/security`
-- **THEN** the tab shows where the master key lives and its move control, and the access token's Show, Copy and Rotate controls
+- **THEN** the tab shows where the master key lives and, in a development build, its move control, and the access token's Show, Copy and Rotate controls
 - **AND** it lists no stored secret and offers no control that adds, reveals or deletes one
 
 ### Requirement: Add MCP servers from one paste box
@@ -422,23 +425,28 @@ The Data tab MUST show what Coffer stores in four blocks, one per kind of data
 and no other — in particular no "This Mac only" block, since what is true of this
 machine only is a setting shown on the tab it belongs to:
 
-- **Vault** — the synced git repository of the user's configuration, skills and
-  knowledge: its size, how many versions it holds, and **Open folder**.
+- **Vault** — the git repository at `~/.coffer/vault/` holding the user's
+  configuration, skills, knowledge and encrypted secrets, a repository whether
+  or not it syncs ([vault-storage](../vault-storage/spec.md) "Keep the vault a
+  git repository whether or not it syncs"): its size (with its history), how
+  many versions it holds, when and by whom it last changed, whether it syncs to
+  a remote or is this machine's only copy, its location, and **Open folder**.
 - **Local content** — what is not synced and the user must back up themselves:
   chat and channel attachments and media only, with their size and **Open
   folder**, and a line saying so.
 - **History** — the retention of each record kind — changes, MCP calls and
   conversations — Keep forever or a number of days, cleaned up by the retention
   worker's schedule (at daemon start and every six hours), with a
-  **Clear expired now** action and a muted line naming `coffer config` for the
+  **Clear expired now** action behind a confirmation, which reports what it
+  removed, and a muted line naming `coffer config` for the
   other retention settings; a saved value survives a reload. Shortening a
   window (or turning Keep forever off) MUST ask first, and the confirmation
   MUST say how many records the shorter window deletes at the next cleanup and
   how many the table holds now and would hold after, counted by the daemon
   without deleting anything. A refused save MUST say so above the blocks with
   **Try again**, name the window still in place, and mark the row "Not saved".
-- **Rebuildable cache** — Coffer's memory tree and the transcript summary cache
-  (`cache/agent/`), which Coffer rebuilds on its own: one **Clear** action,
+- **Rebuildable cache** — Coffer's memory tree and the transcript summary cache,
+  both under `~/.coffer/derived/`, which Coffer rebuilds on its own: one **Clear** action,
   behind a confirmation saying that memory is rebuilt from the agents' own
   memory on the next update, that an equivalent rebuild needs Coffer's model
   (without it each entry becomes a note of its own), and that notes whose
@@ -463,14 +471,16 @@ Edits auto-save, like every settings surface: there is no Save button.
 - **AND** nothing is deleted or saved until the user confirms
 
 #### Scenario: clear expired now removes what retention has passed
-- **GIVEN** MCP calls kept for 7 days and calls older than that
-- **WHEN** the user chooses Clear expired now
-- **THEN** the older calls are removed and the rest remain, as the scheduled cleanup would have done
+- **GIVEN** changes kept for 7 days and changes older than that
+- **WHEN** the user chooses Clear expired now and confirms
+- **THEN** the older changes are removed and the rest remain, as the scheduled cleanup would have done
+- **AND** the page reports how many records it removed, by record kind
 
 #### Scenario: clearing the cache is confirmed and rebuilt
 - **GIVEN** memory partitions with notes
-- **WHEN** the user chooses Clear in Rebuildable cache and confirms
-- **THEN** the memory tree and the transcript summary cache are cleared, and the next memory update rebuilds the partitions from the agents' own memory, with no vault or local content touched
+- **WHEN** the user chooses Clear in Rebuildable cache
+- **THEN** a confirmation says the next memory update rebuilds memory from the agents' own memory and that notes whose sources are gone do not come back, and nothing is cleared until the user confirms
+- **AND** once confirmed only the memory tree and the transcript summary cache are cleared, with no vault or local content touched
 
 ### Requirement: Scope Activity's calls table to one server on its page
 A server's **Invocations** tab MUST read the same invocation log Activity's MCP
@@ -591,14 +601,17 @@ command line (see "Keep the command-line record readers").
 - **AND** no tab requests a route of the Activity page's own
 
 ### Requirement: Use one shared table for every list surface
-Every list surface — agents, knowledge, memory, model providers, channels, each
-Activity tab, Sync's Runs tab — MUST use one shared searchable, filterable,
-paginated table, and a row click MUST open that item's detail page. The MCP
-servers and Skills pages are lists beside a reading pane instead: a filterable
-list of rows, each a link that opens its item in the pane at the item's own
-address, so a row click opens the item there. Sync's Setup tab is not a list
-surface: it is configuration cards, and the machine registry it carries is a
-small plain table.
+Every list surface that is a table — agents, memory partitions, Sync's Runs
+tab — MUST use one shared searchable, filterable, paginated table, and a row
+click MUST open that item's detail page. The Model providers, Channels, MCP
+servers, Custom tools, Skills and CLIs pages are lists beside a reading pane
+instead: a filterable list of rows, each a link that opens its item in the pane
+at the item's own address, so a row click opens the item there; Knowledge is
+its collection tree beside the pane in the same way. Activity's tabs share one
+record list of their own, each row opening its record (see "Filter each
+Activity tab and expand any row"). Sync's Setup tab is not a list surface: it
+is configuration cards, and the machine registry it carries is a small plain
+table.
 
 #### Scenario: a row click opens the item's detail page
 - **GIVEN** a list surface showing at least one row
@@ -611,10 +624,12 @@ it holds, not for the on/off flag it replaced: one button labelled with the answ
 holds — "Every agent", "2 agents", "Disabled", or "No agent selected" for a
 scope narrowed to nobody — so the reader learns the reach by reading it rather
 than by comparing which of three side-by-side segments looks pressed. A list
-beside a reading pane (MCP servers, Skills) shows each row's reach as a mark
-instead — Off, All agents, or the badges of the agents it reaches — and the
-button is in the open item's header. Every detail page MUST carry the same
-button in its header. A kind that declares no
+beside a reading pane shows no reach button in its rows: the MCP servers and
+Skills lists show each row's reach as a mark instead — Off, All agents, or the
+badges of the agents it reaches — and the Model providers and Channels lists
+show none. Every detail page of a scoped kind MUST carry the same button in its
+header — a channel's sits in its Overview tab's agents section instead, beside
+the agent the channel answers with. A kind that declares no
 scope — an agent, a knowledge collection, a memory partition — MUST carry neither
 the column, the button, nor a bulk reach action; see "Offer reach as one choice in a panel".
 
@@ -758,7 +773,7 @@ stored secrets on the Secrets page").
 - **GIVEN** the app shell is rendered with every experimental feature switched on
 - **WHEN** the entries for resource kinds are read
 - **THEN** MCP servers, Custom tools, Skills, Knowledge, Memory, Model providers and Channels each appear exactly once, under Capabilities, Capabilities, Capabilities, Context, Context, Agents and Run respectively
-- **AND** a custom tool is listed on the Custom tools page and not on the MCP servers page
+- **AND** the MCP servers and Custom tools entries open `/mcp-servers` and `/custom-tools`, and a custom-tool group is not listed on the MCP servers page
 - **AND** no heading reads "Resources"
 
 ### Requirement: Open the app on Overview
@@ -815,7 +830,7 @@ never stands down on its own.
 - **WHEN** the user turns on Start at login on the Daemon tab
 - **THEN** one request is sent carrying `login_service_installed: true` and no idle window
 - **AND** the card offers no idle-window or stand-down control
-- **AND** when the request fails, the switch goes back to off and the error is shown beside it
+- **AND** when a later request fails, the switch goes back to what the daemon last reported and the error is shown beside it
 
 ### Requirement: Choose Coffer's model in Settings › General
 Settings › General MUST carry a **Coffer's model** section that sets what Coffer's
@@ -835,7 +850,6 @@ configuration (search is literal-only), and the second picker is Speech to text.
 - **GIVEN** two connections, each with a list of models
 - **WHEN** the user opens `/settings/general` and, in the Engine model picker, chooses a provider and then one of its models
 - **THEN** the model list offers only the chosen provider's models, and the choice is saved without a Save button
-- **AND** the Model providers page shows no Coffer's model tab
 
 #### Scenario: an unset picker says what coffer does without it
 - **GIVEN** no speech-to-text model chosen
@@ -951,7 +965,7 @@ Port controls MUST be disabled.
 #### Scenario: saving a valid port leaves it pending until restart
 - **GIVEN** a daemon answering on port 8000, opened in the desktop shell
 - **WHEN** the user sets the port to 8123 on the Daemon tab and saves
-- **THEN** `~/.coffer/daemon-config.json` carries 8123, the row reads takes effect after restart with Restart now, and the status still shows 8000
+- **THEN** 8123 is saved through `PUT /api/v1/daemon/port` (which writes it to `~/.coffer/daemon-config.json`), the row reads takes effect after restart with Restart now, and the status still shows 8000
 - **AND** in a browser the row offers the same Restart now
 
 #### Scenario: a browser restarts the daemon from the daemon tab
@@ -973,7 +987,7 @@ Port controls MUST be disabled.
 #### Scenario: the settings daemon tab keeps its layout while status loads
 - **GIVEN** the Daemon tab opened before the status probe has answered
 - **WHEN** the tab renders
-- **THEN** it shows its page header and skeleton rows rather than a blank pane or an offline state
+- **THEN** it shows its Startup section and skeleton rows for the status rather than a blank pane or an offline state
 
 #### Scenario: the settings daemon tab with the daemon offline
 - **GIVEN** the daemon cannot be reached
@@ -992,11 +1006,12 @@ It lists two kinds of entry, filtered together by what the user types:
 - **Pages** — every sidebar entry and every Settings tab, by the names the
   sidebar and the tabs use (see "Call a surface by one name everywhere"). A
   Settings tab opens in the Settings modal over the current page.
-- **Objects** — the agents, the resources of every kind with a list surface
-  (custom tools included) and the CLIs, matched by name — and also by title
-  on the kinds that carry one ([resource-framework](../resource-framework/spec.md)
+- **Objects** — the agents, the conversations, the resources of every kind
+  with a list surface (custom tools included), the CLIs and the stored secrets
+  (by ref, never a value), matched by name — and also by title on the kinds
+  that carry one ([resource-framework](../resource-framework/spec.md)
   "Carry an optional editable title on the kinds that have one") — each
-  opening its detail page.
+  opening its detail page; a secret, which has none, opens the Secrets page.
 
 With an empty query it MUST show **Recent** — the last few entries chosen in
 this browser, a convenience that is safe to lose — above every page. Under a
@@ -1005,7 +1020,7 @@ then a match at the start of a name), then the other matching pages, then the
 matching objects in one group per kind, named as the kind's sidebar entry and
 in sidebar order, each group holding a few; typing more narrows them.
 
-A page or object of a switched-off experimental feature MUST NOT appear. The
+A page of a switched-off experimental feature MUST NOT appear. The
 palette MUST read the list routes the pages already read and add no route of its
 own. Arrow keys MUST move the selection, Enter MUST open it, and Escape MUST
 close the palette and return focus where it was.
@@ -1023,10 +1038,10 @@ searches, rather than show an empty panel.
 - **THEN** the app navigates to `/activity` and the palette closes
 
 #### Scenario: the palette jumps to an object
-- **GIVEN** a registered MCP server, and a model provider whose title differs from its name
-- **WHEN** the user opens the palette and types part of the server's name, then part of the provider's name, then part of the provider's title
-- **THEN** the first query lists the server, and the second and third each list the provider
-- **AND** choosing the server opens `/mcp-servers/<name>`
+- **GIVEN** a registered MCP server whose title differs from its name
+- **WHEN** the user opens the palette and types part of the server's name, then part of its title
+- **THEN** each query lists the server as the best match, named by its title and marked as an MCP server
+- **AND** choosing it opens `/mcp-servers/<name>` and closes the palette
 
 #### Scenario: the palette offers no actions
 - **GIVEN** the palette open with an empty query, and then with queries naming objects
@@ -1040,9 +1055,9 @@ searches, rather than show an empty panel.
 - **THEN** Recent lists Usage and then the server, and every page is listed below it
 
 #### Scenario: the palette leaves out switched-off features
-- **GIVEN** a registered experimental feature that is switched off, owning a sidebar entry and a kind with a resource on disk
-- **WHEN** the user searches the palette for the entry's name and for the resource's name
-- **THEN** neither the entry's page nor the resource is listed
+- **GIVEN** a registered experimental feature that is switched off, owning a sidebar entry
+- **WHEN** the user searches the palette for the entry's name
+- **THEN** the entry's page is not listed, and it is listed once the feature is switched on
 
 #### Scenario: the palette lists pages while objects load
 - **GIVEN** the palette opened before the object lists have answered
@@ -1079,30 +1094,36 @@ is still entered where the thing that needs it is configured.
 
 The page MUST carry:
 
-- **List** — every secret the store reports, by its reference, with whether the
-  store holds it, so a reference cited but missing reads as missing (spec
-  [secret](../secret/spec.md) "List every cited reference with its presence").
+- **List** — every secret the store holds or a resource cites, by its reference,
+  with whether this Mac holds it, so a reference cited but missing reads as
+  missing on this Mac (spec [secret](../secret/spec.md) "List every stored and
+  cited secret with what uses it").
 - **Used by** — for each secret, what cites it, by kind and current name, each
-  opening that thing's page; a secret nothing cites is marked unused.
+  opening that thing's page; a secret nothing cites is listed apart as unused.
 - **Add and replace** — store a new secret, or replace the value of one that
-  exists, without the value ever being shown back.
-- **Reveal** — show one value behind an explicit action, which is an audited
-  read (spec [secret](../secret/spec.md) "Audit every read of a secret value").
+  exists, without the value ever being shown back; a change that waits for a
+  person's approval says so (spec [secret](../secret/spec.md) "Hold a new
+  standalone secret until a person approves it").
+- **Reveal** — show one value behind an explicit, confirmed action, only in the
+  desktop app, audited as `secret_revealed` (spec [secret](../secret/spec.md)
+  "Release plaintext only to a present human in the desktop app"); in a
+  browser the action is disabled and names the desktop app.
 - **Delete** — refused while the secret is cited: the control MUST say what still
   uses it, naming each citer as the delete refusal does (spec
   [secret](../secret/spec.md) "Refuse to delete a secret still in use"), and
   the row MUST stay.
-- **Migration assistant** — the entry point that moves plaintext secret files into
-  the store, shown once that assistant ships.
+- **Find plaintext keys** — the entry point that moves plaintext secret files
+  into the store (spec [secret](../secret/spec.md) "Move plaintext secret files
+  into the store").
 
-This requirement fixes the page's place and its parts. What the store enumerates
-beyond cited references, how each operation behaves, and the migration
-assistant's steps are the secret capability's, specified with it.
+This requirement fixes the page's place and its parts. What the store enumerates,
+how each operation behaves, and the steps of finding plaintext keys are the
+secret capability's, specified with it.
 
 #### Scenario: the secrets page lists each secret with what uses it
 - **GIVEN** a registered MCP server citing a stored reference, and a model provider citing a reference the store does not hold
 - **WHEN** the user opens `/secrets`
-- **THEN** both references are listed, the first as present and the second as missing
+- **THEN** both references are listed, the first as present and the second as missing on this Mac
 - **AND** each row names its citer by kind and current name, and choosing it opens that resource's page
 
 #### Scenario: a secret in use cannot be deleted from the secrets page
@@ -1112,10 +1133,10 @@ assistant's steps are the secret capability's, specified with it.
 - **AND** the secret's row is still listed
 
 #### Scenario: revealing a secret is an explicit, audited read
-- **GIVEN** a stored secret listed on the Secrets page
-- **WHEN** the page renders, and then the user chooses Reveal on that row
-- **THEN** no value is shown until Reveal is chosen
-- **AND** the reveal records a `secret_read` audit entry carrying the reference only
+- **GIVEN** a stored secret listed on the Secrets page in the desktop app
+- **WHEN** the page renders, and then the user chooses Reveal value on that row and confirms
+- **THEN** no value is shown until the reveal is confirmed, and then only that secret's value is asked for and shown
+- **AND** the page says the reveal is recorded as `secret_revealed`
 
 ### Requirement: Mark a sidebar entry whose kind needs attention
 A sidebar entry MUST carry a count badge while the kind or tool behind it has
@@ -1131,8 +1152,8 @@ it MUST shrink to a dot of the same tone on the icon, and the row's tooltip
 carries the count ("MCP servers · 1 failing").
 
 What raises a signal and what clears it belongs to the capability that owns the
-kind: the entries of Agents, MCP servers, Skills and Channels count the
-non-informational items the cross-kind attention list reports for their kind
+kind: the entries of Agents, Model providers, MCP servers, Skills and Channels
+count the non-informational items the cross-kind attention list reports for their kind
 (spec [resource-framework](../resource-framework/spec.md) "Report what needs a
 person across every kind"); Sync keeps its own signal, one situation cleared by
 visiting the page (spec [vault-sync](../vault-sync/spec.md) "Say a vault needs a
@@ -1171,9 +1192,9 @@ Settings, not an icon-only button — at the bottom of the sidebar, just above t
 daemon status (see "Show the daemon's state in the shell footer"); the ⌘,
 shortcut on macOS and Ctrl+, elsewhere, from any page; and the command palette's
 Settings tabs. On the collapsed icon rail the row MUST shrink to the gear icon
-with a tooltip reading Settings. The row MUST show as active only while the
+with a tooltip reading Settings and its shortcut. The row MUST show as active only while the
 modal is open, and never mark the page underneath as not current. The row and
-the shortcut open it on General; the footer's daemon state opens it on Daemon. Settings is machine-level
+the shortcut open it on General; the menu the footer's daemon state opens leads to Daemon. Settings is machine-level
 configuration a user visits rarely, so it takes no place in the sidebar
 beside the pages used every day, the convention of desktop applications' own
 preferences windows.
@@ -1198,8 +1219,8 @@ close it and return to the page underneath.
 
 #### Scenario: the collapsed rail keeps Settings as a gear with a tooltip
 - **GIVEN** the sidebar collapsed to its icon rail
-- **WHEN** the user hovers the gear icon above the daemon state and clicks it
-- **THEN** a tooltip reads Settings, and the click opens the Settings modal on General
+- **WHEN** the user points at the gear icon above the daemon state and clicks it
+- **THEN** the gear carries no word, a tooltip reads Settings, and the click opens the Settings modal on General
 
 #### Scenario: the keyboard shortcut opens Settings
 - **GIVEN** the app open on any page, with focus outside a text field
@@ -1218,9 +1239,9 @@ close it and return to the page underneath.
 - **AND** closing it lands on `/`
 
 #### Scenario: the palette opens a Settings tab over the current page
-- **GIVEN** the user on `/skills`
+- **GIVEN** the user on `/agents`
 - **WHEN** they open the palette, type "data" and press Enter
-- **THEN** the Settings modal opens on its Data tab at `/settings/data`, with the Skills page underneath
+- **THEN** the Settings modal opens on its Data tab at `/settings/data`, with the Agents page underneath
 
 ### Requirement: Manage custom tools on their own page
 The Custom tools page (`/custom-tools`, under Capabilities) MUST manage custom
@@ -1236,7 +1257,9 @@ gateway as every other MCP server, and carries:
 - an optional **auth header** whose value is bound to a stored secret, chosen by
   its name on the Secrets page (see "Manage stored secrets on the Secrets
   page"): Coffer's gateway adds the header
-  when it calls the API, and neither the header's value nor the secret's
+  when it calls the API, once a person has approved the secret for the group's
+  host ([mcp-gateway](../mcp-gateway/spec.md) "Wait for approval before a custom
+  tool sends its secret"), and neither the header's value nor the secret's
   reference is ever part of what an agent sees or sends;
 - a default **reach**, which each tool follows unless it overrides it.
 
@@ -1260,11 +1283,11 @@ offers the two ways in:
   operations that change data are listed but not ticked), tools whose request
   the spec changed, and tools it would remove — before anything changes;
   applying keeps every unchanged tool's switch and reach override as they were.
-- **Define one request by hand** — the new group's name, base URL, auth and
+- **Add one request by hand** — the new group's name, base URL, auth and
   default reach, then its first request: method, path, headers, body template
   and arguments.
 
-Every request form MUST end with **Test**, which runs the request as the form
+Every request form MUST end with a **Test** section, whose Run runs the request as the form
 holds it once and shows the answer, the API's error body, a timeout, a failed
 connection or a response cut short; nothing — neither a new group nor a tool — is
 saved until the form's **Add** or **Save**. A request of a group that is not saved
@@ -1280,16 +1303,17 @@ the name of the secret it is bound to), its **reach**, a one-line summary of the
 last 24 hours (calls and failures), and the **tools table** — each tool's
 method and path, its switch, its changes-data flag and its reach override. Choosing
 a tool opens its editor in a **drawer** over the page, where the request is
-edited and a **Test** action calls the tool with sample arguments and shows the
+edited and its **Test** section runs the tool with sample arguments and shows the
 response. Script tools are not offered: they are deferred past 1.0.
-How the gateway runs an HTTP API tool is specified with the change that adds the
-transport.
+How the gateway runs an HTTP API tool is mcp-gateway's ([mcp-gateway](../mcp-gateway/spec.md)
+"Serve an HTTP API as a group of custom tools", "Make a custom tool's request in
+the gateway").
 
 #### Scenario: importing an OpenAPI spec creates a group with the chosen operations
-- **GIVEN** an OpenAPI document with five operations
-- **WHEN** the user chooses Add custom tool, imports the document, names the group `billing`, binds its auth header to a stored secret and picks three operations
-- **THEN** one group `billing` is created with those three tools, each on and following the group's reach
-- **AND** the group's detail page offers Re-import
+- **GIVEN** an OpenAPI document with five operations, three that read data and two that change it
+- **WHEN** the user chooses Add custom tool and New group, imports the document as the group `invoices`, unticks one read, ticks one operation that changes data, and reviews
+- **THEN** the reads started ticked and the operations that change data unticked, and the review lists the three ticked as the tools to create and the other two as Skipped
+- **AND** nothing is created until Create group with 3 tools, which creates `invoices` with only those three and opens its page
 
 #### Scenario: re-importing a spec previews the operations it adds and removes
 - **GIVEN** the `billing` group imported with three operations, one of them switched off and one with a reach override
@@ -1335,7 +1359,7 @@ transport.
 #### Scenario: the custom tools page lists groups by health
 - **GIVEN** one group whose last call failed and two healthy groups
 - **WHEN** the user opens `/custom-tools`
-- **THEN** the failing group is listed first with its tools, and the page header carries one Add custom tool action whose flow asks for an existing or new group and offers Import an OpenAPI spec and Define one request by hand, and no Script type
+- **THEN** the failing group is listed first with its tools, and the page header carries one Add custom tool action whose flow asks for an existing or new group and offers Import an OpenAPI spec and Add one request by hand, and no Script type
 
 #### Scenario: a group's page is one page with a tool drawer
 - **GIVEN** the `billing` group with three tools
@@ -1375,9 +1399,9 @@ is missing, outdated or not logged in. What a skill declares and how a command
 is probed are specified by skill-manager; this page shows what they report.
 
 #### Scenario: the CLIs page lists problems first
-- **GIVEN** two skills requiring `gh` (minimum 2.40, found 2.30) and `jq` (found, no minimum), and one requiring `gcloud` (not logged in)
+- **GIVEN** skills requiring `jq` (not found), `gh` (minimum 2.40, found 2.30.0), `gcloud` (not logged in) and `uv` (found, current)
 - **WHEN** the user opens `/clis`
-- **THEN** `gh` and `gcloud` are listed before `jq`, `gh` shows 2.30 against 2.40, `gcloud` shows not logged in, and each row names the skills that need it
+- **THEN** `jq`, `gh` and `gcloud` are listed under Needs you above `uv` under Ready, `gh` shows 2.30.0 against 2.40, `gcloud` shows not logged in, and each row counts the skills that need it
 
 #### Scenario: a CLI that needs the user offers a prompt for an agent
 - **GIVEN** a required CLI that is missing and a Coffer-managed agent
@@ -1404,8 +1428,8 @@ is probed are specified by skill-manager; this page shows what they report.
 #### Scenario: overview flags a required CLI that needs attention
 - **GIVEN** a required CLI that is outdated
 - **WHEN** the user opens Overview
-- **THEN** an attention item names the CLI and the problem and opens its page
-- **AND** once every required CLI is present, current and logged in, no such item is shown
+- **THEN** an attention item names the CLI and the problem, and its name and its Check action open the CLI's page
+- **AND** once the daemon's list no longer reports it — every required CLI present, current and logged in — the item is gone
 
 ### Requirement: Resize every split view by its divider
 Every split view — a list beside its detail, a file tree beside its file, a
@@ -1426,13 +1450,13 @@ unreadable or blocked, the split opens at its default width and still works,
 and a remembered width that no longer fits the window is clamped to the bounds.
 
 #### Scenario: dragging a divider resizes and survives a reload
-- **GIVEN** the Skills detail page with its file tree beside the file
-- **WHEN** the user drags the divider to widen the tree, then reloads the page
-- **THEN** the tree keeps the width it was dragged to, on that page only
+- **GIVEN** a page's split view, a list beside its detail
+- **WHEN** the user drags the divider to widen the list, then reloads the page
+- **THEN** the list keeps the width it was dragged to, on that page only, and another page's split opens at its default
 
 #### Scenario: a divider cannot be dragged past a pane's minimum
-- **GIVEN** the Conversations page with its list beside the conversation
-- **WHEN** the user drags the divider towards the list until the list would be narrower than 240px, and then the other way until the thread would be narrower than 480px or the list wider than half the window
+- **GIVEN** a split view with a list beside its detail
+- **WHEN** the user drags the divider towards the list until the list would be narrower than 240px, and then the other way until the detail would be narrower than 480px or the list wider than half the window
 - **THEN** the divider stops at 240px, and at whichever of the other two bounds comes first
 
 #### Scenario: double-clicking a divider restores the default
@@ -1460,9 +1484,10 @@ whole"). A history that cannot be read MUST say so in the tab with a retry, leav
 working.
 
 #### Scenario: the history tab lists versions with their writers
-- **GIVEN** a document the user created, that curation then changed from a Claude Code item
+- **GIVEN** a document the user created, that curation then changed from a Codex item
 - **WHEN** the user opens its History tab and chooses the older version
-- **THEN** the tab lists both versions with their writers and times, shows the diff, and offers Restore this version
+- **THEN** the tab lists both versions newest first with their writers, shows the older version's diff, and offers Restore this version
+- **AND** restoring it writes it back as a new version
 
 #### Scenario: a history that fails to load leaves the document readable
 - **GIVEN** the history read failing
@@ -1479,14 +1504,15 @@ asks first and undoes the whole pass, reporting a refusal that names the documen
 wording is Curate / Curation (整理) throughout.
 
 #### Scenario: recent changes shows a cross-collection timeline with waiting items
-- **GIVEN** a pass in one collection, a person's edit in another, and two items waiting
+- **GIVEN** a pass in one collection, a person's edit in another, and an item waiting
 - **WHEN** the user opens Recent changes
-- **THEN** both changes are listed newest first with their collections, the two waiting items are shown with Curate now, and filtering to one collection leaves only its entries
+- **THEN** both changes are listed, each linking the documents it wrote, the waiting item is shown with Curate now, and filtering to one collection leaves only its entries
 
 #### Scenario: a pass is inspected and undone as a whole
 - **GIVEN** a pass that changed two documents
-- **WHEN** the user opens it in Recent changes, reviews the diffs and confirms Undo this pass
-- **THEN** both documents are back as they were before it, and the timeline shows the undo as a new entry
+- **WHEN** the user opens it from Recent changes, reviews the diffs and chooses Undo this pass
+- **THEN** the pass's page lists each document it changed with its diff and a link to that document's history
+- **AND** Undo this pass asks first, writes nothing until confirmed, and confirming undoes the whole pass in one request
 
 ### Requirement: Show memory delivery on the Memory page
 The Memory page MUST show what memory delivery is doing, and the agent detail page MUST show only
@@ -1508,9 +1534,9 @@ the delivery hook's state:
   agent's Memory tab shows only the agent's own native memory stores.
 
 #### Scenario: the memory overview lists deliveries per agent
-- **GIVEN** Claude Code with 12 delivery fires in the last seven days, the last one an hour ago, and transcripts recording reads of 5 distinct memories, and Codex with no delivery in that time
+- **GIVEN** Claude Code with 12 delivery fires in the last seven days, and transcripts recording reads of 5 distinct memories, and Codex with no delivery in that time
 - **WHEN** the user opens the Memory page
-- **THEN** Claude Code reads 12 deliveries, 5 memories read and last delivered an hour ago, and Codex reads not delivered in the last 7 days with no hook detail
+- **THEN** Claude Code reads 12 deliveries, 5 memories read and when it was last delivered to, and Codex reads not delivered in the last 7 days with no hook detail
 
 #### Scenario: a partition's delivered tab shows each agent's session-start text
 - **GIVEN** a partition for the `coffer` repository and both agents connected
@@ -1519,8 +1545,8 @@ the delivery hook's state:
 
 #### Scenario: hook state appears only on the agent page
 - **GIVEN** Claude Code's delivery hook stale
-- **WHEN** the user opens the Memory page and then Claude Code's detail page
-- **THEN** the Memory page shows no hook state, Claude Code's Hooks tab and Overview connection block show the hook as stale with Repair, and its Memory tab lists only its own native memory stores
+- **WHEN** the user opens the Memory page and then Claude Code's Memory tab
+- **THEN** neither shows the hook's state or a Repair action, and the Memory tab lists only Claude Code's own native memory stores
 
 ### Requirement: Stream new Activity records while the list is at the top
 The visible Activity tab MUST show new records as they are written, newest first, with no Pause /
@@ -1587,9 +1613,9 @@ step is **Scan again**; both offer adding an agent by hand, and the first step
 for what agents share follows.
 
 #### Scenario: overview lists what needs the user, most severe first
-- **GIVEN** an MCP server whose last test failed a day ago, an agent not connected since an hour ago and a warning from sync
+- **GIVEN** two failing MCP servers, one failing for five hours and one for two, a skill whose link drifted an hour ago, and an agent the user has not connected
 - **WHEN** the user opens Overview
-- **THEN** Needs you lists the server first, then the sync item, then the agent, each with its reason, since when and one action opening its page
+- **THEN** Needs you lists the older failing server first, then the other, then the skill, then the agent, each with its reason, since when where that is known, and one action opening the page or tab where it is dealt with
 
 #### Scenario: a needs-you row offers the item's hand-off in its menu
 - **GIVEN** an attention item carrying a hand-off prompt, and a managed agent available
@@ -1609,9 +1635,9 @@ for what agents share follows.
 - **AND** with no supported agent found it says none was found and offers Scan again in place of connecting
 
 #### Scenario: one area failing to load leaves the rest of overview working
-- **GIVEN** the knowledge read fails while every other read answers
+- **GIVEN** the skills read fails while every other read answers
 - **WHEN** the user opens Overview
-- **THEN** the Knowledge tile says it could not load, with Retry and a link to Knowledge, and every other tile and the Needs you list render
+- **THEN** the Skills tile says it could not load, with Retry and a link to Skills, and every other tile and the Needs you list render
 
 #### Scenario: overview hides an area whose backend or feature is off
 - **GIVEN** an area owned by a registered experimental feature that is switched off

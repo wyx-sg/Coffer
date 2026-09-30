@@ -1,13 +1,6 @@
 // frontend/src/pages/settings/DaemonSettings.test.tsx — Settings → Daemon: status, the host's restart, Start at login and the port.
-//
-// revise-web-ui-ia: web-ui "the settings daemon tab shows the running daemon",
-// "the settings daemon tab offers the host's restart", "saving a valid port
-// leaves it pending until restart", "a port in use is rejected", "the daemon
-// tab has no token row and no troubleshooting section", "the settings daemon
-// tab keeps its layout while status loads" and "the settings daemon tab with
-// the daemon offline" — the acceptance markers are added when the change is
-// archived.
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { acceptance } from "@/test/acceptance";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -93,7 +86,7 @@ describe("DaemonSettings", () => {
     shell.inShell = false;
   });
 
-  test("the status card shows the running daemon from the status probe, with no stop control", async () => {
+  acceptance("web-ui", "the settings daemon tab shows the running daemon", async () => {
     mockApi();
     renderTab();
     const card = await screen.findByTestId("settings-daemon-status");
@@ -104,7 +97,7 @@ describe("DaemonSettings", () => {
     expect(screen.queryByRole("button", { name: /stop|shut ?down/i })).toBeNull();
   });
 
-  test("both hosts offer Restart; in a browser it asks the daemon to restart itself", async () => {
+  acceptance("web-ui", "the settings daemon tab offers the host's restart", async () => {
     mockApi();
     const { unmount } = renderTab();
     const card = await screen.findByTestId("settings-daemon-status");
@@ -116,11 +109,16 @@ describe("DaemonSettings", () => {
     shell.inShell = true;
     renderTab();
     const shellCard = await screen.findByTestId("settings-daemon-status");
-    expect(within(shellCard).getByRole("button", { name: /^restart$/i })).toBeInTheDocument();
     expect(within(shellCard).queryByText("coffer daemon restart")).toBeNull();
+    // In the desktop shell the same control runs the shell's restart.
+    const { restartDaemon } = await import("@/lib/tauri");
+    vi.mocked(restartDaemon).mockReturnValue(new Promise(() => {}));
+    fireEvent.click(within(shellCard).getByRole("button", { name: /^restart$/i }));
+    await waitFor(() => expect(restartDaemon).toHaveBeenCalledTimes(1));
+    expect(browserRestart).toHaveBeenCalledTimes(1);
   });
 
-  test("saving a valid port leaves it pending until restart, and the status keeps the bound port", async () => {
+  acceptance("web-ui", "saving a valid port leaves it pending until restart", async () => {
     shell.inShell = true;
     const { put } = mockApi();
     renderTab();
@@ -146,7 +144,7 @@ describe("DaemonSettings", () => {
     await waitFor(() => expect(browserRestart).toHaveBeenCalledTimes(1));
   });
 
-  test("a port in use is refused in place naming its holder, and one out of range is refused without a request", async () => {
+  acceptance("web-ui", "a port in use is rejected", async () => {
     const put = vi.fn(
       async (): Promise<Answer> => ({
         error: {
@@ -164,30 +162,34 @@ describe("DaemonSettings", () => {
     await waitFor(() => expect(field).toHaveValue("8000"));
     fireEvent.change(field, { target: { value: "9000" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
-    expect(await screen.findByText("Port 9000 is in use by node (pid 4242). Pick another port.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Port 9000 is in use by node (pid 4242). Pick another port."),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("settings-daemon-port-pending")).toBeNull();
     // Save stays disabled while the refusal is shown, until the port is edited.
     expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
 
     fireEvent.change(field, { target: { value: "80" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
-    expect(
-      await screen.findByText("Use a port from 1024 to 65535."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Use a port from 1024 to 65535.")).toBeInTheDocument();
     expect(put).toHaveBeenCalledTimes(1);
   });
 
-  test("the tab has no token row and no troubleshooting section", async () => {
-    mockApi();
-    renderTab();
-    await screen.findByTestId("settings-daemon-status");
-    expect(screen.queryByText(/token/i)).toBeNull();
-    expect(screen.queryByText(/troubleshoot/i)).toBeNull();
-    expect(screen.queryByText(/copy diagnostics/i)).toBeNull();
-    expect(screen.queryByText(/daemon log/i)).toBeNull();
-  });
+  acceptance(
+    "web-ui",
+    "the daemon tab has no token row and no troubleshooting section",
+    async () => {
+      mockApi();
+      renderTab();
+      await screen.findByTestId("settings-daemon-status");
+      expect(screen.queryByText(/token/i)).toBeNull();
+      expect(screen.queryByText(/troubleshoot/i)).toBeNull();
+      expect(screen.queryByText(/copy diagnostics/i)).toBeNull();
+      expect(screen.queryByText(/daemon log/i)).toBeNull();
+    },
+  );
 
-  test("while the status loads the tab keeps its layout over skeleton rows", () => {
+  acceptance("web-ui", "the settings daemon tab keeps its layout while status loads", () => {
     mockApi({ status: "pending" });
     renderTab();
     expect(screen.getByTestId("settings-daemon-status-loading")).toBeInTheDocument();
@@ -195,7 +197,7 @@ describe("DaemonSettings", () => {
     expect(screen.queryByText(/offline/i)).toBeNull();
   });
 
-  test("with the daemon offline the card names the host's recovery and the controls are disabled", async () => {
+  acceptance("web-ui", "the settings daemon tab with the daemon offline", async () => {
     mockApi({
       status: { error: { error: { code: "DAEMON_NOT_READY", message: "down", details: {} } } },
     });
