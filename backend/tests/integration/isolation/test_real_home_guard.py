@@ -60,6 +60,8 @@ def test_home_is_redirected_away_from_the_real_one() -> None:
         # background ``codex app-server`` in every test that boots it.
         "COFFER_MODEL_PROXY",
         "COFFER_QUOTA_POLL",
+        # ... and from fetching the model price list over the network.
+        "COFFER_PRICE_REFRESH",
         real_home_guard.REAL_HOME_ENV,
     }
     leaked = {

@@ -378,8 +378,9 @@ describe("ConversationsPage open conversation", () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderPage("/conversations/conv-st");
     expect(await screen.findByRole("heading", { name: "Daily Sentry triage" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Test Conv/ })).toBeInTheDocument();
-    expect(screen.getByText(/send a message to start the conversation/i)).toBeInTheDocument();
+    // The list and the thread load on their own queries; wait for each.
+    expect(await screen.findByRole("link", { name: /Test Conv/ })).toBeInTheDocument();
+    expect(await screen.findByText(/send a message to start the conversation/i)).toBeInTheDocument();
   });
 
   test("deleting a conversation from its menu asks for confirmation first", async () => {
