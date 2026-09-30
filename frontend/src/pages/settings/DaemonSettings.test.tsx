@@ -18,6 +18,7 @@ const shell = vi.hoisted(() => ({ inShell: false }));
 vi.mock("@/lib/tauri", async (orig) => ({
   ...(await orig<typeof import("@/lib/tauri")>()),
   isTauri: () => shell.inShell,
+  inDesktopShell: () => shell.inShell,
   daemonVersionMatches: async () => true,
   restartDaemon: vi.fn(),
 }));

@@ -224,6 +224,15 @@ export class PresenceUnavailableError extends Error {
   }
 }
 
+/**
+ * Whether the page runs inside the desktop shell, for the places that offer
+ * what only the shell can do (Settings › Daemon's Restart) or report the host
+ * (Settings › About's diagnostics). Components ask this, never `isTauri()`.
+ */
+export function inDesktopShell(): boolean {
+  return isTauri();
+}
+
 /** True only in the desktop shell: show the control, else "Open in Coffer app". */
 export function presenceAvailable(): boolean {
   return isTauri();

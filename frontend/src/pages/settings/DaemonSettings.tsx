@@ -17,14 +17,14 @@ import { DaemonStatusCard } from "@/components/settings/daemon/DaemonStatusCard"
 import { SettingsSection } from "@/components/settings/SettingsLayout";
 import { useDaemonFooterState } from "@/components/shell/useDaemonFooterState";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
-import { isTauri } from "@/lib/tauri";
+import { inDesktopShell } from "@/lib/tauri";
 import { DaemonResidencySettings } from "./DaemonResidencySettings";
 
 export function DaemonSettings() {
   const { t } = useTranslation();
   const state = useDaemonFooterState();
   const { data: status } = useDaemonStatus();
-  const inShell = isTauri();
+  const inShell = inDesktopShell();
   const unreachable = state.kind === "offline" || state.kind === "connecting";
 
   return (

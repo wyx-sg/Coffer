@@ -13,7 +13,7 @@ import { SettingRow, SettingsSection } from "@/components/settings/SettingsLayou
 import { useDaemonFooterState } from "@/components/shell/useDaemonFooterState";
 import { useToast } from "@/components/ui/toast";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
-import { isTauri } from "@/lib/tauri";
+import { inDesktopShell } from "@/lib/tauri";
 import { diagnosticsText } from "./aboutDiagnostics";
 import { UpdatesSection } from "./UpdatesSection";
 
@@ -30,7 +30,7 @@ export function AboutPage() {
     const text = diagnosticsText({
       status,
       state,
-      host: isTauri() ? "desktop app" : "browser",
+      host: inDesktopShell() ? "desktop app" : "browser",
       platform: typeof navigator !== "undefined" ? navigator.platform : "",
     });
     try {
