@@ -23,11 +23,19 @@ interface Props {
   agentNames: ReadonlyMap<string, string>;
   /** The link to one conversation, carrying the list's filters. */
   hrefFor: (id: string) => string;
+  /** A line under the column heads that says how this view behaves. */
+  notice?: string;
 }
 
 const HEAD = "px-3 text-left text-2xs font-semibold text-text-muted";
 
-export function ConversationsTable({ conversations, isLoading, agentNames, hrefFor }: Props) {
+export function ConversationsTable({
+  conversations,
+  isLoading,
+  agentNames,
+  hrefFor,
+  notice,
+}: Props) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const now = new Date();
@@ -40,6 +48,15 @@ export function ConversationsTable({ conversations, isLoading, agentNames, hrefF
   };
 
   const body: ReactNode[] = [];
+  if (notice) {
+    body.push(
+      <tr key="notice" className="border-b border-border-subtle bg-surface-sunken">
+        <td colSpan={4} className="px-3 py-2 text-xs text-text-muted">
+          {notice}
+        </td>
+      </tr>,
+    );
+  }
   if (isLoading) {
     for (let i = 0; i < 4; i += 1) {
       body.push(

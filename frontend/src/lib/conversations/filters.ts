@@ -68,3 +68,15 @@ export function filterConversations(
 export function isFiltered(filters: ConversationFilters): boolean {
   return filters.source !== "all" || filters.channel !== null || filters.agent !== null;
 }
+
+/** The same view with every filter cleared (the archived view stays). */
+export function clearFilters(filters: ConversationFilters): ConversationFilters {
+  return { ...filters, source: "all", channel: null, agent: null };
+}
+
+/** The source a channel's platform is listed under, read from its resource
+ *  config, so the source switch still says which platform a channel filter is. */
+export function channelSource(config: unknown): SourceFilter | null {
+  const type = (config as { channel_type?: unknown } | null | undefined)?.channel_type;
+  return type === "seatalk" || type === "telegram" ? type : null;
+}

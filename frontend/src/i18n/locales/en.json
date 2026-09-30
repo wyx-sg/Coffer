@@ -2770,10 +2770,11 @@
       "ariaLabel": "Conversation history",
       "rename": "Rename",
       "renameAria": "Rename conversation",
-      "delete": "Delete",
+      "delete": "Delete…",
       "restore": "Restore",
       "archive": "Archive",
-      "archivedEmpty": "No archived conversations"
+      "archivedEmpty": "No archived conversations",
+      "archivedHelp": "Archived conversations are read-only. Open one and choose Restore from its ⋯ menu to continue it."
     },
     "thread": {
       "empty": "Send a message to start the conversation.",
@@ -2827,19 +2828,17 @@
       "inheritNoEffort": "Agent default"
     },
     "draft": {
-      "guide": "Your first message starts the conversation with {{agent}}.",
+      "title": "New conversation with {{agent}}",
+      "details": "{{details}} — send a message to start.",
+      "effort": "{{effort}} effort",
       "noAgentTitle": "No managed agent available",
       "noAgentBody": "Conversations run on a Coffer-managed agent. Install Claude Code or Codex on this Mac, then add it on the Agents page.",
       "workspace": "Coffer’s workspace"
     },
     "delete": {
       "title": "Delete this conversation?",
-      "body": "This conversation and all of its messages will be permanently removed."
-    },
-    "archive": {
-      "title": "Archive this conversation?",
-      "body": "It will be moved to the archive. You can restore it anytime.",
-      "confirm": "Archive"
+      "body": "“{{title}}” and its messages are removed from Coffer. Files the agent changed and {{agent}}’s own session files stay. This can’t be undone — Archive keeps it instead.",
+      "confirm": "Delete conversation"
     },
     "jumpToLatest": "Jump to latest",
     "attachment": "Attachment",
@@ -2849,8 +2848,9 @@
     "attachments": {
       "uploading": "Uploading…",
       "remove": "Remove {{name}}",
-      "tooLarge": "Over the 20 MB limit",
-      "tooMany": "At most 10 files per message",
+      "notAttached": "{{name}} was not attached: {{reason}}. Up to 10 files, 20 MB each.",
+      "tooLarge": "it is over 20 MB",
+      "tooMany": "this message already has 10 files",
       "listLabel": "Attached files"
     },
     "mirror": {
@@ -2889,7 +2889,8 @@
       },
       "emptyTitle": "No conversations yet",
       "emptyBody": "Every conversation shows up here — the ones you start in Coffer and the ones that come in through SeaTalk or Telegram.",
-      "noMatches": "No conversations match these filters"
+      "noMatches": "No conversations match",
+      "clearFilters": "Clear filters"
     },
     "filters": {
       "source": "Source",
@@ -2897,7 +2898,7 @@
       "agent": "Agent",
       "allAgents": "All agents",
       "channel": "Channel: {{channel}}",
-      "clearChannel": "Show every source",
+      "clearChannel": "Clear channel filter",
       "showArchived": "Archived",
       "showActive": "Active"
     },
@@ -2912,7 +2913,8 @@
       "start": "Start"
     },
     "header": {
-      "more": "More actions for this conversation"
+      "more": "More actions for this conversation",
+      "agentFixed": "The agent is fixed for this conversation — start a new conversation to use another"
     },
     "files": {
       "title": "Files changed · {{count}}"
@@ -3069,7 +3071,13 @@
       "runHereConfirm": "Run it here…",
       "turnOn": "Turn on",
       "changeMachine": "Change machine…",
-      "delete": "Delete channel"
+      "delete": "Delete channel",
+      "menu": {
+        "reconnect": "Reconnect",
+        "replaceSecret": "Replace app secret…",
+        "replaceToken": "Replace bot token…",
+        "delete": "Delete channel…"
+      }
     },
     "overview": {
       "who": {
@@ -3084,10 +3092,9 @@
         "title": "Agents",
         "default": "Default agent",
         "reach": "Agents it may drive",
-        "help": "Each message becomes a conversation in Conversations. {{agentCommand}} switches between these agents, /model picks a model, /thread opens a parallel one."
+        "help": "Each message becomes a conversation in Conversations. /new <agent> switches agent, /model picks a model, /thread opens a parallel one."
       },
-      "conversations": "Conversations from this channel",
-      "conversationsHint": "Opens Conversations filtered to {{name}}."
+      "conversations": "Conversations from {{name}}"
     },
     "settings": {
       "saveState": {
@@ -3230,14 +3237,13 @@
     },
     "dialog": {
       "name": "Name",
-      "namePlaceholder": "e.g. my-telegram",
+      "namePlaceholder": "e.g. Team bot",
       "botToken": "Bot token",
       "appId": "App ID",
       "appSecret": "App secret",
       "errors": {
         "name": "Enter a name",
-        "nameFormat": "Letters, digits, dash and underscore only",
-        "nameTooLong": "At most 64 characters",
+        "nameTooLong": "At most 80 characters",
         "botToken": "Enter the bot token",
         "appId": "Enter the App ID",
         "appSecret": "Enter the App secret",
@@ -3252,7 +3258,8 @@
       "seatalkDelivery": {
         "title": "In SeaTalk's Developer Portal, set event delivery to WebSocket",
         "body": "Do it after connecting here — the portal checks that a connection exists."
-      }
+      },
+      "nameHint": "Any name. Coffer tells channels apart by their ID, so you can rename it later."
     },
     "edit": {
       "saved": "Channel {{name}} updated",
@@ -3274,20 +3281,24 @@
       },
       "replies": {
         "title": "Replies",
-        "showSteps": "Show steps while working",
-        "showStepsHelpLabel": "About the step list",
-        "showStepsHelp": "While a turn runs, the live status line lists each step (tool call) under its header, e.g. \"⏳ Working · 2m 14s · 7 steps\". Turned off, it keeps only the header and the agent's latest narration line — quieter in busy groups.",
-        "notifyAfter": "Ping when a turn takes longer than",
-        "notifyAfterHint": "0 turns the ping off.",
-        "notifyAfterHelpLabel": "About the completion ping",
-        "notifyAfterHelp": "A turn that runs at least this long ends with one short line in the chat, e.g. \"✅ Done · 4m 12s — first line of the answer\", where the answer would not notify on its own (on SeaTalk the answer is a message created when the turn began)."
+        "notifyAfter": "Long-task ping after",
+        "notifyAfterHint": "A turn that runs this long ends with a short “Done” message, @mentioning the asker in groups. 0 turns it off.",
+        "showSteps": "Show step lines",
+        "showStepsHint": "While working, show the last 3 steps under the status line. Off keeps only the status line."
       },
       "directories": {
-        "label": "Directories for /dir",
-        "help": "The only folders a chat can switch the agent into with /dir. Each also allows its subfolders.",
-        "placeholder": "One absolute path per line, e.g. /Users/me/projects",
+        "title": "Working directories",
+        "default": "Default",
+        "defaultHint": "New conversations start here.",
+        "defaultPlaceholder": "The agent's own",
+        "allowed": "Allowed for /dir",
+        "allowedHint": "/dir offers only these and the folders under them. With none, /dir is off.",
+        "defaultTag": "default",
+        "remove": "Remove",
+        "removeAria": "Remove {{path}}",
+        "add": "Add directory…",
         "notAbsolute": "\"{{path}}\" is not an absolute path — start it with /.",
-        "tooMany": "List at most {{max}} directories."
+        "tooMany": "At most {{max}} directories."
       }
     },
     "machine": {

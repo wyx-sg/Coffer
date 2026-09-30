@@ -83,7 +83,7 @@ async def test_a_main_chat_setting_becomes_the_default_for_new_threads(
     # Bare /new there says what the defaults are.
     await env.processor.on_message(_main("/new", "m-4"))
     assert adapter.texts()[-1].startswith(
-        f"Defaults for new threads in this group: Codex · gpt-5 high · {tmp_path.name}"
+        f"Defaults for new threads in this group: Codex · gpt-5 · High · {tmp_path}"
     )
     # /resume there points into a thread.
     await env.processor.on_message(_main("/resume", "m-5"))

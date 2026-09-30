@@ -1,9 +1,11 @@
 // frontend/src/components/channel/ChannelSettingsTab.tsx
 // A channel's Settings, saved as they change — there is no Save button. A
 // quiet indicator at the top says Saving… / Saved / Couldn't save. The
-// sections: its name, the turn settings (ChannelTurnSettingsFields), credentials
-// (SeaTalk's App ID is editable; a secret is shown masked and replaced
-// through a dialog), the machine that runs it, and the danger zone.
+// sections, in the board's order: its name (any display name, kept as the
+// resource's title), in group chats and message batching, credentials
+// (SeaTalk's App ID is editable; a secret is shown masked and replaced through
+// a dialog), the machine that runs it, replies, working directories, and the
+// danger zone.
 import { useId, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Loader2 } from "lucide-react";
@@ -18,7 +20,7 @@ import { useChannelAutoSave, CHANNEL_KIND, type AutoSaveState } from "@/lib/hook
 import { useSetResourceTitle } from "@/lib/hooks/useResourceMutations";
 import { titlePatchValue } from "@/lib/resourceTitle";
 import { ChannelMachineSelect, MachineBindingHelp } from "./ChannelMachineSelect";
-import { ChannelTurnSettingsFields } from "./ChannelTurnSettingsFields";
+import { ChannelBatchingFields, ChannelReplyDirectoryFields } from "./ChannelTurnSettingsFields";
 import { FieldError } from "./FieldError";
 import { useSettingDraft } from "./useSettingDraft";
 
@@ -94,6 +96,8 @@ export function ChannelSettingsTab({ channel, onReplaceSecret, onDelete }: Props
           value={title.text}
           onChange={title.change}
           name={channel.name}
+          label={t("channels.dialog.name")}
+          hint={t("channels.dialog.nameHint")}
         />
         <FieldError
           id={`${id}-title-error`}
@@ -101,7 +105,7 @@ export function ChannelSettingsTab({ channel, onReplaceSecret, onDelete }: Props
         />
       </div>
 
-      <ChannelTurnSettingsFields channel={channel} save={save} />
+      <ChannelBatchingFields channel={channel} save={save} />
 
       <Section title={t("channels.settings.credentials.title")}>
         {seatalk ? (
@@ -155,6 +159,8 @@ export function ChannelSettingsTab({ channel, onReplaceSecret, onDelete }: Props
           />
         </div>
       </Section>
+
+      <ChannelReplyDirectoryFields channel={channel} save={save} />
 
       <Section title={t("channels.settings.danger.title")}>
         <div className="flex items-center justify-between gap-4 rounded-xl border border-border-subtle p-3.5">

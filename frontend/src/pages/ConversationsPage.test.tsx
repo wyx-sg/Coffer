@@ -191,8 +191,36 @@ describe("ConversationsPage list", () => {
     expect(await screen.findByText("Daily Sentry triage")).toBeInTheDocument();
     expect(screen.queryByText("From the web")).not.toBeInTheDocument();
     expect(screen.getByText("Channel: Team bot")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /show every source/i }));
+    // The source switch stays beside the chip.
+    expect(screen.getByRole("group", { name: "Source" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /clear channel filter/i }));
     expect(await screen.findByText("From the web")).toBeInTheDocument();
+    expect(screen.queryByText("Channel: Team bot")).not.toBeInTheDocument();
+  });
+
+  test("with nothing matching the filters, Clear filters brings every conversation back", async () => {
+    chatApiMock.listConversations.mockResolvedValue({
+      conversations: [makeConv({ title: "From the web" })],
+    });
+    renderPage("/conversations?source=telegram");
+    expect(await screen.findByText("No conversations match")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(await screen.findByText("From the web")).toBeInTheDocument();
+  });
+
+  test("the archived list says how to continue an archived conversation", async () => {
+    chatApiMock.listConversations.mockImplementation(async (archived?: boolean) => ({
+      conversations: archived
+        ? [makeConv({ id: "old", title: "Old work", archived_at: "2026-02-01T00:00:00Z" })]
+        : [makeConv({ title: "From the web" })],
+    }));
+    renderPage("/conversations?archived=1");
+    expect(await screen.findByText("Old work")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Archived conversations are read-only. Open one and choose Restore from its ⋯ menu to continue it.",
+      ),
+    ).toBeInTheDocument();
   });
 
   test("with no conversation at all, one empty state offers New conversation", async () => {
@@ -359,10 +387,32 @@ describe("ConversationsPage open conversation", () => {
     renderPage("/conversations/conv-1");
 
     fireEvent.click(await screen.findByRole("button", { name: /more actions/i }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /delete/i }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
 
     expect(await screen.findByText(/delete this conversation\?/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "“Test Conv” and its messages are removed from Coffer. Files the agent changed and Claude Code’s own session files stay. This can’t be undone — Archive keeps it instead.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete conversation" })).toBeInTheDocument();
     expect(chatApiMock.deleteConversation).not.toHaveBeenCalled();
+  });
+
+  test("archiving from the menu needs no confirmation", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    chatApiMock.archiveConversation.mockResolvedValue(
+      makeConv({ archived_at: "2026-02-01T00:00:00Z" }),
+    );
+    renderPage("/conversations/conv-1");
+
+    fireEvent.click(await screen.findByRole("button", { name: /more actions/i }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Archive" }));
+
+    await waitFor(() => expect(chatApiMock.archiveConversation).toHaveBeenCalled());
+    expect(chatApiMock.archiveConversation.mock.calls[0][0]).toBe("conv-1");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
   acceptance("chat", "an archived conversation opens read-only", async () => {
