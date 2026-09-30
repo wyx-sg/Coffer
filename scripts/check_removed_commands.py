@@ -200,6 +200,7 @@ ALLOWED: tuple[tuple[str, str, str], ...] = (
     ("openspec/specs/mcp-gateway/spec.md", "coffer__diagnose", _ABSENT),
     ("openspec/specs/memory/spec.md", "coffer__recall", _ABSENT),
     ("docs-site/architecture/security.md", "coffer secret get --show", _ABSENT),
+    ("docs-site/zh/architecture/security.md", "coffer secret get --show", _ABSENT),
 )
 
 

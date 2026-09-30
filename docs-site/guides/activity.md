@@ -92,7 +92,7 @@ coffer log audit --json
 | `--limit` | 1–500, default 50. |
 | `--json` | Machine-readable output. |
 
-Over REST the same query is `GET /api/v1/audit`, which also accepts `event_prefix` to select a family of events such as `sync_` or `skill_`. See the [REST API reference](/reference/rest-api).
+Over REST the same query is `GET /api/v1/audit`, which also accepts `event_prefix` to select a family of events such as `sync_` or `skill_`.
 
 ## Query MCP invocations from the CLI
 

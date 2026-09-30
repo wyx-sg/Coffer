@@ -1,0 +1,141 @@
+{
+  "start": [
+    {
+      "text": { "en": "Getting started", "zh": "入门" },
+      "items": [
+        { "text": { "en": "What is Coffer?", "zh": "Coffer 是什么？" }, "link": "/start/" },
+        { "text": { "en": "Why Coffer", "zh": "为什么用 Coffer" }, "link": "/start/why-coffer" },
+        { "text": { "en": "Install", "zh": "安装" }, "link": "/start/install" },
+        { "text": { "en": "Quickstart", "zh": "快速上手" }, "link": "/start/quickstart" },
+        { "text": { "en": "Core concepts", "zh": "核心概念" }, "link": "/start/concepts" }
+      ]
+    }
+  ],
+  "guides": [
+    {
+      "text": { "en": "Agents and tools", "zh": "智能体与工具" },
+      "items": [
+        { "text": { "en": "Agents", "zh": "智能体" }, "link": "/guides/agents" },
+        { "text": { "en": "Connect a client", "zh": "连接客户端" }, "link": "/guides/connect-a-client" },
+        { "text": { "en": "MCP servers", "zh": "MCP 服务器" }, "link": "/guides/mcp-servers" },
+        { "text": { "en": "Custom tools", "zh": "自定义工具" }, "link": "/guides/custom-tools" },
+        { "text": { "en": "Model providers", "zh": "模型提供商" }, "link": "/guides/providers" },
+        { "text": { "en": "Usage and quota", "zh": "用量与额度" }, "link": "/guides/usage" },
+        { "text": { "en": "Secret store", "zh": "密钥存储" }, "link": "/guides/secret-store" },
+        { "text": { "en": "Secrets", "zh": "密钥" }, "link": "/guides/secrets" }
+      ]
+    },
+    {
+      "text": { "en": "What agents share", "zh": "智能体共享的内容" },
+      "items": [
+        { "text": { "en": "Skills", "zh": "技能" }, "link": "/guides/skills" },
+        { "text": { "en": "CLIs", "zh": "命令行工具" }, "link": "/guides/clis" },
+        { "text": { "en": "Writing skill libraries", "zh": "编写技能库" }, "link": "/guides/writing-skill-libraries" },
+        { "text": { "en": "Knowledge", "zh": "知识" }, "link": "/guides/knowledge" },
+        { "text": { "en": "Memory", "zh": "记忆" }, "link": "/guides/memory" }
+      ]
+    },
+    {
+      "text": { "en": "Talking to agents", "zh": "与智能体对话" },
+      "items": [
+        { "text": { "en": "Conversations", "zh": "对话" }, "link": "/guides/chat" },
+        { "text": { "en": "Channels", "zh": "消息渠道" }, "link": "/guides/channels" },
+        { "text": { "en": "Telegram", "zh": "Telegram" }, "link": "/guides/channels-telegram" },
+        { "text": { "en": "SeaTalk", "zh": "SeaTalk" }, "link": "/guides/channels-seatalk" }
+      ]
+    },
+    {
+      "text": { "en": "Apps", "zh": "应用" },
+      "items": [
+        { "text": { "en": "Web UI", "zh": "Web 界面" }, "link": "/guides/web-ui" },
+        { "text": { "en": "Desktop app", "zh": "桌面应用" }, "link": "/guides/desktop-app" }
+      ]
+    },
+    {
+      "text": { "en": "Operating Coffer", "zh": "运维 Coffer" },
+      "items": [
+        { "text": { "en": "Running the daemon", "zh": "运行守护进程" }, "link": "/guides/daemon" },
+        { "text": { "en": "Editing the vault by hand", "zh": "手工编辑保险库" }, "link": "/guides/vault-files" },
+        { "text": { "en": "Vault sync", "zh": "保险库同步" }, "link": "/guides/vault-sync" },
+        { "text": { "en": "Upgrading an existing Coffer", "zh": "升级已有的 Coffer" }, "link": "/guides/upgrading" },
+        { "text": { "en": "Activity and audit", "zh": "活动与审计" }, "link": "/guides/activity" },
+        { "text": { "en": "Experimental features", "zh": "实验功能" }, "link": "/guides/experimental-features" },
+        { "text": { "en": "Troubleshooting", "zh": "故障排查" }, "link": "/guides/troubleshooting" },
+        { "text": { "en": "FAQ", "zh": "常见问题" }, "link": "/guides/faq" }
+      ]
+    }
+  ],
+  "architecture": [
+    {
+      "text": { "en": "Foundations", "zh": "基础" },
+      "items": [
+        { "text": { "en": "Overview", "zh": "总览" }, "link": "/architecture/" },
+        { "text": { "en": "Principles", "zh": "原则" }, "link": "/architecture/principles" },
+        { "text": { "en": "Design philosophy", "zh": "设计理念" }, "link": "/architecture/design-principles" },
+        { "text": { "en": "Resource framework", "zh": "资源框架" }, "link": "/architecture/resource-framework" },
+        { "text": { "en": "Layering and code layout", "zh": "分层与代码布局" }, "link": "/architecture/layering" },
+        { "text": { "en": "Platform port", "zh": "平台端口" }, "link": "/architecture/platform" },
+        { "text": { "en": "Agent facets", "zh": "智能体切面" }, "link": "/architecture/agent-facets" },
+        { "text": { "en": "Reconciler", "zh": "调和器" }, "link": "/architecture/reconciler" }
+      ]
+    },
+    {
+      "text": { "en": "Runtime", "zh": "运行时" },
+      "items": [
+        { "text": { "en": "Daemon and processes", "zh": "守护进程与进程" }, "link": "/architecture/daemon" },
+        { "text": { "en": "MCP gateway", "zh": "MCP 网关" }, "link": "/architecture/mcp-gateway" },
+        { "text": { "en": "Model proxy", "zh": "模型代理" }, "link": "/architecture/model-proxy" },
+        { "text": { "en": "Chat and turns", "zh": "对话与轮次" }, "link": "/architecture/chat" },
+        { "text": { "en": "Event stream", "zh": "事件流" }, "link": "/architecture/event-stream" },
+        { "text": { "en": "Persistence", "zh": "持久化" }, "link": "/architecture/persistence" }
+      ]
+    },
+    {
+      "text": { "en": "Subsystems", "zh": "子系统" },
+      "items": [
+        { "text": { "en": "Skills", "zh": "技能" }, "link": "/architecture/skills" },
+        { "text": { "en": "Knowledge", "zh": "知识" }, "link": "/architecture/knowledge" },
+        { "text": { "en": "Memory", "zh": "记忆" }, "link": "/architecture/memory" },
+        { "text": { "en": "Skill requirements", "zh": "技能依赖" }, "link": "/architecture/skill-requirements" },
+        { "text": { "en": "Vault sync", "zh": "保险库同步" }, "link": "/architecture/vault-sync" }
+      ]
+    },
+    {
+      "text": { "en": "Cross-cutting", "zh": "横切关注点" },
+      "items": [
+        { "text": { "en": "Security model", "zh": "安全模型" }, "link": "/architecture/security" },
+        { "text": { "en": "Observability", "zh": "可观测性" }, "link": "/architecture/observability" },
+        { "text": { "en": "Design system", "zh": "设计系统" }, "link": "/architecture/design-system" },
+        { "text": { "en": "App shell", "zh": "应用外壳" }, "link": "/architecture/app-shell" },
+        { "text": { "en": "Distribution and releases", "zh": "分发与发布" }, "link": "/architecture/distribution" },
+        { "text": { "en": "Decision records", "zh": "决策记录" }, "link": "/architecture/decisions" }
+      ]
+    }
+  ],
+  "reference": [
+    {
+      "text": { "en": "Reference", "zh": "参考" },
+      "items": [
+        { "text": { "en": "CLI", "zh": "CLI" }, "link": "/reference/cli" },
+        { "text": { "en": "MCP tools", "zh": "MCP 工具" }, "link": "/reference/mcp-tools" },
+        { "text": { "en": "Configuration", "zh": "配置" }, "link": "/reference/configuration" },
+        { "text": { "en": "Files and directories", "zh": "文件与目录" }, "link": "/reference/filesystem" },
+        { "text": { "en": "Error codes", "zh": "错误码" }, "link": "/reference/error-codes" },
+        { "text": { "en": "Glossary", "zh": "术语表" }, "link": "/reference/glossary" }
+      ]
+    }
+  ],
+  "contributing": [
+    {
+      "text": { "en": "Contributing", "zh": "参与贡献" },
+      "items": [
+        { "text": { "en": "Overview", "zh": "总览" }, "link": "/contributing/" },
+        { "text": { "en": "Development setup", "zh": "开发环境" }, "link": "/contributing/development" },
+        { "text": { "en": "Spec-driven workflow", "zh": "规格驱动的工作流" }, "link": "/contributing/spec-workflow" },
+        { "text": { "en": "Testing", "zh": "测试" }, "link": "/contributing/testing" },
+        { "text": { "en": "Frontend", "zh": "前端" }, "link": "/contributing/frontend" },
+        { "text": { "en": "Security policy", "zh": "安全策略" }, "link": "/contributing/security" }
+      ]
+    }
+  ]
+}

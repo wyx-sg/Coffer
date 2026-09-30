@@ -23,7 +23,8 @@ context: |
   reachable from both REST and the `coffer` CLI; a plain file its owning spec
   declares directly readable or editable is answered on the CLI by naming it
   with `coffer path`. Every shipped capability is an end-to-end deliverable a user can
-  operate. Repository docs are English only.
+  operate. Repository docs are English only, except the docs site and the README, which
+  ship English and Simplified Chinese page for page.
 
 rules:
   proposal:

@@ -113,13 +113,13 @@ Send the bot a message. A typing indicator appears at once, the reply streams in
 
 `coffer channel show` and the **SeaTalk connection** badge on the channel's page report the connection as the channel's inbound state. With `--json`, the fields are `status.inbound.websocket_state` and `status.inbound.websocket_error`.
 
-| State | Badge label | Meaning |
+| State | Shown on the channel's page | Meaning |
 | --- | --- | --- |
-| `connecting` | Connecting… | Registering with SeaTalk. |
-| `connected` | Connected | Events are flowing. |
-| `kicked` | Kicked — another process holds this bot's connection | Another process registered the same app. Coffer waits 60 seconds before trying again rather than fighting for the connection. |
-| `sdk_missing` | SDK not found | `seatalk_oapi_sdk` could not be imported. The error names the directory searched. |
-| `error` | Error | The last attempt failed; the error is shown verbatim. Coffer retries with a backoff from 1 to 30 seconds. |
+| `connecting` | **Connecting** — Connecting… (**Reconnecting** — Reconnecting… after a failed attempt) | Registering with SeaTalk. |
+| `connected` | **Connected** | Events are flowing. |
+| `kicked` | **Kicked** — Another process took the connection | Another process registered the same app. Coffer waits 60 seconds before trying again rather than fighting for the connection. |
+| `sdk_missing` | **Can't start** — SeaTalk SDK not found | `seatalk_oapi_sdk` could not be imported. The error names the directory searched. |
+| `error` | **Can't connect** — Connection refused | The last attempt failed; `websocket_error` holds the error verbatim. Coffer retries with a backoff from 1 to 30 seconds. |
 
 No state is shown before the first attempt. Events that SeaTalk sends while the connection is down are not queued anywhere by Coffer.
 

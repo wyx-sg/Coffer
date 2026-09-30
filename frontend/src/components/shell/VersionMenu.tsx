@@ -21,8 +21,11 @@ import { useSetThemePreference, useThemePreference, type ThemePreference } from 
 import { cn } from "@/lib/utils";
 import type { DaemonFooterState } from "./useDaemonFooterState";
 
-/** The published docs site (docs-site/). */
-const DOCS_URL = "https://wyx-sg.github.io/Coffer/";
+/** The published docs site (docs-site/), per interface language: Chinese lives under /zh/. */
+const DOCS_URL = {
+  en: "https://wyx-sg.github.io/Coffer/",
+  zh: "https://wyx-sg.github.io/Coffer/zh/",
+} as const;
 /** The daemon only ever listens on loopback. */
 const DAEMON_HOST = "127.0.0.1";
 
@@ -176,7 +179,7 @@ export function VersionMenu({ state, tone, stateLabel, collapsed, trigger, toolt
         ) : null}
         <Separator />
         <a
-          href={DOCS_URL}
+          href={DOCS_URL[current]}
           target="_blank"
           rel="noreferrer"
           className={ITEM}

@@ -6,7 +6,7 @@ ADR wire-contract-generated-from-the-pydantic-models) is Pydantic models →
 this generator → ``openspec/specs/<capability>/contracts/api.openapi.yaml`` →
 the frontend's generated types. This script is the middle arrow.
 
-It builds the app exactly as ``docs-site/scripts/gen_rest_reference.py`` does
+It builds the app the way the daemon's own OpenAPI route does
 (``create_app().openapi()``: no lifespan, no port, no database, nothing under
 ``~/.coffer``), splits the document by :data:`OWNERS` — which capability owns
 each route — and writes one file per capability holding its operations and
@@ -110,8 +110,8 @@ HEADER = (
 _DESCRIPTION = (
     "The {title} routes of Coffer's management API, generated from the daemon's "
     "Pydantic models. The behaviour behind them is this capability's spec.md; "
-    "authentication, the error envelope and tracing are described once in the "
-    "docs-site REST API reference. Every route except `GET /api/v1/daemon/status` "
+    "the error envelope is described once in the docs-site error-codes reference. "
+    "Every route except `GET /api/v1/daemon/status` "
     "requires the `X-Coffer-Token` header."
 )
 
