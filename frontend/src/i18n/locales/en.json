@@ -795,8 +795,6 @@
     },
     "security": {
       "masterKey": {
-        "title": "Credential encryption",
-        "description": "Secrets are always encrypted into Coffer's local database. This controls where the encryption master key lives.",
         "fileNote": "Master key: file beside the database (no keychain prompts).",
         "keychainNote": "Master key: OS keychain (may prompt once per daemon start).",
         "toggle": "Store master key in OS keychain",
@@ -809,107 +807,71 @@
           "body": "Coffer re-stores the key in a file next to its database; keychain prompts stop."
         },
         "confirmMove": "Move key",
-        "accessGroupNote": "Master key: this Mac's Keychain, readable only by Coffer's signed apps. Back it up from the Sync page in the desktop app."
+        "accessGroupNote": "Only Coffer's signed apps can read it, so there is nothing to move.",
+        "keychainTitle": "Keychain",
+        "fileTitle": "Key file",
+        "keychainDescription": "Coffer reads the master key from the macOS Keychain when the daemon starts.",
+        "fileDescription": "Coffer reads the master key from a file beside its database when the daemon starts.",
+        "ok": "OK",
+        "developmentFile": "Development build — the master key is a file any process of yours can read.",
+        "developmentKeychain": "Development build — the master key is a login-keychain item, not the signed apps' own access group."
       },
       "approvals": {
         "title": "Secret approvals",
         "description": "A secret goes to a place it has not gone before — a new MCP server, a changed command, another remote — only after you approve it in the Coffer desktop app.",
         "on": "On: new destinations wait for your approval.",
-        "off": "Off: new destinations get secrets without asking. Turn it back on with: coffer config set secrets.require_approval on"
-      }
+        "off": "Off: new destinations get secrets without asking. Turn it back on with: coffer config set secrets.require_approval on",
+        "section": "Approvals",
+        "onWord": "On",
+        "offWord": "Off"
+      },
+      "subtitle": "The key that encrypts your secrets and the token that guards the daemon on this Mac.",
+      "encryption": {
+        "title": "Encryption"
+      },
+      "backup": {
+        "title": "Back up the master key",
+        "description": "Without it the secrets in your vault can't be read, on this Mac or another. Keep the export offline.",
+        "export": "Export master key…",
+        "exportedTitle": "Master key exported",
+        "exportedBody": "Saved {{file}} to {{dir}} · recorded in Activity.",
+        "exportedHint": "Move it off this Mac — a password manager or a USB drive — and delete the copy here.",
+        "fingerprint": "Fingerprint",
+        "showInFinder": "Show in Finder",
+        "done": "Done"
+      },
+      "access": {
+        "title": "Access"
+      },
+      "token": {
+        "title": "Daemon access token",
+        "description": "Every request to the daemon carries it. Agents connected through Coffer pick up a new one on their own.",
+        "none": "No token on this page",
+        "show": "Show",
+        "hide": "Hide",
+        "copy": "Copy",
+        "copyFailed": "Couldn't copy the token",
+        "rotate": "Rotate…",
+        "rotateTitle": "Rotate the daemon token?",
+        "rotateBody": "A new token replaces the current one at once. Other open Coffer tabs and any client still using the old token stop working until they load the new one. Agents connected through Coffer pick it up on their own.",
+        "tokenFile": "Token file",
+        "recorded": "Recorded as token_rotated in Activity",
+        "rotateConfirm": "Rotate token",
+        "rotating": "Rotating…",
+        "rotated": "Daemon token rotated"
+      },
+      "secretsFooter": "Secrets are managed in Secrets.",
+      "manageInSecrets": "Manage in Secrets"
     },
     "models": {
       "testConnection": "Test connection"
     },
     "connections": {
-      "title": "Model providers",
-      "subtitle": "A model provider = a vendor endpoint and its API key. One provider can drive your agents and Coffer's internal engine.",
-      "add": "Add model provider",
-      "addTitle": "Add model provider",
-      "editTitle": "Edit model provider",
-      "empty": "No model providers yet.",
-      "active": "Active",
-      "activeHint": "An agent is switched to this provider right now (the Switch action).",
-      "cofferUse": {
-        "engine": "Coffer · background model",
-        "engineHint": "Coffer itself runs its own background work on this provider, such as organising memory — not your agents (Settings → Coffer's model). Only one provider carries it.",
-        "transcribe": "Coffer · speech to text",
-        "transcribeHint": "Coffer itself turns voice messages into text on this provider before your agent sees them (Settings → Coffer's model → Speech to text). Only one provider carries it, and nothing falls back to another."
-      },
-      "reachHint": "Which agents this provider reaches is set with the reach control — on the provider's row in the list, or on its own page.",
-      "protocols": {
-        "anthropic": "Anthropic",
-        "openai": "OpenAI-compatible",
-        "ollama": "Ollama",
-        "unknown": "Unknown"
-      },
-      "errors": {
-        "nameRequired": "Enter a name",
-        "baseUrl": "Enter a full URL, e.g. https://api.openai.com/v1",
-        "secretRequired": "Enter the API key"
-      },
-      "welcome": {
-        "title": "Bring your own model endpoint",
-        "body": "A model provider is a vendor endpoint plus its API key. Add one and every agent Coffer manages can run on it — the key is stored once, in Coffer's credential store.",
-        "featureShare": {
-          "title": "One key, every agent",
-          "body": "Store the endpoint and key once; Coffer projects it into each agent's own configuration."
-        },
-        "featureCurate": {
-          "title": "Curate the model list",
-          "body": "Pick which of the endpoint's models are offered, and what kind each one is."
-        },
-        "featureEngine": {
-          "title": "Powers Coffer too",
-          "body": "The same provider can run Coffer's own model for memory organisation."
-        }
-      },
-      "deleteTitle": "Delete model provider",
-      "deleteConfirm": "Delete model provider \"{{name}}\"? Its stored credential is removed too.",
-      "name": "Name",
-      "provider": "Vendor",
-      "renameHint": "Renaming changes only the label — the stored key, the history and the agents this connection drives stay as they are.",
-      "customProvider": "Custom",
-      "wireFormat": "Protocol",
-      "baseUrl": "Base URL",
-      "secret": "API key",
-      "searchPlaceholder": "Search model providers…",
-      "allVendors": "All vendors",
-      "bulkDeleteConfirm": "Delete {{count}} model provider(s)? Their stored credentials are removed too.",
-      "detail": {
-        "back": "Back to model providers",
-        "tabOverview": "Overview",
-        "notFound": "Model provider not found",
-        "configuration": "Configuration",
-        "keyStored": "Stored",
-        "keyNone": "No key stored",
-        "created": "Created",
-        "updated": "Updated",
-        "models": "Models",
-        "modelsHint": "Pick which of this endpoint's models this provider offers, and what kind each one is. Every picker downstream is then limited to your picks of the kind it needs — a chat model dropdown never offers an embedding model.",
-        "fetchFailed": "Could not list this endpoint's models ({{error}}). Your current selection is unchanged.",
-        "loadingModels": "Listing this endpoint's models…",
-        "retryFetch": "Retry",
-        "noModelsYet": "This endpoint listed no models. Leave the selection empty and every model it offers stays available.",
-        "modelId": "Model",
-        "modelSearchPlaceholder": "Search models…",
-        "noModelsMatch": "No models match your search.",
-        "modality": "Type",
-        "allModalities": "All types",
-        "modalities": {
-          "text": "Text / chat",
-          "embedding": "Embedding",
-          "image": "Image",
-          "video": "Video",
-          "audio": "Audio"
-        }
-      }
+      "title": "Model providers"
     },
     "internalEngine": {
-      "title": "Coffer's model",
-      "subtitle": "The provider and model Coffer uses for its own passes, such as organising memory.",
       "connection": "Model provider",
-      "connectionPlaceholder": "Select a model provider",
+      "connectionPlaceholder": "Choose a provider",
       "model": "Model",
       "modelPlaceholder": "Select a model",
       "timeout": "Time limit per call",
@@ -919,17 +881,11 @@
       "minutes": "{{count}} min"
     },
     "transcribe": {
-      "title": "Speech to text",
-      "subtitle": "The provider and model Coffer transcribes voice messages with, before an agent ever sees them.",
       "connection": "Transcription provider",
-      "connectionPlaceholder": "Select a model provider",
+      "connectionPlaceholder": "Choose a provider",
       "model": "Transcription model",
       "modelPlaceholder": "Select a model",
-      "modelOff": "Off — do not transcribe",
-      "onTitle": "Transcription is on.",
-      "onBody": "Voice messages are transcribed on this provider and the agent is handed the text.",
-      "offTitle": "Transcription is off.",
-      "offBody": "Until both a provider and a model are chosen, Coffer transcribes nothing: an agent is handed the audio file as it is, and the recording never leaves this machine. This is a separate provider on purpose — one that serves chat completions often serves no transcription endpoint at all."
+      "modelOff": "Off — do not transcribe"
     },
     "upkeep": {
       "title": "Automatic upkeep",
@@ -980,6 +936,35 @@
       "port": "Port",
       "version": "Version",
       "startedAt": "Started"
+    },
+    "cofferModel": {
+      "title": "Coffer's model",
+      "subtitle": "Models Coffer uses for its own work. Pick a provider, then a model from that provider's list.",
+      "engine": {
+        "title": "Coffer's engine",
+        "description": "Distils agents' memory and curates knowledge.",
+        "notSet": "No internal pass runs; distil and curation wait.",
+        "failingTail": "Distil and curation wait until it answers."
+      },
+      "stt": {
+        "title": "Speech to text",
+        "description": "Transcribes voice messages that arrive through channels.",
+        "notSet": "Voice messages from channels reach the agent as audio files, without a transcript.",
+        "failingTail": "Voice messages reach the agent as audio files until it answers."
+      },
+      "notSet": "Not set",
+      "set": "Set",
+      "answering": "Answering",
+      "failing": "Failing",
+      "failingDetail": "— {{error}}. {{tail}}",
+      "test": "Test",
+      "testing": "Testing…",
+      "testAria": "Test {{picker}}",
+      "notSetDetail": "— {{text}}",
+      "reachable": "Reachable",
+      "reachableDetail": "— the endpoint doesn't list its models, so the model couldn't be checked.",
+      "notListed": "The endpoint didn't list {{model}}",
+      "noAnswer": "The endpoint didn't answer"
     }
   },
   "daemon": {
@@ -3441,10 +3426,300 @@
     "title": "CLIs"
   },
   "secrets": {
-    "title": "Secrets"
+    "title": "Secrets",
+    "subtitle": "API keys and tokens your MCP servers and providers use, encrypted in the vault on this Mac.",
+    "search": "Find a secret",
+    "loadFailed": "Couldn't load secrets",
+    "noMatch": "No secret matches this search.",
+    "about": {
+      "label": "About secrets",
+      "body": "A secret is stored once, encrypted with this Mac's master key, and referred to by name. MCP servers, model providers, channels and skills cite it instead of holding the value, so replacing it here updates every one of them. No value is shown on this page unless you reveal it in the Coffer desktop app."
+    },
+    "empty": {
+      "title": "No secrets yet",
+      "body": "Keep API keys and tokens here instead of in config files. Servers, providers, skills and channels refer to them by name; the value stays encrypted."
+    },
+    "groups": {
+      "inUse": "In use",
+      "inUseEmpty": "Nothing uses a secret yet.",
+      "unused": "Not used by anything",
+      "unusedHint": "safe to delete"
+    },
+    "cols": {
+      "name": "Name",
+      "usedBy": "Used by",
+      "actions": "Actions"
+    },
+    "row": {
+      "missing": "Missing",
+      "pending": "Waiting for approval",
+      "localReadable": "Readable by local processes",
+      "localReadableHint": "Coffer hands this value to a child process's environment, where other processes you run can read it."
+    },
+    "kind": {
+      "mcp_server": "MCP server",
+      "custom_tool": "MCP server",
+      "skill": "Skill",
+      "provider": "Model provider",
+      "channel": "Channel",
+      "knowledge": "Knowledge",
+      "memory": "Memory",
+      "agent": "Agent"
+    },
+    "usedBy": {
+      "nothing": "Nothing",
+      "trigger_one": "{{name}} is used by {{count}} thing",
+      "trigger_other": "{{name}} is used by {{count}} things",
+      "title": "Used by {{name}}",
+      "note": "Each one reads it as {{reference}}. Replacing the value updates all of them."
+    },
+    "menu": {
+      "label": "Actions for {{name}}",
+      "replace": "Replace value…",
+      "store": "Store value…",
+      "reveal": "Reveal value…",
+      "revealInApp": "Reveal in the Coffer app",
+      "copyRef": "Copy reference",
+      "copied": "Copied {{reference}}",
+      "copyFailed": "Couldn't copy to the clipboard",
+      "activity": "Show in Activity",
+      "delete": "Delete…"
+    },
+    "add": {
+      "open": "Add secret",
+      "title": "Add secret",
+      "name": "Name",
+      "nameHint": "Letters, digits, dots, underscores and dashes, up to 64. It can't be changed after the secret is added.",
+      "nameInvalid": "Use letters, digits, dots, underscores and dashes only, up to 64 characters.",
+      "nameTaken": "{{name}} already exists —",
+      "replaceInstead": "replace its value instead",
+      "namePlaceholder": "<name>",
+      "value": "Value",
+      "valueHint": "Pasted values are never shown again unless you reveal them.",
+      "encrypted": "Encrypted with this Mac's master key. Refer to it as {{reference}}.",
+      "submit": "Add secret",
+      "submitting": "Adding…",
+      "added": "Added {{name}}"
+    },
+    "replace": {
+      "title": "Replace the value of {{name}}",
+      "storeTitle": "Store a value for {{name}}",
+      "secret": "Secret",
+      "value": "New value",
+      "hint": "The old value is destroyed. Everything that uses it gets the new one.",
+      "submit": "Replace value",
+      "storeSubmit": "Store value",
+      "submitting": "Saving…",
+      "replaced": "Replaced the value of {{name}}",
+      "stored": "Stored a value for {{name}}"
+    },
+    "pending": {
+      "title": "Saved, waiting for approval",
+      "body": "The new value is stored sealed. It takes effect once a person approves it in the Coffer desktop app."
+    },
+    "reveal": {
+      "title": "Show the value of {{name}}?",
+      "warning": "Anyone who can see your screen can read it",
+      "warningBody": "The value shows for {{seconds}} seconds, then hides again. Revealing it is recorded in Activity.",
+      "submit": "Reveal for {{seconds}} s",
+      "checking": "Waiting for Touch ID…",
+      "revealedAt": "Revealed at {{time}}",
+      "valueLabel": "Value of {{name}}",
+      "hide": "Hide",
+      "copied": "Value copied",
+      "hidesIn": "Hides in {{seconds}} s · recorded as credential_revealed"
+    },
+    "delete": {
+      "title": "Delete {{name}}?",
+      "body": "Nothing uses it. Its value is destroyed on this Mac. This can't be undone.",
+      "submit": "Delete secret",
+      "submitting": "Deleting…",
+      "deleted": "Deleted {{name}}"
+    },
+    "blocked": {
+      "title": "{{name}} is in use",
+      "body_one": "One thing still reads {{reference}}. Point it at another secret or remove the reference, then delete it.",
+      "body_other": "{{count}} things still read {{reference}}. Point them at another secret or remove the reference, then delete it.",
+      "open": "Open"
+    },
+    "scan": {
+      "open": "Find plaintext keys",
+      "scanning": "Looking for plaintext keys…",
+      "failed": "Couldn't look for plaintext keys",
+      "noneTitle": "No plaintext keys found",
+      "noneBody": "Nothing in ~/.coffer/secrets/ or your skills holds a key in plain text.",
+      "foundTitle": "Plaintext keys found",
+      "foundSummary_one": "{{count}} found in {{files}} file",
+      "foundSummary_other": "{{count}} found in {{files}} files",
+      "foundIn": "Found in",
+      "key": "Key",
+      "secretName": "Secret name",
+      "line": "line {{line}}",
+      "source": {
+        "secrets_file": "secrets file",
+        "skill": "skill"
+      },
+      "tickAll": "Tick all",
+      "tickOne": "Move {{path}} line {{line}}",
+      "ticked": "{{count}} of {{total}} ticked",
+      "mentions_one": "{{count}} skill still points at ~/.coffer/secrets/ — update it by hand:",
+      "mentions_other": "{{count}} skills still point at ~/.coffer/secrets/ — update them by hand:",
+      "hint": "Each ticked value moves into the encrypted store and the file refers to it by name instead. Values are never shown here.",
+      "review_one": "Review {{count}} change",
+      "review_other": "Review {{count}} changes",
+      "reviewing": "Checking…",
+      "previewTitle": "Review changes",
+      "previewSummary": "{{secrets}} secrets added, {{files}} files changed",
+      "previewSecrets": "Secrets",
+      "previewFiles": "Files",
+      "add": "+ Add",
+      "modify": "~ Modify",
+      "previewNote": "Nothing is written until you apply. Each file's value is replaced by its coffer://secret/<name> reference; its permissions stay as they are.",
+      "back": "Back",
+      "apply_one": "Apply {{count}} change",
+      "apply_other": "Apply {{count}} changes",
+      "applying": "Applying…",
+      "applied_one": "Moved {{count}} key into secrets",
+      "applied_other": "Moved {{count}} keys into secrets",
+      "resultTitle_one": "Moved {{count}} key into secrets",
+      "resultTitle_other": "Moved {{count}} keys into secrets",
+      "skippedSummary_one": "{{count}} was skipped and its file left as it was:",
+      "skippedSummary_other": "{{count}} were skipped and their files left as they were:",
+      "skipped": "Skipped"
+    }
   },
   "usage": {
-    "title": "Usage"
+    "title": "Usage",
+    "updated": "Updated {{time}}",
+    "refresh": "Refresh",
+    "more": "More actions",
+    "exportCsv": "Export CSV",
+    "noPrice": "No price",
+    "editPrices": "Edit prices in Model providers",
+    "quota": {
+      "title": "Subscription quota",
+      "subtitle": "Reported by each agent for its own login · never estimated",
+      "helpLabel": "How quota is read",
+      "help1": "Each agent reports its own allowance: Codex through its app-server, Claude Code in the sessions Coffer drives (chat and channels). Coffer shows the vendor's own number as of when it was seen — never an estimate.",
+      "help2": "A window whose reset time has passed shows no number until the agent reports again.",
+      "plan": {
+        "claude_code": "Claude {{plan}} login",
+        "codex": "ChatGPT {{plan}} login",
+        "other": "{{plan}} login",
+        "none": "Subscription login"
+      },
+      "used": "{{percent}}% used",
+      "limitReached": "Limit reached",
+      "noReading": "No current reading",
+      "resetPassed": "Reset since last reading",
+      "resets": "Resets {{when}}",
+      "resetsIn": "Resets {{when}} · in {{in}}",
+      "in": {
+        "dh": "{{days}} d {{hours}} h",
+        "hm": "{{hours}} h {{minutes}} min",
+        "m": "{{minutes}} min"
+      },
+      "asOf": "as of {{time}}",
+      "source": {
+        "codex_app_server": "app-server",
+        "claude_rate_limit_event": "last response",
+        "claude_statusline": "status line"
+      },
+      "empty": {
+        "title": "No quota reading yet",
+        "body": "Appears after your next {{agent}} response."
+      },
+      "statusline": {
+        "lead": "For sessions in your own terminal, set Claude Code's statusLine command to",
+        "helpLabel": "About the statusline wrapper",
+        "help": "The wrapper passes Claude Code's rate limits to Coffer, then runs your own statusline command with the same input and prints its output, even when Coffer is not running. Coffer never installs it: you set it in ~/.claude/settings.json yourself."
+      },
+      "refreshFailed": {
+        "title": "Couldn't reach Codex's app-server",
+        "read_failed": "codex app-server did not answer.",
+        "codex_unavailable": "Codex is not available on this machine.",
+        "no_subscription": "Codex is not signed in with a ChatGPT plan.",
+        "no_windows": "The app-server answered without any quota window.",
+        "other": "Nothing was read."
+      },
+      "lastTried": "Last tried {{time}}.",
+      "tryAgain": "Try again",
+      "error": "Couldn't load subscription quota."
+    },
+    "providers": {
+      "title": "API-key providers",
+      "subtitle": "Exact counts from requests through Coffer's local proxy",
+      "period": "Period",
+      "range": {
+        "today": "Today",
+        "7d": "7 days",
+        "30d": "30 days",
+        "month": "This month",
+        "custom": "Custom…"
+      },
+      "customRange": "Custom range",
+      "from": "From",
+      "to": "To",
+      "detailNote": "Before {{date}}, only daily totals are kept.",
+      "apply": "Apply",
+      "error": "Couldn't load API-key usage."
+    },
+    "tiles": {
+      "cost": "Cost (estimated)",
+      "requests_one": "{{n}} request",
+      "requests_other": "{{n}} requests",
+      "unpriced": "{{n}} unpriced",
+      "unknown": "{{n}} with unknown usage",
+      "input": "Input",
+      "inputNote": "excludes cache",
+      "output": "Output",
+      "outputNote": "includes reasoning",
+      "cacheRead": "Cache read",
+      "cacheWrite": "Cache write",
+      "cacheWriteNote": "Anthropic only"
+    },
+    "chart": {
+      "title": "Cost per day",
+      "today": "Today, so far",
+      "todayShort": "Today",
+      "bar": "{{day}} · {{cost}}",
+      "todayBar": "Today so far · {{cost}}",
+      "error": "Couldn't load the cost per day."
+    },
+    "table": {
+      "breakdown": "Break down by",
+      "by": {
+        "model": "By model",
+        "agent": "By agent",
+        "day": "By day"
+      },
+      "cols": {
+        "model": "Model",
+        "agent": "Agent",
+        "day": "Day",
+        "requests": "Requests",
+        "input": "Input",
+        "output": "Output",
+        "cacheRead": "Cache read",
+        "cacheWrite": "Cache write",
+        "cost": "Cost"
+      },
+      "unknownModel": "Unknown model",
+      "unknownAgent": "Unknown agent",
+      "noPriceTip": "No price for this model. Set one in Model providers.",
+      "partlyPricedTip_one": "{{n}} request has no price and is not in this cost.",
+      "partlyPricedTip_other": "{{n}} requests have no price and are not in this cost.",
+      "unknownTip_one": "{{n}} request ended before reporting its usage; its tokens are not counted.",
+      "unknownTip_other": "{{n}} requests ended before reporting their usage; their tokens are not counted.",
+      "total": "Total · {{range}}"
+    },
+    "empty": {
+      "firstTitle": "No API-key usage yet",
+      "firstBody": "Tokens and cost appear here once an agent sends requests with an API-key provider through Coffer. Subscription logins don't pass through Coffer, so they only show quota.",
+      "openProviders": "Open Model providers",
+      "rangeTitle": "No requests in this range",
+      "rangeBody": "Pick a longer range, or check back after an agent sends requests with an API-key provider."
+    }
   },
   "placeholder": {
     "title": "Coming in this release",
@@ -3498,6 +3773,260 @@
         "disable_protection": "Turn off protection"
       },
       "review": "Review"
+    }
+  },
+  "providers": {
+    "loadFailed": "Couldn't load the model providers",
+    "protocols": {
+      "anthropic": "Anthropic",
+      "openai": "OpenAI-compatible",
+      "ollama": "Ollama",
+      "unknown": "Unknown"
+    },
+    "runtimes": {
+      "ollama": "Ollama",
+      "lmstudio": "LM Studio",
+      "vllm": "vLLM",
+      "llama_server": "llama.cpp server"
+    },
+    "wires": {
+      "anthropic": "Anthropic",
+      "openai": "OpenAI"
+    },
+    "modalities": {
+      "text": "Text / chat",
+      "embedding": "Embedding",
+      "image": "Image",
+      "video": "Video",
+      "audio": "Audio"
+    },
+    "cofferUse": {
+      "engine": "Coffer · background model",
+      "engineHint": "Coffer's engine runs its own background work (distil, curation) on this provider. Changed in Settings › General.",
+      "transcribe": "Coffer · speech to text",
+      "transcribeHint": "Coffer turns voice messages into text on this provider before your agent sees them. Changed in Settings › General."
+    },
+    "status": {
+      "checking": "Checking…",
+      "reachable": "Reachable",
+      "keyRejected": "Key rejected",
+      "unreachable": "Unreachable"
+    },
+    "list": {
+      "filter": "Filter",
+      "heading": "Providers",
+      "noMatch": "No provider matches.",
+      "engineOnly": "Coffer's engine only",
+      "allModels": "All models",
+      "models_one": "{{count}} model",
+      "models_other": "{{count}} models"
+    },
+    "detail": {
+      "notFound": "Model provider not found",
+      "backToList": "Back to model providers"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "models": "Models"
+    },
+    "actions": {
+      "test": "Test",
+      "testConnection": "Test connection",
+      "refreshModels": "Refresh models",
+      "delete": "Delete provider",
+      "more": "More actions for {{name}}"
+    },
+    "fields": {
+      "name": "Name",
+      "protocol": "Protocol",
+      "baseUrl": "Base URL",
+      "apiKey": "API key"
+    },
+    "errors": {
+      "nameRequired": "Enter a name.",
+      "baseUrl": "Enter a full URL, e.g. https://api.openai.com/v1",
+      "secretRequired": "Enter the API key.",
+      "loopback": "A local runtime must be on this Mac — use localhost or 127.0.0.1."
+    },
+    "rejected": {
+      "title": "The endpoint rejects the stored key ({{status}})",
+      "titleNoStatus": "The endpoint rejects the stored key",
+      "bodyUsed": "{{users}} fail on every request until the key is replaced.",
+      "bodyUnused": "Requests to this provider fail until the key is replaced."
+    },
+    "usedBy": {
+      "title": "Used by",
+      "engine": "Coffer's engine",
+      "transcribe": "Speech to text",
+      "runs": "Runs on this provider",
+      "failing": "Requests fail · key rejected",
+      "changeInAgent": "Change it in {{agent}} › Model",
+      "changeInSettings": "Change it in Settings › General",
+      "none": "Nothing runs on this provider yet.",
+      "readOnly": "Read-only. An agent’s provider and model are switched on its own Model tab; Coffer’s engine and speech to text in Settings › General."
+    },
+    "endpoint": {
+      "title": "Endpoint",
+      "locked": "locked while {{agents}} runs on it",
+      "anAgent": "an agent",
+      "runtime": "Runtime",
+      "wires": "serves {{wires}}"
+    },
+    "key": {
+      "secretPrefix": "secret:",
+      "secretLabel": "API key secret",
+      "stored": "Stored in this Mac's keychain-encrypted store. Write-only.",
+      "storedChip": "Stored",
+      "manage": "Manage in Secrets",
+      "replace": "Replace key",
+      "rejected": "Rejected",
+      "rejectedWith": "Rejected ({{status}})",
+      "none": "No key needed — this provider takes none.",
+      "pending": "Waiting for approval in the Coffer app",
+      "review": "Review"
+    },
+    "overview": {
+      "models": "Models",
+      "choose": "Choose models",
+      "all": "All models offered",
+      "allOfListed_one": "All {{count}} offered",
+      "allOfListed_other": "All {{count}} offered",
+      "nOfListed_one": "{{n}} of {{count}} offered",
+      "nOfListed_other": "{{n}} of {{count}} offered",
+      "n_one": "{{count}} offered",
+      "n_other": "{{count}} offered",
+      "unrestricted": "Every model the endpoint lists is offered. Choose models to narrow the list."
+    },
+    "models": {
+      "search": "Search models",
+      "typeFilter": "Type",
+      "allTypes": "All",
+      "typeOf": "Type: {{id}}",
+      "offered": "Offered: {{id}}",
+      "listing": "Listing this endpoint's models…",
+      "listedAgo": "Listed {{ago}}",
+      "refresh": "Refresh",
+      "hint": "Only switched-on models appear in agent, chat and channel pickers. Chat pickers list text models only.",
+      "failedTitle": "Couldn't list this endpoint's models",
+      "failedBody": "{{reason}} Your selection below is unchanged and still offered.",
+      "noneTitle": "This endpoint listed no models",
+      "noneBody": "Leave it like this and every model the endpoint accepts stays available — agents pass the name you type. Or refresh after the gateway admin adds models.",
+      "noMatch": "No models match.",
+      "showMore_one": "Show {{count}} more",
+      "showMore_other": "Show {{count}} more",
+      "agentDefault": "{{agent}} default"
+    },
+    "test": {
+      "running": "Testing the endpoint…",
+      "connected": "Connected in {{ms}} ms",
+      "rejected": "The endpoint rejected the key ({{status}})",
+      "noStatus": "authentication failed",
+      "failed": "Couldn't reach the endpoint",
+      "again": "Test again",
+      "listed_one": "Connected — the endpoint listed {{count}} model.",
+      "listed_other": "Connected — the endpoint listed {{count}} models.",
+      "addOk_one": "The endpoint accepted the key and listed {{count}} model. The key is saved only when you add the provider.",
+      "addOk_other": "The endpoint accepted the key and listed {{count}} models. The key is saved only when you add the provider.",
+      "addFail": "Check the key is for this endpoint and hasn't been revoked. Nothing was saved.",
+      "editOk_one": "The endpoint answered with the stored key and listed {{count}} model.",
+      "editOk_other": "The endpoint answered with the stored key and listed {{count}} models.",
+      "editFail": "Nothing was saved. Check the base URL and protocol, or replace the key.",
+      "replaceOk_one": "The new key works — {{count}} model listed.",
+      "replaceOk_other": "The new key works — {{count}} models listed.",
+      "replaceOkUsed_one": "The new key works — {{count}} model listed. {{users}} use it on their next request; their config files don't change, they only name the secret.",
+      "replaceOkUsed_other": "The new key works — {{count}} models listed. {{users}} use it on their next request; their config files don't change, they only name the secret.",
+      "replaceFail": "Check the key is for this endpoint. Nothing was saved."
+    },
+    "add": {
+      "open": "Add provider",
+      "title": "Add model provider",
+      "stepEndpoint": "Endpoint",
+      "stepModels": "Models",
+      "vendor": "Vendor",
+      "vendorHint": "A vendor fills in the protocol and base URL. Custom for gateways and proxies.",
+      "custom": "Custom",
+      "keyHint": "Saved as a new secret in this Mac's keychain-encrypted store. Write-only — never shown again.",
+      "localUrlPlaceholder": "Leave blank to look on the default ports",
+      "next": "Next: models",
+      "back": "Back",
+      "submit": "Add provider",
+      "protocols": {
+        "openai": {
+          "title": "OpenAI-compatible",
+          "body": "Codex, chat and Coffer's engine can use it."
+        },
+        "anthropic": {
+          "title": "Anthropic-compatible",
+          "body": "Claude Code, chat and Coffer's engine can use it."
+        },
+        "ollama": {
+          "title": "Ollama API",
+          "body": "Coffer's engine only. No agent runs on it."
+        },
+        "unknown": {
+          "title": "Unknown",
+          "body": "The wire could not be told."
+        }
+      },
+      "local": {
+        "title": "Runtime on this Mac",
+        "detect": "Detect",
+        "looking": "Looking for model runtimes on this Mac…",
+        "none": "Nothing answered on the default ports (Ollama 11434, LM Studio 1234, llama-server 8080). Start the runtime, or type its address and detect again.",
+        "noWires": "no agent wire",
+        "keyless": "No key needed. Detection only reads — nothing is pulled or loaded."
+      },
+      "models": {
+        "search_one": "Search {{count}} model",
+        "search_other": "Search {{count}} models",
+        "count_one": "{{n}} selected · nothing selected means all {{count}} are offered",
+        "count_other": "{{n}} selected · nothing selected means all {{count}} are offered",
+        "empty": "The endpoint listed no models. Add the provider as it is and every model it accepts stays available.",
+        "window": "{{tokens}} tokens",
+        "noTools": "no tools"
+      }
+    },
+    "edit": {
+      "title": "Edit {{name}}",
+      "renameHint": "Renaming changes only the label — the key, history and agents stay put.",
+      "locked": "Locked while {{agents}} runs on it.",
+      "keyHint": "Keys are write-only. Use Replace key to change the value."
+    },
+    "replace": {
+      "title": "Replace API key",
+      "secret": "Secret",
+      "newKey": "New key",
+      "hint": "Write-only. Coffer overwrites the secret's value in its keychain-encrypted store and never shows it again.",
+      "pendingBody": "This key is in use, so the new value waits until you approve it in the Coffer app. The old key keeps working until then."
+    },
+    "delete": {
+      "title": "Delete {{name}}?",
+      "confirm": "Delete {{name}}? This can't be undone.",
+      "confirmWithSecret": "Delete {{name}}? Its secret {{ref}} is deleted from this Mac too. This can't be undone.",
+      "blocked": "{{name}} is in use, so it can't be deleted yet. Move each of these off it first:"
+    },
+    "welcome": {
+      "title": "Bring your own model endpoint",
+      "body": "Store an endpoint and its API key once. Coffer points your agents at it and lets you choose which models they may use.",
+      "anthropic": {
+        "title": "Anthropic or compatible",
+        "body": "Claude Code, chat and Coffer's engine. Anthropic API, Bedrock-style gateways."
+      },
+      "openai": {
+        "title": "OpenAI or compatible",
+        "body": "Codex, chat and Coffer's engine. OpenAI, Gemini, DeepSeek, OpenRouter, company gateways."
+      },
+      "local": {
+        "title": "A local runtime on this Mac",
+        "body": "Ollama, LM Studio, vLLM or llama.cpp. No key needed."
+      },
+      "rightNow": "Right now",
+      "ownLogin": {
+        "claude_code": "Own login (Anthropic)",
+        "codex": "Own login (ChatGPT)"
+      },
+      "engineUnset": "Coffer's model isn't set, so distil and curation are paused.",
+      "engineLink": "Coffer's model"
     }
   },
   "skillSources": {

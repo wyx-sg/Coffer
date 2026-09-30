@@ -10,6 +10,24 @@ Coffer answers two different questions, depending on how an agent is signed in:
 - **An agent on a provider** — an API key for a gateway or vendor, or a local model runtime — pays per token. Coffer counts every request it makes, because every such request goes through the [local model proxy](/architecture/model-proxy).
 - **An agent on its own subscription login** (a Claude or ChatGPT plan) pays a flat fee against rolling windows. What matters is how much of the five-hour and weekly allowance is left, and only the vendor's server knows that. Coffer shows the vendor's own number, never an estimate.
 
+## The Usage page
+
+Open **Usage** in the sidebar (under System). The page answers both questions, in two sections that load independently — if one cannot be read, the other still shows.
+
+**Subscription quota** has one row per agent (Claude Code, Codex) with the plan it is signed in on. Each window — the five-hour and the weekly one — is a meter with how much is used and when it resets ("Resets 16:30 · in 2 h 24 min"). A window at 90% or more turns amber; one at 100% reads **Limit reached** in red. The row ends with when the number was seen and where it came from (_app-server_ for Codex, _last response_ or _status line_ for Claude Code). An agent that has not reported anything yet says **No quota reading yet**, and a window whose reset time has passed shows no number rather than a stale one. If a manual read of Codex fails — its app-server did not answer, say — the row says why, with **Try again**.
+
+**API-key providers** covers every request that went through Coffer's local proxy:
+
+- The period control picks **Today**, **7 days** (the default), **30 days**, **This month** or **Custom…**. A custom range is picked on a calendar; the picker notes the first day that still has per-request detail — older days keep only their daily totals, which the page still reports. The range is part of the page's address, so a refresh, a bookmark or Back keeps it.
+- Five figures sum up the range: **Cost (estimated)** with the request count and how many were unpriced, **Input** (uncached), **Output** (reasoning included), **Cache read** and **Cache write** (a category only Anthropic's wire reports).
+- **Cost per day** draws one bar per day of the range; hover a bar for its day and cost. Today's bar is lighter because the day is not over.
+- The table breaks the range down **By model** (with the provider that served it), **By agent** or **By day**, and ends with a Total row. A model with no price reads **No price** — never $0.00; a cost marked `*` leaves out some unpriced requests, and a request count marked `*` includes requests whose usage never arrived. Hover the marker for the count.
+- **Edit prices in Model providers** takes you to the providers, where a model's own price is set.
+
+**Refresh** in the header re-reads everything and asks Codex for its current quota. The **⋯** menu's **Export CSV** downloads the current range in the current breakdown — the same file `coffer usage --csv` writes.
+
+On a machine where nothing has gone through the proxy yet, the API-key section says **No API-key usage yet** and links to Model providers: switching an agent onto an API-key provider is what starts the counting. Agents on a subscription login never pass through Coffer, so for them the page only ever shows quota.
+
 ## Usage of API-key and local providers
 
 ### What is counted
@@ -72,7 +90,7 @@ Coffer never reads Claude Code's or Codex's login token and never calls an undoc
 
 ### Opt-in: Claude Code's statusline
 
-Claude Code passes a statusline command the documented `rate_limits` object on every refresh. `coffer usage statusline` forwards it to Coffer and then runs your own statusline command with the same input, printing its output — so your statusline keeps working, even when the daemon is down. Coffer never installs it; to use it, set it yourself in `~/.claude/settings.json`:
+Claude Code passes a statusline command the documented `rate_limits` object on every refresh. `coffer usage statusline` forwards it to Coffer and then runs your own statusline command with the same input, printing its output — so your statusline keeps working, even when the daemon is down. Coffer never installs it — the Usage page only tells you the command, it has no switch that edits your settings. To use it, set it yourself in `~/.claude/settings.json`:
 
 ```json
 {

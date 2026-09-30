@@ -1520,9 +1520,14 @@ components:
             $ref: '#/components/schemas/ProviderModel'
           title: Models
           type: array
+        reachable:
+          default: true
+          title: Reachable
+          type: boolean
       required:
       - models
       - message
+      - reachable
       title: ProviderModelsOut
       type: object
     ProviderOut:

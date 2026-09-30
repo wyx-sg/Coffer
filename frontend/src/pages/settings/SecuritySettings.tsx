@@ -1,130 +1,61 @@
 // frontend/src/pages/settings/SecuritySettings.tsx
 //
-// The Security settings tab. Controls where the master encryption key lives
-// (file beside the DB vs. OS keychain). The card follows the same layout
-// rhythm as DataSettings.tsx: explanation on the left, action on the right.
+// Settings › Security: what is about this Mac only — the key that encrypts the
+// vault's secrets and the token that guards the daemon (spec web-ui "Organise
+// Settings into five tabs"). Four blocks in the Settings row rhythm (label and
+// description on the left, control on the right):
 //
-// Moving the key re-stores it and changes what the OS asks on every daemon
-// start, so the switch confirms before it writes.
-import { useState } from "react";
+//   • Encryption — where the master key lives, whether it was read, the
+//     development build's move switch, and the key backup.
+//   • Access — the daemon access token: Show, Copy, Rotate.
+//   • Approvals — whether a secret waits before going somewhere new.
+//   • A footer line to the Secrets page, because no stored secret is listed,
+//     added, revealed or deleted here.
 import { useTranslation } from "react-i18next";
+import { ArrowRight, KeyRound } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { translateApiError } from "@/lib/api/errors";
-import {
-  useCredentialSettings,
-  useUpdateCredentialSettings,
-} from "@/lib/hooks/useCredentialSettings";
+import { Button } from "@/components/ui/button";
+import { AccessTokenRow } from "@/components/settings/security/AccessTokenRow";
+import { EncryptionSection } from "@/components/settings/security/EncryptionSection";
+import { SettingsSection } from "@/components/settings/SettingsLayout";
 
 import { SecretBoundaryCard } from "./SecretBoundaryCard";
 
-type Storage = "file" | "keychain";
-
 export function SecuritySettings() {
+  const { t } = useTranslation();
   return (
-    <div className="space-y-4">
-      <MasterKeyCard />
+    <div className="flex flex-col gap-5">
+      <p className="text-sm text-text-muted">{t("settings.security.subtitle")}</p>
+      <EncryptionSection />
+      <SettingsSection title={t("settings.security.access.title")}>
+        <AccessTokenRow />
+      </SettingsSection>
       <SecretBoundaryCard />
+      <SecretsFooter />
     </div>
   );
 }
 
-function MasterKeyCard() {
+function SecretsFooter() {
   const { t } = useTranslation();
-  const { data, isPending, error } = useCredentialSettings();
-  const update = useUpdateCredentialSettings();
-  // The storage the user asked to move to, while the confirmation is open.
-  const [target, setTarget] = useState<Storage | null>(null);
-
-  if (isPending) {
-    return (
-      <Card>
-        <CardContent className="py-6">{t("common.loading")}</CardContent>
-      </Card>
-    );
-  }
-  if (error) {
-    return (
-      <Card>
-        <CardContent className="py-6 text-destructive">{translateApiError(t, error)}</CardContent>
-      </Card>
-    );
-  }
-
-  // A signed release keeps the key only in its Keychain access group: there is
-  // nothing to move (spec credentials "Keep the master key behind a storage
-  // port chosen by the build").
-  if (data!.master_key_storage === "keychain_access_group") {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.security.masterKey.title")}</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          {t("settings.security.masterKey.accessGroupNote")}
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const isKeychain = data!.master_key_storage === "keychain";
-  const confirmKey = target === "keychain" ? "confirmKeychain" : "confirmFile";
-
-  const move = () => {
-    if (!target) return;
-    update.mutate({ master_key_storage: target });
-    setTarget(null);
-  };
-
+  const navigate = useNavigate();
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("settings.security.masterKey.title")}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          {t("settings.security.masterKey.description")}
-        </p>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <Label htmlFor="master-key-keychain">{t("settings.security.masterKey.toggle")}</Label>
-            <p className="text-xs text-muted-foreground">
-              {isKeychain
-                ? t("settings.security.masterKey.keychainNote")
-                : t("settings.security.masterKey.fileNote")}
-            </p>
-          </div>
-          <Switch
-            id="master-key-keychain"
-            checked={isKeychain}
-            disabled={update.isPending}
-            onCheckedChange={(checked) => setTarget(checked ? "keychain" : "file")}
-          />
-        </div>
-
-        {update.isError ? (
-          <p className="text-sm text-destructive" role="alert">
-            {translateApiError(t, update.error)}
-          </p>
-        ) : null}
-
-        <ConfirmDialog
-          open={target !== null}
-          onOpenChange={(open) => {
-            if (!open) setTarget(null);
-          }}
-          title={t(`settings.security.masterKey.${confirmKey}.title`)}
-          description={t(`settings.security.masterKey.${confirmKey}.body`)}
-          confirmLabel={t("settings.security.masterKey.confirmMove")}
-          variant="default"
-          pending={update.isPending}
-          onConfirm={move}
-        />
-      </CardContent>
-    </Card>
+    <div className="flex min-h-row items-center gap-2 rounded-lg border border-border-subtle bg-surface-sunken px-3.5">
+      <KeyRound className="size-3.5 text-text-muted" aria-hidden />
+      <span className="text-sm text-text-muted">{t("settings.security.secretsFooter")}</span>
+      <Button
+        variant="link"
+        size="sm"
+        className="ml-auto px-0"
+        // Replace the Settings entry rather than push over it: the modal is
+        // gone once the page opens, and Back returns to where Settings was
+        // opened from instead of reopening it.
+        onClick={() => navigate("/secrets", { replace: true })}
+      >
+        {t("settings.security.manageInSecrets")}
+        <ArrowRight aria-hidden />
+      </Button>
+    </div>
   );
 }

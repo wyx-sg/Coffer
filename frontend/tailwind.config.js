@@ -155,8 +155,10 @@ export default {
       },
       zIndex: {
         sticky: "10",
-        menu: "40",
+        // Above the dialog: a select, popover or menu opened INSIDE a dialog
+        // must sit over the dialog's scrim, or the scrim takes its clicks.
         dialog: "50",
+        menu: "55",
         toast: "60",
         tooltip: "70",
       },

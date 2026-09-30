@@ -1,0 +1,190 @@
+// e2e/web/specs/shell_secrets.spec.ts
+//
+// The Secrets page at /secrets against a real daemon. Adding a secret from the
+// page stores it (it lists as not used by anything, with its
+// coffer://secret/<name> reference); a secret an MCP server cites lists under
+// In use naming that server, and Delete then says what still uses it instead
+// of deleting; an unused secret is deleted from its ⋯ menu. Only data this
+// file creates is touched, and each test removes it.
+//
+// Reveal needs the desktop app's presence check, so a browser only shows it
+// disabled; the reveal itself, the approval notice and the plaintext-key
+// migration are covered in frontend/src/pages/SecretsPage.test.tsx and
+// frontend/src/components/credentials/ScanSecretsDialog.test.tsx, where the
+// daemon's answers can be fixed.
+
+import { expect, test } from "@playwright/test";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  beforeEachInjectToken,
+  deregisterMcpServer,
+  generateUniqueName,
+  readDaemonToken,
+} from "./_helpers";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(__dirname, "../../..");
+const PYTHON = path.join(REPO_ROOT, ".venv/bin/python3");
+const FAKE_SERVER = path.join(
+  REPO_ROOT,
+  "backend/tests/fixtures/fake_mcp_server.py",
+);
+
+beforeEachInjectToken();
+
+function api(pathname: string, init: RequestInit = {}): Promise<Response> {
+  const { token, port } = readDaemonToken();
+  return fetch(`http://127.0.0.1:${port}/api/v1${pathname}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Coffer-Token": token,
+      "X-Coffer-Actor": "e2e",
+      ...(init.headers ?? {}),
+    },
+  });
+}
+
+async function storeSecret(name: string, value: string): Promise<void> {
+  const r = await api("/credentials", {
+    method: "POST",
+    body: JSON.stringify({ ref: `secret/${name}`, value }),
+  });
+  if (!r.ok) throw new Error(`store failed: ${r.status} ${await r.text()}`);
+}
+
+/** Best-effort cleanup: a secret already gone is fine. */
+async function deleteSecret(name: string): Promise<void> {
+  await api(`/credentials/secret/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
+}
+
+async function registerCitingServer(
+  server: string,
+  secret: string,
+): Promise<void> {
+  const r = await api("/resources", {
+    method: "POST",
+    body: JSON.stringify({
+      kind: "mcp_server",
+      name: server,
+      config: {
+        transport: {
+          type: "stdio",
+          command: PYTHON,
+          args: [FAKE_SERVER, "--scenario", "basic", "--tools", "read_file"],
+          credential_refs: { E2E_TOKEN: `secret/${secret}` },
+        },
+      },
+    }),
+  });
+  if (!r.ok) throw new Error(`register failed: ${r.status} ${await r.text()}`);
+}
+
+/** Refuse what the citing server's first use asked for. A standalone secret
+ *  sent somewhere new waits for approval in the desktop app, and the approvals
+ *  window a browser opens for it would cover this page and every later spec's.
+ *  Rejecting withholds the value; the citation, which is what this spec reads,
+ *  stays. */
+async function rejectApprovalsFor(secret: string): Promise<void> {
+  const r = await api("/credentials/approvals?status=pending");
+  const { approvals } = (await r.json()) as {
+    approvals: { id: string; ref: string | null }[];
+  };
+  for (const a of approvals.filter((x) => x.ref === `secret/${secret}`)) {
+    await api(`/credentials/approvals/${a.id}/reject`, { method: "POST" });
+  }
+}
+
+test("adding a secret lists it as unused, with the reference files cite", async ({
+  page,
+}) => {
+  const name = generateUniqueName("e2e-secret");
+  try {
+    await page.goto("/secrets");
+    await expect(
+      page.getByRole("heading", { name: /^Secrets$/ }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "Add secret" }).first().click();
+    const dialog = page.getByRole("dialog", { name: "Add secret" });
+    await dialog.getByLabel("Name").fill(name);
+    await dialog.getByLabel("Value").fill("e2e-not-a-real-value");
+    await expect(dialog).toContainText(`coffer://secret/${name}`);
+    await dialog.getByRole("button", { name: "Add secret" }).click();
+    await expect(dialog).toBeHidden();
+
+    const unused = page.getByRole("region", { name: /Not used by anything/ });
+    await expect(unused.getByText(name, { exact: true })).toBeVisible();
+    await expect(unused.getByText(`coffer://secret/${name}`)).toBeVisible();
+    // No value is on the page.
+    await expect(page.getByText("e2e-not-a-real-value")).toHaveCount(0);
+  } finally {
+    await deleteSecret(name);
+  }
+});
+
+test("a secret an MCP server cites names it, and Delete says so instead of deleting", async ({
+  page,
+}) => {
+  const secret = generateUniqueName("e2e-secret");
+  const server = generateUniqueName("e2esecretsrv");
+  try {
+    await storeSecret(secret, "e2e-not-a-real-value");
+    await registerCitingServer(server, secret);
+    await rejectApprovalsFor(secret);
+
+    await page.goto("/secrets");
+    const inUse = page.getByRole("region", { name: /In use/ });
+    const row = inUse.getByRole("row").filter({ hasText: secret });
+    await expect(row).toBeVisible();
+    await expect(row).toContainText(server);
+
+    await row.getByRole("button", { name: `Actions for ${secret}` }).click();
+    await page.getByRole("menuitem", { name: "Delete…" }).click();
+    const blocked = page.getByRole("dialog", { name: `${secret} is in use` });
+    await expect(blocked).toContainText(server);
+    await expect(blocked).toContainText("MCP server");
+    await expect(
+      blocked.getByRole("button", { name: "Delete secret" }),
+    ).toBeDisabled();
+    await blocked.getByRole("button", { name: "Close" }).last().click();
+    await expect(row).toBeVisible();
+
+    // The citer opens that server's page.
+    await row
+      .getByRole("button", { name: new RegExp(`${secret} is used by`) })
+      .click();
+    await page.getByRole("link", { name: server }).click();
+    await expect(page).toHaveURL(new RegExp(`/mcp-servers/${server}$`));
+  } finally {
+    await rejectApprovalsFor(secret);
+    await deregisterMcpServer(server);
+    await deleteSecret(secret);
+  }
+});
+
+test("an unused secret is deleted from its menu", async ({ page }) => {
+  const name = generateUniqueName("e2e-secret");
+  try {
+    await storeSecret(name, "e2e-not-a-real-value");
+    await page.goto("/secrets");
+    const unused = page.getByRole("region", { name: /Not used by anything/ });
+    await expect(unused.getByText(name, { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: `Actions for ${name}` }).click();
+    // A browser cannot run the presence check, so Reveal names the app.
+    await expect(
+      page.getByRole("menuitem", { name: "Reveal in the Coffer app" }),
+    ).toBeDisabled();
+    await page.getByRole("menuitem", { name: "Delete…" }).click();
+    const confirm = page.getByRole("dialog", { name: `Delete ${name}?` });
+    await confirm.getByRole("button", { name: "Delete secret" }).click();
+    await expect(confirm).toBeHidden();
+    await expect(page.getByText(name, { exact: true })).toHaveCount(0);
+  } finally {
+    await deleteSecret(name);
+  }
+});

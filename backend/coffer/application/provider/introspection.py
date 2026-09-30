@@ -58,7 +58,7 @@ class ModelIntrospectionService:
             key = self._key_for(provider, credential_ref, secret_value)
             models = await self._port.list_models(provider=provider, base_url=base_url, api_key=key)
         except Exception as e:  # degrade to an empty list + reason — never 500 the picker
-            return ModelList(models=[], message=str(e))
+            return ModelList(models=[], message=str(e), reachable=False)
         if not models:
             # Say what happened, nothing more: no surface takes a typed model id
             # (spec provider-switching "Choose a model from a fixed list").
