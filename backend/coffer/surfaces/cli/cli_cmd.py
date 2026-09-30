@@ -1,20 +1,18 @@
 """``coffer cli …`` — the command-line tools managed skills require (spec
-skill-manager "Cover required commands on REST, the command line and the
+skill-manager "Serve required commands on REST, the command line and the
 web").
 
-``list`` and ``show`` read ``/clis``; ``check`` probes again; ``install``
-prints the exact Homebrew command, asks before running it unless ``--yes``,
-then follows the job's output until it ends. Logging in is never done here:
-``show`` prints the login command to run yourself.
+``list`` and ``show`` read ``/clis``; ``check`` probes again; ``prompt``
+prints the hand-off prompt for a command that needs you — the text to give
+your agent, which installs or updates it (or helps you log in) the way that
+suits this machine. Coffer runs no install and no login itself.
 """
 
 from __future__ import annotations
 
 import json as _json
-import time
 from typing import Any
 
-import httpx
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -25,9 +23,6 @@ from coffer.surfaces.cli._options import ExitCode
 
 app = typer.Typer(help="Check the command-line tools skills require")
 _console = Console()
-
-#: Seconds between two reads of a running install's output.
-POLL_INTERVAL = 0.5
 
 
 def _version_label(item: dict[str, Any]) -> str:
@@ -104,8 +99,8 @@ def show(
     typer.echo(f"login:       {_login_label(data)}")
     if data["login"]["command"]:
         typer.echo(f"log in with: {data['login']['command']}")
-    if data["install_command"]:
-        typer.echo(f"install:     {data['install_command']}  (coffer cli install {command})")
+    if data["handoff"]:
+        typer.echo(f"hand off:    coffer cli prompt {command}  (a prompt for your agent)")
     typer.echo("needed by:")
     for n in data["needed_by"]:
         extra = f" (min {n['min_version']})" if n["min_version"] else ""
@@ -133,49 +128,22 @@ def check(
         _print_table([body])
 
 
-@app.command("install")
-def install(
+@app.command("prompt")
+def prompt(
     ctx: typer.Context,
     command: str = typer.Argument(..., metavar="COMMAND", help="The command, e.g. jq"),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Run without asking"),
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """Install or upgrade a required command through Homebrew, after asking."""
-    verbose = verbose_of(ctx)
+    """Print the prompt to give your agent for a command that needs you."""
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get(f"/clis/{command}")
-        _cli_client.check(r, verbose=verbose)
-        data = r.json()
-        planned = data["install_command"]
-        if planned is None:
-            why = (
-                "no skill declares a Homebrew formula for it"
-                if data["brew"] is None
-                else f"it is {data['status'].replace('_', ' ')}, nothing to install"
-            )
-            typer.echo(f"{command}: {why}.", err=True)
-            raise typer.Exit(int(ExitCode.CONFLICT))
-        typer.echo(f"Coffer will run: {planned}")
-        if not yes and not typer.confirm("Run it?", default=False):
-            typer.echo("Nothing was run.")
-            raise typer.Exit(int(ExitCode.GENERIC))
-        r = c.post(f"/clis/{command}/install", json={"formula": data["brew"]})
-        _cli_client.check(r, verbose=verbose)
-        job = _follow(c, command, r.json(), verbose=verbose)
-    if job["state"] != "succeeded":
-        typer.echo(f"{planned} failed (exit {job['exit_code']}).", err=True)
-        raise typer.Exit(int(ExitCode.GENERIC))
-    typer.echo(f"{planned} finished.")
-
-
-def _follow(c: httpx.Client, command: str, job: dict[str, Any], *, verbose: bool) -> dict[str, Any]:
-    """Print the job's output as it arrives; return the job once it ended."""
-    while True:
-        for line in job["lines"]:
-            typer.echo(line)
-        if job["state"] != "running":
-            return job
-        time.sleep(POLL_INTERVAL)
-        r = c.get(f"/clis/{command}/install", params={"since": job["next_line"]})
-        _cli_client.check(r, verbose=verbose)
-        job = r.json()
+        _cli_client.check(r, verbose=verbose_of(ctx))
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps({"command": data["command"], "handoff": data["handoff"]}, indent=2))
+        return
+    if data["handoff"] is None:
+        typer.echo(f"{command} is ready; there is nothing to hand off.", err=True)
+        raise typer.Exit(int(ExitCode.CONFLICT))
+    typer.echo(data["handoff"]["prompt"])

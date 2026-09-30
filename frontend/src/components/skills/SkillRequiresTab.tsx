@@ -2,19 +2,17 @@
 //
 // The skill's declared commands in their order, each with its state from the
 // CLIs list (GET /clis), so the tab and the CLIs page can never disagree. Each
-// command links to its page on the CLIs page (spec web-ui "Show every CLI a
-// skill requires on the CLIs page"); Install… / Copy command are shortcuts to the
-// same confirmation and copy the CLI page offers. A missing command never stops
-// delivery — the footnote says so.
-import { useState } from "react";
+// command, and its Open in CLIs link, open its page on the CLIs page (spec
+// web-ui "Show every CLI a skill requires on the CLIs page"); a command that needs the person offers the
+// same hand-off to an agent (AgentHandoff) its CLI page does. A missing command
+// never stops delivery — the footnote says so.
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { RefreshCw, Terminal } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
-import { CliActionButton } from "@/components/clis/CliActionButton";
-import { CliInstallDialog } from "@/components/clis/CliInstallDialog";
 import { ClisWarnings } from "@/components/clis/ClisWarnings";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import type { Cli } from "@/lib/api/clis";
@@ -67,7 +65,6 @@ export function SkillRequiresTab({ skill }: Props) {
   const { t, i18n } = useTranslation();
   const { data, error } = useClis();
   const check = useCheckClis();
-  const [installFor, setInstallFor] = useState<Cli | null>(null);
 
   // What the skill declares, in its order (spec skill-manager "Show the
   // commands a skill declares it needs"); each one's state on this machine
@@ -153,13 +150,15 @@ export function SkillRequiresTab({ skill }: Props) {
                 <span className="min-w-0 flex-1 text-xs text-text-muted">
                   <RequirementLine cli={cli} skillUid={skillUid} />
                 </span>
-                <CliActionButton
-                  cli={cli}
-                  onInstall={setInstallFor}
-                  copyLabel={t("clis.actions.copyCommand")}
-                />
+                {cli.handoff ? <AgentHandoff prompt={cli.handoff.prompt} size="sm" /> : null}
               </>
             ) : null}
+            <Link
+              to={`/clis/${encodeURIComponent(req.command)}`}
+              className="ml-auto shrink-0 text-xs text-accent-text hover:underline"
+            >
+              {t("skills.requires.openInClis")}
+            </Link>
           </li>
         ))}
       </ul>
@@ -169,8 +168,6 @@ export function SkillRequiresTab({ skill }: Props) {
           ? t("skills.requires.footnote", { commands: missing.join(", ") })
           : t("skills.requires.stillDelivered")}
       </p>
-
-      <CliInstallDialog cli={installFor} onOpenChange={(open) => !open && setInstallFor(null)} />
     </div>
   );
 }

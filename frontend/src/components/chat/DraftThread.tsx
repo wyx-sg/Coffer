@@ -2,7 +2,8 @@
 // The draft New conversation opens (`/conversations/new`): a header with the
 // chosen agent, its model and effort and the folder it will work in, an empty
 // thread, and the composer whose first send creates the conversation (see
-// useChatController.sendDraft) — no welcome or suggestions. When no managed
+// useChatController.sendDraft) — no welcome or suggestions. A hand-off opens it
+// with a prompt already in the composer (`restore`), waiting for Send. When no managed
 // agent is available, a state saying how to get one replaces the composer.
 import { useTranslation } from "react-i18next";
 import { Folder, MessageSquareOff } from "lucide-react";
@@ -20,6 +21,7 @@ import { abbreviateHomePath } from "@/lib/agents/display";
 import type { AgentProviderInfo } from "@/lib/api/agentProviders";
 import type { ChatAttachment } from "@/lib/api/chat";
 import { useAgentModels } from "@/lib/hooks/useAgentModels";
+import type { ComposerRestore } from "@/lib/hooks/useComposerRestore";
 import { Composer } from "./Composer";
 import { EffortPicker } from "./EffortPicker";
 import { ModelPicker } from "./ModelPicker";
@@ -40,6 +42,9 @@ interface Props {
   onSend: (text: string, attachments: ChatAttachment[]) => void | Promise<boolean>;
   /** True while the create-then-send round-trip is in flight. */
   creating?: boolean;
+  /** Text to type into the composer once (a hand-off's prompt); never sent by itself. */
+  restore?: ComposerRestore | null;
+  onRestored?: () => void;
 }
 
 export function DraftThread({
@@ -54,6 +59,8 @@ export function DraftThread({
   onEffortChange,
   onSend,
   creating = false,
+  restore,
+  onRestored,
 }: Props) {
   const { t } = useTranslation();
   const agentName = agents.find((a) => a.agent_key === agentKey)?.display_name ?? agentKey;
@@ -134,6 +141,8 @@ export function DraftThread({
       <Composer
         onSend={onSend}
         disabled={creating}
+        restore={restore}
+        onRestored={onRestored}
         placeholder={t("conversations.composer.placeholder", { agent: agentName })}
       />
     </div>

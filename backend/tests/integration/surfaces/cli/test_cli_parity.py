@@ -129,10 +129,10 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # `add` also takes an archive or a Git URL, and `update` is a Git-imported
     # skill's upstream updates (check, preview, apply, keep mine).
     "skill": {*_LIFECYCLE - {"edit"}, "add", "update", "scope", "verify"},
-    # The commands skills require (spec skill-manager "Cover required commands
-    # on REST, the command line and the web"): read, probe again, and the one
-    # Homebrew install, which asks first.
-    "cli": {"list", "show", "check", "install"},
+    # The commands skills require (spec skill-manager "Serve required commands
+    # on REST, the command line and the web"): read, probe again, and print
+    # the hand-off prompt for the person's agent.
+    "cli": {"list", "show", "check", "prompt"},
     # Exactly spec knowledge "Cover knowledge management on REST and the
     # CLI". Documents are listed, read, edited and deleted on disk under
     # `path knowledge`. A collection

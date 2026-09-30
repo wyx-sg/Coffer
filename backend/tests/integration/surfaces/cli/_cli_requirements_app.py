@@ -1,21 +1,20 @@
-"""A real ``create_app`` daemon whose required-command check runs against
-fakes (``tests.support.cli_requirements``) — or against the real probe on a
-``PATH`` the test lays out — and never against a real Homebrew."""
+"""A real ``create_app`` daemon whose required-command check runs against a
+fake probe (``tests.support.cli_requirements``) — or against the real probe on
+a ``PATH`` the test lays out — on a machine described as
+:data:`~tests.support.cli_requirements.FAKE_MACHINE`."""
 
 from __future__ import annotations
 
 import pathlib
-import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Any
 
 import pytest
 from starlette.testclient import TestClient
 
 from coffer.application.skill.cli_requirements import CommandProbePort
 from coffer.surfaces.http import cli_wiring
-from tests.support.cli_requirements import FakeCommandProbe, FakeInstaller
+from tests.support.cli_requirements import FAKE_MACHINE, FakeCommandProbe
 
 from ._real_app import boot
 
@@ -24,7 +23,6 @@ from ._real_app import boot
 class CliDaemon:
     client: TestClient
     probe: CommandProbePort
-    installer: FakeInstaller
     root: pathlib.Path
 
     def add_skill(self, name: str, requires: str) -> str:
@@ -40,28 +38,16 @@ class CliDaemon:
         assert r.status_code == 201, r.text
         return str(r.json()["uid"])
 
-    def wait_install(self, command: str, timeout: float = 10.0) -> dict[str, Any]:
-        deadline = time.monotonic() + timeout
-        while True:
-            r = self.client.get(f"/clis/{command}/install")
-            assert r.status_code == 200, r.text
-            body: dict[str, Any] = r.json()
-            if body["state"] != "running" or time.monotonic() > deadline:
-                return body
-            time.sleep(0.02)
-
 
 def boot_cli_daemon(
     tmp_path: pathlib.Path,
     monkeypatch: pytest.MonkeyPatch,
     *,
     probe: CommandProbePort | None = None,
-    installer: FakeInstaller | None = None,
 ) -> Iterator[CliDaemon]:
     fake_probe: CommandProbePort = probe or FakeCommandProbe()
-    fake_installer = installer or FakeInstaller()
     build_probe: Callable[[], CommandProbePort] = lambda: fake_probe  # noqa: E731
     monkeypatch.setattr(cli_wiring, "build_command_probe", build_probe)
-    monkeypatch.setattr(cli_wiring, "build_installer", lambda: fake_installer)
+    monkeypatch.setattr(cli_wiring, "machine_label", lambda: FAKE_MACHINE)
     for client in boot(tmp_path, monkeypatch):
-        yield CliDaemon(client, fake_probe, fake_installer, tmp_path)
+        yield CliDaemon(client, fake_probe, tmp_path)
