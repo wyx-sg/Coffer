@@ -1013,6 +1013,111 @@ paths:
       summary: List Invocations
       tags:
       - mcp
+  /api/v1/resources/mcp_server/{uid}/invocations/summary:
+    get:
+      description: 'This server''s calls since ``since``: totals, per calling agent, per tool.'
+      operationId: invocation_summary_api_v1_resources_mcp_server__uid__invocations_summary_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - description: Count calls at or after this moment; default 24 hours ago.
+        in: query
+        name: since
+        required: false
+        schema:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Count calls at or after this moment; default 24 hours ago.
+          title: Since
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvocationSummaryOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Invocation Summary
+      tags:
+      - mcp
+  /api/v1/resources/mcp_server/{uid}/log:
+    get:
+      description: |-
+        The newest lines of the server's own log file: its stderr, and Coffer's
+        lines about starting and stopping it. A server Coffer does not start (HTTP)
+        has none.
+      operationId: server_log_api_v1_resources_mcp_server__uid__log_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 200
+          maximum: 2000
+          minimum: 1
+          title: Limit
+          type: integer
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpServerLogOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Server Log
+      tags:
+      - mcp
   /api/v1/resources/mcp_server/{uid}/refresh:
     post:
       description: |-
@@ -1061,8 +1166,9 @@ paths:
     get:
       description: |-
         Per-server status from persisted state — health record (from /test),
-        discovered capabilities, or last invocation. Cheap (DB only + one PATH
-        lookup); never spawns.
+        discovered capabilities, or last invocation — and what the page says about
+        it (``application.mcp.server_status``). Cheap (DB only + one PATH lookup);
+        never spawns.
       operationId: get_server_status_api_v1_resources_mcp_server__uid__status_get
       parameters:
       - in: path
@@ -1144,8 +1250,75 @@ paths:
       summary: Test Mcp Server
       tags:
       - mcp
+  /api/v1/resources/mcp_server/{uid}/tiering:
+    get:
+      description: Which of this server's tools are listed to agents and which only reached through search.
+      operationId: tool_tiering_api_v1_resources_mcp_server__uid__tiering_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolTieringOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Tool Tiering
+      tags:
+      - mcp
 components:
   schemas:
+    AgentCallCountOut:
+      properties:
+        agent_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Uid
+        calls:
+          title: Calls
+          type: integer
+        errors:
+          title: Errors
+          type: integer
+        last_call_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Call At
+      required:
+      - calls
+      - errors
+      - last_call_at
+      - agent_uid
+      title: AgentCallCountOut
+      type: object
     CapabilityKeyBody:
       description: |-
         Request body for capability enable/disable routes.
@@ -1902,6 +2075,44 @@ components:
       - agent_uid
       title: InvocationOut
       type: object
+    InvocationSummaryOut:
+      description: 'One server''s calls since ``since``: totals, per agent, per tool.'
+      properties:
+        by_agent:
+          items:
+            $ref: '#/components/schemas/AgentCallCountOut'
+          title: By Agent
+          type: array
+        by_tool:
+          items:
+            $ref: '#/components/schemas/ToolCallCountOut'
+          title: By Tool
+          type: array
+        calls:
+          title: Calls
+          type: integer
+        errors:
+          title: Errors
+          type: integer
+        last_call_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Call At
+        since:
+          format: date-time
+          title: Since
+          type: string
+      required:
+      - since
+      - calls
+      - errors
+      - last_call_at
+      - by_agent
+      - by_tool
+      title: InvocationSummaryOut
+      type: object
     MCPPromptView:
       properties:
         arguments:
@@ -2006,14 +2217,111 @@ components:
       - client_name_length
       title: MCPToolView
       type: object
-    McpServerStatusOut:
-      description: Cheap per-server status, derived from persisted state (no spawn).
+    McpServerLogLineOut:
       properties:
+        at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: At
+        source:
+          enum:
+          - coffer
+          - stderr
+          title: Source
+          type: string
+        text:
+          title: Text
+          type: string
+      required:
+      - text
+      - source
+      - at
+      title: McpServerLogLineOut
+      type: object
+    McpServerLogOut:
+      description: The newest lines of the server's own log file, newest first.
+      properties:
+        lines:
+          items:
+            $ref: '#/components/schemas/McpServerLogLineOut'
+          title: Lines
+          type: array
+        path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Path
+        truncated:
+          default: false
+          title: Truncated
+          type: boolean
+      required:
+      - path
+      - lines
+      - truncated
+      title: McpServerLogOut
+      type: object
+    McpServerStatusOut:
+      description: |-
+        Cheap per-server status, derived from persisted state (no spawn).
+
+        Beside the state word, what the page says about it (spec mcp-gateway
+        "Explain a server's state on its page"): the last transport failure and
+        since when the server has been failing, the last successful call, and the
+        first cited secret with no value on this machine. Each is null when
+        nothing persisted says it.
+      properties:
+        failing_since:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Failing Since
+        last_checked_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Checked At
+        last_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Error
+        last_error_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Error At
+        last_ok_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Ok At
+        last_ok_capability:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Ok Capability
         missing_runner:
           anyOf:
           - type: string
           - type: 'null'
           title: Missing Runner
+        missing_secret:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Missing Secret
+        missing_secret_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Missing Secret Ref
         status:
           enum:
           - healthy
@@ -2024,6 +2332,14 @@ components:
       required:
       - status
       - missing_runner
+      - last_error
+      - last_error_at
+      - failing_since
+      - last_checked_at
+      - last_ok_at
+      - last_ok_capability
+      - missing_secret
+      - missing_secret_ref
       title: McpServerStatusOut
       type: object
     McpTestResultOut:
@@ -2222,6 +2538,72 @@ components:
       - fetched_at
       - skipped
       title: OpenApiSourceOut
+      type: object
+    ToolCallCountOut:
+      properties:
+        calls:
+          title: Calls
+          type: integer
+        errors:
+          title: Errors
+          type: integer
+        last_call_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Call At
+        tool:
+          title: Tool
+          type: string
+      required:
+      - calls
+      - errors
+      - last_call_at
+      - tool
+      title: ToolCallCountOut
+      type: object
+    ToolTieringOut:
+      description: |-
+        Which of this server's tools agents see listed and which only through search.
+
+        Machine-wide: computed over every enabled server's saved tool list, not
+        per agent reach (spec mcp-gateway "Forward tools, resources and prompts").
+      properties:
+        behind_search:
+          items:
+            type: string
+          title: Behind Search
+          type: array
+        budget:
+          title: Budget
+          type: integer
+        catalogue_size:
+          title: Catalogue Size
+          type: integer
+        enabled:
+          title: Enabled
+          type: boolean
+        listed:
+          items:
+            type: string
+          title: Listed
+          type: array
+        listed_count:
+          title: Listed Count
+          type: integer
+        tool_count:
+          title: Tool Count
+          type: integer
+      required:
+      - enabled
+      - budget
+      - catalogue_size
+      - listed_count
+      - tool_count
+      - listed
+      - behind_search
+      title: ToolTieringOut
       type: object
     _MCPPromptArgument:
       properties:

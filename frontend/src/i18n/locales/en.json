@@ -198,35 +198,13 @@
   },
   "resources": {
     "title": "MCP servers",
-    "subtitle": "Upstream MCP servers Coffer aggregates and re-exposes through a single shim.",
-    "addServer": "Add MCP server",
+    "subtitle": "Coffer runs them and serves their tools to the agents you choose, through one endpoint.",
+    "addServer": "Add server",
     "loadFailed": "Failed to load resources",
-    "welcome": {
-      "title": "A local-first vault for the AI assets your editors share",
-      "body": "Register your first MCP server below — Coffer keeps it running locally and re-exposes its tools to every connected client under one namespace.",
-      "featureAggregate": {
-        "title": "Aggregate, don't fragment",
-        "body": "One client connection covers every upstream MCP server you register."
-      },
-      "featureCurate": {
-        "title": "Curate, don't dump",
-        "body": "Per-capability toggles persist across daemon restarts and upstream upgrades."
-      },
-      "featureLocal": {
-        "title": "Local-first",
-        "body": "The vault binds 127.0.0.1; nothing leaves your machine without an explicit surface."
-      }
-    },
     "status": {
       "all": "All"
     },
-    "noMatches": "No servers match your search.",
     "cols": {
-      "name": "Name",
-      "transport": "Transport",
-      "health": "Health",
-      "description": "Description",
-      "status": "Status",
       "reach": "Reach"
     },
     "titleField": {
@@ -236,29 +214,13 @@
       "dialogSubtitle": "A title is for display only; agents keep seeing the name."
     },
     "fixedName": {
-      "badge": "Fixed name",
       "label": "Name",
       "cannotChange": "It cannot change after registration."
     }
   },
   "mcp": {
-    "missingRunner": "{{runner}} is not installed on this machine",
     "missingRunnerHint": "Install {{runner}}, then refresh",
-    "table": {
-      "search": "Search servers…",
-      "deleteAria": "Delete {{name}}"
-    },
     "server": {
-      "addTitle": "Add MCP server",
-      "addSubtitle": "Register an upstream MCP server — Coffer starts it on first use and re-exposes its tools.",
-      "deleteConfirmTitle": "Delete mcp_server:{{name}}?",
-      "deleteConfirmBody": "This removes the server registration and all associated capability preferences. The audit + invocation log entries are preserved.",
-      "deleteServer": "Delete server",
-      "testConnection": "Test connection",
-      "testing": "Testing…",
-      "testFailure": "Failed ({{latency}} ms): {{error}}",
-      "refresh": "Refresh capabilities",
-      "backToResources": "Back to MCP servers",
       "tabs": {
         "overview": "Overview",
         "tools": "Tools",
@@ -270,13 +232,8 @@
         "config": "Configuration",
         "transport": "Transport",
         "command": "Command",
-        "url": "URL",
-        "tools": "Tools",
-        "resources": "Resources",
-        "prompts": "Prompts",
-        "rawConfig": "Raw config JSON"
-      },
-      "edit": "Edit"
+        "url": "URL"
+      }
     },
     "capabilities": {
       "emptyTool": "No tools discovered from this upstream yet — run Refresh capabilities to query it again.",
@@ -323,46 +280,117 @@
       "failing": "Failing"
     },
     "add": {
-      "invalidJson": "That isn't valid JSON: {{detail}}"
+      "dialogTitle": "Add MCP server",
+      "subtitle": "Coffer runs it and serves its tools to the agents you choose, through one endpoint.",
+      "pasteLabel": "Paste a config, a command or a URL",
+      "review": "Review",
+      "chooseType": "Or choose a type",
+      "type": {
+        "stdio": "Command (stdio)",
+        "stdioSub": "A program Coffer starts, like npx, uvx or docker.",
+        "stdioRuns": "Coffer starts it for each agent session",
+        "http": "URL (Streamable HTTP)",
+        "httpSub": "A server already running somewhere, reached over HTTP.",
+        "httpRuns": "Coffer connects to it for each agent session"
+      },
+      "elsewhere": "Already have them elsewhere?",
+      "importAgents": "Import from your agents",
+      "importFound": "Import from your agents · {{count}} found",
+      "reviewN_one": "Review {{count}} server",
+      "reviewN_other": "Review {{count}} servers",
+      "continue": "Continue",
+      "back": "Back",
+      "change": "Change",
+      "name": "Name",
+      "nameHelp": "Agents see its tools as {{name}}__<tool>. Up to 24 characters; it can't be changed later.",
+      "nameFixedShort": "Can't be changed once added.",
+      "nameTooLong": "{{length}} characters; names are at most {{max}}. Shorten it to add this server.",
+      "nameInvalid": "Use lower-case letters, digits, \".\", \"_\" or \"-\" (no \"__\").",
+      "nameTaken": "A server called {{name}} already exists. Pick another name.",
+      "title": "Title",
+      "titleHelp": "Shown in Coffer. You can change it any time.",
+      "command": "Command",
+      "args": "Arguments",
+      "argsQuote": "An argument has a quote that is never closed.",
+      "url": "URL",
+      "urlHelp": "Streamable HTTP only.",
+      "env": "Environment",
+      "headers": "Headers",
+      "addRow": "Add",
+      "rowKey": "{{label}} name",
+      "rowValue": "Value of {{key}}",
+      "removeRow": "Remove {{key}}",
+      "secret": "Secret",
+      "secretFor": "{{key}} is a secret",
+      "secretValue": "Secret value",
+      "secretHint": "Stored in the keychain; the config keeps only its name.",
+      "secretMissing": "Enter the value of {{key}}; it goes to the keychain.",
+      "secretLine": "{{key}} looks like a secret — it goes to the keychain, the config keeps only its name.",
+      "testAfterAdd": "Coffer tests it right after it is added, on its page.",
+      "addServer": "Add server",
+      "adding": "Adding…",
+      "reviewTitle": "Review before adding",
+      "reviewSub": "Nothing is saved until you add them.",
+      "found_one": "{{count}} server found",
+      "found_other": "{{count}} servers found",
+      "include": "Include {{name}}",
+      "added": "Added",
+      "renamedFrom": "Renamed from {{name}}.",
+      "summaryStdio": "stdio · {{program}}",
+      "summaryHttp": "Streamable HTTP",
+      "noHeaders": "No headers.",
+      "noEnv": "No environment variables.",
+      "reviewFootnote": "Names are fixed once added. Each server is tested after it is added; a failing one shows under Needs attention.",
+      "addN_one": "Add {{count}} server",
+      "addN_other": "Add {{count}} servers",
+      "reachAll": "all agents",
+      "reachOff": "no agent yet",
+      "toastTested": "{{name}} added. Tested: connected in {{ms}} ms. Available to {{reach}}.",
+      "toastFailing": "{{name}} added, but its test failed: {{error}} See its page.",
+      "toastAddedMany_one": "Added {{count}} server",
+      "toastAddedMany_other": "Added {{count}} servers",
+      "toastPartial": "Added {{done}} of {{total}} servers — {{names}} wasn't added: {{reason}}",
+      "approvalTitle": "Waiting for approval",
+      "approvalBody": "Added. The secrets of {{names}} take effect once they are approved in the Coffer app.",
+      "openApprovals": "Open approvals"
     },
     "import": {
-      "jsonLabel": "MCP server JSON",
-      "jsonHelp": "Paste the JSON from an MCP server's README — the standard {\"mcpServers\": {…}} format. Multiple servers are imported at once.",
-      "jsonPlaceholder": "{\n  \"mcpServers\": {\n    \"filesystem\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@modelcontextprotocol/server-filesystem\", \"/tmp\"]\n    }\n  }\n}",
-      "parse": "Continue",
-      "back": "Back",
-      "import": "Import {{count}}",
-      "review": "Review what will be imported",
-      "noEnv": "No environment variables",
-      "secret": "Secret",
-      "secretHint": "Values marked Secret are encrypted into Coffer's local database; the rest stay in the config.",
-      "errInvalidJson": "That's not valid JSON.",
-      "errNoServers": "Couldn't find an MCP server. Expected the {\"mcpServers\": {…}} format.",
-      "errBadServer": "Server \"{{name}}\" needs a \"command\" (stdio) or a \"url\" (http).",
-      "errBadEnvValue": "Server \"{{name}}\" env variable \"{{key}}\" must be a string.",
-      "errEnvNotObject": "Server \"{{name}}\" env must be an object of string values.",
-      "noHeaders": "No headers",
-      "errBadHeaderValue": "Server \"{{name}}\" header \"{{key}}\" must be a string.",
-      "errHeadersNotObject": "Server \"{{name}}\" headers must be an object of string values.",
-      "fixedName": "This name is kept as is: it cannot be changed after registration.",
-      "nameTooLong": "\"{{name}}\" is {{length}} characters; MCP server names are limited to {{max}}. Shorten its key in the pasted JSON.",
-      "blockedByName": "Go back and shorten every name over {{max}} characters before importing."
+      "title": "Review import",
+      "sub": "Bring your agents' MCP servers into Coffer",
+      "none": "No direct MCP entries in your agents' config files.",
+      "alreadyInCoffer": "Already in Coffer as {{name}} — nothing to import.",
+      "nameUnusable": "Its name can't be registered as is; adopt it from the agent's page to rename it.",
+      "whatHappens": "What will happen",
+      "happensCoffer": "Coffer adds {{names}}, available to every agent.",
+      "happensAgent": "{{agent}} loses its own {{names}} entries and gets them through Coffer.",
+      "keepNote": "Secret values move to the keychain first. Only the chosen entries are removed from each file, and a .bak copy is kept.",
+      "importN_one": "Import {{count}} server",
+      "importN_other": "Import {{count}} servers",
+      "importing": "Importing…",
+      "done_one": "Imported {{count}} server",
+      "done_other": "Imported {{count}} servers",
+      "partial": "Imported {{done}} of {{total}}. Not imported:",
+      "entryFailed": "{{name}}: {{reason}}"
     },
     "edit": {
-      "title": "Edit MCP server",
-      "subtitle": "Update this server's title, description, configuration, and credentials.",
-      "description": "Description",
-      "descriptionPlaceholder": "What is this server for?",
-      "config": "Configuration (JSON)",
-      "configHint": "Credentials are managed below, not in this JSON.",
-      "credentials": "Credentials",
-      "noCredentials": "No credentials.",
-      "addCredential": "Add credential",
-      "removeCredential": "Remove credential",
+      "title": "Edit {{name}}",
+      "subtitle": "Changes apply to new agent sessions.",
+      "fixedNameHint": "Fixed — agents call its tools by it.",
+      "titleLabel": "Title",
+      "titleHelp": "Shown in Coffer.",
+      "urlHelp": "Streamable HTTP.",
+      "credentials": "Secrets",
+      "noCredentials": "No stored secrets.",
+      "addCredential": "Add secret",
+      "removeCredential": "Remove secret",
+      "credentialKey": "Secret name",
+      "credentialValue": "New value of {{name}}",
       "credentialNew": "Secret value",
-      "credentialHint": "Credential values are encrypted into Coffer's local database. Removing a credential deletes its stored entry.",
+      "credentialHint": "Secret values are stored in the keychain; the config keeps only their names. Removing one deletes its stored value.",
+      "stored": "Stored",
+      "replace": "Replace",
       "errRenameNeedsValue": "Re-enter the secret value for \"{{name}}\" to rename it.",
-      "fixedNameHint": "Agents see it as the prefix of every tool this server offers (mcp__coffer__<name>__…)."
+      "errInvalidConfig": "The stored configuration could not be read."
     },
     "timeouts": {
       "legend": "Timeouts (seconds)",
@@ -370,6 +398,192 @@
       "spawnHint": "Starting the server process. 5–120, default 30.",
       "request": "Request",
       "requestHint": "One call to this server. 5–1800, default 120."
+    },
+    "paste": {
+      "foundJson_one": "Found {{count}} server in an mcpServers block — {{names}}",
+      "foundJson_other": "Found {{count}} servers in an mcpServers block — {{names}}",
+      "foundToml_one": "Found {{count}} server in Codex TOML — {{names}}",
+      "foundToml_other": "Found {{count}} servers in Codex TOML — {{names}}",
+      "foundCommand": "Looks like a command · stdio",
+      "foundUrl": "Looks like a URL · Streamable HTTP",
+      "hint": "Reads an mcpServers JSON block or one server object, Codex [mcp_servers.<name>] TOML, a command line (also claude mcp add … / codex mcp add …) → stdio, or a URL → Streamable HTTP.",
+      "unreadable": "Couldn't read this — choose a type below",
+      "errUnreadable": "Couldn't read a server from this. Paste an mcpServers JSON block, Codex TOML, a command line or a URL — or choose a type below.",
+      "errInvalidJson": "Not valid JSON — line {{line}}, column {{column}}: {{detail}}",
+      "errInvalidJsonNoLocation": "Not valid JSON: {{detail}}",
+      "errNotAnObject": "Expected a JSON object: an {\"mcpServers\": {…}} block or one server object.",
+      "errServersNotObject": "\"{{key}}\" must be an object of servers keyed by name.",
+      "errNoServers": "No MCP server found. Expected an {\"mcpServers\": {…}} block or one server object.",
+      "errBadServer": "Server \"{{name}}\" needs a \"command\" (stdio) or a \"url\" (Streamable HTTP).",
+      "errEnvNotObject": "Server \"{{name}}\" env must be an object of string values.",
+      "errBadEnvValue": "Server \"{{name}}\" env variable \"{{key}}\" must be a string.",
+      "errHeadersNotObject": "Server \"{{name}}\" headers must be an object of string values.",
+      "errBadHeaderValue": "Server \"{{name}}\" header \"{{key}}\" must be a string.",
+      "errInvalidToml": "Not valid TOML at line {{line}}. Expected [mcp_servers.<name>] tables of key = value lines.",
+      "errCommandQuote": "The command has a quote that is never closed.",
+      "errCommandNoName": "{{tool}} needs a server name.",
+      "errCommandNoTarget": "{{tool}} needs the command to run (after --) or the server's URL.",
+      "errCommandOption": "{{flag}} needs a value: KEY=value for env, \"Name: value\" for a header.",
+      "errCommandNotAdd": "{{tool}} doesn't add a server. Paste a claude mcp add … or codex mcp add … line."
+    },
+    "page": {
+      "agents": "Agents",
+      "allOff": "All off",
+      "allOn": "All on",
+      "and": ", ",
+      "availableTo": "Available to",
+      "behindSearch": "Behind search",
+      "bulkLabel": "Selected MCP servers",
+      "calledBy": "Called by",
+      "calls_one": "call",
+      "calls_other": "calls",
+      "callsShort_one": "{{count}} call",
+      "callsShort_other": "{{count}} calls",
+      "choose": {
+        "title": "Choose a server",
+        "body": "Pick a server on the left to see why it is in its state, who calls it, and its tools."
+      },
+      "colCalls": "Calls",
+      "colCalls24h": "Calls 24 h",
+      "colErrors": "Errors",
+      "colLastCall": "Last call",
+      "colListing": "Agents see it",
+      "configCopied": "Config copied — it carries secret names only, never their values.",
+      "delete": {
+        "title": "Delete {{name}}?",
+        "body_one": "{{agents}} lose its {{count}} tool on their next call. Its call history stays in Activity.",
+        "body_other": "{{agents}} lose its {{count}} tools on their next call. Its call history stays in Activity.",
+        "bodyNoAgents": "No agent uses it now. Its call history stays in Activity.",
+        "confirm": "Delete server",
+        "alsoSecrets_one": "Also delete the secret {{names}}",
+        "alsoSecrets_other": "Also delete the secrets {{names}}",
+        "noOtherUser": "No other server uses it.",
+        "pause": "This can't be undone. To stop it for a while, turn it off instead."
+      },
+      "deleteManyTitle_one": "Delete {{count}} server?",
+      "deleteManyTitle_other": "Delete {{count}} servers?",
+      "deleteManyBody": "Agents lose their tools on their next call. Their call history stays in Activity.",
+      "edit": "Edit",
+      "errors_one": "error",
+      "errors_other": "errors",
+      "failingBody_one": "{{agents}} can't call its {{count}} tool until it answers again.",
+      "failingBody_other": "{{agents}} can't call its {{count}} tools until it answers again.",
+      "failingSince": "failing since {{at}}",
+      "failingTitle": "It isn't answering",
+      "filter": "Filter servers",
+      "fromCache": "From the last successful connection. Your switches still apply when it comes back.",
+      "group": {
+        "attention": "Needs attention",
+        "healthy": "Healthy",
+        "unknown": "Not checked yet",
+        "off": "Off"
+      },
+      "last24h": "Last 24 hours",
+      "lastErrorAt": "Last error at {{at}}",
+      "lastSuccess": "Last successful call {{at}}, {{tool}}.",
+      "launcherTitle": "{{runner}} is not installed on this Mac",
+      "launcherBody_one": "Coffer starts this server with {{runner}}. Install it, then test again — agents can't call its {{count}} tool until then.",
+      "launcherBody_other": "Coffer starts this server with {{runner}}. Install it, then test again — agents can't call its {{count}} tools until then.",
+      "listed": "Listed",
+      "listedDirectly": "Listed directly",
+      "log": {
+        "agent": "Called by",
+        "all": "All",
+        "calls": "Calls",
+        "callsFootnote": "Coffer records who called what and how it went — never the arguments or the result.",
+        "callsTab": "Calls · {{count}}",
+        "errorLines": "Errors",
+        "errors": "Errors · {{count}}",
+        "everything": "Everything",
+        "logFootnote": "What the server printed on stderr and how Coffer started and stopped it. Newest first.",
+        "logTab": "Server log",
+        "noLogHttp": "A Streamable HTTP server runs somewhere else, so Coffer has no log of its own for it. Its calls are on the Calls tab.",
+        "notStarted": "Coffer hasn't started this server on this Mac yet.",
+        "nothing": "Nothing to show.",
+        "openFile": "Open log file",
+        "result": "Result",
+        "session": "Session",
+        "show": "Show",
+        "status": {
+          "ok": "OK",
+          "error": "Error",
+          "timeout": "Timed out",
+          "denied": "Denied"
+        },
+        "subtitle": "{{calls}} calls · {{errors}} errors in the last 24 hours",
+        "subtitleHttp": "Streamable HTTP · reached over the network",
+        "subtitleStdio": "stdio · started by Coffer for each agent session",
+        "time": "Time",
+        "title": "{{name}} · Calls and server log",
+        "took": "Took",
+        "tool": "Tool"
+      },
+      "menu": {
+        "copyConfig": "Copy config as JSON",
+        "delete": "Delete…",
+        "edit": "Edit…",
+        "label": "More actions for {{name}}",
+        "log": "Calls and server log",
+        "turnOff": "Turn off"
+      },
+      "mostBehindSearch": "most behind search",
+      "mostlyBehindSearch": "Most behind search · {{listed}} listed · {{behind}} by search",
+      "noCalls": "No calls in the last 24 hours.",
+      "noMatches": "No servers match.",
+      "notFound": "No MCP server is named {{name}}.",
+      "offBody": "Coffer doesn't start it for any session. Turning it on gives it back to the agents you chose last time.",
+      "offKept": "Off — kept: {{agents}}",
+      "offTitle": "Off — no agent can use it",
+      "openInActivity": "Open in Activity",
+      "reason": {
+        "failing": "Failing",
+        "failingSince": "{{error}} · since {{since}}",
+        "launcher": "{{runner}} is not installed",
+        "secret": "Secret missing · {{secret}}"
+      },
+      "replaceSecret": "Replace secret",
+      "secretBody": "The {{key}} setting points to it, but no value is stored on this Mac — secrets don't travel with the vault. Add it and Coffer uses it on the next call. Agents never see it.",
+      "secretTitle": "The secret {{secret}} isn't in this Mac's keychain",
+      "showMore": "Show {{count}} more",
+      "state": {
+        "failing": "Failing",
+        "launcherMissing": "Launcher missing",
+        "secretMissing": "Secret missing",
+        "healthy": "Healthy",
+        "unknown": "Not checked yet",
+        "off": "Off"
+      },
+      "stored": "Stored",
+      "storedValue": "Reach is set on this Mac only",
+      "summaryUnavailable": "The last 24 hours couldn't be read.",
+      "test": "Test",
+      "testAgain": "Test again",
+      "testFailed": "Test failed after {{ms}} ms",
+      "testPassed": "Test passed in {{ms}} ms",
+      "testPassedBody": "It answered; its tools are the set agents see now.",
+      "testing": "Testing…",
+      "tieringTitle": "{{listed}} of its {{total}} tools are listed to agents; {{behind}} are behind search",
+      "tieringBody": "Your servers offer {{catalogue}} tools together. Coffer lists {{budget}} directly — the ones agents called most, at least one per server — so agents aren't flooded. Agents find the rest with coffer__search_tools and call them by name. Every tool that is on still works.",
+      "toolCount_one": "{{count}} tool",
+      "toolCount_other": "{{count}} tools",
+      "toolsOn": "{{on}} of {{total}} on",
+      "toolsReachAgents": "Tools reach agents",
+      "transport": {
+        "stdio": "stdio",
+        "http": "Streamable HTTP",
+        "unknown": "Unknown transport"
+      },
+      "turnOn": "Turn on",
+      "unknownSession": "A session that named no agent",
+      "viewLog": "View log",
+      "welcome": {
+        "title": "No MCP servers yet",
+        "body": "Add a server once and every agent you choose gets its tools through Coffer's one endpoint.",
+        "foundTitle_one": "Your agents already use {{count}} MCP server",
+        "foundTitle_other": "Your agents already use {{count}} MCP servers",
+        "foundBody": "Import them and Coffer runs them for every agent you choose. Each one is removed from the agent's own config, so it isn't started twice.",
+        "reviewImport": "Review and import"
+      }
     }
   },
   "timeRange": {
@@ -470,7 +684,8 @@
       "secret_approval_requested": "Asked for approval of a secret change",
       "secret_approval_approved": "Approved a secret change",
       "secret_approval_rejected": "Rejected a secret change",
-      "secret_imported": "Imported secrets"
+      "secret_imported": "Imported secrets",
+      "storage_cache_cleared": "Cleared the rebuildable cache"
     },
     "capType": {
       "tool": "tool",
@@ -674,23 +889,26 @@
       "daemon": "Daemon"
     },
     "general": {
-      "title": "Preferences",
-      "pageSize": "Default rows per page",
-      "pageSizeHelp": "The initial page size for every table.",
+      "pageSize": "Rows per page",
+      "pageSizeHelp": "How many rows a table shows before paging.",
       "theme": "Theme",
-      "themeHelp": "Follow the system appearance, or keep Coffer light or dark on this device.",
+      "themeHelp": "System follows the macOS appearance.",
       "themeSystem": "System",
       "themeLight": "Light",
       "themeDark": "Dark",
-      "preferredEditor": "Preferred editor",
-      "preferredEditorHelp": "The editor Coffer opens managed files with. Pick a detected editor, or type any app name / launch command. Empty uses the system default.",
+      "preferredEditor": "Open files with",
+      "preferredEditorHelp": "The editor Coffer opens managed files in. Pick a detected editor, or type any app name or launch command.",
       "preferredEditorSystemDefault": "System default",
       "preferredEditorCustom": "Custom…",
       "preferredEditorCustomCommand": "Custom editor command",
-      "preferredEditorCustomPlaceholder": "e.g. zed or /Applications/Zed.app"
+      "preferredEditorCustomPlaceholder": "e.g. zed or /Applications/Zed.app",
+      "intro": "Preferences for this browser and this Mac.",
+      "appearance": "Appearance",
+      "language": "Language",
+      "languageHelp": "The language of Coffer's own interface.",
+      "tablesAndFiles": "Tables and files"
     },
     "daemon": {
-      "title": "Coffer's daemon",
       "autostart": "Start at login",
       "autostartHelp": "Keep the daemon running whether or not Coffer is open, so an agent's first call of the day does not wait for it to start. It is restarted if it crashes.",
       "autostartUnsupported": "Only available on macOS."
@@ -723,38 +941,35 @@
       "offBody": "{{name}} is an experimental feature and is switched off on this machine. Nothing it holds was removed — switch it on from the command line: coffer config set feature.{{key}} on."
     },
     "retention": {
-      "title": "Data retention",
       "keepForever": "Keep forever",
       "days": "Keep for (days)",
       "minDays": "Minimum is 1 day",
-      "lastPruned": "Last pruned: {{when}} — {{rows}} rows removed",
       "neverPruned": "Not pruned yet",
       "shortenTitle": "Shorten retention to {{days}} days?",
       "shortenBody": "The next prune will delete older rows.",
       "shortenConfirm": "Shorten",
       "pruneAll": "Clear expired data now",
       "pruning": "Pruning…",
-      "pruneDescription": "Apply the current retention policies immediately.",
       "pruneConfirmTitle": "Clear expired data now?",
       "pruneConfirmBody": "Rows older than each policy's retention window are deleted permanently.",
       "pruneRow": "Removed {{rows}} rows from {{name}}",
       "pruneNothing": "Nothing to clear",
       "policy": {
         "audit_log": {
-          "name": "Audit log",
-          "description": "Resource lifecycle events."
+          "name": "Changes",
+          "description": "Every change made in Coffer, by you, the CLI, sync or an agent"
         },
         "mcp_invocations": {
-          "name": "MCP invocations",
-          "description": "MCP tool/resource/prompt invocation log."
+          "name": "MCP calls",
+          "description": "Who called which tool, and how it went"
         },
         "conversations_archive": {
           "name": "Auto-archive idle chats",
           "description": "Archive conversations with no new message for this many days."
         },
         "conversations": {
-          "name": "Delete archived chats",
-          "description": "Delete archived conversations this many days after archival (with their messages)."
+          "name": "Conversations",
+          "description": "Archived conversations and channel threads, counted from when they were archived"
         },
         "sync_runs": {
           "name": "Sync rounds",
@@ -763,8 +978,7 @@
       }
     },
     "about": {
-      "title": "About Coffer",
-      "copyDiagnostics": "Copy diagnostics",
+      "copyDiagnostics": "Copy diagnostics for a bug report",
       "fields": {
         "version": "Version",
         "license": "License",
@@ -793,7 +1007,11 @@
         "autoHelp": "Checks at launch and every 6 hours, and asks before installing.",
         "browser": "Updates are installed by the Coffer desktop app. In a browser, Coffer is updated by installing a new version of the command-line tools.",
         "unconfigured": "This build was made without an update key, so it does not check for updates. New versions are on the GitHub Releases page."
-      }
+      },
+      "diagnosticsCopied": "Diagnostics copied — paste them into your bug report.",
+      "versionLine": "Version {{version}} · {{channel}} channel",
+      "versionLineLoading": "Reading the version…",
+      "details": "Details"
     },
     "security": {
       "masterKey": {
@@ -934,10 +1152,32 @@
     "sections": "Settings sections",
     "daemonTab": {
       "title": "Status",
-      "state": "State",
+      "intro": "The background process that serves your agents and this page.",
+      "state": {
+        "connecting": "Connecting…",
+        "stopping": "Stopping",
+        "offline": "Offline — the daemon isn't answering"
+      },
+      "runningOn": "Running on 127.0.0.1:{{port}}",
+      "offlineShell": "Restart it to bring Coffer back; this page reconnects when it answers.",
+      "offlineBrowser": "A page the daemon serves can't start it. Run this in a terminal, then reload:",
+      "restart": "Restart",
+      "restartNow": "Restart now",
+      "browserRestart": "To restart it from a browser, run this in a terminal. This page reconnects when it is back.",
+      "copyCommand": "Copy {{command}}",
       "port": "Port",
+      "portHelp": "{{min}}–{{max}}, default 8000. Bookmarks and agent connections follow it.",
+      "portRange": "Choose a whole number from {{min}} to {{max}}.",
+      "portInUse": "Port {{port}} is in use by another program.",
+      "portInUseBy": "Port {{port}} is in use by {{name}} (pid {{pid}}).",
+      "portPending": "Port {{port}} saved — takes effect after Coffer restarts",
+      "portPendingHelp": "Agents are reconnected to the new port automatically.",
+      "save": "Save",
+      "startup": "Startup",
       "version": "Version",
-      "startedAt": "Started"
+      "channel": "Channel",
+      "startedAt": "Started",
+      "executable": "Executable"
     },
     "cofferModel": {
       "title": "Coffer's model",
@@ -967,6 +1207,43 @@
       "reachableDetail": "— the endpoint doesn't list its models, so the model couldn't be checked.",
       "notListed": "The endpoint didn't list {{model}}",
       "noAnswer": "The endpoint didn't answer"
+    },
+    "data": {
+      "intro": "What Coffer keeps, where it lives, and for how long.",
+      "openFolder": "Open folder",
+      "showInFinder": "Show in Finder",
+      "location": "Location",
+      "notSaved": "Not saved",
+      "saveFailedTitle": "Couldn't save the new retention",
+      "lastCleared": "Last cleared {{when}} — {{rows}} rows",
+      "clearedOnSchedule": "Expired records are cleared every six hours.",
+      "vault": {
+        "title": "Vault",
+        "size_one": "{{size}} · {{versions}} version",
+        "size_other": "{{size}} · {{versions}} versions",
+        "description": "Synced — a git repository. Config, skills, knowledge and encrypted secrets.",
+        "notRepository": "Your configuration, skills and knowledge. Set up Sync to keep it as a git repository with every version."
+      },
+      "local": {
+        "title": "Local content",
+        "description": "Not synced — back it up yourself (include this folder in your own backups).",
+        "attachments": "Conversation and channel attachments",
+        "attachmentsHelp": "Files and images sent in conversations and channels"
+      },
+      "history": {
+        "title": "History",
+        "description": "The record of what happened. Old entries are deleted on the schedule below."
+      },
+      "cache": {
+        "title": "Rebuildable cache",
+        "description": "Memory tree and conversation summary cache. Coffer rebuilds it automatically.",
+        "clear": "Clear",
+        "confirmTitle": "Clear the cache?",
+        "confirmBody": "{{size}} — the memory tree and the conversation summary cache. Coffer rebuilds memory from the agents' own memory on the next update; an equally good rebuild needs Coffer's model (without it each memory becomes a note of its own), and memories whose sources are gone won't come back. Nothing you wrote and no history is touched.",
+        "confirm": "Clear cache",
+        "clearing": "Clearing…",
+        "cleared": "Cleared {{size}}. Memory is rebuilt on the next update."
+      }
     }
   },
   "daemon": {
@@ -1125,7 +1402,9 @@
     "SKILL_STAGING_NOT_FOUND": "That staged source is gone — it was added, cancelled or expired. Start again.",
     "SKILL_SOURCE_UNREACHABLE": "Git could not reach the skill's repository.",
     "SKILL_UPDATE_CONFLICT": "The skill was edited since its pinned commit. Keep your edits, or take the update and discard them.",
-    "SKILL_NOT_FROM_GIT": "This skill was not added from a Git repository, so it has no source to update from."
+    "SKILL_NOT_FROM_GIT": "This skill was not added from a Git repository, so it has no source to update from.",
+    "PORT_OUT_OF_RANGE": "Choose a port from 1024 to 65535.",
+    "PORT_IN_USE": "That port is in use by another program. Pick another one."
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",

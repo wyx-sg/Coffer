@@ -32,6 +32,10 @@ interface Props extends CapabilityLists {
   // so the parameters are unknown rather than absent — say so, and offer no
   // row detail.
   fromCache?: boolean;
+  /** Tools only: calls and errors in the last 24 hours, by original name. */
+  usage?: ReadonlyMap<string, { calls: number; errors: number }>;
+  /** Tools only: whether each is listed to agents or reached through search. */
+  listing?: { listed: ReadonlySet<string>; behind: ReadonlySet<string> } | null;
 }
 
 export function CapabilityList(props: Props) {
@@ -79,6 +83,39 @@ export function CapabilityList(props: Props) {
         </div>
       ),
     },
+    ...(props.listing
+      ? [
+          {
+            key: "listing",
+            header: t("mcp.page.colListing"),
+            className: "w-32",
+            cell: (row: RowDescriptor) =>
+              props.listing?.behind.has(row.key) ? (
+                <span className="text-xs text-text-muted">{t("mcp.page.behindSearch")}</span>
+              ) : props.listing?.listed.has(row.key) ? (
+                <span className="text-xs text-text">{t("mcp.page.listed")}</span>
+              ) : (
+                <span className="text-xs text-text-subtle">—</span>
+              ),
+          },
+        ]
+      : []),
+    ...(props.usage
+      ? [
+          {
+            key: "calls",
+            header: t("mcp.page.colCalls24h"),
+            className: "w-24 text-right tabular-nums",
+            cell: (row: RowDescriptor) => props.usage?.get(row.key)?.calls ?? 0,
+          },
+          {
+            key: "errors",
+            header: t("mcp.page.colErrors"),
+            className: "w-20 text-right tabular-nums",
+            cell: (row: RowDescriptor) => props.usage?.get(row.key)?.errors ?? 0,
+          },
+        ]
+      : []),
     {
       key: "enabled",
       header: t("mcp.capabilities.header.enabled"),

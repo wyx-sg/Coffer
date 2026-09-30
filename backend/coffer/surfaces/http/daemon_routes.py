@@ -232,13 +232,9 @@ async def rotate_token(
 # === residency: whether the system starts the daemon at login ===
 #
 # Nothing ends the daemon on its own, so the login service is the whole
-# setting. It has a REST surface where the port ("Bind a fixed, settable port")
-# deliberately does not,
-# and the difference is which state each setting is reached from. A port is
-# changed when the daemon CANNOT start, so a route the daemon would have to
-# serve is useless exactly then. Residency is changed while Coffer is working
-# fine and the user is deciding how it should behave tomorrow — a settings
-# question, on the surface where settings live.
+# setting. The port of the next start has its own routes
+# (daemon_port_routes.py); the CLI stays its escape hatch, because a daemon
+# that cannot bind its port serves no route to change it.
 
 
 def _residency() -> DaemonResidencyOut:

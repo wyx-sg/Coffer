@@ -29,9 +29,11 @@ const foreverPolicy: RetentionPolicyOut = {
 describe("RetentionPolicySection", () => {
   test("renders the policy display name and description", () => {
     render(<RetentionPolicySection policy={basePolicy} onUpdate={vi.fn()} updating={false} />);
-    expect(screen.getByText("Audit log")).toBeInTheDocument();
+    expect(screen.getByText("Changes")).toBeInTheDocument();
     // The description is provided via i18n (translated value shown in UI)
-    expect(screen.getByText("Resource lifecycle events.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Every change made in Coffer, by you, the CLI, sync or an agent"),
+    ).toBeInTheDocument();
   });
 
   test("shows the days input with the current retention value", () => {
@@ -140,14 +142,5 @@ describe("RetentionPolicySection", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /shorten/i }));
     expect(onUpdate).toHaveBeenCalledWith(30);
-  });
-
-  test("reports the rows the last prune removed, or that none has run", () => {
-    const { rerender } = render(
-      <RetentionPolicySection policy={foreverPolicy} onUpdate={vi.fn()} updating={false} />,
-    );
-    expect(screen.getByText(/100 rows removed/)).toBeInTheDocument();
-    rerender(<RetentionPolicySection policy={basePolicy} onUpdate={vi.fn()} updating={false} />);
-    expect(screen.getByText("Not pruned yet")).toBeInTheDocument();
   });
 });

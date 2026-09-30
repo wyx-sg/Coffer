@@ -27,6 +27,9 @@ class AuditEventType(StrEnum):
     # autostart installed or removed
     DAEMON_RESIDENCY_UPDATED = "daemon_residency_updated"
     RETENTION_UPDATED = "retention_updated"
+    # Settings > Data "Rebuildable cache": the memory tree and the transcript
+    # summary cache were cleared, to be rebuilt by the next memory update.
+    STORAGE_CACHE_CLEARED = "storage_cache_cleared"
     INTERNAL_ENGINE_MODEL_SET = "internal_engine_model_set"
     CREDENTIAL_SET = "credential_set"
     CREDENTIAL_READ = "credential_read"

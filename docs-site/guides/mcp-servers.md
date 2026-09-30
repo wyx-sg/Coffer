@@ -49,7 +49,14 @@ coffer mcp add filesystem \
 
 `--stdio` takes the whole command line; Coffer splits it shell-style into `command` and `args`.
 
-**Web UI:** open **MCP servers**, click **Add MCP server**, and paste the JSON from the server's README in the standard shape:
+**Web UI:** open **MCP servers**, click **Add server**, and paste whatever the server's README gives you into the one box. It is read as you type:
+
+- an `mcpServers` JSON block, or a single server object — one server or many;
+- Codex TOML `[mcp_servers.<name>]` tables;
+- a command line — `claude mcp add …`, `codex mcp add …`, or a plain `npx …` / `uvx …` / `docker run …` — which becomes a stdio server named after its package;
+- a URL, which becomes a Streamable HTTP server named after its host.
+
+For example, the standard JSON:
 
 ```json
 {
@@ -62,7 +69,7 @@ coffer mcp add filesystem \
 }
 ```
 
-Click **Continue** to see **Review what will be imported**, then **Import**. You can paste several servers at once.
+One server opens the form prefilled with it (name, title, command and arguments or URL, environment or headers, and who it is available to); click **Add server**. Several servers open **Review before adding**: each server's name as it will be kept (lower case, other characters turned into `-`; a name over 24 characters is flagged and not added until you shorten it), its secrets, and one **Available to** choice for them all; click **Add N servers**. Text the box cannot read — a sentence from a README, broken JSON (the message names the line and column) — adds nothing and leaves you the two manual choices, **Command (stdio)** and **URL (Streamable HTTP)**, which open the empty form. **Import from your agents** in the same dialog lists the MCP servers your agents' own config files already carry and adopts the ones you tick (see [Agents](/guides/agents)). Each server is tested once right after it is added; a failing one shows under **Needs attention**.
 
 ### Worked example: a stdio server with a secret
 
@@ -104,7 +111,7 @@ The stored config holds only the reference:
 
 When Coffer starts the server, it decrypts `brave/api-key` in memory and puts it in the child's environment as `BRAVE_API_KEY`. The child does **not** inherit the daemon's own environment: it gets a minimal safe set (such as `PATH` and `HOME`), the server's static `env`, and its materialised credentials — nothing else.
 
-In the web UI's paste dialog, environment variables whose name or value looks like a secret are pre-marked **Secret**. Values marked Secret are stored in the credential store under a generated ref and cited from `credential_refs`; the rest stay in `env`.
+In the web UI's Add server dialog, environment variables whose name or value looks like a secret are pre-marked **Secret**. Values marked Secret are stored in the credential store under a generated ref and cited from `credential_refs`; the rest stay in `env`.
 
 ## Register an HTTP server
 
@@ -146,7 +153,7 @@ A static `env` or `headers` value that looks like a secret — starting with `Be
 :::
 
 ::: info Pasting an HTTP server with `headers`
-The **Add MCP server** paste dialog reads an HTTP server's (`"url": …`) `headers` object and reviews each value for secrets exactly as it does `env`: a value whose name or content looks like a secret (an `Authorization` header, for example) is pre-marked **Secret**, stored in the credential store and cited from `credential_refs`; the rest stay in the transport's `headers`. An `env` object on an HTTP server is sent as headers too; when both name the same key, the `headers` value wins.
+The **Add server** paste box reads an HTTP server's (`"url": …`) `headers` object and reviews each value for secrets exactly as it does `env`: a value whose name or content looks like a secret (an `Authorization` header, for example) is pre-marked **Secret**, stored in the credential store and cited from `credential_refs`; the rest stay in the transport's `headers`. An `env` object on an HTTP server is sent as headers too; when both name the same key, the `headers` value wins.
 :::
 
 ## Server names and descriptions
@@ -155,7 +162,7 @@ A server name is a label of letters, digits, `.`, `_` and `-`, at most 24 charac
 
 The name is fixed once the server is registered, because it is the prefix of every tool name `<server>__<tool>` an agent sees, and agents' permission rules and skills quote those names. A request to change it is refused with `NAME_IMMUTABLE`. To use a different name, delete the server and register it again, which resets its capability toggles and its reach. The decision is recorded in the ADR "names-visible-to-agents-are-fixed".
 
-A server has no separate display title: Coffer's pages and the CLI show its name. Next to the name sits an optional **description**, your own note about what the server is for. Agents never see it. Set it at registration with `coffer mcp add … --description`, change it later with `coffer mcp edit <name> --description "…"`, or edit it in the web UI.
+A server can carry a **title**, shown in Coffer's pages in place of its name and changeable at any time; agents only ever see the name. Next to the name sits an optional **description**, your own note about what the server is for. Agents never see it. Set it at registration with `coffer mcp add … --description`, change it later with `coffer mcp edit <name> --description "…"`, or edit it in the web UI.
 
 After each discovery, Coffer measures the name a client like Claude Code shows for every tool, `mcp__coffer__<server>__<tool>`. The server's **Tools** tab and `coffer mcp cap list` flag a tool whose name is over 64 characters, the limit model provider APIs accept; Cursor already drops tools above 60. A flagged tool stays enabled and listed. The fix is on the upstream side (a shorter tool name) or a shorter server name for a new registration.
 
@@ -164,31 +171,32 @@ After each discovery, Coffer measures the name a client like Claude Code shows f
 | Task | Web UI | CLI |
 | --- | --- | --- |
 | Inspect | **MCP servers** → the server → **Overview** | `coffer mcp show <name>` |
-| Change the description | **Edit** | `coffer mcp edit <name> --description …` |
-| Change config, timeouts, credentials | **Edit** | `PATCH /api/v1/resources/{uid}` |
-| Re-query its tools, resources and prompts, then check the server answers | **Refresh capabilities**, **Test connection** | `coffer mcp test <name>` (exit 7 on failure) |
-| Enable or disable the whole server | **Reach** control → **Disabled** | `coffer mcp disable <name>` (and `enable`) |
-| Delete | **Delete server** | `coffer mcp rm <name>` |
+| Change the title | **Edit** | `PATCH /api/v1/resources/{uid}` (`title`) |
+| Change command or URL, timeouts, credentials | **Edit** | `PATCH /api/v1/resources/{uid}` |
+| Check the server answers and re-list its tools | **Test** (**Test again** while it is failing) | `coffer mcp test <name>` (exit 7 on failure) |
+| Turn the whole server off or on | **⋯** → **Turn off**, **Turn on** | `coffer mcp disable <name>` (and `enable`) |
+| Copy its config | **⋯** → **Copy config as JSON** (secret names only, never values) | `coffer mcp show <name>` |
+| Delete | **⋯** → **Delete…** | `coffer mcp rm <name>` |
 
-The **Edit** dialog shows the configuration JSON without secrets; credentials are listed below it and can be added, replaced or removed there. Removing a credential deletes its stored entry. Saving an edit closes every live connection to the server, so the next call from any agent starts it with the new configuration.
+The **Edit** dialog shows the name (fixed), the title, the command and arguments or the URL, and the environment or headers; a stored secret reads **Stored** with **Replace**, and a new value goes to the keychain. Removing a credential deletes its stored entry. Saving an edit closes every live connection to the server, so the next call from any agent starts it with the new configuration.
 
 Disabling a server takes effect at once, including in sessions that are already connected: its tools leave the listings, a call to one is refused as `TOOL_DISABLED` and logged as `denied`, and every running copy of the server is stopped. Enabling it again needs nothing more; the next call starts it. Timeouts are per server: **Spawn** (5–120 seconds, default 30) and **Request** (5–1800 seconds, default 120).
 
-Deleting a server removes its registration and capability preferences, keeps its audit and invocation history, and releases credential refs that nothing else cites.
+Deleting a server removes its registration and capability preferences and keeps its audit and invocation history. The confirmation says which agents lose its tools, and offers **Also delete the secret …** for each secret no other resource cites.
 
 ### Health and a missing launcher
 
-The list's **Health** column shows **Healthy**, **Failing** or **Unknown**. Registering a server whose upstream is unreachable still succeeds; it is marked failing until it answers. Without a **Test connection** result, health follows the server's most recent call: a call that could not reach the server (it would not start, the connection died, or it timed out) reads as failing, while a tool that answered with an error does not, because the server itself is up. Refused (`denied`) calls are ignored.
+The list groups servers by what needs you: **Needs attention** (failing, launcher missing, secret missing — each with its reason, such as `Connection refused · since 14:02`), **Healthy**, **Not checked yet** and **Off**. The open server's page says why and what next: a failing server's last error, since when it has been failing and its last successful call, with **View log**; a missing launcher with the command that installs it; a secret this Mac does not hold (a vault restored on a new Mac carries names, not values) with **Replace secret**. Registering a server whose upstream is unreachable still succeeds; it is marked failing until it answers. Without a **Test connection** result, health follows the server's most recent call: a call that could not reach the server (it would not start, the connection died, or it timed out) reads as failing, while a tool that answered with an error does not, because the server itself is up. Refused (`denied`) calls are ignored.
 
 When a stdio server's command is not installed on this machine — for example a server imported from another machine that runs `uvx` where `uv` is missing — the status reads `missing <runner>` and the UI tells you what to install (`uvx is not installed on this machine` / `Install uvx, then refresh`). Coffer does not install software for you.
 
-A stdio server's stderr goes to its own file, `~/.coffer/logs/upstream/<name>.log`, not to the daemon log.
+A stdio server's stderr goes to its own file, `~/.coffer/logs/upstream/<name>.log`, not to the daemon log. Coffer adds its own lines there when it starts the server, when a start fails (a launcher not found on `PATH`, a start that timed out) and when it stops it. **⋯** → **Calls and server log** opens a drawer with the server's calls in the last 24 hours (**All** or **Errors**, by agent) and its **Server log**, newest first, with **Copy** and **Open log file**.
 
 ## Curate tools, resources and prompts
 
 Every capability a server exposes can be switched on or off individually. A newly discovered capability starts **enabled**.
 
-**Web UI:** open the server and use the **Tools**, **Resources** and **Prompts** tabs. Each row has an **Enabled** switch and shows the input schema.
+**Web UI:** open the server and use the **Tools**, **Resources** and **Prompts** tabs. Each row has an **Enabled** switch and shows the input schema; the Tools tab also shows each tool's calls and errors in the last 24 hours, and **All on** · **All off**. The Overview lists the busiest few tools with **Show N more**.
 
 **CLI:**
 
@@ -208,7 +216,7 @@ A disabled tool disappears from every client's next `tools/list`, and a call to 
 
 By default a server reaches every agent. You can narrow that to specific agents — for example, keep a production database server away from an experimental agent. Together with the enabled switch this is the server's **reach**.
 
-**Web UI:** use the **Reach** control on the server's row in **MCP servers** or in its page header. It offers **Disabled**, **Every agent**, or **Only selected agents** with the agents ticked. Selecting no agents makes the server dormant: registered, but reaching nobody.
+**Web UI:** each row in **MCP servers** reads its reach (**Off**, **All agents**, or the badges of its agents); change it with the **Reach** control in the open server's header, or tick several rows and use the selection bar's reach control. It offers **Disabled**, **Every agent**, or **Only selected agents** with the agents ticked. Selecting no agents makes the server dormant: registered, but reaching nobody.
 
 **CLI:**
 
@@ -257,13 +265,13 @@ Tiering is controlled by three environment variables of the daemon process (rest
 | `COFFER_TOOL_TIERING_BUDGET` | `50` | How many upstream tools to list. |
 | `COFFER_TOOL_TIERING_WINDOW_DAYS` | `90` | The usage window that ranks tools. |
 
-A malformed value falls back to the default, and any failure of the usage query lists everything. To keep a specific tool listed without changing the budget, use it: usage is what ranks it. To remove a tool from agents entirely, disable it instead.
+A malformed value falls back to the default, and any failure of the usage query lists everything. A server's page shows the split: **Tools reach agents** reads **Listed directly** or **Most behind search**, the Tools tab marks each tool **Listed** or **Behind search**, and a note says how many of its tools are listed and why. To keep a specific tool listed without changing the budget, use it: usage is what ranks it. To remove a tool from agents entirely, disable it instead.
 
 ## The invocation log
 
 Every tool call, resource read and prompt fetch is recorded with its time, server, capability, duration and status — `ok`, `error`, `timeout` or `denied`. A tool that returns a result flagged `isError` is recorded as `error`. Arguments and results are never stored. Entries are kept for 30 days by default (see [Activity and audit](/guides/activity) to change retention).
 
-**Web UI:** the server's **Invocations** tab, or the **Activity** page for every server.
+**Web UI:** the server's **Invocations** tab, the **Last 24 hours** block of its Overview (calls and errors, per calling agent), its **Calls and server log** drawer, or the **Activity** page for every server.
 
 **CLI:**
 

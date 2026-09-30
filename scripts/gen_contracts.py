@@ -60,6 +60,7 @@ OWNERS: tuple[tuple[str, str], ...] = (
     ("/api/v1/daemon", "daemon"),
     ("/api/v1/events", "resource-framework"),
     ("/api/v1/fs", "daemon"),
+    ("/api/v1/storage", "daemon"),
     ("/api/v1/internal-engine-config", "internal-engine"),
     ("/api/v1/knowledge", "knowledge"),
     ("/api/v1/mcp", "mcp-gateway"),

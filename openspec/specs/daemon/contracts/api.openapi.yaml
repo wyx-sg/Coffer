@@ -211,6 +211,80 @@ paths:
       summary: List Daemon Logs
       tags:
       - daemon
+  /api/v1/daemon/port:
+    get:
+      operationId: get_daemon_port_api_v1_daemon_port_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonPortOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Daemon Port
+      tags:
+      - daemon
+    put:
+      description: Save the port of the next start; refused in place when it cannot be bound.
+      operationId: put_daemon_port_api_v1_daemon_port_put
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DaemonPortIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonPortOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Put Daemon Port
+      tags:
+      - daemon
   /api/v1/daemon/residency:
     get:
       operationId: get_residency_api_v1_daemon_residency_get
@@ -581,8 +655,108 @@ paths:
       summary: Reveal Path
       tags:
       - fs
+  /api/v1/storage:
+    get:
+      operationId: storage_summary_api_v1_storage_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageSummaryOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Storage Summary
+      tags:
+      - daemon
+  /api/v1/storage/cache/clear:
+    post:
+      description: |-
+        Delete the memory tree's files and the transcript summary cache.
+
+        Partitions keep their rows; the next memory update rebuilds their folders
+        from the agents' own memory. Refused (409) while a memory pass is running,
+        because that pass is writing into the tree being cleared.
+      operationId: clear_cache_api_v1_storage_cache_clear_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CacheClearOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Clear Cache
+      tags:
+      - daemon
 components:
   schemas:
+    CacheClearOut:
+      properties:
+        cleared_bytes:
+          title: Cleared Bytes
+          type: integer
+      required:
+      - cleared_bytes
+      title: CacheClearOut
+      type: object
+    CacheUsageOut:
+      properties:
+        bytes:
+          title: Bytes
+          type: integer
+      required:
+      - bytes
+      title: CacheUsageOut
+      type: object
     DaemonLogListOut:
       properties:
         records:
@@ -633,6 +807,38 @@ components:
       - event
       - record
       title: DaemonLogRecordOut
+      type: object
+    DaemonPortIn:
+      properties:
+        port:
+          title: Port
+          type: integer
+      required:
+      - port
+      title: DaemonPortIn
+      type: object
+    DaemonPortOut:
+      description: |-
+        The port of the next start beside the port this daemon answers on.
+
+        ``pending`` is a saved port this daemon is not on: it takes effect at the
+        next start (spec daemon "Bind a fixed, settable port"), so until then the page
+        says so and the status keeps showing ``bound_port``.
+      properties:
+        bound_port:
+          title: Bound Port
+          type: integer
+        pending:
+          title: Pending
+          type: boolean
+        port:
+          title: Port
+          type: integer
+      required:
+      - port
+      - bound_port
+      - pending
+      title: DaemonPortOut
       type: object
     DaemonResidencyIn:
       properties:
@@ -903,6 +1109,56 @@ components:
       - path
       title: FsRevealRequest
       type: object
+    HistoryUsageOut:
+      properties:
+        bytes:
+          title: Bytes
+          type: integer
+        path:
+          title: Path
+          type: string
+      required:
+      - path
+      - bytes
+      title: HistoryUsageOut
+      type: object
+    LocalContentUsageOut:
+      properties:
+        bytes:
+          title: Bytes
+          type: integer
+        folder:
+          title: Folder
+          type: string
+        locations:
+          items:
+            type: string
+          title: Locations
+          type: array
+      required:
+      - folder
+      - locations
+      - bytes
+      title: LocalContentUsageOut
+      type: object
+    StorageSummaryOut:
+      description: What Coffer keeps on this machine, by kind (Settings > Data).
+      properties:
+        cache:
+          $ref: '#/components/schemas/CacheUsageOut'
+        history:
+          $ref: '#/components/schemas/HistoryUsageOut'
+        local_content:
+          $ref: '#/components/schemas/LocalContentUsageOut'
+        vault:
+          $ref: '#/components/schemas/VaultUsageOut'
+      required:
+      - vault
+      - local_content
+      - history
+      - cache
+      title: StorageSummaryOut
+      type: object
     TokenRotationOut:
       properties:
         token:
@@ -933,4 +1189,23 @@ components:
       - healthy
       - unhealthy
       title: UpstreamSummary
+      type: object
+    VaultUsageOut:
+      properties:
+        bytes:
+          title: Bytes
+          type: integer
+        path:
+          title: Path
+          type: string
+        versions:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Versions
+      required:
+      - path
+      - bytes
+      - versions
+      title: VaultUsageOut
       type: object

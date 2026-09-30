@@ -137,8 +137,11 @@ async def test_a_failing_report_is_logged_and_the_loop_carries_on() -> None:
     await watcher.prime(flaky)
     task = asyncio.ensure_future(watcher.serve(flaky))
     try:
-        await asyncio.sleep(0.06)
-        assert calls >= 3
+        # Wait for the loop to get past the failure rather than a fixed time,
+        # so a loaded machine cannot starve it of turns.
+        async with asyncio.timeout(5):
+            while calls < 3 or not _attention_envelopes(broker):
+                await asyncio.sleep(0.01)
         assert len(_attention_envelopes(broker)) == 1
     finally:
         task.cancel()
