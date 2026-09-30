@@ -14,7 +14,6 @@ export type McpConfigTestIn = components["schemas"]["McpConfigTestIn"];
 /** What a test found — the same shape a registered server's test answers. */
 export type McpTestResult = components["schemas"]["McpTestResultOut"];
 /** Why a test failed. */
-export type McpTestErrorCode = NonNullable<McpTestResult["error_code"]>;
 
 export const mcpTestConfigApi = {
   test: async (body: McpConfigTestIn, signal?: AbortSignal): Promise<McpTestResult> => {

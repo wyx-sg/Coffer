@@ -15,7 +15,7 @@ import type { McpImportEntryIn, McpImportFile, McpImportPlan } from "@/lib/api/m
 import type { McpEntryOut } from "@/lib/api/agents";
 
 /** The agent type the change preview groups Coffer's own item under. */
-export const COFFER_TARGET = "coffer";
+const COFFER_TARGET = "coffer";
 
 type T = (key: string, options?: Record<string, unknown>) => string;
 
@@ -28,7 +28,7 @@ export function toEntryIn(agentUid: string, entry: McpEntryOut): McpImportEntryI
   return { agent_uid: agentUid, name: entry.name, source: entry.source };
 }
 
-export function fileDiff(file: McpImportFile): DiffLine[] {
+function fileDiff(file: McpImportFile): DiffLine[] {
   const out: DiffLine[] = [];
   for (const hunk of file.hunks) {
     out.push({ kind: "hunk", text: hunk.header });

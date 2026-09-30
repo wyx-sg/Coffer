@@ -12,7 +12,7 @@ import { CustomToolsPage } from "./CustomToolsPage";
 
 export const api = customToolsApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
-export const grafana = makeGroup({
+const grafana = makeGroup({
   name: "grafana",
   health: "attention",
   health_reason: "secret_missing",
@@ -25,7 +25,7 @@ export const grafana = makeGroup({
   },
   tools: [makeTool({ name: "search_dashboards", path: "/search" })],
 });
-export const deploy = makeGroup({ name: "deploy-api", health: "failing" });
+const deploy = makeGroup({ name: "deploy-api", health: "failing" });
 export const billing = makeGroup({
   name: "billing",
   source: {
@@ -47,7 +47,7 @@ export const billing = makeGroup({
     }),
   ],
 });
-export const status = makeGroup({ name: "status-page", enabled: false, health: "off" });
+const status = makeGroup({ name: "status-page", enabled: false, health: "off" });
 const ALL = [billing, status, grafana, deploy];
 
 let current = "";

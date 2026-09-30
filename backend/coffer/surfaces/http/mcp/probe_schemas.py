@@ -1,7 +1,7 @@
 """Wire models for testing an MCP server — a registered one or an unsaved config.
 
-Spec mcp-gateway "Test an unsaved server config before adding it" and "Test a
-registered server on demand". Both routes answer :class:`McpTestResultOut`, so
+Spec mcp-gateway "Test an unsaved server config before adding it" and "Report what
+a test of a registered server found". Both routes answer :class:`McpTestResultOut`, so
 the Add dialog and the server page read one shape. No field carries a secret
 value: typed secrets are redacted from ``stderr_tail`` and ``error_message``
 before the result is built.

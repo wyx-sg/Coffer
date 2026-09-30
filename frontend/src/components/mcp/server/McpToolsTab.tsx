@@ -24,7 +24,7 @@ import { cacheNote, countsUsage, toolRows } from "./toolRows";
 type CapabilityListOut = components["schemas"]["CapabilityListOut"];
 
 /** How many rows the tab lists before "Filter to find the rest". */
-export const TAB_SHOWN = 10;
+const TAB_SHOWN = 10;
 
 interface Props {
   serverUid: string;

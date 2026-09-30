@@ -7,7 +7,6 @@ import { ApiError, throwApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
 
 export type McpBuiltinServer = components["schemas"]["McpBuiltinServerOut"];
-export type McpBuiltinTool = components["schemas"]["BuiltinToolOut"];
 
 export const mcpBuiltinApi = {
   get: async (): Promise<McpBuiltinServer> => {

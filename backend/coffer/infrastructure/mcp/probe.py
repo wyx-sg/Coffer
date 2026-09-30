@@ -1,7 +1,7 @@
 """Test one MCP server: start or reach it, initialize, list its tools, close.
 
-Spec mcp-gateway "Test an unsaved server config before adding it" and "Test a
-registered server on demand". One probe serves both: the caller supplies the
+Spec mcp-gateway "Test an unsaved server config before adding it" and "Report what
+a test of a registered server found". One probe serves both: the caller supplies the
 transport, the secret overlay it may release (typed values for an unsaved
 config, the materialised binding for a registered server), and — for a URL the
 person typed — the SSRF guard. The probe persists nothing; what to record

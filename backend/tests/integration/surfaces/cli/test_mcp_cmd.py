@@ -735,7 +735,7 @@ def test_mcp_group_offers_the_new_verbs_only() -> None:
 
 
 def _fake_upstream(monkeypatch: pytest.MonkeyPatch, *, answers: bool) -> None:
-    from coffer.surfaces.http.mcp import server_test_routes
+    from coffer.infrastructure.mcp import probe as server_probe
 
     class _Conn:
         def __init__(self, **_kw: Any) -> None:
@@ -746,10 +746,15 @@ def _fake_upstream(monkeypatch: pytest.MonkeyPatch, *, answers: bool) -> None:
                 raise RuntimeError("connection refused")
             return {"tools": {}}
 
+        async def request(self, method: str, params: dict[str, Any]) -> Any:
+            return type("Listed", (), {"tools": []})()
+
         async def close(self) -> None:
             return None
 
-    monkeypatch.setattr(server_test_routes, "StdioUpstreamConnection", _Conn)
+    monkeypatch.setattr(server_probe, "StdioUpstreamConnection", _Conn)
+    # The fake command is not on PATH; the probe's pre-spawn check is not under test.
+    monkeypatch.setattr(server_probe, "_launcher_problem", lambda *_a: None)
 
 
 def _tool_names(result: Any) -> list[str]:
@@ -787,7 +792,7 @@ def test_mcp_test_requeries_capabilities_then_reports_health(
     down = _runner.invoke(app, ["mcp", "test", "fs"])
     combined = down.output + (down.stderr or "")
     assert down.exit_code == 7, combined
-    assert "FAIL" in combined and "connection refused" in combined
+    assert "FAIL" in combined and "did not complete MCP initialize" in combined
 
 
 def test_mcp_test_not_found_exit_4(mcp_daemon: Any) -> None:

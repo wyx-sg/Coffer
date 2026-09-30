@@ -4,7 +4,7 @@ import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-export type CalloutTint = "ok" | "err" | "warn" | "off" | "info";
+type CalloutTint = "ok" | "err" | "warn" | "off" | "info";
 
 const TINT: Record<CalloutTint, { box: string; icon: string }> = {
   ok: { box: "bg-success-soft", icon: "text-success" },

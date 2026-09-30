@@ -12,10 +12,8 @@ import type { components } from "@/lib/api/types";
 
 export type McpImportEntryIn = components["schemas"]["McpImportEntryIn"];
 export type McpImportPlan = components["schemas"]["McpImportPlanOut"];
-export type McpImportServer = components["schemas"]["McpImportServerOut"];
 export type McpImportFile = components["schemas"]["McpImportFileOut"];
 export type McpImportApplyResult = components["schemas"]["McpImportApplyOut"];
-export type McpImportEntryResult = components["schemas"]["McpImportEntryResultOut"];
 
 export const mcpImportApi = {
   plan: async (entries: McpImportEntryIn[]): Promise<McpImportPlan> => {

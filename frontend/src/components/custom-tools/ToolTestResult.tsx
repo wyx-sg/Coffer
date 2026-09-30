@@ -10,7 +10,7 @@ import { formatBytes } from "@/lib/utils";
 
 /** The most of a response a tool returns (mcp-gateway "Make a custom tool's
  *  request in the gateway": at most 1 MiB is read). */
-export const RESPONSE_CAP_BYTES = 1024 * 1024;
+const RESPONSE_CAP_BYTES = 1024 * 1024;
 
 interface Props {
   result: CustomToolTestOut;

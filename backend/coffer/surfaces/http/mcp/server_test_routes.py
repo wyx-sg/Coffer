@@ -62,7 +62,7 @@ async def test_mcp_server(
 
     if isinstance(config.transport, (StdioTransport, HttpTransport)):
         # The same probe the Add dialog's unsaved-config test runs (spec
-        # mcp-gateway "Test a registered server on demand"): initialize, list
+        # mcp-gateway "Report what a test of a registered server found"): initialize, list
         # the tools, keep a redacted stderr tail, stop the process group.
         # Offload the blocking credential-store read off the event loop.
         try:

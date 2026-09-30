@@ -24,7 +24,6 @@ import type { ParsedEnvVar } from "@/lib/mcp/pasteTypes";
 import { credentialRefsOf, plainMapOf, secretPlanOf } from "./env/rowsModel";
 import { withTimeouts, type Timeouts } from "./serverTimeouts";
 
-export { credentialRefsOf } from "./env/rowsModel";
 
 type ResourceOut = components["schemas"]["ResourceOut"];
 

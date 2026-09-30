@@ -22,5 +22,5 @@
 
 ## 5. Close
 
-- [ ] 5.1 Docs, generated references, en/zh strings, tests
-- [ ] 5.2 Archive the change
+- [x] 5.1 Docs, generated references, en/zh strings, tests
+- [x] 5.2 Archive the change
