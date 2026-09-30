@@ -9,6 +9,7 @@ must not import from any other kind module.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -19,6 +20,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    and_,
     delete,
     func,
     select,
@@ -298,6 +300,44 @@ class ChannelThreadConversationRepo:
             for model in (ChannelThreadConversationModel, ChannelThreadHistoryModel):
                 await session.execute(delete(model).where(model.resource_uid == resource_uid))
             await session.commit()
+
+    async def locate_many(
+        self, conversation_ids: Sequence[str]
+    ) -> dict[str, tuple[ChannelThreadLocation, ChannelThreadConversation | None]]:
+        if not conversation_ids:
+            return {}
+        history, thread = ChannelThreadHistoryModel, ChannelThreadConversationModel
+        stmt = (
+            select(history, thread)
+            .outerjoin(
+                thread,
+                and_(
+                    thread.resource_uid == history.resource_uid,
+                    thread.chat_id == history.chat_id,
+                    thread.thread_id == history.thread_id,
+                ),
+            )
+            .where(history.conversation_id.in_(list(conversation_ids)))
+        )
+        async with self._sm() as session:
+            rows = (await session.execute(stmt)).all()
+        located: dict[str, tuple[ChannelThreadLocation, ChannelThreadConversation | None]] = {}
+        for hist, row in rows:
+            # As in ``locate``: a history row recorded before the thread's kind
+            # was known takes it from the thread row.
+            chat_kind = hist.chat_kind or (row.chat_kind if row is not None else None)
+            loc = ChannelThreadLocation(
+                resource_uid=hist.resource_uid,
+                chat_id=hist.chat_id,
+                thread_id=hist.thread_id,
+                chat_kind=chat_kind,
+                opened_at=_tz(hist.opened_at),
+            )
+            located[hist.conversation_id] = (
+                loc,
+                _thread_to_domain(row) if row is not None else None,
+            )
+        return located
 
     # -- helpers ---------------------------------------------------------------
 

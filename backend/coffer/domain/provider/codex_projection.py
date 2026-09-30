@@ -3,16 +3,13 @@ and the content of the Coffer-owned model catalogue beside it (spec
 provider-switching "Project into Codex config without clobbering it").
 
 Codex gets top-level ``model`` + ``model_provider = "coffer"`` and a
-``[model_providers.coffer]`` table. How Codex authenticates to that provider is
-the caller's choice of two:
-
-- ``auth`` — a command Codex runs for a bearer token (``auth.command`` /
-  ``auth.args``), with ``supports_websockets = false`` and
-  ``requires_openai_auth = false``: the form the local model proxy uses, so a
-  Codex the user starts in their own terminal needs nothing exported.
-- ``env_key`` — the name of an environment variable holding the key, which
-  Codex passes to every shell command unless excluded, so the variable is
-  also added to ``shell_environment_policy.exclude``.
+``[model_providers.coffer]`` table. Codex authenticates to that provider with
+its ``auth`` command (``auth.command`` / ``auth.args``), which prints the
+agent's local model-proxy token, with ``supports_websockets = false`` and
+``requires_openai_auth = false`` — so a Codex the user starts in their own
+terminal needs nothing exported, and no key rides its environment. The
+``COFFER_PROVIDER_KEY`` shell exclusion earlier builds added is dropped on every
+write and every de-projection.
 
 When the connection curates a model set, ``model_catalog_json`` points at a
 Coffer-owned catalogue whose entries carry each model's context window, a 90%
@@ -30,21 +27,12 @@ from dataclasses import dataclass
 
 import tomlkit
 
-from coffer.domain.connection import CODEX_ENV_KEY as _CODEX_ENV_KEY
-from coffer.domain.provider.codex_shell_env import (
-    drop_shell_env_exclude,
-    exclude_from_shell_env,
-)
+from coffer.domain.provider.codex_shell_env import drop_legacy_shell_env_exclude
 from coffer.domain.provider.model_binding import ProjectedModel
 
 #: The ``model_providers`` table key Coffer manages, and the ``model_provider``
 #: selector that points at it.
 CODEX_PROVIDER_ID = "coffer"
-#: The env var an ``env_key``-form provider block names. Kept (and still
-#: dropped from ``shell_environment_policy.exclude`` on de-projection) so a
-#: file an earlier build wrote is cleaned up.
-CODEX_ENV_KEY = _CODEX_ENV_KEY
-
 #: Filename of the model catalogue Coffer writes next to an agent's
 #: ``config.toml``. The name doubles as the OWNERSHIP MARKER: de-projection
 #: drops ``model_catalog_json`` iff the path it holds ends in this filename.
@@ -141,19 +129,16 @@ def apply_codex_provider(
     model: str | None,
     wire_api: str,
     display_name: str,
+    auth: CodexAuthCommand,
     effort: str | None = None,
-    auth: CodexAuthCommand | None = None,
     provider_id: str = CODEX_PROVIDER_ID,
-    env_key: str = CODEX_ENV_KEY,
     catalog_path: pathlib.Path | None = None,
 ) -> str:
     """Return new ``config.toml`` text with Coffer's provider block.
 
-    With ``auth`` the block authenticates through that command and names no
-    ``env_key``; without it the block names ``env_key`` and hides it from
-    shell commands. ``effort`` is written only by a caller that knows the model
-    has levels. ``catalog_path`` ``None``: no curated set, and a catalogue
-    pointer Coffer wrote earlier is dropped.
+    The block authenticates through ``auth``. ``effort`` is written only by a
+    caller that knows the model has levels. ``catalog_path`` ``None``: no
+    curated set, and a catalogue pointer Coffer wrote earlier is dropped.
     """
     doc = tomlkit.parse(text) if text.strip() else tomlkit.document()
     if model:
@@ -175,19 +160,15 @@ def apply_codex_provider(
     block["name"] = display_name
     block["base_url"] = base_url
     block["wire_api"] = wire_api
-    if auth is not None:
-        # WebSockets off: pointed at another base URL, Codex otherwise tries the
-        # Responses WebSocket transport first and stalls.
-        block["supports_websockets"] = False
-        block["requires_openai_auth"] = False
-        auth_table = tomlkit.inline_table()
-        auth_table["command"] = auth.command
-        auth_table["args"] = list(auth.args)
-        block["auth"] = auth_table
-        drop_shell_env_exclude(doc, CODEX_ENV_KEY)
-    else:
-        block["env_key"] = env_key
-        exclude_from_shell_env(doc, env_key)
+    # WebSockets off: pointed at another base URL, Codex otherwise tries the
+    # Responses WebSocket transport first and stalls.
+    block["supports_websockets"] = False
+    block["requires_openai_auth"] = False
+    auth_table = tomlkit.inline_table()
+    auth_table["command"] = auth.command
+    auth_table["args"] = list(auth.args)
+    block["auth"] = auth_table
+    drop_legacy_shell_env_exclude(doc)
     doc["model_providers"][provider_id] = block
     return tomlkit.dumps(doc)
 
@@ -200,12 +181,13 @@ def remove_codex_provider(
     ``model_provider``, ``model`` and a ``model_reasoning_effort`` equal to
     ``managed_effort`` go only while ``model_provider`` points at Coffer (a
     user-selected provider is left untouched); a Coffer-owned catalogue pointer
-    and the ``COFFER_PROVIDER_KEY`` shell exclusion go too."""
+    and the ``COFFER_PROVIDER_KEY`` shell exclusion an earlier build added go
+    too."""
     if not text.strip():
         return ""
     doc = tomlkit.parse(text)
     _pop_managed_catalog(doc)
-    drop_shell_env_exclude(doc, CODEX_ENV_KEY)
+    drop_legacy_shell_env_exclude(doc)
     providers = doc.get("model_providers")
     if isinstance(providers, MutableMapping):
         providers.pop(provider_id, None)
@@ -221,7 +203,6 @@ def remove_codex_provider(
 
 __all__ = [
     "CODEX_CATALOG_TRUNCATION_LIMIT",
-    "CODEX_ENV_KEY",
     "CODEX_MODEL_CATALOG_FILENAME",
     "CODEX_MODEL_CATALOG_KEY",
     "CODEX_PROVIDER_ID",

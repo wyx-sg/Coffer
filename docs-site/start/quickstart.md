@@ -69,7 +69,7 @@ connected agent claude-code to Coffer
   gateway MCP entry: installed (/Users/you/.coffer/bin/coffer-mcp-shim)
 ```
 
-This adds one entry to `mcpServers` in `~/.claude.json` (and, while the `memory` feature is on, Coffer's memory hook — four entries, from session start to each shell command — to `~/.claude/settings.json` — see [Memory](/guides/memory)). Coffer writes the file atomically and keeps a `.bak` of the previous version:
+This adds one entry to `mcpServers` in `~/.claude.json` (and Coffer's memory hook — four entries, from session start to each shell command — to `~/.claude/settings.json` — see [Memory](/guides/memory)). Coffer writes the file atomically and keeps a `.bak` of the previous version:
 
 ```json
 {
@@ -130,7 +130,7 @@ OK  (993 ms)
 
 The first test can take a few seconds while `npx` downloads the package. An agent sees each tool as `filesystem__<tool>`. **Name length** counts the full name a client such as Claude Code sees, `mcp__coffer__filesystem__<tool>`; a name over 64 characters is flagged with `!`, because model provider APIs refuse it.
 
-**In the web UI:** open **MCP servers**, click **Add MCP server**, and paste the server's JSON in the standard `mcpServers` format. The path must be absolute:
+**In the web UI:** open **MCP servers**, click **Add server**, and paste the server's JSON in the standard `mcpServers` format (a command line or a URL works too). The path must be absolute:
 
 ```json
 {
@@ -150,7 +150,7 @@ Click **Continue**, review what will be imported, and click **Import 1**. On the
 Start a **new** Claude Code session. A session that was already open loaded its MCP servers when it started. Run `/mcp`, and `coffer` appears as a connected server. Its tools include:
 
 - the filesystem server's tools: `filesystem__read_text_file`, `filesystem__list_directory`, `filesystem__write_file` and the rest;
-- Coffer's own built-in tools: `coffer__search_tools`, plus `coffer__write` when the Knowledge feature is on.
+- Coffer's own built-in tools: `coffer__search_tools` and `coffer__write`.
 
 Claude Code adds its own prefix to every MCP tool, so in its tool list the names appear as `mcp__coffer__filesystem__list_directory`. Ask it to use one:
 

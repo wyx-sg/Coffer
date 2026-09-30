@@ -293,7 +293,7 @@ def test_migration_0015_creates_channel_peers(tmp_path, monkeypatch):  # type: i
     assert _ALEMBIC_INI.is_file(), f"alembic.ini not found at {_ALEMBIC_INI}"
     cfg = AlembicConfig(str(_ALEMBIC_INI))
 
-    # 0116 drops the table (pairings are a vault document now); 0114 holds its
+    # 0117 drops the table (pairings are a vault document now); 0114 holds its
     # last shape.
     command.upgrade(cfg, "0114")
 

@@ -3,8 +3,7 @@
 //!
 //! One light loop over loopback. Every tick reads `daemon.json` and the
 //! daemon's own status — the probe `resolve.rs` gates its take-over on — and
-//! hands the answer to the sync watcher too, so that status is read once per
-//! tick for both. The attention list and the login service change on a human
+//! lets the sync watcher run its own slow poll on a tick that reached it. The attention list and the login service change on a human
 //! timescale, so they are read every minute, and at once whenever the daemon
 //! comes (back) up. A tray action that changes something (a restart, the Start
 //! at login switch) wakes the loop instead of waiting out the tick.
@@ -18,13 +17,12 @@ use tauri::{AppHandle, Manager};
 
 use crate::daemon_http::{fetch_ok, json_or_error, put_json, DEFAULT_READ_TIMEOUT};
 use crate::discovery::read_daemon_info;
-use crate::sync_gate::parse_vault_sync;
 use crate::sync_watch::SyncWatch;
 use crate::tray::update_state;
 use crate::tray_state::{Attention, Daemon, Login};
 
 /// How often the daemon's status is read — and so how long the menu bar may
-/// lag a daemon going down, or the `vault_sync` feature switching.
+/// lag a daemon going down.
 pub const STATUS_TICK: Duration = Duration::from_secs(10);
 /// How often the attention list and the login service are re-read.
 const SLOW_TICK: Duration = Duration::from_secs(60);
@@ -75,7 +73,7 @@ fn run(app: AppHandle, wake: Receiver<()>) {
         let now_daemon = daemon.clone();
         update_state(&app, |s| s.daemon = now_daemon);
 
-        if let Some((port, token, body)) = probe {
+        if let Some((port, token, _)) = probe {
             let slow_due = slow_read.is_none_or(|at| at.elapsed() >= SLOW_TICK);
             if !was_online || slow_due {
                 slow_read = Some(Instant::now());
@@ -93,7 +91,7 @@ fn run(app: AppHandle, wake: Receiver<()>) {
                     }
                 });
             }
-            sync.tick(&app, port, &token, parse_vault_sync(&body).unwrap_or(true));
+            sync.tick(&app, port, &token);
         } else if !matches!(daemon, Daemon::Running { .. }) {
             slow_read = None;
         }

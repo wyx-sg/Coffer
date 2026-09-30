@@ -41,15 +41,14 @@ coffer channel add my-telegram --type telegram \
 
 ```text [Web UI]
 Channels → Add channel
-  Type:           Telegram | SeaTalk
-  Name:           my-telegram
-  Bot token:      (or App ID + App secret for SeaTalk)
-  Default agent:  claude-code
+  1 Platform:  SeaTalk | Telegram
+  2 Connect:   Name, Default agent, Bot token (or App ID + App secret)
+  3 Pair:      the code to send the bot, then "Paired with …"
 ```
 
 :::
 
-In the web UI, **Add channel** writes the secret to the credential store and registers the channel in one step. A name is letters, digits, dash and underscore, at most 64 characters.
+In the web UI, **Add channel** walks three steps. **Platform** shows what each platform supports and what it needs to connect. **Connect** writes the secret to the credential store and registers the channel in one step; for SeaTalk it reminds you to set event delivery to WebSocket in the SeaTalk Developer Portal *after* connecting, since the portal checks that a connection exists. **Pair** issues a code straight away and waits for your message to the bot (see [Pair your account](#pair-your-account)); **Pair later** closes the dialog and leaves the channel unpaired. A name is letters, digits, dash and underscore, at most 64 characters.
 
 A registration whose credential reference does not resolve is rejected and nothing is saved. So is one naming a default agent that is not registered in this vault.
 
@@ -59,7 +58,7 @@ A new channel is bound to the machine you register it from and may drive every r
 
 Pairing makes you the channel's owner. Until a channel is paired, it answers nobody.
 
-1. Issue a code: on the channel's page, **Generate pairing code** in the account section (**Re-pair** once a channel is paired), or
+1. Issue a code: on the channel's **Overview**, **Generate pairing code** (or **Re-pair…** under **Who can use it** once a channel is paired, which first asks you to confirm that a new owner may take over), or
 
    ```sh
    coffer channel pair my-telegram
@@ -72,7 +71,7 @@ Pairing makes you the channel's owner. Until a channel is paired, it answers nob
    Send this code to the bot from the account that should own the channel.
    ```
 
-2. From your own account, send the eight characters to the bot as a message. On Telegram you can open the pair link instead (**Open the pairing link**), which sends the code for you.
+2. From your own account, send the eight characters to the bot as a message. On Telegram you can choose **Open in Telegram** instead, which opens the chat with the code filled in. The page shows the time left and **Waiting for your message…** until the pairing lands, then names the new owner.
 3. The bot confirms and follows up once with the [help](#status-and-help-cards). You are now the channel's sole owner.
 
 A code is eight characters from an alphabet with no `0`, `O`, `1` or `I`. It works once, expires after one hour, and is invalidated after 10 wrong guesses. Codes are held in the daemon's memory only, so restarting the daemon drops an unused code; generate another.
@@ -116,14 +115,14 @@ When the agent needs a yes or a choice before it goes on — a change it is abou
 
 A turn that ran longer than the channel's threshold (90 seconds by default) ends with one short line where its answer would not notify you by itself: `✅ Done · 4m 12s — <the answer's first line>`, or `⚠️ Failed · …`, `⏹ Stopped · …`, `❓ Needs you · …`. On SeaTalk the answer is the message that opened when the turn began, so finishing it rings nobody — the done line does, in the same thread, @mentioning you in a group. On Telegram the answer is always a new message, so it needs no extra line.
 
-Two per-channel settings shape this, on the Channels page under **Edit** → **Replies**, or from the CLI:
+Two per-channel settings shape this, on the channel's **Settings** tab under **Replies** (**Show steps while working**, **Ping when a turn takes longer than**), or from the CLI:
 
 - `coffer channel edit <name> --hide-steps` (or `--show-steps`) — keep only the status header and the 💬 line, without the step list. Useful in a busy group.
 - `coffer channel edit <name> --notify-after <seconds>` — the long-turn threshold, 0 to 3600; 0 turns the done line off.
 
 Messages sent in quick succession are one question. The channel waits for a short pause after each message before it starts the turn: 1.5 seconds after text, 5 seconds after a forwarded chat record or files with no text. Anything you send inside that pause joins the same turn. So you can forward a record and then type "look into this", and the agent answers once, having seen both. Each message is still acknowledged the moment it arrives.
 
-Both pauses are per-channel settings: on the Channels page under **Edit** → **Message batching**, or with `coffer channel edit <name> --wait-after-text <seconds> --wait-after-forward <seconds>`. Each takes 0 to 60 seconds; 0 answers every such message on its own.
+Both pauses are per-channel settings: on the channel's **Settings** tab under **Message batching**, or with `coffer channel edit <name> --wait-after-text <seconds> --wait-after-forward <seconds>`. Each takes 0 to 60 seconds; 0 answers every such message on its own.
 
 Messages you send while a turn is running wait in the conversation's queue and run in order — the same queue the Conversations page shows. A burst sent during a turn joins the queue as one entry. The channel accepts up to 10 waiting messages; past that it tells you the channel is busy and drops the message.
 
@@ -133,7 +132,7 @@ A direct chat is one conversation. To run a second task beside it without mixing
 
 How the thread appears depends on the platform. On SeaTalk it is a message from the bot that you reply under. On Telegram it is a private-chat topic, which needs the bot's Threaded Mode turned on in BotFather. In a group, every thread is already its own conversation, so `/thread` is not needed there.
 
-Each turn tells the agent it is on a chat channel: keep replies concise but quote the key log lines, errors and IDs behind a finding verbatim, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. While the `memory` feature is on, the turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, since a channel turn runs no session-start hook.
+Each turn tells the agent it is on a chat channel: keep replies concise but quote the key log lines, errors and IDs behind a finding verbatim, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. The turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, and the notes your message names are added after it, since a channel turn runs no hook of Coffer's.
 
 ## Commands
 
@@ -206,7 +205,7 @@ This is why `/new` is safe to use often: it clears the context, not your choices
 
 A conversation normally runs in the Coffer-managed workspace `~/.coffer/workspace`. `/dir` moves the chat to another directory, but only to one the channel allows. The allow-list exists because anyone holding your phone — or a slip of the thumb — should not be able to point an agent with full permissions at an arbitrary folder on your machine; you decide the places in advance, at the computer.
 
-Set the allowed directories on the Channels page: open the channel, choose **Edit**, and fill in **Directories for /dir** (one absolute path per line). Or from the CLI:
+Set the allowed directories on the channel's **Settings** tab, in **Directories for /dir** (one absolute path per line). Or from the CLI:
 
 ```sh
 coffer channel edit my-telegram --dir ~/src/coffer --dir ~/src/notes   # replaces the list
@@ -231,7 +230,7 @@ Only conversations this chat opened are offered — never one from the web page 
 
 `/status` answers in words, not ids: the conversation's title (or its `🧵#N` mark), the agent, the model, the effort, the directory, and whether a turn is running or how many messages wait. In a direct chat it also lists the parallel threads, each with its agent and whether it is running, waiting or idle.
 
-`/help` lists the commands and says that anything else goes to the agent. `/kb` appears in the help and the menus only while the Knowledge feature is on; while it is off, `/kb` answers that knowledge is switched off. See [Experimental features](/guides/experimental-features).
+`/help` lists the commands and says that anything else goes to the agent.
 
 On a platform with buttons both answers are cards with **Stop**, **New**, **Model**, **Resume** and **Dir** buttons. A tap does exactly what typing the command in that chat does, so remembering `/status` is enough to reach every action. The help also arrives once, right after you pair, which is how a platform with no command menu (SeaTalk) shows you what the bot accepts.
 
@@ -263,9 +262,9 @@ A button tap is checked exactly like a message: only the owner's taps count. If 
 
 Two settings decide which agent answers.
 
-**The default agent** is the agent a new conversation starts on. Set it when you register the channel; change it with **Edit** on the channel's page.
+**The default agent** is the agent a new conversation starts on. Set it when you register the channel; change it under **Agents** → **Default agent** on the channel's **Overview**.
 
-**The scope** is the channel's reach — the list of agents it **may drive**. For every other resource kind, scope names the agents a resource is delivered *to*; a channel is used by no agent, so its scope is read the other way round. Set it with the **Reach** button on the channel's row or page, or:
+**The scope** is the channel's reach — the list of agents it **may drive**. For every other resource kind, scope names the agents a resource is delivered *to*; a channel is used by no agent, so its scope is read the other way round. Set it with **Agents it may drive** on the channel's **Overview**, or:
 
 ```sh
 coffer channel scope my-telegram                        # show the current scope
@@ -294,7 +293,7 @@ A bot tolerates exactly one consumer: two machines polling one Telegram bot, or 
 - Only the named machine starts the adapter. A channel bound to another machine is shown as running elsewhere, not as stopped.
 - A channel with no binding, or bound to a machine the registry does not know, runs nowhere and says so on its page.
 
-To move a channel, change **Runs on** on its page (the **?** beside it repeats the handover notes below), or:
+To move a channel, change **Runs on** on its **Settings** tab, or choose **Run it here…** on a channel another machine runs (it asks first, since both machines may answer until the other syncs), or:
 
 ```sh
 coffer channel bind my-telegram              # bind to this machine
@@ -324,7 +323,7 @@ Two channel settings tune when the bot answers in a group. They change when the 
 | `require_mention` | on | The bot stays quiet in a group until someone @mentions it or replies to it. Turned off, it acts on every group message the owner sends. Telegram only: SeaTalk delivers a group message to a bot only when it @mentions the bot. |
 | `ignore_other_mentions` | off | A group message that also @mentions another person is left alone, even when it mentions the bot too. |
 
-**Web UI:** on the channel's page choose **Edit**, and use the switches under **In group chats**: **Answer only when @mentioned** (Telegram channels only) and **Ignore messages that @mention someone else**. Then **Save changes**.
+**Web UI:** on the channel's **Settings** tab, use the switches under **In group chats**: **Answer only when @mentioned** (Telegram channels only) and **Ignore messages that @mention someone else**. They save as you flip them.
 
 **CLI:** pass the switches to `coffer channel add`, or change them later with `coffer channel edit`. An option you leave out keeps its current value.
 
@@ -376,19 +375,23 @@ coffer channel notify my-telegram "build finished"
 coffer channel notify my-telegram "deploy done" --chat -1001234567890
 ```
 
-Without `--chat` the message goes to the owner's direct chat. `--chat` names another paired chat, such as a group; a chat the channel is not paired to is refused. On the channel's page, **Send test message** sends a fixed test message to the owner's direct chat. Notifying a channel with no paired owner fails and sends nothing. The REST equivalent is `POST /api/v1/channels/{uid}/notify`.
+Without `--chat` the message goes to the owner's direct chat. `--chat` names another paired chat, such as a group; a chat the channel is not paired to is refused. On the channel's page, **Send test** (or **Send test message** in its **⋯** menu) sends a test message — editable, **Test message from Coffer** by default — to the owner's direct chat; it starts no turn. Notifying a channel with no paired owner fails and sends nothing. The REST equivalent is `POST /api/v1/channels/{uid}/notify`.
 
 ## Manage channels
 
-The **Channels** page lists every channel with **Name**, **Type**, **Default agent**, **Health** (Running or Stopped), **Runs on**, **Paired** and its reach. A channel's page is one card in three sections, under a header carrying its reach, **Edit** and **Delete**:
+The **Channels** page is where a channel is set up and looked after: its setup, connection status and settings. It shows no messages — a channel's conversations are on the [Conversations](/guides/chat) page, and each channel links there with **Conversations from this channel**, which opens the list filtered to it (`/conversations?channel=<uid>`).
 
-- **Status** — one line with the adapter's state (Running or Stopped), for SeaTalk the **SeaTalk connection** state, and **Runs on**, the machine binding. Problems appear directly under it, and only when there are any: a binding that runs nowhere, the connection's last error, or a platform setting that defeats the channel's configuration. A note also appears there while a pairing code is outstanding.
-- **Account** — the paired owner's name, with its chat ID, when it was paired and the active conversation. **Re-pair** issues a new code; an unpaired channel shows **Generate pairing code** instead. The code appears here, with a copy button and, on Telegram, a one-tap link.
-- **Test delivery** — **Send test message** sends a fixed test message to the owner. It is disabled until the channel is paired.
+The channel list sits beside the open channel. It groups channels by what they need from you: **Needs attention** (reconnecting, kicked, can't start, not paired, bound to no machine or to one Coffer does not know), **Connected**, **Elsewhere** (run by another machine) and, when there are any, **Off**. **Filter** narrows it by name or platform. A channel is addressed by its uid — `/channels/<uid>` for its **Overview**, `/channels/<uid>/settings` for its **Settings** — so a rename never breaks a link.
 
-Longer explanations, such as what a rebind costs or what re-pairing replaces, sit behind the **?** beside a label.
+The header names the channel, its status and where it runs (`SeaTalk app 8231 · WebSocket · runs on this machine`), with the one action its state calls for — **Send test**, **Reconnect now**, **Take it back**, **Retry**, **Replace secret** or **Replace token**, **Run it here…** — and a **⋯** menu: **Send test message**, **Reconnect**, **Change machine…**, **Replace secret** (or **Replace token**) and **Delete channel**. Whenever something is wrong, a banner under the header says why and what fixes it: lost connection and reconnecting, another process took the SeaTalk connection, the SeaTalk SDK is missing, the platform refused the connection, the adapter stopped (often a revoked token or a regenerated secret), the status could not be read, the channel runs on another machine by design, or it is bound to no machine or an unknown one. **Reconnect** restarts the channel's adapter.
 
-**Edit** changes the default agent, the directories `/dir` may switch to, the SeaTalk App ID and the group switches under **In group chats**, or rotates a secret. A blank secret field keeps the current value; a new one is written under the reference the channel already uses, so rotating a secret changes neither pairing nor binding.
+**Overview** holds:
+
+- **Who can use it** — the paired owner, with when they paired and **Re-pair…**; an unpaired channel offers **Generate pairing code** instead.
+- **Agents** — **Default agent** (saved as soon as you pick it) and **Agents it may drive**, the channel's scope (see [Default agent and scope](#default-agent-and-scope)).
+- **Conversations from this channel**.
+
+**Settings** saves each change as you make it — a number or a path once you stop typing and it is valid, a switch at once — and says **Saving…**, **Saved** or **Couldn't save** at the top. It holds the channel's title, **In group chats**, **Message batching**, **Replies**, **Directories for /dir**, **Credentials** (the SeaTalk App ID, and the secret or token, masked, with **Replace**), **Runs on** and **Delete…**. A replaced secret is written under the reference the channel already uses and the adapter restarts on it, so rotating a secret changes neither pairing nor binding. Deleting a channel stops the bot and removes its pairing; its conversations stay on the Conversations page.
 
 From the CLI:
 

@@ -10,13 +10,12 @@ state with coffer path").
 Resource paths come from reads the daemon already serves: the skill's
 ``master_path``, a partition's file tree, an agent's config-file listing,
 native-memory scan and transcript listing. A collection's directory is its name
-under the knowledge root, found through the collection listing, which is also
-what refuses while ``knowledge`` is switched off. The roots themselves resolve
-through the same functions the daemon uses, all from ``HOME``: the five storage
-classes of ADR storage-is-five-classes-by-nature (the vault repository with
-knowledge and skill masters inside it, ``local/``, ``content/``, ``derived/``
-with the memory tree, and ``runs.db``), plus the log directory
-(``COFFER_LOG_DIR`` moves it).
+under the knowledge root, found through the collection listing. The roots
+themselves resolve through the same functions the daemon uses, all from
+``HOME``, so printing them needs no daemon: the five storage classes of ADR
+storage-is-five-classes-by-nature (the vault repository with knowledge and
+skill masters inside it, ``local/``, ``content/``, ``derived/`` with the memory
+tree, and ``runs.db``), plus the log directory (``COFFER_LOG_DIR`` moves it).
 """
 
 from __future__ import annotations
@@ -87,25 +86,11 @@ def _logs() -> dict[str, str]:
     return {"logs": directory, "daemon_log": str(Path(directory) / "daemon.log")}
 
 
-def _read(c: httpx.Client, path: str, *, feature: str | None, verbose: bool, **params: Any) -> Any:
-    """GET ``path``; a switched-off feature is one line naming the switch."""
+def _read(c: httpx.Client, path: str, *, verbose: bool, **params: Any) -> Any:
+    """GET ``path``; an error answer is rendered and exits."""
     r = c.get(path, params=params or None)
-    if feature is not None and r.status_code == 404 and _code(r) == "FEATURE_DISABLED":
-        typer.echo(
-            f"{feature} is switched off on this machine"
-            f" — run: coffer config set feature.{feature} on",
-            err=True,
-        )
-        raise typer.Exit(1)
     _cli_client.check(r, verbose=verbose)
     return r.json()
-
-
-def _code(r: httpx.Response) -> str | None:
-    try:
-        return str(r.json()["error"]["code"])
-    except Exception:
-        return None
 
 
 def _not_found(what: str, name: str) -> typer.Exit:
@@ -119,17 +104,12 @@ def roots(ctx: typer.Context, output_json: bool = _JSON) -> None:
     storage classes and logs."""
     if ctx.invoked_subcommand is not None:
         return
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        features = _read(c, "/daemon/status", feature=None, verbose=_verbose(ctx)).get(
-            "features", {}
-        )
-    paths = {"vault": _vault()}
-    if features.get("knowledge", True):
-        paths["knowledge"] = _abs(knowledge_root())
-    if features.get("memory", True):
-        paths["memory"] = _abs(memory_root())
-    paths["skills"] = _abs(default_master_root())
+    paths = {
+        "vault": _vault(),
+        "knowledge": _abs(knowledge_root()),
+        "memory": _abs(memory_root()),
+        "skills": _abs(default_master_root()),
+    }
     paths.update(_classes())
     paths.update(_logs())
     _emit(paths, output_json, lines=[f"{k}: {v}" for k, v in paths.items()])
@@ -144,7 +124,7 @@ def knowledge(
     """The knowledge root, or one collection's directory of Markdown documents."""
     c, _info = _cli_client.client_or_exit()
     with c:
-        listed = _read(c, "/knowledge/collections", feature="knowledge", verbose=_verbose(ctx))
+        listed = _read(c, "/knowledge/collections", verbose=_verbose(ctx))
     root = _abs(knowledge_root())
     if collection is None:
         _emit({"knowledge": root}, output_json)
@@ -166,16 +146,14 @@ def memory(
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        listed = _read(c, "/memory/partitions", feature="memory", verbose=verbose)
+        listed = _read(c, "/memory/partitions", verbose=verbose)
         if partition is None:
             _emit({"memory": _abs(memory_root())}, output_json)
             return
         match = [p for p in listed["partitions"] if partition in (p["name"], p["uid"])]
         if not match:
             raise _not_found("memory partition", partition)
-        tree = _read(
-            c, f"/memory/partitions/{match[0]['uid']}/files", feature="memory", verbose=verbose
-        )
+        tree = _read(c, f"/memory/partitions/{match[0]['uid']}/files", verbose=verbose)
     node = tree["root"]
     _emit(
         {"memory": node["folder_abs_path"], "partition": node["abs_path"]},

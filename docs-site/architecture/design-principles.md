@@ -161,7 +161,7 @@ The same stance governs other mismatches Coffer can detect but not safely resolv
 
 **Rationale.** A second release branch drifts and collides on every rebase. A runtime switch lets the owner keep testing everything while releasing only what is ready — and a switch that destroyed data would make trying a feature a one-way door.
 
-**In the code.** [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py) registers `vault_sync`, `knowledge` and `memory` with the route prefixes and resource kinds each owns. Gates run at request time: gated routes answer `404 FEATURE_DISABLED`, the generic resource routes refuse and hide the feature's kinds, builtin tools leave `tools/list`, and workers skip their round. Kinds stay registered and migrations always run. The switch is per machine, in `~/.coffer/daemon-config.json`. See [Experimental features](/guides/experimental-features).
+**In the code.** [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py) registers each experimental feature with the route prefixes and resource kinds it owns; it is empty right now, since Sync, Knowledge and Memory graduated at 1.0. Gates run at request time: gated routes answer `404 FEATURE_DISABLED`, the generic resource routes refuse and hide the feature's kinds, builtin tools leave `tools/list`, and workers skip their round. Kinds stay registered and migrations always run. The switch is per machine, in `~/.coffer/daemon-config.json`. See [Experimental features](/guides/experimental-features).
 
 **Rules out.** Wiring-time gates that need a restart; a switch stored in the synced database; deleting a feature's data when it is switched off.
 
@@ -171,7 +171,7 @@ The same stance governs other mismatches Coffer can detect but not safely resolv
 
 **Rationale.** An abstraction designed against one use case either over-fits it or is too generic to enforce anything. Waiting for the second caller means the shared shape is discovered, not guessed.
 
-**In the code.** Shared packages exist exactly where two kinds met: [`infrastructure/net/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/net) (the SSRF guard), [`infrastructure/agent_files/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent_files) (transcript readers shared by agent and memory), and [`domain/connection.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/connection.py). The cross-kind import contracts make any other sharing fail the build. The Resource framework is the one declared exception, described above.
+**In the code.** Shared packages exist exactly where two kinds met: [`infrastructure/net/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/net) (the SSRF guard), [`infrastructure/agent_files/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent_files) (transcript readers shared by agent and memory), and [`domain/hook_trust.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/hook_trust.py) (whether an agent will run a hook, which memory reports and the agent kind's hooks listing shows). The cross-kind import contracts make any other sharing fail the build. The Resource framework is the one declared exception, described above.
 
 **Rules out.** Speculative "common" packages; a utilities module that grows ahead of its callers; one kind importing another's services.
 

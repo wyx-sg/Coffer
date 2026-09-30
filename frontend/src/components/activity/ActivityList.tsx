@@ -216,8 +216,9 @@ export function ActivityList({ tab, rows, agents, selectedKey, onSelect }: Props
           ))}
         </tr>
       </thead>
-      {/* Which records exist changes from run to run; screenshot tests mask it. */}
-      <tbody data-visual-volatile>{body}</tbody>
+      {/* Which records exist, and how many, changes from run to run; screenshot
+          tests mask it and show a fixed number of rows. */}
+      <tbody data-visual-volatile="rows">{body}</tbody>
     </table>
   );
 }

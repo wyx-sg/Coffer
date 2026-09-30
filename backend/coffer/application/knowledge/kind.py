@@ -16,8 +16,7 @@ almost all default. The fields that are not:
 - ``toggleable`` is False: every collection is served to every agent, and the
   kind-agnostic enable/disable route refuses one with
   ``RESOURCE_NOT_TOGGLEABLE`` (see "Serve every collection to every agent").
-  Nobody switched one collection off — the layer as a whole is already
-  switched by its experimental feature — and a collection kept out of the
+  Nobody switched one collection off, and a collection kept out of the
   catalogue was still a directory under the root the skill tells an agent to
   grep. A collection leaves every agent's catalogue only by being deleted.
 

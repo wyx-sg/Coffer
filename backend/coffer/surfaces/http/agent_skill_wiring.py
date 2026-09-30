@@ -54,6 +54,7 @@ from coffer.surfaces.http.agent_dependencies import (
     set_agent_service,
     set_auto_detect_service,
 )
+from coffer.surfaces.http.cli_wiring import wire_cli_requirements
 from coffer.surfaces.http.skill_dependencies import set_skill_service
 from coffer.surfaces.http.skill_source_wiring import SkillSources, wire_skill_sources
 from coffer.surfaces.http.vault_composition import VaultStores
@@ -278,6 +279,7 @@ def wire_agent_and_skill_kinds(
     set_agent_hooks_service(agent_hooks_svc)
     set_agent_transcript_service(agent_transcript_svc)
     set_skill_service(skill_svc)
+    wire_cli_requirements(skill_svc, audit)
 
     return AgentSkillWiring(
         skill_sources=skill_sources,

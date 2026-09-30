@@ -90,9 +90,12 @@ describe("Composer", () => {
     expect(onSend).toHaveBeenCalledWith("queue me", []);
   });
 
-  test("shows a 'will queue' hint while streaming", () => {
+  test("says a message sent while streaming will queue", () => {
     render(<Composer onSend={vi.fn()} streaming />);
-    expect(screen.getByText(/will queue/i)).toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveAttribute(
+      "placeholder",
+      "Reply — it queues until this turn finishes",
+    );
   });
 
   test("shows a Stop button while streaming and calls onStop", () => {

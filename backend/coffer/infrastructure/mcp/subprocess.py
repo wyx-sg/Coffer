@@ -13,7 +13,7 @@ import weakref
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack, suppress
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 import psutil
 from mcp import ClientSession, StdioServerParameters
@@ -24,7 +24,7 @@ from mcp.types import ServerNotification
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import StdioTransport
 from coffer.infrastructure.daemon.orphan_sweep import reap_pidfile, record_spawn
-from coffer.infrastructure.logging.files import open_upstream_errlog
+from coffer.infrastructure.logging.files import open_upstream_errlog, write_coffer_line
 from coffer.infrastructure.mcp.dispatch import dispatch_method
 
 NotificationCallback = Callable[[Any], Awaitable[None]]
@@ -135,6 +135,7 @@ class StdioUpstreamConnection:
         )
 
         self._exit_stack = AsyncExitStack()
+        errlog = None
         try:
             # --- PID snapshot (hardened by the process-wide lock) ---
             # Snapshot this daemon's children BEFORE letting the SDK spawn the
@@ -157,6 +158,9 @@ class StdioUpstreamConnection:
                 errlog = open_upstream_errlog(self._server_name)
                 if errlog is not None:
                     self._exit_stack.callback(errlog.close)
+                    # LIFO: this runs after the client's teardown, before close.
+                    self._exit_stack.callback(self._note_stop, errlog)
+                    write_coffer_line(errlog, f"start {self._command_line()}")
                 client = (
                     stdio_client(params) if errlog is None else stdio_client(params, errlog=errlog)
                 )
@@ -200,12 +204,16 @@ class StdioUpstreamConnection:
                 timeout=self._spawn_timeout,
             )
         except TimeoutError as exc:
+            if errlog is not None:
+                write_coffer_line(errlog, f"error did not start within {self._spawn_timeout}s")
             await self._cleanup()
             raise UpstreamTimeout(
                 f"MCP server {self._server_name!r} did not finish starting within "
                 f"{self._spawn_timeout}s (its spawn timeout)"
             ) from exc
         except Exception as exc:
+            if errlog is not None:
+                write_coffer_line(errlog, self._launch_error_line(exc, env))
             await self._cleanup()
             # Don't interpolate the raw exception into the message —
             # an upstream/transport error can embed credential-bearing argv or
@@ -221,6 +229,24 @@ class StdioUpstreamConnection:
         except AttributeError:
             capabilities = {}
         return capabilities
+
+    def _command_line(self) -> str:
+        """The launcher and its static args. Secrets never appear here: they
+        reach the child only through ``credential_refs`` in its environment."""
+        return " ".join([self._transport.command, *self._transport.args])
+
+    def _note_stop(self, errlog: TextIO) -> None:
+        # Only a session that came up is "stopped"; a failed start has its line.
+        if self._session is not None:
+            write_coffer_line(errlog, "stop after the session ended")
+
+    def _launch_error_line(self, exc: BaseException, env: dict[str, str]) -> str:
+        """Coffer's own account of a failed start: the exception type only (its
+        text can carry argv or env detail), or the launcher that did not resolve."""
+        if isinstance(exc, FileNotFoundError):
+            path = env.get("PATH", "")
+            return f'error launcher "{self._transport.command}" not found on PATH {path}'
+        return f"error {type(exc).__name__}"
 
     async def request(
         self,

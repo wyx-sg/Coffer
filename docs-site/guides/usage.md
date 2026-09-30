@@ -21,7 +21,7 @@ Open **Usage** in the sidebar (under System). The page answers both questions, i
 - The period control picks **Today**, **7 days** (the default), **30 days**, **This month** or **Custom…**. A custom range is picked on a calendar; the picker notes the first day that still has per-request detail — older days keep only their daily totals, which the page still reports. The range is part of the page's address, so a refresh, a bookmark or Back keeps it.
 - Five figures sum up the range: **Cost (estimated)** with the request count and how many were unpriced, **Input** (uncached), **Output** (reasoning included), **Cache read** and **Cache write** (a category only Anthropic's wire reports).
 - **Cost per day** draws one bar per day of the range; hover a bar for its day and cost. Today's bar is lighter because the day is not over.
-- The table breaks the range down **By model** (with the provider that served it), **By agent** or **By day**, and ends with a Total row. A model with no price reads **No price** — never $0.00; a cost marked `*` leaves out some unpriced requests, and a request count marked `*` includes requests whose usage never arrived. Hover the marker for the count.
+- The table breaks the range down **By model** (with the provider that served it), **By agent** or **By day**, and ends with a Total row. A model with no price reads **—** — never $0.00 — and its tooltip says why and where to set one; a cost marked `*` leaves out some unpriced requests, and a request count marked `*` includes requests whose usage never arrived. Hover the marker for the count.
 - **Edit prices in Model providers** takes you to the providers, where a model's own price is set.
 
 **Refresh** in the header re-reads everything and asks Codex for its current quota. The **⋯** menu's **Export CSV** downloads the current range in the current breakdown — the same file `coffer usage --csv` writes.
@@ -60,9 +60,9 @@ Ranges are local days: **today**, **7d** and **30d** (both including today), **m
 
 Cost is an **estimate**, worked out per model and per token category:
 
-- Coffer ships a price list with each release. It holds Anthropic's own per-model rates, including each model's cache rates.
+- Coffer ships a price list with each release. It holds Anthropic's own per-model rates, including each model's cache rates, and nothing else: Coffer has no verified source for OpenAI's rates, so Codex models carry no bundled price.
 - A provider can carry its own price for a model (on the provider's Models tab, or `price` on the curated model over REST), because relays and resellers charge differently. That price wins. A cache category it leaves out is charged at its input rate, so the estimate errs high.
-- A model neither prices is marked **unpriced** and counted separately — never costed at zero. Models from vendors other than Anthropic are unpriced until you set a price.
+- A model neither prices is marked **unpriced** and counted separately — never costed at zero. Its cost reads `—` on the page and in `coffer usage`. Models from vendors other than Anthropic, Codex models included, are unpriced until you set a price on the provider.
 - Each request's cost is stored with the price it was costed with, so a later price list never rewrites history.
 
 ### How long it is kept

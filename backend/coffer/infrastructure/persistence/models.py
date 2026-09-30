@@ -31,7 +31,7 @@ class AuditLogModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     event_type: Mapped[str] = mapped_column(String, nullable=False)
-    #: The resource's uid (migration 0116); kind+name are the label it
+    #: The resource's uid (migration 0117); kind+name are the label it
     #: carried then.
     resource_uid: Mapped[str | None] = mapped_column(String, nullable=True)
     resource_kind: Mapped[str | None] = mapped_column(String, nullable=True)

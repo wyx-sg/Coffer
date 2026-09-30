@@ -40,7 +40,7 @@ class ClaudeCodeDelivery:
     config_key: str = CONFIG_KEY
     event: str = EVENT
     #: The `coffer` CLI the hook runs — an absolute path, resolved by the
-    #: composition root (see `domain.memory.delivery.context_invocation`).
+    #: composition root (see `domain.memory.delivery.hook_invocation`).
     cli: str = "coffer"
     trust_config_key: str | None = None
 

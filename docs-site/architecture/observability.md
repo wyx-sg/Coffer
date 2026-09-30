@@ -154,7 +154,7 @@ The vocabulary is a closed enumeration, `AuditEventType` in `backend/coffer/doma
 | Daemon | `token_rotated`, `daemon_residency_updated`, `retention_updated`, `internal_engine_model_set` |
 | Credentials | `credential_set`, `credential_revealed`, `credential_deleted`, `credential_migrated`, `master_key_relocated`, `secret_resolved`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected`, `secret_imported` |
 | Agents | `agent_config_file_written`, `agent_config_file_deleted`, `agent_mcp_installed`, `agent_mcp_uninstalled`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled` |
-| Skills | `skill_imported`, `skill_updated`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted` |
+| Skills | `skill_imported`, `skill_updated`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted`, `cli_install_started`, `cli_install_finished` |
 | Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted`, `knowledge_curated` |
 | Memory | `memory_aggregated`, `memory_distilled`, `memory_delivery_installed`, `memory_delivery_removed`, `memory_delivery_fired`, `memory_trigger_added`, `memory_trigger_proposed`, `memory_trigger_armed`, `memory_trigger_disarmed`, `memory_trigger_deleted` |
 | Channels | `channel_pairing_issued`, `channel_paired` |

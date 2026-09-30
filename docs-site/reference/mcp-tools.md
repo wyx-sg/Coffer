@@ -16,15 +16,15 @@ integrations against Coffer. For how the gateway works internally, see
 
 | Tool | Purpose | Present when |
 | --- | --- | --- |
-| [`coffer__write`](#coffer-write) | File a durable fact into Coffer's knowledge. | The `knowledge` feature is on. |
+| [`coffer__write`](#coffer-write) | File a durable fact into Coffer's knowledge. | Always. |
 | [`coffer__search_tools`](#coffer-search-tools) | Rank the upstream tool catalogue against an intent. | Always. |
 
 Those two are the whole list. Coffer's memory notes and its own records have no tool:
 they are read with the agent's own file tools and with the `coffer` command line. See
 [Memory and logs without a tool](#memory-and-logs-without-a-tool).
 
-A tool whose [experimental feature](/guides/experimental-features) is switched off is
-absent from `tools/list`, is not named in the handshake instructions, and a call to it is
+No built-in tool belongs to an [experimental feature](/guides/experimental-features) right
+now. A tool that does is, while its feature is switched off, absent from `tools/list`, is not named in the handshake instructions, and a call to it is
 answered exactly like a call to a tool that does not exist. Switching a feature takes effect
 on the next list or call, without a restart.
 
@@ -66,7 +66,7 @@ anything in the repository in front of the agent, anything transient, or secrets
 no read tool: agents read knowledge with their own file tools, at the paths the
 `coffer-guide` skill lists.
 
-Gated by the `knowledge` feature. Guide: [Knowledge](/guides/knowledge).
+Guide: [Knowledge](/guides/knowledge).
 
 ### Input
 
@@ -238,7 +238,7 @@ Coffer's `initialize` result declares protocol version `2025-06-18`, server name
 and the capabilities `tools`, `resources` and `prompts`, each with `listChanged: true`
 (resources without `subscribe`). Its `instructions` field, which clients place in the
 agent's system prompt, is at most 800 characters and names only the built-in tools the
-session's list carries. With every feature on, it reads (the memory root is the
+session's list carries. It reads (the memory root is the
 vault's own, here `/Users/you/.coffer/memory`):
 
 ```text
@@ -252,12 +252,9 @@ coffer-guide skill is the manual: load it for the catalogue, with paths, before 
 the developer something they may have written down.
 ```
 
-(Line breaks added here; the text is one paragraph.) When the `memory` feature is off, the
-memory sentence is left out. When a memory root is too long for the 800-character cap, the
-sentence names the directory `coffer path memory` prints instead of the path itself. When
-the `knowledge` feature is off, `coffer__write` and the knowledge sentence are left out and
-the text ends with "The coffer-guide skill is the manual: load it before relying on these
-tools." When tiering hid tools in this session's last `tools/list`, one sentence is
+(Line breaks added here; the text is one paragraph.) When a memory root is too long for
+the 800-character cap, the sentence names the directory `coffer path memory` prints instead
+of the path itself. When tiering hid tools in this session's last `tools/list`, one sentence is
 appended:
 
 ```text

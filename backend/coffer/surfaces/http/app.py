@@ -79,16 +79,13 @@ from coffer.surfaces.http.dependencies import (
 from coffer.surfaces.http.engine_config_composition import build_config_services
 from coffer.surfaces.http.event_wiring import build_event_stream, start_attention_watch
 from coffer.surfaces.http.feature_dependencies import build_feature_service, set_feature_service
-from coffer.surfaces.http.guide_wiring import follow_guide_features, run_builtin_guide_refresh
+from coffer.surfaces.http.guide_wiring import run_builtin_guide_refresh
 from coffer.surfaces.http.kind_wiring import wire_resource_kinds
 from coffer.surfaces.http.mcp.protocol_routes import (
     start_session_reaper,
 )
-from coffer.surfaces.http.memory_wiring import (
-    follow_memory_switch,
-    memory_context_composer,
-    register_delivery_hook_target,
-)
+from coffer.surfaces.http.memory_turn_wiring import memory_context_composer, memory_turn_retriever
+from coffer.surfaces.http.memory_wiring import register_delivery_hook_target
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.reconcile_wiring import (
     build_reconciler,
@@ -226,15 +223,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Wire the chat feature (spec chat) after the kinds: the agent service is
     # the agent kind's result, and a channel turn's memory append closes over
-    # the memory kind's service and the feature switch (spec memory "Deliver to
-    # channel turns through the system prompt").
+    # the memory kind's service (spec memory "Deliver to channel turns through
+    # the system prompt").
     chat = wire_chat(
         sm,
         credential_store,
         kinds.agent_skill.agent_service,
         resource_svc,
         agent_catalog,
-        compose_memory_context=memory_context_composer(kinds.memory.service, features),
+        compose_memory_context=memory_context_composer(kinds.memory.service),
+        retrieve_memory=memory_turn_retriever(kinds.memory.turn_retrieval),
         observe_quota=kinds.usage.quota.observe_agent_event,
     )
     # Kept on app.state: an integration test asserts the registry's contents.
@@ -262,18 +260,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         kinds.agent_skill.agent_service,
         kinds.agent_skill.mcp_service,
         kinds.memory.delivery_service,
-        features,
     )
     register_delivery_hook_target(
-        reconciler, kinds.memory.delivery_service, features, connection.connected_agents
+        reconciler, kinds.memory.delivery_service, connection.connected_agents
     )
     # The boot pass converges every target at once — MCP entries, skill links,
     # provider projections, delivery hooks — before the daemon reports ready.
     await run_boot_pass(reconciler)
-    # The delivery hook follows the ``memory`` switch from here on (spec
-    # experimental-features), through a pass with the switch's warrant.
-    follow_memory_switch(reconciler, features)
-    follow_guide_features(kinds.guide, features)
     # Coffer's own skill, re-rendered from this build and the corpus every boot
     # (cheap when nothing moved; heals an edited master; upgrades old renders).
     await run_builtin_guide_refresh(kinds.guide)
@@ -306,7 +299,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         credential_store=credential_store,
         master_key=credentials.master_key,
         sync_contributions=sync_contributions,
-        features=features,
         platform=platform,
     )
     # Published like ``app.state.kinds``: a test asserting the lifespan started

@@ -36,7 +36,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 import coffer
 from coffer.application.audit_service import AuditService
-from coffer.application.features import FeatureService
 from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.appliers import (
@@ -318,7 +317,7 @@ def start_sync(
 
 
 def start_converge_worker(
-    wiring: SyncWiring, sm: async_sessionmaker[AsyncSession], features: FeatureService
+    wiring: SyncWiring, sm: async_sessionmaker[AsyncSession]
 ) -> ConvergeWorker:
     """Start the timer that converges the vault, shaped like ``RetentionWorker``.
 
@@ -326,16 +325,8 @@ def start_converge_worker(
     on every tick, so a user who shortens it in the UI is believed without a
     daemon restart, and a vault with no remote configured ticks harmlessly on
     the default cadence until one appears.
-
-    The ``vault_sync`` feature is read the same way, at the top of every round
-    (spec experimental-features): while it is off the timer keeps ticking and
-    runs nothing. The graph itself is still built — curation takes its lock.
     """
-    worker = ConvergeWorker(
-        wiring.service,
-        SqlAlchemySyncRemoteRepo(sm),
-        is_enabled=lambda: features.is_enabled("vault_sync"),
-    )
+    worker = ConvergeWorker(wiring.service, SqlAlchemySyncRemoteRepo(sm))
     worker.start()
     return worker
 

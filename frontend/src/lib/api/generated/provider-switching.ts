@@ -681,8 +681,9 @@ export interface components {
          *     ``name`` beside it is the label, free to change through
          *     ``PATCH /api/v1/resources/{uid}`` without anything downstream noticing. That
          *     is the whole reason this kind no longer owns a rename operation of its own:
-         *     the projected ``apiKeyHelper`` cites the uid, so a rename rewrites nothing
-         *     (ADR resource-identity-is-an-immutable-uid).
+         *     nothing Coffer projects into an agent's config names the connection (the
+         *     ``apiKeyHelper`` prints the agent's local proxy token), so a rename rewrites
+         *     nothing (ADR resource-identity-is-an-immutable-uid).
          */
         ProviderOut: {
             /** Base Url */

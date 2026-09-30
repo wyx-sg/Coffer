@@ -18,14 +18,14 @@ export function ChannelMirrorHint({ mirror }: Props) {
   const { t } = useTranslation();
   const reason = mirror.reason && REASONS.has(mirror.reason) ? mirror.reason : "not_located";
   return (
-    <div className="flex items-center gap-0.5 px-4 pt-2 text-xs text-muted-foreground">
+    <div className="mx-auto flex w-full max-w-[calc(720px+4rem)] items-center gap-0.5 px-8 pt-2 text-xs text-text-muted">
       {mirror.deliverable ? (
-        <span>{t("chat.mirror.alsoSends", { target: mirror.target })}</span>
+        <span>{t("conversations.mirror.alsoSends", { target: mirror.target })}</span>
       ) : (
         <>
-          <span>{t("chat.mirror.staysInCoffer")}</span>
+          <span>{t("conversations.mirror.staysInCoffer")}</span>
           <HelpTip>
-            <p className="text-sm">{t(`chat.mirror.reason.${reason}`)}</p>
+            <p className="text-sm">{t(`conversations.mirror.reason.${reason}`)}</p>
           </HelpTip>
         </>
       )}

@@ -95,10 +95,11 @@ returns — so no request can be answered before then, and a client that has jus
 MUST wait a bounded time for the probe to answer rather than read a refused connection as a
 failure. It MUST report the lifecycle phase (`ready`, or `draining` once shutdown has begun), the
 bound port, the start time, the build's version and the executable answering. It MUST also report
-the build's release channel, the on/off state of every experimental feature (spec
-[experimental-features](../experimental-features/spec.md) "Decide a feature's state per machine"),
-and this machine's id and name — the identity a channel is bound to, which cannot sit behind the
-sync routes because those close while `vault_sync` is switched off. It MAY carry a count of registered,
+the build's release channel, the on/off state of every registered experimental feature as a `features` map — empty
+while the registry names none (spec
+[experimental-features](../experimental-features/spec.md) "Decide a feature's state per machine") —
+and this machine's id and name, the identity a channel is bound to, which is on the status because
+it belongs to the machine rather than to sync. It MAY carry a count of registered,
 enabled, healthy and unhealthy upstreams when those are available, and MUST still answer when they
 are not.
 
@@ -110,9 +111,9 @@ are not.
 - **AND** a CLI or shim whose own version differs from the reported one prints a one-line warning naming both builds and the executable, and carries on.
 
 #### Scenario: daemon status names this machine and its features
-- **GIVEN** a running daemon with `vault_sync` switched off
+- **GIVEN** a running daemon
 - **WHEN** `GET /api/v1/daemon/status` is called with no token
-- **THEN** the response carries `channel`, a `features` map naming `vault_sync`, `knowledge` and `memory`, and this machine's `machine_id` and `machine_name`
+- **THEN** the response carries `channel`, a `features` map with one entry per registered experimental feature (empty when none is registered), and this machine's `machine_id` and `machine_name`
 
 ### Requirement: Decide liveness by the status call
 Liveness MUST be decided by that status call against the recorded port — never by a bare TCP

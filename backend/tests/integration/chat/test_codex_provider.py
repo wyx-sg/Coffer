@@ -428,3 +428,32 @@ async def test_a_turn_with_no_channel_gets_no_memory_digest(tmp_path: Any) -> No
     assert "## Coffer memory" not in start_params["developerInstructions"]
 
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="memory", scenario="a channel turn's prompt brings in the notes it names"
+)
+async def test_a_channel_turn_sends_codex_the_notes_its_prompt_names(tmp_path: Any) -> None:
+    """Codex's turn input carries the notes after the user's text, for a
+    channel turn only."""
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv(channel_uid=_SEATALK_UID))
+    factory, server = _make_factory()
+    notes = "## Coffer memory — notes this prompt names\n- a fact they recorded: x"
+
+    async def _retrieve(agent_key: str, cwd: str, prompt: str, conversation_id: str) -> str | None:
+        assert (agent_key, cwd, conversation_id) == ("codex", str(tmp_path), conv.id)
+        return notes
+
+    provider = CodexAppServerProvider(
+        conversations=repo, session_factory=factory, retrieve_memory=_retrieve
+    )
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+    await _collect(adapter, _user_turn("why does make verify fail", conv.id))
+
+    turn = next(p for m, p in server.requests if m == "turn/start")
+    assert turn["input"][0]["text"] == f"why does make verify fail\n\n{notes}"
+
+    await engine.dispose()

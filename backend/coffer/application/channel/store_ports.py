@@ -231,6 +231,15 @@ class ChannelThreadConversationRepoPort(Protocol):
         from")."""
         ...
 
+    async def locate_many(
+        self, conversation_ids: Sequence[str]
+    ) -> dict[str, tuple[ChannelThreadLocation, ChannelThreadConversation | None]]:
+        """``locate`` for many conversations in ONE read, each paired with its
+        thread's row (``None`` when the thread keeps none) — what the
+        Conversations list's source badges are built from. A conversation no
+        channel opened is absent."""
+        ...
+
     async def next_parallel_ordinal(self, resource_uid: str, chat_id: str) -> int:
         """The number the chat's next parallel thread gets: ``max + 1`` over the
         chat's rows, so a number is never reused after a conversation is replaced

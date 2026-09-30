@@ -7,19 +7,15 @@
 import { useTranslation } from "react-i18next";
 
 import { useAttention } from "@/lib/hooks/useAttention";
-import { useFeatureEnabled, type FeatureKey } from "@/lib/hooks/useFeatures";
+import { isFeatureOn, useFeatureMap } from "@/lib/hooks/useFeatures";
 import { AREAS } from "@/lib/overview/health";
 import { AreaHealthTile } from "./areaTiles";
 
 export function HealthTiles() {
   const { t } = useTranslation();
   const attention = useAttention();
-  const features: Record<FeatureKey, boolean | undefined> = {
-    knowledge: useFeatureEnabled("knowledge"),
-    memory: useFeatureEnabled("memory"),
-    vault_sync: useFeatureEnabled("vault_sync"),
-  };
-  const shown = AREAS.filter((a) => !a.feature || features[a.feature] === true);
+  const features = useFeatureMap();
+  const shown = AREAS.filter((a) => isFeatureOn(features, a.feature));
   return (
     <section aria-labelledby="overview-health" className="space-y-3">
       <h2 id="overview-health" className="text-sm font-semibold">

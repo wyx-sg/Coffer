@@ -198,35 +198,13 @@
   },
   "resources": {
     "title": "MCP 服务器",
-    "subtitle": "Coffer 聚合并通过单一 shim 重新暴露的上游 MCP 服务器。",
-    "addServer": "添加 MCP 服务器",
+    "subtitle": "Coffer 运行它们，并通过同一个端点把它们的工具提供给你选择的智能体。",
+    "addServer": "添加服务器",
     "loadFailed": "加载资源失败",
-    "welcome": {
-      "title": "本地优先的 AI 资产金库，供你的编辑器共享",
-      "body": "在下方注册第一个 MCP 服务器——Coffer 会在本机管理它的生命周期，并把它的工具透过单一命名空间暴露给所有已连接的客户端。",
-      "featureAggregate": {
-        "title": "聚合，不再碎片化",
-        "body": "一次客户端连接，覆盖你注册的全部上游 MCP 服务器。"
-      },
-      "featureCurate": {
-        "title": "策展，不再泛滥",
-        "body": "逐能力开关；偏好在守护进程重启与上游升级后均保留。"
-      },
-      "featureLocal": {
-        "title": "本地优先",
-        "body": "金库只绑定 127.0.0.1；不经你明确开放的对接面，任何数据都不会离开本机。"
-      }
-    },
     "status": {
       "all": "全部"
     },
-    "noMatches": "没有服务器匹配你的搜索。",
     "cols": {
-      "name": "名称",
-      "transport": "传输方式",
-      "health": "健康",
-      "description": "描述",
-      "status": "状态",
       "reach": "生效范围"
     },
     "titleField": {
@@ -236,29 +214,13 @@
       "dialogSubtitle": "标题只用于显示，智能体看到的仍是名称。"
     },
     "fixedName": {
-      "badge": "名称固定",
       "label": "名称",
       "cannotChange": "注册后不能修改。"
     }
   },
   "mcp": {
-    "missingRunner": "本机未安装 {{runner}}",
     "missingRunnerHint": "请先安装 {{runner}}，然后刷新",
-    "table": {
-      "search": "搜索服务器…",
-      "deleteAria": "删除 {{name}}"
-    },
     "server": {
-      "addTitle": "添加 MCP 服务器",
-      "addSubtitle": "注册一个上游 MCP 服务器——Coffer 会在首次使用时启动它，并重新暴露它的工具。",
-      "deleteConfirmTitle": "删除 mcp_server:{{name}}？",
-      "deleteConfirmBody": "这将删除服务器注册及所有关联的功能偏好设置。审计和调用日志条目将被保留。",
-      "deleteServer": "删除服务器",
-      "testConnection": "测试连接",
-      "testing": "测试中…",
-      "testFailure": "失败（{{latency}} ms）：{{error}}",
-      "refresh": "刷新功能列表",
-      "backToResources": "返回 MCP 服务器列表",
       "tabs": {
         "overview": "概览",
         "tools": "工具",
@@ -270,13 +232,8 @@
         "config": "配置",
         "transport": "传输方式",
         "command": "命令",
-        "url": "URL",
-        "tools": "工具",
-        "resources": "资源",
-        "prompts": "提示词",
-        "rawConfig": "原始配置 JSON"
-      },
-      "edit": "编辑"
+        "url": "URL"
+      }
     },
     "capabilities": {
       "emptyTool": "尚未从此上游发现任何工具——点「刷新功能列表」重新查询。",
@@ -323,46 +280,117 @@
       "failing": "异常"
     },
     "add": {
-      "invalidJson": "不是合法的 JSON：{{detail}}"
+      "dialogTitle": "添加 MCP 服务器",
+      "subtitle": "Coffer 运行它，并通过同一个端点把它的工具提供给你选定的智能体。",
+      "pasteLabel": "粘贴配置、命令或 URL",
+      "review": "检查",
+      "chooseType": "或选择类型",
+      "type": {
+        "stdio": "命令（stdio）",
+        "stdioSub": "由 Coffer 启动的程序，例如 npx、uvx 或 docker。",
+        "stdioRuns": "Coffer 为每个智能体会话启动它",
+        "http": "URL（Streamable HTTP）",
+        "httpSub": "已在别处运行、通过 HTTP 访问的服务器。",
+        "httpRuns": "Coffer 为每个智能体会话连接它"
+      },
+      "elsewhere": "已经在别处配置过？",
+      "importAgents": "从你的智能体导入",
+      "importFound": "从你的智能体导入 · 找到 {{count}} 个",
+      "reviewN_one": "检查 {{count}} 个服务器",
+      "reviewN_other": "检查 {{count}} 个服务器",
+      "continue": "继续",
+      "back": "返回",
+      "change": "更改",
+      "name": "名称",
+      "nameHelp": "智能体看到的工具名为 {{name}}__<tool>。最多 24 个字符；之后不能修改。",
+      "nameFixedShort": "添加后不能修改。",
+      "nameTooLong": "{{length}} 个字符；名称最多 {{max}} 个字符。缩短后才能添加此服务器。",
+      "nameInvalid": "只能使用小写字母、数字、\".\"、\"_\" 或 \"-\"（不能含 \"__\"）。",
+      "nameTaken": "已有名为 {{name}} 的服务器。请换一个名称。",
+      "title": "标题",
+      "titleHelp": "在 Coffer 中显示，随时可以修改。",
+      "command": "命令",
+      "args": "参数",
+      "argsQuote": "有一个参数的引号没有闭合。",
+      "url": "URL",
+      "urlHelp": "仅支持 Streamable HTTP。",
+      "env": "环境变量",
+      "headers": "请求头",
+      "addRow": "添加",
+      "rowKey": "{{label}}名称",
+      "rowValue": "{{key}} 的值",
+      "removeRow": "移除 {{key}}",
+      "secret": "密钥",
+      "secretFor": "{{key}} 是密钥",
+      "secretValue": "密钥值",
+      "secretHint": "存入钥匙串；配置里只保留它的名称。",
+      "secretMissing": "请输入 {{key}} 的值；它会存入钥匙串。",
+      "secretLine": "{{key}} 看起来是密钥——它会存入钥匙串，配置里只保留它的名称。",
+      "testAfterAdd": "添加后，Coffer 会立即在它的页面上测试它。",
+      "addServer": "添加服务器",
+      "adding": "正在添加…",
+      "reviewTitle": "添加前检查",
+      "reviewSub": "添加之前不会保存任何内容。",
+      "found_one": "找到 {{count}} 个服务器",
+      "found_other": "找到 {{count}} 个服务器",
+      "include": "包含 {{name}}",
+      "added": "已添加",
+      "renamedFrom": "由 {{name}} 重命名。",
+      "summaryStdio": "stdio · {{program}}",
+      "summaryHttp": "Streamable HTTP",
+      "noHeaders": "没有请求头。",
+      "noEnv": "没有环境变量。",
+      "reviewFootnote": "名称添加后即固定。每个服务器添加后都会测试；失败的会显示在「需要处理」中。",
+      "addN_one": "添加 {{count}} 个服务器",
+      "addN_other": "添加 {{count}} 个服务器",
+      "reachAll": "所有智能体",
+      "reachOff": "暂无智能体",
+      "toastTested": "已添加 {{name}}。测试通过：{{ms}} ms 内连接成功。可用于{{reach}}。",
+      "toastFailing": "已添加 {{name}}，但测试失败：{{error}} 请查看它的页面。",
+      "toastAddedMany_one": "已添加 {{count}} 个服务器",
+      "toastAddedMany_other": "已添加 {{count}} 个服务器",
+      "toastPartial": "已添加 {{total}} 个中的 {{done}} 个服务器——{{names}} 未添加：{{reason}}",
+      "approvalTitle": "等待批准",
+      "approvalBody": "已添加。{{names}} 的密钥在 Coffer 应用中获批后生效。",
+      "openApprovals": "打开待批准项"
     },
     "import": {
-      "jsonLabel": "MCP 服务器 JSON",
-      "jsonHelp": "粘贴 MCP 服务器 README 里的那段 JSON——标准的 {\"mcpServers\": {…}} 格式。可一次粘贴多个。",
-      "jsonPlaceholder": "{\n  \"mcpServers\": {\n    \"filesystem\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@modelcontextprotocol/server-filesystem\", \"/tmp\"]\n    }\n  }\n}",
-      "parse": "继续",
-      "back": "返回",
-      "import": "导入 {{count}} 个",
-      "review": "确认将要导入的内容",
-      "noEnv": "无环境变量",
-      "secret": "密钥",
-      "secretHint": "标记为「密钥」的值会加密存入 Coffer 本地数据库；其余保留在配置中。",
-      "errInvalidJson": "这不是合法的 JSON。",
-      "errNoServers": "没找到 MCP 服务器。需要 {\"mcpServers\": {…}} 格式。",
-      "errBadServer": "服务器「{{name}}」需要 \"command\"（stdio）或 \"url\"（http）。",
-      "errBadEnvValue": "服务器「{{name}}」的环境变量「{{key}}」必须为字符串。",
-      "errEnvNotObject": "服务器「{{name}}」的 env 必须是字符串值的对象。",
-      "noHeaders": "无请求头",
-      "errBadHeaderValue": "服务器「{{name}}」的请求头「{{key}}」必须为字符串。",
-      "errHeadersNotObject": "服务器「{{name}}」的 headers 必须是字符串值的对象。",
-      "fixedName": "服务器将沿用这个名称，注册后不能修改。",
-      "nameTooLong": "「{{name}}」有 {{length}} 个字符，MCP 服务器名称最多 {{max}} 个字符。请在粘贴的 JSON 里缩短它的键名。",
-      "blockedByName": "导入前请返回，把超过 {{max}} 个字符的名称缩短。"
+      "title": "检查导入",
+      "sub": "把你的智能体的 MCP 服务器纳入 Coffer",
+      "none": "你的智能体的配置文件里没有直接配置的 MCP 条目。",
+      "alreadyInCoffer": "Coffer 中已有 {{name}}——无需导入。",
+      "nameUnusable": "它的名称无法直接注册；请从该智能体的页面接管并重命名。",
+      "whatHappens": "将会发生什么",
+      "happensCoffer": "Coffer 添加 {{names}}，所有智能体可用。",
+      "happensAgent": "{{agent}} 移除自己的 {{names}} 条目，改为通过 Coffer 使用。",
+      "keepNote": "密钥值会先移入钥匙串。每个文件只移除选中的条目，并保留一份 .bak 副本。",
+      "importN_one": "导入 {{count}} 个服务器",
+      "importN_other": "导入 {{count}} 个服务器",
+      "importing": "正在导入…",
+      "done_one": "已导入 {{count}} 个服务器",
+      "done_other": "已导入 {{count}} 个服务器",
+      "partial": "已导入 {{total}} 个中的 {{done}} 个。未导入：",
+      "entryFailed": "{{name}}：{{reason}}"
     },
     "edit": {
-      "title": "编辑 MCP 服务器",
-      "subtitle": "修改该服务器的标题、描述、配置和凭据。",
-      "description": "描述",
-      "descriptionPlaceholder": "这个服务器是做什么的",
-      "config": "配置（JSON）",
-      "configHint": "凭据在下方单独管理，不写在这段 JSON 里。",
-      "credentials": "凭据",
-      "noCredentials": "无凭据。",
-      "addCredential": "添加凭据",
-      "removeCredential": "删除凭据",
+      "title": "编辑 {{name}}",
+      "subtitle": "更改对新的智能体会话生效。",
+      "fixedNameHint": "固定——智能体按它调用其工具。",
+      "titleLabel": "标题",
+      "titleHelp": "在 Coffer 中显示。",
+      "urlHelp": "Streamable HTTP。",
+      "credentials": "密钥",
+      "noCredentials": "没有已存储的密钥。",
+      "addCredential": "添加密钥",
+      "removeCredential": "移除密钥",
+      "credentialKey": "密钥名称",
+      "credentialValue": "{{name}} 的新值",
       "credentialNew": "密钥值",
-      "credentialHint": "凭据值会加密存入 Coffer 本地数据库；移除凭据会删除对应的存储条目。",
-      "errRenameNeedsValue": "重命名「{{name}}」需要重新输入密钥值。",
-      "fixedNameHint": "智能体看到的该服务器每个工具名都以它为前缀（mcp__coffer__<name>__…）。"
+      "credentialHint": "密钥值存入钥匙串；配置里只保留它们的名称。移除一个会删除其已存储的值。",
+      "stored": "已存储",
+      "replace": "替换",
+      "errRenameNeedsValue": "要重命名 \"{{name}}\"，请重新输入它的密钥值。",
+      "errInvalidConfig": "无法读取已存储的配置。"
     },
     "timeouts": {
       "legend": "超时（秒）",
@@ -370,6 +398,192 @@
       "spawnHint": "启动服务器进程。5–120，默认 30。",
       "request": "请求",
       "requestHint": "对该服务器的单次调用。5–1800，默认 120。"
+    },
+    "paste": {
+      "foundJson_one": "在 mcpServers 块中找到 {{count}} 个服务器——{{names}}",
+      "foundJson_other": "在 mcpServers 块中找到 {{count}} 个服务器——{{names}}",
+      "foundToml_one": "在 Codex TOML 中找到 {{count}} 个服务器——{{names}}",
+      "foundToml_other": "在 Codex TOML 中找到 {{count}} 个服务器——{{names}}",
+      "foundCommand": "看起来是一条命令 · stdio",
+      "foundUrl": "看起来是一个 URL · Streamable HTTP",
+      "hint": "可读取 mcpServers JSON 块或单个服务器对象、Codex [mcp_servers.<name>] TOML、命令行（也支持 claude mcp add … / codex mcp add …）→ stdio，或 URL → Streamable HTTP。",
+      "unreadable": "无法识别——请在下方选择类型",
+      "errUnreadable": "无法从中读出服务器。请粘贴 mcpServers JSON 块、Codex TOML、命令行或 URL，或在下方选择类型。",
+      "errInvalidJson": "不是合法的 JSON——第 {{line}} 行第 {{column}} 列：{{detail}}",
+      "errInvalidJsonNoLocation": "不是合法的 JSON：{{detail}}",
+      "errNotAnObject": "需要一个 JSON 对象：{\"mcpServers\": {…}} 块或单个服务器对象。",
+      "errServersNotObject": "「{{key}}」必须是以名称为键的服务器对象。",
+      "errNoServers": "没找到 MCP 服务器。需要 {\"mcpServers\": {…}} 块或单个服务器对象。",
+      "errBadServer": "服务器「{{name}}」需要 \"command\"（stdio）或 \"url\"（Streamable HTTP）。",
+      "errEnvNotObject": "服务器「{{name}}」的 env 必须是字符串值的对象。",
+      "errBadEnvValue": "服务器「{{name}}」的环境变量「{{key}}」必须为字符串。",
+      "errHeadersNotObject": "服务器「{{name}}」的 headers 必须是字符串值的对象。",
+      "errBadHeaderValue": "服务器「{{name}}」的请求头「{{key}}」必须为字符串。",
+      "errInvalidToml": "第 {{line}} 行不是合法的 TOML。需要由 key = value 行组成的 [mcp_servers.<name>] 表。",
+      "errCommandQuote": "命令里有未闭合的引号。",
+      "errCommandNoName": "{{tool}} 需要一个服务器名称。",
+      "errCommandNoTarget": "{{tool}} 需要要运行的命令（写在 -- 之后）或服务器的 URL。",
+      "errCommandOption": "{{flag}} 需要一个值：env 用 KEY=value，请求头用 \"Name: value\"。",
+      "errCommandNotAdd": "{{tool}} 不会添加服务器。请粘贴 claude mcp add … 或 codex mcp add … 这样的命令。"
+    },
+    "page": {
+      "agents": "智能体",
+      "allOff": "全部关闭",
+      "allOn": "全部开启",
+      "and": "、",
+      "availableTo": "可用于",
+      "behindSearch": "通过搜索",
+      "bulkLabel": "已选的 MCP 服务器",
+      "calledBy": "调用方",
+      "calls_one": "次调用",
+      "calls_other": "次调用",
+      "callsShort_one": "{{count}} 次",
+      "callsShort_other": "{{count}} 次",
+      "choose": {
+        "title": "选择一个服务器",
+        "body": "在左侧选择一个服务器，查看它为什么处于当前状态、谁在调用它，以及它的工具。"
+      },
+      "colCalls": "调用",
+      "colCalls24h": "24 小时调用",
+      "colErrors": "错误",
+      "colLastCall": "最近调用",
+      "colListing": "智能体看到的方式",
+      "configCopied": "配置已复制 — 其中只有密钥名称，从不包含密钥值。",
+      "delete": {
+        "title": "删除 {{name}}？",
+        "body_one": "{{agents}} 在下次调用时将失去它的 {{count}} 个工具。它的调用记录仍保留在活动中。",
+        "body_other": "{{agents}} 在下次调用时将失去它的 {{count}} 个工具。它的调用记录仍保留在活动中。",
+        "bodyNoAgents": "目前没有智能体使用它。它的调用记录仍保留在活动中。",
+        "confirm": "删除服务器",
+        "alsoSecrets_one": "同时删除密钥 {{names}}",
+        "alsoSecrets_other": "同时删除密钥 {{names}}",
+        "noOtherUser": "没有其他服务器使用它。",
+        "pause": "此操作无法撤销。如果只想暂停一段时间，请改为关闭它。"
+      },
+      "deleteManyTitle_one": "删除 {{count}} 个服务器？",
+      "deleteManyTitle_other": "删除 {{count}} 个服务器？",
+      "deleteManyBody": "智能体在下次调用时将失去这些工具。调用记录仍保留在活动中。",
+      "edit": "编辑",
+      "errors_one": "个错误",
+      "errors_other": "个错误",
+      "failingBody_one": "在它恢复响应之前，{{agents}} 无法调用它的 {{count}} 个工具。",
+      "failingBody_other": "在它恢复响应之前，{{agents}} 无法调用它的 {{count}} 个工具。",
+      "failingSince": "自 {{at}} 起失败",
+      "failingTitle": "它没有响应",
+      "filter": "筛选服务器",
+      "fromCache": "来自上次成功的连接。它恢复后，你的开关设置仍然生效。",
+      "group": {
+        "attention": "需要处理",
+        "healthy": "正常",
+        "unknown": "尚未检查",
+        "off": "已关闭"
+      },
+      "last24h": "最近 24 小时",
+      "lastErrorAt": "最近一次错误于 {{at}}",
+      "lastSuccess": "最近一次成功调用于 {{at}}，{{tool}}。",
+      "launcherTitle": "这台 Mac 上没有安装 {{runner}}",
+      "launcherBody_one": "Coffer 用 {{runner}} 启动这个服务器。安装后再测试一次 — 在此之前智能体无法调用它的 {{count}} 个工具。",
+      "launcherBody_other": "Coffer 用 {{runner}} 启动这个服务器。安装后再测试一次 — 在此之前智能体无法调用它的 {{count}} 个工具。",
+      "listed": "直接列出",
+      "listedDirectly": "直接列出",
+      "log": {
+        "agent": "调用方",
+        "all": "全部",
+        "calls": "调用",
+        "callsFootnote": "Coffer 只记录谁调用了什么、结果如何 — 从不记录参数或返回内容。",
+        "callsTab": "调用 · {{count}}",
+        "errorLines": "错误",
+        "errors": "错误 · {{count}}",
+        "everything": "全部",
+        "logFootnote": "服务器在 stderr 上的输出，以及 Coffer 启动和停止它的记录。最新的在前。",
+        "logTab": "服务器日志",
+        "noLogHttp": "Streamable HTTP 服务器运行在别处，Coffer 没有它自己的日志。它的调用在“调用”标签页中。",
+        "notStarted": "Coffer 还没有在这台 Mac 上启动过这个服务器。",
+        "nothing": "没有可显示的内容。",
+        "openFile": "打开日志文件",
+        "result": "结果",
+        "session": "会话",
+        "show": "显示",
+        "status": {
+          "ok": "成功",
+          "error": "错误",
+          "timeout": "超时",
+          "denied": "已拒绝"
+        },
+        "subtitle": "最近 24 小时 {{calls}} 次调用 · {{errors}} 个错误",
+        "subtitleHttp": "Streamable HTTP · 通过网络连接",
+        "subtitleStdio": "stdio · 由 Coffer 为每个智能体会话启动",
+        "time": "时间",
+        "title": "{{name}} · 调用与服务器日志",
+        "took": "耗时",
+        "tool": "工具"
+      },
+      "menu": {
+        "copyConfig": "复制配置为 JSON",
+        "delete": "删除…",
+        "edit": "编辑…",
+        "label": "{{name}} 的更多操作",
+        "log": "调用与服务器日志",
+        "turnOff": "关闭"
+      },
+      "mostBehindSearch": "大多通过搜索",
+      "mostlyBehindSearch": "大多通过搜索 · 直接列出 {{listed}} 个 · 通过搜索 {{behind}} 个",
+      "noCalls": "最近 24 小时没有调用。",
+      "noMatches": "没有匹配的服务器。",
+      "notFound": "没有名为 {{name}} 的 MCP 服务器。",
+      "offBody": "Coffer 不会为任何会话启动它。开启后，它会重新提供给你上次选择的智能体。",
+      "offKept": "已关闭 — 保留：{{agents}}",
+      "offTitle": "已关闭 — 没有智能体能使用它",
+      "openInActivity": "在活动中打开",
+      "reason": {
+        "failing": "失败",
+        "failingSince": "{{error}} · 自 {{since}} 起",
+        "launcher": "没有安装 {{runner}}",
+        "secret": "缺少密钥 · {{secret}}"
+      },
+      "replaceSecret": "替换密钥",
+      "secretBody": "{{key}} 设置指向了它，但这台 Mac 上没有保存它的值 — 密钥不会随保险库同步。添加后 Coffer 会在下次调用时使用它。智能体永远看不到它。",
+      "secretTitle": "这台 Mac 的钥匙串中没有密钥 {{secret}}",
+      "showMore": "再显示 {{count}} 个",
+      "state": {
+        "failing": "失败",
+        "launcherMissing": "缺少启动器",
+        "secretMissing": "缺少密钥",
+        "healthy": "正常",
+        "unknown": "尚未检查",
+        "off": "已关闭"
+      },
+      "stored": "保存位置",
+      "storedValue": "可用范围只在这台 Mac 上设置",
+      "summaryUnavailable": "无法读取最近 24 小时的记录。",
+      "test": "测试",
+      "testAgain": "再次测试",
+      "testFailed": "测试失败，耗时 {{ms}} 毫秒",
+      "testPassed": "测试通过，耗时 {{ms}} 毫秒",
+      "testPassedBody": "它有响应；它的工具就是智能体现在看到的那些。",
+      "testing": "正在测试…",
+      "tieringTitle": "它的 {{total}} 个工具中有 {{listed}} 个直接列给智能体，{{behind}} 个通过搜索",
+      "tieringBody": "你的服务器一共提供 {{catalogue}} 个工具。Coffer 直接列出 {{budget}} 个 — 智能体调用最多的那些，每个服务器至少一个 — 以免智能体被淹没。其余的由智能体用 coffer__search_tools 找到并按名称调用。所有已开启的工具都仍然可用。",
+      "toolCount_one": "{{count}} 个工具",
+      "toolCount_other": "{{count}} 个工具",
+      "toolsOn": "已开启 {{on}} / {{total}}",
+      "toolsReachAgents": "工具如何提供给智能体",
+      "transport": {
+        "stdio": "stdio",
+        "http": "Streamable HTTP",
+        "unknown": "未知传输方式"
+      },
+      "turnOn": "开启",
+      "unknownSession": "未说明智能体的会话",
+      "viewLog": "查看日志",
+      "welcome": {
+        "title": "还没有 MCP 服务器",
+        "body": "添加一次服务器，你选择的每个智能体都能通过 Coffer 的同一个端点使用它的工具。",
+        "foundTitle_one": "你的智能体已经在使用 {{count}} 个 MCP 服务器",
+        "foundTitle_other": "你的智能体已经在使用 {{count}} 个 MCP 服务器",
+        "foundBody": "导入后，Coffer 会为你选择的每个智能体运行它们。每一个都会从智能体自己的配置中移除，避免被启动两次。",
+        "reviewImport": "查看并导入"
+      }
     }
   },
   "timeRange": {
@@ -454,6 +668,8 @@
       "skill_relinked": "重新链接了技能 {{resource}}",
       "skill_unbound": "将技能 {{resource}} 从 {{key}} 解绑",
       "skill_unmanaged_deleted": "删除了未纳管技能 {{resource}}",
+      "cli_install_started": "开始用 Homebrew 安装命令行工具 {{command}}",
+      "cli_install_finished": "命令行工具 {{command}} 的 Homebrew 安装已结束",
       "skill_updated": "更新了技能 {{resource}}",
       "sync_confirmed": "确认了一轮被暂停的收敛",
       "sync_machine_removed": "从同步注册表中下线了一台机器",
@@ -468,7 +684,8 @@
       "secret_approval_requested": "请求批准一项密钥改动",
       "secret_approval_approved": "批准了一项密钥改动",
       "secret_approval_rejected": "拒绝了一项密钥改动",
-      "secret_imported": "导入了密钥"
+      "secret_imported": "导入了密钥",
+      "storage_cache_cleared": "清除了可重建的缓存"
     },
     "capType": {
       "tool": "工具",
@@ -672,23 +889,26 @@
       "daemon": "守护进程"
     },
     "general": {
-      "title": "偏好",
-      "pageSize": "每页默认行数",
-      "pageSizeHelp": "所有表格的初始每页行数。",
+      "pageSize": "每页行数",
+      "pageSizeHelp": "表格分页前显示的行数。",
       "theme": "主题",
-      "themeHelp": "跟随系统外观，或在本设备上固定为浅色或深色。",
+      "themeHelp": "“跟随系统”会跟随 macOS 的外观。",
       "themeSystem": "跟随系统",
       "themeLight": "浅色",
       "themeDark": "深色",
-      "preferredEditor": "首选编辑器",
-      "preferredEditorHelp": "Coffer 打开受管文件所用的编辑器。可选一个检测到的编辑器，或直接填入应用名 / 启动命令；留空则用系统默认。",
+      "preferredEditor": "打开文件的方式",
+      "preferredEditorHelp": "Coffer 打开受管文件所用的编辑器。选择检测到的编辑器，或输入任意应用名称或启动命令。",
       "preferredEditorSystemDefault": "系统默认",
       "preferredEditorCustom": "自定义…",
       "preferredEditorCustomCommand": "自定义编辑器命令",
-      "preferredEditorCustomPlaceholder": "例：zed 或 /Applications/Zed.app"
+      "preferredEditorCustomPlaceholder": "例：zed 或 /Applications/Zed.app",
+      "intro": "此浏览器和这台 Mac 的偏好设置。",
+      "appearance": "外观",
+      "language": "语言",
+      "languageHelp": "Coffer 界面使用的语言。",
+      "tablesAndFiles": "表格与文件"
     },
     "daemon": {
-      "title": "Coffer 守护进程",
       "autostart": "开机自启动",
       "autostartHelp": "不管 Coffer 有没有打开，守护进程都保持运行，这样智能体当天第一次调用不用等它启动；崩溃后会自动拉起。",
       "autostartUnsupported": "仅 macOS 可用。"
@@ -707,52 +927,39 @@
         "setting": "在这台机器上设置",
         "channel": "{{channel}} 渠道的默认值"
       },
-      "names": {
-        "vault_sync": "同步",
-        "knowledge": "知识",
-        "memory": "记忆"
-      },
-      "descriptions": {
-        "vault_sync": "把这个 vault 与你自有的 git 远端双向同步。",
-        "knowledge": "~/.coffer/knowledge/ 下供智能体阅读的文档集合。",
-        "memory": "从各智能体自己的存储聚合来的记忆，以及投递它的 hook。"
-      },
       "offTitle": "{{name}}已关闭",
       "offBody": "{{name}}是实验功能，在这台机器上已关闭。它保存的内容都没有删除——在命令行里用 coffer config set feature.{{key}} on 开启即可。"
     },
     "retention": {
-      "title": "数据保留",
       "keepForever": "永久保留",
       "days": "保留天数",
       "minDays": "最少 1 天",
-      "lastPruned": "上次清理：{{when}}，清理了 {{rows}} 行",
       "neverPruned": "尚未清理过",
       "shortenTitle": "把保留期缩短到 {{days}} 天？",
       "shortenBody": "下次清理会删除更早的记录。",
       "shortenConfirm": "缩短",
       "pruneAll": "立即清理过期数据",
       "pruning": "清理中…",
-      "pruneDescription": "立即应用当前保留策略。",
       "pruneConfirmTitle": "立即清理过期数据？",
       "pruneConfirmBody": "超过各项保留期的记录会被永久删除。",
       "pruneRow": "已从{{name}}清理 {{rows}} 行",
       "pruneNothing": "没有需要清理的数据",
       "policy": {
         "audit_log": {
-          "name": "审计日志",
-          "description": "资源生命周期事件。"
+          "name": "变更",
+          "description": "在 Coffer 中做出的每一次变更，无论来自你、命令行、同步还是智能体"
         },
         "mcp_invocations": {
-          "name": "MCP 调用记录",
-          "description": "MCP 工具 / 资源 / 提示词的调用日志。"
+          "name": "MCP 调用",
+          "description": "谁调用了哪个工具，结果如何"
         },
         "conversations_archive": {
           "name": "自动归档闲置对话",
           "description": "超过设定天数没有新消息的对话将被自动归档。"
         },
         "conversations": {
-          "name": "删除已归档对话",
-          "description": "对话归档后超过设定天数将被删除（连同其消息）。"
+          "name": "对话",
+          "description": "已归档的对话和消息渠道话题，从归档时开始计算"
         },
         "sync_runs": {
           "name": "同步轮次",
@@ -761,8 +968,7 @@
       }
     },
     "about": {
-      "title": "关于 Coffer",
-      "copyDiagnostics": "复制诊断信息",
+      "copyDiagnostics": "复制诊断信息以报告问题",
       "fields": {
         "version": "版本",
         "license": "许可证",
@@ -791,7 +997,11 @@
         "autoHelp": "在启动时以及每 6 小时检查一次，安装前会先征得你的同意。",
         "browser": "更新由 Coffer 桌面应用安装。在浏览器中使用时，请安装新版本的命令行工具来更新 Coffer。",
         "unconfigured": "此版本构建时没有更新密钥，因此不会检查更新。新版本发布在 GitHub Releases 页面。"
-      }
+      },
+      "diagnosticsCopied": "诊断信息已复制，可粘贴到问题报告中。",
+      "versionLine": "版本 {{version}} · {{channel}} 渠道",
+      "versionLineLoading": "正在读取版本…",
+      "details": "详细信息"
     },
     "security": {
       "masterKey": {
@@ -932,10 +1142,32 @@
     "sections": "设置分区",
     "daemonTab": {
       "title": "状态",
-      "state": "状态",
+      "intro": "为你的智能体和本页面提供服务的后台进程。",
+      "state": {
+        "connecting": "正在连接…",
+        "stopping": "正在停止",
+        "offline": "离线 — 守护进程没有响应"
+      },
+      "runningOn": "运行于 127.0.0.1:{{port}}",
+      "offlineShell": "重启它即可恢复 Coffer；它响应后本页面会自动重新连接。",
+      "offlineBrowser": "由守护进程提供的页面无法启动它。请在终端中运行以下命令，然后刷新：",
+      "restart": "重启",
+      "restartNow": "立即重启",
+      "browserRestart": "要在浏览器中重启它，请在终端中运行以下命令。它恢复后本页面会自动重新连接。",
+      "copyCommand": "复制 {{command}}",
       "port": "端口",
+      "portHelp": "{{min}}–{{max}}，默认 8000。书签和智能体连接都会跟随它。",
+      "portRange": "请输入 {{min}} 到 {{max}} 之间的整数。",
+      "portInUse": "端口 {{port}} 已被其他程序占用。",
+      "portInUseBy": "端口 {{port}} 已被 {{name}}（pid {{pid}}）占用。",
+      "portPending": "端口 {{port}} 已保存 — Coffer 重启后生效",
+      "portPendingHelp": "智能体会自动重新连接到新端口。",
+      "save": "保存",
+      "startup": "启动",
       "version": "版本",
-      "startedAt": "启动时间"
+      "channel": "渠道",
+      "startedAt": "启动时间",
+      "executable": "可执行文件"
     },
     "cofferModel": {
       "title": "Coffer 自用模型",
@@ -965,6 +1197,43 @@
       "reachableDetail": "——该端点不列出自己的模型，因此无法核对所选模型。",
       "notListed": "该端点的模型列表里没有 {{model}}",
       "noAnswer": "该端点没有应答"
+    },
+    "data": {
+      "intro": "Coffer 保存了什么、放在哪里、保留多久。",
+      "openFolder": "打开文件夹",
+      "showInFinder": "在访达中显示",
+      "location": "位置",
+      "notSaved": "未保存",
+      "saveFailedTitle": "未能保存新的保留期限",
+      "lastCleared": "上次清理：{{when}} — {{rows}} 行",
+      "clearedOnSchedule": "过期记录每六小时自动清理一次。",
+      "vault": {
+        "title": "保险库",
+        "size_one": "{{size}} · {{versions}} 个版本",
+        "size_other": "{{size}} · {{versions}} 个版本",
+        "description": "会同步 — 一个 git 仓库。包含配置、技能、知识和加密的密钥。",
+        "notRepository": "你的配置、技能和知识。设置同步后会以 git 仓库保存每个版本。"
+      },
+      "local": {
+        "title": "本地内容",
+        "description": "不会同步 — 请自行备份（把这个文件夹加入你的备份）。",
+        "attachments": "对话和消息渠道的附件",
+        "attachmentsHelp": "在对话和消息渠道中发送的文件和图片"
+      },
+      "history": {
+        "title": "历史记录",
+        "description": "发生过的事情的记录。旧记录按下面的期限删除。"
+      },
+      "cache": {
+        "title": "可重建的缓存",
+        "description": "记忆树和对话摘要缓存。Coffer 会自动重建它。",
+        "clear": "清除",
+        "confirmTitle": "清除缓存？",
+        "confirmBody": "{{size}} — 记忆树和对话摘要缓存。Coffer 会在下次更新时从智能体自己的记忆重建记忆；要达到同样的质量需要 Coffer 的模型（没有它，每条记忆会各自成为一条笔记），来源已删除的记忆不会恢复。你写的内容和历史记录都不受影响。",
+        "confirm": "清除缓存",
+        "clearing": "正在清除…",
+        "cleared": "已清除 {{size}}。记忆会在下次更新时重建。"
+      }
     }
   },
   "daemon": {
@@ -998,6 +1267,11 @@
     "CHANNEL_NOT_PAIRED": "该消息渠道还没有配对的账号——请生成配对码并发给机器人",
     "CHANNEL_NOT_RUNNING": "消息渠道适配器未在运行——请启用该消息渠道以启动它",
     "CHANNEL_SEND_FAILED": "向 IM 平台发送失败",
+    "CLI_FORMULA_MISMATCH": "该 Homebrew formula 与技能为此命令声明的不一致，未执行任何操作。",
+    "CLI_INSTALL_NOT_FOUND": "自 Coffer 启动以来没有为此命令运行过安装",
+    "CLI_INSTALL_RUNNING": "此命令的安装已在进行中",
+    "CLI_NOT_INSTALLABLE": "没有可安装的内容：未声明 Homebrew formula，或命令已是最新",
+    "CLI_NOT_REQUIRED": "没有技能需要此命令",
     "CONFIG_FILE_FORMAT_INVALID": "内容不符合该文件的格式，文件未做更改。",
     "CONFIG_FILE_NOT_ALLOWED": "该配置文件不适用于此智能体",
     "CONFIG_FILE_STALE": "配置文件在你加载后已被磁盘上的改动覆盖，请重新加载后重试。",
@@ -1020,6 +1294,7 @@
     "GENERIC_CREATE_NOT_ALLOWED": "该类型不支持直接创建",
     "GIT_MIRROR_FAILED": "Git 推送失败。改动已在本地提交；请检查远端地址、分支和推送凭据。",
     "GREP_PATTERN_INVALID": "无效的 grep 模式",
+    "HOMEBREW_NOT_FOUND": "智能体的 PATH 上没有 Homebrew（brew），未执行任何操作。",
     "HOST_NOT_ALLOWED": "Coffer 只响应发往它自己回环地址和端口的请求。",
     "INGEST_REJECTED": "文档在摄入过程中被拒绝",
     "INGEST_REJECTED_scanned_pdf": "该 PDF 似乎是扫描件或纯图片——无法提取文本。请先运行 OCR（或将其转换为基于文本的 PDF）后重新上传。",
@@ -1108,10 +1383,18 @@
     "SECRET_NAME_INVALID": "密钥名称无效。",
     "SECRET_NOT_FOUND": "没有以该名称存储的密钥。",
     "MASTER_KEY_CONFLICT": "发现了两把不同的主密钥（一把在钥匙串中，另一把在别处）。Coffer 不会替你选择：请保留加密凭据时所用的那把，删除另一把。",
+    "CUSTOM_TOOL_NOT_FOUND": "没有这个名称的自定义工具或分组",
+    "NOT_A_CUSTOM_TOOL_GROUP": "这个 MCP 服务器不是自定义工具分组",
+    "CUSTOM_TOOL_EXISTS": "这个分组中已有同名工具",
+    "OPENAPI_UNREADABLE": "无法读取这个 OpenAPI 规范",
+    "NOT_IMPORTED_FROM_OPENAPI": "这个分组不是从 OpenAPI 规范导入的，无法重新导入",
+    "OPENAPI_FILE_NEEDED": "这个分组是从文件导入的：请再次选择该文件以重新导入",
     "SKILL_STAGING_NOT_FOUND": "暂存的来源已不存在——已添加、已取消或已过期。请重新开始。",
     "SKILL_SOURCE_UNREACHABLE": "Git 无法访问该技能的仓库。",
     "SKILL_UPDATE_CONFLICT": "该技能在固定的提交之后被修改过。请保留你的修改，或接受更新并丢弃修改。",
-    "SKILL_NOT_FROM_GIT": "该技能不是从 Git 仓库添加的，没有可更新的来源。"
+    "SKILL_NOT_FROM_GIT": "该技能不是从 Git 仓库添加的，没有可更新的来源。",
+    "PORT_OUT_OF_RANGE": "请选择 1024 到 65535 之间的端口。",
+    "PORT_IN_USE": "该端口已被其他程序占用，请换一个。"
   },
   "pagination": {
     "summary": "第 {{page}} / {{pageCount}} 页 · 共 {{total}} 条",
@@ -1380,6 +1663,8 @@
       },
       "matcher": "匹配器 {{matcher}}",
       "matcherAny": "任意",
+      "memoryHook_one": "记忆钩子 · {{count}} 个事件",
+      "memoryHook_other": "记忆钩子 · {{count}} 个事件",
       "state": {
         "active": "生效中",
         "current": "最新",
@@ -1408,7 +1693,7 @@
         "openActivity": "打开活动"
       },
       "repair": "修复",
-      "repairAria": "修复 Coffer 的 {{event}} 钩子",
+      "repairAria": "修复 Coffer 的记忆钩子",
       "openFile": "打开文件",
       "openFileAria": "打开 {{path}}",
       "search": "搜索钩子",
@@ -2107,7 +2392,17 @@
       "anyVersion": "任意版本",
       "emptyTitle": "这个技能没有声明需要的命令",
       "emptyBody": "在 SKILL.md 的 frontmatter 里用 requires: 列出它需要的命令，例如 requires: [jq, \"gh>=2.40\"]。",
-      "stillDelivered": "无论这些命令是否已安装，技能都会照常投递。"
+      "stillDelivered": "无论这些命令是否已安装，技能都会照常投递。",
+      "title": "依赖",
+      "readyLine": "{{command}} {{version}} · {{path}}",
+      "notOnPath": "不在 PATH 上。",
+      "outdatedLine": "找到 {{version}}，要求 ≥ {{min}}。",
+      "loggedOutBefore": "已安装，但未登录。在终端运行",
+      "loggedOutAfter": "。",
+      "footnote": "技能仍会投递。按它执行的智能体会在需要 {{commands}} 的那一步失败，直到安装为止。",
+      "empty": "这个技能没有声明需要的命令。",
+      "emptyHint": "在 SKILL.md 的 requires: 里列出它调用的命令，就会显示在这里。",
+      "loadFailed": "无法检查这个技能需要的命令"
     },
     "history": {
       "title": "尚未记录版本",
@@ -2462,7 +2757,7 @@
       "loadFailed": "加载投递内容失败。"
     }
   },
-  "chat": {
+  "conversations": {
     "title": "对话",
     "thinking": "思考中…",
     "message": {
@@ -2470,29 +2765,21 @@
       "tokens": "输入 {{prompt}} · 输出 {{completion}}"
     },
     "history": {
-      "new": "新对话",
-      "empty": "暂无对话——点「新对话」开始",
       "search": "搜索对话",
       "noMatches": "没有匹配的对话",
       "ariaLabel": "对话历史",
       "rename": "重命名",
       "renameAria": "重命名对话",
       "delete": "删除",
-      "collapse": "折叠历史面板",
-      "expand": "展开历史面板",
       "restore": "恢复",
       "archive": "归档",
-      "archivedEmpty": "没有已归档的对话",
-      "filterLabel": "筛选对话",
-      "filterActive": "活跃",
-      "filterArchived": "归档",
-      "viaChannel": "来自 {{channel}}"
+      "archivedEmpty": "没有已归档的对话"
     },
     "thread": {
       "empty": "发送消息开始对话。",
       "notFoundTitle": "未找到该对话",
       "notFoundBody": "它可能已被删除，或者链接已失效。",
-      "notFoundCta": "开始新对话"
+      "notFoundCta": "新建对话"
     },
     "archivedThread": {
       "notice": "该对话已归档。",
@@ -2500,13 +2787,15 @@
       "restoring": "恢复中…"
     },
     "composer": {
-      "placeholder": "输入消息…（Enter 发送，Shift+Enter 换行）",
+      "placeholder": "给 {{agent}} 发消息…",
       "ariaLabel": "消息输入框",
       "send": "发送",
       "stop": "停止",
-      "streaming": "回复正在生成中——你的下一条消息将进入队列。",
       "attach": "添加附件",
-      "dropHint": "松开以添加附件"
+      "dropHint": "松开以添加附件",
+      "placeholderAny": "输入消息…",
+      "replyPlaceholder": "回复…",
+      "queuePlaceholder": "回复——会排队到这一轮结束"
     },
     "queue": {
       "label": "队列中：",
@@ -2517,7 +2806,7 @@
       "unknown": "未知工具",
       "running": "运行中",
       "done": "完成",
-      "error": "错误",
+      "error": "出错",
       "input": "输入",
       "result": "结果",
       "errorLabel": "错误",
@@ -2538,9 +2827,10 @@
       "inheritNoEffort": "智能体默认"
     },
     "draft": {
-      "guide": "给 {{agent}} 发消息，开始新对话。",
+      "guide": "发出第一条消息即开始与 {{agent}} 的对话。",
       "noAgentTitle": "没有可用的受管智能体",
-      "noAgentBody": "聊天需要连接 Coffer 受管的智能体。请安装或配置 Claude Code 或 Codex，然后在「智能体」页面注册。"
+      "noAgentBody": "对话需要一个由 Coffer 管理的智能体。请在本机安装 Claude Code 或 Codex，然后在「智能体」页面添加。",
+      "workspace": "Coffer 的工作区"
     },
     "delete": {
       "title": "删除此对话？",
@@ -2574,50 +2864,371 @@
       },
       "notDelivered": "尚未送达 {{platform}}",
       "notDeliveredHelp": "渠道恢复运行后，Coffer 会发送这条消息以及智能体的回答。"
+    },
+    "source": {
+      "coffer": "Coffer",
+      "channel": "消息渠道",
+      "dm": "私聊",
+      "group": "群聊",
+      "thread": "话题",
+      "topic": "话题",
+      "viaChannel": "来自消息渠道 {{channel}}"
+    },
+    "day": {
+      "today": "今天",
+      "yesterday": "昨天"
+    },
+    "list": {
+      "running": "运行中",
+      "ariaLabel": "对话",
+      "cols": {
+        "conversation": "对话",
+        "source": "来源",
+        "agent": "智能体",
+        "lastActivity": "最近活动"
+      },
+      "emptyTitle": "还没有对话",
+      "emptyBody": "所有对话都会出现在这里——在 Coffer 里发起的，以及通过 SeaTalk 或 Telegram 进来的。",
+      "noMatches": "没有符合这些筛选条件的对话"
+    },
+    "filters": {
+      "source": "来源",
+      "allSources": "全部来源",
+      "agent": "智能体",
+      "allAgents": "全部智能体",
+      "channel": "消息渠道：{{channel}}",
+      "clearChannel": "显示全部来源",
+      "showArchived": "已归档",
+      "showActive": "进行中"
+    },
+    "new": {
+      "action": "新建对话",
+      "title": "新建对话",
+      "hint": "模型和思考强度沿用智能体「模型」标签页的设置；在对话里可以随时切换。",
+      "agent": "智能体",
+      "unavailable": "本机不可用",
+      "workingDir": "工作目录",
+      "workingDirPlaceholder": "Coffer 的工作区（~/.coffer/workspace）",
+      "start": "开始"
+    },
+    "header": {
+      "more": "这个对话的更多操作"
+    },
+    "files": {
+      "title": "改动的文件 · {{count}}"
+    },
+    "streamLost": {
+      "title": "与守护进程的实时连接已断开",
+      "body": "重连五次都失败了。这一轮可能仍在运行——重新加载会显示它目前写下的全部内容。",
+      "reload": "重新加载对话"
     }
   },
   "channels": {
     "title": "消息渠道",
-    "subtitle": "把你常用的 IM 账号（Telegram、SeaTalk）接到你的智能体上。",
-    "add": "添加消息渠道",
     "loadFailed": "加载消息渠道失败",
-    "searchPlaceholder": "搜索消息渠道…",
     "noMatches": "没有匹配的消息渠道。",
-    "backToChannels": "返回消息渠道列表",
-    "paired": "已配对",
-    "notPaired": "未配对",
-    "types": {
-      "telegram": "Telegram",
-      "seatalk": "SeaTalk"
-    },
-    "cols": {
-      "name": "名称",
-      "type": "类型",
-      "agent": "默认智能体",
-      "health": "健康",
-      "runsOn": "运行机器",
-      "paired": "配对"
-    },
-    "welcome": {
-      "title": "在你常用的 IM 里和智能体对话",
-      "body": "一个消息渠道把一个 Telegram 机器人或 SeaTalk 应用接入 Coffer 的对话平台。与你自己的账号配对后，给机器人发消息即可与智能体对话——回复和通知都会送达 IM 聊天里。",
-      "featureChat": {
-        "title": "随处对话",
-        "body": "消息会进入一条普通会话；智能体的回复原路返回 IM 聊天。"
-      },
-      "featurePair": {
-        "title": "只配对给你",
-        "body": "一次性配对码把消息渠道绑定到你的账号；陌生人会被静默忽略。"
-      },
-      "featureNotify": {
-        "title": "推送通知",
-        "body": "Coffer 可以主动向已配对的所有者推送消息——无需任何入站消息。"
+    "notFound": "这个消息渠道已不存在",
+    "notFoundBody": "请从列表中选择一个消息渠道。",
+    "list": {
+      "filter": "筛选",
+      "groups": {
+        "attention": "需要处理",
+        "connected": "已连接",
+        "elsewhere": "在其他机器",
+        "off": "已关闭"
       }
     },
-    "dialog": {
+    "state": {
+      "loading": {
+        "word": "检查中…",
+        "line": "检查中…"
+      },
+      "unavailable": {
+        "word": "未知",
+        "line": "状态不可用"
+      },
+      "unbound": {
+        "word": "无处运行",
+        "line": "未绑定机器"
+      },
+      "unknownMachine": {
+        "word": "无处运行",
+        "line": "绑定到了未知机器"
+      },
+      "elsewhere": {
+        "word": "运行在 {{machine}}",
+        "line": "运行在 {{machine}}"
+      },
+      "off": {
+        "word": "已关闭",
+        "line": "已关闭"
+      },
+      "connecting": {
+        "word": "连接中",
+        "line": "连接中…"
+      },
+      "reconnecting": {
+        "word": "重连中",
+        "line": "重连中…"
+      },
+      "kicked": {
+        "word": "被挤下线",
+        "line": "连接被另一个进程占用"
+      },
+      "sdkMissing": {
+        "word": "无法启动",
+        "line": "未找到 SeaTalk SDK"
+      },
+      "connectFailed": {
+        "word": "无法连接",
+        "line": "连接被拒绝"
+      },
+      "stopped": {
+        "word": "已停止",
+        "line": "已停止"
+      },
+      "notPaired": {
+        "word": "未配对",
+        "line": "尚未配对"
+      },
+      "connected": {
+        "word": "已连接",
+        "line": "已连接"
+      }
+    },
+    "banner": {
+      "unavailable": {
+        "title": "读不到这个消息渠道的状态",
+        "body": "其他消息渠道不受影响。请重试，或打开「活动」查看守护进程最近的日志。"
+      },
+      "unbound": {
+        "title": "没有绑定任何机器",
+        "body": "没有指明机器的消息渠道不会被任何机器启动，机器人永远不会回话。在本机运行它，或在「设置」里选择应该运行它的机器。"
+      },
+      "unknownMachine": {
+        "title": "绑定到了 Coffer 不认识的机器（{{id}}）",
+        "body": "同步组里没有机器认领这个 id，所以没有机器会启动机器人，它永远不会回话。请选择应该运行它的机器。"
+      },
+      "elsewhere": {
+        "title": "在本机保持安静是有意为之——{{machine}} 在运行这个机器人",
+        "body": "一个机器人只能有一个连接，所以只有一台机器应答它。设置和配对会同步，连接不会。"
+      },
+      "off": {
+        "title": "这个消息渠道已关闭",
+        "body": "它的机器人不会发起任何对话。打开它即可重新连接——设置和配对都会保留。"
+      },
+      "reconnecting": {
+        "title": "与 {{platform}} 的连接已断开——正在重连",
+        "body": "通常是网络或 {{platform}} 那边的短暂故障。期间发送的消息会在恢复后送达。"
+      },
+      "kicked": {
+        "title": "{{platform}} 把这个机器人的连接交给了另一个进程",
+        "body": "SeaTalk 每个应用只允许一个连接。有别的程序在运行应用 {{appId}}——常见的是另一台机器上的 Coffer，或测试脚本。请在那边停掉它，或在这里把连接拿回来。"
+      },
+      "sdkMissing": {
+        "title": "未安装 SeaTalk 的 Python SDK",
+        "body": "Coffer 通过 SeaTalk 官方 SDK 与其通信，但 SDK 不随安装包提供。请按下面的提示安装，然后重试。"
+      },
+      "connectFailed": {
+        "title": "{{platform}} 拒绝了连接",
+        "body": "通常是 App ID 有误，或 App Secret 已在 SeaTalk 开放平台重新生成。请更换密钥——配对和设置都会保留。"
+      },
+      "notPaired": {
+        "title": "把它与你的 {{platform}} 账号配对",
+        "body": "生成一个配对码，用你自己的账号发给机器人。这个账号将成为它唯一回应的账号。"
+      },
+      "stopped": {
+        "title": "{{platform}} 适配器没有在运行",
+        "body": {
+          "telegram": "常见原因是 bot token 已在 @BotFather 中撤销或重新生成。粘贴新的 token 即可——配对和设置都会保留。",
+          "seatalk": "常见原因是 App Secret 已在 SeaTalk 开放平台重新生成。更换它即可——配对和设置都会保留。"
+        }
+      }
+    },
+    "meta": {
+      "seatalkApp": "SeaTalk 应用 {{appId}}",
+      "websocket": "WebSocket",
+      "longPolling": "长轮询",
+      "runsHere": "运行在本机"
+    },
+    "tabs": {
+      "overview": "总览",
+      "settings": "设置"
+    },
+    "actions": {
+      "more": "{{name}} 的更多操作",
+      "sendTest": "发送测试",
+      "sendTestMessage": "发送测试消息",
+      "reconnect": "立即重连",
+      "takeBack": "拿回连接",
+      "retryStart": "重试",
+      "refresh": "重试",
+      "replaceSecret": "更换密钥",
+      "replaceToken": "更换 token",
+      "runHere": "在本机运行",
+      "runHereConfirm": "在本机运行…",
+      "turnOn": "打开",
+      "changeMachine": "更换机器…",
+      "delete": "删除消息渠道"
+    },
+    "overview": {
+      "who": {
+        "title": "谁可以使用",
+        "oneOwner": "1 位主人",
+        "ownerLine": "主人 · 私聊 · 配对于 {{date}}",
+        "repair": "重新配对…",
+        "nobody": "还没有人。配对之前，机器人会忽略所有消息。",
+        "onlyOwner": "只回应主人；陌生人得不到任何回复。"
+      },
+      "agents": {
+        "title": "智能体",
+        "default": "默认智能体",
+        "reach": "可驱动的智能体",
+        "help": "每条消息都会成为「对话」里的一个对话。{{agentCommand}} 在这些智能体之间切换，/model 选择模型，/thread 开启一个并行对话。"
+      },
+      "conversations": "来自这个消息渠道的对话",
+      "conversationsHint": "打开按 {{name}} 筛选的「对话」。"
+    },
+    "settings": {
+      "saveState": {
+        "saving": "保存中…",
+        "saved": "已保存",
+        "error": "保存失败"
+      },
+      "credentials": {
+        "title": "凭据",
+        "replace": "更换",
+        "hint": "保存在 Coffer 的凭据库中；消息渠道配置只保存引用。"
+      },
+      "machine": {
+        "runsOn": "运行在",
+        "hint": "只有一台机器持有机器人的连接。"
+      },
+      "danger": {
+        "title": "危险操作",
+        "body": "停止机器人并移除配对。对话仍保留在「对话」中。",
+        "button": "删除…"
+      }
+    },
+    "add": {
+      "button": "添加消息渠道",
       "title": "添加消息渠道",
-      "subtitle": "密钥保存在 Coffer 的凭据库中；消息渠道配置只保存引用。",
-      "type": "类型",
+      "connectTitle": "添加 {{platform}} 消息渠道",
+      "pairTitle": "配对 {{name}}",
+      "stepsLabel": "步骤",
+      "steps": {
+        "platform": "平台",
+        "connect": "连接",
+        "pair": "配对"
+      },
+      "filter": "按名称或功能筛选",
+      "platformHint": "一个消息渠道就是一个机器人。它只回应你，每条消息都会成为与你的某个智能体的对话。",
+      "next": "下一步",
+      "back": "上一步",
+      "connect": "连接",
+      "connecting": "连接中…",
+      "pairLater": "稍后配对",
+      "paired": {
+        "title": "已与 {{owner}} 配对",
+        "body": "{{name}} 只回应你，其他人都会被静默忽略。"
+      }
+    },
+    "platforms": {
+      "count_one": "{{count}} 个平台",
+      "count_other": "{{count}} 个平台",
+      "toConnect": "连接需要：",
+      "seatalk": {
+        "body": "工作私聊和群聊，通过 SeaTalk 开放平台上的应用接入。",
+        "needs": "App ID + Secret"
+      },
+      "telegram": {
+        "body": "来自 @BotFather 的机器人。随时随地用手机就能找到它。",
+        "needs": "Bot token"
+      },
+      "capabilities": {
+        "privateChat": "私聊",
+        "groups": "群聊",
+        "threads": "话题",
+        "quotes": "引用消息",
+        "cards": "卡片",
+        "voice": "语音",
+        "files": "文件"
+      }
+    },
+    "firstRun": {
+      "title": "在聊天应用里和你的智能体对话",
+      "body": "连接一个机器人，与你的账号配对，你的消息就会送到本机上的智能体。",
+      "choose": "选择平台",
+      "benefits": {
+        "chat": {
+          "title": "随处聊天",
+          "body": "每条消息都会成为「对话」里的一个对话；回复会发回聊天应用。"
+        },
+        "onlyYou": {
+          "title": "只回应你",
+          "body": "一次性配对码绑定你的账号。陌生人得不到任何回复。"
+        },
+        "groups": {
+          "title": "群聊也行",
+          "body": "把机器人拉进群，你 @ 它时它就会在群里回答。"
+        }
+      }
+    },
+    "pairing": {
+      "generate": "生成配对码",
+      "generating": "生成中…",
+      "copy": "复制",
+      "copied": "已复制",
+      "expiresIn_one": "{{count}} 分钟后过期 · 仅限一次",
+      "expiresIn_other": "{{count}} 分钟后过期 · 仅限一次",
+      "expiresSoon": "不到一分钟后过期",
+      "expired": "已过期",
+      "expiredBody": "配对码已过期，或被猜错太多次。猜错不会得到回复，所以没人会知道这个机器人存在。",
+      "instruction": "在 {{platform}} 里打开与机器人的私聊，原样发送这个配对码。",
+      "openIn": "在 {{platform}} 中打开",
+      "openInHint": "打开聊天并自动填好配对码。",
+      "waiting": "等待你的消息…",
+      "newCode": "新配对码",
+      "newCodeAfterExpiry": "生成新的配对码"
+    },
+    "repair": {
+      "title": "重新配对 {{name}}？",
+      "body": "新的配对码允许另一个账号接管。有人发送它之后，{{owner}} 将不再是主人，其私聊消息不会再得到回复。在新配对码被使用之前，当前主人仍可正常使用。",
+      "confirm": "生成新配对码"
+    },
+    "runHere": {
+      "title": "在本机运行 {{name}}？",
+      "body": "{{machine}} 仍在运行这个机器人。如果可以，请先在那边停掉它——否则在 {{machine}} 同步之前，两台机器可能会同时应答。"
+    },
+    "delete": {
+      "title": "删除 {{name}}？",
+      "body": "机器人将停止回应，与 {{owner}} 的配对会被移除。对话仍保留在「对话」中。{{platform}} 那边的应用不受影响。",
+      "bodyUnpaired": "机器人将停止回应。对话仍保留在「对话」中。{{platform}} 那边的应用不受影响。"
+    },
+    "replace": {
+      "token": {
+        "title": "更换 bot token",
+        "body": "粘贴 @BotFather 给出的新 token。配对和设置都会保留；机器人会用新 token 重启。",
+        "label": "新的 bot token"
+      },
+      "secret": {
+        "title": "更换 App Secret",
+        "body": "粘贴 SeaTalk 开放平台上的新密钥。配对和设置都会保留；机器人会用新密钥重启。",
+        "label": "新的 App Secret"
+      },
+      "hint": "存入 Coffer 凭据库；旧值会被覆盖。",
+      "submit": "更换并重启"
+    },
+    "test": {
+      "title": "发送测试消息",
+      "message": "消息",
+      "goesTo": "发送到 {{owner}} 的私聊，不会发起回合。",
+      "send": "发送",
+      "sending": "发送中…",
+      "sent": "测试消息已发送",
+      "fixedMessage": "来自 Coffer 的测试消息"
+    },
+    "dialog": {
       "name": "名称",
       "namePlaceholder": "例如 my-telegram",
       "botToken": "Bot token",
@@ -2637,17 +3248,13 @@
       "created": "消息渠道 {{name}} 已注册",
       "machineUnknown": "Coffer 暂时读不到本机的机器 id，这个消息渠道就没有可运行的机器。请稍后重试。",
       "agent": "默认智能体",
-      "agentHint": "此渠道中的新会话都会在该智能体上开始。"
+      "agentHint": "此渠道中的新会话都会在该智能体上开始。",
+      "seatalkDelivery": {
+        "title": "在 SeaTalk 开发者后台把事件投递方式设为 WebSocket",
+        "body": "请在这里连接之后再设置——后台会检查连接是否已存在。"
+      }
     },
     "edit": {
-      "title": "编辑消息渠道",
-      "subtitle": "更换绑定的智能体、轮换密钥，设置机器人在群聊中何时回复、它等待后续消息的时长，或 /dir 可切换的目录。密钥字段留空则保留当前值。",
-      "agent": "默认智能体",
-      "agentHint": "该消息渠道上的新会话将使用此智能体。",
-      "newBotToken": "新的机器人 token",
-      "newAppSecret": "新的 App Secret",
-      "rotateHint": "存入 Coffer 凭据库；沿用现有引用。",
-      "save": "保存修改",
       "saved": "消息渠道 {{name}} 已更新",
       "groups": {
         "title": "群聊中",
@@ -2683,25 +3290,6 @@
         "tooMany": "最多列出 {{max}} 个目录。"
       }
     },
-    "test": {
-      "send": "发送测试消息",
-      "sending": "发送中…",
-      "title": "测试投递",
-      "subtitle": "向已配对的账号发送一条固定消息，确认投递正常。",
-      "sent": "测试消息已发送",
-      "needsPeer": "请先完成配对——当前还没有可通知的对端。",
-      "fixedMessage": "来自 Coffer 的测试消息——投递正常。"
-    },
-    "status": {
-      "adapter": "适配器",
-      "running": "运行中",
-      "stopped": "已停止",
-      "chatId": "Chat ID",
-      "pairedAt": "配对时间",
-      "conversation": "活跃会话",
-      "none": "暂无活跃会话",
-      "pendingPairing": "有一个配对码尚未使用。"
-    },
     "machine": {
       "title": "运行机器",
       "pickerLabel": "运行 {{name}} 的机器",
@@ -2709,41 +3297,10 @@
       "self": "{{name}} · 本机",
       "unbound": "未绑定",
       "unknown": "未知机器（{{id}}）",
-      "unboundBody": "这个消息渠道没有绑定任何机器，因此没有任何守护进程会启动它，机器人永远不会回话。请选择一台应该负责应答的机器。",
-      "unknownBody": "这个消息渠道绑定在 {{id}} 上，而注册表里没有任何机器认领这个 id——在重新绑定到一台真实存在的机器之前，它不会在任何地方运行。",
       "handover": "重新绑定不需要重启。失去该渠道的机器会在一两秒内停掉适配器；获得它的机器会在下一轮同步把变更带过去之后启动。从你当前所在的这台机器上「绑出去」交接得最干净——反过来，在另一台机器仍然持有该渠道时把它绑到本机，可能会出现两边同时应答，直到那台机器完成下一轮同步。",
-      "notReach": "这里决定的是「哪台机器运行适配器」。页头的生效范围决定的是「这个渠道可以驱动哪些智能体」。",
+      "notReach": "这里决定的是「哪台机器运行适配器」。总览里的「可驱动的智能体」决定的是「这个渠道可以驱动哪些智能体」。",
       "rebound": "{{name}} 现在运行在 {{machine}} 上",
       "helpLabel": "关于运行机器"
-    },
-    "pairing": {
-      "instruction": "生成配对码后，用你自己的账号把它发给机器人。发送者将成为该消息渠道唯一的所有者——重新配对会替换之前的绑定。",
-      "generate": "生成配对码",
-      "generating": "生成中…",
-      "copy": "复制",
-      "copied": "已复制",
-      "openLink": "打开配对链接",
-      "expires": "{{time}} 过期（仅可使用一次）。",
-      "hint": "生成配对码，然后用应当拥有该消息渠道的账号把它发给机器人。",
-      "repair": "重新配对",
-      "helpLabel": "关于配对"
-    },
-    "inbound": {
-      "title": "SeaTalk 连接",
-      "state": {
-        "connecting": "连接中…",
-        "connected": "已连接",
-        "kicked": "已被挤下线——另一个进程正持有该机器人的连接",
-        "sdk_missing": "未找到 SDK",
-        "error": "错误",
-        "unknown": "未知"
-      }
-    },
-    "deleteTitle": "删除消息渠道",
-    "deleteConfirm": "确定删除消息渠道「{{name}}」？其适配器将停止，配对关系也会被移除。",
-    "bulkDeleteConfirm": "确定删除 {{count}} 个消息渠道？它们的适配器将停止，配对关系也会被移除。",
-    "account": {
-      "title": "账号"
     }
   },
   "scope": {
@@ -3158,10 +3715,361 @@
     }
   },
   "customTools": {
-    "title": "自定义工具"
+    "title": "自定义工具",
+    "pendingApprovalSaved": "已保存。密钥需要先在 Coffer 应用里批准，调用才能使用它。",
+    "health": {
+      "failing": "失败",
+      "attention": "需要处理",
+      "healthy": "正常",
+      "idle": "空闲",
+      "off": "已关闭"
+    },
+    "list": {
+      "counts": "{{groups}} · {{tools}}",
+      "groupCount_other": "{{count}} 个分组",
+      "toolCount_other": "{{count}} 个工具",
+      "filter": "筛选分组",
+      "noMatch": "没有匹配的分组。",
+      "section": {
+        "attention": "需要处理",
+        "healthy": "正常",
+        "off": "已关闭"
+      },
+      "secretMissing": "密钥缺失 · {{secret}}",
+      "approvalPending": "等待批准 · {{secret}}",
+      "lastCallFailed": "最近一次调用失败",
+      "hostTools_other": "{{host}} · {{count}} 个工具",
+      "expand": "展开 {{name}} 的工具",
+      "collapse": "收起 {{name}} 的工具",
+      "loadFailed": "无法加载自定义工具",
+      "pickTitle": "选择一个分组",
+      "pickBody": "在左侧选择一个分组，查看它的定义和工具。",
+      "groupCount_one": "{{count}} 个分组",
+      "toolCount_one": "{{count}} 个工具",
+      "hostTools_one": "{{host}} · {{count}} 个工具"
+    },
+    "add": {
+      "action": "添加自定义工具",
+      "title": "添加自定义工具",
+      "subtitle": "把一个 HTTP API 变成智能体可以调用的工具。",
+      "newGroup": "新分组",
+      "waysLabel": "添加方式",
+      "footnote": "每个自定义工具都是 Coffer 发出的一次 HTTP API 调用。智能体看到的名字是 <group>__<tool>；密钥永远不会到达智能体。",
+      "continue": "继续",
+      "back": "上一步",
+      "nameInvalid": "只能用小写字母、数字和 -，以字母或数字开头，最多 24 个字符。",
+      "nameTaken": "已有同名分组。"
+    },
+    "ways": {
+      "importTitle": "导入 OpenAPI 规范",
+      "importBody": "一个 URL 或一个文件。由你挑选操作，每个操作成为一个工具。",
+      "importPoint1": "创建一个新分组",
+      "importPoint2": "基础 URL 和认证来自规范",
+      "importPoint3": "之后可重新导入以获取变更",
+      "importNewOnly": "只能导入到新分组。",
+      "handTitle": "手动添加一个请求",
+      "handBody": "方法、URL 模板、请求头、请求体模板和参数。",
+      "handPoint1": "放入已有分组或新分组",
+      "handPoint2": "使用分组的基础 URL 和认证",
+      "handPoint3": "保存前先测试"
+    },
+    "fields": {
+      "group": "分组",
+      "groupName": "分组名称",
+      "groupNameHelp": "智能体看到的是 {{prefix}}。小写字母、数字和 -，最多 24 个字符；创建后不可更改。",
+      "spec": "规范",
+      "specSource": "规范来源",
+      "specUrl": "URL",
+      "specFile": "文件",
+      "baseUrl": "基础 URL",
+      "baseUrlHelp": "每个请求的路径都拼接在它后面。",
+      "authHeader": "认证请求头",
+      "headerName": "请求头名称",
+      "headerPrefix": "密钥前的前缀",
+      "prefixPlaceholder": "Bearer",
+      "secret": "密钥",
+      "noSecret": "不使用密钥",
+      "secretHelpBefore": "来自",
+      "secretHelpLink": "密钥",
+      "secretHelpAfter": "页面。Coffer 会在每次调用时加上它。",
+      "availableTo": "可用于",
+      "availableToHelp": "分组内每个工具的默认范围；单个工具可以覆盖它。"
+    },
+    "import": {
+      "title": "导入 OpenAPI 规范",
+      "step1": "第 1 步，共 2 步 · 规范与操作。",
+      "step2": "第 2 步，共 2 步 · 核对。创建分组之前不会保存任何内容。",
+      "load": "加载",
+      "loading": "加载中…",
+      "reload": "重新加载",
+      "loaded_other": "已加载 · {{count}} 个操作",
+      "readFailed": "无法读取规范：{{reason}}",
+      "urlHelp": "指向 OpenAPI 3.0 或 3.1 文档的 URL，JSON 或 YAML。",
+      "browse": "浏览…",
+      "fileHelp": "JSON 或 YAML，最大 5 MB。",
+      "tooLarge": "文件超过 5 MB。",
+      "authFromSpec": "来自规范的安全方案。",
+      "review": "核对工具",
+      "operations_other": "{{count}} 个操作",
+      "reviewNote": "会修改数据的工具默认关闭，除非你打开它们。重新导入会保留仍然存在的工具的开关和可用范围。",
+      "create_other": "创建分组（{{count}} 个工具）",
+      "loaded_one": "已加载 · {{count}} 个操作",
+      "operations_one": "{{count}} 个操作",
+      "create_one": "创建分组（{{count}} 个工具）"
+    },
+    "newGroup": {
+      "title": "新分组",
+      "subtitle": "一个分组共用一个基础 URL、一种认证和一个默认可用范围。",
+      "create": "创建分组"
+    },
+    "group": {
+      "imported": "从 OpenAPI 导入",
+      "byHand": "手动添加的请求",
+      "calls_other": "{{count}} 次调用",
+      "errors_other": "{{count}} 次错误",
+      "in24h": "（24 小时内）",
+      "openActivity": "在活动中查看",
+      "help": "分组是一组 HTTP API 工具，共用一个基础 URL、一个绑定到密钥的认证请求头和一个默认可用范围。智能体看到的每个工具名为 <group>__<tool>；Coffer 在发出调用时才加上密钥，因此密钥不会到达智能体。",
+      "enabled": "打开或关闭 {{name}}",
+      "edit": "编辑分组",
+      "delete": "删除分组",
+      "deleteTitle": "删除 {{name}}？",
+      "deleteBody_other": "它的 {{count}} 个工具将不再提供给任何智能体。密钥仍保留在密钥页面。",
+      "calls_one": "{{count}} 次调用",
+      "errors_one": "{{count}} 次错误",
+      "deleteBody_one": "它的 {{count}} 个工具将不再提供给任何智能体。密钥仍保留在密钥页面。"
+    },
+    "alert": {
+      "missingTitle": "密钥 {{secret}} 不在密钥页面中",
+      "missingBody_other": "在它恢复之前，已打开的 {{count}} 个工具都会失败。请在密钥页面添加它，或让分组改用另一个密钥。",
+      "addSecret": "添加密钥",
+      "chooseAnother": "改用其他密钥",
+      "pendingTitle": "密钥 {{secret}} 正在等待批准",
+      "pendingBody": "请在 Coffer 应用中批准；在此之前它的工具无法使用该密钥。",
+      "missingBody_one": "在它恢复之前，已打开的 {{count}} 个工具都会失败。请在密钥页面添加它，或让分组改用另一个密钥。"
+    },
+    "definition": {
+      "title": "定义",
+      "agentsSee": "智能体看到",
+      "auth": "认证",
+      "authBound": "{{line}} ← 密钥 {{secret}}",
+      "noAuth": "无认证请求头",
+      "missing": "缺失",
+      "waiting": "等待中",
+      "spec": "规范",
+      "fetched": "获取于 {{date}}"
+    },
+    "tools": {
+      "title": "工具 · 已打开 {{on}}/{{total}}",
+      "allOn": "全部打开",
+      "allOff": "全部关闭",
+      "switch": "开关",
+      "switchTool": "打开或关闭 {{name}}",
+      "colTool": "工具 · 请求",
+      "colCalls": "24 小时调用",
+      "colErrors": "错误",
+      "changesData": "修改数据",
+      "groupDefault": "分组默认",
+      "override": "单独设置",
+      "on": "已打开",
+      "off": "已关闭",
+      "empty": "这个分组还没有工具。",
+      "addRequest": "添加请求"
+    },
+    "editor": {
+      "newTitle": "新请求",
+      "subtitle": "{{group}} 中的工具 · 智能体看到 {{name}}",
+      "name": "工具名称",
+      "nameHelp": "智能体看到 {{name}}。字母、数字、_ 和 -，最多 40 个字符。",
+      "request": "请求",
+      "method": "方法",
+      "requestHelp": "拼接在分组的基础 URL {{url}} 后面。",
+      "description": "工具说明",
+      "descriptionHelp": "智能体根据它决定何时调用。",
+      "changesDataHelp": "POST、PUT、PATCH 和 DELETE 默认打开。智能体会把它当作工具的只读或破坏性提示，从而让它们的批准提示生效。",
+      "headers": "请求头",
+      "groupAuth": "{{line}} ← 来自分组的密钥 {{secret}}",
+      "headerKey": "请求头",
+      "headerValue": "值",
+      "removeHeader": "移除请求头",
+      "addHeader": "为这个请求添加请求头",
+      "body": "请求体模板",
+      "bodyHelp": "GET 不发送请求体。POST、PUT 或 PATCH 请写 JSON，用 {argument} 占位。",
+      "arguments": "参数",
+      "argName": "名称",
+      "argType": "类型",
+      "argRequired": "必填",
+      "argRequiredFor": "{{name}} 为必填",
+      "argDescription": "给智能体的说明",
+      "enumValues": "取值，用逗号分隔",
+      "removeArgument": "移除参数",
+      "addArgument": "添加参数",
+      "groupDefaultSub": "跟随分组的可用范围",
+      "enabled": "工具开关",
+      "delete": "删除工具",
+      "deleteTitle": "删除 {{name}}？",
+      "deleteBody": "智能体将不再看到它。它的调用记录仍保留在活动中。"
+    },
+    "test": {
+      "title": "测试",
+      "valueFor": "{{name}} 的取值",
+      "run": "运行",
+      "runAgain": "再次运行",
+      "running": "运行中…",
+      "summary": "{{status}}，耗时 {{ms}} ms · {{size}} {{kind}}",
+      "failed": "调用失败",
+      "truncated": "响应已被截断。",
+      "note": "只运行一次；按下保存之前不会保存任何内容。",
+      "noteSecret": "使用 {{secret}} 运行一次；按下保存之前不会保存任何内容。"
+    },
+    "editGroup": {
+      "title": "编辑 {{name}}",
+      "subtitle": "名称不可更改：它是智能体看到的前缀。",
+      "description": "说明",
+      "timeout": "超时（秒）",
+      "timeoutHelp": "单次调用的最长时间，1 到 300 秒。",
+      "timeoutInvalid": "请输入 1 到 300 之间的整数。"
+    },
+    "reimport": {
+      "action": "重新导入",
+      "title": "重新导入 {{name}}",
+      "subtitle": "再次读取规范。确认之前不会有任何改动。",
+      "file": "规范文件",
+      "fileHelp": "这个分组是从文件导入的：请再次选择该文件。",
+      "reading": "正在读取规范…",
+      "noChange": "规范中没有要添加的操作，也没有要移除的工具。",
+      "addOp": "添加 {{name}}",
+      "removeTool": "{{name}}（将移除）",
+      "kept_other": "保留 {{count}} 个工具，开关和可用范围不变。",
+      "confirm": "确认",
+      "kept_one": "保留 {{count}} 个工具，开关和可用范围不变。"
+    },
+    "firstRun": {
+      "title": "把任意 HTTP API 变成工具",
+      "body": "自定义工具是 Coffer 替智能体发出的一次 HTTP 请求——无需运行 MCP 服务器。工具放在分组里：分组有一个智能体看到的名称前缀、一个基础 URL、一个用于认证的密钥和一个默认可用范围。",
+      "importBody": "从规范中挑选操作；这次导入成为一个分组。",
+      "importPoint": "重新导入即可更新",
+      "handBody": "方法、URL 模板、请求头、请求体和参数。",
+      "handPoint": "放入新分组或已有分组"
+    }
   },
   "clis": {
-    "title": "命令行工具"
+    "title": "命令行工具",
+    "count_one": "{{count}} 个命令",
+    "count_other": "{{count}} 个命令",
+    "subtitle": "技能声明自己需要的命令行工具。",
+    "help": "技能在 SKILL.md 的 requires: 里列出它会调用的命令。Coffer 在智能体的 PATH 上逐个检查：版本是否达到技能要求的最低版本，声明了登录检查的还会检查登录状态。缺少命令不会阻止技能投递；智能体会在调用它的那一步失败。",
+    "checkAgain": "重新检查",
+    "checking": "检查中…",
+    "checkedAgo": "检查于 {{when}}",
+    "loadFailed": "无法加载命令行工具",
+    "summary": {
+      "missing": "{{count}} 个未找到",
+      "outdated": "{{count}} 个版本过旧",
+      "logged_out": "{{count}} 个未登录",
+      "ready": "{{count}} 个就绪"
+    },
+    "status": {
+      "missing": "未找到",
+      "outdated": "版本过旧",
+      "logged_out": "未登录",
+      "ready": "就绪"
+    },
+    "cols": {
+      "command": "命令",
+      "version": "版本 · 要求",
+      "login": "登录",
+      "neededBy": "需要它的技能",
+      "status": "状态",
+      "actions": "操作"
+    },
+    "search": "筛选命令",
+    "notOnPath": "不在 PATH 上",
+    "needs": "要求 ≥ {{version}}",
+    "unknownVersion": "版本未知",
+    "login": {
+      "logged_in": "已登录",
+      "logged_out": "未登录",
+      "not_needed": "无需登录"
+    },
+    "skillCount_one": "{{count}} 个技能",
+    "skillCount_other": "{{count}} 个技能",
+    "actions": {
+      "install": "安装…",
+      "update": "更新…",
+      "copyLogin": "复制登录命令",
+      "copyCommand": "复制命令",
+      "copy": "复制",
+      "copied": "已复制",
+      "open": "打开"
+    },
+    "warnings": {
+      "title": "部分 requires: 条目已跳过",
+      "line": "{{skill}}：{{message}}"
+    },
+    "empty": {
+      "title": "还没有技能需要命令",
+      "description": "技能在 SKILL.md 的 requires: 里列出它会调用的命令行工具。一旦有技能声明，每个命令都会显示在这里，附带版本、登录状态和需要它的技能。",
+      "docs": "如何声明 requires:",
+      "docsUrl": "https://wyx-sg.github.io/Coffer/guides/clis#declare-what-a-skill-needs"
+    },
+    "detail": {
+      "back": "命令行工具",
+      "subtitle_one": "{{title}} · {{count}} 个技能需要",
+      "subtitle_other": "{{title}} · {{count}} 个技能需要",
+      "notFound": "无法打开此命令",
+      "help": "Coffer 在智能体的 PATH 上查找该命令，运行它的 --version 和声明的登录检查（输出直接丢弃）。安装只通过 Homebrew，只安装技能声明的 formula，并且只在你确认之后。",
+      "sections": {
+        "command": "命令",
+        "login": "登录",
+        "neededBy": "需要它的技能"
+      },
+      "foundAt": "位置",
+      "version": "版本",
+      "installWith": "安装命令",
+      "updateWith": "更新命令",
+      "state": "状态",
+      "loginWith": "登录命令",
+      "loginHint": "在终端中运行，然后点「重新检查」。",
+      "whyNone": "未说明原因"
+    },
+    "banner": {
+      "missing_one": "{{command}} 未安装 — 影响 {{count}} 个技能",
+      "missing_other": "{{command}} 未安装 — 影响 {{count}} 个技能",
+      "outdated_one": "{{command}} 低于 {{version}} — 影响 {{count}} 个技能",
+      "outdated_other": "{{command}} 低于 {{version}} — 影响 {{count}} 个技能",
+      "logged_out_one": "{{command}} 未登录 — 影响 {{count}} 个技能",
+      "logged_out_other": "{{command}} 未登录 — 影响 {{count}} 个技能",
+      "body": "{{skills}} 会在调用 {{command}} 的那一步失败。",
+      "loginBefore": "在终端运行",
+      "loginAfter": "，然后重新检查。"
+    },
+    "install": {
+      "titleInstall": "安装 {{command}}？",
+      "titleUpdate": "更新 {{command}}？",
+      "intro": "Coffer 将以你的身份在这台 Mac 上运行此命令：",
+      "installer": "安装器",
+      "homebrew": "Homebrew",
+      "why": "原因",
+      "whyWithMin_one": "{{count}} 个技能需要 {{command}} ≥ {{version}}：{{skills}}",
+      "whyWithMin_other": "{{count}} 个技能需要 {{command}} ≥ {{version}}：{{skills}}",
+      "whyPlain_one": "{{count}} 个技能需要 {{command}}：{{skills}}",
+      "whyPlain_other": "{{count}} 个技能需要 {{command}}：{{skills}}",
+      "output": "输出",
+      "outputWhere": "显示在这里，并保留在「活动」中",
+      "never": "Coffer 不会未经询问就安装，也从不使用 sudo。",
+      "run": "运行 {{command}}",
+      "titleRunning": "正在运行 {{command}}…",
+      "titleSucceeded": "{{command}} 已完成",
+      "titleFailed": "{{command}} 失败",
+      "running": "运行中。可以关闭此窗口；安装会继续进行，输出保留在「活动」中。",
+      "succeeded": "完成（退出码 {{code}}）。Coffer 已重新检查该命令。",
+      "failed": "失败，退出码 {{code}}。原因见上方输出。",
+      "failedNoCode": "未完成就停止了。原因见上方输出。",
+      "noOutput": "暂无输出。",
+      "outputLabel": "安装输出",
+      "close": "关闭"
+    }
   },
   "secrets": {
     "title": "密钥",
@@ -3332,7 +4240,7 @@
     "refresh": "刷新",
     "more": "更多操作",
     "exportCsv": "导出 CSV",
-    "noPrice": "无价格",
+    "noPrice": "—",
     "editPrices": "在模型提供商中编辑价格",
     "quota": {
       "title": "订阅额度",
@@ -3444,7 +4352,7 @@
       },
       "unknownModel": "未知模型",
       "unknownAgent": "未知智能体",
-      "noPriceTip": "此模型没有价格。可在模型提供商中设置。",
+      "noPriceTip": "此模型没有价格：Coffer 只内置 Anthropic 的价格。可在模型提供商中为它的连接设置价格。",
       "partlyPricedTip_other": "{{n}} 次请求没有价格，未计入此费用。",
       "unknownTip_other": "{{n}} 次请求在上报用量前结束，其 token 未计入。",
       "total": "合计 · {{range}}",
@@ -3486,7 +4394,9 @@
       "provider": "模型提供商",
       "channel": "消息渠道",
       "knowledge": "知识",
-      "memory": "记忆"
+      "memory": "记忆",
+      "customTool": "自定义工具",
+      "cli": "命令行工具"
     }
   },
   "credentials": {

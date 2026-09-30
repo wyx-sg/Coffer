@@ -30,13 +30,14 @@ can be put on and the reasoning levels its runtime reports, and the config-file 
 projection write goes through. What the flagged connections are used for — the engine's model, the
 speech-to-text model, the unattended passes and the rule that drops a model when a flag moves — is
 [internal-engine](../internal-engine/spec.md)'s. Coffer is a single-user tool, so no access control
-applies beyond the daemon's `X-Coffer-Token` gate. Out of scope: hot-switching a running Claude Code
-or Codex process mid-session; continuously reconciling live native config against the active
-connection (the boot self-check is the narrow version that exists); restoring native config beyond
-the `.bak` copies projection leaves; proxying, failover chains or anthropic↔openai translation (a
-connection reaches an agent only because the user routed it there, and the endpoint must really
-speak what that agent sends); curating an agent's own models; and deriving account entitlement
-locally.
+applies beyond the daemon's `X-Coffer-Token` gate. It also owns the local model proxy every
+API-key and local connection is reached through — the per-agent proxy tokens, failover between
+connections that serve the same model, and usage metering. Out of scope: hot-switching a running
+Claude Code or Codex process mid-session; restoring native config beyond the `.bak` copies
+projection leaves; anthropic↔openai protocol translation (a connection reaches an agent only
+because the user routed it there, and the endpoint must really speak what that agent sends — the
+proxy relays each wire to an upstream of the same wire); curating an agent's own models; and
+deriving account entitlement locally.
 
 ## Requirements
 
@@ -339,7 +340,7 @@ routed to Claude Code. Coffer translates nothing between protocols.
 #### Scenario: route an openai-compatible connection to Claude Code with its scope
 - **GIVEN** a Claude Code agent is registered and an `openai`-wire connection is created and then scoped to `["claude_code"]`,
 - **WHEN** the user activates that connection,
-- **THEN** it projects into Claude Code's `settings.json` (the anthropic shape) with `apiKeyHelper = "<absolute path to the coffer CLI> provider key --connection-uid <uid>"`, `GET /providers/{uid}/key` returns exactly that connection's key, and the reported agent set follows the scope.
+- **THEN** it projects into Claude Code's `settings.json` (the anthropic shape) with `apiKeyHelper = "<absolute path to the coffer CLI> proxy token --agent-uid <agent uid>"`, the model proxy routes that agent's requests to exactly that connection with that connection's key, and the reported agent set follows the scope.
 
 ### Requirement: Audit every provider switch
 The system MUST emit an audit event with value `"provider_switched"` for every switch, with details
@@ -1007,8 +1008,7 @@ arrived on, and any request that carries an `Origin` header — no browser page 
 ### Requirement: Fail over only before the first content byte
 When a request fails before the first content byte reaches the agent — a connect, TLS or DNS
 error, a 5xx, 529 or 429 status, a 401 or 403, a first-byte timeout, or an error event before the
-first content event (the proxy holds the response until then, bounded to a few kilobytes and
-seconds) — the proxy MUST move it to the next member of the agent's route: another enabled
+first content event (the proxy holds the response until then, bounded to 64 KiB and 5 seconds) — the proxy MUST move it to the next member of the agent's route: another enabled
 connection that reaches the same agent type, speaks the same protocol and lists the requested model
 among its curated models. Failover MUST never change the model, never try the same member twice for
 one request, and never happen after the first content byte: an error or truncation after it goes to
@@ -1152,8 +1152,12 @@ shipped with the release, unless the connection records its own price for that m
 resellers price differently), and stored with the price it used (`snapshot:<version>` or
 `override:<connection uid>`) so a later snapshot never rewrites history. A cache category an
 override leaves out is charged at its input rate. A model neither prices MUST be marked unpriced,
-never costed at zero. The snapshot carries Anthropic's first-party rates; other vendors' models are
-unpriced until the user sets a price on the connection. Every surface labels cost as estimated.
+never costed at zero. The snapshot carries Anthropic's first-party rates only. It carries no OpenAI
+(Codex) rates, because Coffer has no verified source for them, and it MUST NOT carry a rate that
+is not from the vendor's own published pricing; other vendors' models are unpriced until the user
+sets a price on the connection. Every surface labels cost as estimated. Where nothing in a cost is
+priced, the web UI and the CLI MUST show `—` in its place, never `$0.00`, and the web UI MUST say
+why and where a price is set in the dash's tooltip and accessible name.
 
 #### Scenario: a known model is priced per category
 - **GIVEN** a record for `claude-opus-5-5` with input, cache-write, cache-read and output tokens
@@ -1169,6 +1173,12 @@ unpriced until the user sets a price on the connection. Every surface labels cos
 - **GIVEN** one record priced from the snapshot and one from its connection's own price
 - **WHEN** both are ingested
 - **THEN** each row names the price it was costed with
+
+#### Scenario: a model with no price reads as a dash, never zero
+- **GIVEN** usage of a model from a vendor other than Anthropic — a Codex model, or a gateway’s own — through a connection that records no price for it
+- **WHEN** the Usage page and `coffer usage` show that model's row
+- **THEN** its cost reads `—`, not `$0.00`, with the unpriced request count
+- **AND** on the Usage page the dash's tooltip says Coffer ships Anthropic's rates only and a price is set on the connection in Model providers
 
 ### Requirement: Report usage by model, agent or day over a range
 `GET /api/v1/usage/summary` and `coffer usage [--range today|7d|30d|month|custom] [--from <day> --to <day>] [--by model|agent|day] [--json]`
@@ -1244,3 +1254,18 @@ even when the daemon is down. Coffer never installs it: the user opts in by sett
 - **GIVEN** no daemon running
 - **WHEN** Claude Code runs the wrapper with the user's own statusline command
 - **THEN** the user's command runs with the same stdin and its output is printed
+
+### Requirement: Push the proxy an approved key without a restart
+The model proxy MUST hold a connection's key only once the key may go to the connection's base
+URL ([credentials](../credentials/spec.md) "Hold a secret for a new destination until a person
+approves it"). While a new key for a key in use waits for approval, the proxy MUST keep sending the
+old key; while a new base URL waits, the proxy MUST NOT hold the key for that connection and MUST
+send nothing to the new URL. When the approval is applied in the desktop app, the daemon MUST push
+the proxy its state again, so the next request carries the new key or reaches the new URL, with no
+restart of the daemon or the proxy.
+
+#### Scenario: an approved key reaches the running proxy
+- **GIVEN** an agent on a connection served by a running proxy, sending with the connection's key
+- **WHEN** the key is replaced, then approved in the desktop app, and the connection's base URL is then moved and that change approved too
+- **THEN** until each approval the proxy keeps sending the old key and sends nothing to the new URL
+- **AND** after each approval the next requests carry the new key and reach the new URL, with neither process restarted

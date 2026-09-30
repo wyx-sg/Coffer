@@ -11,6 +11,7 @@ from coffer.surfaces.cli import (
     _client,
     agent_cmd,
     channel_cmd,
+    cli_cmd,
     config_cmd,
     credentials_cmd,
     daemon_cmd,
@@ -26,6 +27,7 @@ from coffer.surfaces.cli import (
     scan_cmd,
     skill_cmd,
     sync_cmd,
+    tool_cmd,
     usage_cmd,
 )
 from coffer.surfaces.cli import mcp as mcp_cmd
@@ -57,6 +59,7 @@ app.command("scan")(scan_cmd.scan)
 app.add_typer(scan_cmd.adopt_app, name="adopt")
 app.add_typer(scan_cmd.discard_app, name="discard")
 app.add_typer(mcp_cmd.app, name="mcp")
+app.add_typer(tool_cmd.app, name="tool")
 app.add_typer(credentials_cmd.app, name="credentials")
 # `coffer run [--secret …] -- cmd`: everything after `--` is the child's argv.
 app.command(
@@ -66,6 +69,7 @@ app.command(
 app.add_typer(agent_cmd.app, name="agent")
 app.add_typer(channel_cmd.app, name="channel")
 app.add_typer(skill_cmd.app, name="skill")
+app.add_typer(cli_cmd.app, name="cli")
 app.add_typer(knowledge_cmd.app, name="knowledge")
 app.add_typer(memory_cmd.app, name="memory")
 app.add_typer(provider_cmd.app, name="provider")

@@ -26,7 +26,7 @@ export function AgentHookRowActions({ row, onRepair }: Props) {
         <TableActionButton
           icon={Wrench}
           label={t("agents.hooksTab.repair")}
-          aria-label={t("agents.hooksTab.repairAria", { event: row.event })}
+          aria-label={t("agents.hooksTab.repairAria")}
           onClick={onRepair}
         />
       ) : null}

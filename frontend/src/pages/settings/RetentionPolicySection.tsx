@@ -1,8 +1,8 @@
 // frontend/src/pages/settings/RetentionPolicySection.tsx
 //
-// One retention-policy row inside the "Data retention" card: the table's
-// name, description, and last-prune status on the left; the keep-forever
-// toggle and retention-days field on the right. Edits auto-save — toggling
+// One record kind's retention row in Settings › Data's History block: the
+// kind's name and description on the left; the keep-forever toggle and the
+// retention-days field on the right. Edits auto-save — toggling
 // keep-forever persists immediately; the days field persists on blur (or
 // Enter) — so there is no Save button, matching every other settings surface.
 //
@@ -15,10 +15,10 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { SettingRow } from "@/components/settings/SettingsLayout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { formatDateTime } from "@/lib/utils";
 import type { components } from "@/lib/api/types";
 
 type RetentionPolicyOut = components["schemas"]["RetentionPolicyOut"];
@@ -27,12 +27,14 @@ interface Props {
   policy: RetentionPolicyOut;
   onUpdate: (retentionDays: number | null) => void;
   updating: boolean;
+  /** The last save of this row failed; the row says "Not saved". */
+  failed?: boolean;
 }
 
 const MIN_DAYS = 1;
 const MAX_DAYS = 3650;
 
-export function RetentionPolicySection({ policy, onUpdate, updating }: Props) {
+export function RetentionPolicySection({ policy, onUpdate, updating, failed = false }: Props) {
   const { t } = useTranslation();
   const [keepForever, setKeepForever] = useState(policy.retention_days === null);
   const [days, setDays] = useState<number>(
@@ -87,68 +89,57 @@ export function RetentionPolicySection({ policy, onUpdate, updating }: Props) {
   };
 
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0 space-y-1">
-        <div className="font-medium">
-          {t(`settings.retention.policy.${policy.table_name}.name`, {
-            defaultValue: policy.display_name,
-          })}
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {t(`settings.retention.policy.${policy.table_name}.description`, {
-            defaultValue: policy.description,
-          })}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {policy.last_pruned_at
-            ? t("settings.retention.lastPruned", {
-                when: formatDateTime(policy.last_pruned_at),
-                rows: policy.last_pruned_rows,
-              })
-            : t("settings.retention.neverPruned")}
-        </p>
-      </div>
-      <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <div className="flex items-center gap-2">
-            <Switch
-              id={foreverId}
-              checked={keepForever}
-              disabled={updating}
-              onCheckedChange={toggleForever}
-            />
-            <Label htmlFor={foreverId}>{t("settings.retention.keepForever")}</Label>
-          </div>
-          {!keepForever ? (
-            <div className="flex items-center gap-2">
-              <Label htmlFor={daysId} className="whitespace-nowrap">
-                {t("settings.retention.days")}
-              </Label>
-              <Input
-                id={daysId}
-                type="number"
-                min={MIN_DAYS}
-                max={MAX_DAYS}
-                value={days}
-                disabled={updating}
-                onChange={(e) => {
-                  const raw = parseInt(e.target.value || "0", 10) || 0;
-                  setClamped(raw < MIN_DAYS);
-                  setDays(Math.min(MAX_DAYS, Math.max(MIN_DAYS, raw)));
-                }}
-                onBlur={commitDays}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") e.currentTarget.blur();
-                }}
-                className="w-20"
-              />
-            </div>
-          ) : null}
-        </div>
-        {clamped && !keepForever ? (
-          <p className="text-xs text-status-warn" role="status">
+    <SettingRow
+      label={t(`settings.retention.policy.${policy.table_name}.name`, {
+        defaultValue: policy.display_name,
+      })}
+      description={t(`settings.retention.policy.${policy.table_name}.description`, {
+        defaultValue: policy.description,
+      })}
+      status={
+        clamped && !keepForever ? (
+          <span className="text-xs text-status-warn" role="status">
             {t("settings.retention.minDays")}
-          </p>
+          </span>
+        ) : failed ? (
+          <span className="text-xs text-danger">{t("settings.data.notSaved")}</span>
+        ) : null
+      }
+    >
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex items-center gap-2">
+          <Switch
+            id={foreverId}
+            checked={keepForever}
+            disabled={updating}
+            onCheckedChange={toggleForever}
+          />
+          <Label htmlFor={foreverId}>{t("settings.retention.keepForever")}</Label>
+        </div>
+        {!keepForever ? (
+          <div className="flex items-center gap-2">
+            <Label htmlFor={daysId} className="whitespace-nowrap">
+              {t("settings.retention.days")}
+            </Label>
+            <Input
+              id={daysId}
+              type="number"
+              min={MIN_DAYS}
+              max={MAX_DAYS}
+              value={days}
+              disabled={updating}
+              onChange={(e) => {
+                const raw = parseInt(e.target.value || "0", 10) || 0;
+                setClamped(raw < MIN_DAYS);
+                setDays(Math.min(MAX_DAYS, Math.max(MIN_DAYS, raw)));
+              }}
+              onBlur={commitDays}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
+              className="w-20"
+            />
+          </div>
         ) : null}
       </div>
 
@@ -163,6 +154,6 @@ export function RetentionPolicySection({ policy, onUpdate, updating }: Props) {
         pending={updating}
         onConfirm={confirm}
       />
-    </div>
+    </SettingRow>
   );
 }

@@ -48,8 +48,8 @@ class ProviderProjectionRequest:
     base_url: str
     #: Claude Code's ``apiKeyHelper`` command line.
     key_helper: str
-    #: Codex's provider ``auth`` command; ``None`` falls back to ``env_key``.
-    codex_auth: CodexAuthCommand | None
+    #: Codex's provider ``auth`` command, which prints the same token.
+    codex_auth: CodexAuthCommand
     #: The agent's own binding (spec provider-switching "Take projected model
     #: keys from the agent's binding").
     binding: ModelBinding

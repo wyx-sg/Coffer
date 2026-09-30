@@ -93,53 +93,6 @@ class DeliveryUnsupported(CofferError):  # noqa: N818
 DELIVERY_CEILING_BYTES = 9500
 
 
-def context_invocation(
-    agent_uid: str, *, cli: str = "coffer", hook_event: str | None = None
-) -> str:
-    """The bare CLI call Coffer wants running at session start.
-
-    ``cli`` is the **absolute path** of the ``coffer`` binary whenever the
-    composition root can find one. A hook runs under whatever shell the agent
-    starts, and that shell need not read the user's rc files: Codex runs its
-    hooks under ``/bin/zsh`` with a ``PATH`` that does not include
-    ``~/.coffer/bin``, so a bare ``coffer`` there is "command not found" and the
-    hook delivers nothing. The bare name is only the fallback for a build that
-    cannot locate its own CLI.
-
-    ``hook_event``, when given, asks the CLI to wrap the text as that event's
-    JSON ``hookSpecificOutput.additionalContext`` rather than print it plain.
-
-    The agent is named by its **uid**, not by its registry name (ADR
-    resource-identity-is-an-immutable-uid). An installed hook is a string
-    sitting in somebody else's settings file for months; a name is a label the
-    user may edit in that time, and the hook would then report an agent that no
-    longer answers to anything. There is no name fallback on the reading side
-    either — one spelling, and it is the one that cannot change.
-
-    `--cwd` reads the shell's own `$PWD` at fire time, not a value baked in
-    at install time: both agents run the hook with the session's working
-    directory as its own, and that directory is only known when the hook
-    actually runs.
-    """
-    call = f'{shlex.quote(cli)} memory context --agent-uid {shlex.quote(agent_uid)} --cwd "$PWD"'
-    if hook_event is not None:
-        call += f" --hook-event {shlex.quote(hook_event)}"
-    return call
-
-
-def hook_command(agent_uid: str, *, cli: str = "coffer", hook_event: str | None = None) -> str:
-    """The exact command string Coffer installs for `agent_uid`.
-
-    Marker-scoped: every adapter's installed command starts with the same
-    `": {MARKER};"` prefix, so it is recognised identically regardless of what
-    follows. That is also what makes a changed command costless for an
-    already-installed hook: detection never reads the arguments, so a
-    reinstall replaces the entry in place and an old one is found and removed
-    exactly as before.
-    """
-    return f": {MARKER}; {context_invocation(agent_uid, cli=cli, hook_event=hook_event)}"
-
-
 #: The four moments memory reaches a session (ADR
 #: memory-reaches-a-session-at-prompt-time-and-before-a-known-trap): the index at
 #: session start, retrieval per prompt, the guard before a shell command, and
@@ -170,14 +123,34 @@ def hook_invocation(agent_uid: str, *, cli: str = "coffer") -> str:
     One command for every event: it reads the hook's own JSON from stdin, whose
     ``hook_event_name`` says which moment this is, and prints the JSON that
     moment answers with. ``--cwd "$PWD"`` is the fallback for an event whose
-    input carries no ``cwd``. The CLI is named by absolute path, as
-    :func:`context_invocation` explains.
+    input carries no ``cwd``; it reads the shell's own ``$PWD`` at fire time,
+    because the session's working directory is only known when the hook runs.
+
+    ``cli`` is the **absolute path** of the ``coffer`` binary whenever the
+    composition root can find one. A hook runs under whatever shell the agent
+    starts, and that shell need not read the user's rc files: Codex runs its
+    hooks under ``/bin/zsh`` with a ``PATH`` that does not include
+    ``~/.coffer/bin``, so a bare ``coffer`` there is "command not found" and the
+    hook delivers nothing. The bare name is only the fallback for a build that
+    cannot locate its own CLI.
+
+    The agent is named by its **uid**, not by its registry name (ADR
+    resource-identity-is-an-immutable-uid). An installed hook is a string
+    sitting in somebody else's settings file for months; a name is a label the
+    user may edit in that time, and the hook would then report an agent that no
+    longer answers to anything.
     """
     return f'{shlex.quote(cli)} memory hook --agent-uid {shlex.quote(agent_uid)} --cwd "$PWD"'
 
 
 def entry_command(agent_uid: str, *, cli: str = "coffer") -> str:
-    """The exact command string Coffer installs on each event, marker first."""
+    """The exact command string Coffer installs on each event, marker first.
+
+    Marker-scoped: every adapter's installed command starts with the same
+    ``": {MARKER};"`` prefix, so it is recognised identically regardless of what
+    follows. Detection never reads the arguments, so a reinstall replaces the
+    entry in place and an old one is found and removed exactly as before.
+    """
     return f": {MARKER}; {hook_invocation(agent_uid, cli=cli)}"
 
 
@@ -330,14 +303,12 @@ __all__ = [
     "InstalledHook",
     "MalformedDeliveryConfig",
     "commands_label",
-    "context_invocation",
     "delivery_entries",
     "entry_command",
     "events_label",
     "find_all_installed",
     "find_command",
     "find_installed",
-    "hook_command",
     "hook_invocation",
     "install_entries",
     "install_entry",

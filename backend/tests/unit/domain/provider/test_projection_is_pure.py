@@ -18,10 +18,13 @@ from typing import Any, NoReturn
 import pytest
 
 from coffer.domain.provider import projection
+from coffer.domain.provider.api_key_helper import proxy_token_helper
+from coffer.domain.provider.codex_projection import CodexAuthCommand
 
 _EXISTING_SETTINGS = json.dumps({"theme": "dark", "env": {"OTHER": "1"}}, indent=2) + "\n"
 _EXISTING_TOML = '# user comment\napproval_policy = "never"\n'
 _CATALOG = pathlib.Path("/absolute/elsewhere/coffer-models.json")
+_AUTH = CodexAuthCommand("/opt/coffer/bin/coffer", ("proxy", "token", "--agent-uid", "a1"))
 
 
 def _forbid_file_access(monkeypatch: pytest.MonkeyPatch, attempts: list[str]) -> None:
@@ -56,7 +59,7 @@ def _forbid_file_access(monkeypatch: pytest.MonkeyPatch, attempts: list[str]) ->
 def test_projection_transforms_touch_no_file(monkeypatch: pytest.MonkeyPatch) -> None:
     attempts: list[str] = []
     _forbid_file_access(monkeypatch, attempts)
-    helper = projection.anthropic_api_key_helper(
+    helper = proxy_token_helper(
         "0123456789abcdef0123456789abcdef", coffer_cli="/opt/coffer/bin/coffer"
     )
 
@@ -76,6 +79,7 @@ def test_projection_transforms_touch_no_file(monkeypatch: pytest.MonkeyPatch) ->
         wire_api="responses",
         display_name="Coffer (acme)",
         catalog_path=_CATALOG,
+        auth=_AUTH,
     )
     removed_toml = projection.remove_codex_provider(applied_toml)
 

@@ -95,10 +95,13 @@ The ORM models live in [`infrastructure/persistence/models.py`](https://github.c
 
 | Table | Purpose |
 | --- | --- |
-| `resources` | One row per resource of every kind: `id`, `uid`, `kind`, `name` (unique per kind), `description`, `config_json`, `enabled`, `scope_json`, timestamps. See [Resource framework](/architecture/resource-framework). |
+| `resources` | One row per resource of every kind: `id`, `uid`, `kind`, `name` (unique per kind), an optional display `title`, `description`, `config_json`, `enabled`, `scope_json`, `rev` (1 at creation, bumped by every write), timestamps. See [Resource framework](/architecture/resource-framework). |
 | `audit_log` | Every lifecycle change: time, event type, actor, the resource's `id` plus its kind and name at the time, and redacted details. |
 | `retention_policies` | One row per prunable table: retention days, when it was last pruned and how many rows went. |
 | `credentials` | `ref` → Fernet `ciphertext`. The only place a secret exists at rest. |
+| `secret_bindings` | A secret approved for one slot of one destination, with the fingerprint of the target it was approved for; a changed target needs a new approval. |
+| `secret_approvals` | Changes waiting for a present human in the desktop app, with their status. A pending value waits as ciphertext. |
+| `secret_boundary_settings` | Key/value switches of the secret boundary (`require_approval`) and its one-time adoption marker. |
 | `internal_engine_config` | A single row: the model Coffer's own passes run on, each unattended pass's switch and interval, the curation owner machine, and the per-call timeout. |
 
 ### Kind-owned
@@ -108,9 +111,15 @@ The ORM models live in [`infrastructure/persistence/models.py`](https://github.c
 | `mcp_capability_preferences` | `mcp_server` | Which of a server's tools, prompts and resources you switched off. Cascades from `resources.id`. |
 | `mcp_server_health` | `mcp_server` | The last "test connection" result per server, keyed by uid. |
 | `mcp_invocations` | `mcp_server` | One row per tool call through the gateway, written by a batched writer. Pruned after 30 days by default. |
+| `skill_source_status` | `skill` | What this machine last found when it checked a Git-imported skill's source: when, the latest commit, how far ahead, a dismissed commit. Machine-local; cascades from `resources.id`. |
 | `skill_agent_bindings` | `skill` | Bookkeeping for each delivered copy of a skill in an agent. A record, not a switch: delivery is decided by `enabled` and scope. |
 | `channel_peers` | `channel` | Paired identities per channel, including the owner. |
 | `channel_thread_conversations` | `channel` | Which chat conversation an IM thread maps to. |
+| `channel_thread_history` | `channel` | Every conversation a chat thread has opened, for `/resume` and for mirroring a web reply back to it. |
+| `channel_outbox` | `channel` | Replies Coffer owes a chat and has not delivered yet; a row is marked delivered, never deleted by a failure. Cascades from `resources.id`. |
+| `usage_requests` | `provider` | One row per upstream attempt the model proxy spooled, with the cost estimated at ingest and the price version used. Pruned on the MCP-calls retention window. |
+| `usage_daily` | `provider` | The per-day rollup the Usage page reads, one row per day, agent, connection and model. Kept 365 days by default. |
+| `quota_snapshots` | `provider` | The latest official subscription quota each feed reported, per agent type and window, with when it was seen. |
 | `conversations`, `chat_messages` | chat | Conversation metadata and message history for the Conversations page and every channel. Idle conversations are auto-archived after 7 days and archived ones deleted after 30, by default. |
 
 ### Sync bookkeeping

@@ -589,3 +589,42 @@ async def test_on_conversation_deleted_is_noop(tmp_path) -> None:  # type: ignor
     # Should complete without error.
     await provider.on_conversation_deleted("any-id")
     await engine.dispose()
+
+
+@pytest.mark.acceptance(
+    spec="memory", scenario="a channel turn's prompt brings in the notes it names"
+)
+@pytest.mark.asyncio
+async def test_a_channel_turn_sends_the_notes_its_prompt_names(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A channel turn's prompt reaches the agent with the notes it names after
+    it — where a UserPromptSubmit hook's context would land — keyed on the
+    conversation; a turn the developer drives is never ranked here."""
+    repo, engine = await _repo(tmp_path)
+    channel = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
+    web = await repo.create(_conv())
+    sessions: list[_FakeSdkSession] = []
+
+    def factory(options: ClaudeAgentOptions) -> _FakeSdkSession:
+        sessions.append(_FakeSdkSession(options, _simple_messages()))
+        return sessions[-1]
+
+    calls: list[tuple[str, str, str, str]] = []
+    notes = "## Coffer memory — notes this prompt names\n- a fact they recorded: x"
+
+    async def _retrieve(agent_key: str, cwd: str, prompt: str, conversation_id: str) -> str | None:
+        calls.append((agent_key, cwd, prompt, conversation_id))
+        return notes
+
+    provider = ClaudeSdkProvider(
+        conversations=repo, session_factory=factory, retrieve_memory=_retrieve
+    )
+    for conv in (channel, web):
+        await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+        adapter = await provider.build_adapter(conv.id)
+        await _collect(adapter, _user_turn("why does make verify fail", conv.id))
+
+    assert sessions[0].connected_prompt == f"why does make verify fail\n\n{notes}"
+    assert sessions[1].connected_prompt == "why does make verify fail"
+    assert calls == [("claude_code", str(tmp_path), "why does make verify fail", channel.id)]
+
+    await engine.dispose()

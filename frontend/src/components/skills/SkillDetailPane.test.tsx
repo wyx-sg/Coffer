@@ -121,7 +121,8 @@ function openTab(name: string) {
 
 acceptance("skill-manager", "a skill opens on its files with SKILL.md rendered", async () => {
   renderSkillsPage("/skills/hello");
-  const tabs = await screen.findAllByRole("tab");
+  // The open skill's pane waits on the library and the skill's detail.
+  const tabs = await screen.findAllByRole("tab", {}, { timeout: 5_000 });
   expect(tabs.map((t) => t.textContent)).toEqual(["Files", "Delivery", "Requires", "History"]);
   expect(screen.getByRole("tab", { name: "Files" })).toHaveAttribute("aria-selected", "true");
   expect(screen.queryByRole("tab", { name: "SKILL.md" })).not.toBeInTheDocument();

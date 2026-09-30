@@ -2,7 +2,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/api/errors";
-import { ownListKeyForKind, resourcesKey } from "@/lib/api/queryKeys";
+import { ownListKeysForKind, resourcesKey } from "@/lib/api/queryKeys";
 import { resourcesApi } from "@/lib/api/resources";
 import { useToast } from "@/components/ui/toast";
 
@@ -18,13 +18,14 @@ interface ResourceWriteInput {
 }
 
 /** A kind-agnostic write refreshes the generic list AND the kind's own list
- *  key, where it has one (`ownListKeyForKind`) — the Skills page reads
+ *  key, where it has one (`ownListKeysForKind`) — the Skills page reads
  *  `skillsKey`, not `resourcesKey`, and would otherwise keep rendering the
  *  pre-toggle state. */
 function invalidateFor(qc: ReturnType<typeof useQueryClient>, kind: string): void {
   void qc.invalidateQueries({ queryKey: resourcesKey });
-  const own = ownListKeyForKind(kind);
-  if (own) void qc.invalidateQueries({ queryKey: own });
+  for (const own of ownListKeysForKind(kind)) {
+    void qc.invalidateQueries({ queryKey: own });
+  }
 }
 
 export function useEnableResource() {

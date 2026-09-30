@@ -176,11 +176,11 @@ The boundary holds only in a release signed with Coffer's Developer ID, under th
 
 ## Loopback binding
 
-The daemon binds `127.0.0.1` and nothing else ([`infrastructure/daemon/port_alloc.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/port_alloc.py)). Uvicorn is handed the pre-bound socket rather than a host and port, so nothing downstream can widen the bind. It is the only socket Coffer listens on: Telegram is long-polled from inside the daemon, and each SeaTalk channel holds one outbound websocket connection. No channel needs a public URL, a tunnel or an inbound port.
+The daemon binds `127.0.0.1` and nothing else ([`infrastructure/daemon/port_alloc.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/port_alloc.py)). Uvicorn is handed the pre-bound socket rather than a host and port, so nothing downstream can widen the bind. Coffer listens on one other socket: the [local model proxy](/architecture/model-proxy), the daemon's sibling process, binds `127.0.0.1:8001` (`proxy_port` in `daemon-config.json`) and nothing else, and runs Host and Origin checks of its own (see [below](#the-model-proxy-listener)). Nothing else listens: Telegram is long-polled from inside the daemon, and each SeaTalk channel holds one outbound websocket connection. No channel needs a public URL, a tunnel or an inbound port.
 
 ## The Host and Origin checks
 
-Binding to loopback stops remote hosts. It does not stop a browser, because any page you have open can send requests to `127.0.0.1`. Coffer runs two checks on every request before any route sees it. They cover the REST API, the `/mcp` endpoint, the `/api/v1/events` stream, websockets, the status probe and the served web UI. The daemon has one listener and every surface is on it, so there is no path that skips the checks. This follows the MCP specification, which says an HTTP server must validate `Origin` on every connection. The same gap caused CVE-2025-49596 in the MCP Inspector, CVE-2024-28224 in Ollama and TS-2022-004/005 in Tailscale.
+Binding to loopback stops remote hosts. It does not stop a browser, because any page you have open can send requests to `127.0.0.1`. Coffer runs two checks on every request before any route sees it. They cover the REST API, the `/mcp` endpoint, the `/api/v1/events` stream, websockets, the status probe and the served web UI. The daemon has one listener and every surface is on it, so there is no path to the daemon that skips the checks. This follows the MCP specification, which says an HTTP server must validate `Origin` on every connection. The same gap caused CVE-2025-49596 in the MCP Inspector, CVE-2024-28224 in Ollama and TS-2022-004/005 in Tailscale.
 
 ### Host: DNS rebinding
 
@@ -220,6 +220,10 @@ You only need this when you serve the UI yourself instead of opening it from the
 Both variables are read when the daemon starts, so restart it after you change them. Never put a site you do not control on the list: any page on a listed origin can call the daemon.
 
 `COFFER_ALLOWED_HOSTS` (comma-separated hostnames, or `*`) adds names that the Host check accepts. It never relaxes the Origin check. The backend test suite sets it because it drives the app in-process with made-up hostnames. A real installation does not need it.
+
+### The model proxy listener
+
+The [local model proxy](/architecture/model-proxy) is Coffer's second listener, and it runs its own checks before anything else ([`infrastructure/model_proxy/app.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/model_proxy/app.py)). They are stricter than the daemon's. A request whose `Host` is not a loopback name on the port it arrived on gets 403, and `COFFER_ALLOWED_HOSTS` does not apply here. **Any** request that carries an `Origin` header gets 403 as well, because no browser page is a client of the proxy. Only then does a model route check the agent's local proxy token. The daemon's control routes are behind a separate control token from `~/.coffer/proxy.json`.
 
 ## The API token
 
@@ -296,20 +300,27 @@ A copy of `coffer.db` without its master key yields no secrets, and in a signed 
 
 [`infrastructure/net/ssrf_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/net/ssrf_guard.py) resolves a URL's host and refuses it if any resolved address is loopback, private (RFC 1918, `fc00::/7`), link-local, carrier-grade NAT (`100.64.0.0/10`), multicast, unspecified or reserved. A name that fails to resolve counts as blocked.
 
-The rule ([Principles → Network defaults](/architecture/principles)) is that a URL Coffer probes or fetches on your behalf from something typed into a form passes the guard, while an endpoint you configure as your own does not. Today one adapter fetches from typed input: the provider introspector ([`infrastructure/provider/introspector.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/provider/introspector.py)), behind the three probes a connection editor runs before anything is saved — `POST /api/v1/models/list-models`, `/test-connection` and `/detect-protocol`. Each checks the base URL before its first request. Two cases skip the check:
+The rule ([Principles → Network defaults](/architecture/principles)) is that a URL Coffer probes or fetches on your behalf from something typed into a form passes the guard, while an endpoint you configure as your own does not. Two adapters fetch from typed input. The first is the provider introspector ([`infrastructure/provider/introspector.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/provider/introspector.py)), behind the three probes a connection editor runs before anything is saved — `POST /api/v1/models/list-models`, `/test-connection` and `/detect-protocol`. Each checks the base URL before its first request. Two cases skip the check:
 
 - A connection whose protocol is local by design (`ollama`) is never checked, since its URL is loopback.
 - `detect-protocol` classifies a loopback host (`localhost`, `127.0.0.1`, `::1`, `0.0.0.0`, `host.docker.internal`) as `ollama` without sending any request.
 
+The OpenAPI import of [custom tools](/guides/custom-tools) is the second: a spec URL typed into the import form is checked before it is fetched, and so is every redirect it answers with (`infrastructure/mcp/openapi_fetch.py`, capped at 5 MiB and 20 seconds). A spec on a private host is imported as a file instead.
+
 So a probe of a non-Ollama endpoint on a private or link-local address is refused. Saving and using a connection are not probes, and the guard is not applied to the endpoints you configure as your own:
 
 - **HTTP-transport MCP servers**, whose URL you registered — they commonly run on your own machine or network.
+- **Custom-tool groups**, whose base URL you configured. Their requests follow no redirect, so the auth header only ever goes to that base URL.
 - **Coffer's own model calls** and **transcription**, which go to the providers you configured.
 - **Telegram and SeaTalk**, the IM platforms' own hosts, including the media URLs they hand back.
 - **Vault sync**, which is a `git` subprocess against the remote you configured.
 - **A skill's Git repository**, also a `git` subprocess against a URL you typed, run with no prompt, only the `https`, `http`, `ssh`, `git` and `file` transports and no submodules; a company's own Git host usually sits on a private address (see [Skills](/architecture/skills#git-repositories)).
 
 The guard resolves DNS at validation time and the HTTP client resolves again when it connects, so a host that re-points between the two can slip past. Pinning the resolved address through to the client would break TLS certificate verification; for a single-user daemon where you typed the URL yourself, that residual risk is accepted.
+
+## Commands Coffer runs for skill requirements
+
+A skill can declare the command-line tools it needs ([Skill requirements](/architecture/skill-requirements)), and checking them runs two things on your machine: `<command> --version`, and the skill's login check. Both are held to the command the skill names — a bare name looked up on your `PATH`, and a login check whose first word must be that same command — and run as argv, never through a shell, with `stdin` closed and a timeout. A login check's output is discarded unread, so an account name or token it prints is never captured, logged or shown; only its exit status counts. Installing runs `brew install|upgrade <formula>` as you, never with `sudo`, and only after a person confirmed that exact command. Coffer never runs a login command.
 
 ## Agent identity
 

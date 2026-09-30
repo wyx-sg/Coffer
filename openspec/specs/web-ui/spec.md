@@ -97,9 +97,9 @@ The sidebar's entries MUST be exactly these, in these three groups and at these
 routes — eleven today, and no twelfth. An entry whose
 experimental feature is switched off (spec
 [experimental-features](../experimental-features/spec.md) "Close every surface of a switched-off feature")
-MUST be left out — Knowledge for `knowledge`, Memory for `memory`, Sync for
-`vault_sync` — and MUST appear on the next render after the feature is switched
-on:
+MUST be left out, and MUST appear on the next render after the feature is
+switched on. Knowledge, Memory and Sync are ordinary entries, owned by no
+experimental feature:
 
 ```
  AGENTS
@@ -120,7 +120,6 @@ on:
 
 #### Scenario: cold-start renders authenticated content
 - **GIVEN** the user has never opened Coffer (localStorage is empty, no daemon.json in user HOME yet)
-- **AND** every experimental feature is switched on
 - **AND** `coffer daemon start` is running (so daemon.json exists in user HOME)
 - **WHEN** they navigate to `http://localhost:5173/` in a real browser
 - **THEN** the index redirects to `/agents` and the page renders the sidebar + main content area within 2 seconds
@@ -128,9 +127,10 @@ on:
 - **AND** the sidebar lists exactly Coffer's operational surfaces — Agents, Chat; MCP servers, Skills, Knowledge, Memory, Model providers, Channels; Activity, Sync, Settings — grouped under "Agents", "Resources", and "System" headings, with no other entry
 
 #### Scenario: a switched-off feature leaves the sidebar
-- **GIVEN** `knowledge` and `vault_sync` switched off
+- **GIVEN** a sidebar entry owned by a registered experimental feature that is switched off
 - **WHEN** the app shell is rendered
-- **THEN** the sidebar lists Agents, Chat; MCP servers, Skills, Memory, Model providers, Channels; Activity, Settings — with no Knowledge and no Sync entry
+- **THEN** the sidebar leaves that entry out and lists every other entry
+- **AND** with a registry that names no feature, the sidebar lists all eleven entries
 
 ### Requirement: Hold one Resources entry per listed resource kind
 RESOURCES MUST hold exactly one entry per resource kind that has a list UI —
@@ -570,8 +570,8 @@ rather than resolving to a "page not found" view.
 
 ### Requirement: Organise Settings into five tabs
 Settings MUST carry exactly five tabs, in this order, grouped by what they
-manage rather than by how Coffer is built — **General** (display preferences, when the daemon runs, and which
-experimental features are switched on),
+manage rather than by how Coffer is built — **General** (display preferences, when the daemon runs, and — while the
+registry names any experimental feature — which of them are switched on),
 **Coffer's model** (at `/settings/engine` — Coffer's own machinery: the internal
 LLM connection and model its own passes run on, the speech-to-text connection
 and model voice messages are transcribed on, and the switch and interval of each

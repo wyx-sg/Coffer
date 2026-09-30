@@ -9,31 +9,29 @@ only by aggregation ("Provision partitions only from aggregation"), and no
 ``/memory/partitions``, which counts each partition's notes and names the
 repository it is keyed on. ``sync`` updates memory — aggregation, then a
 distil pass over every partition that gained entries ("Update memory in one
-action"). The session-start
-hook in an agent's own settings file is part of that agent's Coffer
+action"). The delivery hook
+(four events) in an agent's own settings file is part of that agent's Coffer
 connection (``coffer agent connect``), not a command of this group.
 A partition's notes, index, retirement record and file tree are plain files,
 so this group has no command that lists or prints one: ``coffer path memory
 [<partition>]`` names the directory. Whether the hook is installed is a part of
 ``coffer_connection`` in ``coffer agent show``.
 
-``context`` is the exception to everything above: it is the exact command an
-agent's own session-start hook invokes (``domain.memory.delivery.hook_command``),
-so it must be fast and must never fail a session — no detect-or-spawn, a short
-timeout, and any failure at all (daemon not running, a slow response, a
-malformed one) degrades to printing nothing and exiting 0. "Audit every
-delivery fire" exists precisely because the previous injection layer had no
-such safety net and nothing said so for two months; this command must not
-repeat that by crashing a real session over its own plumbing.
+``context`` is the exception to everything above: it prints the session-start
+context the installed hook delivers — the hook itself runs ``coffer memory
+hook`` (``domain.memory.delivery.hook_invocation``), which asks the daemon for
+the same text at session start — and like the hook it must be fast and must
+never fail: no detect-or-spawn, a short timeout, and any failure at all
+(daemon not running, a slow response, a malformed one) degrades to printing
+nothing and exiting 0.
 
 Every other command takes a partition's **name**, because that is what a
 person knows; each resolves once through ``_resolve`` to the uid the
 routes address resources by (ADR resource-identity-is-an-immutable-uid).
-``context`` deliberately takes ``--agent-uid``: its caller is not a person but
-the hook entry Coffer wrote into that agent's own settings file, months ago,
-and never rewrites. A uid there is precisely what stops a rename from silently
-turning every session's fire into an unattributable one — so there is no
-``--agent`` and no fallback.
+``context`` deliberately takes ``--agent-uid``, the same spelling the hook
+entry Coffer wrote into that agent's own settings file carries: a uid is
+precisely what stops a rename from silently turning a fire into an
+unattributable one — so there is no ``--agent`` and no fallback.
 """
 
 from __future__ import annotations
@@ -134,31 +132,26 @@ def context(
 ) -> None:
     """Print the composed session-start context to stdout.
 
-    The installed session-start hook runs this; you rarely need to. It prints
-    nothing, and exits 0, when the daemon is not running.
+    This is the text the installed hook (``coffer memory hook``) delivers at
+    session start, printed for you to read. It prints nothing, and exits 0,
+    when the daemon is not running.
     \f
-    This is exactly what an installed session-start hook invokes
-    (``domain.memory.delivery.hook_command``) — see the module docstring for
-    why every failure here is silent rather than raised.
+    The installed hook runs ``coffer memory hook``
+    (``domain.memory.delivery.hook_invocation``), not this command — see the
+    module docstring for why every failure here is silent rather than raised.
 
     ``--agent-uid`` says who fired, and only that: the payload is the same for
     every agent, and the uid travels so the daemon can record the fire against
-    it ("Audit every delivery fire") and so the daemon can size the payload for
-    that agent's hook output limit. It is still required, because an
-    unattributed fire is a hook nobody can tell is working.
+    it ("Audit every delivery fire") and size the payload for that agent's
+    hook output limit.
 
-    ``--hook-event`` is what Codex's hook passes: Codex takes a session-start
-    hook's context from ``hookSpecificOutput.additionalContext``. Claude Code's
-    hook prints plain text, which it adds to the session whole.
+    ``--hook-event`` wraps the text as that event's JSON
+    ``hookSpecificOutput.additionalContext``, the shape Codex reads a hook's
+    context from; without it the text is printed plain.
 
-    It is the **one** command in this group that does not take a name, because
-    it is the one whose caller is not a person. The value arrives from a string
-    Coffer wrote into the agent's settings file at install time and never
-    revisits; a name there would keep pointing at a label the user is free to
-    change, and the fire would then be attributed to nothing. There is
-    deliberately no ``--agent`` alias to fall back to — two spellings would put
-    the rename hazard straight back (ADR
-    resource-identity-is-an-immutable-uid).
+    Like ``coffer memory hook``, it takes a uid and not a name, and there is
+    deliberately no ``--agent`` alias: a uid is the spelling a rename cannot
+    change (ADR resource-identity-is-an-immutable-uid).
     """
     try:
         info = live_daemon()

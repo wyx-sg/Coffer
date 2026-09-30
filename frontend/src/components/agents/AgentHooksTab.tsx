@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { Webhook } from "lucide-react";
 
 import { AgentHookCommandCell } from "@/components/agents/AgentHookCommandCell";
+import { AgentHookEventCell } from "@/components/agents/AgentHookEventCell";
 import { AgentHookRowActions } from "@/components/agents/AgentHookRowActions";
 import { AgentHookStateCell } from "@/components/agents/AgentHookStateCell";
 import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
@@ -59,8 +60,8 @@ export function AgentHooksTab({ agent, onRepair }: Props) {
     {
       key: "event",
       header: t("agents.hooksTab.cols.event"),
-      className: "w-32 align-top",
-      cell: (row) => <span className="font-mono text-xs text-text">{row.event}</span>,
+      className: "w-44 align-top",
+      cell: (row) => <AgentHookEventCell row={row} />,
     },
     {
       key: "command",

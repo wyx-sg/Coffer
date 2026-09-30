@@ -1,4 +1,5 @@
 // frontend/src/components/mcp/EditMcpServerDialog.test.tsx
+import { useState } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -29,6 +30,9 @@ const stdioResource: ResourceOut = {
     transport: {
       type: "stdio",
       command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-github"],
+      env: { LOG_LEVEL: "debug" },
+      cwd: "/tmp/gh",
       credential_refs: { GITHUB_TOKEN: "gh.GITHUB_TOKEN" },
     },
   },
@@ -63,123 +67,115 @@ function wrap(ui: React.ReactNode) {
   return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
 }
 
-function openDialog() {
-  fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+/** The dialog is controlled; the harness plays the detail header's Edit button. */
+function Harness({ resource, focus }: { resource: ResourceOut; focus?: "secret" }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button onClick={() => setOpen(true)}>edit</button>
+      <EditMcpServerDialog resource={resource} open={open} onOpenChange={setOpen} focus={focus} />
+    </>
+  );
 }
+
+function openDialog() {
+  fireEvent.click(screen.getByRole("button", { name: "edit" }));
+}
+
+function client(over: Record<string, unknown> = {}) {
+  const api = {
+    PATCH: vi.fn().mockResolvedValue({ data: {}, error: undefined }),
+    POST: vi.fn().mockResolvedValue({ data: {}, error: undefined }),
+    DELETE: vi.fn().mockResolvedValue({ data: undefined, error: undefined }),
+    ...over,
+  };
+  getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
+  return api;
+}
+
+const patchBody = (patch: ReturnType<typeof vi.fn>) =>
+  patch.mock.calls[0][1].body as {
+    title?: string | null;
+    config: { transport: Record<string, unknown> } & Record<string, unknown>;
+  };
 
 describe("EditMcpServerDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  test("renders existing description and config when opened", () => {
-    getApiClientMock.mockReturnValue({
-      PATCH: vi.fn().mockResolvedValue({ data: {}, error: undefined }),
-      POST: vi.fn().mockResolvedValue({ data: {}, error: undefined }),
-      DELETE: vi.fn().mockResolvedValue({ data: undefined, error: undefined }),
-    } as unknown as ReturnType<typeof getApiClient>);
-
-    render(wrap(<EditMcpServerDialog resource={stdioResource} />));
+  test("shows the fixed name, the title and the transport as fields", () => {
+    client();
+    render(wrap(<Harness resource={{ ...stdioResource, title: "GitHub" }} />));
     openDialog();
-
-    const descInput = screen.getByLabelText(/description/i);
-    expect((descInput as HTMLInputElement).value).toBe("GitHub MCP");
-    // Config textarea is shown (without credential_refs)
-    const textarea = screen.getByRole("textbox", { name: /config/i });
-    const configVal = (textarea as HTMLTextAreaElement).value;
-    expect(configVal).toContain("stdio");
-    expect(configVal).not.toContain("credential_refs");
+    expect(screen.getByText("Edit gh")).toBeInTheDocument();
+    expect(screen.getByText("Changes apply to new agent sessions.")).toBeInTheDocument();
+    expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("GitHub");
+    expect((screen.getByLabelText("Command") as HTMLInputElement).value).toBe("npx");
+    expect((screen.getByLabelText("Arguments") as HTMLInputElement).value).toBe(
+      "-y @modelcontextprotocol/server-github",
+    );
+    // A stored secret shows its key and "Stored" — never a value.
+    expect(screen.getByText("GITHUB_TOKEN")).toBeInTheDocument();
+    expect(screen.getByText("Stored")).toBeInTheDocument();
   });
 
-  test("timeouts are editable fields, defaulted, and saved back into config", async () => {
-    // They were configurable on the backend and had no UI at all, so every
-    // server ran on the defaults regardless of how slow its upstream was.
-    const patch = vi.fn().mockResolvedValue({ data: {}, error: undefined });
-    getApiClientMock.mockReturnValue({
-      PATCH: patch,
-      POST: vi.fn().mockResolvedValue({ data: {}, error: undefined }),
-      DELETE: vi.fn().mockResolvedValue({ data: undefined, error: undefined }),
-    } as unknown as ReturnType<typeof getApiClient>);
-
-    render(wrap(<EditMcpServerDialog resource={noCredsResource} />));
+  test("saves the fields over the stored config, keeping every key the form does not show", async () => {
+    const api = client();
+    render(wrap(<Harness resource={stdioResource} />));
     openDialog();
-
-    // A server that never set one shows the backend default, not an empty box.
-    const request = screen.getByLabelText(/^request$/i) as HTMLInputElement;
-    expect(request.value).toBe("120");
-    expect((screen.getByLabelText(/^spawn$/i) as HTMLInputElement).value).toBe("30");
-    // Two fields, not three: the idle timeout is gone with the backend field,
-    // which nothing ever enforced.
-    expect(screen.queryByLabelText(/^idle$/i)).toBeNull();
-
-    // The JSON textarea must not ALSO carry them — two controls over one key
-    // would fight on save.
-    const textarea = screen.getByRole("textbox", { name: /config/i }) as HTMLTextAreaElement;
-    expect(textarea.value).not.toContain("request_timeout_seconds");
-
-    fireEvent.change(request, { target: { value: "45" } });
-    fireEvent.click(screen.getByRole("button", { name: /save/i }));
-
-    await waitFor(() => expect(patch).toHaveBeenCalled());
-    const body = patch.mock.calls[0][1].body as { config: Record<string, unknown> };
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "GitHub" } });
+    fireEvent.change(screen.getByLabelText("Arguments"), { target: { value: "-y 'a b'" } });
+    fireEvent.change(screen.getByLabelText(/^request$/i), { target: { value: "45" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
+    const body = patchBody(api.PATCH);
+    expect(body.title).toBe("GitHub");
+    expect(body.config.transport).toMatchObject({
+      type: "stdio",
+      command: "npx",
+      args: ["-y", "a b"],
+      env: { LOG_LEVEL: "debug" },
+      cwd: "/tmp/gh",
+    });
     expect(body.config.request_timeout_seconds).toBe(45);
     expect(body.config.spawn_timeout_seconds).toBe(30);
   });
 
-  test("pre-populates existing credential rows with keep-existing placeholder", () => {
-    getApiClientMock.mockReturnValue({
-      PATCH: vi.fn(),
-      POST: vi.fn(),
-      DELETE: vi.fn(),
-    } as unknown as ReturnType<typeof getApiClient>);
-
-    render(wrap(<EditMcpServerDialog resource={stdioResource} />));
+  test("an http server edits its URL and plain headers", async () => {
+    const api = client();
+    const http: ResourceOut = {
+      ...noCredsResource,
+      config: {
+        transport: { type: "http", url: "https://a.example/mcp", headers: { "X-R": "eu" } },
+      },
+    };
+    render(wrap(<Harness resource={http} />));
     openDialog();
-
-    // The credential name field shows the env var name
-    const nameInputs = screen.getAllByPlaceholderText("GITHUB_TOKEN");
-    expect(nameInputs.length).toBeGreaterThanOrEqual(1);
-    // The value field shows the "keep existing" placeholder
-    const passwordInputs = screen.getAllByPlaceholderText(/Leave blank to keep/i);
-    expect(passwordInputs.length).toBeGreaterThanOrEqual(1);
+    fireEvent.change(screen.getByLabelText("URL"), { target: { value: "https://b.example/mcp" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
+    expect(patchBody(api.PATCH).config.transport).toMatchObject({
+      url: "https://b.example/mcp",
+      headers: { "X-R": "eu" },
+    });
   });
 
-  test("adds a new credential row when the add button is clicked", () => {
-    getApiClientMock.mockReturnValue({
-      PATCH: vi.fn(),
-      POST: vi.fn(),
-      DELETE: vi.fn(),
-    } as unknown as ReturnType<typeof getApiClient>);
-
-    render(wrap(<EditMcpServerDialog resource={noCredsResource} />));
+  test("opened for a secret, the first stored one is ready to replace", () => {
+    client();
+    render(wrap(<Harness resource={stdioResource} focus="secret" />));
     openDialog();
-
-    // No credentials initially
-    expect(screen.queryByPlaceholderText("GITHUB_TOKEN")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /add credential/i }));
-
-    // Now there should be an input row
-    expect(screen.getByPlaceholderText("GITHUB_TOKEN")).toBeInTheDocument();
+    expect(screen.getByLabelText("New value of GITHUB_TOKEN")).toHaveFocus();
   });
 
-  test("removes a credential row when the remove button is clicked", () => {
-    getApiClientMock.mockReturnValue({
-      PATCH: vi.fn(),
-      POST: vi.fn(),
-      DELETE: vi.fn(),
-    } as unknown as ReturnType<typeof getApiClient>);
-
-    render(wrap(<EditMcpServerDialog resource={stdioResource} />));
+  test("adds and removes secret rows", () => {
+    client();
+    render(wrap(<Harness resource={stdioResource} />));
     openDialog();
-
-    // Start with one credential row
+    fireEvent.click(screen.getByRole("button", { name: /add secret/i }));
     expect(screen.getByPlaceholderText("GITHUB_TOKEN")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /remove credential/i }));
-
-    // Credential row is gone
-    expect(screen.queryByPlaceholderText("GITHUB_TOKEN")).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: /remove secret/i })[0]);
+    expect(screen.queryByText("Stored")).not.toBeInTheDocument();
   });
 
   test("keep-existing path: leaves value='' for unchanged creds, PATCH still has ref in credential_refs", async () => {
@@ -192,7 +188,7 @@ describe("EditMcpServerDialog", () => {
       DELETE: deleteMock,
     } as unknown as ReturnType<typeof getApiClient>);
 
-    render(wrap(<EditMcpServerDialog resource={stdioResource} />));
+    render(wrap(<Harness resource={stdioResource} />));
     openDialog();
 
     // Don't change the credential value — keep the placeholder ("keep existing")
@@ -232,10 +228,11 @@ describe("EditMcpServerDialog", () => {
       DELETE: vi.fn().mockResolvedValue({ data: undefined, error: undefined }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    render(wrap(<EditMcpServerDialog resource={stdioResource} />));
+    render(wrap(<Harness resource={stdioResource} />));
     openDialog();
 
     // Set a new value for the existing credential
+    fireEvent.click(screen.getByRole("button", { name: "Replace" }));
     const passwordInputs = screen.getAllByPlaceholderText(/Leave blank to keep/i);
     fireEvent.change(passwordInputs[0], { target: { value: "new-secret-token" } });
 
@@ -283,9 +280,10 @@ describe("EditMcpServerDialog", () => {
       DELETE: vi.fn().mockResolvedValue({ data: undefined, error: undefined }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    render(wrap(<EditMcpServerDialog resource={stdioResource} />));
+    render(wrap(<Harness resource={stdioResource} />));
     openDialog();
 
+    fireEvent.click(screen.getByRole("button", { name: "Replace" }));
     const passwordInputs = screen.getAllByPlaceholderText(/Leave blank to keep/i);
     fireEvent.change(passwordInputs[0], { target: { value: "rotated" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));

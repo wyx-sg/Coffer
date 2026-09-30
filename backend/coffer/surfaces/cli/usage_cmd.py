@@ -65,10 +65,19 @@ def _label(row: dict[str, Any], group_by: str) -> str:
     return str(row.get("day") or row.get("key"))
 
 
+#: What a cost reads as when nothing in it has a price: a dash, never $0.
+NO_PRICE = "—"
+
+
 def _cost(totals: dict[str, Any]) -> str:
+    unpriced = totals.get("unpriced_requests") or 0
+    if unpriced and unpriced >= (totals.get("requests") or 0):
+        # Nothing here was priced (Coffer bundles Anthropic's rates only; a
+        # price for another vendor's model is set on its connection).
+        return f"{NO_PRICE} ({unpriced} unpriced)"
     cost = f"~${totals['estimated_cost_usd']:.4f}"
-    if totals.get("unpriced_requests"):
-        cost += f" (+{totals['unpriced_requests']} unpriced)"
+    if unpriced:
+        cost += f" (+{unpriced} unpriced)"
     return cost
 
 
@@ -151,7 +160,7 @@ def requests(
             e["outcome"],
             "?" if not e["usage_known"] else str(e.get("input_tokens") or 0),
             "?" if not e["usage_known"] else str(e.get("output_tokens") or 0),
-            "unpriced" if e["unpriced"] else ("" if cost is None else f"~${cost:.4f}"),
+            NO_PRICE if e["unpriced"] else ("" if cost is None else f"~${cost:.4f}"),
         )
     _console.print(table)
     if body.get("next_cursor"):

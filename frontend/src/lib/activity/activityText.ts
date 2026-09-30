@@ -28,6 +28,7 @@ export function describeActivity(t: TFunction, entry: AuditEntry): string {
     defaultValue: entry.event_type,
     resource: entry.resource_name ?? "",
     key: typeof details.key === "string" ? details.key : "",
+    command: typeof details.command === "string" ? details.command : "",
     capType: capTypeLabel(t, capTypeRaw),
   });
 }

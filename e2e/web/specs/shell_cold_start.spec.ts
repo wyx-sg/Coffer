@@ -48,8 +48,8 @@ acceptance(
     // This list is the whole inventory, and the count assertion below is what
     // makes "and only those" true: a fence with no upper bound is not a fence.
     // Adding a sidebar entry means adding it here. See
-    // `frontend/src/lib/navigation.ts`. An experimental feature's entry
-    // carries its marker in its name.
+    // `frontend/src/lib/navigation.ts`. No entry is experimental while the
+    // daemon registers no feature, so no name carries the marker.
     const SIDEBAR_GROUPS: [string | null, RegExp[]][] = [
       [null, [/^Overview$/i]],
       ["Agents", [/^Agents$/i, /^Model providers$/i]],
@@ -58,11 +58,8 @@ acceptance(
         "Capabilities",
         [/^MCP servers$/i, /^Custom tools$/i, /^Skills$/i, /^CLIs$/i],
       ],
-      ["Context", [/^Knowledge Experimental$/i, /^Memory Experimental$/i]],
-      [
-        "System",
-        [/^Secrets$/i, /^Activity$/i, /^Usage$/i, /^Sync Experimental$/i],
-      ],
+      ["Context", [/^Knowledge$/i, /^Memory$/i]],
+      ["System", [/^Secrets$/i, /^Activity$/i, /^Usage$/i, /^Sync$/i]],
     ];
     const nav = page.getByRole("navigation", { name: /Primary navigation/i });
     for (const [heading, labels] of SIDEBAR_GROUPS) {
@@ -172,27 +169,25 @@ acceptance(
         resources: Array<{ uid: string }>;
       };
       for (const r of body.resources) {
-        await fetch(
-          `http://127.0.0.1:${port}/api/v1/resources/${r.uid}`,
-          {
-            method: "DELETE",
-            headers: {
-              "X-Coffer-Token": token,
-              "X-Coffer-Actor": "e2e-cleanup",
-            },
+        await fetch(`http://127.0.0.1:${port}/api/v1/resources/${r.uid}`, {
+          method: "DELETE",
+          headers: {
+            "X-Coffer-Token": token,
+            "X-Coffer-Actor": "e2e-cleanup",
           },
-        );
+        });
       }
     }
 
     await page.goto("/mcp-servers");
 
     // Welcome card content
+    const welcome = page.getByTestId("mcp-welcome");
     await expect(
-      page.getByRole("heading", { name: /local-first vault/i }),
+      welcome.getByRole("heading", { name: /no mcp servers yet/i }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /Add MCP server/i }).first(),
+      welcome.getByRole("button", { name: /^add server$/i }),
     ).toBeVisible();
 
     // No ghost-table / "No resources yet" cell (we render the welcome

@@ -1,7 +1,8 @@
 // frontend/src/lib/hooks/useFeatures.ts
 //
 // The experimental features (spec experimental-features): which of them are
-// switched on on this machine, and the switch itself.
+// switched on on this machine, and the switch itself. The daemon's registry
+// names them; it may be empty, and then nothing in the web UI is gated.
 //
 // Two reads, on purpose. Every surface that only needs "is it on?" — the
 // sidebar, the gated routes, a query that belongs to a feature — reads the
@@ -22,9 +23,9 @@ import type { components } from "@/lib/api/types";
 import { daemonFeaturesKey, daemonStatusKey } from "@/lib/api/queryKeys";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
 
-/** The registered experimental features. The daemon's registry is the source
- *  of truth; this union is only what the web UI's own gates name. */
-export type FeatureKey = "vault_sync" | "knowledge" | "memory";
+/** A registered experimental feature's key. The daemon's registry is the
+ *  source of truth, so the web UI names no keys of its own. */
+export type FeatureKey = string;
 
 export type Feature = components["schemas"]["FeatureOut"];
 export type FeatureList = components["schemas"]["FeatureListOut"];
@@ -47,6 +48,31 @@ export function useFeatureEnabled(key: FeatureKey): boolean | undefined {
   const { data } = useDaemonStatus();
   if (!data) return undefined;
   return data.features?.[key] ?? true;
+}
+
+const NO_FEATURES: Record<FeatureKey, boolean> = {};
+
+/**
+ * Every registered feature's state, for a surface that filters many entries by
+ * whichever feature each one carries: `null` while the daemon has not answered.
+ * A key absent from the map is not registered, so it reads as on — see
+ * `isFeatureOn`.
+ */
+export function useFeatureMap(): Record<FeatureKey, boolean> | null {
+  const { data } = useDaemonStatus();
+  if (!data) return null;
+  return data.features ?? NO_FEATURES;
+}
+
+/** Whether an entry carrying `feature` is shown under `map`: an entry with no
+ *  feature always is; one with a feature only once the daemon says it is on. */
+export function isFeatureOn(
+  map: Record<FeatureKey, boolean> | null,
+  feature: FeatureKey | undefined,
+): boolean {
+  if (feature === undefined) return true;
+  if (map === null) return false;
+  return map[feature] ?? true;
 }
 
 /** The registry with each feature's state and the layer that decided it. */

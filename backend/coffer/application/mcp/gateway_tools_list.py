@@ -51,6 +51,7 @@ async def build_tools_listing(
     discovery: CapabilityDiscovery,
     ensure_subscribed: Callable[[str], Awaitable[None]],
     servers: list[str],
+    hidden: frozenset[str] = frozenset(),
     builtin: BuiltinToolRegistry,
     invocations: MCPInvocationRepoPort,
     tiering: TieringConfig,
@@ -58,7 +59,7 @@ async def build_tools_listing(
     degraded: DegradedTracker,
 ) -> ToolsListing:
     """Aggregate, append the built-ins, then hide what tiering says to hide."""
-    outcome = await list_tools_across(discovery, ensure_subscribed, servers)
+    outcome = await list_tools_across(discovery, ensure_subscribed, servers, hidden)
     tools = list(outcome.items)
     append_builtin_tools(tools, builtin)
     tiered = await apply_tiering(tools, invocations=invocations, config=tiering, clock=clock)

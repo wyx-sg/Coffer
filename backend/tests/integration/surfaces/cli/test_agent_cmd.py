@@ -928,7 +928,7 @@ def memory_daemon(tmp_path, monkeypatch):
     shim = tmp_path / "coffer-mcp-shim"
     shim.write_text("#!/bin/sh\n", encoding="utf-8")
     monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(shim))
-    yield from boot(tmp_path, monkeypatch, features="memory=on")
+    yield from boot(tmp_path, monkeypatch)
 
 
 @pytest.mark.acceptance(

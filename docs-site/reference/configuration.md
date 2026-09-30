@@ -12,7 +12,7 @@ Coffer keeps configuration in four places, and each one exists for a reason:
 | Where | Holds | Why there |
 | --- | --- | --- |
 | Environment variables | Operator escape hatches, test and dev overrides | Read by one process at start-up; nothing persists them |
-| `~/.coffer/daemon-config.json` | Port, machine name and id, experimental features | Needed before the database is opened, and machine-local |
+| `~/.coffer/daemon-config.json` | Daemon and model-proxy ports, machine name and id, experimental features | Needed before the database is opened, and machine-local |
 | The database (`~/.coffer/coffer.db`) | Coffer's model, upkeep passes, retention policies | Ordinary settings; some travel with [vault sync](/guides/vault-sync) |
 | Browser `localStorage` | Web UI preferences | Per browser, never sent to the daemon |
 
@@ -33,6 +33,7 @@ Links point at the file that reads each variable on GitHub.
 | `COFFER_CORS_ORIGINS` | unset | Comma-separated list of exact origins that replaces the cross-origin allow-list entirely, for both CORS and the `Origin` check. Without it the daemon allows only the desktop app's origins (`tauri://localhost`, `http://tauri.localhost`). The daemon's own origins are always allowed; any other origin gets `403 ORIGIN_NOT_ALLOWED`. | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
 | `COFFER_DEV_CORS` | unset | `1` adds the Vite dev server origins `http://localhost:5173` and `http://127.0.0.1:5173` to the default allow-list, for both CORS and the `Origin` check. Ignored when `COFFER_CORS_ORIGINS` is set. `make dev` sets it. | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
 | `COFFER_WEBUI_DIR` | built-in | Directory holding a built web UI (`index.html`). Without it the daemon serves the UI bundled into the frozen binary, or `frontend/dist` in a source checkout. | [`surfaces/http/webui.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/webui.py) |
+| `COFFER_MODEL_PROXY` | unset | `off` keeps the daemon from starting or supervising the [local model proxy](/architecture/model-proxy); any other value, or none, leaves it on. The test suite sets it. | [`surfaces/http/model_proxy_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/model_proxy_wiring.py) |
 
 ### MCP gateway
 
@@ -65,7 +66,8 @@ These move a tree away from `~/.coffer`. They exist mainly so tests never touch 
 | `COFFER_MEMORY_ROOT` | `~/.coffer/memory` | Root of the derived memory tree. | [`infrastructure/memory/paths.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/memory/paths.py) |
 | `COFFER_SKILLS_ROOT` | `~/.coffer/skills` | Root of the skill master store, and the tree vault sync mirrors. | [`infrastructure/skill/master_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/skill/master_store.py), [`infrastructure/sync/paths.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/sync/paths.py) |
 | `COFFER_AGENT_STATE_ROOT` | `~/.coffer/cache/agent` | Where the agent layer keeps derived state such as the transcript summary cache. | [`infrastructure/agent/paths.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/agent/paths.py) |
-| `COFFER_LOG_DIR` | `~/.coffer/logs` | Directory for `daemon.log`, upstream server logs, MCP shim logs and the login service's output. | [`infrastructure/logging/files.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/files.py) |
+| `COFFER_PROXY_SPOOL_DIR` | `~/.coffer/proxy-usage` | Directory the model proxy writes its usage spool files to and the daemon ingests them from. Both processes must see the same value. | [`infrastructure/model_proxy/spool.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/model_proxy/spool.py), [`infrastructure/usage/spool_reader.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/usage/spool_reader.py) |
+| `COFFER_LOG_DIR` | `~/.coffer/logs` | Directory for `daemon.log`, `proxy.log`, upstream server logs, MCP shim logs and the login service's output. | [`infrastructure/logging/files.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/files.py) |
 | `HOME` | the user's home | Every `~/.coffer` path is resolved against `$HOME`, so an alternate `HOME` gives a fully separate vault. | many modules |
 
 ### Installer
@@ -102,7 +104,6 @@ Coffer never reads these from its own environment; it sets them for child proces
 | --- | --- | --- |
 | `CLAUDE_CONFIG_DIR` | Claude Code turns | Points Claude Code at a registered agent's config directory when it is not `~/.claude`. |
 | `CODEX_HOME` | Codex turns | Points Codex at a registered agent's config directory when it is not `~/.codex`. |
-| `COFFER_PROVIDER_KEY` | Codex turns | The API key of the model provider Coffer projected into Codex's `config.toml` (`model_providers.coffer.env_key`). The key is never written to disk, and the projection lists the variable in `shell_environment_policy.exclude` so the shell commands Codex runs do not inherit it. |
 | `COFFER_GIT_TOKEN` | `git` during vault sync | The sync remote's token, read by a credential helper at run time so it never appears in `argv` or on disk. |
 | `PATH`, `HOME` | the login service | Captured from your login shell when you install the service, so the daemon can find `npx`, `uvx` and other upstream launchers. |
 
@@ -115,30 +116,28 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
 ```json
 {
   "port": 8123,
+  "proxy_port": 8001,
   "machine_name": "studio",
   "machine_id": "3f0c9a…",
-  "features": { "vault_sync": true, "memory": false }
+  "features": {}
 }
 ```
 
 | Key | Type | Default | Effect | Changed with |
 | --- | --- | --- | --- | --- |
 | `port` | integer 1024–65535, or `null` | `8000` | The one port the daemon binds. The daemon refuses to start rather than move to another port. Takes effect at the next start. | `coffer config set daemon.port <port>`, `coffer config unset daemon.port` |
+| `proxy_port` | integer 1024–65535, or `null` | `8001` | The port the [local model proxy](/architecture/model-proxy) binds on `127.0.0.1`, and the one projected into agents' configs. An invalid value is ignored with a warning and the default applies. Takes effect when the proxy next starts. | edit the file |
 | `machine_name` | string | host name without `.local` | This machine's display label in vault sync. Free to change; nothing references it. | **Sync** page, `coffer sync machine rename` |
 | `machine_id` | string | derived from the host | Cache of the host-derived machine id that names this machine in a synced vault. Deleting it recomputes the same value. | written by the daemon |
-| `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. | **Settings → General → Experimental features**, `coffer config set feature.<key> on\|off` |
+| `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. A key the registry does not declare is ignored. | **Settings → General**, `coffer config set feature.<key> on\|off` |
 
 The daemon's runtime state — its pid, port and API token — lives in a different file, `~/.coffer/daemon.json`, which is created on start and removed on exit. See [Files and directories](/reference/filesystem#daemon-files).
 
 ## Experimental features
 
-Three capabilities are experimental. Each can be switched off per machine; switching one off hides its pages, commands and routes and deletes nothing it holds.
+An experimental feature is a capability that can be switched off per machine; switching one off hides its pages, commands and routes and deletes nothing it holds. Each registry entry names its key, the routes it owns and the resource kinds it owns.
 
-| Key | Name in the UI | Routes it owns | Resource kinds it owns |
-| --- | --- | --- | --- |
-| `vault_sync` | Sync | `/api/v1/sync` | — |
-| `knowledge` | Knowledge | `/api/v1/knowledge` | `knowledge` |
-| `memory` | Memory | `/api/v1/memory` | `memory` |
+No feature is experimental right now: the registry is empty. Sync, Knowledge and Memory (keys `vault_sync`, `knowledge`, `memory`) graduated at 1.0 and are always on; a migration removed their stored switches. `coffer config set feature.<one of them>` now reports an unknown setting, and `PUT /api/v1/daemon/features/<one of them>` answers `FEATURE_UNKNOWN`.
 
 While a feature is off, its routes answer `404` with code `FEATURE_DISABLED`, and the CLI prints the command that switches it back on. The registry lives in [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py).
 
@@ -150,23 +149,23 @@ Highest precedence first:
 2. **Setting** — this machine's value in `daemon-config.json` under `features`.
 3. **Channel default** — on for a `dev` build, off for a `stable` build. Release builds are stamped `stable`; every other build (source runs, local frozen builds) is `dev`.
 
-**Settings → General → Experimental features** shows which of the three decided each switch.
+While the registry has an entry, **Settings → General** shows an experimental-features section that says which of the three decided each switch. With the registry empty the section is not shown.
 
 ### COFFER_FEATURES syntax
 
 A comma-separated list of `key=value` entries. `on`, `true` and `1` switch a feature on; `off`, `false` and `0` switch it off. Whitespace around entries is ignored and values are case-insensitive. An unknown key or a malformed entry is logged and skipped; it never stops the daemon.
 
 ```sh
-COFFER_FEATURES="vault_sync=on,memory=off" coffer daemon restart
+COFFER_FEATURES="<key>=on,<other-key>=off" coffer daemon restart
 ```
 
 ### Commands
 
 ```sh
-coffer config list feature.             # every feature, its state, and what decided it
-coffer config set feature.memory on     # switch on, at once
-coffer config set feature.knowledge off
-coffer config unset feature.knowledge   # back to the channel default
+coffer config list feature.             # every feature, its state, and what decided it (nothing right now)
+coffer config set feature.<key> on      # switch on, at once
+coffer config set feature.<key> off
+coffer config unset feature.<key>       # back to the channel default
 ```
 
 See [Experimental features](/guides/experimental-features) for the task-oriented guide.

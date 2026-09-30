@@ -116,21 +116,11 @@ _OWNER_REPAIR = "take it back with 'coffer config set engine.curate_owner this'"
 
 
 def _machine_facts(s: Session) -> tuple[str, list[str]]:
-    """This machine's id, and every machine id the registry holds (none while
-    ``vault_sync`` is off, which reads as a single-machine vault)."""
+    """This machine's id, and every machine id the registry holds."""
     this_machine = _cli_client.status_machine_id(s.get("/daemon/status")) or ""
     r = s.client().get("/sync/machines")
-    if r.status_code == 404 and _code(r) == "FEATURE_DISABLED":
-        return this_machine, []
     _cli_client.check(r, verbose=s.verbose)
     return this_machine, [str(m["machine_id"]) for m in (r.json().get("machines") or [])]
-
-
-def _code(r: Any) -> str | None:
-    try:
-        return str(r.json()["error"]["code"])
-    except Exception:
-        return None
 
 
 def _owner_lines(owner: str | None, s: Session) -> tuple[CurationOwner, str, list[str]]:

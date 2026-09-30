@@ -20,12 +20,12 @@ export function PendingQueue({ pending, onEdit, onRemove }: Props) {
   const { t } = useTranslation();
   if (pending.length === 0) return null;
   return (
-    <div className="flex max-h-40 flex-col gap-1 overflow-y-auto border-t border-border bg-background px-4 pt-2">
-      <span className="text-xs text-muted-foreground">{t("chat.queue.label")}</span>
+    <div className="mx-auto flex max-h-40 w-full max-w-[calc(720px+4rem)] flex-col gap-1 overflow-y-auto px-8 pt-2">
+      <span className="text-xs text-text-muted">{t("conversations.queue.label")}</span>
       {pending.map((text, idx) => (
         <div
           key={`${idx}-${text}`}
-          className="flex items-start gap-2 rounded-md bg-secondary px-2 py-1 text-xs text-secondary-foreground"
+          className="flex items-start gap-2 rounded-md border border-border-subtle bg-surface-raised px-2.5 py-1.5 text-xs text-text"
         >
           <span
             className="line-clamp-2 min-w-0 flex-1 whitespace-pre-wrap break-words"
@@ -37,7 +37,7 @@ export function PendingQueue({ pending, onEdit, onRemove }: Props) {
             type="button"
             className="shrink-0 rounded-sm p-0.5 hover:text-foreground"
             onClick={() => onEdit(idx)}
-            aria-label={t("chat.queue.edit")}
+            aria-label={t("conversations.queue.edit")}
           >
             <Pencil className="size-3" />
           </button>
@@ -45,7 +45,7 @@ export function PendingQueue({ pending, onEdit, onRemove }: Props) {
             type="button"
             className="shrink-0 rounded-sm p-0.5 hover:text-destructive"
             onClick={() => onRemove(idx)}
-            aria-label={t("chat.queue.remove")}
+            aria-label={t("conversations.queue.remove")}
           >
             <X className="size-3" />
           </button>

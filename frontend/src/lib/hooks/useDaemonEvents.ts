@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { followDaemonEvents, type StreamMessage } from "@/lib/events/eventStream";
-import { attentionKey, ownListKeyForKind, resourcesKey } from "@/lib/api/queryKeys";
+import { attentionKey, ownListKeysForKind, resourcesKey } from "@/lib/api/queryKeys";
 
 /** The query keys one envelope's kind is read through. */
 function invalidateFor(qc: QueryClient, message: StreamMessage): void {
@@ -26,8 +26,9 @@ function invalidateFor(qc: QueryClient, message: StreamMessage): void {
     return;
   }
   void qc.invalidateQueries({ queryKey: resourcesKey });
-  const own = ownListKeyForKind(kind);
-  if (own) void qc.invalidateQueries({ queryKey: own });
+  for (const own of ownListKeysForKind(kind)) {
+    void qc.invalidateQueries({ queryKey: own });
+  }
 }
 
 interface Options {

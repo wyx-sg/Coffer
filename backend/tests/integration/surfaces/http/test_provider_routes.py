@@ -496,8 +496,9 @@ def test_switch_is_audited(tmp_path, monkeypatch):
 def test_openai_connection_scoped_to_claude_code(tmp_path, monkeypatch):
     # The agnes case: an openai-wire gateway the user routes to Claude Code. The
     # projection writer is chosen by AGENT type, so it writes Claude's settings.json
-    # (anthropic shape) with an apiKeyHelper that cites THIS connection's uid — the
-    # key is resolved per-connection, never by a wire+active guess. The routing is a
+    # (anthropic shape) with the proxy-token apiKeyHelper, and the model proxy
+    # routes the agent to THIS connection with its key — per connection, never by
+    # a wire+active guess. The routing is a
     # scope edit through the framework's shared surface (ADR per-agent-resource-scope),
     # not a field on the connection; the scope names the AGENT by uid, and
     # ``compatible_agents`` reports back the agent TYPES that resolves to.

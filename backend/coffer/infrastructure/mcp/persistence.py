@@ -43,6 +43,7 @@ from coffer.infrastructure.mcp.invocation_writer import (
     MCPInvocationModel,
     MCPInvocationRepo,
 )
+from coffer.infrastructure.mcp.tool_reach_repo import MCPToolReachStore
 from coffer.infrastructure.persistence.derived_db import MCPCapabilitySeenModel
 from coffer.infrastructure.vault.state_documents import StateDocuments
 
@@ -54,6 +55,7 @@ __all__ = [
     "MCPInvocationRepo",
     "MCPServerHealthModel",
     "MCPServerHealthRepo",
+    "MCPToolReachStore",
 ]
 
 #: ``state/mcp-preferences/``.

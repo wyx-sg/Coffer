@@ -65,7 +65,7 @@ The rules are [import-linter](https://github.com/seddonym/import-linter) contrac
 | LangGraph and LangChain confined to infrastructure/llm | Coffer's own model calls go through `infrastructure/llm/`. Domain, application, and the chat, MCP, channel, knowledge, persistence, credentials, daemon and logging infrastructure packages may not import `langgraph` or any `langchain*` package; they reach a model through injected ports. |
 | Claude Agent SDK confined | Domain, application and the other infrastructure packages may not import `claude_agent_sdk`. Its homes are `infrastructure/chat` (the agent adapters) and `infrastructure/agent` (reading the installed agent's catalogue). |
 
-When two kinds genuinely need the same code, it moves to a kind-agnostic package at the layer root: [`infrastructure/net/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/net) (the SSRF guard), [`infrastructure/agent_files/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent_files) (agent transcript readers shared by `agent` and `memory`), [`domain/connection.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/connection.py). Everything else crosses between kinds through a port the consuming kind declares and the composition root satisfies — for example `application.chat.ports.ModelCatalogPort`, which the chat platform uses to read the agent kind's model catalogue without importing it.
+When two kinds genuinely need the same code, it moves to a kind-agnostic package at the layer root: [`infrastructure/net/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/net) (the SSRF guard), [`infrastructure/agent_files/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent_files) (agent transcript readers shared by `agent` and `memory`), [`domain/hook_trust.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/hook_trust.py) (the hook-trust values the `memory` kind reports and the `agent` kind's hooks listing shows). Everything else crosses between kinds through a port the consuming kind declares and the composition root satisfies — for example `application.chat.ports.ModelCatalogPort`, which the chat platform uses to read the agent kind's model catalogue without importing it.
 
 ## The composition root
 
@@ -73,7 +73,7 @@ The composition root is the only code allowed to see every kind. It is [`surface
 
 ### Explicit per-kind wiring
 
-There is no plugin discovery, no global registry and no import-time side effect. Each kind has a factory, `make_<kind>_kind()` in `application/<kind>/kind.py`, that returns a frozen [`Kind`](/architecture/resource-framework#kind). A per-kind wiring module in `surfaces/http/` builds the kind's services, calls the factory, and stores the result in the per-app dict `app.state.kinds`:
+There is no plugin discovery, no global registry and no import-time side effect. Each registered kind has a factory in `application/<kind>/kind.py`, named after its package (`make_agent_kind`, `make_mcp_kind`, `make_provider_kind`, …), that takes the services the kind needs and returns a frozen [`Kind`](/architecture/resource-framework#kind). The registry key can differ from the package name: the MCP kind registers as `"mcp_server"`. Chat and sync register no kind. A per-kind wiring module in `surfaces/http/` builds the kind's services, calls the factory, and stores the result in the per-app dict `app.state.kinds`:
 
 | Wiring module | Sets |
 | --- | --- |

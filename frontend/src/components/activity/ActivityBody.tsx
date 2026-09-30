@@ -75,7 +75,7 @@ export function NewRecordsStrip({
           {t("activity.pending", { count: feed.pendingCount })}
         </button>
       ) : (
-        <span data-visual-volatile className="ml-auto">
+        <span data-visual-volatile="count" className="ml-auto">
           {feed.loaded > 0 ? t("activity.loaded", { count: feed.loaded }) : null}
         </span>
       )}

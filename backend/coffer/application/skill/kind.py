@@ -67,12 +67,11 @@ def _row_storage(config: dict[str, object]) -> StorageClass:
 
     Every skill a person imported is in the vault. Coffer's own is not: its
     master folder is rendered locally from the running build, the knowledge
-    files and **this machine's own inputs** — its experimental-feature
-    switches, which decide which sections of the manual render — so two
-    machines holding identical knowledge render different bytes, each correct
-    where it is. It is derived output, so it is filed under ``derived/`` and
-    regenerated rather than received: every machine already has everything it
-    takes to produce its own.
+    files and **this machine's own inputs** — the knowledge and memory roots
+    as they sit under its own home — so two machines holding identical
+    knowledge render different bytes, each correct where it is. It is derived
+    output, so it is filed under ``derived/`` and regenerated rather than
+    received: every machine already has everything it takes to produce its own.
     """
     return StorageClass.DERIVED if is_builtin(config) else StorageClass.VAULT
 

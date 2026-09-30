@@ -8,7 +8,8 @@ switch and timer of every pass Coffer runs when nobody asked it to, the one
 machine allowed to run curation, the bound on one call to that model, and the
 speech-to-text model. It owns one global
 settings row, the surfaces that show and change it (`/api/v1/internal-engine-config`,
-the `engine.*` and `transcribe.*` keys of `coffer config`, Settings → Coffer's model), its convergence between machines, and the
+the `engine.*` and `transcribe.*` keys of `coffer config`, the Coffer's model section of
+Settings › General), its convergence between machines, and the
 rule that a pass with nothing configured is a clean no-op rather than an error.
 
 Coffer does work on its own behalf: it aggregates the agents' memory, lets a

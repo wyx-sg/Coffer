@@ -72,7 +72,7 @@ peer:     not paired
 
 ## 3. Pair your account
 
-1. Issue a code, on the channel's page with **Generate pairing code** in the account section, or:
+1. Issue a code, on the channel's **Overview** with **Generate pairing code**, or:
 
    ```sh
    coffer channel pair my-telegram
@@ -99,7 +99,7 @@ Send the bot a message, for example `list the files in my home directory`. You s
 3. the final reply, formatted, with the status removed;
 4. a 👌 reaction on your message when the turn finished — 😢 if it failed, 🤷 if it was stopped. Telegram lets a bot react with a fixed list of emoji only, and these are on it.
 
-Open **Chat** in the web UI and the same conversation is there, marked `via my-telegram`.
+Open **Conversations** in the web UI and the same conversation is there, its source badge reading `Telegram · DM` (hover it for the channel's name).
 
 ## How replies look
 
@@ -124,7 +124,7 @@ Coffer registers the bot's command menus with Telegram every time the channel st
 | Private chats | All nine: `/new`, `/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/kb`, `/help` |
 | Groups | `/new`, `/stop`, `/model`, `/status`, `/resume`, `/help` |
 
-Each menu is registered twice, with English descriptions and with Chinese ones, so a Telegram client set to Chinese shows the Chinese menu. `/kb` is listed only while the Knowledge feature is on; switching the feature re-registers the menus. The hidden `/start` is never listed.
+Each menu is registered twice, with English descriptions and with Chinese ones, so a Telegram client set to Chinese shows the Chinese menu. The hidden `/start` is never listed.
 
 A command tapped from a group's menu arrives as `/status@my_coffer_bot`. Coffer treats it as `/status` addressed to the bot, so it answers even when the group requires a mention. A command naming another bot, such as `/status@some_other_bot`, is not for this one and is ignored.
 
@@ -164,7 +164,7 @@ The Bot API only reports mentions in the text of a plain message, so an @mention
 
 Telegram bots start with **privacy mode on**, which means the bot only sees messages that mention it, reply to it, or are commands. That is what the default `require_mention: true` expects, so nothing needs changing.
 
-If you turn `require_mention` off so the bot acts on every owner message in a group — **Edit** → **In group chats** → **Answer only when @mentioned**, or `coffer channel edit <name> --no-require-mention` — the bot also needs to see them:
+If you turn `require_mention` off so the bot acts on every owner message in a group — the channel's **Settings** → **In group chats** → **Answer only when @mentioned**, or `coffer channel edit <name> --no-require-mention` — the bot also needs to see them:
 
 1. In BotFather, send `/setprivacy`, choose the bot and select **Disable**.
 2. Remove the bot from the group and add it again. The change applies only to groups the bot joins afterwards.
@@ -173,7 +173,7 @@ Until you do, `coffer channel show` prints a `warning:` line naming this fix.
 
 ## Rotate the token
 
-On the channel's page, choose **Edit**, enter the new token in **New bot token** and **Save changes**. The token is written under the reference the channel already uses, so pairing and machine binding are untouched. From the CLI:
+On the channel's page, choose **Replace token** (in the header when Telegram rejected the old one, or in the **⋯** menu and under **Settings** → **Credentials**), paste the new token in **New bot token** and choose **Replace and restart**. The token is written under the reference the channel already uses, so pairing and machine binding are untouched. From the CLI:
 
 ```sh
 coffer channel show my-telegram               # find the bot_token_ref

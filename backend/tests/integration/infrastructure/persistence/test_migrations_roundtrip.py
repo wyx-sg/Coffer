@@ -19,10 +19,10 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0116"
+HEAD_REVISION = "0117"
 #: The last revision whose tables still hold the pre-vault state: a data test
-#: of an older revision reads them here, before 0116 drops them.
-PRE_LAYOUT_REVISION = "0114"
+#: of an older revision reads them here, before 0117 drops them.
+PRE_LAYOUT_REVISION = "0116"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -205,6 +205,9 @@ PRE_LAYOUT_TABLES = {
     "mcp_capability_preferences",
     "mcp_invocations",
     "mcp_server_health",
+    # 0115: custom tools' machine-local reach overrides (spec mcp-gateway
+    # "Switch off or narrow one custom tool").
+    "mcp_tool_reach",
     "skill_agent_bindings",
     "credentials",
     "conversations",
@@ -252,7 +255,7 @@ PRE_LAYOUT_TABLES = {
 # ``sync_convergence_state`` / ``sync_held_paths`` (0073) and ``sync_runs``
 # (0075). ``memory_overrides`` needs no subtracting: 0070 created it and 0078
 # dropped it again, so head does not carry it either.
-#: 0116: the database becomes ``runs.db`` — every table whose state moved
+#: 0117: the database becomes ``runs.db`` — every table whose state moved
 #: into files is dropped (ADR storage-is-five-classes-by-nature).
 MOVED_OUT_TABLES = {
     "resources",
@@ -267,6 +270,7 @@ MOVED_OUT_TABLES = {
     "secret_approvals",
     "secret_boundary_settings",
     "skill_source_status",
+    "mcp_tool_reach",
 }
 EXPECTED_TABLES = PRE_LAYOUT_TABLES - MOVED_OUT_TABLES
 
@@ -295,6 +299,8 @@ PRE_MERGE_TABLES = (
         "secret_boundary_settings",
         # 0114 created this.
         "skill_source_status",
+        # 0115 created this.
+        "mcp_tool_reach",
     }
 ) | {
     # 0066 drops these at head; every revision below it still has them, and
@@ -1098,7 +1104,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     cfg = _alembic_config()
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
-    # 0116's downgrade recreates the moved-out tables empty.
+    # 0117's downgrade recreates the moved-out tables empty.
     command.downgrade(cfg, PRE_LAYOUT_REVISION)
     assert _user_tables(db_path) == PRE_LAYOUT_TABLES
     # 0041 adds channel_thread_conversations (spec channels "Key conversation

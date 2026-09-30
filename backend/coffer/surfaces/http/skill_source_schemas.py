@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from coffer.application.skill.staging import ImportStage, StagedSkill
 from coffer.application.skill.update_ops import CompareView, UpdatePreview
 from coffer.domain.skill.folder_diff import FileChange, TextVersion
-from coffer.domain.skill.requires import SkillRequirement
+from coffer.domain.skill.requirements import CommandRequirement
 from coffer.domain.skill.source import ArchiveImportSource, GitImportSource
 from coffer.domain.skill.source_status import SourceStatus
 
@@ -71,7 +71,7 @@ class SkillRequirementOut(BaseModel):
     min_version: str | None
 
 
-def requirement_out(r: SkillRequirement) -> SkillRequirementOut:
+def requirement_out(r: CommandRequirement) -> SkillRequirementOut:
     return SkillRequirementOut(command=r.command, min_version=r.min_version)
 
 

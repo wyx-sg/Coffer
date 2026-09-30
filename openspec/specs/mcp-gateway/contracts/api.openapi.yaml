@@ -8,6 +8,638 @@ info:
 servers:
 - url: http://127.0.0.1:8000
 paths:
+  /api/v1/custom-tools:
+    get:
+      operationId: list_groups_api_v1_custom_tools_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomToolGroupListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List Groups
+      tags:
+      - custom-tools
+    post:
+      operationId: create_group_api_v1_custom_tools_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomToolGroupIn'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomToolGroupOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Create Group
+      tags:
+      - custom-tools
+  /api/v1/custom-tools/openapi:
+    post:
+      description: Read a document into draft tools; saves nothing.
+      operationId: read_openapi_api_v1_custom_tools_openapi_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenApiReadIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenApiReadOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Read Openapi
+      tags:
+      - custom-tools
+  /api/v1/custom-tools/{name}:
+    delete:
+      operationId: delete_group_api_v1_custom_tools__name__delete
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Delete Group
+      tags:
+      - custom-tools
+    get:
+      operationId: get_group_api_v1_custom_tools__name__get
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomToolGroupOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Group
+      tags:
+      - custom-tools
+    patch:
+      operationId: update_group_api_v1_custom_tools__name__patch
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomToolGroupPatch'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomToolGroupOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Update Group
+      tags:
+      - custom-tools
+  /api/v1/custom-tools/{name}/reimport:
+    post:
+      operationId: apply_reimport_api_v1_custom_tools__name__reimport_post
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomToolReimportIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomToolGroupOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Apply Reimport
+      tags:
+      - custom-tools
+  /api/v1/custom-tools/{name}/reimport/preview:
+    post:
+      operationId: preview_reimport_api_v1_custom_tools__name__reimport_preview_post
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomToolReimportIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomToolReimportPreviewOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Preview Reimport
+      tags:
+      - custom-tools
+  /api/v1/custom-tools/{name}/test:
+    post:
+      description: Run a draft tool once; saves nothing and records no invocation.
+      operationId: test_tool_api_v1_custom_tools__name__test_post
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomToolTestIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomToolTestOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Test Tool
+      tags:
+      - custom-tools
+  /api/v1/custom-tools/{name}/tools:
+    post:
+      operationId: add_tool_api_v1_custom_tools__name__tools_post
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomToolIn'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomToolGroupOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Add Tool
+      tags:
+      - custom-tools
+  /api/v1/custom-tools/{name}/tools/{tool}:
+    delete:
+      operationId: delete_tool_api_v1_custom_tools__name__tools__tool__delete
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: path
+        name: tool
+        required: true
+        schema:
+          title: Tool
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomToolGroupOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Delete Tool
+      tags:
+      - custom-tools
+    patch:
+      operationId: update_tool_api_v1_custom_tools__name__tools__tool__patch
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: path
+        name: tool
+        required: true
+        schema:
+          title: Tool
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomToolPatch'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomToolGroupOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Update Tool
+      tags:
+      - custom-tools
+  /api/v1/custom-tools/{name}/tools/{tool}/reach:
+    put:
+      operationId: set_tool_reach_api_v1_custom_tools__name__tools__tool__reach_put
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: path
+        name: tool
+        required: true
+        schema:
+          title: Tool
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomToolReachIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomToolGroupOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Set Tool Reach
+      tags:
+      - custom-tools
   /api/v1/mcp/invocations:
     get:
       description: |-
@@ -381,6 +1013,111 @@ paths:
       summary: List Invocations
       tags:
       - mcp
+  /api/v1/resources/mcp_server/{uid}/invocations/summary:
+    get:
+      description: 'This server''s calls since ``since``: totals, per calling agent, per tool.'
+      operationId: invocation_summary_api_v1_resources_mcp_server__uid__invocations_summary_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - description: Count calls at or after this moment; default 24 hours ago.
+        in: query
+        name: since
+        required: false
+        schema:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          description: Count calls at or after this moment; default 24 hours ago.
+          title: Since
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvocationSummaryOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Invocation Summary
+      tags:
+      - mcp
+  /api/v1/resources/mcp_server/{uid}/log:
+    get:
+      description: |-
+        The newest lines of the server's own log file: its stderr, and Coffer's
+        lines about starting and stopping it. A server Coffer does not start (HTTP)
+        has none.
+      operationId: server_log_api_v1_resources_mcp_server__uid__log_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 200
+          maximum: 2000
+          minimum: 1
+          title: Limit
+          type: integer
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpServerLogOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Server Log
+      tags:
+      - mcp
   /api/v1/resources/mcp_server/{uid}/refresh:
     post:
       description: |-
@@ -429,8 +1166,9 @@ paths:
     get:
       description: |-
         Per-server status from persisted state — health record (from /test),
-        discovered capabilities, or last invocation. Cheap (DB only + one PATH
-        lookup); never spawns.
+        discovered capabilities, or last invocation — and what the page says about
+        it (``application.mcp.server_status``). Cheap (DB only + one PATH lookup);
+        never spawns.
       operationId: get_server_status_api_v1_resources_mcp_server__uid__status_get
       parameters:
       - in: path
@@ -512,8 +1250,75 @@ paths:
       summary: Test Mcp Server
       tags:
       - mcp
+  /api/v1/resources/mcp_server/{uid}/tiering:
+    get:
+      description: Which of this server's tools are listed to agents and which only reached through search.
+      operationId: tool_tiering_api_v1_resources_mcp_server__uid__tiering_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolTieringOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Tool Tiering
+      tags:
+      - mcp
 components:
   schemas:
+    AgentCallCountOut:
+      properties:
+        agent_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Uid
+        calls:
+          title: Calls
+          type: integer
+        errors:
+          title: Errors
+          type: integer
+        last_call_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Call At
+      required:
+      - calls
+      - errors
+      - last_call_at
+      - agent_uid
+      title: AgentCallCountOut
+      type: object
     CapabilityKeyBody:
       description: |-
         Request body for capability enable/disable routes.
@@ -567,6 +1372,588 @@ components:
       - fetched_at
       - from_cache
       title: CapabilityListOut
+      type: object
+    CustomToolAuthIn:
+      properties:
+        header:
+          default: Authorization
+          title: Header
+          type: string
+        prefix:
+          default: ''
+          title: Prefix
+          type: string
+        secret:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Secret
+      title: CustomToolAuthIn
+      type: object
+    CustomToolAuthOut:
+      properties:
+        header:
+          title: Header
+          type: string
+        prefix:
+          title: Prefix
+          type: string
+        secret:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Secret
+        secret_state:
+          enum:
+          - none
+          - present
+          - missing
+          - pending_approval
+          title: Secret State
+          type: string
+      required:
+      - header
+      - prefix
+      - secret
+      - secret_state
+      title: CustomToolAuthOut
+      type: object
+    CustomToolGroupIn:
+      properties:
+        agents:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Agents
+        auth:
+          anyOf:
+          - $ref: '#/components/schemas/CustomToolAuthIn'
+          - type: 'null'
+        base_url:
+          title: Base Url
+          type: string
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        headers:
+          additionalProperties:
+            type: string
+          title: Headers
+          type: object
+        name:
+          title: Name
+          type: string
+        source:
+          anyOf:
+          - $ref: '#/components/schemas/OpenApiSourceIn'
+          - type: 'null'
+        timeout_seconds:
+          default: 30
+          maximum: 300.0
+          minimum: 1.0
+          title: Timeout Seconds
+          type: integer
+        tools:
+          items:
+            $ref: '#/components/schemas/CustomToolIn'
+          title: Tools
+          type: array
+      required:
+      - name
+      - base_url
+      title: CustomToolGroupIn
+      type: object
+    CustomToolGroupListOut:
+      properties:
+        groups:
+          items:
+            $ref: '#/components/schemas/CustomToolGroupOut'
+          title: Groups
+          type: array
+      required:
+      - groups
+      title: CustomToolGroupListOut
+      type: object
+    CustomToolGroupOut:
+      properties:
+        auth:
+          anyOf:
+          - $ref: '#/components/schemas/CustomToolAuthOut'
+          - type: 'null'
+        base_url:
+          title: Base Url
+          type: string
+        calls_24h:
+          title: Calls 24H
+          type: integer
+        created_at:
+          format: date-time
+          title: Created At
+          type: string
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        enabled:
+          title: Enabled
+          type: boolean
+        failures_24h:
+          title: Failures 24H
+          type: integer
+        headers:
+          additionalProperties:
+            type: string
+          title: Headers
+          type: object
+        health:
+          enum:
+          - failing
+          - attention
+          - healthy
+          - idle
+          - 'off'
+          title: Health
+          type: string
+        health_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Health Reason
+        last_call_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Call At
+        name:
+          title: Name
+          type: string
+        pending_approvals:
+          items:
+            type: string
+          title: Pending Approvals
+          type: array
+        scope:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Scope
+        secret_state:
+          enum:
+          - none
+          - present
+          - missing
+          - pending_approval
+          title: Secret State
+          type: string
+        source:
+          anyOf:
+          - $ref: '#/components/schemas/OpenApiSourceOut'
+          - type: 'null'
+        timeout_seconds:
+          title: Timeout Seconds
+          type: integer
+        tools:
+          items:
+            $ref: '#/components/schemas/CustomToolOut'
+          title: Tools
+          type: array
+        uid:
+          title: Uid
+          type: string
+        updated_at:
+          format: date-time
+          title: Updated At
+          type: string
+      required:
+      - uid
+      - name
+      - description
+      - enabled
+      - base_url
+      - headers
+      - auth
+      - timeout_seconds
+      - scope
+      - source
+      - health
+      - health_reason
+      - secret_state
+      - pending_approvals
+      - calls_24h
+      - failures_24h
+      - last_call_at
+      - tools
+      - created_at
+      - updated_at
+      title: CustomToolGroupOut
+      type: object
+    CustomToolGroupPatch:
+      description: 'A partial change to a group; ``auth: null`` removes the auth header.'
+      properties:
+        auth:
+          anyOf:
+          - $ref: '#/components/schemas/CustomToolAuthIn'
+          - type: 'null'
+        base_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Base Url
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        headers:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Headers
+        timeout_seconds:
+          anyOf:
+          - maximum: 300.0
+            minimum: 1.0
+            type: integer
+          - type: 'null'
+          title: Timeout Seconds
+      title: CustomToolGroupPatch
+      type: object
+    CustomToolIn:
+      description: One tool as a request writes it — and as an OpenAPI reading drafts it.
+      properties:
+        body_template:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Body Template
+        changes_data:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Changes Data
+        description:
+          default: ''
+          title: Description
+          type: string
+        enabled:
+          default: true
+          title: Enabled
+          type: boolean
+        headers:
+          additionalProperties:
+            type: string
+          title: Headers
+          type: object
+        input_schema:
+          additionalProperties: true
+          title: Input Schema
+          type: object
+        method:
+          default: GET
+          enum:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          title: Method
+          type: string
+        name:
+          title: Name
+          type: string
+        operation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Operation
+        path:
+          title: Path
+          type: string
+      required:
+      - name
+      - path
+      title: CustomToolIn
+      type: object
+    CustomToolOut:
+      properties:
+        agent_name:
+          title: Agent Name
+          type: string
+        body_template:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Body Template
+        calls_24h:
+          title: Calls 24H
+          type: integer
+        changes_data:
+          title: Changes Data
+          type: boolean
+        changes_data_set:
+          title: Changes Data Set
+          type: boolean
+        description:
+          title: Description
+          type: string
+        enabled:
+          title: Enabled
+          type: boolean
+        failures_24h:
+          title: Failures 24H
+          type: integer
+        headers:
+          additionalProperties:
+            type: string
+          title: Headers
+          type: object
+        input_schema:
+          additionalProperties: true
+          title: Input Schema
+          type: object
+        method:
+          enum:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          title: Method
+          type: string
+        name:
+          title: Name
+          type: string
+        operation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Operation
+        path:
+          title: Path
+          type: string
+        reach_override:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Reach Override
+      required:
+      - name
+      - agent_name
+      - description
+      - method
+      - path
+      - headers
+      - body_template
+      - input_schema
+      - enabled
+      - changes_data
+      - changes_data_set
+      - operation
+      - reach_override
+      - calls_24h
+      - failures_24h
+      title: CustomToolOut
+      type: object
+    CustomToolPatch:
+      description: 'A partial change to one tool: only the fields sent change.'
+      properties:
+        body_template:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Body Template
+        changes_data:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Changes Data
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        enabled:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+        headers:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Headers
+        input_schema:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Input Schema
+        method:
+          anyOf:
+          - enum:
+            - GET
+            - POST
+            - PUT
+            - PATCH
+            - DELETE
+            type: string
+          - type: 'null'
+          title: Method
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Path
+      title: CustomToolPatch
+      type: object
+    CustomToolReachIn:
+      properties:
+        agents:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Agents
+      title: CustomToolReachIn
+      type: object
+    CustomToolReimportIn:
+      properties:
+        add:
+          items:
+            type: string
+          title: Add
+          type: array
+        document:
+          anyOf:
+          - maxLength: 5242880
+            type: string
+          - type: 'null'
+          title: Document
+      title: CustomToolReimportIn
+      type: object
+    CustomToolReimportPreviewOut:
+      properties:
+        added:
+          items:
+            $ref: '#/components/schemas/OpenApiOperationOut'
+          title: Added
+          type: array
+        kept:
+          items:
+            type: string
+          title: Kept
+          type: array
+        removed:
+          items:
+            type: string
+          title: Removed
+          type: array
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        warnings:
+          items:
+            type: string
+          title: Warnings
+          type: array
+      required:
+      - title
+      - version
+      - added
+      - removed
+      - kept
+      - warnings
+      title: CustomToolReimportPreviewOut
+      type: object
+    CustomToolTestIn:
+      properties:
+        arguments:
+          additionalProperties: true
+          title: Arguments
+          type: object
+        tool:
+          $ref: '#/components/schemas/CustomToolIn'
+      required:
+      - tool
+      title: CustomToolTestIn
+      type: object
+    CustomToolTestOut:
+      properties:
+        body:
+          title: Body
+          type: string
+        content_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Content Type
+        duration_ms:
+          title: Duration Ms
+          type: integer
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        ok:
+          title: Ok
+          type: boolean
+        status:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Status
+        status_line:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status Line
+        truncated:
+          title: Truncated
+          type: boolean
+        url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Url
+      required:
+      - ok
+      - duration_ms
+      - url
+      - status
+      - status_line
+      - body
+      - truncated
+      - content_type
+      - error
+      title: CustomToolTestOut
       type: object
     ErrorDetail:
       properties:
@@ -688,6 +2075,44 @@ components:
       - agent_uid
       title: InvocationOut
       type: object
+    InvocationSummaryOut:
+      description: 'One server''s calls since ``since``: totals, per agent, per tool.'
+      properties:
+        by_agent:
+          items:
+            $ref: '#/components/schemas/AgentCallCountOut'
+          title: By Agent
+          type: array
+        by_tool:
+          items:
+            $ref: '#/components/schemas/ToolCallCountOut'
+          title: By Tool
+          type: array
+        calls:
+          title: Calls
+          type: integer
+        errors:
+          title: Errors
+          type: integer
+        last_call_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Call At
+        since:
+          format: date-time
+          title: Since
+          type: string
+      required:
+      - since
+      - calls
+      - errors
+      - last_call_at
+      - by_agent
+      - by_tool
+      title: InvocationSummaryOut
+      type: object
     MCPPromptView:
       properties:
         arguments:
@@ -792,14 +2217,111 @@ components:
       - client_name_length
       title: MCPToolView
       type: object
-    McpServerStatusOut:
-      description: Cheap per-server status, derived from persisted state (no spawn).
+    McpServerLogLineOut:
       properties:
+        at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: At
+        source:
+          enum:
+          - coffer
+          - stderr
+          title: Source
+          type: string
+        text:
+          title: Text
+          type: string
+      required:
+      - text
+      - source
+      - at
+      title: McpServerLogLineOut
+      type: object
+    McpServerLogOut:
+      description: The newest lines of the server's own log file, newest first.
+      properties:
+        lines:
+          items:
+            $ref: '#/components/schemas/McpServerLogLineOut'
+          title: Lines
+          type: array
+        path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Path
+        truncated:
+          default: false
+          title: Truncated
+          type: boolean
+      required:
+      - path
+      - lines
+      - truncated
+      title: McpServerLogOut
+      type: object
+    McpServerStatusOut:
+      description: |-
+        Cheap per-server status, derived from persisted state (no spawn).
+
+        Beside the state word, what the page says about it (spec mcp-gateway
+        "Explain a server's state on its page"): the last transport failure and
+        since when the server has been failing, the last successful call, and the
+        first cited secret with no value on this machine. Each is null when
+        nothing persisted says it.
+      properties:
+        failing_since:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Failing Since
+        last_checked_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Checked At
+        last_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Error
+        last_error_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Error At
+        last_ok_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Ok At
+        last_ok_capability:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Ok Capability
         missing_runner:
           anyOf:
           - type: string
           - type: 'null'
           title: Missing Runner
+        missing_secret:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Missing Secret
+        missing_secret_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Missing Secret Ref
         status:
           enum:
           - healthy
@@ -810,6 +2332,14 @@ components:
       required:
       - status
       - missing_runner
+      - last_error
+      - last_error_at
+      - failing_since
+      - last_checked_at
+      - last_ok_at
+      - last_ok_capability
+      - missing_secret
+      - missing_secret_ref
       title: McpServerStatusOut
       type: object
     McpTestResultOut:
@@ -843,6 +2373,237 @@ components:
       - server_capabilities
       - error_message
       title: McpTestResultOut
+      type: object
+    OpenApiOperationOut:
+      properties:
+        key:
+          title: Key
+          type: string
+        summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Summary
+        tool:
+          $ref: '#/components/schemas/CustomToolIn'
+      required:
+      - key
+      - summary
+      - tool
+      title: OpenApiOperationOut
+      type: object
+    OpenApiReadIn:
+      description: 'A document to read: its URL (fetched through the SSRF guard) or its text.'
+      properties:
+        document:
+          anyOf:
+          - maxLength: 5242880
+            type: string
+          - type: 'null'
+          title: Document
+        filename:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Filename
+        url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Url
+      title: OpenApiReadIn
+      type: object
+    OpenApiReadOut:
+      properties:
+        auth_header:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Auth Header
+        auth_prefix:
+          title: Auth Prefix
+          type: string
+        base_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Base Url
+        location:
+          title: Location
+          type: string
+        operations:
+          items:
+            $ref: '#/components/schemas/OpenApiOperationOut'
+          title: Operations
+          type: array
+        source_kind:
+          enum:
+          - url
+          - file
+          title: Source Kind
+          type: string
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        warnings:
+          items:
+            type: string
+          title: Warnings
+          type: array
+      required:
+      - title
+      - version
+      - base_url
+      - auth_header
+      - auth_prefix
+      - source_kind
+      - location
+      - operations
+      - warnings
+      title: OpenApiReadOut
+      type: object
+    OpenApiSourceIn:
+      properties:
+        kind:
+          enum:
+          - url
+          - file
+          title: Kind
+          type: string
+        location:
+          title: Location
+          type: string
+        skipped:
+          items:
+            type: string
+          title: Skipped
+          type: array
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+      required:
+      - kind
+      - location
+      title: OpenApiSourceIn
+      type: object
+    OpenApiSourceOut:
+      properties:
+        fetched_at:
+          format: date-time
+          title: Fetched At
+          type: string
+        kind:
+          enum:
+          - url
+          - file
+          title: Kind
+          type: string
+        location:
+          title: Location
+          type: string
+        skipped:
+          items:
+            type: string
+          title: Skipped
+          type: array
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+      required:
+      - kind
+      - location
+      - title
+      - version
+      - fetched_at
+      - skipped
+      title: OpenApiSourceOut
+      type: object
+    ToolCallCountOut:
+      properties:
+        calls:
+          title: Calls
+          type: integer
+        errors:
+          title: Errors
+          type: integer
+        last_call_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Call At
+        tool:
+          title: Tool
+          type: string
+      required:
+      - calls
+      - errors
+      - last_call_at
+      - tool
+      title: ToolCallCountOut
+      type: object
+    ToolTieringOut:
+      description: |-
+        Which of this server's tools agents see listed and which only through search.
+
+        Machine-wide: computed over every enabled server's saved tool list, not
+        per agent reach (spec mcp-gateway "Forward tools, resources and prompts").
+      properties:
+        behind_search:
+          items:
+            type: string
+          title: Behind Search
+          type: array
+        budget:
+          title: Budget
+          type: integer
+        catalogue_size:
+          title: Catalogue Size
+          type: integer
+        enabled:
+          title: Enabled
+          type: boolean
+        listed:
+          items:
+            type: string
+          title: Listed
+          type: array
+        listed_count:
+          title: Listed Count
+          type: integer
+        tool_count:
+          title: Tool Count
+          type: integer
+      required:
+      - enabled
+      - budget
+      - catalogue_size
+      - listed_count
+      - tool_count
+      - listed
+      - behind_search
+      title: ToolTieringOut
       type: object
     _MCPPromptArgument:
       properties:

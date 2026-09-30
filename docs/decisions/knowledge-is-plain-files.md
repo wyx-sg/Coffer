@@ -224,10 +224,9 @@ Rules a future change must respect:
   the text; the skill kind writes, registers and delivers it.
 - **One undivided store.** A collection carries no per-agent reach and no
   enabled switch: every collection is named to every agent in the one rendered
-  skill, and a collection is withheld only by deleting it. The `knowledge`
-  experimental feature (off by default on the stable channel) closes the whole
-  layer — its routes, `coffer__write`, the catalogue in the skill and the
-  curation sweep.
+  skill, and a collection is withheld only by deleting it. The layer itself is
+  always on: it was an experimental feature, off by default on the stable
+  channel, until it graduated at 1.0.
 - **Pull, never push.** Nothing in this layer writes into a session or into an
   agent's own files.
 

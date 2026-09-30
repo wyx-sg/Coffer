@@ -27,6 +27,7 @@ Aggregation brings its own problem. Once a user registers a handful of servers, 
 | Listing is budgeted, and calling is not. | Tiering decides what the model sees. It never decides what the model may call. |
 | The agent's identity is taken once, at the handshake. | Scope gating and built-in tool attribution need one identity per session that a client cannot change call by call. |
 | Invocations are logged without arguments or results. | The log exists to show which capability ran, when, for how long and with what outcome. Payloads may contain secrets. |
+| A custom tool is a third upstream transport, not a new kind. | An HTTP request the gateway makes itself gets namespacing, the reach and disabled gates, logging, audit and sync for free; a separate kind would duplicate all of it. |
 
 ## Topology
 
@@ -96,7 +97,7 @@ On `initialize`, the session records the client's declared capabilities, the lau
 The identity is self-reported, not verified. Any local process that holds the token can open `/mcp` and claim any uid. This is acceptable under the loopback-only, single-user posture described in [Security model](/architecture/security).
 :::
 
-The `initialize` reply declares `tools`, `resources` and `prompts`, each with `listChanged: true`, and protocol version `2025-06-18`. It also carries an `instructions` string capped at 800 characters (`gateway_instructions.py`). The string says what Coffer is, names each built-in tool the session currently lists, says where the agent reads what Coffer has no tool for — the memory root to search with its own file tools (while the `memory` feature is on) and the `coffer log` readers for Coffer's own records — and points to the `coffer-guide` skill for everything else. When the session's last `tools/list` left tools unlisted, the string adds one sentence with the number of unlisted tools and says that every one of them is still callable.
+The `initialize` reply declares `tools`, `resources` and `prompts`, each with `listChanged: true`, and protocol version `2025-06-18`. It also carries an `instructions` string capped at 800 characters (`gateway_instructions.py`). The string says what Coffer is, names each built-in tool the session currently lists, says where the agent reads what Coffer has no tool for — the memory root to search with its own file tools and the `coffer log` readers for Coffer's own records — and points to the `coffer-guide` skill for everything else. When the session's last `tools/list` left tools unlisted, the string adds one sentence with the number of unlisted tools and says that every one of them is still callable.
 
 ## Discovery and namespacing
 
@@ -185,10 +186,10 @@ The results are real upstream schemas under the names the agent calls directly. 
 
 | Tool | Declared in | Experimental feature |
 | --- | --- | --- |
-| `coffer__write` | `application/knowledge/builtin_tools.py` | `knowledge` |
+| `coffer__write` | `application/knowledge/builtin_tools.py` | none |
 | `coffer__search_tools` | `application/mcp/gateway_tool_search.py` (gateway-owned) | none |
 
-The registry checks the feature on every read. While a feature is off, its tool is absent from `tools/list` and from the `initialize` text. A call to it falls through to upstream routing and fails as an unknown tool would. See [Experimental features](/guides/experimental-features).
+No built-in tool belongs to an experimental feature right now. For one that does, the registry checks the feature on every read: while the feature is off, its tool is absent from `tools/list` and from the `initialize` text. A call to it falls through to upstream routing and fails as an unknown tool would. See [Experimental features](/guides/experimental-features).
 
 Before a built-in handler runs, `inject_session_context` sets `agent` as described above. It also fills `cwd` when the tool's schema declares that property and the client left it empty. The handler's return value is wrapped as a `CallToolResult`: JSON text in `content`, the same object in `structuredContent`, and `isError: false`. An exception inside a handler becomes an in-band `isError: true` result, not a JSON-RPC error, so the model can read it and correct itself. The text shows Coffer-authored and `ValueError` messages, and only the class name for any other exception. For tool behaviour, see [MCP tools](/reference/mcp-tools).
 
@@ -312,6 +313,36 @@ The row's columns, the exact meaning of each status, the buffered writer and ret
 
 An upstream's in-band `isError` result is not an error at this layer. It passes through unchanged as a successful JSON-RPC response. Transport failures between the shim and the daemon become `-32603` errors that the shim synthesizes, so the client never hangs on a dead socket.
 
+## Custom tools: the HTTP API transport
+
+A **custom-tool group** is an `mcp_server` whose transport is `http_api` (`domain/mcp/http_api.py`). Its config holds a base URL, static headers, an auth header and prefix, the one secret ref that header carries, a timeout and a list of tools; each tool is a method, a path template, headers, a body template, a JSON Schema for its arguments, an on/off switch and a changes-data flag. The user-facing side is the [Custom tools guide](/guides/custom-tools).
+
+### Principles
+
+- **Same pipeline, different last hop.** Everything between the agent and the upstream is the gateway's ordinary path. Only the "connection" differs: `infrastructure/mcp/http_api_client.py` is an in-process adapter with the connection contract (`spawn_and_initialize`, `request`, `close`). It answers `tools/list` from the config and makes the HTTP request on `tools/call`; `resources/list` and `prompts/list` answer *method not found*, which discovery already reads as "none".
+- **A value can fill a request, never reshape it.** `domain/mcp/http_api_render.py` percent-encodes every path hole with no safe characters, drops a query pair whose argument is absent, and fills a body template with JSON values (JSON-escaped text inside a string). A path that is not a path, or a hole the schema does not declare, is refused when the tool is saved.
+- **The secret has one way out.** It arrives in the adapter's header overlay, materialised by the supervisor through the guarded resolver for the destination *this group at this base URL*; it is added last, after every tool header; redirects are never followed, so it never reaches a host nobody configured; and its value is masked as `***` in whatever the upstream sends back.
+- **Bounded by construction.** One `httpx` client per call, the group's timeout (1–300 s), at most 1 MiB of response read by streaming.
+
+### What is where
+
+| Piece | Where | Why there |
+| --- | --- | --- |
+| Definition and tools | `mcp_server.config.transport` | It travels with sync like every server's definition, and the tool switch travels like a capability toggle does. |
+| Reach override | `~/.coffer/local/tool-reach.json` | Reach is machine-local; an override narrows the group's scope for one tool. |
+| The per-tool gate | `application/mcp/gateway_tool_gate.py` | Computes, per session, the switched-off and out-of-reach tools; `tools/list` and `coffer__search_tools` drop them and `tools/call` refuses them as `denied` — the same shape as a disabled capability. |
+| Annotations | `DiscoveredTool.annotations` → the listing entry | A tool that changes data is listed `readOnlyHint: false, destructiveHint: true`, any other `readOnlyHint: true`; every upstream's own annotations are passed through too. |
+| Management | `application/mcp/custom_tools.py`, `custom_tool_views.py`, `custom_tool_import.py`; `surfaces/http/mcp/custom_tool_routes.py`; `surfaces/cli/tool_cmd.py` | Every write goes through `ResourceService`, so validation, the missing-credential probe, audit and the eviction of live connections come with it. |
+| OpenAPI | `domain/mcp/openapi_import.py` (pure), `infrastructure/mcp/openapi_fetch.py` | The document is read into draft tools; a URL is fetched through the SSRF guard (5 MiB, 20 s, redirects re-checked). |
+
+### The secret boundary
+
+The destination is the group; its **target** is `http_api <base_url>` and its slot is the auth header's name, so binding a stored secret, moving the base URL and renaming the header each wait for a person's approval in the desktop app. A group reports its secret as `present`, `missing` or `pending_approval` with the approval ids, and a withheld secret makes the agent's call fail with `SECRET_BINDING_PENDING` having sent nothing. A standalone secret a group binds is never released when the group is deleted: it belongs to the Secrets page.
+
+### Health
+
+A group's health is read, not stored: `off` while disabled, `failing` when its last call in 24 hours failed or timed out, `attention` while its secret is missing or waits for approval, `healthy` after a successful last call, `idle` otherwise. The 24-hour counts per group and per tool come from `mcp_invocations`.
+
 ## Trade-offs and alternatives
 
 - **One upstream session shared across clients.** Rejected. Clients declare different capabilities, and a shared session would force the gateway to invent answers or proxy state mid-stream. Routing `list_changed`, progress tokens and sampling requests to the right client becomes a bookkeeping layer of its own. The cost of not sharing is N × M processes, which is small at single-user scale. A daemon-wide pool has the same problems and also ties every session's state to one pool.
@@ -345,8 +376,9 @@ An upstream's in-band `isError` result is not an error at this layer. It passes 
 | [`application/mcp/supervisor.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/supervisor.py), [`discovery.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/discovery.py) | Spawn, retry, cooldown, eviction; live lists, cache, preference reconcile |
 | [`application/builtin_tools.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/builtin_tools.py) | `BuiltinTool` and `BuiltinToolRegistry` |
 | [`application/credentials/resolver.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/credentials/resolver.py) | Credential ref materialisation |
-| [`domain/mcp/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/domain/mcp) | Namespacing, server config, BM25-lite ranker, tiering policy |
-| [`infrastructure/mcp/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/mcp) | stdio and HTTP upstream connections, dispatch table, persistence, buffered invocation writer |
+| [`domain/mcp/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/domain/mcp) | Namespacing, server config, the HTTP API transport and its request rendering, OpenAPI reading, BM25-lite ranker, tiering policy |
+| [`application/mcp/custom_tools.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/custom_tools.py), [`gateway_tool_gate.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_tool_gate.py) | Custom-tool groups and the per-tool gate |
+| [`infrastructure/mcp/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/mcp) | stdio, HTTP and HTTP API upstream connections, dispatch table, OpenAPI fetch, persistence, buffered invocation writer |
 
 ## Related
 

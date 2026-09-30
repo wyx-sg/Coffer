@@ -3,7 +3,8 @@
 // Lists every supported agent type with whether it was found on this Mac,
 // and one step forward (the Agents page, where connecting previews every file
 // change before Coffer writes it). Below, the areas an agent shares, each
-// with its first step. Knowledge is offered only while its feature is on.
+// with its first step. An area whose sidebar entry carries an experimental
+// feature is offered only while that feature is on.
 import { ArrowRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -14,16 +15,16 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { useAgentTypes } from "@/lib/hooks/useAgentTypes";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
+import { isFeatureOn, useFeatureMap } from "@/lib/hooks/useFeatures";
 import { NAV_ENTRIES } from "@/lib/navigation";
 
 const INSTALLED = new Set(["installed_active", "installed_never_run"]);
 
 /** The areas agents share, in sidebar order, each with its first-step copy key. */
-const SHARED: readonly { to: string; id: string; feature?: "knowledge" }[] = [
+const SHARED: readonly { to: string; id: string }[] = [
   { to: "/mcp-servers", id: "mcpServers" },
   { to: "/skills", id: "skills" },
-  { to: "/knowledge", id: "knowledge", feature: "knowledge" },
+  { to: "/knowledge", id: "knowledge" },
   { to: "/model-providers", id: "providers" },
   { to: "/channels", id: "channels" },
 ];
@@ -31,8 +32,10 @@ const SHARED: readonly { to: string; id: string; feature?: "knowledge" }[] = [
 export function FirstRun() {
   const { t } = useTranslation();
   const types = useAgentTypes();
-  const knowledgeOn = useFeatureEnabled("knowledge");
-  const shared = SHARED.filter((s) => !s.feature || knowledgeOn === true);
+  const features = useFeatureMap();
+  const shared = SHARED.filter((s) =>
+    isFeatureOn(features, NAV_ENTRIES.find((e) => e.to === s.to)?.feature),
+  );
 
   return (
     <>

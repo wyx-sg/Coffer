@@ -50,6 +50,8 @@ function makeConversation(overrides?: Partial<Conversation>): Conversation {
     channel_binding: null,
     created_at: "2026-05-22T00:00:00Z",
     updated_at: "2026-05-22T00:00:00Z",
+    preview: null,
+    running: false,
     ...overrides,
   };
 }

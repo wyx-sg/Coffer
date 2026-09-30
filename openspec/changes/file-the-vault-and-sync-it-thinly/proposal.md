@@ -78,7 +78,7 @@ sync-applies-clean-merges-and-stops-on-any-conflict decide the replacement.
 - Backend: new `domain/vault/`, `application/vault/`, `infrastructure/vault/`
   (+ `migration/`); the resource, credential, boundary, preference, pairing,
   engine, retention and skill-source stores move onto files; `runs.db`
-  Alembic revision 0115; `application/sync/`, `domain/sync/` and
+  Alembic revision 0117; `application/sync/`, `domain/sync/` and
   `infrastructure/sync/` rewritten around the vault repository; per-kind sync
   adapters deleted.
 - Frontend: Sync page moved onto the new API; Skills History tab.

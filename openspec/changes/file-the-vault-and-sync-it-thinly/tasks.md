@@ -8,7 +8,7 @@
 ## 2. Resources and state as files
 
 - [ ] 2.1 File resource store (vault / local / derived by kind), reach store in `local/reach.json`, uid index and revision counter in `derived/`
-- [ ] 2.2 `Resource.id` removed; history tables re-keyed to uids; `runs.db` revision 0115
+- [ ] 2.2 `Resource.id` removed; history tables re-keyed to uids; `runs.db` revision 0117
 - [ ] 2.3 Resource validator (schema, uid rules, format versions, secret scan) registered on `resources/`
 - [ ] 2.4 MCP preferences, channel pairings, engine settings as vault state documents; seen-times and health and skill bindings in `derived/derived.db`
 - [ ] 2.5 Retention policies and skill source status in `local/`
@@ -42,7 +42,7 @@
 
 ## 7. Migration
 
-- [ ] 7.1 One-time migration from `coffer.db` at 0114 into the five classes, with the move manifest
+- [ ] 7.1 One-time migration from `coffer.db` at 0116 into the five classes, with the move manifest
 - [ ] 7.2 `coffer migrate --rollback` and `--rehearse`
 - [ ] 7.3 Rehearsal gate test from fixtures of the current schema; rollback byte for byte
 - [ ] 7.4 Two-machine cross-version sync test

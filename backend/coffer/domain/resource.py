@@ -155,9 +155,8 @@ class Kind:
     # Whether this kind's rows carry an enabled switch at all. False means
     # every row is served and ``ResourceService.set_enabled`` refuses it with
     # ``ResourceNotToggleable`` (409), changing nothing. `knowledge` and
-    # `memory` set it False: nobody turns one collection or partition off —
-    # the whole layer is already switched by its experimental feature — and a
-    # disabled partition was still a file any agent could open (spec
+    # `memory` set it False: nobody turns one collection or partition off, and
+    # a disabled partition was still a file any agent could open (spec
     # resource-framework "Address every resource by an immutable uid through
     # one kind-agnostic surface").
     toggleable: bool = True

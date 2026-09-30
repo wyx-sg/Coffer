@@ -23,16 +23,20 @@ _logger = logging.getLogger(__name__)
 
 _STATUS: dict[str, int] = {
     "RESOURCE_NOT_FOUND": 404,
-    # The vault's one write path (ADR every-vault-write-is-a-validated-commit-
-    # naming-its-writer): a file changed under the write, a document the
-    # validator refused, a path outside the vault; git failing or missing is
-    # Coffer's fault, not the request's.
+    # The vault's write path (ADR every-vault-write-is-a-validated-commit-naming-its-writer).
     "VAULT_FILE_STALE": 409,
     "VAULT_FILE_INVALID": 422,
     "VAULT_PATH_INVALID": 400,
     "VAULT_VERSION_NOT_FOUND": 404,
     "VAULT_GIT_FAILED": 500,
     "GIT_MISSING": 500,
+    # custom tools (spec mcp-gateway "Manage custom tools on REST and the command line")
+    "CUSTOM_TOOL_NOT_FOUND": 404,
+    "NOT_A_CUSTOM_TOOL_GROUP": 404,
+    "CUSTOM_TOOL_EXISTS": 409,
+    "OPENAPI_UNREADABLE": 422,
+    "NOT_IMPORTED_FROM_OPENAPI": 409,
+    "OPENAPI_FILE_NEEDED": 422,
     "RESOURCE_ALREADY_EXISTS": 409,
     "AGENT_CONFIG_DIR_REGISTERED": 409,
     "AGENT_TYPE_REGISTERED": 409,
@@ -45,6 +49,9 @@ _STATUS: dict[str, int] = {
     # A changed name on a kind whose name is fixed (ADR
     # names-visible-to-agents-are-fixed): a conflict with what quotes the name.
     "NAME_IMMUTABLE": 409,
+    # The daemon's settable port (spec daemon "Bind a fixed, settable port").
+    "PORT_OUT_OF_RANGE": 422,
+    "PORT_IN_USE": 409,
     "UNKNOWN_KIND": 400,
     "CONFIG_INVALID": 422,
     "SCOPE_INVALID": 422,  # per-agent activation scope (ADR per-agent-resource-scope)
@@ -105,6 +112,15 @@ _STATUS: dict[str, int] = {
     "UNMANAGED_SKILL_NOT_FOUND": 404,
     "CONFIG_FILE_STALE": 409,
     "SKILL_FILE_STALE": 409,
+    # The commands skills require (spec skill-manager "Install a required
+    # command only through Homebrew and only when asked"): every refusal runs
+    # nothing.
+    "CLI_NOT_REQUIRED": 404,
+    "CLI_INSTALL_NOT_FOUND": 404,
+    "CLI_FORMULA_MISMATCH": 422,
+    "CLI_NOT_INSTALLABLE": 409,
+    "HOMEBREW_NOT_FOUND": 409,
+    "CLI_INSTALL_RUNNING": 409,
     # skill sources (spec skill-manager "Add skills from an archive", "Add
     # skills from a Git repository", "Update a Git-imported skill from its
     # source"): an expired stage is a missing thing; git failing to fetch is

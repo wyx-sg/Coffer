@@ -5,12 +5,13 @@
 // navigation builds a fetch Request, and jsdom's AbortSignal is not the one
 // undici's Request accepts.)
 import { beforeEach, expect, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation, useRoutes } from "react-router-dom";
 
 import { acceptance } from "@/test/acceptance";
 import { routes } from "@/router";
+import { cli } from "@/test/cliFixtures";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
 const { getApiClient } = await import("@/lib/api/client");
@@ -21,6 +22,7 @@ function mockApi() {
     Promise.resolve({
       data: {
         resources: [],
+        groups: [],
         agents: [],
         candidates: [],
         entries: [],
@@ -124,19 +126,50 @@ test("the old Settings addresses land on a live tab", async () => {
     ["/settings/sync", "/sync"],
   ] as const) {
     const location = renderAt(from);
-    await waitFor(() => expect(location.pathname).toBe(to));
+    // The Settings modal is code-split; its first load can take a while.
+    await waitFor(() => expect(location.pathname).toBe(to), { timeout: 5_000 });
   }
 });
 
 test("every page the shell adds resolves to a page of its own", async () => {
   mockApi();
-  for (const path of ["/custom-tools", "/clis", "/secrets", "/usage"]) {
-    renderAt(path);
+  for (const path of ["/secrets", "/usage", "/custom-tools", "/clis"]) {
+    const location = renderAt(path);
+    // Each page is code-split; wait until it has replaced the fallback.
+    await waitFor(() => expect(location.pathname).toBe(path));
+    await waitFor(() => expect(screen.getAllByRole("heading").length).toBeGreaterThan(0), {
+      timeout: 5_000,
+    });
+    expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
+    cleanup();
   }
-  // Each page is code-split, so they arrive one by one. Secrets and Usage are
-  // built; Custom tools and CLIs are still placeholders.
-  await waitFor(() => expect(screen.getAllByTestId("placeholder-page")).toHaveLength(2), {
+});
+
+test("the CLIs page and a command's address each resolve to their own page", async () => {
+  const get = mockApi();
+  const empty = get.getMockImplementation()!;
+  get.mockImplementation((path: string) =>
+    path === "/clis/{command}"
+      ? Promise.resolve({ data: cli({ command: "gh" }), error: undefined })
+      : empty(path),
+  );
+  renderAt("/clis");
+  renderAt("/clis/gh");
+  await waitFor(() => expect(screen.getByRole("heading", { name: "CLIs" })).toBeInTheDocument(), {
     timeout: 5_000,
   });
+  // The detail page, titled by the command it is addressed by.
+  await waitFor(() => expect(screen.getByRole("heading", { name: "gh" })).toBeInTheDocument());
+  expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
+});
+
+test("the Custom tools page and a group's address both resolve to the Custom tools page", async () => {
+  mockApi();
+  renderAt("/custom-tools");
+  renderAt("/custom-tools/billing");
+  await waitFor(
+    () => expect(screen.getAllByRole("heading", { name: "Custom tools" })).toHaveLength(2),
+    { timeout: 5_000 },
+  );
   expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
 });

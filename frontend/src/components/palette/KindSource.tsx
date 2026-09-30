@@ -5,8 +5,7 @@ import type { ObjectKind } from "./paletteItems";
 import { KIND_LIST_HOOKS, type KindState } from "./paletteSources";
 
 /** Runs one kind's list hook and reports what it says. Mounted per kind, and
- *  only for kinds the palette may list, so a switched-off feature is never
- *  asked for. */
+ *  only while the palette is open and the daemon has answered. */
 export function KindSource({
   kind,
   onState,

@@ -479,3 +479,74 @@ def test_moving_a_provider_base_url_asks_again(daemon: BoundaryDaemon) -> None:
     [replace] = [a for a in d.pending() if a["op"] == "replace_value"]
     d.approve(replace["id"])
     assert d.value(ref) == "sk-replaced-2" and key_now() == "sk-replaced-2"
+
+
+def _provider(d: BoundaryDaemon, name: str, base_url: str, **body: Any) -> dict[str, Any]:
+    r = d.client.post(
+        "/api/v1/providers",
+        json={"name": name, "protocol": "anthropic", "base_url": base_url, **body},
+    )
+    assert r.status_code == 201, r.text
+    return dict(r.json())
+
+
+@pytest.mark.acceptance(
+    spec="credentials", scenario="the command line reports a pending provider key and exits 9"
+)
+def test_the_command_line_reports_a_pending_provider_key(cli: BoundaryDaemon) -> None:
+    d = cli
+    gw = _provider(d, "gw", "https://gw.example.com/anthropic", secret_value="sk-cli-key-1")
+    d.pending()  # the first key, just typed for this connection, is approved on sight
+    ref = d.client.get(f"/api/v1/providers/{gw['uid']}").json()["credential_ref"]
+
+    rotated = _runner.invoke(cli_app, ["provider", "edit", "gw", "--secret", "sk-cli-key-2"])
+    assert rotated.exit_code == 9, rotated.output
+    assert "updated provider gw" in rotated.output
+    assert "waiting for approval in the Coffer app" in rotated.output
+    [replace] = [a for a in d.pending() if a["op"] == "replace_value"]
+    assert replace["id"] in rotated.output and d.value(ref) == "sk-cli-key-1"
+
+    moved = _runner.invoke(
+        cli_app, ["provider", "edit", "gw", "--base-url", "https://elsewhere.example.net/v1"]
+    )
+    assert moved.exit_code == 9, moved.output
+    [bind] = d.pending(destination_uid=gw["uid"])
+    assert bind["id"] in moved.output and "waiting for approval" in moved.output
+
+    added = _runner.invoke(
+        cli_app,
+        [
+            "provider",
+            "add",
+            "second",
+            "--protocol",
+            "anthropic",
+            "--base-url",
+            "https://second.example.org/v1",
+            "--credential-ref",
+            ref,
+        ],
+    )
+    assert added.exit_code == 9, added.output
+    assert "added provider second" in added.output
+    assert "waiting for approval in the Coffer app" in added.output
+
+    described = _runner.invoke(cli_app, ["provider", "edit", "gw", "--description", "gateway"])
+    assert described.exit_code == 0, described.output
+
+
+def test_provider_edit_waits_for_the_approval_with_wait(
+    cli: BoundaryDaemon, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    d = cli
+    _provider(d, "gw", "https://gw.example.com/anthropic", secret_value="sk-wait-key-1")
+    d.pending()
+
+    def the_person_approves(_seconds: float) -> None:
+        for approval in d.pending():
+            d.approve(approval["id"])
+
+    monkeypatch.setattr(_approvals.time, "sleep", the_person_approves)
+    r = _runner.invoke(cli_app, ["provider", "edit", "gw", "--secret", "sk-wait-key-2", "--wait"])
+    assert r.exit_code == 0, r.output
+    assert "approved in the Coffer app" in r.output

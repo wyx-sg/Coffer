@@ -40,7 +40,6 @@ been partly that a path an agent reads should be one a person can retype.
 from __future__ import annotations
 
 import pathlib
-import re
 from collections.abc import Sequence
 from importlib import resources
 
@@ -65,32 +64,14 @@ _ROOT_PLACEHOLDER = "<KNOWLEDGE_ROOT>"
 #: Replaced in the asset with the memory root as ``display_memory_root`` gives it.
 _MEMORY_ROOT_PLACEHOLDER = "<MEMORY_ROOT>"
 
-#: Replaced in the asset with how many ``coffer__`` tools the manual describes.
-_TOOL_COUNT_PLACEHOLDER = "<TOOL_COUNT>"
-
-#: A line ``<!-- when:<feature> -->`` opens a span of the asset that belongs to
-#: one experimental feature, ``<!-- end:<feature> -->`` closes it; spans nest.
-#: The marker lines are never rendered, and a span is dropped whole while its
-#: feature is off (spec experimental-features "Withdraw what a switched-off
-#: feature put in front of agents") — so the manual never documents a tool the
-#: gateway would answer as unknown.
-_SPAN_OPEN = re.compile(r"^<!-- when:([a-z_]+) -->$")
-_SPAN_CLOSE = re.compile(r"^<!-- end:([a-z_]+) -->$")
-
 _ASSET = "coffer-guide.md"
 
-_COUNT_WORDS = {1: "one tool", 2: "two tools"}
-
-_LEAD_WITH_KNOWLEDGE = (
-    "Coffer, this machine's local vault — how to use it, and what it already holds"
-)
-
-#: The lead while the knowledge feature is switched off: the manual still
-#: describes Coffer's tools, and names no knowledge.
-_LEAD_WITHOUT_KNOWLEDGE = "Coffer, this machine's local vault — how to use it"
-
-_SEARCH_TOOLS_GLOSS = (
-    "coffer__search_tools, which finds upstream tools your tool list does not show"
+#: The description's first sentence: what Coffer is and which tools it has.
+_LEAD = (
+    "Coffer, this machine's local vault — how to use it, and what it already holds. "
+    "Covers its own tools (coffer__search_tools, which finds upstream tools your "
+    "tool list does not show; coffer__write), where its memory notes live, and "
+    "THIS developer's own knowledge"
 )
 
 _TAIL = (
@@ -144,31 +125,9 @@ def _subject(entry: CollectionEntry) -> str:
     return f"{entry.name} ({first})"
 
 
-def _lead(*, knowledge: bool, memory: bool) -> str:
-    """The description's first sentence: what Coffer is and which tools it has."""
-    tools = [_SEARCH_TOOLS_GLOSS]
-    if knowledge:
-        tools.append("coffer__write")
-    head = _LEAD_WITH_KNOWLEDGE if knowledge else _LEAD_WITHOUT_KNOWLEDGE
-    covers = f"Covers its own tools ({'; '.join(tools)})"
-    if memory:
-        covers += ", where its memory notes live"
-    if knowledge:
-        return f"{head}. {covers}, and THIS developer's own knowledge"
-    return f"{head}. {covers}"
-
-
-def render_description(catalogue: Catalogue | None, *, memory: bool = False) -> str:
-    """The frontmatter description: the one part always in a model's context.
-
-    ``None`` is the knowledge feature switched off: no subjects, and a lead
-    that does not promise any knowledge. ``memory`` is the memory feature:
-    while it is off the lead does not mention memory notes.
-    """
-    if catalogue is None:
-        lead = _lead(knowledge=False, memory=memory)
-        return f"{lead}. {_TAIL}"[:MAX_DESCRIPTION_CHARS]
-    lead = _lead(knowledge=True, memory=memory)
+def render_description(catalogue: Catalogue) -> str:
+    """The frontmatter description: the one part always in a model's context."""
+    lead = _LEAD
     subjects = [
         _subject(entry) for entry, _ in catalogue if entry.document_count or entry.pending_count
     ]
@@ -186,39 +145,12 @@ def _static_body() -> str:
     return resources.files(__package__).joinpath("skill_assets", _ASSET).read_text(encoding="utf-8")
 
 
-def _select_spans(text: str, enabled: set[str]) -> str:
-    """Drop every span of a feature not in ``enabled``, and every marker line."""
-    out: list[str] = []
-    stack: list[str] = []
-    for line in text.splitlines(keepends=True):
-        stripped = line.rstrip("\n")
-        opened = _SPAN_OPEN.match(stripped)
-        if opened:
-            stack.append(opened.group(1))
-            continue
-        closed = _SPAN_CLOSE.match(stripped)
-        if closed:
-            if not stack or stack[-1] != closed.group(1):
-                raise ValueError(f"unbalanced feature span in {_ASSET}: {stripped}")
-            stack.pop()
-            continue
-        if all(feature in enabled for feature in stack):
-            out.append(line)
-    if stack:
-        raise ValueError(f"unclosed feature span in {_ASSET}: {stack[-1]}")
-    return "".join(out)
-
-
-def _manual(root: str, *, knowledge: bool, memory_root: str | None) -> str:
-    """The static half with the switched-off features' spans taken out."""
-    memory = memory_root is not None
-    enabled = {key for key, on in (("knowledge", knowledge), ("memory", memory)) if on}
-    count = 1 + int(knowledge)  # search_tools is always there; write is knowledge's
+def _manual(root: str, *, memory_root: str) -> str:
+    """The static half, with the knowledge and memory roots filled in."""
     return (
-        _select_spans(_static_body(), enabled)
+        _static_body()
         .replace(_ROOT_PLACEHOLDER, root)
-        .replace(_MEMORY_ROOT_PLACEHOLDER, memory_root or "")
-        .replace(_TOOL_COUNT_PLACEHOLDER, _COUNT_WORDS[count])
+        .replace(_MEMORY_ROOT_PLACEHOLDER, memory_root)
     )
 
 
@@ -264,18 +196,13 @@ def render_catalogue(root: str, catalogue: Catalogue) -> str:
     return "\n".join(lines).rstrip()
 
 
-def render_body(root: str, catalogue: Catalogue | None, *, memory_root: str | None = None) -> str:
-    """The skill body: the manual, then the catalogue — or the manual alone,
-    without its knowledge sections, while the knowledge feature is switched off
-    (``None``). ``memory_root`` is ``None`` while the memory feature is off,
-    which takes the memory sections out likewise."""
-    static = _manual(root, knowledge=catalogue is not None, memory_root=memory_root).rstrip()
-    if catalogue is None:
-        return f"{static}\n"
+def render_body(root: str, catalogue: Catalogue, *, memory_root: str) -> str:
+    """The skill body: the manual, then the catalogue."""
+    static = _manual(root, memory_root=memory_root).rstrip()
     return f"{static}\n\n{render_catalogue(root, catalogue)}\n"
 
 
-def render_frontmatter(catalogue: Catalogue | None, *, memory: bool = False) -> str:
+def render_frontmatter(catalogue: Catalogue) -> str:
     """The `---`-delimited YAML block, with the description safely quoted.
 
     Emitted through a YAML dumper rather than an f-string, because the
@@ -292,7 +219,7 @@ def render_frontmatter(catalogue: Catalogue | None, *, memory: bool = False) -> 
     on where the line breaks fall, and these bytes have to be reproducible.
     """
     return yaml.safe_dump(
-        {"name": GUIDE_SKILL_NAME, "description": render_description(catalogue, memory=memory)},
+        {"name": GUIDE_SKILL_NAME, "description": render_description(catalogue)},
         allow_unicode=True,
         sort_keys=False,
         default_flow_style=False,
@@ -300,17 +227,10 @@ def render_frontmatter(catalogue: Catalogue | None, *, memory: bool = False) -> 
     )
 
 
-def render(root: str, catalogue: Catalogue | None, *, memory_root: str | None = None) -> str:
-    """The complete `SKILL.md`, as every agent receives it.
-
-    ``catalogue`` is ``None`` while the knowledge feature is switched off: the
-    skill is then rendered without its knowledge catalogue or the sections
-    that document ``coffer__write`` and the knowledge root. ``memory_root`` is
-    the memory root as :func:`display_memory_root` gives it, or ``None`` while
-    the memory feature is off: the sections naming it are then left out (spec
-    experimental-features "Withdraw what a switched-off feature put in front of
-    agents")."""
-    frontmatter = render_frontmatter(catalogue, memory=memory_root is not None)
+def render(root: str, catalogue: Catalogue, *, memory_root: str) -> str:
+    """The complete `SKILL.md`, as every agent receives it. ``memory_root`` is
+    the memory root as :func:`display_memory_root` gives it."""
+    frontmatter = render_frontmatter(catalogue)
     body = render_body(root, catalogue, memory_root=memory_root)
     return f"---\n{frontmatter}---\n\n{body}"
 

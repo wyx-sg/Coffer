@@ -5,11 +5,29 @@ description: Install Coffer with the one-line installer, the macOS desktop app, 
 
 # Install
 
-This page covers every supported way to install Coffer, what each one puts on disk, and how to verify, upgrade and uninstall it. If you only want to get going, run the one-line installer and continue with the [Quickstart](/start/quickstart).
+This page covers every supported way to install Coffer, what each one puts on disk, and how to verify, upgrade and uninstall it. If you only want to get going, [let your agent install it](#let-your-agent-install-it) or run the one-line installer, then continue with the [Quickstart](/start/quickstart).
 
 ::: warning No tagged release yet
 The one-line installer, the desktop `.dmg` and the release archive all download from a tagged GitHub release. Until the first `v*` tag is published those downloads return 404. For now, [install from source](#from-source).
 :::
+
+## Let your agent install it
+
+If you already work with a coding agent — Claude Code, Codex, or any agent that can run commands on your machine — paste this prompt into it:
+
+```text
+Install Coffer on this machine by following
+https://wyx-sg.github.io/Coffer/start/install — pick the install path that fits
+this machine (a release build if one is published for this OS and architecture,
+otherwise from source). Ask me before running anything with sudo or editing my
+shell profile. When it is installed, check it with `coffer daemon status`.
+Then, for each coding agent installed here (claude-code, codex), run
+`coffer agent add <type>` and `coffer agent connect <type>`, telling me which
+config files connect will change before you run it. Do not handle any
+credentials: if a step needs a login, tell me what to do instead.
+```
+
+The agent reads this page, chooses the path that fits your machine and checks the result, asking before it touches anything outside Coffer's own directory. Coffer never asks an agent to handle a credential, so any login stays with you. The rest of this page is what the agent follows, and what you follow to install by hand.
 
 ## Choose an install path
 
@@ -136,7 +154,7 @@ cd frontend && npm install && npm run build && cd ..
 | `~/.coffer/coffer.db.pre-<revision>` | A copy taken before each schema migration. The three newest are kept. |
 | `~/.coffer/master.key` | The credential master key (mode `0600`), unless you moved it to the keychain. |
 | `~/.coffer/daemon.json` | Runtime discovery file: PID, port and API token (mode `0600`). Written at start and removed at exit. |
-| `~/.coffer/daemon-config.json` | Settings read before the daemon starts: a fixed port, the machine name, experimental-feature switches. |
+| `~/.coffer/daemon-config.json` | Settings read before the daemon starts: a fixed port, the machine name, any experimental-feature switches. |
 | `~/.coffer/skills/`, `knowledge/`, `memory/` | The file-backed kinds' trees. |
 | `~/.coffer/logs/daemon.log` | The daemon log, shared by the daemon, its child processes and the desktop app. |
 
@@ -228,7 +246,7 @@ Restarting matters because a daemon that is already running keeps running the ol
 
 ## Release channel
 
-Every build has a **channel**. A tagged release is stamped `stable`. Source runs, `make desktop` and `make bundle-binaries` are `dev`. The channel sets only the default for the experimental features (Sync, Knowledge and Memory): off on `stable`, on on `dev`. You can switch any of them on each machine under **Settings → General** or with `coffer config set feature.<key> on`. See [Experimental features](/guides/experimental-features).
+Every build has a **channel**. A tagged release is stamped `stable`. Source runs, `make desktop` and `make bundle-binaries` are `dev`. The channel sets only the default of an experimental feature: off on `stable`, on on `dev`. No feature is experimental right now; Sync, Knowledge and Memory graduated at 1.0 and are always on. See [Experimental features](/guides/experimental-features).
 
 ## Next steps
 

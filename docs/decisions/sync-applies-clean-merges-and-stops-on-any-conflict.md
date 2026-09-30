@@ -193,8 +193,8 @@ Leave multi-machine use to the person's own tools.
 - **Pros.** No code and no risk.
 - **Cons.** A person who runs `git pull` in the vault themselves gets none of
   the protections — no breaker, no validation before checkout, no snapshot —
-  and file synchronisers are unsafe over a git repository (above). The
-  experimental switch already gives users who want no sync exactly that.
+  and file synchronisers are unsafe over a git repository (above). Leaving
+  the remote unconfigured already gives users who want no sync exactly that.
 - **Why it loses.** The unprotected route would be the only route.
 
 ### How the clean merge is computed
@@ -236,8 +236,7 @@ rewriter of vault content, which curation shares; the single owner machine for
 unattended rewrites (a clean merge would still duplicate two machines'
 curation silently); machine identity and descriptors; the push token through a
 per-invocation credential helper with the user's git configuration pinned
-away; "a vault needs a human" surfaced where the user is; the `vault_sync`
-experimental switch.
+away; "a vault needs a human" surfaced where the user is.
 
 What is removed: the delete-versus-edit layer ("keep the edit") and the agent
 resolution pass with its validation gate (`application/sync/conflicts.py`

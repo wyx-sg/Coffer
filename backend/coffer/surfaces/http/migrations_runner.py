@@ -155,8 +155,8 @@ def backup_before_migrate(
 
 #: The last revision whose tables still hold the pre-vault state, and the
 #: first one that drops them (ADR storage-is-five-classes-by-nature).
-PRE_LAYOUT_REVISION = "0114"
-LAYOUT_REVISION = "0116"
+PRE_LAYOUT_REVISION = "0116"
+LAYOUT_REVISION = "0117"
 
 _PRE_LAYOUT_HOOKS: list[Callable[[str], None]] = []
 

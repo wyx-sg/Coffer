@@ -5,6 +5,7 @@ import { ChatRedirect, SettingsIndexRedirect } from "./components/shell/redirect
 import { FeatureGate } from "./components/FeatureGate";
 import { PageFallback } from "./components/PageFallback";
 import type { FeatureKey } from "./lib/hooks/useFeatures";
+import { NAV_GROUPS, type NavEntry } from "./lib/navigation";
 import { AgentsPage } from "./pages/AgentsPage";
 import { ChannelsPage } from "./pages/ChannelsPage";
 import { SkillsPage } from "./pages/SkillsPage";
@@ -34,19 +35,30 @@ function lazyPage<K extends string>(
 }
 
 /** A page that belongs to an experimental feature: while the feature is off
- *  the route renders a notice saying so instead. */
-function gated(feature: FeatureKey, page: JSX.Element): JSX.Element {
-  return <FeatureGate feature={feature}>{page}</FeatureGate>;
+ *  the route renders a notice saying so instead (spec experimental-features
+ *  "Close every surface of a switched-off feature"). A page is gated here by
+ *  the `feature` its sidebar entry carries in `lib/navigation.ts`, so one flag
+ *  on the entry closes both. No entry carries one while the registry is empty. */
+const FEATURE_OF_PATH = new Map<string, FeatureKey>(
+  NAV_GROUPS.flatMap((g) => g.entries)
+    .filter((e): e is NavEntry & { feature: FeatureKey } => e.feature !== undefined)
+    .map((e) => [e.to.replace(/^\//, ""), e.feature]),
+);
+
+/** Wrap every route under a flagged entry's path in its `FeatureGate`. */
+function gateRoutes(table: RouteObject[]): RouteObject[] {
+  return table.map((route) => {
+    const top = route.path?.split("/")[0];
+    const feature = top === undefined ? undefined : FEATURE_OF_PATH.get(top);
+    if (feature === undefined || route.element === undefined) return route;
+    return { ...route, element: <FeatureGate feature={feature}>{route.element}</FeatureGate> };
+  });
 }
 
-const knowledgePage = gated(
-  "knowledge",
-  lazyPage(() => import("./pages/KnowledgePage"), "KnowledgePage"),
-);
-const memoryDetailPage = gated(
-  "memory",
-  lazyPage(() => import("./pages/MemoryDetailPage"), "MemoryDetailPage"),
-);
+const knowledgePage = lazyPage(() => import("./pages/KnowledgePage"), "KnowledgePage");
+const memoryDetailPage = lazyPage(() => import("./pages/MemoryDetailPage"), "MemoryDetailPage");
+
+const conversationsPage = lazyPage(() => import("./pages/ConversationsPage"), "ConversationsPage");
 
 const settingsModal = lazyPage(() => import("./pages/settings/SettingsModal"), "SettingsModal");
 
@@ -65,38 +77,36 @@ const settingsModal = lazyPage(() => import("./pages/settings/SettingsModal"), "
 // name where a kind's name is fixed — skills and MCP servers — and the immutable
 // uid where a name can be renamed (ADR resource-identity-is-an-immutable-uid);
 // each page redirects an old `?tab=` or old uid address to the new one.
-const pageRoutes: RouteObject[] = [
+const pageRoutes: RouteObject[] = gateRoutes([
   { index: true, element: <OverviewPage /> },
-  {
-    path: "conversations",
-    element: lazyPage(() => import("./pages/ChatPage"), "ChatPage"),
-  },
-  {
-    path: "conversations/:id",
-    element: lazyPage(() => import("./pages/ChatPage"), "ChatPage"),
-  },
+  // One element for both addresses, so opening a conversation from the list —
+  // or the draft's first send landing on the conversation it created — keeps
+  // the page mounted and its state (the draft's pending first message) alive.
+  { path: "conversations", element: conversationsPage },
+  { path: "conversations/:id", element: conversationsPage },
   // Legacy routes — Conversations was Chat.
   { path: "chat", element: <ChatRedirect /> },
   { path: "chat/:id", element: <ChatRedirect /> },
   { path: "mcp-servers", element: <ResourcesPage /> },
-  {
-    path: "mcp-servers/:name",
-    element: lazyPage(() => import("./pages/ResourceDetailPage"), "ResourceDetailPage"),
-  },
-  {
-    path: "mcp-servers/:name/:tab",
-    element: lazyPage(() => import("./pages/ResourceDetailPage"), "ResourceDetailPage"),
-  },
+  { path: "mcp-servers/:name", element: <ResourcesPage /> },
+  { path: "mcp-servers/:name/:tab", element: <ResourcesPage /> },
   // Legacy route — this surface used to live at /resources.
   { path: "resources", element: <Navigate to="/mcp-servers" replace /> },
   {
     path: "custom-tools",
     element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
   },
+  // One custom-tool group, by its fixed name — one page with no tabs.
+  {
+    path: "custom-tools/:group",
+    element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
+  },
   { path: "clis", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
-  // A skill's Requires tab links each command here; the CLIs page item gives
-  // it its own detail page.
-  { path: "clis/:command", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
+  // One required command, by the command itself — one page with no tabs.
+  {
+    path: "clis/:command",
+    element: lazyPage(() => import("./pages/CliDetailPage"), "CliDetailPage"),
+  },
   { path: "agents", element: <AgentsPage /> },
   // An agent's pages are addressed by its TYPE (one agent per type), the
   // detail page's tab by the path (`/agents/<type>/<tab>`, Overview bare),
@@ -133,11 +143,11 @@ const pageRoutes: RouteObject[] = [
     path: "agents/:type/plugins/:pluginId",
     element: lazyPage(() => import("./pages/AgentPluginPage"), "AgentPluginPage"),
   },
+  // The Channels page is the list beside the open channel, so all three
+  // addresses render the same page (the tab is the optional last segment).
   { path: "channels", element: <ChannelsPage /> },
-  {
-    path: "channels/:uid",
-    element: lazyPage(() => import("./pages/ChannelDetailPage"), "ChannelDetailPage"),
-  },
+  { path: "channels/:uid", element: <ChannelsPage /> },
+  { path: "channels/:uid/:tab", element: <ChannelsPage /> },
   // The Skills page is the library beside the open skill, so all three
   // addresses render the same page; it loads the detail pane on first open.
   { path: "skills", element: <SkillsPage /> },
@@ -156,20 +166,14 @@ const pageRoutes: RouteObject[] = [
   { path: "knowledge/:uid/:tab", element: knowledgePage },
   {
     path: "memory",
-    element: gated(
-      "memory",
-      lazyPage(() => import("./pages/MemoryPage"), "MemoryPage"),
-    ),
+    element: lazyPage(() => import("./pages/MemoryPage"), "MemoryPage"),
   },
   // A partition's two tabs: Memories (the bare path) and Delivered.
   { path: "memory/:uid", element: memoryDetailPage },
   { path: "memory/:uid/:tab", element: memoryDetailPage },
   {
     path: "sync",
-    element: gated(
-      "vault_sync",
-      lazyPage(() => import("./pages/sync/SyncPage"), "SyncPage"),
-    ),
+    element: lazyPage(() => import("./pages/sync/SyncPage"), "SyncPage"),
   },
   { path: "model-providers", element: <ModelProvidersPage /> },
   {
@@ -202,7 +206,7 @@ const pageRoutes: RouteObject[] = [
   { path: "observability", element: <Navigate to="/activity" replace /> },
   { path: "usage", element: lazyPage(() => import("./pages/UsagePage"), "UsagePage") },
   { path: "*", element: <NotFoundPage /> },
-];
+]);
 
 /** The Settings modal's routes, rendered over the page underneath. */
 const settingsRoutes: RouteObject[] = [

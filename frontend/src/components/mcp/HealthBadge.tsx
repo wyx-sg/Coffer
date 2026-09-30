@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { healthStatusClass } from "@/lib/statusColors";
 
-export type HealthState = "healthy" | "unknown" | "failing";
+type HealthState = "healthy" | "unknown" | "failing";
 
 interface Props {
   state: HealthState;

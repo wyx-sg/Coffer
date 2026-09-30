@@ -7,10 +7,6 @@ description: How Coffer reads every agent's native memory without writing it, di
 
 This page explains how Coffer's memory layer works: how it reads what Claude Code and Codex have learned out of their own memory files, distils that into notes of its own, and hands the result back to every agent. It is written for engineers who want the mechanism and the reasoning behind it. For the task-oriented view, see the [Memory guide](/guides/memory).
 
-::: info Experimental
-Memory is an [experimental feature](/guides/experimental-features) (key `memory`). On a stable build it is off until you switch it on. While it is off, the workers skip their rounds, the gateway stops naming the memory root, and the delivery hooks are withdrawn from every agent.
-:::
-
 ## The problem
 
 Every coding agent keeps its own memory, and none of them can see another's. Claude Code writes one Markdown file per fact under each project. Codex distils its rollouts into task groups and a profile. Both do this well, but the knowledge stays in each agent's own directory, so you end up teaching Codex what Claude Code already knows.
@@ -82,7 +78,7 @@ Only aggregation creates partitions. The `memory` kind sets `generic_create_allo
 
 ### No per-agent reach and no switch
 
-Most resource kinds carry a per-agent **reach** (see [Resource framework](/architecture/resource-framework)). Memory does not: its kind leaves `supports_scope` at `False`, and it declares `toggleable=False`, so a partition has no enabled switch either and the generic enable/disable route refuses one with `RESOURCE_NOT_TOGGLEABLE`. **Every** partition is delivered to **every** agent. The `memory` experimental feature switches the whole layer, and the notes themselves are files under the memory root either way.
+Most resource kinds carry a per-agent **reach** (see [Resource framework](/architecture/resource-framework)). Memory does not: its kind leaves `supports_scope` at `False`, and it declares `toggleable=False`, so a partition has no enabled switch either and the generic enable/disable route refuses one with `RESOURCE_NOT_TOGGLEABLE`. **Every** partition is delivered to **every** agent. The notes themselves are files under the memory root.
 
 This is deliberate. A per-agent default is the natural thing to reach for, namely "scope a partition to the agents it was aggregated from". But that default is exactly the opposite of what this layer is for. A partition filled only from Claude Code would be withheld from Codex working in the same repository, and Codex is the agent that has not learned it yet. Reach would not be a real boundary anyway. A note is a plain file that any local process can open, so no switch on a partition could decide more than what Coffer *serves*; a disabled partition was still a file any agent could read.
 
@@ -347,7 +343,7 @@ Delivery reaches an agent through the agent's own hook mechanism. Coffer's hook 
 
 Both agents get the same four entries: Claude Code in `settings.json`, Codex in `hooks.json`. Both hand their hook the event as JSON on stdin in the same shape (`hook_event_name`, `session_id`, `cwd`, `prompt`, and for the shell `tool_name: "Bash"`, `tool_input.command` and `tool_response`), and both read the same `hookSpecificOutput` JSON back on every event. So `coffer memory hook` reads the event from stdin, relays it to the daemon's `POST /api/v1/memory/hook`, and prints what comes back. `--cwd "$PWD"` is only the fallback for an event whose input carries no `cwd`. One command for every event means one string to judge for staleness and one hash shape per entry for Codex. `coffer memory context` stays as the command that composes the session-start text alone.
 
-**Why a deny, not a reminder.** A `PreToolUse` hook can also answer with `additionalContext`, which would never interrupt the agent. But Claude Code delivers `PreToolUse` context **after** the command has run, together with its result, so a reminder there can only help the agent recover; it cannot stop the first attempt. Only `permissionDecision: "deny"` does. Codex honours the same deny and shows the model "Command blocked by PreToolUse hook: <reason>". After a command is the right time for an error's context, which is why the `context` kind sits on `PostToolUse`.
+**Why a deny, not a reminder.** A `PreToolUse` hook can also answer with `additionalContext`, which would never interrupt the agent. But Claude Code delivers `PreToolUse` context **after** the command has run, together with its result, so a reminder there can only help the agent recover; it cannot stop the first attempt. Only `permissionDecision: "deny"` does. Codex honours the same deny and shows the model `Command blocked by PreToolUse hook: <reason>`. After a command is the right time for an error's context, which is why the `context` kind sits on `PostToolUse`.
 
 The path is the one the composition root resolves, preferring the stable `~/.coffer/bin/coffer` over the version directory behind it. A bare `coffer` is not enough, because a hook runs under whatever shell the agent starts. Codex runs hooks under `/bin/zsh` without the user's rc files, so `~/.coffer/bin` is not on that shell's `PATH`. Claude Code started from the Dock does not inherit the login shell's `PATH` either.
 
@@ -378,11 +374,11 @@ A fire that cannot deliver anything never contacts the daemon at all. The CLI an
 
 ### The per-session ledger
 
-Two promises rest on remembering what each session was given: a note retrieved for one prompt is not retrieved again in the same session, and a trigger holds or adds at most once per session. The daemon keeps both in a **per-session ledger in memory**, keyed on the `session_id` the agent hands its hook and bounded to the 2,048 most recent sessions.
+Two promises rest on remembering what each session was given: a note retrieved for one prompt is not retrieved again in the same session, and a trigger holds or adds at most once per session. The daemon keeps both in a **per-session ledger in memory**, keyed on the `session_id` the agent hands its hook (or, for a channel turn, `conversation:<id>`) and bounded to the 2,048 most recent sessions.
 
 It is never keyed on a process id. Every session of one Codex app-server shares a parent pid, which is how an earlier build's Codex hook, guarded on `$PPID`, fired only for the first session of each app-server under Codex Desktop and the IDE hosts.
 
-A daemon restart forgets the ledger. After one, a running session may be given a note it already had, or have a trigger hold one more command. That was chosen over a table: the harm is one repeated line or one extra deny, and the memory layer adds no table.
+The ledger survives a daemon restart without a table of its own. Every fire that delivered something is already a `memory_delivery_fired` audit event naming its session, its notes and, for a trigger, the trigger. Before a new daemon answers its first prompt or command, `restore_from_audit` (`application/memory/ledger_restore.py`) reads the fires of the last seven days back, oldest first, into the ledger. A running session therefore is not given a note again after a restart, and a trigger does not hold a second command in it. A session idle for more than seven days is treated as new. If the audit log cannot be read, the failure is logged and the ledger starts empty; the cost is one repeated line or one extra deny.
 
 ### Audit and the delivery views
 
@@ -419,13 +415,16 @@ Detection matches the marker and never reads the arguments. A hook whose command
 
 For Codex, the target also compares trust. A current hook that Codex will not run differs only in trust. That difference is reported as `hook_untrusted` (or `hook_disabled`, or `hook_trust_unknown`) on the attention list, with the remedy, and is never written.
 
-The same target follows the `memory` feature switch. Switching memory off removes the hook from every agent. Switching it back on installs the hook into every agent connected to Coffer — every agent carrying the gateway MCP entry, a list the composition root hands in from the agent kind — and repairs stale commands. An ordinary pass never installs a hook: a connected agent missing it is reported, and reads as partly connected until it is connected again.
+An ordinary pass never installs a hook: a connected agent missing it is reported, and reads as partly connected until it is connected again.
 
 ### Channel turns
 
-A turn that arrives from Telegram or SeaTalk runs no session-start hook, so the memory payload travels in its system prompt instead. `memory_context_composer` in `surfaces/http/memory_wiring.py` closes over `MemoryService` and the feature switch; `wire_chat` hands it to both agent providers, and `compose_system_context` in `infrastructure/chat/adapter_support.py` calls it only for a channel-driven turn, with the conversation's working directory. It runs the same `compose_context` the hook uses, so a channel turn gets the same index and notes path a terminal session would. The system-prompt append carries the session-start index only; prompt-time retrieval and the guard are not composed into it.
+A turn that arrives from Telegram or SeaTalk runs no hook of Coffer's, so Coffer delivers memory to it itself, through two closures in `surfaces/http/memory_turn_wiring.py` that `wire_chat` hands to both agent providers:
 
-The composer answers nothing, and the turn carries no memory header, while the `memory` feature is off (read per turn), when the composed index is empty, or when the tree cannot be read (logged; memory is an append to the turn, not a precondition of it). A turn from the web Conversations page gets no append: it receives memory through the agent's own hook, so no turn gets it twice.
+- `memory_context_composer` closes over `MemoryService`. `compose_system_context` in `infrastructure/chat/adapter_support.py` calls it only for a channel-driven turn, with the conversation's working directory. It runs the same `compose_context` the hook uses, so a channel turn gets the same index and notes path in its system prompt that a terminal session would.
+- `memory_turn_retriever` closes over `TurnRetrieval` (`application/memory/turn_retrieval.py`). The provider binds it to the turn (`infrastructure/chat/prompt_memory.py`) only for a channel-driven turn, and the adapter adds what it returns after the user's text in the prompt it sends — where a `UserPromptSubmit` hook's context lands, so the notes stay in the agent's own session. `TurnRetrieval` calls the same `RetrievalService` the hook answers through, with `conversation:<id>` as the session id, so a note is given once per conversation; it records the delivery as a `prompt` fire of the answering agent, with event `ChannelTurn`. The message stored in the conversation is the user's own text.
+
+Each closure answers nothing when it finds nothing, or when the tree cannot be read (logged; memory is an addition to the turn, not a precondition of it). The guard is not applied to channel turns. A turn from the web Conversations page gets neither: it receives memory through the agent's own hook, so no turn gets it twice.
 
 ### Rules about every turn are not memory's job
 
@@ -433,7 +432,7 @@ A rule about **every** reply, such as the language to answer in or a tone, is no
 
 ## Finding a note in another partition
 
-The memory layer has no MCP tool. A note is a Markdown file, and every partition's `notes/` sits under one **memory root** (`~/.coffer/memory/`, printed by `coffer path memory`), so one search with the agent's own file tools covers every partition. The delivered payload names that root, and so does the gateway's `initialize` text while the `memory` feature is on. For the current repository the index is already in the session's context; the root is for a note from a partition the session was *not* opened in.
+The memory layer has no MCP tool. A note is a Markdown file, and every partition's `notes/` sits under one **memory root** (`~/.coffer/memory/`, printed by `coffer path memory`), so one search with the agent's own file tools covers every partition. The delivered payload names that root, and so does the gateway's `initialize` text. For the current repository the index is already in the session's context; the root is for a note from a partition the session was *not* opened in.
 
 A search over the files never sees a raw entry or a retired note as a note: raw entries live under `.raw/`, and retired notes leave `notes/` for `RETIRED.md`. There is no `remember` tool either. An agent records something the way it always does, and Coffer reads it on the next pass.
 
@@ -446,7 +445,7 @@ Both passes run as asyncio tasks that the daemon starts from `surfaces/http/memo
 | `AggregateWorker` | immediately on start | 1 hour | `system:memory-aggregate-worker` |
 | `DistilWorker` | after 60 s | 6 hours | `system:memory-distil-worker` |
 
-Both are on by default. They read the agents' files and write only the derived tree, so an unattended run carries no risk. Each pass reads its switch and interval from the internal-engine configuration (`aggregate`, `distil`) **per pass**, so a change in Settings applies without a restart. While the `memory` feature is off, both skip their rounds. A failed pass is logged and never ends the loop. On shutdown, a pending pass is dropped, because the next boot sweeps everything again. You can also run both by hand in one action: `coffer memory sync`, `POST /api/v1/memory/sync` or the web UI's **Update memory** button (`application/memory/update.py`) aggregates, then distils every partition left holding undistilled raw entries. A partition whose distil pass is already running is reported as `skipped` rather than failing the call. The answer carries what the aggregation wrote and the `distilled` and `skipped` partitions.
+Both are on by default. They read the agents' files and write only the derived tree, so an unattended run carries no risk. Each pass reads its switch and interval from the internal-engine configuration (`aggregate`, `distil`) **per pass**, so a change in Settings applies without a restart. A failed pass is logged and never ends the loop. On shutdown, a pending pass is dropped, because the next boot sweeps everything again. You can also run both by hand in one action: `coffer memory sync`, `POST /api/v1/memory/sync` or the web UI's **Update memory** button (`application/memory/update.py`) aggregates, then distils every partition left holding undistilled raw entries. A partition whose distil pass is already running is reported as `skipped` rather than failing the call. The answer carries what the aggregation wrote and the `distilled` and `skipped` partitions.
 
 ## Trade-offs and alternatives
 
@@ -469,7 +468,7 @@ Both are on by default. They read the agents' files and write only the derived t
 | Repository identity, partition slugs | [`domain/memory/repository.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/repository.py), [`domain/memory/partition.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/partition.py) |
 | Hook marker, the four entries, install transform and hook ceiling | [`domain/memory/hook_entries.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/hook_entries.py), [`domain/memory/delivery.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/delivery.py) |
 | Ranker, trigger matching, delivered wording | [`domain/memory/retrieval.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/retrieval.py), [`domain/memory/trigger.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/trigger.py), [`domain/memory/hook_output.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/hook_output.py) |
-| Answering a hook fire, retrieval, triggers, session ledger, delivery views | [`application/memory/hook_service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/hook_service.py), [`retrieval.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/retrieval.py), [`triggers.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/triggers.py), [`session_ledger.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/session_ledger.py), [`delivery_stats.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery_stats.py) |
+| Answering a hook fire, retrieval, triggers, session ledger and its restore, delivery views | [`application/memory/hook_service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/hook_service.py), [`retrieval.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/retrieval.py), [`triggers.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/triggers.py), [`session_ledger.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/session_ledger.py), [`ledger_restore.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/ledger_restore.py), [`delivery_stats.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery_stats.py) |
 | Aggregation pass and worker | [`application/memory/aggregate.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/aggregate.py), [`aggregate_worker.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/aggregate_worker.py) |
 | Which partition an entry files into | [`application/memory/placement.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/placement.py) |
 | Distil pass (routing, plan, write, apply) and worker | [`application/memory/distil.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/distil.py) and its `distil_*.py` siblings |
@@ -481,7 +480,8 @@ Both are on by default. They read the agents' files and write only the derived t
 | Hook adapters per agent | [`infrastructure/memory/delivery/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory/delivery) |
 | Paths, raw store, note store, digest cache, trigger files, notes-read count | [`infrastructure/memory/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory) |
 | Transcript `cwd` lookup shared with the agent kind | [`infrastructure/agent_files/claude_code_transcripts.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/agent_files/claude_code_transcripts.py) |
-| Wiring, workers, the delivery-hook target, the channel-turn composer | [`surfaces/http/memory_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/memory_wiring.py) |
+| Wiring, workers, the delivery-hook target | [`surfaces/http/memory_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/memory_wiring.py) |
+| The channel-turn composer and per-prompt retriever | [`surfaces/http/memory_turn_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/memory_turn_wiring.py), [`application/memory/turn_retrieval.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/turn_retrieval.py) |
 | REST routes | [`surfaces/http/memory/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/surfaces/http/memory) |
 | CLI | [`surfaces/cli/memory_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/memory_cmd.py), [`memory_hook_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/memory_hook_cmd.py) (`hook`, `trigger`, `delivered`) |
 

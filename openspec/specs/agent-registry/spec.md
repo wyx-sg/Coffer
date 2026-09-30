@@ -672,43 +672,6 @@ The system MUST return one installed plugin's detail, addressed by the `<name>@<
 - **WHEN** the user reads the detail of a plugin id its listing does not report
 - **THEN** Coffer answers 404 with `PLUGIN_NOT_FOUND`
 
-### Requirement: Connect an agent to Coffer in one action
-Users MUST be able to connect an agent to Coffer in one action, from the REST API (`POST /api/v1/agents/{uid}/coffer-connection`), the CLI (`coffer agent connect <name>`) and the web UI. Connecting MUST install every **part** Coffer writes into the agent's own configuration that applies to that agent now:
-
-- `mcp` — the gateway MCP entry of "Install Coffer's MCP server into an agent in one action", for every agent type;
-- `memory_hook` — the memory delivery hook of [memory](../memory/spec.md) "Install delivery hooks explicitly and removably", for an agent type with a hook adapter, and only while the `memory` experimental feature is on.
-
-The gateway entry MUST be installed first, so that a connect refused for want of a shim writes nothing. Every part MUST be installed through its own atomic write with a `.bak` and record its own audit event, as it does when installed alone. Connecting MUST be idempotent: connecting a connected agent rewrites each entry in place and never duplicates one.
-
-#### Scenario: connect installs every part that applies
-- **GIVEN** a registered Claude Code agent with neither the gateway entry nor the memory hook, and `memory` switched on
-- **WHEN** the user connects it to Coffer
-- **THEN** the agent's `.claude.json` carries the `coffer` MCP entry and its `settings.json` carries Coffer's marked hook entry
-- **AND** one `agent_mcp_installed` and one `memory_delivery_installed` audit entry name the user as actor, and the connection reports `connected` with both parts installed
-
-#### Scenario: connect leaves out a part whose feature is off
-- **GIVEN** a registered agent and `memory` switched off
-- **WHEN** the user connects it to Coffer
-- **THEN** only the gateway entry is installed, no hook is written into the agent's settings, and the connection reports `connected` with the `mcp` part alone
-
-### Requirement: Report an agent's Coffer connection part by part
-The system MUST report an agent's Coffer connection (`GET /api/v1/agents/{uid}/coffer-connection`, `coffer_connection` in `coffer agent show <name> [--json]`) as the list of parts that apply to the agent now — each with its key, whether it is installed, and the installed command when it is — and a state: `connected` when every listed part is installed, `disconnected` when none is, and `partial` otherwise. The report MUST be read from the agent's own configuration files on demand, never stored, and MUST write nothing and record no audit event.
-
-#### Scenario: report a partly installed connection
-- **GIVEN** a registered agent carrying the gateway entry but not the memory hook, with `memory` switched on
-- **WHEN** the user reads its Coffer connection
-- **THEN** the state is `partial`, the `mcp` part is installed with its shim command and the `memory_hook` part is not installed
-- **AND** connecting again installs the missing hook and the state becomes `connected`
-
-### Requirement: Disconnect an agent from Coffer
-Users MUST be able to disconnect an agent from Coffer in one action (`DELETE /api/v1/agents/{uid}/coffer-connection`, `coffer agent disconnect <name>`, the web UI). Disconnecting MUST remove every part the agent type has — whether or not it applies now, since a part whose feature was switched off may still have been left behind — taking out only Coffer's own marked entries and leaving every other entry, key and hook in those files as it was. A part that is absent MUST be a no-op that writes no file and records no audit event.
-
-#### Scenario: disconnect removes only Coffer's entries
-- **GIVEN** a connected Claude Code agent whose `.claude.json` also carries another MCP server and whose `settings.json` also carries a foreign hook on the same event
-- **WHEN** the user disconnects it from Coffer
-- **THEN** the `coffer` MCP entry and Coffer's hook entry are gone, the other MCP server and the foreign hook are untouched, and the connection reports `disconnected`
-- **AND** disconnecting again writes no file and records no audit entry
-
 ### Requirement: Show the Coffer connection on the agent pages
 The agent detail page's header MUST offer **Connect to Coffer** when the agent is not connected or needs repair, and **Disconnect from Coffer** — behind a confirmation — when it is connected. The Agents list MUST carry a Coffer column showing each agent's state as **Connected**, **Not connected** or **Needs repair** (the `partial` state), and bulk **Connect to Coffer** / **Disconnect from Coffer** actions over the selected agents. Which parts a connection installs MUST be explained behind a help affordance beside the action rather than as inline text. The Memory tab MUST NOT carry a separate install or remove action for the memory delivery hook.
 
@@ -761,6 +724,8 @@ The report MUST also say whether the agent will run the hook, as its **trust**: 
 
 The listing MUST be served by `GET /api/v1/agents/{uid}/hooks` and `coffer agent hooks <name> [--json]`, and MUST write nothing and record no audit event. When the agent will not run a current hook, the CLI MUST say what the user does about it. A file that does not parse MUST be reported as a parse error beside the hooks the other files yield.
 
+On the agent's Hooks tab, Coffer's memory hook MUST be **one row** per file that declares it — including the row of a missing hook — whose event cell reads "Memory hook · N events" followed by one chip per event it sits on. Its entries MUST NOT be shown as one row each, and its events MUST NOT be shown joined into one string. The tab's summary counts it as one hook.
+
 #### Scenario: list an agent's hooks with Coffer's own marked
 - **GIVEN** a registered Claude Code agent whose `settings.json` carries a foreign `PreToolUse` hook and Coffer's memory hook, whose `settings.local.json` carries a `Stop` hook, and which has one enabled and one disabled plugin with a hook file each
 - **WHEN** the user lists the agent's hooks
@@ -771,6 +736,12 @@ The listing MUST be served by `GET /api/v1/agents/{uid}/hooks` and `coffer agent
 - **GIVEN** a registered Codex agent whose `hooks.json` carries Coffer's marked hook on `UserPromptSubmit` alone, as an older build wrote it, and one recorded fire
 - **WHEN** the user lists the agent's hooks
 - **THEN** Coffer's hook reads `stale` on `UserPromptSubmit`, the installed and expected commands differ, and the last fire is reported
+
+#### Scenario: coffer's memory hook is one row with a chip per event
+- **GIVEN** a Claude Code agent whose `settings.json` carries Coffer's four memory-hook entries beside three hooks of its own
+- **WHEN** the user opens the agent's Hooks tab
+- **THEN** Coffer's hook is one row whose event cell reads "Memory hook · 4 events" with a chip each for `PostToolUse`, `PreToolUse`, `SessionStart` and `UserPromptSubmit`
+- **AND** no cell shows the events joined into one string, and the summary reads four hooks, one of them Coffer's
 
 ### Requirement: Discover agents on this machine as candidates without registering them
 The system MUST provide a read-only discovery operation that looks, for each supported type, at its standard config directory — named in that type's child spec — and at the directory that type's own environment variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) names in the daemon's environment when set, and reports each type with no agent registered and with either detection signal of "Detect an agent by its program and its config directory" as one **candidate**, carrying the fields of "Report every supported type's detection state". Nothing else is scanned. Candidates are derived at scan time and never stored. Discovery MUST NOT register anything automatically — the user reviews candidates and confirms which to add, and an `installed_active` or `installed_never_run` candidate can be added — the second's registration creates its standard config directory with only the entries Coffer needs — while a `config_only` candidate cannot, because a directory whose program is gone belongs to no working agent. The daemon MUST NOT auto-register agents on startup.
@@ -842,3 +813,35 @@ The system MUST serve `GET /api/v1/agents/types`, one row per supported type in 
 - **WHEN** the user requests `GET /api/v1/agent-providers/codex/models`
 - **THEN** the response lists that model with `id`, `label`, `description`, `efforts` and `default_effort`
 - **AND** the same request for an unknown agent key answers 404
+
+### Requirement: Connect an agent to Coffer in one action
+Users MUST be able to connect an agent to Coffer in one action, from the REST API (`POST /api/v1/agents/{uid}/coffer-connection`), the CLI (`coffer agent connect <name>`) and the web UI. Connecting MUST install every **part** Coffer writes into the agent's own configuration for that agent's type:
+
+- `mcp` — the gateway MCP entry of "Install Coffer's MCP server into an agent in one action", for every agent type;
+- `memory_hook` — the memory delivery hook of [memory](../memory/spec.md) "Install delivery hooks explicitly and removably", for every agent type with a hook adapter.
+
+The gateway entry MUST be installed first, so that a connect refused for want of a shim writes nothing. Every part MUST be installed through its own atomic write with a `.bak` and record its own audit event, as it does when installed alone. Connecting MUST be idempotent: connecting a connected agent rewrites each entry in place and never duplicates one.
+
+#### Scenario: connect installs every part that applies
+- **GIVEN** a registered Claude Code agent with neither the gateway entry nor the memory hook
+- **WHEN** the user connects it to Coffer
+- **THEN** the agent's `.claude.json` carries the `coffer` MCP entry and its `settings.json` carries Coffer's marked hook entry
+- **AND** one `agent_mcp_installed` and one `memory_delivery_installed` audit entry name the user as actor, and the connection reports `connected` with both parts installed
+
+### Requirement: Report an agent's Coffer connection part by part
+The system MUST report an agent's Coffer connection (`GET /api/v1/agents/{uid}/coffer-connection`, `coffer_connection` in `coffer agent show <name> [--json]`) as the list of parts its type has — each with its key, whether it is installed, and the installed command when it is — and a state: `connected` when every listed part is installed, `disconnected` when none is, and `partial` otherwise. The report MUST be read from the agent's own configuration files on demand, never stored, and MUST write nothing and record no audit event.
+
+#### Scenario: report a partly installed connection
+- **GIVEN** a registered agent carrying the gateway entry but not the memory hook
+- **WHEN** the user reads its Coffer connection
+- **THEN** the state is `partial`, the `mcp` part is installed with its shim command and the `memory_hook` part is not installed
+- **AND** connecting again installs the missing hook and the state becomes `connected`
+
+### Requirement: Disconnect an agent from Coffer
+Users MUST be able to disconnect an agent from Coffer in one action (`DELETE /api/v1/agents/{uid}/coffer-connection`, `coffer agent disconnect <name>`, the web UI). Disconnecting MUST remove every part the agent type has, taking out only Coffer's own marked entries and leaving every other entry, key and hook in those files as it was. A part that is absent MUST be a no-op that writes no file and records no audit event.
+
+#### Scenario: disconnect removes only Coffer's entries
+- **GIVEN** a connected Claude Code agent whose `.claude.json` also carries another MCP server and whose `settings.json` also carries a foreign hook on the same event
+- **WHEN** the user disconnects it from Coffer
+- **THEN** the `coffer` MCP entry and Coffer's hook entry are gone, the other MCP server and the foreign hook are untouched, and the connection reports `disconnected`
+- **AND** disconnecting again writes no file and records no audit entry

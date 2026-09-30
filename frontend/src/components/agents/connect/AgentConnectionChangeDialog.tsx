@@ -24,7 +24,6 @@ import {
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
 import type { AgentTypeOut } from "@/lib/api/agents";
 import { useAgentConnection } from "@/lib/hooks/useAgents";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { useConnectionChangeRun } from "./useConnectionChangeRun";
 
 export type ConnectionChangeRequest =
@@ -51,7 +50,6 @@ const FILE_NAME: Record<string, Record<ConnectionPartKey, string>> = {
 
 export function AgentConnectionChangeDialog({ request, onClose }: Props) {
   const { t } = useTranslation();
-  const memoryOn = useFeatureEnabled("memory");
   const single = request && request.kind !== "add" ? request.row : undefined;
   const uid = single?.uid ?? "";
   const connection = useAgentConnection(uid);
@@ -74,13 +72,11 @@ export function AgentConnectionChangeDialog({ request, onClose }: Props) {
     request?.kind === "add" ? { row } : { row, uid: row.uid, parts: connection.data?.parts },
   );
   const computing =
-    !!request &&
-    (request.kind === "add" ? memoryOn === undefined : connection.isPending || !connection.data);
+    !!request && request.kind !== "add" && (connection.isPending || !connection.data);
 
   const plan = useMemo<Snapshot>(() => {
     if (!request || computing) return { items: [], summaries: [], repairing: false };
     const opts = {
-      memoryOn: memoryOn ?? false,
       placeholders: {
         uid: t("agents.change.placeholder.uid"),
         shim: t("agents.change.placeholder.shim"),
@@ -93,7 +89,7 @@ export function AgentConnectionChangeDialog({ request, onClose }: Props) {
       if (request.kind === "disconnect") {
         return { agentType: type, text: t("agents.change.summary.loses") };
       }
-      const parts = partsToInstall(agent, opts.memoryOn);
+      const parts = partsToInstall(agent);
       const files = { mcpFile: FILE_NAME[type].mcp, hookFile: FILE_NAME[type].memory_hook };
       const gets =
         parts.length > 1 ? "both" : parts[0] === "memory_hook" ? "hook" : ("mcp" as const);
@@ -109,7 +105,7 @@ export function AgentConnectionChangeDialog({ request, onClose }: Props) {
     const repairing = !!connection.data?.parts.some((p) => p.installed);
     return { items, summaries, repairing };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `agents` derives from request + connection
-  }, [request, computing, connection.data, memoryOn, t]);
+  }, [request, computing, connection.data, t]);
 
   const shown = frozen ?? plan;
   const items = shown.items.map((item) => {

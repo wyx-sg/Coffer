@@ -18,7 +18,7 @@ from coffer.domain.resource import Resource
 from coffer.domain.skill.binding import BindingState, LinkMode
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.drift import DriftEntry, DriftKind
-from coffer.domain.skill.requires import requires_from_skill_md
+from coffer.domain.skill.requirements import requirements_from_skill_md
 from coffer.domain.skill.source import (
     ArchiveImportSource,
     BuiltinSource,
@@ -227,7 +227,7 @@ def _requires(svc: SkillService, name: str) -> list[SkillRequirementOut]:
         text = (pathlib.Path(svc.master_path(name)) / "SKILL.md").read_text("utf-8")
     except (OSError, UnicodeDecodeError, ValueError):
         return []
-    return [requirement_out(q) for q in requires_from_skill_md(text)]
+    return [requirement_out(q) for q in requirements_from_skill_md(text).requirements]
 
 
 async def _to_skill_out(

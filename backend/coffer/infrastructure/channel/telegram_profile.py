@@ -81,14 +81,12 @@ async def probe_identity(call: Call) -> BotIdentity:
     )
 
 
-def menu_commands(
-    *, group: bool = False, knowledge: bool = True, chinese: bool = False
-) -> list[dict[str, Any]]:
+def menu_commands(*, group: bool = False, chinese: bool = False) -> list[dict[str, Any]]:
     """One menu in Telegram's ``BotCommand`` shape.
 
     Generated from the same roster the help text is, so the two cannot drift
-    apart: every command in a private chat, the group subset in a group, and
-    ``/kb`` only while knowledge is on (``/start`` is an alias, never listed).
+    apart: every command in a private chat and the group subset in a group
+    (``/start`` is an alias, never listed).
     ``chinese`` picks each entry's Chinese line for the ``zh`` menu.
 
     An asker-only command is registered as ephemeral ("Keep non-answer chatter
@@ -102,7 +100,7 @@ def menu_commands(
             "description": entry.description_zh if chinese else entry.description,
             "is_ephemeral": entry.group_private,
         }
-        for entry in menu_entries(group=group, knowledge=knowledge)
+        for entry in menu_entries(group=group)
     ]
 
 
@@ -116,7 +114,7 @@ _SCOPES: tuple[tuple[dict[str, str] | None, bool], ...] = (
 )
 
 
-async def register_profile(call: Call, *, knowledge_enabled: bool = True) -> None:
+async def register_profile(call: Call) -> None:
     """Register the command menus and fill an empty profile.
 
     The command menus are Coffer's functional contract and are always written —
@@ -130,7 +128,7 @@ async def register_profile(call: Call, *, knowledge_enabled: bool = True) -> Non
         where = {} if scope is None else {"scope": scope}
         for chinese in (False, True):
             language = {"language_code": "zh"} if chinese else {}
-            commands = menu_commands(group=group, knowledge=knowledge_enabled, chinese=chinese)
+            commands = menu_commands(group=group, chinese=chinese)
             await _try(call, "setMyCommands", commands=commands, **where, **language)
     # A menu button showing the command list is strictly better than the
     # default blank one, and carries no copy of its own to overwrite.

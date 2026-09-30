@@ -77,6 +77,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/daemon/port": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Daemon Port */
+        get: operations["get_daemon_port_api_v1_daemon_port_get"];
+        /**
+         * Put Daemon Port
+         * @description Save the port of the next start; refused in place when it cannot be bound.
+         */
+        put: operations["put_daemon_port_api_v1_daemon_port_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/daemon/residency": {
         parameters: {
             query?: never;
@@ -252,10 +273,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Storage Summary */
+        get: operations["storage_summary_api_v1_storage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/storage/cache/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear Cache
+         * @description Delete the memory tree's files and the transcript summary cache.
+         *
+         *     Partitions keep their rows; the next memory update rebuilds their folders
+         *     from the agents' own memory. Refused (409) while a memory pass is running,
+         *     because that pass is writing into the tree being cleared.
+         */
+        post: operations["clear_cache_api_v1_storage_cache_clear_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** CacheClearOut */
+        CacheClearOut: {
+            /** Cleared Bytes */
+            cleared_bytes: number;
+        };
+        /** CacheUsageOut */
+        CacheUsageOut: {
+            /** Bytes */
+            bytes: number;
+        };
         /** DaemonLogListOut */
         DaemonLogListOut: {
             /** Records */
@@ -286,6 +358,27 @@ export interface components {
             };
             /** Timestamp */
             timestamp: string | null;
+        };
+        /** DaemonPortIn */
+        DaemonPortIn: {
+            /** Port */
+            port: number;
+        };
+        /**
+         * DaemonPortOut
+         * @description The port of the next start beside the port this daemon answers on.
+         *
+         *     ``pending`` is a saved port this daemon is not on: it takes effect at the
+         *     next start (spec daemon "Bind a fixed, settable port"), so until then the page
+         *     says so and the status keeps showing ``bound_port``.
+         */
+        DaemonPortOut: {
+            /** Bound Port */
+            bound_port: number;
+            /** Pending */
+            pending: boolean;
+            /** Port */
+            port: number;
         };
         /** DaemonResidencyIn */
         DaemonResidencyIn: {
@@ -442,6 +535,32 @@ export interface components {
             /** Path */
             path: string;
         };
+        /** HistoryUsageOut */
+        HistoryUsageOut: {
+            /** Bytes */
+            bytes: number;
+            /** Path */
+            path: string;
+        };
+        /** LocalContentUsageOut */
+        LocalContentUsageOut: {
+            /** Bytes */
+            bytes: number;
+            /** Folder */
+            folder: string;
+            /** Locations */
+            locations: string[];
+        };
+        /**
+         * StorageSummaryOut
+         * @description What Coffer keeps on this machine, by kind (Settings > Data).
+         */
+        StorageSummaryOut: {
+            cache: components["schemas"]["CacheUsageOut"];
+            history: components["schemas"]["HistoryUsageOut"];
+            local_content: components["schemas"]["LocalContentUsageOut"];
+            vault: components["schemas"]["VaultUsageOut"];
+        };
         /** TokenRotationOut */
         TokenRotationOut: {
             /**
@@ -460,6 +579,15 @@ export interface components {
             registered: number;
             /** Unhealthy */
             unhealthy: number;
+        };
+        /** VaultUsageOut */
+        VaultUsageOut: {
+            /** Bytes */
+            bytes: number;
+            /** Path */
+            path: string;
+            /** Versions */
+            versions: number | null;
         };
     };
     responses: never;
@@ -621,6 +749,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DaemonLogListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_daemon_port_api_v1_daemon_port_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonPortOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_daemon_port_api_v1_daemon_port_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DaemonPortIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonPortOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -1025,6 +1237,87 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    storage_summary_api_v1_storage_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageSummaryOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    clear_cache_api_v1_storage_cache_clear_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CacheClearOut"];
+                };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {
