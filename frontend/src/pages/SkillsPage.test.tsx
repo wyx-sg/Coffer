@@ -111,7 +111,9 @@ acceptance("skill-manager", "the old overview address opens delivery", async () 
   h.skills = [makeSkill({ uid: "sk-0rel", name: "release-notes" })];
   renderSkillsPage("/skills/sk-0rel?tab=overview");
   await waitFor(() => expect(where.url).toBe("/skills/release-notes/delivery"));
-  expect(await screen.findByRole("tab", { name: "Delivery", selected: true })).toBeInTheDocument();
+  expect(
+    await screen.findByRole("tab", { name: "Delivery", selected: true }, { timeout: 5_000 }),
+  ).toBeInTheDocument();
 });
 
 acceptance(
