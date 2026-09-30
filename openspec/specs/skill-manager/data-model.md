@@ -106,24 +106,24 @@ it never fails a skill.
 | `min_version` | `str \| None`            | dotted numbers (`"2.40"`); an unquoted YAML float is refused, since `2.40` reads as `2.4` |
 | `login_check` | `tuple[str, ...] \| None` | argv (a string is split shell-style, never run in a shell); first word MUST equal `command` |
 | `login`       | `str \| None`            | the login command to show; never run                                       |
-| `brew`        | `str \| None`            | Homebrew formula, `^[A-Za-z0-9][A-Za-z0-9@._+/-]{0,127}$`                  |
 | `why`         | `str \| None`            | one line, ≤ 200 chars                                                      |
 
 A bare string entry is a command with no conditions. An entry that breaks a
-rule is skipped and reported as a warning (`GET /clis` → `warnings`); a
-command named twice in one skill keeps its first entry.
+rule is skipped and reported as a warning (`GET /clis` → `warnings`); a field
+not listed here (such as a `brew:` formula) is ignored with a warning and the
+entry kept; a command named twice in one skill keeps its first entry.
 
 ### Required-command row and check result (`domain/skill/cli_status.py`)
 
 `aggregate()` turns every managed skill's requirements into one
 `RequiredCommand` per command: `min_version` is the highest any skill asks
-for; `title`, `login_check`, `login` and `brew` come from the first skill (by
+for; `title`, `login_check` and `login` come from the first skill (by
 name) that declares each; `needed_by` lists every declaring skill with its own
 minimum and `why`.
 
 `ProbeResult` is the in-memory check result, one per command, kept by
-`CliRequirementService` until **Check again**, an install of that command
-finishing, or a daemon restart (no table):
+`CliRequirementService` until **Check again** or a daemon restart (no
+table):
 
 | Field         | Type                | Notes                                                              |
 | ------------- | ------------------- | ------------------------------------------------------------------ |
@@ -137,23 +137,14 @@ finishing, or a daemon restart (no table):
 lists sort in that order, then by command. The login check's output is sent to
 `/dev/null` and never read.
 
-### Install job (`application/skill/cli_install.py`)
+### Hand-off prompt (`application/skill/cli_handoff.py`)
 
-In memory, one per command at a time; the latest per command is served by
-`GET /clis/{command}/install` until the daemon restarts.
-
-| Field         | Type              | Notes                                                    |
-| ------------- | ----------------- | -------------------------------------------------------- |
-| `command`, `formula` | `str`      | the formula is the declared one the request repeated     |
-| `action`      | `install \| upgrade` | `install` for a missing command, `upgrade` for an outdated one |
-| `argv`        | `tuple[str, ...]` | `(<located brew>, action, formula)` — no shell, never `sudo` |
-| `state`       | `running \| succeeded \| failed` | `succeeded` iff exit 0                      |
-| `exit_code`   | `int \| None`     | `None` when brew could not be started                    |
-| `lines`       | last 2 000 lines  | merged stdout + stderr, numbered; `since` pages them     |
-
-The run has `HOMEBREW_NO_AUTO_UPDATE=1`, `NONINTERACTIVE=1`, `stdin` closed and
-a 15-minute ceiling (its process group is killed). When it ends the command is
-probed again, then the end is audited, then the job reads as finished.
+Derived, never stored: every view of a command that is `missing`, `outdated` or
+`logged_out` carries the prompt text for the person's agent, rendered by
+`domain/handoff.py` from the row, the probe result and the machine's
+`machine_label()` (read once per daemon); a `ready` command carries none. On
+the wire it is `CliOut.handoff` (`HandoffOut {prompt}`), and `coffer cli prompt`
+prints it.
 
 ### `BindingState` (`domain/skill/binding.py`)
 
@@ -344,13 +335,6 @@ The workspace amendment adds:
 | `skill_unmanaged_deleted` | An unmanaged skill folder was deleted from an agent's workspace (see "Delete an unmanaged skill on explicit request")                                   |
 | `skill_relinked`          | A delivered copy's managed link was re-created at a new delivery path (e.g. after a `config_dir` change) |
 | `skill_drift_remediated`  | A drift entry was re-delivered from master by repair — on demand or by a reconcile pass (see "Repair repairable drift from master"); details `{agent, kind}` |
-
-The required-command check adds (no resource row — `resource_id` is null):
-
-| Value                  | When emitted                                                                                   |
-| ---------------------- | ---------------------------------------------------------------------------------------------- |
-| `cli_install_started`  | A Homebrew install of a required command started; details `{command, formula, argv}`           |
-| `cli_install_finished` | It ended; details `{command, formula, argv, exit_code, output_tail}` (the last 40 output lines) |
 
 Skill **removal** has no dedicated event — deleting a skill goes through
 `ResourceService.delete`, which emits the generic `resource_deleted` event
@@ -546,8 +530,8 @@ in lockstep and returns an `AgentSkillWiring`. The wiring function:
 
 The same function calls `surfaces/http/cli_wiring.wire_cli_requirements`,
 which builds `CliRequirementService` over the skill service
-(`MasterSkillDocuments`), `CommandProbe` and `HomebrewInstaller` (both on
-`UserPath`) and publishes it for `cli_routes` and the `cli` attention source
+(`MasterSkillDocuments`), `CommandProbe` (on `UserPath`) and the machine's
+`machine_label` and publishes it for `cli_routes` and the `cli` attention source
 (`attention_wiring`).
 
 Passing the hooks as callables keeps both kinds independent at the application

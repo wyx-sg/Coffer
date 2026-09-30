@@ -152,7 +152,8 @@ export interface paths {
         };
         /**
          * Get Cli
-         * @description One required command; 404 ``CLI_NOT_REQUIRED`` when no skill requires it.
+         * @description One required command, with the hand-off prompt when it needs the
+         *     person; 404 ``CLI_NOT_REQUIRED`` when no skill requires it.
          */
         get: operations["get_cli_api_v1_clis__command__get"];
         put?: never;
@@ -177,31 +178,6 @@ export interface paths {
          * @description Probe one required command again.
          */
         post: operations["check_cli_api_v1_clis__command__check_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/clis/{command}/install": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Cli Install
-         * @description The latest install job for the command: its state, exit code and output.
-         */
-        get: operations["get_cli_install_api_v1_clis__command__install_get"];
-        put?: never;
-        /**
-         * Install Cli
-         * @description Start ``brew install|upgrade <formula>``; refused unless the command is
-         *     missing or outdated, ``formula`` is the declared one and Homebrew is found.
-         */
-        post: operations["install_cli_api_v1_clis__command__install_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -556,48 +532,6 @@ export interface components {
              */
             type: "builtin";
         };
-        /**
-         * CliInstallIn
-         * @description The formula the confirmation showed; it must equal the declared one.
-         */
-        CliInstallIn: {
-            /** Formula */
-            formula: string;
-        };
-        /** CliInstallOut */
-        CliInstallOut: {
-            /**
-             * Action
-             * @enum {string}
-             */
-            action: "install" | "upgrade";
-            /** Argv */
-            argv: string[];
-            /** Command */
-            command: string;
-            /** Exit Code */
-            exit_code: number | null;
-            /** Finished At */
-            finished_at: string | null;
-            /** First Line */
-            first_line: number;
-            /** Formula */
-            formula: string;
-            /** Lines */
-            lines: string[];
-            /** Next Line */
-            next_line: number;
-            /**
-             * Started At
-             * Format: date-time
-             */
-            started_at: string;
-            /**
-             * State
-             * @enum {string}
-             */
-            state: "running" | "succeeded" | "failed";
-        };
         /** CliListOut */
         CliListOut: {
             /** Items */
@@ -635,8 +569,6 @@ export interface components {
         };
         /** CliOut */
         CliOut: {
-            /** Brew */
-            brew: string | null;
             /**
              * Checked At
              * Format: date-time
@@ -644,10 +576,7 @@ export interface components {
             checked_at: string;
             /** Command */
             command: string;
-            /** Install Command */
-            install_command: string | null;
-            /** Install State */
-            install_state: ("running" | "succeeded" | "failed") | null;
+            handoff: components["schemas"]["HandoffOut"] | null;
             login: components["schemas"]["CliLoginOut"];
             /** Min Version */
             min_version: string | null;
@@ -755,6 +684,15 @@ export interface components {
             type: "git_import";
             /** Url */
             url: string;
+        };
+        /**
+         * HandoffOut
+         * @description A chore for the person's agent. ``prompt`` is the whole text to copy or
+         *     to pre-fill a new conversation with; Coffer never sends it itself.
+         */
+        HandoffOut: {
+            /** Prompt */
+            prompt: string;
         };
         /**
          * LinkMode
@@ -1609,98 +1547,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CliOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_cli_install_api_v1_clis__command__install_get: {
-        parameters: {
-            query?: {
-                /** @description Only output lines from this number on. */
-                since?: number;
-            };
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path: {
-                command: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CliInstallOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    install_cli_api_v1_clis__command__install_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path: {
-                command: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CliInstallIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CliInstallOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

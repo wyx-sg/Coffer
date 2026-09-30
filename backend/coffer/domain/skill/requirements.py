@@ -7,7 +7,6 @@ requires:
     min_version: "2.40"         # optional; dotted numbers
     login_check: gh auth status # optional; argv of the SAME command
     login: gh auth login        # optional; shown to copy, never run
-    brew: gh                    # optional; the Homebrew formula
     why: Opens and labels issues.
   - jq                          # shorthand: a command with no conditions
   - "node>=20.1"                # shorthand: a command and its minimum
@@ -20,8 +19,8 @@ declares it needs" are the same list: ``requires: {commands: [...]}``, an entry
 Parsed leniently: the frontmatter is third-party, like ``allowed-tools``, so
 an entry that is not understood is skipped and reported as a warning, never a
 reason to refuse the skill. The rules are what keep a declaration from making
-Coffer run anything but the tool it names: the command is a bare name, the
-login check's first word is that command, and the formula is a Homebrew name.
+Coffer run anything but the tool it names: the command is a bare name and the
+login check's first word is that command.
 """
 
 from __future__ import annotations
@@ -33,11 +32,10 @@ from dataclasses import dataclass
 from coffer.domain.skill.validator import parse_frontmatter
 
 COMMAND_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
-FORMULA_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9@._+/-]{0,127}$")
 _MIN_VERSION_RE = re.compile(r"^\d+(?:\.\d+)*$")
 _TEXT_MAX = 200
 _KEYS = frozenset(
-    {"command", "name", "title", "min_version", "version", "login_check", "login", "brew", "why"}
+    {"command", "name", "title", "min_version", "version", "login_check", "login", "why"}
 )
 #: ``gh``, ``gh>=2.40``, ``node == 20.1``, ``python3~=3.12``.
 _SPEC_RE = re.compile(r"^\s*([^\s<>=!~]+)\s*(?:(?:>=|=>|~=|==)\s*([0-9][^\s]*))?\s*$")
@@ -54,7 +52,6 @@ class CommandRequirement:
     login_check: tuple[str, ...] | None = None
     #: Shown to the user to copy; Coffer never runs it.
     login: str | None = None
-    brew: str | None = None
     why: str | None = None
 
 
@@ -124,9 +121,6 @@ def _entry(entry: object) -> tuple[CommandRequirement, list[str]]:
     if unknown:
         dropped.append(f"unknown field(s) {', '.join(unknown)} ignored")
     login_check = _login_check(command, entry.get("login_check"))
-    brew = entry.get("brew")
-    if brew is not None and (not isinstance(brew, str) or not FORMULA_RE.match(brew)):
-        raise _SkipEntryError(f"brew {brew!r} is not a Homebrew formula name")
     return (
         CommandRequirement(
             command=command,
@@ -134,7 +128,6 @@ def _entry(entry: object) -> tuple[CommandRequirement, list[str]]:
             min_version=_min_version(entry.get("min_version", entry.get("version"))),
             login_check=login_check,
             login=_text(entry.get("login"), "login", dropped),
-            brew=brew,
             why=_text(entry.get("why"), "why", dropped),
         ),
         dropped,
@@ -202,7 +195,6 @@ def _text(value: object, field: str, dropped: list[str]) -> str | None:
 
 __all__ = [
     "COMMAND_RE",
-    "FORMULA_RE",
     "CommandRequirement",
     "RequirementsParse",
     "parse_requires",

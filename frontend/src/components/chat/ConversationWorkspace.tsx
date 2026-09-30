@@ -109,6 +109,8 @@ export function ConversationWorkspace({ c, onNew, agentNames }: Props) {
         onEffortChange={c.setDraftEffort}
         onSend={c.sendDraft}
         creating={c.creating}
+        restore={c.draftPrefill}
+        onRestored={c.clearDraftPrefill}
       />
     );
   }

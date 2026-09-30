@@ -31,13 +31,20 @@ vi.mock("./useChatTurn", () => ({
 }));
 vi.mock("react-router-dom", () => ({
   useNavigate: () => navigate,
-  useParams: () => ({}),
+  useLocation: () => location,
+  useParams: () => route,
   useSearchParams: () => [new URLSearchParams(), vi.fn()],
 }));
 
 import { useChatController } from "./useChatController";
 
 const navigate = vi.fn();
+let route: { id?: string } = {};
+let location: { pathname: string; search: string; state: unknown } = {
+  pathname: "/conversations",
+  search: "",
+  state: null,
+};
 const createConv = {
   mutate: vi.fn(),
   isPending: false,
@@ -54,6 +61,8 @@ function createdWith(): Record<string, unknown> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  route = {};
+  location = { pathname: "/conversations", search: "", state: null };
 });
 
 describe("useChatController draft", () => {
@@ -111,5 +120,43 @@ describe("useChatController draft", () => {
 
     expect(result.current.effectiveDraft.effort).toBe("high");
     expect(result.current.effectiveDraft.model).toBe("sonnet");
+  });
+});
+
+describe("useChatController hand-off", () => {
+  test("seeds the draft once from the location state, then clears it", () => {
+    route = { id: "new" };
+    location = {
+      pathname: "/conversations/new",
+      search: "",
+      state: { handoff: { agentKey: "codex", cwd: "/w", prompt: "Install jq." } },
+    };
+    const { result } = renderHook(() => useChatController());
+
+    expect(result.current.effectiveDraft).toEqual({
+      agentKey: "codex",
+      cwd: "/w",
+      model: null,
+      effort: null,
+    });
+    expect(result.current.draftPrefill).toEqual({ text: "Install jq.", attachments: [] });
+    // The history entry loses the state, so a reload or Back does not type it again.
+    expect(navigate).toHaveBeenCalledWith("/conversations/new", { replace: true, state: null });
+    // Pre-filling creates nothing.
+    expect(createConv.mutate).not.toHaveBeenCalled();
+
+    act(() => result.current.clearDraftPrefill());
+    expect(result.current.draftPrefill).toBeNull();
+  });
+
+  test("a hand-off in the state of any other page is ignored", () => {
+    location = {
+      pathname: "/conversations",
+      search: "",
+      state: { handoff: { agentKey: "codex", cwd: null, prompt: "Install jq." } },
+    };
+    const { result } = renderHook(() => useChatController());
+    expect(result.current.draftPrefill).toBeNull();
+    expect(navigate).not.toHaveBeenCalled();
   });
 });

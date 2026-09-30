@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 export function CliSection({ title, children }: { title: ReactNode; children: ReactNode }) {
   return (
     <section className="space-y-2">
-      <h2 className="text-sm font-label">{title}</h2>
+      <h3 className="text-sm font-label">{title}</h3>
       <div className="paper-card divide-y divide-border-subtle">{children}</div>
     </section>
   );

@@ -2,14 +2,15 @@
 //
 // The CLIs page against a real daemon (spec web-ui "Show every CLI a skill
 // requires on the CLIs page"). A throwaway skill declares two commands under
-// `requires:` — one that cannot exist (with a Homebrew formula, so it is
-// installable) and `sh`, which always does — and is imported over REST. The
-// test then walks the list (problems first), the detail page, the Homebrew
-// confirmation (CANCELLED: an e2e run never installs anything) and the skill's
-// Requires tab. The skill is removed afterwards.
+// `requires:` — one that cannot exist and `sh`, which always does — and is
+// imported over REST. The test then walks the list (Needs you before Ready),
+// the command's pane and its hand-off (Copy prompt, and Ask an agent opening
+// the draft with the prompt in its composer — never sent: an e2e run installs
+// nothing) and the skill's Requires tab. A stand-in `codex` on the daemon's PATH makes a
+// managed agent available. The skill is removed afterwards.
 //
 // scenario (web-ui, revise-web-ui-ia 7.14d): "the CLIs page lists problems first"
-// scenario (web-ui, revise-web-ui-ia 7.14d): "installing a CLI asks first and uses Homebrew only"
+// scenario (web-ui, revise-web-ui-ia 7.14d): "a CLI that needs the user offers a prompt for an agent"
 // scenario (web-ui, revise-web-ui-ia 7.14d): "a skill's requirement links to its CLI"
 
 import { expect, test } from "@playwright/test";
@@ -26,6 +27,24 @@ beforeEachInjectToken();
 
 const MISSING = "coffer-e2e-missing-cmd";
 
+function home(): string {
+  const pointer =
+    process.env.COFFER_E2E_HOME_FILE ?? "/tmp/coffer-e2e-home.path";
+  return fs.readFileSync(pointer, "utf-8").trim();
+}
+
+/** A stand-in `codex` on the daemon's PATH, so a managed agent is available. */
+function ensureCodexProgram(): void {
+  const bin = path.join(home(), "bin");
+  fs.mkdirSync(bin, { recursive: true });
+  const program = path.join(bin, "codex");
+  if (!fs.existsSync(program)) {
+    fs.writeFileSync(program, '#!/bin/sh\necho "codex-cli 0.41.0"\n', {
+      mode: 0o755,
+    });
+  }
+}
+
 function mkRequiringSkill(name: string): string {
   const dir = path.join(os.tmpdir(), `coffer-e2e-skill-${name}-${Date.now()}`);
   fs.mkdirSync(dir, { recursive: true });
@@ -38,7 +57,6 @@ function mkRequiringSkill(name: string): string {
       "requires:",
       `  - command: ${MISSING}`,
       "    title: Coffer e2e missing command",
-      `    brew: ${MISSING}`,
       "    why: The e2e suite checks the missing-command path with it.",
       "  - sh",
       "---",
@@ -51,9 +69,10 @@ function mkRequiringSkill(name: string): string {
   return dir;
 }
 
-test("the CLIs page lists what a skill requires, and Install asks first", async ({
+test("the CLIs page lists what a skill requires, and hands a fix to an agent", async ({
   page,
 }) => {
+  ensureCodexProgram();
   const { token, port } = readDaemonToken();
   const skillName = `e2e-requires-${Date.now().toString(36)}`;
   const src = mkRequiringSkill(skillName);
@@ -61,6 +80,15 @@ test("the CLIs page lists what a skill requires, and Install asks first", async 
     "Content-Type": "application/json",
     "X-Coffer-Token": token,
     "X-Coffer-Actor": "e2e",
+  };
+  const conversationCount = async (): Promise<number> => {
+    const res = await fetch(
+      `http://127.0.0.1:${port}/api/v1/chat/conversations`,
+      { headers },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { conversations: unknown[] };
+    return body.conversations.length;
   };
   try {
     const imported = await fetch(
@@ -79,54 +107,56 @@ test("the CLIs page lists what a skill requires, and Install asks first", async 
     });
     expect(checked.status).toBe(200);
 
-    // 1. The list: the missing command before the ready one.
+    // 1. The list: the missing command under Needs you, the ready one under Ready.
     await page.goto("/clis");
     await expect(page.getByRole("heading", { name: "CLIs" })).toBeVisible();
-    const missingRow = page.getByRole("row").filter({ hasText: MISSING });
-    const shRow = page
-      .getByRole("row")
-      .filter({ has: page.locator(".font-mono", { hasText: /^sh$/ }) });
+    const needsYou = page.getByRole("region", { name: "Needs you" });
+    const ready = page.getByRole("region", { name: "Ready" });
+    const missingRow = needsYou
+      .getByRole("button")
+      .filter({ hasText: MISSING });
     await expect(missingRow).toBeVisible({ timeout: 10_000 });
-    await expect(missingRow).toContainText("Not on PATH");
     await expect(missingRow).toContainText("Not found");
-    await expect(shRow).toContainText("Ready");
-    const commands = await page
-      .locator("tbody tr td:first-child .font-mono")
-      .allTextContents();
-    expect(commands.indexOf(MISSING)).toBeGreaterThanOrEqual(0);
-    expect(commands.indexOf(MISSING)).toBeLessThan(commands.indexOf("sh"));
+    await expect(
+      ready
+        .getByRole("button")
+        .filter({ has: page.locator(".font-mono", { hasText: /^sh$/ }) }),
+    ).toBeVisible();
     await expect(page.getByTestId("nav-dot-clis")).toBeVisible();
 
-    // 2. Install… opens the confirmation naming the exact Homebrew command —
-    //    and is cancelled: nothing may run.
-    await missingRow.getByRole("button", { name: "Install…" }).click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog.getByText(`Install ${MISSING}?`)).toBeVisible();
-    await expect(dialog.getByTestId("cli-install-command")).toHaveText(
-      `brew install ${MISSING}`,
-    );
-    await expect(dialog.getByText("Homebrew", { exact: true })).toBeVisible();
-    await expect(
-      dialog.getByRole("button", { name: `Run brew install ${MISSING}` }),
-    ).toBeVisible();
-    await dialog.getByRole("button", { name: "Cancel" }).click();
-    await expect(dialog).toBeHidden();
-    const job = await fetch(
-      `http://127.0.0.1:${port}/api/v1/clis/${MISSING}/install`,
-      { headers },
-    );
-    expect(job.status).toBe(404); // no install ever ran
-
-    // 3. The detail page: the problem banner names the skill it breaks.
-    await missingRow.locator("td").first().click();
+    // 2. Its pane: the banner names the skill it breaks, and the header's one
+    //    action hands the fix to an agent — nothing installs.
+    await missingRow.click();
     await expect(page).toHaveURL(new RegExp(`/clis/${MISSING}$`));
-    await expect(page.getByTestId("cli-problem")).toContainText(
-      `${MISSING} isn't installed`,
-    );
-    await expect(page.getByTestId("cli-problem")).toContainText(skillName);
-    await expect(page.getByText(`brew install ${MISSING}`)).toBeVisible();
+    const banner = page.getByTestId("cli-problem");
+    await expect(banner).toContainText(`${MISSING} isn't installed`);
+    await expect(banner).toContainText(skillName);
+    await expect(page.getByText("Not on PATH")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Copy prompt" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Install|Update/ }),
+    ).toHaveCount(0);
 
-    // 4. Needed by → the skill's Requires tab, whose rows link back to /clis/<command>.
+    // Ask an agent → New conversation → the draft, the prompt in its composer.
+    const before = await conversationCount();
+    await page.getByRole("button", { name: "Ask an agent" }).click();
+    const dialog = page.getByRole("dialog", { name: /new conversation/i });
+    const start = dialog.getByRole("button", { name: /^start$/i });
+    await expect(start).toBeEnabled();
+    await start.click();
+    await expect(page).toHaveURL(/\/conversations\/new$/);
+    const box = page.getByRole("textbox", { name: /message input/i });
+    await expect(box).toHaveValue(
+      new RegExp(`Please install the command-line tool \`${MISSING}\``),
+    );
+    // Pre-filled, never sent: still the draft, and no conversation was created.
+    await page.waitForTimeout(500);
+    await expect(page).toHaveURL(/\/conversations\/new$/);
+    expect(await conversationCount()).toBe(before);
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`/clis/${MISSING}$`));
+
+    // 3. Needed by → the skill's Requires tab, whose rows link back to /clis/<command>.
     await page.getByRole("link", { name: skillName }).click();
     await expect(page).toHaveURL(new RegExp(`/skills/${skillName}/requires$`));
     const requires = page.getByRole("list", { name: "Requires" });

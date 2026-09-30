@@ -25,15 +25,15 @@ def _skill(name: str, *reqs: CommandRequirement) -> SkillRequirements:
 def test_rows_take_the_highest_minimum_and_the_first_skill_by_name() -> None:
     rows = aggregate(
         [
-            _skill("zeta", CommandRequirement("gh", title="Z", min_version="2.40", brew="gh-z")),
-            _skill("alpha", CommandRequirement("gh", min_version="2.20", brew="gh")),
+            _skill("zeta", CommandRequirement("gh", title="Z", min_version="2.40", login="z")),
+            _skill("alpha", CommandRequirement("gh", min_version="2.20", login="gh auth login")),
             _skill("alpha2", CommandRequirement("jq")),
         ]
     )
     assert [r.command for r in rows] == ["gh", "jq"]
     gh = rows[0]
     assert gh.min_version == "2.40"
-    assert gh.brew == "gh"  # alpha declares it first
+    assert gh.login == "gh auth login"  # alpha declares it first
     assert gh.title == "Z"  # only zeta gives a title
     assert [(n.skill_name, n.min_version) for n in gh.needed_by] == [
         ("alpha", "2.20"),

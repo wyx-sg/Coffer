@@ -15,24 +15,21 @@ export function cli(overrides: Partial<Cli> & Pick<Cli, "command">): Cli {
     version: "1.0.0",
     min_version: null,
     login: { state: "not_needed", check: null, command: null },
-    brew: null,
-    install_command: null,
-    install_state: null,
+    handoff: null,
     needed_by: [need("any-skill")],
     checked_at: CHECKED,
     ...overrides,
   };
 }
 
-/** gh too old, gcloud not logged in, jq missing (installable), uv ready. */
+/** gh too old, gcloud not logged in, jq missing (each with a hand-off prompt), uv ready. */
 export const GH_OUTDATED = cli({
   command: "gh",
   title: "GitHub CLI",
   status: "outdated",
   version: "2.30.0",
   min_version: "2.40",
-  brew: "gh",
-  install_command: "brew upgrade gh",
+  handoff: { prompt: "Update gh to 2.40 or newer on this machine." },
   needed_by: [need("gh-triage", "2.40", "Opens and labels issues."), need("release-notes")],
 });
 
@@ -46,6 +43,7 @@ export const GCLOUD_LOGGED_OUT = cli({
     check: ["gcloud", "auth", "print-access-token"],
     command: "gcloud auth login",
   },
+  handoff: { prompt: "Help me log gcloud in on this machine." },
   needed_by: [need("gh-triage")],
 });
 
@@ -56,8 +54,7 @@ export const JQ_MISSING = cli({
   version: null,
   min_version: "1.6",
   login: { state: null, check: null, command: null },
-  brew: "jq",
-  install_command: "brew install jq",
+  handoff: { prompt: "Install jq 1.6 or newer on this machine." },
   needed_by: [
     need("gh-triage", "1.6", "The skill filters issue JSON with it."),
     need("log-digest", "1.6"),

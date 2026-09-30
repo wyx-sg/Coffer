@@ -18,7 +18,6 @@ requires:
     min_version: "2.40"
     login_check: gh auth status
     login: gh auth login
-    brew: gh
     why: Opens and labels issues.
   - jq
 ---
@@ -36,7 +35,6 @@ def test_a_full_entry_and_a_bare_name() -> None:
             min_version="2.40",
             login_check=("gh", "auth", "status"),
             login="gh auth login",
-            brew="gh",
             why="Opens and labels issues.",
         ),
         CommandRequirement(command="jq"),
@@ -77,17 +75,6 @@ def test_an_integer_minimum_is_kept() -> None:
     assert req.min_version == "20"
 
 
-def test_a_bad_formula_is_skipped() -> None:
-    parsed = parse_requires([{"command": "gh", "brew": "gh; echo hi"}])
-    assert parsed.requirements == ()
-    assert "formula" in parsed.warnings[0]
-
-
-def test_a_tapped_formula_is_kept() -> None:
-    parsed = parse_requires([{"command": "tool", "brew": "owner/tap/tool@2"}])
-    assert parsed.requirements[0].brew == "owner/tap/tool@2"
-
-
 def test_no_command_and_wrong_shapes_are_skipped() -> None:
     parsed = parse_requires([{"title": "x"}, 3, ""])
     assert parsed.requirements == ()
@@ -101,12 +88,12 @@ def test_not_a_list_is_one_warning() -> None:
 
 
 def test_unknown_fields_are_ignored_with_a_warning_and_the_entry_kept() -> None:
-    parsed = parse_requires([{"command": "gh", "install": "make it"}])
+    parsed = parse_requires([{"command": "gh", "install": "make it", "brew": "gh"}])
     assert parsed.requirements == (CommandRequirement(command="gh"),)
-    assert "unknown field(s) install" in parsed.warnings[0]
+    assert "unknown field(s) brew, install" in parsed.warnings[0]
 
 
 def test_a_command_named_twice_keeps_the_first() -> None:
-    parsed = parse_requires([{"command": "gh", "brew": "gh"}, "gh"])
-    assert parsed.requirements == (CommandRequirement(command="gh", brew="gh"),)
+    parsed = parse_requires([{"command": "gh", "title": "GitHub CLI"}, "gh"])
+    assert parsed.requirements == (CommandRequirement(command="gh", title="GitHub CLI"),)
     assert "declared twice" in parsed.warnings[0]

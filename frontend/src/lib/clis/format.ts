@@ -1,12 +1,9 @@
-// src/lib/clis/format.ts — pure helpers the CLIs pages share: status tone, the summary counts, "checked … ago".
+// src/lib/clis/format.ts — pure helpers the CLIs surfaces share: status tone, the list's groups, "checked … ago".
 //
 // No React and no i18n instance: callers pass `t` or a locale in, so the rules
-// are the same on the list, the detail page and a skill's Requires tab.
+// are the same on the CLIs page and a skill's Requires tab.
 import type { StatusTone } from "@/components/status/statusTone";
 import type { Cli, CliStatus } from "@/lib/api/clis";
-
-/** Problems first — the order the daemon lists rows in, and the summary's. */
-export const CLI_STATUSES: readonly CliStatus[] = ["missing", "outdated", "logged_out", "ready"];
 
 const TONE: Record<CliStatus, StatusTone> = {
   missing: "err",
@@ -19,11 +16,20 @@ export function cliTone(status: CliStatus): StatusTone {
   return TONE[status];
 }
 
-/** How many rows are in each status. */
-export function countByStatus(items: readonly Cli[]): Record<CliStatus, number> {
-  const counts: Record<CliStatus, number> = { missing: 0, outdated: 0, logged_out: 0, ready: 0 };
-  for (const item of items) counts[item.status] += 1;
-  return counts;
+/** The list pane's two groups, each in the daemon's order (problems first:
+ *  missing, too old, not logged in), narrowed to commands matching `filter`. */
+export function groupClis(
+  items: readonly Cli[],
+  filter: string,
+): { needsYou: Cli[]; ready: Cli[] } {
+  const q = filter.trim().toLowerCase();
+  const shown = q
+    ? items.filter((c) => `${c.command} ${c.title ?? ""}`.toLowerCase().includes(q))
+    : items;
+  return {
+    needsYou: shown.filter((c) => c.status !== "ready"),
+    ready: shown.filter((c) => c.status === "ready"),
+  };
 }
 
 /** The oldest probe among `items` — what "Checked … ago" honestly reports. */
@@ -49,16 +55,6 @@ export function relativeTime(iso: string, locale: string, now: number = Date.now
     if (Math.abs(seconds) >= size) return rtf.format(Math.round(seconds / size), unit);
   }
   return rtf.format(0, "second");
-}
-
-/** Whether Coffer can run the Homebrew command for this row: something to
- *  install or upgrade, and a declared formula to do it with. */
-export function isInstallable(cli: Cli): boolean {
-  return (
-    (cli.status === "missing" || cli.status === "outdated") &&
-    cli.brew !== null &&
-    cli.install_command !== null
-  );
 }
 
 /** The skills that need the command, by name, comma-joined. */

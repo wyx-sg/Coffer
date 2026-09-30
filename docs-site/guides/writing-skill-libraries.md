@@ -150,7 +150,7 @@ metadata:
 ---
 ```
 
-`metadata.profiles` indexes the profile files the domain ships. `metadata.requires` is covered under [Declared dependencies](#declared-dependencies). A top-level `requires:` is something else: the command-line tools the skill drives (`gh`, `jq`), with a minimum version, a login check and a Homebrew formula, which Coffer checks and can install — see [CLIs](/guides/clis). A carrier skill that wraps a CLI should declare it there. Quote a description that contains `: ` (colon and space); unquoted, it is invalid YAML and the skill fails to parse. Keep the description to 1024 characters at most; Coffer refuses to import a longer one.
+`metadata.profiles` indexes the profile files the domain ships. `metadata.requires` is covered under [Declared dependencies](#declared-dependencies). A top-level `requires:` is something else: the command-line tools the skill drives (`gh`, `jq`), with a minimum version and a login check, which Coffer checks and hands to your agent to install when one is missing — see [CLIs](/guides/clis). A carrier skill that wraps a CLI should declare it there. Quote a description that contains `: ` (colon and space); unquoted, it is invalid YAML and the skill fails to parse. Keep the description to 1024 characters at most; Coffer refuses to import a longer one.
 
 ### Folder hygiene
 

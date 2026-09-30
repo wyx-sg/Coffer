@@ -59,4 +59,21 @@ describe("SearchInput", () => {
     render(<SearchInput value="hello" onChange={vi.fn()} ariaLabel="Search" />);
     expect(() => fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" })).not.toThrow();
   });
+
+  test("a shortcut focuses the field from the page, but not while typing elsewhere", () => {
+    render(
+      <>
+        <input aria-label="Other" />
+        <SearchInput value="" onChange={vi.fn()} ariaLabel="Search" shortcut="/" />
+      </>,
+    );
+    const search = screen.getByRole("textbox", { name: "Search" });
+    const other = screen.getByRole("textbox", { name: "Other" });
+    other.focus();
+    fireEvent.keyDown(other, { key: "/" });
+    expect(other).toHaveFocus();
+    other.blur();
+    fireEvent.keyDown(document.body, { key: "/" });
+    expect(search).toHaveFocus();
+  });
 });

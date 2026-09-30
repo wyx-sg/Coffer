@@ -108,11 +108,6 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `CLI_NOT_REQUIRED` | 404 | No managed skill declares that command in its `requires:`. | List required commands with `coffer cli list`. |
-| `CLI_INSTALL_NOT_FOUND` | 404 | No install has run for that command since the daemon started. | Start one with `coffer cli install <command>`. |
-| `CLI_FORMULA_MISMATCH` | 422 | The install request named a different Homebrew formula than the skills declare. | Confirm the install again from the page or the command line. |
-| `CLI_NOT_INSTALLABLE` | 409 | There is nothing to install: the command is ready (`details.reason` `not_needed`), or no skill names a Homebrew formula for it (`no_formula`). | Install it yourself, then run `coffer cli check <command>`. |
-| `HOMEBREW_NOT_FOUND` | 409 | Homebrew is not on the agent's `PATH`. | Install Homebrew, or install the command another way and check again. |
-| `CLI_INSTALL_RUNNING` | 409 | An install for that command is already running. | Wait for it to finish; its output is on the command's page. |
 
 ## Agents and agent workspaces
 

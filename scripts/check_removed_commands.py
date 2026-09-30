@@ -68,7 +68,10 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer provider internal-default", "coffer config set engine.provider <name>"),
     ("coffer provider transcribe-default", "coffer config set transcribe.provider <name>"),
     ("coffer provider use-builtin", "coffer provider builtin"),
-    ("coffer provider key", "coffer proxy token --agent-uid <uid> (a local proxy token, never a provider key)"),
+    (
+        "coffer provider key",
+        "coffer proxy token --agent-uid <uid> (a local proxy token, never a provider key)",
+    ),
     ("coffer mcp remove", "coffer mcp rm"),
     ("coffer mcp refresh", "coffer mcp test"),
     ("coffer mcp invocations", "coffer log mcp [--server <name>]"),
@@ -113,11 +116,17 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer memory delivery-remove", "coffer agent disconnect <agent>"),
     # The delivery hook is a part of the agent's Coffer connection (spec
     # agent-registry "Connect an agent to Coffer in one action").
-    ("coffer memory delivery", "coffer agent connect|disconnect <agent>, coffer agent show <agent>"),
+    (
+        "coffer memory delivery",
+        "coffer agent connect|disconnect <agent>, coffer agent show <agent>",
+    ),
     # Trimmed by the OpenSpec change trim-redundant-cli-commands: each repeated
     # another command or guarded nothing.
     ("coffer adopt agent", "coffer agent add <type>"),
-    ("coffer discard agent", "coffer agent add <type> to register it; Coffer never removes a detected agent"),
+    (
+        "coffer discard agent",
+        "coffer agent add <type> to register it; Coffer never removes a detected agent",
+    ),
     ("coffer agent connection", "coffer agent show <name> (field coffer_connection)"),
     ("coffer knowledge save", "edit the file under coffer path knowledge <collection>"),
     ("coffer memory distil", "coffer memory sync"),
@@ -131,6 +140,9 @@ REMOVED: tuple[tuple[str, str], ...] = (
     # Removed by the OpenSpec change one-agent-per-type-and-no-titles: a skill
     # has a fixed name and no title, and its description is SKILL.md's.
     ("coffer skill edit", "edit SKILL.md under coffer path skill <name>"),
+    # Removed by the OpenSpec change hand-cli-installs-to-an-agent: Coffer runs
+    # no installer; the person's agent installs the command from a prompt.
+    ("coffer cli install", "coffer cli prompt <command>, then give the prompt to your agent"),
     ("coffer__recall", "grep the memory root (coffer path memory)"),
     ("coffer__diagnose", "coffer log audit|mcp|daemon, coffer path logs"),
 )
@@ -171,7 +183,11 @@ ALLOWED: tuple[tuple[str, str, str], ...] = (
     ("docs-site/architecture/security.md", "coffer secret get --show", _ABSENT),
     # The vault-sync data model is being rewritten on its own branch; delete
     # this entry when that lands (the gate fails once it matches nothing).
-    ("openspec/specs/vault-sync/data-model.md", "coffer sync key export", "pending vault-sync rewrite"),
+    (
+        "openspec/specs/vault-sync/data-model.md",
+        "coffer sync key export",
+        "pending vault-sync rewrite",
+    ),
 )
 
 
@@ -181,7 +197,9 @@ def _pattern(phrase: str) -> re.Pattern[str]:
 
 
 def _option_pattern(phrase: str, option: str) -> re.Pattern[str]:
-    return re.compile(_pattern(phrase).pattern + r".*?(?<![\w-])" + re.escape(option) + r"(?![\w-])")
+    return re.compile(
+        _pattern(phrase).pattern + r".*?(?<![\w-])" + re.escape(option) + r"(?![\w-])"
+    )
 
 
 PATTERNS: tuple[tuple[re.Pattern[str], str, str], ...] = (
@@ -218,9 +236,7 @@ def _files() -> list[Path]:
     return out
 
 
-def scan(
-    paths: list[Path], allowed: tuple[tuple[str, str, str], ...] = ALLOWED
-) -> list[str]:
+def scan(paths: list[Path], allowed: tuple[tuple[str, str, str], ...] = ALLOWED) -> list[str]:
     hits: list[str] = []
     allow = {(rel, phrase) for rel, phrase, _why in allowed}
     used: set[tuple[str, str]] = set()
