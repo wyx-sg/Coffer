@@ -86,7 +86,7 @@ The shell owns only the drawing. Whether a kind needs attention, and what clears
 
 ## Split views are resizable, per browser
 
-The sidebar against the page, and the conversation list against the open conversation, are split views divided by a hairline you can drag. Every split behaves the same way:
+The sidebar against the page, the conversation list against the open conversation, the Knowledge tree against its reading pane and a memory partition's list against the open memory are split views divided by a hairline you can drag. Every split behaves the same way:
 
 - The divider has a wider invisible grip than the line it draws, and lights up in the accent on hover or drag.
 - Double-clicking restores the default, and the arrow keys move a focused divider in small steps, so resizing does not require a mouse.
@@ -104,7 +104,7 @@ Which identifier fills `<id>` depends on whether the kind can be renamed:
 - **Skills and MCP servers** are addressed by their **name**, because the name is fixed once registered and is what you already recognise — `/mcp-servers/github/tools`.
 - **Kinds you can rename** — model providers, channels, knowledge collections, memory partitions — are addressed by their immutable **uid**, so renaming never breaks a link.
 
-Old addresses — a tab given as `?tab=`, or a skill or MCP server addressed by uid — redirect to the current form. Pages not yet rebuilt, such as an agent's page, still carry their tab as `?tab=` until their turn comes.
+Old addresses — a tab given as `?tab=`, or a skill or MCP server addressed by uid — redirect to the current form. A knowledge collection's pane is addressed the same way — `/knowledge/<uid>/history?file=<document>` for a document's History, `/knowledge/<uid>/inbox` for its Inbox — and a memory partition's Delivered tab is `/memory/<uid>/delivered`. Pages not yet rebuilt, such as Sync, still carry their tab as `?tab=` until their turn comes.
 
 ## Related
 

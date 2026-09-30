@@ -1,71 +1,186 @@
 // frontend/src/pages/KnowledgePage.tsx — the one Knowledge surface.
-// It lists collections: the top-level folders under `~/.coffer/knowledge/`.
-// Every one of them exists because somebody made it — nothing auto-provisions
-// a collection, so an empty list means the vault is genuinely empty rather
-// than merely untouched (spec knowledge "Create collections only deliberately").
 //
-// Loads from the DEDICATED `/knowledge/collections` endpoint rather than the
-// generic `/resources` list: only the former carries the file counts and the
-// README descriptions, both of which are read off disk.
+// A document app (spec knowledge "Present a collection as one tree in the web
+// UI"): the tree of every collection on the left — Recent changes on top, then
+// each collection with its Inbox and its documents — and whatever the address
+// names on the right (lib/knowledge/routes.ts): Recent changes, one change, a
+// collection, an open document with its Document and History tabs, or the
+// Inbox. Every collection is served to every agent, so there is no
+// per-collection switch and no reach control; and the layer has no retrieval,
+// so there is no search box — ⌘K jumps to a collection by name.
+//
+// New knowledge goes in as an ITEM — Add a document, an upload, an agent's
+// `coffer__write` — which waits in the collection's Inbox until curation files
+// it into the right document. With Coffer's model not set there is nothing to
+// curate with: the page shows no Inbox and no Curate now, only one line
+// pointing to Settings › General.
+//
+// Nothing auto-provisions a collection (spec knowledge "Create collections
+// only deliberately"), so an empty list is the first-run welcome.
 import { useState } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Library, Plus } from "lucide-react";
+import { Library, Plus, Upload } from "lucide-react";
 
+import { EmptyState } from "@/components/EmptyState";
+import { useFillToBottom } from "@/components/filePane";
+import { KnowledgeAddDocumentDialog } from "@/components/knowledge/KnowledgeAddDocumentDialog";
 import { KnowledgeCreateDialog } from "@/components/knowledge/KnowledgeCreateDialog";
+import { KnowledgeNav } from "@/components/knowledge/KnowledgeNav";
+import { KnowledgePane } from "@/components/knowledge/KnowledgePane";
+import { KnowledgeUploadDialog } from "@/components/knowledge/KnowledgeUploadDialog";
 import { KnowledgeWelcomePanel } from "@/components/knowledge/KnowledgeWelcomePanel";
-import { KnowledgeTable } from "@/components/knowledge/KnowledgeTable";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
+import { SplitView } from "@/components/SplitView";
+import { Button } from "@/components/ui/button";
 import { translateApiError } from "@/lib/api/errors";
+import { useDetailTab } from "@/lib/detailTabs";
+import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
+import { useCofferModelSet } from "@/lib/hooks/useInternalEngine";
+import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
+import {
+  collectionBasePath,
+  DEFAULT_KNOWLEDGE_TAB,
+  KNOWLEDGE_ROOT,
+  KNOWLEDGE_TABS,
+} from "@/lib/knowledge/routes";
+
+type Dialog = "create" | "add" | "upload" | null;
 
 export function KnowledgePage() {
   const { t } = useTranslation();
-  const { data, isPending, error, refetch } = useKnowledgeCollections();
-  const items = data ?? [];
-  const hasItems = items.length > 0;
-  const [showAdd, setShowAdd] = useState(false);
+  // Agents write items while the page is open: the change feed keeps the
+  // Inbox counts current without a poll.
+  useDaemonEvents();
+  const { uid, version } = useParams<{ uid?: string; version?: string }>();
+  const [params] = useSearchParams();
+  const file = params.get("file");
+  const collections = useKnowledgeCollections();
+  const modelSet = useCofferModelSet();
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const fill = useFillToBottom();
+
+  const [tab, setTab] = useDetailTab(
+    KNOWLEDGE_TABS,
+    DEFAULT_KNOWLEDGE_TAB,
+    uid ? collectionBasePath(uid) : KNOWLEDGE_ROOT,
+    { enabled: Boolean(uid) },
+  );
+
+  const list = collections.data ?? [];
+  const current = uid ? (list.find((c) => c.uid === uid) ?? null) : null;
+  const empty = !collections.isPending && !collections.error && list.length === 0;
+  const close = (open: boolean) => {
+    if (!open) setDialog(null);
+  };
+
+  const header = (
+    <PageHeader
+      icon={Library}
+      title={t("knowledge.title")}
+      actions={
+        list.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => setDialog("upload")}>
+              <Upload aria-hidden /> {t("knowledge.upload.button")}
+            </Button>
+            <Button onClick={() => setDialog("add")}>
+              <Plus aria-hidden /> {t("knowledge.add.button")}
+            </Button>
+          </div>
+        ) : null
+      }
+    />
+  );
+
+  const dialogs = (
+    <>
+      <KnowledgeCreateDialog open={dialog === "create"} onOpenChange={close} />
+      {list.length > 0 ? (
+        <>
+          <KnowledgeAddDocumentDialog
+            open={dialog === "add"}
+            onOpenChange={close}
+            collections={list}
+            initial={current?.name ?? null}
+            modelSet={modelSet}
+          />
+          <KnowledgeUploadDialog
+            open={dialog === "upload"}
+            onOpenChange={close}
+            collections={list}
+            initial={current?.name ?? null}
+          />
+        </>
+      ) : null}
+    </>
+  );
+
+  if (collections.error) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <EmptyState
+          tone="error"
+          title={t("knowledge.loadFailed")}
+          description={translateApiError(t, collections.error)}
+          action={<Button onClick={() => void collections.refetch()}>{t("common.retry")}</Button>}
+        />
+      </div>
+    );
+  }
+
+  if (empty) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <KnowledgeWelcomePanel onCreate={() => setDialog("create")} />
+        {dialogs}
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        icon={Library}
-        title={t("knowledge.title")}
-        subtitle={t("knowledge.subtitle")}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {hasItems ? (
-              <Button onClick={() => setShowAdd(true)}>
-                <Plus className="mr-1 size-4" /> {t("knowledge.add")}
-              </Button>
-            ) : null}
-          </div>
-        }
-      />
-
-      <KnowledgeCreateDialog
-        open={showAdd}
-        onOpenChange={setShowAdd}
-        onCreated={() => void refetch()}
-      />
-
-      {/* The header stays mounted through loading — the table renders skeleton
-          rows under it rather than the page swapping to a loading card. */}
-      {error ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-destructive">{t("knowledge.loadFailed")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">{translateApiError(t, error)}</p>
-          </CardContent>
-        </Card>
-      ) : !isPending && !hasItems ? (
-        <KnowledgeWelcomePanel onAdd={() => setShowAdd(true)} />
-      ) : (
-        <KnowledgeTable items={items} isLoading={isPending} />
-      )}
+    <div className="space-y-4">
+      {header}
+      <div ref={fill.ref} style={fill.style} className="flex min-h-0">
+        <SplitView
+          storageKey="knowledge"
+          label={t("splitView.resizeList")}
+          defaultListWidth={280}
+          className="min-h-0 flex-1"
+          listClassName="min-h-0 overflow-auto pr-2"
+          detailClassName="min-h-0 pl-4"
+          list={
+            <KnowledgeNav
+              collections={list}
+              isLoading={collections.isPending}
+              currentUid={uid ?? null}
+              tab={tab}
+              file={file}
+              atRecent={!uid && !version}
+              modelSet={modelSet}
+              onCreate={() => setDialog("create")}
+            />
+          }
+          detail={
+            <KnowledgePane
+              uid={uid ?? null}
+              version={version ?? null}
+              collection={current}
+              collections={list}
+              collectionsLoading={collections.isPending}
+              tab={tab}
+              setTab={setTab}
+              file={file}
+              modelSet={modelSet}
+              onAdd={() => setDialog("add")}
+              onUpload={() => setDialog("upload")}
+            />
+          }
+        />
+      </div>
+      {dialogs}
     </div>
   );
 }

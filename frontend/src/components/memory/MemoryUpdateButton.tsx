@@ -1,7 +1,7 @@
 // frontend/src/components/memory/MemoryUpdateButton.tsx
 //
 // The one memory action (spec memory "Update memory in one action"): read every
-// agent's latest native memory, then distil what is new into Coffer's notes.
+// agent's latest native memory, then distil what is new into Coffer's memories.
 // The partitions page, a partition's page and the first-run welcome all carry
 // this same button. There used to be two — "Read from agents" (aggregation) on
 // the list and "Distil" on a partition — and either one alone left the notes

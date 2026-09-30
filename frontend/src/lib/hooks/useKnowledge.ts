@@ -7,6 +7,7 @@
 // curation pass may rewrite any level of it.
 import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
@@ -19,22 +20,23 @@ import {
   getTree,
   listCollections,
   saveFile,
+  submitMaterial,
   uploadFile,
+  type CurationRunOut,
   type FileSave,
+  type MaterialIn,
 } from "@/lib/api/knowledge";
 import {
+  knowledgeChangesRootKey,
   knowledgeCollectionsKey,
   knowledgeFileKey,
+  knowledgeHistoryKey,
   knowledgeKey,
   knowledgeTreeKey,
   knowledgeTreeRootKey,
   upkeepRunsKey,
 } from "@/lib/api/queryKeys";
 import { curateToastKey } from "@/lib/hooks/curateToast";
-
-// re-exported for tests that still import the root key from here; import
-// from queryKeys directly in new code
-export { knowledgeKey } from "@/lib/api/queryKeys";
 
 export function useKnowledgeCollections() {
   return useQuery({
@@ -93,28 +95,37 @@ export function useSaveKnowledgeFile() {
       const saved = await saveFile(input);
       qc.setQueryData(knowledgeFileKey(saved.path), saved);
       void qc.invalidateQueries({ queryKey: knowledgeTreeRootKey });
+      // An accepted save is a commit naming the user: the document's History
+      // and the timeline both gain it.
+      void qc.invalidateQueries({ queryKey: knowledgeHistoryKey(saved.path) });
+      void qc.invalidateQueries({ queryKey: knowledgeChangesRootKey });
       return saved.fingerprint;
     },
     [qc],
   );
 }
 
+/** The one toast a finished Curate now leaves: the last pass says how the run
+ *  ended; `count` only means something to `no_model`, which reports how many
+ *  items it wrote as documents as they stood. */
+function curateToastText(t: TFunction, result: CurationRunOut) {
+  const last = result.passes[result.passes.length - 1];
+  const promoted = result.passes.reduce((sum, p) => sum + p.promoted.length, 0);
+  return t(last ? curateToastKey(last) : "knowledge.curate.status.up_to_date", {
+    count: promoted,
+  });
+}
+
 /**
- * Curate one collection now: a pass per pending item until none is left. It
- * rewrites the collection's documents — writing new ones, retiring ones whose
- * content moved — and drains the inbox (or, with no model, promotes it), so
- * every cached level, body and count under `["knowledge"]` is invalidated
- * afterwards.
+ * Curate one collection now: passes one at a time until nothing is pending,
+ * stopping at the first that fails (see "Run curation on a sweep and on
+ * demand"). It rewrites the collection's documents and drains its inbox, so
+ * every cached level, body, count and change under `["knowledge"]` is
+ * invalidated afterwards. Progress (n of m) is the daemon's, on the in-flight
+ * list (`useUpkeepRun`), so a page that remounts mid-run still shows it.
  *
- * Every status the pass reports is a 200, so the toast says which one it was
- * rather than treating `no_model` or `up_to_date` as a success that did
- * something.
- *
- * The pass is long and the daemon refuses a second one over the same
- * collection, so this keeps the shared run list honest at both ends — same
- * treatment as memory's organise. A 409 gets NO toast on purpose: the button
- * reads it off `mutation.error` and says a pass is already running in place,
- * where the click was, instead of the page saying it twice.
+ * A 409 gets NO toast on purpose: the control reads it off `mutation.error`
+ * and says a pass is already running in place, where the click was.
  */
 export function useCurateCollection(collectionUid: string) {
   const qc = useQueryClient();
@@ -124,22 +135,62 @@ export function useCurateCollection(collectionUid: string) {
     mutationFn: (document?: string | null) => curateCollection(collectionUid, document),
     onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: knowledgeKey });
-      // The run answers every pass it ran; the last one says how it ended.
-      // `count` only means something to `no_model`, which reports how much of
-      // the inbox it promoted to documents as it stood.
-      const last = result.passes[result.passes.length - 1];
-      const promoted = result.passes.reduce((sum, p) => sum + p.promoted.length, 0);
-      toast.success(
-        t(last ? curateToastKey(last) : "knowledge.detail.curateStatus.up_to_date", {
-          count: promoted,
-        }),
-      );
+      toast.success(curateToastText(t, result));
     },
     onError: (error) => {
       if (error instanceof ApiError && error.code === "UPKEEP_ALREADY_RUNNING") return;
       toast.error(translateApiError(t, error));
     },
     onSettled: () => void qc.invalidateQueries({ queryKey: upkeepRunsKey }),
+  });
+}
+
+/**
+ * Curate several collections now, one after another — Recent changes' Curate
+ * now over every collection with items waiting. A collection already being
+ * curated is skipped rather than failing the rest; any other refusal stops
+ * the run and is toasted.
+ */
+export function useCurateCollections() {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (uids: string[]) => {
+      const results: CurationRunOut[] = [];
+      for (const uid of uids) {
+        try {
+          results.push(await curateCollection(uid, null));
+        } catch (error) {
+          if (error instanceof ApiError && error.code === "UPKEEP_ALREADY_RUNNING") continue;
+          throw error;
+        }
+        void qc.invalidateQueries({ queryKey: upkeepRunsKey });
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      void qc.invalidateQueries({ queryKey: knowledgeKey });
+      const last = results[results.length - 1];
+      if (last) toast.success(curateToastText(t, last));
+    },
+    onError: (error) => toast.error(translateApiError(t, error)),
+    onSettled: () => void qc.invalidateQueries({ queryKey: upkeepRunsKey }),
+  });
+}
+
+/**
+ * Add a document: a title and body submitted as an ITEM into a collection's
+ * inbox, curated like any other (see "Submit material through coffer__write").
+ * Counts, the inbox and the timeline all move, so the whole subtree is
+ * invalidated. No toast either way: the dialog says where the item went and
+ * renders a refusal beside its fields.
+ */
+export function useSubmitMaterial() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: MaterialIn) => submitMaterial(input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
   });
 }
 
@@ -173,17 +224,16 @@ export function useDeleteKnowledgeFile() {
  * waits in the inbox (the collection's `pending_count` goes up) or becomes a
  * document on the spot (a tree level and `document_count` change), so success
  * invalidates the whole `["knowledge"]` subtree rather than guessing which of
- * the two happened. Which one it was is the caller's toast to report.
+ * the two happened. Which one it was is the caller's toast to report, and a
+ * refusal (an unsupported type, a file too large) is rendered in the upload
+ * dialog, where the file still is — so no `onError` toast here.
  */
 export function useUploadKnowledgeFile() {
   const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
   return useMutation({
     // `collection` is the collection's NAME here, not its uid: an upload lands
     // material in a directory, and the directory is named after the collection.
     mutationFn: (vars: { collection: string; file: File }) => uploadFile(vars),
     onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
-    onError: (error) => toast.error(translateApiError(t, error)),
   });
 }

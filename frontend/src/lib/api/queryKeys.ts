@@ -194,29 +194,36 @@ export const scopeKey = ["scope"] as const;
 export const resourceScopeKey = (uid: string) => ["scope", uid] as const;
 
 // ---------------------------------------------------------------------------
-// knowledge — collections, one directory level per key, one file per key
+// knowledge — collections, tree levels, files, changes, document history
 // ---------------------------------------------------------------------------
 
 export const knowledgeKey = ["knowledge"] as const;
 export const knowledgeCollectionsKey = ["knowledge", "collections"] as const;
-/** Every directory level of every collection — the prefix a save invalidates. */
 export const knowledgeTreeRootKey = ["knowledge", "tree"] as const;
-/** One directory level; `path` is relative to the knowledge root. */
 export const knowledgeTreeKey = (path: string) => ["knowledge", "tree", path] as const;
 export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as const;
+export const knowledgeChangesRootKey = ["knowledge", "changes"] as const;
+export const knowledgeChangesKey = (collection: string | null) =>
+  ["knowledge", "changes", "list", collection ?? ""] as const;
+export const knowledgeChangeKey = (version: string) =>
+  ["knowledge", "changes", "detail", version] as const;
+export const knowledgeHistoryKey = (path: string) => ["knowledge", "history", path] as const;
+export const knowledgeVersionDiffKey = (path: string, version: string) =>
+  ["knowledge", "history", path, "diff", version] as const;
 
-// ---------------------------------------------------------------------------
-// memory — partitions, files
-// ---------------------------------------------------------------------------
+// --- memory — partitions, their memories, what is delivered ---------------
 
 export const memoryKey = ["memory"] as const;
 export const memoryPartitionsKey = ["memory", "partitions"] as const;
-/** A partition's own directory, and one file in it — the tree the detail page
- *  browses (spec memory "Present partitions as a table and a file tree"). */
-export const memoryPartitionFilesKey = (partitionUid: string) =>
-  ["memory", "partitions", partitionUid, "files"] as const;
-export const memoryPartitionFileKey = (partitionUid: string, path: string) =>
-  ["memory", "partitions", partitionUid, "files", "content", path] as const;
+export const memoryPartitionFilesKey = (uid: string) =>
+  ["memory", "partitions", uid, "files"] as const;
+export const memoryNotesKey = (uid: string) => ["memory", "partitions", uid, "notes"] as const;
+export const memoryNoteKey = (uid: string, slug: string) =>
+  ["memory", "partitions", uid, "notes", slug] as const;
+export const memoryRetiredKey = (uid: string) => ["memory", "partitions", uid, "retired"] as const;
+export const memoryDeliveredKey = (uid: string) =>
+  ["memory", "partitions", uid, "delivered"] as const;
+export const memoryDeliveriesKey = ["memory", "deliveries"] as const;
 
 // ---------------------------------------------------------------------------
 // upkeep — the long rewrites (memory organise, knowledge curation) in flight

@@ -462,7 +462,7 @@
       "sync_run": "执行了一轮收敛",
       "token_rotated": "已轮换访问令牌",
       "daemon_residency_updated": "守护进程常驻设置已变更",
-      "knowledge_curated": "整理了 {{resource}}：把新条目并入了其中的文档",
+      "knowledge_curated": "整理了 {{resource}}：把新条目整理进了其中的文档",
       "credential_revealed": "在 Coffer 应用中查看了密钥",
       "secret_resolved": "把密钥交给了一条 coffer run 命令",
       "secret_approval_requested": "请求批准一项密钥改动",
@@ -943,18 +943,18 @@
         "thisMachine": "本机",
         "everyMachine": "每一台机器",
         "unknownMachine": "未知机器（{{id}}）",
-        "self": "提炼在本机运行。共用这个金库的其他机器不会去改这些派生文档。",
-        "other": "提炼运行在 {{machine}} 上。本机只读那台机器提炼出的文档，不会重写它们。",
-        "unowned": "没有指定任何机器，因此在哪台机器上打开这个金库，提炼就在哪台上跑。只有一台机器时这样没问题；有两台时，两边会各自把同一批新材料并入各自的文档，最后同一份知识在金库里存了两遍。",
-        "fault": "提炼被指派给了 {{id}}，而注册表里没有任何机器认领这个 id。也就是说它现在一台机器上都没在跑——上面的开关仍然显示「开」，而 Coffer 别的地方不会提这件事。在这里把它接管过来，提炼才会重新开始。",
-        "takeOver": "让提炼在本机运行",
-        "takeOverHint": "把本机指定为负责的机器。原先持有它的那台机器会在下一轮同步把变更带过去之后停止提炼；本机会在下一次轮到它时开始。",
+        "self": "整理在本机运行。共用这个金库的其他机器不会去改这些派生文档。",
+        "other": "整理运行在 {{machine}} 上。本机只读那台机器整理出的文档，不会重写它们。",
+        "unowned": "没有指定任何机器，因此在哪台机器上打开这个金库，整理就在哪台上跑。只有一台机器时这样没问题；有两台时，两边会各自把同一批新条目整理进各自的文档，最后同一份知识在金库里存了两遍。",
+        "fault": "整理被指派给了 {{id}}，而注册表里没有任何机器认领这个 id。也就是说它现在一台机器上都没在跑——上面的开关仍然显示「开」，而 Coffer 别的地方不会提这件事。在这里把它接管过来，整理才会重新开始。",
+        "takeOver": "让整理在本机运行",
+        "takeOverHint": "把本机指定为负责的机器。原先持有它的那台机器会在下一轮同步把变更带过去之后停止整理；本机会在下一次轮到它时开始。",
         "noMachineId": "本机还没有机器 id，无法被指定为负责的机器。",
         "clear": "清除指定",
-        "clearTitle": "让每一台机器都去提炼？",
-        "clearBody": "不指定机器之后，共用这个金库的每一台机器都会把同一批新材料并入文档。只有一台机器时这不改变什么；机器更多时，同一份知识很可能被写成两份、各叫一个名字。",
-        "claimedToast": "提炼现在运行在本机",
-        "clearedToast": "提炼不再绑定到某一台机器"
+        "clearTitle": "让每一台机器都去整理？",
+        "clearBody": "不指定机器之后，共用这个金库的每一台机器都会把同一批新条目整理进文档。只有一台机器时这不改变什么；机器更多时，同一份知识很可能被写成两份、各叫一个名字。",
+        "claimedToast": "整理现在运行在本机",
+        "clearedToast": "整理不再绑定到某一台机器"
       },
       "passes": {
         "aggregate": {
@@ -966,9 +966,9 @@
           "writes": "模型把从智能体读到的原始条目提炼成 Coffer 自己的笔记，并重写索引。删掉这棵树再跑一遍，能复现出等价的一组笔记。"
         },
         "curate": {
-          "name": "把新知识并入文档",
-          "writes": "Coffer 的模型把新材料（上传的文件、智能体写下的内容）并入集合里的文档，并把你改过的文档同步到相关的其他文档。",
-          "caution": "关掉它之后，新材料会一直等着，直到你手动跑一次；你改过的文档也不会被同步到其他文档。"
+          "name": "把新知识整理进文档",
+          "writes": "Coffer 的模型把新条目（上传的文件、智能体写下的内容）整理进知识集里的文档，并把你改过的文档同步到相关的其他文档。",
+          "caution": "关掉它之后，新条目会一直在收件箱里等着，直到你手动整理；你改过的文档也不会被同步到其他文档。"
         }
       }
     },
@@ -2147,117 +2147,334 @@
   },
   "knowledge": {
     "title": "知识",
-    "subtitle": "每个集合是一个 Markdown 文档文件夹，由你和 Coffer 共同编写。新材料由提炼并入这些文档，智能体用自己的工具读取每个集合。",
-    "add": "新建集合",
-    "loadFailed": "加载集合失败",
-    "searchPlaceholder": "搜索集合…",
-    "noMatches": "没有匹配的集合。",
-    "cols": {
-      "name": "名称",
-      "description": "描述",
+    "loadFailed": "无法加载知识集",
+    "nav": {
+      "label": "知识集与文档",
+      "collections": "知识集",
+      "expand": "展开 {{name}}",
+      "collapse": "收起 {{name}}"
+    },
+    "tree": {
+      "empty": "还没有文档",
+      "emptyFolder": "这里还没有内容"
+    },
+    "notFound": {
+      "title": "找不到这个知识集",
+      "body": "它可能已被删除，或者链接来自另一台机器。"
+    },
+    "stats": {
       "documents": "文档",
-      "pending": "待并入"
+      "waiting": "待整理",
+      "curated": "整理于",
+      "never": "尚未整理"
     },
-    "detail": {
-      "emptyFolder": "这里还没有内容",
-      "selectAFile": "选择一个文件来阅读",
-      "deleteFile": "删除文档",
-      "deleteFileTitle": "删除这份文档？",
-      "deleteFileConfirm": "从磁盘上删除「{{path}}」？这份文档是唯一的副本——此操作不可撤销。",
-      "curate": "提炼",
-      "curateHint": "把下一份待并入的材料并入本集合的文档。",
-      "curateRunning": "已经有一次提炼在跑了",
-      "curateStatus": {
-        "ok": "提炼已完成。",
-        "no_model": "没有配置内部模型，所以没有做合并——待并入的材料已按原样成为文档（{{count}} 份）。",
-        "up_to_date": "没有待并入的内容。",
-        "too_large": "这份内容太大，一次提炼放不下，已按原样保留，没有做合并。",
-        "truncated": "这次提炼在跑完之前达到了步数上限。已写入的内容会保留，这一项稍后会重试。",
-        "truncatedGaveUp": "这一项已连续三次达到步数上限，不再重试，已按原样保留。",
-        "failed": "这次提炼没有跑完。没有丢失任何内容，稍后会重试。"
-      },
-      "curatedAt": "上次提炼于 {{when}}",
-      "notCuratedYet": "尚未提炼",
-      "inboxFolder": "待并入",
-      "inboxReadOnly": "等待并入集合，并入后会从这里消失。",
-      "editorLabel": "编辑 {{path}}",
-      "treeLabel": "本集合的文档",
-      "empty": "还没有文档——上传一份，或者把 Markdown 文件直接放进这个文件夹。"
+    "noModel": {
+      "line": "条目到达时会直接成为文档。设置 Coffer 的模型后，新条目会被整理进你的文档：",
+      "link": "设置 › 通用"
     },
-    "welcome": {
-      "title": "把智能体知道的一切放在一处",
-      "body": "一个集合就是一个文档文件夹，由你、智能体和 Coffer 一起构建。建一个，然后让智能体来读。",
-      "featureEntries": {
-        "title": "放进去的",
-        "body": "上传一份文档、让智能体写下它学到的东西，或者在你自己的编辑器里直接改文档。"
-      },
-      "featureDocuments": {
-        "title": "Coffer 做的",
-        "body": "Coffer 自己的模型把新材料并入文档，一个事实只放在一处，而不是堆成一条条笔记。"
-      },
-      "featureLocal": {
-        "title": "本地优先",
-        "body": "一切都是你机器上的纯 Markdown。不建任何索引，智能体也不经由 Coffer 的工具来读。"
-      }
+    "collection": {
+      "emptyTitle": "{{name}} 还是空的",
+      "emptyBody": "写下第一篇文档、上传已有的文档，或把 Markdown 文件放进这个文件夹。智能体已经能看到这个知识集，也能往它的收件箱里写条目。",
+      "pickDocument": "在左侧树中选择一篇文档来阅读。"
     },
     "create": {
-      "title": "新建集合",
+      "title": "新建知识集",
+      "body": "一个由你和智能体共同编写的 Markdown 文档文件夹。",
       "name": "名称",
-      "description": "描述",
-      "descriptionHint": "一句话：这里放什么"
+      "folder": "文件夹：~/.coffer/knowledge/{{name}}/",
+      "description": "这里放什么",
+      "descriptionHint": "一句话说明这个知识集收录什么",
+      "everyAgent": "每个智能体都会通过 coffer-guide 技能看到它。",
+      "submit": "创建知识集"
     },
-    "delete": {
-      "title": "删除集合",
-      "description": "删除「{{name}}」及其中的所有文件？此操作不可撤销。",
-      "bulkDescription": "确定删除 {{count}} 个知识集合？每个集合下的所有文件都会从磁盘上移除。"
+    "deleteCollection": {
+      "zone": "危险操作",
+      "hint_one": "从磁盘删除这个文件夹及其中的 {{count}} 篇文档。",
+      "hint_other": "从磁盘删除这个文件夹及其中全部 {{count}} 篇文档。",
+      "button": "删除…",
+      "title": "删除 {{name}}？",
+      "body": "将删除这个文件夹、其中的 {{documents}} 篇文档和 {{items}} 个收件箱条目。智能体从下一次会话起不再看到它。此操作无法撤销。",
+      "typeToConfirm": "输入 {{name}} 以确认",
+      "confirm": "删除知识集"
+    },
+    "add": {
+      "button": "添加文档",
+      "here": "在这里添加文档",
+      "title": "添加文档",
+      "hint": "它会进入知识集的收件箱，像其他条目一样被整理进合适的文档——一小时内自动整理。你不用选择文件，整理会决定放在哪里。",
+      "hintNoModel": "Coffer 的模型尚未设置，因此它会按原样写成一篇文档。",
+      "collection": "知识集",
+      "titleField": "标题",
+      "body": "正文",
+      "submit": "放入收件箱",
+      "submitNoModel": "添加文档",
+      "pending": "已放入 {{collection}} 的收件箱——一小时内会被整理。",
+      "written": "已保存为 {{path}}。"
     },
     "upload": {
       "button": "上传",
-      "uploading": "正在上传…",
-      "pending": "已上传「{{title}}」——稍后会并入文档。",
-      "written": "已上传「{{title}}」——已保存为 {{path}}。"
+      "title": "上传文档",
+      "body": "Coffer 会把它转换成 Markdown 并整理进知识集。原始文件不会保留。",
+      "choose": "选择文件",
+      "types": "PDF、Word、PowerPoint、Excel、HTML、CSV、Markdown 或纯文本 · 最大 20 MB",
+      "remove": "移除这个文件",
+      "into": "放入知识集",
+      "converting": "正在转换为 Markdown…",
+      "uploading": "上传中…",
+      "pending": "已上传“{{title}}”——它在收件箱中等待，很快会被整理。",
+      "written": "已上传“{{title}}”——保存为 {{path}}。"
+    },
+    "curate": {
+      "now": "立即整理",
+      "running": "整理中…",
+      "progress": "整理中 · 第 {{done}} 个，共 {{total}} 个",
+      "alreadyRunning": "已有一轮整理在进行",
+      "status": {
+        "ok": "整理完成。",
+        "no_model": "Coffer 的模型尚未设置，因此没有进行整理——待整理的条目已按原样成为文档（{{count}} 个）。",
+        "up_to_date": "没有待整理的条目。",
+        "too_large": "这个条目太大，一轮整理放不下，因此把它保留为单独的文档。",
+        "truncated": "这轮整理在完成前达到了步数上限。已写入的内容会保留，之后会再试。",
+        "truncatedGaveUp": "这轮整理已连续三次被截断，因此把该条目保留为单独的文档，不会再运行它。",
+        "failed": "整理没有完成。没有丢失任何内容——之后会再试。"
+      }
+    },
+    "inbox": {
+      "title": "收件箱",
+      "hint": "等待整理 · 一小时内自动整理",
+      "automatic": "一小时内自动整理",
+      "waitingCount_one": "{{count}} 个条目待整理",
+      "waitingCount_other": "{{count}} 个条目待整理",
+      "empty": "没有待整理的条目。智能体写入和上传的新条目会先出现在这里。",
+      "back": "全部条目",
+      "writtenBy": "由 {{who}} 写入 · {{when}}",
+      "waitingSince": "由 {{who}} 写入 · {{when}} · 等待整理",
+      "readOnly": "条目是只读的：整理会把它归入合适的文档，之后它会离开收件箱。"
+    },
+    "document": {
+      "tab": "文档",
+      "where": "这篇文档的位置",
+      "meta": "编辑于 {{updated}} · 由 {{actor}} 创建于 {{created}}",
+      "more": "{{path}} 的更多操作",
+      "curatedBanner": "整理最近一次根据 {{agent}} 的条目修改了这篇文档，{{when}}。",
+      "seePass": "查看这轮整理改了什么"
+    },
+    "editor": {
+      "label": "编辑 {{path}}",
+      "title": "标题",
+      "description": "描述",
+      "frontmatterNote": "Frontmatter · 此处只读 · 由整理保持更新",
+      "footer": "Markdown · ⌘S 保存 · esc 取消",
+      "footerUnsaved": "Markdown · 有未保存的修改 · ⌘S 保存 · esc 取消",
+      "footerNotSaved": "Markdown · 未保存",
+      "conflictTitle": "你编辑期间，这篇文档在磁盘上被修改了",
+      "conflictBody": "你的文字没有保存：磁盘上的文件比你打开的版本更新。重新加载以获取当前版本，或先比较；如果想保留你的文字，请先复制。",
+      "compare": "比较",
+      "reload": "重新加载",
+      "copyMine": "复制我的文字",
+      "copyFailed": "无法复制你的文字",
+      "compareTitle": "磁盘上的当前版本与你的文字",
+      "compareBody": "标 − 的行只在磁盘上；标 + 的行只在你的文字里。"
+    },
+    "deleteDocument": {
+      "menu": "删除文档…",
+      "title": "删除 {{name}}？",
+      "body": "Coffer 将从磁盘删除这个文件：",
+      "afterwards": "智能体从下一次读取起不再找到它。它仍保留在知识库的历史中，可以作为新版本恢复。",
+      "confirm": "删除文档"
+    },
+    "history": {
+      "tab": "历史",
+      "count_one": "{{count}} 个版本 · 最新在前",
+      "count_other": "{{count}} 个版本 · 最新在前",
+      "current": "当前",
+      "none": "还没有记录任何版本。",
+      "versionLabel": "选中的版本",
+      "wholePass": "查看整轮整理",
+      "restore": "恢复这个版本",
+      "restored": "已作为新版本恢复。",
+      "failedTitle": "无法读取这篇文档的历史",
+      "failedFine": "文档本身没有问题。",
+      "openActivity": "打开活动"
+    },
+    "diff": {
+      "none": "文字没有变化。"
+    },
+    "writer": {
+      "user": "你",
+      "agent": "一个智能体",
+      "curation": "整理",
+      "sync": "同步",
+      "disk": "在磁盘上编辑"
+    },
+    "changes": {
+      "op": {
+        "pass_one": "把 {{agent}} 的条目整理进了 {{document}}",
+        "pass_other": "把 {{agent}} 的条目整理进了 {{count}} 篇文档",
+        "save": "编辑了 {{document}}",
+        "delete": "删除了 {{document}}",
+        "promote": "按原样添加了 {{document}}",
+        "submit": "提交了一个条目",
+        "restore": "恢复了 {{document}} 的一个早期版本",
+        "undo": "撤销了一轮整理",
+        "edit": "在 Coffer 之外编辑了 {{document}}",
+        "sync": "同步了另一台机器的改动",
+        "create": "创建了这个知识集",
+        "rename": "移动了 {{document}}",
+        "remove": "移除了 {{document}}",
+        "baseline": "记录了知识集的现状"
+      }
+    },
+    "recent": {
+      "title": "最近改动",
+      "window": "最近 7 天",
+      "writerFilter": "改动者",
+      "writer": {
+        "everyone": "所有人",
+        "agents": "智能体",
+        "you": "你"
+      },
+      "collectionFilter": "知识集",
+      "allCollections": "全部知识集",
+      "waitingTitle": "等待整理",
+      "waitingCount_one": "{{count}} 个条目",
+      "waitingCount_other": "{{count}} 个条目",
+      "waitingMeta": "{{collection}} · 由 {{who}} 写入 · {{when}}",
+      "nothingWaiting": "没有待整理的条目。智能体写入和上传的新条目会先出现在这里。",
+      "today": "今天",
+      "yesterday": "昨天",
+      "empty": "最近 7 天没有改动。",
+      "failed": "无法读取最近改动"
+    },
+    "pass": {
+      "title": "整理 · {{when}}",
+      "undo": "撤销这轮整理",
+      "undone": "已撤销",
+      "status": {
+        "added": "新增",
+        "modified": "修改",
+        "removed": "移除"
+      },
+      "itemsLeft": "这轮整理处理过的条目已离开收件箱，它们的文字保留在各篇文档的历史中。",
+      "undoTitle": "撤销这轮整理？",
+      "undoBody": "把这轮整理改过的每篇文档恢复到 {{when}} 之前的样子。",
+      "undoEffect": {
+        "added": "将被移除",
+        "modified": "恢复到整理前的版本",
+        "removed": "将被恢复"
+      },
+      "undoNote": "每篇文档都会得到一个由你写入的新版本，因此也可以在它的历史里再撤销。这些条目不会重新排队。",
+      "undoConfirm": "撤销整理",
+      "undoing": "撤销中…",
+      "undoRefused": "没有撤销任何内容：{{document}} 在这轮整理之后被修改过，撤销会覆盖那次修改。",
+      "undoneToast": "已撤销这轮整理。"
+    },
+    "welcome": {
+      "title": "还没有记下任何东西",
+      "body": "知识是这台 Mac 上的普通 Markdown，由你和智能体共同编辑。智能体用自己的文件工具读取它。",
+      "collection": {
+        "title": "新建一个知识集",
+        "body": "一个主题一个文件夹，比如你的架构或运维手册。"
+      },
+      "upload": {
+        "title": "导入已有的资料",
+        "body": "把 PDF、Word 或 Markdown 上传到知识集，Coffer 会把它变成文档。"
+      },
+      "agents": {
+        "title": "让智能体来写",
+        "body": "智能体用 coffer__write 记下它们学到的东西，这些内容会进入收件箱。",
+        "automatic": "自动"
+      }
     }
   },
   "memory": {
     "title": "记忆",
-    "subtitle": "汇总你的智能体已经学到的内容——读取它们自己的原生记忆（Claude Code 按项目记录的笔记、Codex 的任务分组），提炼成 Coffer 自己的笔记：一个主题一个文件，按仓库归档，外加一个关于你本人（而非某个项目）的全局分区。Coffer 从不写回智能体自己的记忆。它会自己定时重读；按钮只是让它立刻跑一次。",
+    "subtitle": "你的智能体学到的东西：从它们自己的记忆里读出来，每个主题提炼成一条记忆条目。只读。",
     "update": "更新记忆",
     "updating": "更新中…",
-    "updateHint": "读取每个智能体最新的记忆，再把新增内容提炼进 Coffer 的笔记。",
+    "updateHint": "读取每个智能体最新的记忆，再把新增内容提炼进 Coffer 的记忆条目。",
     "syncDone": "读到 {{count}} 条新条目，更新了 {{partitions}} 个分区。",
     "syncFailures": "{{count}} 个来源解析失败——详见活动页面。",
     "loadFailed": "加载分区失败",
-    "empty": "还没有分区。点「更新记忆」，把智能体已经掌握的内容导入进来。",
-    "searchPlaceholder": "搜索分区…",
+    "deliveries": {
+      "title": "会话开始时投递",
+      "window_one": "最近 {{count}} 天",
+      "window_other": "最近 {{count}} 天",
+      "delivered_one": "最近 {{days}} 天投递 {{count}} 次",
+      "delivered_other": "最近 {{days}} 天投递 {{count}} 次",
+      "read_one": "读了 {{count}} 条记忆条目",
+      "read_other": "读了 {{count}} 条记忆条目",
+      "readUnavailable": "读取条数不可用",
+      "readUnavailableHint": "Coffer 读不到这个智能体的会话记录，所以数不出它的会话打开过哪些记忆条目。",
+      "last": "最近一次 {{when}}",
+      "notDelivered": "最近 {{days}} 天没有投递",
+      "none": "还没有智能体接入 Coffer，记忆不会投递给任何智能体。",
+      "loadFailed": "加载投递情况失败。"
+    },
+    "partitions": {
+      "title": "分区",
+      "count_one": "{{count}} 个分区",
+      "count_other": "{{count}} 个分区",
+      "memories_one": "{{count}} 条记忆条目",
+      "memories_other": "{{count}} 条记忆条目"
+    },
     "cols": {
       "name": "分区",
-      "repository": "仓库",
-      "global": "全局——关于你本人，而非某个项目",
-      "notes": "笔记数",
+      "path": "路径",
+      "global": "所有项目",
+      "memories": "记忆条目",
       "unresolvable": "仓库已不在",
       "unresolvableHint": "该分区对应的仓库已不在磁盘上，因此它不会投递给任何智能体。之所以仍然列出，是因为要不要删掉由你决定。"
     },
-    "files": {
-      "tree": "文件",
-      "selectFile": "选择一个文件查看。",
-      "binary": "二进制文件（{{size}} 字节）",
-      "truncated": "内容已截断——只显示文件开头。"
+    "delete": {
+      "title": "删除 {{name}}？",
+      "body_one": "Coffer 会删除它提炼出的 {{count}} 条记忆条目并停止投递；该分区会从列表中移除。",
+      "body_other": "Coffer 会删除它提炼出的 {{count}} 条记忆条目并停止投递；该分区会从列表中移除。",
+      "untouched": "智能体自己为该文件夹保存的记忆不受影响。",
+      "confirm": "删除分区"
     },
     "welcome": {
       "title": "还没有提炼出任何东西",
-      "body": "你的智能体其实已经知道不少事——哪个服务归谁、上个月踩过的坑、这个仓库怎么搭起来的。这些都存在它们自己的原生记忆里，各有各的格式。Coffer 会去读，然后提炼成自己的笔记：一个主题一个文件，按仓库归档，外加一个关于你本人、而不是关于某个项目的全局分区。",
-      "featureRead": {
-        "title": "只读，不回写",
-        "body": "Coffer 只读取智能体自己的记忆，绝不往里面写东西。"
+      "body": "你的智能体已经记住了不少关于你项目的事。Coffer 读取它们的记忆、从不写回，并为每个仓库按主题各提炼一条记忆条目。"
+    },
+    "detail": {
+      "notFound": "该分区已不存在。",
+      "tabs": {
+        "memories": "记忆条目",
+        "delivered": "投递内容"
       },
-      "featureShape": {
-        "title": "一个主题一个文件",
-        "body": "按仓库归档；关于你本人而非某个项目的，进全局分区。"
-      },
-      "featureOneWay": {
-        "title": "它会自己保持更新",
-        "body": "Coffer 会按自己的节奏定时重读。这个按钮只是让它立刻跑一次。"
+      "menu": {
+        "label": "{{name}} 的更多操作",
+        "reveal": "在文件管理器中显示分区文件夹",
+        "copyPath": "复制路径",
+        "delete": "删除分区…"
       }
+    },
+    "memories": {
+      "listLabel": "记忆条目",
+      "retired": "已退役",
+      "readOnly": "只读",
+      "learnedBy": "学自 {{agents}} · 更新于 {{date}}",
+      "updated": "更新于 {{date}}",
+      "select": "选择一条记忆条目查看。",
+      "loadFailed": "加载记忆条目失败。",
+      "emptyTitle": "{{name}} 还没有记忆条目",
+      "emptyBody": "Coffer 还没有为这个分区提炼任何内容。点「更新记忆」，或者等它在几小时内自动完成。"
+    },
+    "noModel": {
+      "title": "Coffer 的模型尚未设置，所以每个智能体的条目各自成为一条记忆条目",
+      "body": "两个智能体学到的同一条经验，在设置模型之前会保留为两条记忆条目。",
+      "link": "设置 › 通用 › Coffer 的模型"
+    },
+    "delivered": {
+      "agentsLabel": "智能体",
+      "intro": "在 {{path}} 中开始的会话会收到的内容 · 只读",
+      "introGlobal": "每个会话开始时收到的内容 · 只读",
+      "copy": "复制",
+      "characters_one": "{{count}} 个字符",
+      "characters_other": "{{count}} 个字符",
+      "none": "还没有智能体接入 Coffer，没有会话会以这个分区的记忆条目开始。",
+      "loadFailed": "加载投递内容失败。"
     }
   },
   "chat": {

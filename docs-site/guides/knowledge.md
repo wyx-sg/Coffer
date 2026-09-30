@@ -39,7 +39,7 @@ A **collection** is a top-level folder under the knowledge root:
 - **Documents** are the Markdown files in the collection. A document's path is its identity; there is no separate id. File names are slugs of the title, with a suffix such as `-2` on a collision.
 - **Folders** inside a collection are optional and carry no meaning. You, or curation, can create, move and remove them.
 - **`README.md`** at the collection root describes the collection. Its first paragraph is the collection's description everywhere Coffer shows one, and it is what the `coffer-guide` skill tells agents the collection is about. It is never listed as a document, counted or curated.
-- **Hidden entries** (names starting with `.`) are left out of every document count and the catalogue. Inside a collection Coffer writes exactly one: the `.inbox/` folder, where submitted items wait to be curated. At the knowledge root it keeps `.git/`, the [history](#history-and-undo) of every change. The collection's tree lists `.inbox/` so you can see what is waiting, and its items can be read but not edited or deleted; no other hidden entry is listed.
+- **Hidden entries** (names starting with `.`) are left out of every document count and the catalogue. Inside a collection Coffer writes exactly one: the `.inbox/` folder, where submitted items wait to be curated. At the knowledge root it keeps `.git/`, the [history](#history-and-undo) of every change. The Knowledge page shows `.inbox/` as the collection's **Inbox**, with how many items wait; its items can be read but not edited or deleted, and no other hidden entry is listed.
 
 To move the knowledge root, set `COFFER_KNOWLEDGE_ROOT` in the daemon's environment.
 
@@ -85,7 +85,7 @@ coffer knowledge add payments --description "Payments platform: ownership, APIs,
 ```
 
 ```text [Web UI]
-Knowledge → New collection → Name, Description → Create
+Knowledge → New collection → Name, What belongs in here → Create collection
 ```
 
 :::
@@ -132,7 +132,7 @@ coffer knowledge upload ./session-design.pdf --collection payments
 ```
 
 ```text [Web UI]
-Knowledge → choose the collection → Upload → pick a file
+Knowledge → Upload → choose a file and the collection → Upload
 ```
 
 :::
@@ -159,13 +159,13 @@ Coffer saves the attachment into that collection through the same upload path an
 
 ### From the Knowledge page: add a document
 
-Adding a document on the Knowledge page submits an item exactly as `coffer__write` does, with you as its writer. Curation then decides where it belongs, as for any other item; with no model configured it becomes a document at once.
+**Add a document** on the Knowledge page takes a collection, a title and the text, and submits them as an item exactly as `coffer__write` does, with you as its writer — you never pick a file. It waits in the collection's Inbox and curation decides where it belongs, as for any other item, within the hour; with no model configured it becomes a document at once.
 
 ### Edit a file yourself
 
 Writing, editing or deleting a Markdown file in the collection folder with any editor is a complete way to change knowledge. There is no import step. The change is live on the next read, and the next curation sweep notices the edit (by its modification time) and carries it through to the rest of the collection.
 
-On the Knowledge page, choose a document and use **Edit** to change it in place, or **Open in editor** or **Reveal in Finder** to jump to the file. **Edit** rewrites the document's body and keeps its frontmatter. A save that finds the file changed on disk since the page loaded it, by your own editor or by a curation pass, is refused as a conflict (`KNOWLEDGE_FILE_CONFLICT`) and the file is left as it is. The refusal carries the document as it is on disk now, so the page can offer to reload it, compare it with your text, or copy your text before you reload. The saved file counts as your edit, exactly like one made in your own editor. From the CLI, edit the file under `coffer path knowledge <collection>` with your own editor.
+On the Knowledge page, choose a document and use **Edit** to change it in place, or the **⋯** menu's **Open in editor** or **Reveal in Finder** to jump to the file. The editor holds the document's body only: its title and description are shown above it, read-only, because curation keeps the frontmatter current. **⌘S** saves and **Esc** cancels. A save that finds the file changed on disk since the page loaded it, by your own editor or by a curation pass, is refused as a conflict (`KNOWLEDGE_FILE_CONFLICT`) and the file is left as it is. The page says the document changed on disk and your text was not saved, and offers **Reload** (take what is on disk), **Compare** (what is on disk against your text) and **Copy my text** — never a second save over it. The saved file counts as your edit, exactly like one made in your own editor. From the CLI, edit the file under `coffer path knowledge <collection>` with your own editor.
 
 Agents may do the same thing with their own file tools: the `coffer-guide` skill tells them they can correct or extend a document they have read by editing it.
 
@@ -206,7 +206,7 @@ A pass can only retire a document whose content it has already written elsewhere
 
 Curation runs on a background sweep, every hour by default, starting about a minute after the daemon starts. New items are therefore curated within the hour; to have them curated now, curate by hand (below). Each sweep takes inbox items first, oldest first, then edited documents, and runs a few passes per collection.
 
-Change the switch or the interval under **Settings › General → Coffer's model → Automatic upkeep → Merge new knowledge into documents**, or on the CLI:
+Change the switch or the interval under **Settings › General → Coffer's model → Automatic upkeep → Curate new knowledge into documents**, or on the CLI:
 
 ```sh
 coffer config list engine.upkeep.
@@ -231,7 +231,8 @@ coffer knowledge curate payments --document gateway/rate-limits.md
 ```
 
 ```text [Web UI]
-Knowledge → choose the collection → Curate
+Knowledge → the collection's Inbox → Curate now
+Knowledge → Recent changes → Curate now   (every collection with items waiting)
 ```
 
 :::
@@ -311,12 +312,14 @@ cat "$(coffer path knowledge payments)"/session-ownership.md
 ```
 
 ```text [Web UI]
-Knowledge → choose the collection
+Knowledge → choose the collection in the tree → choose a document
 ```
 
 :::
 
-The collection page shows one tree of documents beside a preview, both filling the window. The preview shows when each document was last curated, and offers **Edit** (see [Edit a file yourself](#edit-a-file-yourself)). The tree also shows the collection's **Inbox** folder: items waiting to be curated. An inbox item opens read-only — it cannot be edited or deleted — and it leaves the folder once curation has folded it in.
+The Knowledge page is one tree beside a reading pane, both filling the window. At the top of the tree is **Recent changes**; below it every collection, each opening to its **Inbox** — with the number of items waiting — and its documents. Choosing a collection shows what belongs in it and one status line, **Documents N · Waiting M · Curated** *(when)*; **Waiting** opens the Inbox, and while a Curate now run is draining it the line reads **Curating · n of m**. Choosing a document renders it, with **Edit** (see [Edit a file yourself](#edit-a-file-yourself)) and a **⋯** menu, on two tabs: **Document** and **History** (see [History and undo](#history-and-undo)). The Inbox lists the items waiting to be curated — *curated automatically within the hour* — with the one quiet **Curate now**; an item opens read-only, with who wrote it and when, and it leaves the Inbox once curation has filed it.
+
+The page has no search box and no per-collection switch: ⌘K jumps to a collection by name, and every collection reaches every agent. While Coffer's model is not set there is no Inbox and no Curate now; one line says that items become documents as they arrive and links to **Settings › General**.
 
 The documents are plain files: `coffer path knowledge` prints the knowledge root, and `coffer path knowledge <collection>` one collection's directory, so you read and grep them with your own tools.
 
@@ -357,7 +360,9 @@ coffer knowledge changes --in payments   # one collection
 coffer knowledge changes 8d41e07         # one change in full, with each document's diff
 ```
 
-Each change lists its writer, its time, its collection and every document it added, modified or removed, with line counts. The items still waiting in each inbox are listed separately, with who submitted them and when. The Knowledge page shows the same history and recent changes.
+Each change lists its writer, its time, its collection and every document it added, modified or removed, with line counts. The items still waiting in each inbox are listed separately, with who submitted them and when.
+
+On the Knowledge page, a document's **History** tab lists its versions newest first with their writers; choosing one shows its diff against the version before, with **Restore this version**. **Recent changes**, at the top of the tree, is the timeline across every collection for the last seven days, grouped by day and filterable by who wrote it (Everyone, Agents, You) and by collection, with the items waiting and **Curate now** above it. Choosing a change shows every document it touched, each with its diff and a link to its History.
 
 ### Undo a curation pass
 
@@ -368,6 +373,8 @@ coffer knowledge undo 8d41e07
 ```
 
 Every document the pass wrote or retired goes back exactly as it was before the pass, and documents it created are removed, in one new change written by you. Curation does not redo the pass afterwards. The item the pass curated stays out of the inbox; its text is still in the history.
+
+On the Knowledge page, open the pass from **Recent changes** (or **See what this pass changed** above a document it wrote) and choose **Undo this pass**; the page asks first.
 
 - If a later change touched one of the pass's documents, the undo is refused with `KNOWLEDGE_UNDO_CONFLICT` naming that document, and nothing is written. Edit or restore that document instead.
 - Only a curation pass can be undone this way (`KNOWLEDGE_NOT_A_PASS` otherwise). For any other change, restore the document's earlier version.
@@ -383,7 +390,7 @@ rm "$(coffer path knowledge payments)"/gateway/rate-limits.md
 ```
 
 ```text [Web UI]
-Knowledge → choose the collection → choose the document → Delete document
+Knowledge → choose the document → ⋯ → Delete document…
 ```
 
 :::
@@ -397,8 +404,7 @@ coffer knowledge rm payments
 ```
 
 ```text [Web UI]
-Knowledge → the delete action on the collection's row
-          (or select several rows → Delete)
+Knowledge → choose the collection → Danger zone → Delete… → type its name
 ```
 
 :::
