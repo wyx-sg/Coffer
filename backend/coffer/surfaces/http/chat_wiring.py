@@ -28,7 +28,7 @@ from coffer.application.provider.targets import projection_targets
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.chat.channel_note import ChannelNote
-from coffer.domain.errors import CredentialMissing, ResourceNotFound
+from coffer.domain.errors import ResourceNotFound, SecretMissing
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.provider.modality import Modality
 from coffer.infrastructure.agent.claude_binary_models import ClaudeBinaryModelDiscovery
@@ -41,9 +41,9 @@ from coffer.infrastructure.chat.codex_app_server import default_app_server_sessi
 from coffer.infrastructure.chat.media_store import FileChatMediaStore, default_chat_media_dir
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.chat.prompt_memory import MemoryRetriever
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.provider.introspector import PROTOCOL_BASE_URLS, ProviderIntrospector
 from coffer.infrastructure.provider.reported_prices import shared_store as reported_price_store
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.surfaces.http.agent_dependencies import set_agent_model_catalogue
 from coffer.surfaces.http.chat.dependencies import (
     get_channel_note_reader,
@@ -163,7 +163,7 @@ class ChatWiring:
 
 def wire_chat(
     sm: async_sessionmaker[AsyncSession],
-    credential_store: EncryptedCredentialStore,
+    secret_store: EncryptedSecretStore,
     agent_service: AgentService,
     resource_service: ResourceService,
     agent_catalog: AgentCatalog,
@@ -187,15 +187,15 @@ def wire_chat(
     conv_repo = ConversationRepo(sm)
     msg_repo = MessageRepo(sm)
 
-    # 2. Credential resolver: resolve a credential ref → raw API key from the
-    #    encrypted credential store.
-    def _credential_resolver(ref: str) -> str:
-        value: str | None = credential_store.get(ref)
+    # 2. Secret resolver: resolve a secret ref → raw API key from the
+    #    encrypted secret store.
+    def _secret_resolver(ref: str) -> str:
+        value: str | None = secret_store.get(ref)
         if value is None:
             # A domain error so a missing/revoked key surfaces as a mapped 400
-            # (CREDENTIAL_MISSING) and the conversation stays usable, rather
+            # (SECRET_MISSING) and the conversation stays usable, rather
             # than a generic 500 from a bare ValueError.
-            raise CredentialMissing(ref)
+            raise SecretMissing(ref)
         return value
 
     # 3. The agent-provider registry — the platform seam (chat_provider_wiring:
@@ -222,7 +222,7 @@ def wire_chat(
     registry = build_agent_provider_registry(
         conv_repo,
         agent_catalog,
-        _credential_resolver,
+        _secret_resolver,
         compose_memory_context=compose_memory_context,
         resolve_channel=_channel_note,
         # Official subscription quota from the turns Coffer drives (spec
@@ -258,12 +258,12 @@ def wire_chat(
 
     # 6. Provider introspection (test-connection + list-models). The OpenAI-
     #    compatible client + SSRF guard live in the infrastructure adapter; the
-    #    service resolves credential refs to keys server-side.
+    #    service resolves secret refs to keys server-side.
     #    What an endpoint's API reports its models cost is remembered here, so
     #    usage is costed from it without asking per request.
     introspection_svc = ModelIntrospectionService(
         ProviderIntrospector(),
-        _credential_resolver,
+        _secret_resolver,
         reported_prices=reported_price_store(),
         default_base_url=PROTOCOL_BASE_URLS.get,
     )

@@ -104,7 +104,7 @@ Work through these causes in order:
 | The agent's session reports no identity, so it sees only unscoped servers. | The agent's MCP entry runs `coffer-mcp-shim` without `--agent-uid`. | Connect the agent again: `coffer agent connect <agent>`. |
 | The individual tool is switched off. | The server's **Tools** tab, or `coffer mcp cap list <name>`. | Switch it on there, or with `coffer mcp cap enable <name> tool:<tool>`. |
 | The server cannot start: its launcher is missing. | The server shows `npx is not installed on this machine` (or `uvx`, …). | Install that runtime, then **Refresh capabilities**. Coffer does not install runtimes. |
-| The server is failing or slow to answer. | `coffer mcp test <name>`; the server's stderr in `~/.coffer/logs/upstream/<name>.log`. | Fix the server's configuration or credentials. A server that misses discovery is retried in the background and its tools reappear when it answers. |
+| The server is failing or slow to answer. | `coffer mcp test <name>`; the server's stderr in `~/.coffer/logs/upstream/<name>.log`. | Fix the server's configuration or secrets. A server that misses discovery is retried in the background and its tools reappear when it answers. |
 
 See [MCP servers](/guides/mcp-servers) and [Connect a client](/guides/connect-a-client).
 
@@ -134,37 +134,37 @@ See [MCP servers](/guides/mcp-servers) and [Connect a client](/guides/connect-a-
 
 **Fix.** Switch the feature on under **Settings → General**, or with `coffer config set feature.<key> on`. If the switch is disabled, the feature is pinned by `COFFER_FEATURES` in the daemon's environment.
 
-## Credentials and macOS keychain prompts
+## Secrets and macOS keychain prompts
 
 ### macOS asks for keychain access every time the daemon starts
 
 **Cause.** One of two things:
 
-- The credential master key is stored in the OS keychain (you opted in under **Settings → Security**). Reading it costs one prompt per daemon start.
-- A resource cites a credential that is not in Coffer's encrypted store. At each start Coffer looks for that ref once in the OS keychain and moves it into the store if it finds it. A locked or denied read is retried at the next start, with another prompt.
+- The secret master key is stored in the OS keychain (you opted in under **Settings → Security**). Reading it costs one prompt per daemon start.
+- A resource cites a secret that is not in Coffer's encrypted store. At each start Coffer looks for that ref once in the OS keychain and moves it into the store if it finds it. A locked or denied read is retried at the next start, with another prompt.
 
 **Fix.**
 
 - Move the master key back to a file beside the database:
   ```sh
-  coffer config set credentials.storage file
+  coffer config set secrets.storage file
   ```
   or switch off **Store master key in OS keychain** in **Settings → Security**.
-- Find credentials that are cited but missing with `coffer credentials list`, then store each one with `coffer credentials set <ref>`.
+- Find secrets that are cited but missing with `coffer secret list`, then store each one with `coffer secret set <ref>`.
 
 ### A command exits 9: "waiting for approval in the Coffer app"
 
 **Cause.** The change sends a secret somewhere it has not gone before — a second MCP server citing the same token, a changed command line or URL, a push token pointed at a new remote — or replaces a value something already uses, or switches `secrets.require_approval` off. The change is saved; the secret is held until you approve it. An MCP server in that state is not started, and its tools fail with `SECRET_BINDING_PENDING`.
 
-**Fix.** Open the desktop app and answer the approval it shows (or look with `coffer credentials approvals`). Approve only a target you recognise; refuse the rest with `coffer credentials reject <id>`. Rerun the command with `--wait` to have it wait for your answer. See [Secrets → Approvals](/guides/secrets#approvals).
+**Fix.** Open the desktop app and answer the approval it shows (or look with `coffer secret approvals`). Approve only a target you recognise; refuse the rest with `coffer secret reject <id>`. Rerun the command with `--wait` to have it wait for your answer. See [Secrets → Approvals](/guides/secrets#approvals).
 
 ### There is no way to print a secret from the terminal
 
-**Cause.** By design: no command, route or MCP tool returns a stored value, because an agent can run any command you can. `coffer credentials get` only confirms a value is stored.
+**Cause.** By design: no command, route or MCP tool returns a stored value, because an agent can run any command you can. `coffer secret get` only confirms a value is stored.
 
 **Fix.** Reveal or copy it in the desktop app, which asks for Touch ID or your password. To give a value to a command, store it as a standalone secret and run the command with `coffer run --secret <name> -- <command>`. See [Secrets](/guides/secrets).
 
-See [Credentials](/guides/credentials).
+See [Secret store](/guides/secret-store).
 
 ## Vault sync
 
@@ -173,8 +173,8 @@ See [Credentials](/guides/credentials).
 | `coffer sync status` exits 1 and shows `awaiting_confirmation` | The deletion guard held a round. | Read the list, then `coffer sync confirm`, `reject` or `rebuild`. Never confirm after a reinstall. |
 | `conflict: <path>` | Two machines edited the same lines. | Resolve it in `~/.coffer/sync` with git, commit, then `coffer sync now`. |
 | `awaiting_join` | This machine has not joined the remote. | `coffer sync adopt` |
-| `credential locked: <ref>` | This machine lacks the master key. | `coffer sync key import <file>` |
-| Push fails with an authentication error | Coffer does not use your global git config or the macOS keychain helper. | Store a token and pass `--credential-ref`, or use an SSH key that needs no passphrase prompt. |
+| `secret locked: <ref>` | This machine lacks the master key. | `coffer sync key import <file>` |
+| Push fails with an authentication error | Coffer does not use your global git config or the macOS keychain helper. | Store a token and pass `--secret-ref`, or use an SSH key that needs no passphrase prompt. |
 
 The full list is in [Vault sync troubleshooting](/guides/vault-sync#troubleshooting).
 

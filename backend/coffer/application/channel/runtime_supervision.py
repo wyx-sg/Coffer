@@ -6,7 +6,7 @@ websocket connection"). Its reconciler follows this discipline:
 
 1. derive the wanted set from the enabled channels,
 2. stop whatever is no longer wanted, even in an otherwise steady state,
-3. touch the credential store ONLY when the wanted set changed or the thing
+3. touch the secret store ONLY when the wanted set changed or the thing
    died — a steady state that polled the store every tick would have macOS
    answering with authorization prompts,
 4. latch a failure for 30 seconds instead of retrying hot.
@@ -118,7 +118,7 @@ async def reconcile_websockets(
         return
     if latch.cooling(wanted=bool(refs)):
         return
-    credentials: dict[str, tuple[str, str]] = {}
+    secrets: dict[str, tuple[str, str]] = {}
     for uid, (app_id, secret_ref) in refs.items():
         assert materialize is not None  # refs is empty otherwise
         destination = channel_destination(uid, names[uid], "seatalk", app_id)
@@ -128,9 +128,9 @@ async def reconcile_websockets(
             latch.failed()
             _logger.exception("channel.websocket.secret_failed", extra={"channel_uid": uid})
             return
-        credentials[uid] = (app_id, secret)
+        secrets[uid] = (app_id, secret)
     try:
-        for uid, (app_id, secret) in credentials.items():
+        for uid, (app_id, secret) in secrets.items():
             await websockets.ensure_running(uid, app_id, secret)
     except Exception:
         latch.failed()

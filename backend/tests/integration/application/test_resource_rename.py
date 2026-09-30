@@ -4,7 +4,7 @@ See spec resource-framework "Treat a resource's name as a mutable label".
 
 The point of the identity change is that a rename costs nothing: the row keeps
 its uid, so every reference to it — a kind-owned table's foreign key, the audit
-trail, the credential its config cites — keeps pointing at the same thing and
+trail, the secret its config cites — keeps pointing at the same thing and
 nothing has to be rewritten. This file asserts that by renaming a resource that
 has one of each and checking that none of them moved.
 
@@ -41,16 +41,16 @@ from coffer.infrastructure.persistence.repos import (
 
 
 class _Config(BaseModel):
-    credential_ref: str = ""
+    secret_ref: str = ""
 
 
 def _cited(config: dict) -> dict[str, str]:
-    ref = config.get("credential_ref")
+    ref = config.get("secret_ref")
     return {"token": ref} if isinstance(ref, str) and ref else {}
 
 
 class _Store:
-    """The smallest credential store the service will talk to."""
+    """The smallest secret store the service will talk to."""
 
     def __init__(self) -> None:
         self.values: dict[str, str] = {}
@@ -76,7 +76,7 @@ async def _service(tmp_path, *, on_rename=None):
             display_name="Thing",
             config_schema=_Config,
             supports_scope=True,
-            credential_ref_extractor=_cited,
+            secret_ref_extractor=_cited,
             on_rename=on_rename,
         )
     }
@@ -86,7 +86,7 @@ async def _service(tmp_path, *, on_rename=None):
         kinds=kinds,
         repo=SqlAlchemyResourceRepo(sm),
         audit=AuditService(SqlAlchemyAuditRepo(sm)),
-        credentials=store,
+        secrets=store,
     )
     return svc, AuditService(SqlAlchemyAuditRepo(sm)), store, engine, sm
 
@@ -100,7 +100,7 @@ async def test_rename_moves_the_label_and_nothing_else(tmp_path):
         created = await svc.register(
             kind="thing",
             name="before",
-            config={"credential_ref": "thing/secret"},
+            config={"secret_ref": "thing/secret"},
             actor="test",
         )
         await svc.update_scope(created.uid, Scope(agents=["agent-uid-1"]), actor="test")
@@ -129,9 +129,9 @@ async def test_rename_moves_the_label_and_nothing_else(tmp_path):
         assert renamed.scope == Scope(agents=["agent-uid-1"])
         assert renamed.enabled is False
 
-        # The credential is still in the store and still cited by this resource.
+        # The secret is still in the store and still cited by this resource.
         assert store.exists("thing/secret")
-        assert [r.uid for r in await svc.find_credential_citations("thing/secret")] == [created.uid]
+        assert [r.uid for r in await svc.find_secret_citations("thing/secret")] == [created.uid]
 
         # The kind-owned row did not cascade away, because it was never keyed
         # on the name.

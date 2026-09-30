@@ -82,7 +82,7 @@ resource gets a random `uuid4`.
   gets rename at once. Two machines hold one
   identity per resource. The spelling (`uuid4().hex`) is the one already used
   for provider credential refs, the fallback machine id and the frontend's
-  minted credential refs (`lib/credentialRef.ts`).
+  minted credential refs (`lib/secretRef.ts`).
 - **Cons.** A URL is no longer guessable from a name, and every surface
   changed in one release, with no redirect from name-based URLs. The CLI has to
   resolve names to uids (`surfaces/cli/_resolve.py`, one

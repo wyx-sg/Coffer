@@ -114,8 +114,8 @@ class SyncRemoteModel(Base):
 
     Single row by construction: ``id`` is pinned to 1 by a check constraint, so
     "at most one sync remote" is a schema fact rather than a convention the
-    application has to remember. ``credential_ref`` holds a reference into the
-    credential store — never a secret, so this row is safe to read into an API
+    application has to remember. ``secret_ref`` holds a reference into the
+    secret store — never a secret, so this row is safe to read into an API
     response or a log line without redaction.
 
     The ``last_*`` columns are the most recent round, denormalised onto the
@@ -137,8 +137,8 @@ class SyncRemoteModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     url: Mapped[str] = mapped_column(String, nullable=False)
     branch: Mapped[str] = mapped_column(String, nullable=False, default="main")
-    credential_ref: Mapped[str | None] = mapped_column(String, nullable=True)
-    include_credentials: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    secret_ref: Mapped[str | None] = mapped_column(String, nullable=True)
+    include_secrets: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     interval_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=3600)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     worktree_path: Mapped[str] = mapped_column(String, nullable=False, default="~/.coffer/sync")
@@ -193,7 +193,7 @@ class SyncRunModel(Base):
     join_kind: Mapped[str | None] = mapped_column(String, nullable=True)
     #: ``commit`` is reserved in SQL, so the column says what it holds instead.
     commit_sha: Mapped[str | None] = mapped_column(String, nullable=True)
-    #: Already redacted of the push credential by the time it arrives here.
+    #: Already redacted of the push secret by the time it arrives here.
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -254,24 +254,26 @@ class SyncHeldPathModel(Base):
     held_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
 
-class CredentialModel(Base):
+class SecretModel(Base):
     """Fernet-encrypted secret values. Plaintext NEVER lands in this table —
-    only ciphertext produced by EncryptedCredentialStore. Timestamps are ISO-8601
+    only ciphertext produced by EncryptedSecretStore. Timestamps are ISO-8601
     strings written by the sync store (stdlib sqlite3, not the async ORM)."""
 
-    __tablename__ = "credentials"
+    __tablename__ = "secrets"
 
     ref: Mapped[str] = mapped_column(String, primary_key=True)
     ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
+    #: When a consumer last had the value decrypted on this machine (0135).
+    last_used_at: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class SecretBindingModel(Base):
     """A secret approved for one slot of one destination, at one target.
 
-    Written by the credentials package's sync store (stdlib sqlite3), like
-    ``credentials``. The target is kept only as its fingerprint: a changed
+    Written by the secret package's sync store (stdlib sqlite3), like
+    ``secrets``. The target is kept only as its fingerprint: a changed
     target is a new destination and needs a new approval (ADR
     only-a-present-human-sees-a-secret-or-sends-it-somewhere-new)."""
 

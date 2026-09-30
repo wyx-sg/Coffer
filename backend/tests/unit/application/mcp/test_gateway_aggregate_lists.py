@@ -11,7 +11,7 @@ import pytest
 
 from coffer.application.mcp.discovery import DiscoveredTool
 from coffer.application.mcp.gateway_aggregate_lists import list_tools_across
-from coffer.domain.errors import CredentialLocked, CredentialMissing
+from coffer.domain.errors import SecretLocked, SecretMissing
 
 
 def _tool(server: str, name: str) -> DiscoveredTool:
@@ -45,15 +45,15 @@ async def _noop_subscribe(server: str) -> None:
 @pytest.mark.parametrize(
     "error",
     [
-        CredentialLocked("keychain is locked: (-128, 'Keychain Access Denied')"),
-        CredentialMissing("confluence.API_TOKEN"),
+        SecretLocked("keychain is locked: (-128, 'Keychain Access Denied')"),
+        SecretMissing("confluence.API_TOKEN"),
     ],
     ids=["locked", "missing"],
 )
-async def test_credential_failure_on_one_server_is_dropped_not_fatal(
+async def test_secret_failure_on_one_server_is_dropped_not_fatal(
     error: Exception,
 ) -> None:
-    """A server whose credentials can't be resolved is dropped from the
+    """A server whose secrets can't be resolved is dropped from the
     aggregate, exactly like a dead or timed-out upstream — the other
     servers' tools still come back."""
     discovery = _FakeDiscovery(

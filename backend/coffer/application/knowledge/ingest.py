@@ -121,14 +121,14 @@ class IngestService:
         registry: ConverterRegistry,
         models: ModelSelectorPort | None = None,
         completion: LlmCompletionPort | None = None,
-        credential_resolver: Callable[[str], str] | None = None,
+        secret_resolver: Callable[[str], str] | None = None,
         read_timeout: TimeoutReader | None = None,
     ) -> None:
         self._knowledge = knowledge
         self._registry = registry
         self._models = models
         self._completion = completion
-        self._credential_resolver = credential_resolver
+        self._secret_resolver = secret_resolver
         self._read_timeout = read_timeout
 
     async def ingest(
@@ -188,7 +188,7 @@ class IngestService:
         configured and reachable, else the document's own opening prose."""
         if self._models is not None and self._completion is not None:
             model = await self._models.get_default()
-            if model is not None and self._credential_resolver is not None:
+            if model is not None and self._secret_resolver is not None:
                 with contextlib.suppress(Exception):
                     timeout = await resolve_timeout(self._read_timeout)
                     described = await asyncio.wait_for(
@@ -196,7 +196,7 @@ class IngestService:
                             system=_DESCRIPTION_SYSTEM,
                             user=markdown[:_DESCRIPTION_SOURCE_CHARS],
                             model=model,
-                            credential_resolver=self._credential_resolver,
+                            secret_resolver=self._secret_resolver,
                             timeout=timeout,
                         ),
                         timeout=timeout,

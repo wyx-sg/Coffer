@@ -411,7 +411,7 @@ A deleted document or collection stays in the [history](#history-and-undo). **Re
 
 ## What not to put in knowledge
 
-- **Secrets.** No keys, tokens or passwords. Use [Credentials](/guides/credentials).
+- **Secrets.** No keys, tokens or passwords. Use [Secret store](/guides/secret-store).
 - **What the code already says.** If an agent can read it in the repository, it does not belong here.
 - **Scratch notes.** What goes in should still be true in a month.
 

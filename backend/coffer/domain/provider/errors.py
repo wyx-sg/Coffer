@@ -5,15 +5,15 @@ from __future__ import annotations
 from coffer.domain.error_base import CofferError
 
 
-class ProviderCredentialSourceInvalid(CofferError):  # noqa: N818
+class ProviderSecretSourceInvalid(CofferError):  # noqa: N818
     """A provider create must supply EXACTLY one of ``secret_value`` /
-    ``credential_ref`` — not both, not neither. Maps to 422."""
+    ``secret_ref`` — not both, not neither. Maps to 422."""
 
-    code = "PROVIDER_CREDENTIAL_SOURCE_INVALID"
+    code = "PROVIDER_SECRET_SOURCE_INVALID"
 
     def __init__(self) -> None:
         super().__init__(
-            "provide exactly one of 'secret_value' or 'credential_ref' (not both, not neither)"
+            "provide exactly one of 'secret_value' or 'secret_ref' (not both, not neither)"
         )
 
 
@@ -67,7 +67,7 @@ class ProviderInternalOnly(CofferError):  # noqa: N818
 
 
 class NoActiveProvider(CofferError):  # noqa: N818
-    """A connection has no credential to hand the local model proxy — raised
+    """A connection has no secret to hand the local model proxy — raised
     by the service's key lookup, which the proxy's membership check treats as
     "not a member". Maps to 404."""
 

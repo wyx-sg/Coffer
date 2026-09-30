@@ -13,7 +13,7 @@ A developer who uses more than one AI coding agent accumulates the same assets s
 
 Coffer is one local process that holds those assets once and hands them to every agent through the channels the agents already speak: an MCP endpoint, files in the agent's own skills directory, and entries in the agent's own config files. Everything it holds lives on your machine. The architecture follows from three requirements:
 
-- **One owner of state.** A single long-lived daemon owns the database, the credential store and every file tree, so there is exactly one writer.
+- **One owner of state.** A single long-lived daemon owns the database, the secret store and every file tree, so there is exactly one writer.
 - **Many thin entry points.** Agents, the CLI, the web UI and the desktop app are all clients of that daemon over loopback HTTP. None of them holds state of its own.
 - **The agent's own files stay authoritative.** Coffer reads an agent's configuration, memory and transcripts where the agent keeps them, and writes only documented surfaces, so uninstalling Coffer leaves each agent working.
 
@@ -66,14 +66,14 @@ What each box is:
 | --- | --- |
 | Coding agents | Claude Code and Codex, the two agent types Coffer registers. Each reaches Coffer through an MCP server entry Coffer writes into its config, and reads skills Coffer delivers into its skills directory. |
 | `coffer-mcp-shim` | A small stdio-to-HTTP forwarder the agent launches as an MCP server. It finds (or starts) the daemon and relays JSON-RPC to `/mcp`, stamping the agent's identity onto the handshake. |
-| `coffer` CLI | A Typer application. Every command is an HTTP call to the daemon; the CLI never opens the database or the credential store itself. |
+| `coffer` CLI | A Typer application. Every command is an HTTP call to the daemon; the CLI never opens the database or the secret store itself. |
 | Web UI | A React single-page app, built to static files that the daemon serves from its own origin. |
 | Desktop shell | A Tauri 2 app that hosts the same built frontend in a native window with a menu bar item. It supplies the page its daemon address and token over IPC, starts the daemon when none is running, and updates itself from a signed release manifest. |
 | HTTP API | FastAPI routes under `/api/v1/*`: the management plane every client uses. |
 | MCP gateway | The `/mcp` endpoint. It aggregates every enabled upstream MCP server behind one endpoint, adds Coffer's builtin tools, and filters what each agent sees by reach. See [MCP gateway](/architecture/mcp-gateway). |
 | Resource framework and kinds | The kind-agnostic core that gives every user-managed thing — an MCP server, a skill, a channel — one identity, lifecycle, audit trail and reach, plus the seven kinds plugged into it. See [Resource framework](/architecture/resource-framework). |
 | Background workers | In-process asyncio loops: retention pruning, knowledge curation, memory aggregation and distillation, vault sync rounds, the transcript-cache warm-up, the MCP session reaper, and the channel runtime that holds Telegram polling and SeaTalk websocket connections. The full list with cadences is in [Daemon and processes](/architecture/daemon#background-work). |
-| `coffer.db` | SQLite, the system of record for control-plane state: resources, audit, credentials (as ciphertext), chat history, sync bookkeeping. See [Persistence](/architecture/persistence). |
+| `coffer.db` | SQLite, the system of record for control-plane state: resources, audit, secrets (as ciphertext), chat history, sync bookkeeping. See [Persistence](/architecture/persistence). |
 | knowledge, memory, skills | Plain file trees under `~/.coffer/`. Knowledge collections and memory partitions are Markdown; skills are master bundles delivered into each agent. |
 | Upstream MCP servers | The servers you register — stdio subprocesses or HTTP endpoints — started per client session. |
 | Model providers | Anthropic, OpenAI-compatible and Ollama endpoints Coffer's own passes run on, and the provider profiles it projects into agents. |
@@ -89,7 +89,7 @@ Coffer runs as a small set of cooperating processes. Only one of them holds stat
 | `coffer-daemon` | Long-lived. Serves until you stop it or another daemon supersedes it; never stands down on its own. | Owns all state and is the single SQLite writer. Binds `127.0.0.1` on the port you pinned in `~/.coffer/daemon-config.json`, else `8000`, and refuses to start (naming the holder) if it cannot bind that port. |
 | `coffer-mcp-shim` | One per MCP client session. | Forwards stdio to the daemon's `/mcp` endpoint; detect-or-spawns the daemon; recovers when the daemon restarts. |
 | `coffer` | One per command. | Calls the daemon over loopback; detect-or-spawns it; warns on stderr when the daemon's version differs from its own. |
-| Desktop shell | While the app runs. | Hosts the frontend, supplies credentials over IPC, detect-or-spawns and restarts the daemon. Quitting it does not stop the daemon. |
+| Desktop shell | While the app runs. | Hosts the frontend, supplies secrets over IPC, detect-or-spawns and restarts the daemon. Quitting it does not stop the daemon. |
 | Upstream MCP servers | Per client session, per server. | Spawned by the gateway's per-session supervisor and reaped when the session closes. |
 | Agent runtimes | Per chat turn or conversation. | The Claude Agent SDK and the Codex app-server, started by the chat platform to run a turn. |
 
@@ -111,7 +111,7 @@ A skill is a master folder under `~/.coffer/skills/<name>/` and a `skill` resour
 
 ### A sync round
 
-When you configure a git remote you own, a worker runs converge rounds on the remote's interval, hourly by default. A round serializes the vault differentially into a git working tree (`~/.coffer/sync` by default) and commits it, merges the remote branch, applies the diff between what this vault last provably held and the merge result back into the vault path by path, then pushes and advances a machine-local pointer. Resource documents travel without their reach, credentials travel only as Fernet ciphertext and only when you opt in, and a round that would delete more than its configured share holds for your confirmation. Details: [Vault sync](/architecture/vault-sync).
+When you configure a git remote you own, a worker runs converge rounds on the remote's interval, hourly by default. A round serializes the vault differentially into a git working tree (`~/.coffer/sync` by default) and commits it, merges the remote branch, applies the diff between what this vault last provably held and the merge result back into the vault path by path, then pushes and advances a machine-local pointer. Resource documents travel without their reach, secrets travel only as Fernet ciphertext and only when you opt in, and a round that would delete more than its configured share holds for your confirmation. Details: [Vault sync](/architecture/vault-sync).
 
 ## The design in eleven decisions
 
@@ -128,7 +128,7 @@ Most of Coffer's shape follows from a handful of decisions. Each one below is ar
 | Knowledge is plain Markdown with no index; its catalogue reaches agents as a skill. | Agents read files all day and rarely call a retrieval tool. Nothing derived can disagree with the files. | [Knowledge](/architecture/knowledge) |
 | Memory is aggregated read-only from each agent's own files and never written back. | Each agent keeps its own memory loop untouched, and everything Coffer derives can be deleted and rebuilt. | [Memory](/architecture/memory) |
 | Sync is git: three-way merge arbitrates, every diff is taken against a local pointer, and a guard holds large deletions. | A shared base is the only way to tell "never had it" from "deleted it". Your remote stays an ordinary repository you can inspect. | [Vault sync](/architecture/vault-sync) |
-| Secrets are Fernet ciphertext under one master key, kept in a `0600` file by default. | Coffer's builds are unsigned, and macOS re-prompts for every keychain item a new build touches. One key in a file removes the prompts; the keychain stays an opt-in. | [Security model](/architecture/security#the-credential-store) |
+| Secrets are Fernet ciphertext under one master key, kept in a `0600` file by default. | Coffer's builds are unsigned, and macOS re-prompts for every keychain item a new build touches. One key in a file removes the prompts; the keychain stays an opt-in. | [Security model](/architecture/security#the-secret-store) |
 | Unfinished features ship in every build, switched off on `stable`, instead of living on a branch. | One line of development, and the owner tests exactly what users run. Switching a feature off hides it and keeps its data. | [Distribution and releases](/architecture/distribution#experimental-features) |
 
 ### What Coffer deliberately is not
@@ -153,7 +153,7 @@ Versions are the ones pinned in [`backend/uv.lock`](https://github.com/wyx-sg/Co
 | HTTP | FastAPI 0.141, Uvicorn 0.52 | REST API, the `/mcp` endpoint, serving the web UI. |
 | Validation | Pydantic 2.13 | Every config schema and wire model; JSON columns are validated on the way in and out. |
 | Persistence | SQLAlchemy 2.0 (async) over aiosqlite, Alembic 1.18 | The SQLite system of record and its migrations. |
-| Credentials | `cryptography` (Fernet), `keyring` 25 | Envelope encryption; `keyring` only for the opt-in keychain master key. |
+| Secrets | `cryptography` (Fernet), `keyring` 25 | Envelope encryption; `keyring` only for the opt-in keychain master key. |
 | MCP | `mcp` SDK 2.2 | The gateway as an MCP server and as a client of upstream servers. |
 | Coffer's own model calls | LangChain 1.3, LangGraph 1.2 (`langchain-anthropic`, `-openai`, `-ollama`) | Knowledge curation, memory distillation, sync conflict resolution. |
 | Agent turns | Claude Agent SDK 0.2, Codex app-server | Running a chat turn in Claude Code or Codex. |

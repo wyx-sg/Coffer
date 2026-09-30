@@ -49,7 +49,7 @@ _CONNECTION_UID = "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
 _CONNECTION = {
     "protocol": "anthropic",
     "base_url": "https://gw.example",
-    "credential_ref": "gw-key",
+    "secret_ref": "gw-key",
 }
 
 #: The one command every memory hook entry runs, marker first.

@@ -44,7 +44,7 @@ def _source(
     return McpAttentionSource(
         resources=resources,
         health=health or FakeHealth(),
-        credentials=FakeStore(held or set()),
+        secrets=FakeStore(held or set()),
         runner_missing=runner,
     )
 
@@ -103,7 +103,7 @@ async def test_a_cited_ref_the_store_lacks_asks_for_the_secret_without_a_value()
     assert item.action == AttentionAction(
         verb="set_secret",
         method="POST",
-        path="/api/v1/credentials",
+        path="/api/v1/secrets",
         body={"ref": "mcp/jira/token"},
     )
 

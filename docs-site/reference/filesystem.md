@@ -16,7 +16,7 @@ Every path below is resolved against `$HOME`. The storage-location environment v
 ├── coffer.db                     # the database (SQLite, WAL mode)
 ├── coffer.db-wal, coffer.db-shm  # SQLite write-ahead log and shared memory
 ├── coffer.db.pre-<revision>      # copy taken before a schema migration (newest 3 kept)
-├── master.key                    # credential master key (when stored as a file)
+├── master.key                    # secret master key (when stored as a file)
 ├── machine-id                    # fallback machine id (only if the host gives none)
 ├── daemon.json                   # running daemon: pid, port, API token
 ├── daemon.lock                   # spawn lock
@@ -53,13 +53,13 @@ Every path below is resolved against `$HOME`. The storage-location environment v
 
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
-| `coffer.db` | Every resource (MCP servers, agents, providers, channels, …), credentials as Fernet ciphertext, conversations, audit log, MCP invocation log, settings. | daemon | Resources and shared settings travel as YAML documents in the sync tree; the file itself never does | **No.** This is the vault. Stop the daemon before copying it. |
+| `coffer.db` | Every resource (MCP servers, agents, providers, channels, …), secrets as Fernet ciphertext, conversations, audit log, MCP invocation log, settings. | daemon | Resources and shared settings travel as YAML documents in the sync tree; the file itself never does | **No.** This is the vault. Stop the daemon before copying it. |
 | `coffer.db-wal`, `coffer.db-shm` | SQLite write-ahead log and shared-memory index. The WAL can hold committed data not yet folded into `coffer.db`. | daemon | No | **No**, and never copy `coffer.db` without them while the daemon runs. |
 | `coffer.db.pre-<revision>` (+ `-wal`, `-shm`) | A copy of the database taken just before a migration changes the schema. Only the newest three are kept. | daemon | No | Yes, once the upgraded daemon works. To roll back a failed upgrade, stop the daemon and rename the copy to `coffer.db`. |
-| `master.key` | The Fernet key that decrypts stored credentials, mode `0600`. Absent when the key lives in the OS keychain (service `coffer`, entry `master-key`). Always beside the database file. | daemon | **Never.** Back it up in the desktop app and install it on another machine with `coffer sync key import`. | **No.** Without it every stored secret is unreadable. |
+| `master.key` | The Fernet key that decrypts stored secrets, mode `0600`. Absent when the key lives in the OS keychain (service `coffer`, entry `master-key`). Always beside the database file. | daemon | **Never.** Back it up in the desktop app and install it on another machine with `coffer sync key import`. | **No.** Without it every stored secret is unreadable. |
 | `machine-id` | A random id, mode `0600`, used only when the host exposes no hardware id (macOS `IOPlatformUUID`, Linux machine-id). Never rewritten. | daemon | No | No: a new id splits this machine's identity in a synced vault. |
 
-See [Persistence](/architecture/persistence) and [Credentials](/guides/credentials).
+See [Persistence](/architecture/persistence) and [Secret store](/guides/secret-store).
 
 ### Daemon files {#daemon-files}
 
@@ -89,7 +89,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
 | `logs/daemon.log`, `daemon.log.1`…`.3` | The daemon's log, one JSON object per line, rotated at 10 MB with three backups. The desktop app and the login service write their own records into the same file. Shown on the **Activity** page, read by `coffer log daemon`, and located by `coffer path logs`. | daemon, desktop app | No | Rotated files, yes. Leave the live file while the daemon runs. |
-| `logs/proxy.log` | Standard error of the model proxy: metadata-only lines, never a body, prompt or credential. | daemon (supervisor), model proxy | No | Yes. |
+| `logs/proxy.log` | Standard error of the model proxy: metadata-only lines, never a body, prompt or secret. | daemon (supervisor), model proxy | No | Yes. |
 | `logs/shim-<pid>-<epoch>.log` | One file per MCP shim process, created only when the shim has something to log. Pruned after 7 days. | shim | No | Yes. |
 | `logs/upstream/<server>.log`, `.log.1` | Standard error of each stdio upstream MCP server. Rolled aside at 2 MB; the `.1` copy is pruned after 7 days. | daemon | No | Yes. |
 
@@ -119,7 +119,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | `sync/manifest.json` | Layout version of the tree, read before anything is applied. | daemon | Yes | — |
 | `sync/resources/<kind>/<uid>.yaml` | One document per synced resource. | daemon | Yes | — |
 | `sync/state/<area>/…yaml` | Shared state owned by one module, for example the internal engine settings. | daemon | Yes | — |
-| `sync/credentials/<ref>.enc` | Credential ciphertext, only when you opt in. Never the key. | daemon | Yes | — |
+| `sync/secret/<ref>.enc` | Secret ciphertext, only when you opt in. Never the key. | daemon | Yes | — |
 | `sync/machines/<machine-id>.yaml` | One descriptor per machine sharing the vault. | daemon | Yes | — |
 | `sync/knowledge/`, `sync/skills/` | Mirrors of the live trees. | daemon | Yes | — |
 

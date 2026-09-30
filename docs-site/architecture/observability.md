@@ -12,8 +12,8 @@ This page explains the records Coffer keeps about itself, how they are written, 
 Coffer is a background process that other programs talk to. When something goes wrong, the person noticing it is usually looking at an agent's chat window, not at Coffer. That shapes the requirements:
 
 - **The answer has to be reachable from where the failure shows up.** An agent that sees a failed tool call should be able to ask Coffer what happened, without the user hunting for a file.
-- **"What changed" and "what happened" are different questions.** A credential that stopped resolving might be a configuration change (someone deleted it) or a runtime fault (the upstream refused it). Both records are needed, and they need to line up on one timeline.
-- **Nothing observable may leak a secret.** Coffer holds credentials for every upstream it proxies. Logs, audit rows and invocation rows are written far more often than they are read, and they have to be safe by construction.
+- **"What changed" and "what happened" are different questions.** A secret that stopped resolving might be a configuration change (someone deleted it) or a runtime fault (the upstream refused it). Both records are needed, and they need to line up on one timeline.
+- **Nothing observable may leak a secret.** Coffer holds secrets for every upstream it proxies. Logs, audit rows and invocation rows are written far more often than they are read, and they have to be safe by construction.
 - **Records must not grow without bound.** A local tool that fills the disk after a year of use has failed its user.
 
 ## Design decisions
@@ -137,7 +137,7 @@ The audit log answers "what changed, and who changed it". It lives in the `audit
 Two decisions shape this:
 
 - **Identity and label are stored separately.** A resource's trail is queried by its id, so renaming a resource leaves its history intact, and old rows keep the name that was true when they were written. There is no way to audit an event by label alone; see [Resource framework](/architecture/resource-framework).
-- **Redaction happens before storage, per kind.** Each resource kind can supply an `audit_redactor` that strips secret fields from a configuration before it becomes `details`. The MCP server kind uses one to drop the `env` and `headers` maps from its transport, keeping only credential references.
+- **Redaction happens before storage, per kind.** Each resource kind can supply an `audit_redactor` that strips secret fields from a configuration before it becomes `details`. The MCP server kind uses one to drop the `env` and `headers` maps from its transport, keeping only secret references.
 
 The actor comes from the `X-Coffer-Actor` request header, which must match `^[a-z][a-z0-9_-]{0,31}$`; a missing header means `api`, and anything else is rejected with `400`.
 
@@ -152,7 +152,7 @@ The vocabulary is a closed enumeration, `AuditEventType` in `backend/coffer/doma
 | Resources | `resource_created`, `resource_updated`, `resource_enabled`, `resource_disabled`, `resource_deleted`, `resource_renamed`, `resource_scope_updated` |
 | MCP capabilities | `capability_enabled`, `capability_disabled` |
 | Daemon | `token_rotated`, `daemon_residency_updated`, `retention_updated`, `internal_engine_model_set` |
-| Credentials | `credential_set`, `credential_revealed`, `credential_deleted`, `credential_migrated`, `master_key_relocated`, `secret_resolved`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected`, `secret_imported` |
+| Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `secret_migrated`, `master_key_relocated`, `secret_resolved`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected`, `secret_imported` |
 | Agents | `agent_config_file_written`, `agent_config_file_deleted`, `agent_mcp_installed`, `agent_mcp_uninstalled`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled` |
 | Skills | `skill_imported`, `skill_updated`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted` |
 | Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted`, `knowledge_curated` |
@@ -161,15 +161,15 @@ The vocabulary is a closed enumeration, `AuditEventType` in `backend/coffer/doma
 | Vault sync | `sync_run`, `sync_confirmed`, `sync_rejected`, `sync_rolled_back`, `sync_machine_removed`, `master_key_exported`, `master_key_imported` |
 | Providers | `provider_switched`, `provider_internal_default_set`, `provider_transcribe_default_set`, `provider_projection_refused` |
 
-No credential event carries a secret value; each records the ref, the standalone secret's name or the destination only.
+No secret event carries a secret value; each records the ref, the standalone secret's name or the destination only.
 
-- `credential_revealed` — a person revealed or copied a value in the desktop app, behind a presence check. It is the only way a value is shown, since no route, command or tool returns one.
+- `secret_revealed` — a person revealed or copied a value in the desktop app, behind a presence check. It is the only way a value is shown, since no route, command or tool returns one.
 - `secret_resolved` — `coffer run` resolved a standalone secret into one child process. The row names the secret, the program and the working directory, never the value or the rest of the command line.
 - `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` — a secret waited to be sent somewhere new (or a value in use waited to be replaced, or the protection waited to be switched off), and a person answered. See [Secrets](/guides/secrets#approvals).
-- `secret_imported` — `coffer credentials import` moved a plaintext secret from a file into the store.
+- `secret_imported` — `coffer secret import` moved a plaintext secret from a file into the store.
 - `master_key_exported` — the desktop app wrote a key backup, behind a presence check. No command or route exports the key.
 
-`credential_read`, which the old plaintext read route recorded, is no longer written: that route is gone. Decrypting a secret to spawn an upstream is not an audit event.
+`secret_read`, which the old plaintext read route recorded, is no longer written: that route is gone. Decrypting a secret to spawn an upstream is not an audit event.
 
 You read the audit log from the **Changes** tab of the Activity page, with `coffer log audit` (`--kind`, `--name`, `--event-type`, `--since`, `--limit`, `--json`), or through `GET /api/v1/audit`. See [Activity and audit](/guides/activity).
 
@@ -250,7 +250,7 @@ The realistic reader of these records is often an agent at the moment something 
 
 `--since` takes an ISO 8601 instant or an age such as `30m`, `1h` or `2d`. A filter that cannot be resolved — a name without a kind, or a name that no resource of that kind has — is an error rather than being silently ignored, because an unfiltered answer would look like "nothing happened to this resource". Every command is read-only and prints no secret values: audit details are redacted before storage, and log records carry none by construction.
 
-An agent that hits a `CREDENTIAL_MISSING` error does not know whether it needs "what changed" or "what failed", so it runs `coffer log audit --since 1h` and `coffer log daemon --errors --since 1h`, or greps the file `coffer path logs` names for the response's trace id.
+An agent that hits a `SECRET_MISSING` error does not know whether it needs "what changed" or "what failed", so it runs `coffer log audit --since 1h` and `coffer log daemon --errors --since 1h`, or greps the file `coffer path logs` names for the response's trace id.
 
 ## Eval capture
 
@@ -273,7 +273,7 @@ The invocation log's honest `error` status for in-band tool errors is what makes
 
 ## Trade-offs and alternatives
 
-**Payloads in the invocation log.** Recording arguments and results would make debugging a single call easier. Coffer does not, because both routinely carry credentials, personal data and file contents, and the log is retained for a month and readable by any agent through `coffer log mcp`. The fixed error marker for in-band tool errors follows the same rule.
+**Payloads in the invocation log.** Recording arguments and results would make debugging a single call easier. Coffer does not, because both routinely carry secrets, personal data and file contents, and the log is retained for a month and readable by any agent through `coffer log mcp`. The fixed error marker for in-band tool errors follows the same rule.
 
 **A log file per writer.** Giving the desktop shell or a detached daemon's stdio their own files would keep `daemon.log` pure JSON. Coffer keeps one file and a tolerant reader instead, because every "check the log" message points at one path and a second file is a place nobody is told to look. Upstream MCP servers are the exception, because their volume would evict Coffer's own records.
 

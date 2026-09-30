@@ -2,10 +2,10 @@
 
 A Fernet token is ``version || timestamp || IV || ciphertext || HMAC``, and the
 timestamp is **cleartext** — eight big-endian bytes of Unix seconds right after
-the version byte. So two blobs encrypting the same credential can be ordered by
+the version byte. So two blobs encrypting the same secret can be ordered by
 when they were encrypted, on a machine that cannot decrypt either of them.
 
-That is the whole reason this module exists. A credential blob is one line of
+That is the whole reason this module exists. A secret blob is one line of
 base64; when two machines re-encrypt the same ref, git has nothing to merge and
 every text-level rule ("newest commit wins") picks by when a machine happened to
 sync rather than by which secret is current. The 2026-07-10 incident was exactly
@@ -51,7 +51,7 @@ def is_fresher(candidate: bytes, incumbent: bytes) -> bool:
     Ties and unreadable headers answer False, so the incumbent is kept. The
     conservative direction is deliberate: keeping a blob that is merely
     equally-old costs nothing, while replacing a current secret with an
-    indistinguishable one can orphan a working credential.
+    indistinguishable one can orphan a working secret.
     """
     a, b = encrypted_at(candidate), encrypted_at(incumbent)
     if a is None or b is None:

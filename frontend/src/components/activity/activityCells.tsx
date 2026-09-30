@@ -66,11 +66,27 @@ export function SourceIcon({ record }: { record: ActivityRecord }) {
   );
 }
 
-/** The call's target, `server.tool`, in mono. */
-export function CallTarget({ call, className }: { call: Invocation; className?: string }) {
+/** The call's target, `server.tool`, in mono; the MCP calls table mutes the server part. */
+export function CallTarget({
+  call,
+  className,
+  muteServer = false,
+}: {
+  call: Invocation;
+  className?: string;
+  muteServer?: boolean;
+}) {
   return (
-    <span className={cn("whitespace-nowrap font-mono text-xs text-text", className)}>
-      {callServerLabel(call)}.{call.capability_key}
+    <span
+      data-call-target
+      className={cn("whitespace-nowrap font-mono text-xs text-text", className)}
+    >
+      {muteServer ? (
+        <span className="text-text-muted">{callServerLabel(call)}.</span>
+      ) : (
+        `${callServerLabel(call)}.`
+      )}
+      {call.capability_key}
     </span>
   );
 }
@@ -150,6 +166,51 @@ const STATUS_TONE: Record<Invocation["status"], StatusTone> = {
 export function CallStatus({ t, call }: { t: TFunction; call: Invocation }) {
   return (
     <StatusWord tone={STATUS_TONE[call.status]}>{t(`activity.status.${call.status}`)}</StatusWord>
+  );
+}
+
+/** A call's status as the drawer's tinted chip: a dot and the word. */
+export function CallStatusChip({ t, call }: { t: TFunction; call: Invocation }) {
+  const tone = STATUS_TONE[call.status];
+  return (
+    <span
+      className={cn(
+        "inline-flex h-[22px] items-center rounded-md px-2 font-semibold",
+        tone === "err"
+          ? "bg-danger-soft"
+          : tone === "warn"
+            ? "bg-warning-soft"
+            : tone === "ok"
+              ? "bg-success-soft"
+              : "bg-chip",
+      )}
+    >
+      <StatusWord tone={tone} className="font-semibold">
+        {t(`activity.status.${call.status}`)}
+      </StatusWord>
+    </span>
+  );
+}
+
+/** A daemon record's level as a small tinted chip, as the Daemon log table shows it. */
+export function LevelChip({ record }: { record: ActivityRecord }) {
+  if (record.source !== "daemon") return null;
+  const level = daemonLevel(record.log);
+  if (!level) return <span className="text-xs text-text-subtle">—</span>;
+  const severity = recordSeverity(record);
+  return (
+    <span
+      className={cn(
+        "inline-flex h-5 items-center rounded-[5px] px-[7px] font-mono text-2xs uppercase",
+        severity === "error"
+          ? "bg-danger-soft text-danger"
+          : severity === "warning"
+            ? "bg-warning-soft text-warning"
+            : "bg-chip text-text-muted",
+      )}
+    >
+      {level}
+    </span>
   );
 }
 

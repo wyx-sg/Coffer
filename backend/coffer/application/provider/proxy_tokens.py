@@ -4,7 +4,7 @@ to the proxy with its own local token").
 
 Each managed agent gets its own random 256-bit token. It unlocks the loopback
 model proxy and nothing else, and it tells the proxy which agent is calling —
-which is how usage is attributed. It is kept in the credential store (as
+which is how usage is attributed. It is kept in the secret store (as
 Fernet ciphertext, like every secret) under ``proxy-token/<agent_uid>``, a
 machine-local ref vault sync never carries, and handed out by
 ``coffer proxy token --agent-uid <uid>``, the command both agents run for it.
@@ -29,14 +29,14 @@ from coffer.domain.model_proxy.state import PROXY_TOKEN_REF_PREFIX, token_digest
 _TOKEN_BYTES = 32
 
 
-class _CredentialStore(Protocol):
+class _SecretStore(Protocol):
     def get(self, ref: str) -> str | None: ...
     def set(self, ref: str, value: str) -> None: ...
     def delete(self, ref: str) -> None: ...
 
 
 def token_ref(agent_uid: str) -> str:
-    """The credential ref an agent's proxy token lives under."""
+    """The secret ref an agent's proxy token lives under."""
     return f"{PROXY_TOKEN_REF_PREFIX}{agent_uid}"
 
 
@@ -49,8 +49,8 @@ def new_token() -> str:
 class ProxyTokenService:
     """Issues, reads, rotates and revokes agents' local proxy tokens."""
 
-    def __init__(self, credentials: _CredentialStore) -> None:
-        self._credentials = credentials
+    def __init__(self, secrets: _SecretStore) -> None:
+        self._secrets = secrets
         # One agent, one token: two concurrent first reads must not mint two.
         self._lock = asyncio.Lock()
 
@@ -58,11 +58,11 @@ class ProxyTokenService:
         """The agent's token, minted on first ask."""
         async with self._lock:
             ref = token_ref(agent_uid)
-            existing = await asyncio.to_thread(self._credentials.get, ref)
+            existing = await asyncio.to_thread(self._secrets.get, ref)
             if existing:
                 return existing
             token = new_token()
-            await asyncio.to_thread(self._credentials.set, ref, token)
+            await asyncio.to_thread(self._secrets.set, ref, token)
             return token
 
     async def rotate(self, agent_uid: str) -> str:
@@ -71,13 +71,13 @@ class ProxyTokenService:
         cadence (Claude Code's helper cache is five minutes)."""
         async with self._lock:
             token = new_token()
-            await asyncio.to_thread(self._credentials.set, token_ref(agent_uid), token)
+            await asyncio.to_thread(self._secrets.set, token_ref(agent_uid), token)
             return token
 
     async def revoke(self, agent_uid: str) -> None:
         """Forget an agent's token (the agent was removed)."""
         async with self._lock:
-            await asyncio.to_thread(self._credentials.delete, token_ref(agent_uid))
+            await asyncio.to_thread(self._secrets.delete, token_ref(agent_uid))
 
     async def digests(self, agent_uids: Iterable[str]) -> dict[str, str]:
         """``agent_uid -> sha256(token)`` for the proxy, minting as needed."""

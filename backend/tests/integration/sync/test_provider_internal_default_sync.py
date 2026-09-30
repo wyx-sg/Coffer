@@ -40,7 +40,7 @@ _LAST = "f" * 32
 
 
 def _ollama(host: str, *, flagged: bool = False) -> dict[str, Any]:
-    """A keyless connection, so no credential has to cross machines."""
+    """A keyless connection, so no secret has to cross machines."""
     return {"protocol": "ollama", "base_url": f"http://{host}:11434", "internal_default": flagged}
 
 

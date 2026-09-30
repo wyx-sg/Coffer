@@ -2,13 +2,17 @@
 //
 // Where the master key lives, whether Coffer could read it, and — in a
 // development build only — the switch that moves it between a file beside
-// the database and the login keychain (spec credentials "Keep the master key
+// the database and the login keychain (spec secret "Keep the master key
 // behind a storage port chosen by the build"). A signed release keeps the key
 // in its Keychain access group and nowhere else, so it has nothing to move.
 //
 // Moving the key re-stores it and changes what macOS asks on every daemon
 // start, so the switch confirms first, and the confirmation closes only once
 // the move went through.
+//
+// Below those: the key backup (desktop app only), the import of a key from
+// another Mac, and the key's fingerprint, grouped in fours so two Macs can be
+// compared at a glance.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -20,10 +24,14 @@ import { translateApiError } from "@/lib/api/errors";
 import { toneTextClass } from "@/lib/statusColors";
 import { cn } from "@/lib/utils";
 import {
-  useCredentialSettings,
-  useUpdateCredentialSettings,
-} from "@/lib/hooks/useCredentialSettings";
+  useSecretSettings,
+  useUpdateSecretSettings,
+} from "@/lib/hooks/useSecretSettings";
 
+import { useMasterKeyFingerprint } from "@/lib/hooks/useSecurity";
+
+import { formatFingerprint } from "./fingerprint";
+import { ImportKeyRow } from "./ImportKeyRow";
 import { MasterKeyBackupRow } from "./MasterKeyBackupRow";
 import { SettingRow, SettingsSection } from "@/components/settings/SettingsLayout";
 
@@ -31,7 +39,7 @@ type Storage = "file" | "keychain";
 
 export function EncryptionSection() {
   const { t } = useTranslation();
-  const { data, isPending, error } = useCredentialSettings();
+  const { data, isPending, error } = useSecretSettings();
 
   return (
     <SettingsSection title={t("settings.security.encryption.title")}>
@@ -47,7 +55,28 @@ export function EncryptionSection() {
         <KeyRows storage={data!.master_key_storage ?? null} />
       )}
       <MasterKeyBackupRow />
+      <ImportKeyRow />
+      <FingerprintRow />
     </SettingsSection>
+  );
+}
+
+function FingerprintRow() {
+  const { t } = useTranslation();
+  const { data } = useMasterKeyFingerprint();
+  return (
+    <SettingRow
+      label={t("settings.security.fingerprint.title")}
+      description={t("settings.security.fingerprint.description")}
+    >
+      <code className="font-mono text-sm text-text" data-testid="key-fingerprint">
+        {data?.fingerprint
+          ? formatFingerprint(data.fingerprint)
+          : data
+            ? t("settings.security.fingerprint.none")
+            : "—"}
+      </code>
+    </SettingRow>
   );
 }
 
@@ -72,13 +101,16 @@ function KeyRows({ storage }: { storage: string | null }) {
             : t("settings.security.masterKey.keychainDescription")
         }
         status={
-          <span className={cn("text-xs", toneTextClass(signed ? "muted" : "warn"))}>
-            {signed
-              ? t("settings.security.masterKey.accessGroupNote")
-              : inFile
+          // A signed release reads as the design draws it: the row and OK.
+          // Only a development build carries a note, because its key is
+          // weaker than the release's.
+          signed ? null : (
+            <span className={cn("text-xs", toneTextClass("warn"))}>
+              {inFile
                 ? t("settings.security.masterKey.developmentFile")
                 : t("settings.security.masterKey.developmentKeychain")}
-          </span>
+            </span>
+          )
         }
       >
         <StatusWord tone="ok">{t("settings.security.masterKey.ok")}</StatusWord>
@@ -90,7 +122,7 @@ function KeyRows({ storage }: { storage: string | null }) {
 
 function MoveKeyRow({ isKeychain }: { isKeychain: boolean }) {
   const { t } = useTranslation();
-  const update = useUpdateCredentialSettings();
+  const update = useUpdateSecretSettings();
   // The storage the user asked to move to, while the confirmation is open.
   const [target, setTarget] = useState<Storage | null>(null);
   const confirmKey = target === "keychain" ? "confirmKeychain" : "confirmFile";

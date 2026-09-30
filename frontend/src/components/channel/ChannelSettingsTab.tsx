@@ -2,7 +2,7 @@
 // A channel's Settings, saved as they change — there is no Save button. A
 // quiet indicator at the top says Saving… / Saved / Couldn't save. The
 // sections, in the board's order: its name (any display name, kept as the
-// resource's title), in group chats and message batching, credentials
+// resource's title), in group chats and message batching, secrets
 // (SeaTalk's App ID is editable; a secret is shown masked and replaced through
 // a dialog), the machine that runs it, replies, working directories, and the
 // danger zone.
@@ -107,7 +107,7 @@ export function ChannelSettingsTab({ channel, onReplaceSecret, onDelete }: Props
 
       <ChannelBatchingFields channel={channel} save={save} />
 
-      <Section title={t("channels.settings.credentials.title")}>
+      <Section title={t("channels.settings.secrets.title")}>
         {seatalk ? (
           <div className="space-y-1.5">
             <Label htmlFor={`${id}-app-id`}>{t("channels.dialog.appId")}</Label>
@@ -136,10 +136,10 @@ export function ChannelSettingsTab({ channel, onReplaceSecret, onDelete }: Props
             <p className="font-mono text-xs text-text-muted">••••••••••••</p>
           </div>
           <Button size="sm" variant="outline" onClick={onReplaceSecret}>
-            {t("channels.settings.credentials.replace")}
+            {t("channels.settings.secrets.replace")}
           </Button>
         </div>
-        <p className="text-xs text-text-muted">{t("channels.settings.credentials.hint")}</p>
+        <p className="text-xs text-text-muted">{t("channels.settings.secrets.hint")}</p>
       </Section>
 
       <Section title={t("channels.machine.title")}>

@@ -10,8 +10,8 @@ Coffer's backend is Python 3.12+.
 - **FastAPI** for HTTP surface
 - **Pydantic v2** for models + validation
 - **SQLite** via **SQLAlchemy 2 (async)** + **`aiosqlite`** (the exclusive data-access path)
-- **`cryptography`** (Fernet) for the envelope-encrypted credential store
-- **`keyring`** for OS keychain (credential module only — master key opt-in + legacy migration)
+- **`cryptography`** (Fernet) for the envelope-encrypted secret store
+- **`keyring`** for OS keychain (secret module only — master key opt-in + legacy migration)
 - **`asyncio`** for async + subprocess management. Coffer's own code imports
   `asyncio`, never `anyio` (which `domain/` is forbidden to import at all) — but
   `anyio` is underneath Starlette and the `mcp` SDK, and its task-group cancel
@@ -59,11 +59,11 @@ infrastructure/— adapters for SQLite, keyring, and outbound I/O
 
 **Import direction is one-way**: `surfaces → application → domain`; `infrastructure` adapts to ports defined in `application`. `domain/` is pure.
 
-The layering import rules, the credential-access rule, and the "extract cross-cutting modules only after the second feature needs them" rule are invariants owned by [`docs-site/architecture/principles.md`](../docs-site/architecture/principles.md). The Python-specific way they land in this codebase:
+The layering import rules, the secret-access rule, and the "extract cross-cutting modules only after the second feature needs them" rule are invariants owned by [`docs-site/architecture/principles.md`](../docs-site/architecture/principles.md). The Python-specific way they land in this codebase:
 
 - `domain/` stays pure Python + Pydantic only — no FastAPI, SQLAlchemy, httpx, or other external SDKs.
 - `application/` defines ports; `infrastructure/` adapts to them.
-- `keyring` is imported only by the credential module; everywhere else passes credential refs.
+- `keyring` is imported only by the secret module; everywhere else passes secret refs.
 - Each registered resource kind has a factory in `application/<kind>/kind.py` (`make_agent_kind`, `make_mcp_kind`, …; chat and sync register none) that takes the services it needs and returns a frozen `Kind`; the composition root (`surfaces/http/app.py` via per-kind `*_wiring.py`, `surfaces/cli/main.py`) registers it and mounts its routes. FastAPI dependency providers are split per kind: `surfaces/http/dependencies.py` holds only the kind-agnostic core, and each kind publishes its own concretely-typed `set_*`/`get_*` pairs from its own module — nothing is typed `Any`.
 - The import-linter cross-kind fence covers every kind symmetrically (mcp, agent, skill, knowledge, channel, chat, provider, memory, sync). The only exceptions are domain vocabulary, not services: `provider`/`memory` may import `domain.agent`, `channel` may import `domain.chat`; `TYPE_CHECKING`-only imports don't count. Code two kinds need moves to a kind-agnostic package at the layer root (`infrastructure/net/`, `infrastructure/agent_files/`, `domain/hook_trust.py`).
 - Only `infrastructure/platform/` asks which OS Coffer runs on. The application reaches it through `PlatformPort` (`application/platform_port.py`), whose adapter `HostPlatform` is built once in the composition root and passed in; other infrastructure imports the platform modules directly. `scripts/check_platform_calls.py` (in `make lint`) fails on a `sys.platform` / `platform.system()` / `os.name` check anywhere else. See [Platform port](../docs-site/architecture/platform.md).

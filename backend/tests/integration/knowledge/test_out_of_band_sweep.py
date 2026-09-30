@@ -133,7 +133,7 @@ def _worker(service: KnowledgeService, loop: _Loop) -> CurationWorker:
 
     return CurationWorker(
         service=service,
-        curate=CurationPass(agent=loop, models=_Models(), credential_resolver=lambda ref: "key"),
+        curate=CurationPass(agent=loop, models=_Models(), secret_resolver=lambda ref: "key"),
         is_enabled=_enabled,
         deliver=None,
         list_collections=_collections,

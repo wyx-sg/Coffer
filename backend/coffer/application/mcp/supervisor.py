@@ -17,9 +17,9 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.ports import UpstreamConnectionPort
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.errors import (
     UpstreamTimeout,
     UpstreamUnavailable,
@@ -30,7 +30,7 @@ from coffer.domain.resource import Resource
 
 # A factory the composition root injects to build connections without
 # pulling the infrastructure adapters into the application layer.
-# Signature: (transport, credentials_overlay, spawn_timeout, request_timeout,
+# Signature: (transport, secrets_overlay, spawn_timeout, request_timeout,
 #             resource) -> UpstreamConnectionPort.
 #
 # The whole ``Resource`` rather than its name because the connection needs both
@@ -108,7 +108,7 @@ class SubprocessSupervisor:
     def __init__(
         self,
         resource_service: ResourceService,
-        credential_resolver: CredentialResolver,
+        secret_resolver: SecretResolver,
         upstream_factory: UpstreamFactory,
         *,
         retry_delays: tuple[float, ...] = _RETRY_DELAYS_SECONDS,
@@ -117,7 +117,7 @@ class SubprocessSupervisor:
         max_concurrent_spawns: int | None = None,  # None → env knob, else default
     ) -> None:
         self._resources = resource_service
-        self._credentials = credential_resolver
+        self._secrets = secret_resolver
         # The caller injects the upstream factory so application
         # code never imports infrastructure adapters. The composition root and
         # tests both inject ``coffer.infrastructure.mcp.factory.build_upstream``
@@ -272,12 +272,12 @@ class SubprocessSupervisor:
         # (sqlite, or the OS keychain in legacy setups). Offload to a thread
         # so a slow read can't freeze the whole event loop and stall every
         # other concurrent session. Named destination: the boundary injects
-        # nothing into a target nobody approved (spec credentials "Hold a
+        # nothing into a target nobody approved (spec secret "Hold a
         # secret for a new destination until a person approves it") — for a
         # custom-tool group the target is its base URL.
         overlay = await asyncio.to_thread(
-            self._credentials.materialize,
-            config.transport.credential_refs,
+            self._secrets.materialize,
+            config.transport.secret_refs,
             mcp_destination(resource.uid, resource.name, config),
         )
         return self._upstream_factory(

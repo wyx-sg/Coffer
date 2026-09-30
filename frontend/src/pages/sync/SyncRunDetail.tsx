@@ -2,7 +2,7 @@
 //
 // One round opened up: everything its row could not carry — the paths it moved
 // in each direction, the conflicts, what an agent resolved, what failed, and
-// the credential refs it could not touch.
+// the secret refs it could not touch.
 //
 // Split out of SyncRunsTab so that file stays a tab (query, folding, filters,
 // states) rather than also being a renderer — the same seam syncRunColumns.tsx

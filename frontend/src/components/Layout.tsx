@@ -33,7 +33,7 @@ import { useOpenSettings, usePageLocation } from "@/lib/settingsModal";
 import { CofferLogo } from "./brand/CofferLogo";
 import { DaemonOfflineState, DaemonStatusBar } from "./DaemonOfflineBanner";
 import { SidebarNav } from "./SidebarNav";
-import { PendingApprovalsSheet } from "./credentials/PendingApprovalsSheet";
+import { PendingApprovalsSheet } from "./secret/PendingApprovalsSheet";
 import { SplitDivider } from "./SplitDivider";
 import { CommandPalette } from "./palette/CommandPalette";
 import { useDaemonConnectionDriver } from "./shell/daemonConnection";

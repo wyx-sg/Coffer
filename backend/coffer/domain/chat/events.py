@@ -89,7 +89,7 @@ TURN_TIMEOUT = "turn_timeout"
 
 @dataclass(frozen=True)
 class TurnError:
-    """The turn failed — e.g. credential error, provider timeout, tool limit hit.
+    """The turn failed — e.g. secret error, provider timeout, tool limit hit.
 
     ``code`` is a short machine token; :data:`STREAM_ENDED` and
     :data:`TURN_TIMEOUT` are the two the platform itself raises.

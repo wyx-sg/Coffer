@@ -14,7 +14,7 @@ def test_stdio_transport_minimal():
     assert t.type == "stdio"
     assert t.args == []
     assert t.env == {}
-    assert t.credential_refs == {}
+    assert t.secret_refs == {}
 
 
 def test_stdio_transport_full():
@@ -23,7 +23,7 @@ def test_stdio_transport_full():
         command="npx",
         args=["-y", "@mcp/server-filesystem", "/tmp"],
         env={"LOG_LEVEL": "info"},
-        credential_refs={"GITHUB_TOKEN": "github_pat_main"},
+        secret_refs={"GITHUB_TOKEN": "github_pat_main"},
         cwd="/tmp",
     )
     assert t.args == ["-y", "@mcp/server-filesystem", "/tmp"]
@@ -34,7 +34,7 @@ def test_http_transport_minimal():
     t = HttpTransport(type="http", url="https://api.example.com/mcp")
     assert t.type == "http"
     assert t.headers == {}
-    assert t.credential_refs == {}
+    assert t.secret_refs == {}
 
 
 def test_http_transport_validates_url():
@@ -94,7 +94,7 @@ def test_mcp_server_config_validates_timeout_ranges():
 def test_secret_in_env_rejected():
     """Static env values that look like API keys must be rejected.
 
-    Secrets go through credential_refs.
+    Secrets go through secret_refs.
     """
     with pytest.raises(ValidationError):
         StdioTransport(

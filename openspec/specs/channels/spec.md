@@ -42,7 +42,7 @@ Deliberately out of scope:
   own agent. Coffer neither proxies nor manages these: stacking Coffer's channel
   in front would collide with their runtime, holding a token that is then
   written into an external process's config defeats the vault, and the official
-  cloud integrations have no local credential to hold at all. A native or
+  cloud integrations have no local secret to hold at all. A native or
   official channel that does not support a platform simply does not run there;
   Coffer does not bridge it. Coffer's channel plane manages only what Coffer
   hosts.
@@ -57,30 +57,30 @@ Deliberately out of scope:
 
 ## Requirements
 
-### Requirement: Register channels as a credential-referencing resource kind
+### Requirement: Register channels as a secret-referencing resource kind
 The system MUST provide a `channel` resource kind with per-type configuration, a
 default agent key, and optional default agent configuration. Each child spec
-states its own type's fields. Secrets MUST live in the credential store only;
+states its own type's fields. Secrets MUST live in the secret store only;
 configuration carries references, which are probed at registration time, and a
 registration whose reference does not resolve is rejected with nothing
 persisted.
 
 A channel is addressed by its immutable `uid`
 ([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md));
-its config is the type, the credential refs, the default agent and its config,
+its config is the type, the secret refs, the default agent and its config,
 and `runs_on` — the `machine_id` of the one machine whose daemon runs this
 channel's adapter (see "Bind each channel to the one machine that runs it").
 
 #### Scenario: register a telegram channel
-- **GIVEN** a bot token stored under a credential ref
+- **GIVEN** a bot token stored under a secret ref
 - **WHEN** the user registers a channel named `tg` with type telegram and that ref
 - **THEN** the channel is listed with its config and enabled state
 - **AND** the registration is audited
 
-#### Scenario: reject a channel with a missing credential
-- **GIVEN** no credential stored under the referenced name
+#### Scenario: reject a channel with a missing secret
+- **GIVEN** no secret stored under the referenced name
 - **WHEN** the user registers a channel pointing at it
-- **THEN** registration fails with a credential error and nothing is persisted
+- **THEN** registration fails with a secret error and nothing is persisted
 
 ### Requirement: Run the channel lifecycle through the resource framework
 Channel lifecycle (register, enable, disable, update, delete) MUST ride the
@@ -272,7 +272,7 @@ reuses.
 
 ### Requirement: Manage channels from the Channels page and the CLI
 The Channels page MUST list channels, register new ones (storing secrets
-through the credential store), show each row's paired peer and health, set each
+through the secret store), show each row's paired peer and health, set each
 channel's reach (enable/disable and scope), bind each channel to the machine
 that runs it (see "Bind each channel to the one machine that runs it"), and
 delete a channel from its row. A channel's detail page MUST show its status
@@ -284,7 +284,7 @@ owner (see "Notify the paired owner on demand"), and delete it.
 Editing changes the channel's default agent, its type's plain settings (a
 SeaTalk app id), its title and its two group-gating switches, `require_mention` and
 `ignore_other_mentions` (see "Configure when the bot answers in a group"). Rotating an existing
-secret happens **in place**: the new value MUST be written to the credential
+secret happens **in place**: the new value MUST be written to the secret
 store under the ref the channel already cites before the configuration is
 saved, and that ref MUST stay in the saved configuration, so a rotation moves
 no secret and leaves the channel's machine binding and pairing untouched. A
@@ -305,14 +305,14 @@ generates each kind's lifecycle verbs), and its channel-specific commands are
   `--ignore-other-mentions/--no-ignore-other-mentions`. `edit` also takes
   `--name`, `--title` and `--description`, and it changes only what it is
   given: every switch, setting and ref it is not given keeps its stored value.
-- `coffer credentials set <ref>` rotates a secret under a ref that
+- `coffer secret set <ref>` rotates a secret under a ref that
   `coffer channel show` reports.
 
 Editing a channel's default agent or type settings is served by the detail page
 and `PATCH /api/v1/resources/{uid}`.
 
 #### Scenario: register and list channels from the command line
-- **GIVEN** a running daemon and a stored credential
+- **GIVEN** a running daemon and a stored secret
 - **WHEN** the user runs `coffer channel add` and `coffer channel list`
 - **THEN** the channel is created and appears in the listing
 
@@ -324,7 +324,7 @@ and `PATCH /api/v1/resources/{uid}`.
 
 #### Scenario: rotating a channel secret keeps its refs and pairing
 - **GIVEN** a registered telegram channel whose bot token is stored under a
-  credential ref
+  secret ref
 - **WHEN** the owner enters a new bot token in the channel detail page's edit
   dialog and saves
 - **THEN** the new token is written under the channel's existing ref first
@@ -582,7 +582,7 @@ is not used for it.
 
 **This is the one place in Coffer where user content may leave the machine, and
 it is off by default.** With no connection designated for transcription, no
-model chosen for it, an unsupported protocol, or a credential that will not
+model chosen for it, an unsupported protocol, or a secret that will not
 resolve, nothing is uploaded: the voice is handed to the agent as an audio file
 rather than lost. A failed or slow request degrades the same way — a
 transcription problem MUST never fail a turn. The constitution permits this:
@@ -858,11 +858,11 @@ this.
   allowed and is sometimes the only option — the old machine may be the one that
   is broken — but it opens a window, bounded by that machine's sync interval, in
   which both adapters are live; the surface offering the rebind MUST say so.
-- A channel's configuration MUST carry credential **references** only, never
+- A channel's configuration MUST carry secret **references** only, never
   secret material, exactly as it did when it never travelled — the rule is
   unchanged, and travelling is what makes it load-bearing rather than merely
   tidy. Ciphertext for those refs travels only when the user opts the remote in
-  to credentials, and a machine holding ciphertext without the master key MUST
+  to secrets, and a machine holding ciphertext without the master key MUST
   report those refs locked rather than failing decryption silently.
 - A channel bound to another machine MUST NOT be refused by this machine's own
   preconditions. Its `default_agent` names an agent on the machine that runs it;
@@ -927,7 +927,7 @@ exists.
 Coffer-hosted channels MUST have a unified management surface. A management
 view lists every Coffer-hosted channel with its status, paired owner, agent, and
 health, mirroring the MCP-server / memory / skill management surfaces; each
-channel's credentials (bot tokens, app secrets) are held in the Coffer vault.
+channel's secrets (bot tokens, app secrets) are held in the Coffer vault.
 Externally-hosted channels are out of scope (a non-goal).
 
 #### Scenario: the management surface lists each Coffer-hosted channel with status, owner, agent, and health

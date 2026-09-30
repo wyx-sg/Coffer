@@ -152,13 +152,13 @@ def test_patch_moves_the_wire_of_a_connection_that_is_not_live(tmp_path, monkeyp
     app = _app(tmp_path, monkeypatch, 59840)
     with _client(app) as c:
         uid = _create(c)
-        ref = c.get(f"/api/v1/providers/{uid}").json()["credential_ref"]
+        ref = c.get(f"/api/v1/providers/{uid}").json()["secret_ref"]
         r = c.patch(f"/api/v1/providers/{uid}", json={"protocol": "openai"})
         assert r.status_code == 200, r.text
         assert r.json()["protocol"] == "openai"
         # The key stayed exactly where it was — that is what "in place" buys.
-        assert r.json()["credential_ref"] == ref
-        assert c.get(f"/api/v1/credentials/{ref}/exists").json()["present"] is True
+        assert r.json()["secret_ref"] == ref
+        assert c.get(f"/api/v1/secrets/{ref}/exists").json()["present"] is True
 
 
 @pytest.mark.acceptance(

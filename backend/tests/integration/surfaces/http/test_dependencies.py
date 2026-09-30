@@ -24,9 +24,9 @@ from typing import Any
 import pytest
 
 from coffer.surfaces.http import agent_dependencies as agent_deps
-from coffer.surfaces.http import credential_composition as cred_comp
 from coffer.surfaces.http import dependencies as deps
 from coffer.surfaces.http import provider_dependencies as provider_deps
+from coffer.surfaces.http import secret_composition as cred_comp
 from coffer.surfaces.http import skill_dependencies as skill_deps
 from coffer.surfaces.http import workspace_dependencies as workspace_deps
 from coffer.surfaces.http.chat import dependencies as chat_deps
@@ -106,8 +106,8 @@ _PROVIDERS: list[_Provider] = [
     ),
     # provider kind
     *_pairs(provider_deps, "_provider_service", "_introspection_service", "_price_resolver"),
-    # credential store + master key
-    *_pairs(cred_comp, "_credential_store", "_master_key_manager"),
+    # secret store + master key
+    *_pairs(cred_comp, "_secret_store", "_master_key_manager"),
 ]
 
 # Providers a surface works without: the getter answers ``None`` while unset

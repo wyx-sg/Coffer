@@ -278,7 +278,7 @@ def adopt_mcp(
     name: str | None = typer.Option(None, "--name", help="Register the server under this name"),
     source: str | None = _SOURCE,
     secret: list[str] = typer.Option(  # noqa: B008 — typer option declaration
-        [], "--secret", help="KEY=CREDENTIAL_REF for a secret-like env/header key (repeatable)"
+        [], "--secret", help="KEY=SECRET_REF for a secret-like env/header key (repeatable)"
     ),
 ) -> None:
     """Register an agent's direct MCP entry as a Coffer MCP server and remove it from the agent."""
@@ -287,7 +287,7 @@ def adopt_mcp(
     for item in secret:
         key, sep, cred = item.partition("=")
         if not sep or not key or not cred:
-            typer.echo(f"--secret must be KEY=CREDENTIAL_REF, got {item!r}", err=True)
+            typer.echo(f"--secret must be KEY=SECRET_REF, got {item!r}", err=True)
             raise typer.Exit(2)
         secrets[key] = cred
     body: dict[str, Any] = {
@@ -312,7 +312,7 @@ def _adopt_refusal(r: httpx.Response) -> None:
     envelope = r.json().get("error", {})
     if r.status_code == 422 and envelope.get("code") == "ADOPT_SECRET_UNRESOLVED":
         typer.echo(envelope.get("message", "secret keys unresolved"), err=True)
-        typer.echo("hint: pass --secret KEY=CREDENTIAL_REF for each key listed above", err=True)
+        typer.echo("hint: pass --secret KEY=SECRET_REF for each key listed above", err=True)
         raise typer.Exit(int(ExitCode.INVALID_INPUT))
     if r.status_code == 409:
         typer.echo(envelope.get("message", "name conflict"), err=True)

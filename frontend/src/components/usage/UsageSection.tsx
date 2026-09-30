@@ -1,15 +1,21 @@
 // src/components/usage/UsageSection.tsx — "API-key providers": the metered requests of a range as tiles, a cost chart and a breakdown.
 //
-// Loads and fails on its own (quota trouble never blanks it). The breakdown
-// tab is the summary's grouping and lives in the URL with the range.
+// Loads and fails on its own (quota trouble never blanks it). The range, the
+// Agent and Provider filters and the breakdown tab live in the URL; the ⋯
+// menu beside them exports exactly that as CSV. Before any API-key usage
+// exists the section is only its empty state, without controls to narrow
+// nothing; an empty range after that says only the range is empty.
 import { Info, KeyRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
+import { FilterPill } from "@/components/activity/FilterPill";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
+import { ActionMenu } from "@/components/ui/menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { agentTypeLabel } from "@/lib/agents/display";
 import type { UsageQuery, UsageSummary } from "@/lib/api/usage";
 import { formatDay } from "@/lib/usage/format";
 import { GROUPINGS, parseDay } from "@/lib/usage/range";
@@ -34,8 +40,16 @@ interface Props {
   summary: Loaded<UsageSummary>;
   /** The same range by day (the chart). */
   byDay: Loaded<UsageSummary>;
-  /** Some agent has reported quota — so "nothing yet" would be wrong for the page as a whole. */
-  hasQuota: boolean;
+  /** Nothing has gone through the proxy in the year of daily totals kept: the first run. */
+  neverUsed: boolean;
+  /** The agent types the Agent filter offers. */
+  agentTypes: readonly string[];
+  /** The connections the Provider filter offers. */
+  providers: readonly { uid: string; label: string }[];
+  /** Agent types on a subscription login: their API-key rows carry "via API key". */
+  subscriptionAgents: ReadonlySet<string>;
+  onExport: () => void;
+  exporting: boolean;
 }
 
 export function UsageSection({
@@ -44,7 +58,12 @@ export function UsageSection({
   detailDays,
   summary,
   byDay,
-  hasQuota,
+  neverUsed,
+  agentTypes,
+  providers,
+  subscriptionAgents,
+  onExport,
+  exporting,
 }: Props) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
@@ -53,6 +72,7 @@ export function UsageSection({
       ? `${formatDay(parseDay(query.from), lang, "long")} – ${formatDay(parseDay(query.to), lang, "long")}`
       : t(`usage.providers.range.${query.range}`);
   const data = summary.data;
+  const firstRun = neverUsed && !!data && data.totals.requests === 0;
   const providersLink = (
     <Button asChild size="sm">
       <Link to="/model-providers">{t("usage.empty.openProviders")}</Link>
@@ -78,7 +98,7 @@ export function UsageSection({
       );
     }
     if (data.totals.requests === 0) {
-      return hasQuota ? (
+      return !firstRun ? (
         <EmptyState
           icon={KeyRound}
           title={t("usage.empty.rangeTitle")}
@@ -134,7 +154,11 @@ export function UsageSection({
           </TabsList>
           {GROUPINGS.map((g) => (
             <TabsContent key={g} value={g} className="mt-1">
-              <BreakdownTable summary={data} totalLabel={rangeLabel} />
+              <BreakdownTable
+                summary={data}
+                totalLabel={rangeLabel}
+                subscriptionAgents={subscriptionAgents}
+              />
             </TabsContent>
           ))}
         </Tabs>
@@ -147,10 +171,38 @@ export function UsageSection({
       <div className="flex min-h-7 flex-wrap items-center gap-x-2 gap-y-2.5">
         <h2 className="text-sm font-semibold text-text">{t("usage.providers.title")}</h2>
         <span className="text-xs text-text-muted">{t("usage.providers.subtitle")}</span>
-        <div className="basis-full">
-          <RangeControl query={query} detailDays={detailDays} onChange={onQueryChange} />
-        </div>
       </div>
+      {firstRun ? null : (
+        <div className="flex flex-wrap items-center gap-2">
+          <RangeControl query={query} detailDays={detailDays} onChange={onQueryChange} />
+          <FilterPill
+            label={t("usage.filters.agent")}
+            value={query.agent_type ?? ""}
+            anyValue=""
+            groups={[{ options: agentTypes.map((a) => ({ value: a, label: agentTypeLabel(a) })) }]}
+            onChange={(a) => onQueryChange({ ...query, agent_type: a || undefined })}
+          />
+          <FilterPill
+            label={t("usage.filters.provider")}
+            value={query.connection_uid ?? ""}
+            anyValue=""
+            groups={[{ options: providers.map((p) => ({ value: p.uid, label: p.label })) }]}
+            onChange={(p) => onQueryChange({ ...query, connection_uid: p || undefined })}
+          />
+          <ActionMenu
+            label={t("usage.more")}
+            className="ml-auto"
+            actions={[
+              {
+                key: "export",
+                label: t("usage.exportCsv"),
+                disabled: exporting,
+                onSelect: onExport,
+              },
+            ]}
+          />
+        </div>
+      )}
       {body}
     </section>
   );

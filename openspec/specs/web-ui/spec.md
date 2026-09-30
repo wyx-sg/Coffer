@@ -137,7 +137,7 @@ RESOURCES MUST hold exactly one entry per resource kind that has a list UI —
 today six kinds (`mcp_server`, `skill`, `knowledge`, `memory`, `provider`,
 `channel`), six entries. That correspondence is the rule: **Model providers**
 is filed under Resources rather than Settings, because a `provider` is
-`{protocol, base_url, credential_ref}`, a vendor endpoint and its key, and the
+`{protocol, base_url, secret_ref}`, a vendor endpoint and its key, and the
 model is not stored there but chosen at the point of use; **Channels** is filed
 under Resources rather than Agents, because a channel is a credentialed
 transport the vault owns, not a consumer of the vault.
@@ -414,9 +414,9 @@ The review covers every server's `env` values and, for an HTTP server, the
 values of its `headers` object too, read with the same secret detection as
 `env` rather than ignored (a header and an `env` entry of the same name are one
 header, the `headers` value winning). Secrets MUST
-be lifted into the encrypted credential store with only their refs kept in the
+be lifted into the encrypted secret store with only their refs kept in the
 resource config, and the server MUST be registered before its secrets are
-written, so a failed registration leaves no orphan credential entry.
+written, so a failed registration leaves no orphan secret entry.
 
 The review step MUST show each server's name, taken from its key in the pasted block, as the
 name the server will keep: it cannot be changed after registration
@@ -428,7 +428,7 @@ block.
 #### Scenario: MCP server registration round-trip via JSON import
 - **GIVEN** the user opens the "Add MCP server" dialog from the resources list
 - **WHEN** they paste the standard `mcpServers` JSON and confirm the review step
-- **THEN** the app posts each server to `/api/v1/resources`, then writes any secret env values to `/api/v1/credentials` (register-first ordering avoids orphan credential entries when registration fails)
+- **THEN** the app posts each server to `/api/v1/resources`, then writes any secret env values to `/api/v1/secrets` (register-first ordering avoids orphan secret entries when registration fails)
 - **AND** on success the dialog closes and (for a single server) the app navigates to the server's detail page `/mcp-servers/<uid>` showing the Overview tab
 - **AND** the new server appears on the resources list with health "unknown" then "healthy" within 10 seconds
 
@@ -440,7 +440,7 @@ block.
 #### Scenario: a pasted HTTP server's headers are reviewed for secrets
 - **GIVEN** the user pastes an `mcpServers` block holding an HTTP server with a `headers` object that carries an `Authorization` value
 - **WHEN** the review step is shown and confirmed
-- **THEN** the header is offered as a secret, its value is written to the credential store, and the registered server keeps only its ref (`credential_refs`), never the value in `headers`
+- **THEN** the header is offered as a secret, its value is written to the secret store, and the registered server keeps only its ref (`secret_refs`), never the value in `headers`
 
 #### Scenario: the import review shows each server's fixed name
 - **GIVEN** the user pastes an `mcpServers` block holding one server keyed with a 12-character name and one keyed with a 30-character name
@@ -457,7 +457,7 @@ parse location, or the failing field — and MUST NOT send a request.
 - **GIVEN** the user opens the "Add MCP server" dialog
 - **WHEN** they paste a payload that is not valid JSON (or a valid JSON document that does not match the `mcpServers` shape) and submit
 - **THEN** the dialog stays open and renders a readable error explaining what is wrong (parse error location for malformed JSON, or the failing field for shape-mismatch)
-- **AND** no request is sent to `/api/v1/resources` or `/api/v1/credentials`
+- **AND** no request is sent to `/api/v1/resources` or `/api/v1/secrets`
 - **AND** the dialog never shows the literal text "unexpected error" or `INTERNAL_ERROR`
 
 ### Requirement: Scope Activity's calls table to one server on its page

@@ -1,9 +1,9 @@
 """The secret boundary's vocabulary: destinations, bindings, approvals, names.
 
 A *destination* is a place Coffer sends a secret's plaintext — an MCP server's
-environment variable or HTTP header, a channel adapter's credential, the sync
+environment variable or HTTP header, a channel adapter's secret, the sync
 remote's push token, a provider connection's key. A *binding* is one secret
-(a credential ref) sent to one slot of one destination, and it is approved for
+(a secret ref) sent to one slot of one destination, and it is approved for
 one *target*: the thing that actually receives the value (a stdio server's
 command line, an HTTP server's URL, a provider's base URL). Changing the target
 is sending the secret somewhere new, so an approval is pinned to the target's
@@ -34,7 +34,7 @@ _NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 _URI_RE = re.compile(r"coffer://secret/([A-Za-z0-9_.-]{1,64})")
 
 #: What a pending approval asks the person to allow.
-ApprovalOp = Literal["bind", "replace_value", "disable_protection"]
+ApprovalOp = Literal["bind", "add_secret", "replace_value", "disable_protection"]
 ApprovalStatus = Literal["pending", "approved", "rejected", "superseded"]
 
 #: What a presence grant may authorise. Each is one operation on one target.
@@ -123,6 +123,7 @@ class SecretApproval:
     """A change that waits for a present human in the desktop app.
 
     ``op`` is ``bind`` (a secret to a new destination or target),
+    ``add_secret`` (a new standalone secret; its value waits as ciphertext),
     ``replace_value`` (a new value for a secret already in use; the new value
     waits as ciphertext and never appears here) or ``disable_protection``
     (turning the approval requirement off).
@@ -150,6 +151,9 @@ class SecretApproval:
                 f"send secret {self.ref!r} to {self.destination_kind} "
                 f"{self.destination_label!r} ({self.slot}) at {self.target}"
             )
+        if self.op == "add_secret":
+            name = standalone_name(self.ref or "") or self.ref
+            return f"add the new secret {name!r}"
         if self.op == "replace_value":
             return f"replace the value of secret {self.ref!r}"
         return "turn off approval for new secret destinations"
@@ -172,6 +176,6 @@ def sync_remote_destination(url: str) -> SecretDestination:
 def channel_destination(
     uid: str, name: str, channel_type: str, app_id: str = ""
 ) -> SecretDestination:
-    """A channel's credential goes to its platform, as the app it names."""
+    """A channel's secret goes to its platform, as the app it names."""
     target = f"{channel_type} app {app_id}" if app_id else f"{channel_type} bot"
     return SecretDestination(kind="channel", uid=uid, target=target, label=name)

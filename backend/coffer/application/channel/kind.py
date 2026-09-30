@@ -19,8 +19,8 @@ _REF_FIELDS = ("bot_token_ref", "app_secret_ref")
 AgentNames = Callable[[], Awaitable[Mapping[str, str]]]
 
 
-def _channel_credential_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
-    """Every `*_ref` field is a credential ref to probe before registration."""
+def _channel_secret_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
+    """Every `*_ref` field is a secret ref to probe before registration."""
     refs: dict[str, str] = {}
     for field in _REF_FIELDS:
         value = config.get(field)
@@ -262,7 +262,7 @@ def make_channel_kind(
     ``on_delete`` is injected by the composition root: it evicts the channel
     from the runtime (stopping its adapter and, for SeaTalk, closing its
     websocket connection) before the row — and, via FK cascade, the
-    peer binding — is removed. Channel config holds only credential refs, so
+    peer binding — is removed. Channel config holds only secret refs, so
     no audit redaction is needed.
 
     ``agent_names`` (also injected by the composition root) maps every
@@ -303,7 +303,7 @@ def make_channel_kind(
         display_name="Channel",
         config_schema=ChannelConfigModel,
         on_delete=on_delete,
-        credential_ref_extractor=_channel_credential_ref_extractor,
+        secret_ref_extractor=_channel_secret_ref_extractor,
         # Registration and edit run the same check from the two ends of a
         # channel's life, so a ``default_agent`` naming no registered agent is
         # refused wherever it is written rather than only failing at start time.

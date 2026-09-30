@@ -24,19 +24,19 @@ ChannelConfig (discriminator: channel_type)
 │   └── runs_on: str | None = None          # machine_id that runs the adapter
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
-│   └── bot_token_ref: str            # credential-store ref, probed at register
+│   └── bot_token_ref: str            # secret-store ref, probed at register
 └── SeaTalkChannelConfig
     ├── channel_type: "seatalk"
     ├── app_id: str                     # authenticates the websocket register handshake
-    └── app_secret_ref: str             # credential-store ref, probed at register
+    └── app_secret_ref: str             # secret-store ref, probed at register
 ```
 
 Validation rules:
 
 - `*_ref` fields must not look like raw secrets (a Telegram token pattern or
-  a long high-entropy string is rejected with a pointer to the credential
+  a long high-entropy string is rejected with a pointer to the secret
   store) — same posture as `mcp_server`'s static-value secret rejection.
-- The kind declares `credential_ref_extractor`, so `ResourceService` probes
+- The kind declares `secret_ref_extractor`, so `ResourceService` probes
   every ref before the row is written; a dangling ref aborts registration.
 - `default_agent` is the **uid of an agent resource**
   ([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
@@ -105,9 +105,9 @@ Validation rules:
   ingress field. The webhook-era keys — `delivery`, `signing_secret_ref`,
   `public_base_url`, `tunnel_token_ref` — were removed from every stored row by
   migration `0103` (below), in one direction for the data and with no load-time
-  shim (house rule). The credential values the two removed refs cited are left
-  in the credential store: a migration that deletes secrets could not be undone
-  by its downgrade, and `coffer credentials rm <ref>` removes them on
+  shim (house rule). The secret values the two removed refs cited are left
+  in the secret store: a migration that deletes secrets could not be undone
+  by its downgrade, and `coffer secret rm <ref>` removes them on
   purpose. A document still carrying those keys — from a machine running an
   older build — is read like any other unknown key and ignored.
 - Channel turns run in the Coffer-managed default workspace `~/.coffer/workspace`
@@ -263,8 +263,8 @@ Migration 0108 creates it; reversible by dropping it.
 | `20260915_0080_repair_stale_channel_bindings.py` | replaces a `runs_on` that **cannot** be a machine id — the withdrawn axis wrote ULIDs under this very key — with this machine, the answer an absent key would have given |
 | `20260915_0081_channel_scope_names_agent_resources.py` | rewrites each channel's stored scope from agent **keys** into agent **resource names** — an intermediate step, superseded by 0096 |
 | `20260918_0096_cross_references_point_at_uids.py` | rewrites each channel's stored scope from agent resource names into agent **uids**, and its `default_agent` from an agent key into an agent uid (it also renames `conversations.channel_name` to `channel_uid`) |
-| `20260918_0099_credential_refs_stop_naming_their_resource.py` | rewrites every `*_ref` field of a channel config (`bot_token_ref`, `app_secret_ref`, `signing_secret_ref`, `tunnel_token_ref`) from `channel/<name>/<secret>` to an address that does not spell the channel's name, moving the credential row with it |
-| `20260924_0103_seatalk_channels_drop_webhook_fields.py` | removes `delivery`, `signing_secret_ref`, `public_base_url` and `tunnel_token_ref` from every SeaTalk channel config, leaving the credential values the refs cited in the store; the downgrade writes `delivery: "websocket"` back, the value every rewritten channel now behaves as and the only one the older model accepts without a signing secret |
+| `20260918_0099_credential_refs_stop_naming_their_resource.py` | rewrites every `*_ref` field of a channel config (`bot_token_ref`, `app_secret_ref`, `signing_secret_ref`, `tunnel_token_ref`) from `channel/<name>/<secret>` to an address that does not spell the channel's name, moving the secret row with it |
+| `20260924_0103_seatalk_channels_drop_webhook_fields.py` | removes `delivery`, `signing_secret_ref`, `public_base_url` and `tunnel_token_ref` from every SeaTalk channel config, leaving the secret values the refs cited in the store; the downgrade writes `delivery: "websocket"` back, the value every rewritten channel now behaves as and the only one the older model accepts without a signing secret |
 
 All eight rewrite channel config data with no load-time shim (house rule), and
 all but 0103 in one direction only; 0096 also renames a `conversations` column,

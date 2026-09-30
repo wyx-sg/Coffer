@@ -55,7 +55,7 @@ from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from coffer.infrastructure.net import loopback_authority
-from coffer.surfaces.http import cors, daemon_routes
+from coffer.surfaces.http import cors, daemon_port
 
 _logger = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ def _listener_port(scope: Scope) -> int:
     server = scope.get("server")
     if server and len(server) >= 2 and isinstance(server[1], int):
         return server[1]
-    return daemon_routes.get_port()
+    return daemon_port.get_port()
 
 
 def _log_once(reason: str, value: str, path: str) -> None:

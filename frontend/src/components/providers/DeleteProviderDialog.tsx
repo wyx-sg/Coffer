@@ -52,8 +52,8 @@ export function DeleteProviderDialog({ open, provider, use, onClose }: Props) {
         onOpenChange={(o) => !o && onClose()}
         title={t("providers.delete.title", { name })}
         description={
-          provider.credential_ref
-            ? t("providers.delete.confirmWithSecret", { name, ref: provider.credential_ref })
+          provider.secret_ref
+            ? t("providers.delete.confirmWithSecret", { name, ref: provider.secret_ref })
             : t("providers.delete.confirm", { name })
         }
         confirmLabel={del.isPending ? t("common.deleting") : t("providers.actions.delete")}

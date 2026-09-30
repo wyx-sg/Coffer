@@ -2,14 +2,14 @@
 //
 // The edit-channel planning contract (counterpart to AddChannelDialog's
 // register flow): rotating a secret writes the NEW value to the SAME
-// credential ref the channel already points at (so the config never changes
+// secret ref the channel already points at (so the config never changes
 // when only a secret rotates), and the config PATCH preserves every existing
 // `*_ref` while only the mutable fields (bound agent, SeaTalk app id) change.
-// A blank secret field means "leave it as-is" — no credential write at all.
+// A blank secret field means "leave it as-is" — no secret write at all.
 //
 // Every input below carries BOTH of the channel's strings, because they are no
 // longer one: the `uid` the PATCH is addressed to, and the `name` that mints a
-// credential ref and reads out in the toast. They are spelled differently on
+// secret ref and reads out in the toast. They are spelled differently on
 // purpose — a fixture whose uid reads as its name would let an assertion about
 // the address pass on the label.
 //

@@ -23,7 +23,7 @@ All of this lives in files the agents own and nothing connects. The more agents 
 Coffer is a **daemon plus a vault**:
 
 - **`coffer-daemon`** is a long-running process that listens on `127.0.0.1` (port 8000 by default). It holds all of Coffer's state and serves the MCP endpoint, the REST API and the web UI.
-- **The vault** is the directory `~/.coffer`. It contains a SQLite database for configuration, plain-file trees for skills, knowledge and memory, and an encrypted credential store.
+- **The vault** is the directory `~/.coffer`. It contains a SQLite database for configuration, plain-file trees for skills, knowledge and memory, and an encrypted secret store.
 - **`coffer-mcp-shim`** is a small stdio program that each agent starts as an ordinary MCP server. It finds the running daemon, starting one if none is running, and forwards the session to it.
 
 When you run `coffer agent connect claude-code`, Coffer writes one `coffer` entry into Claude Code's MCP config. From then on, Claude Code reaches every MCP server you register in Coffer through that one entry.
@@ -42,7 +42,7 @@ Everything Coffer manages is a **resource** of one of seven **kinds**. Every res
 | `channel` | A Telegram or SeaTalk bot you use to chat with your agents from your phone | [Channels](/guides/channels) |
 | `provider` | A model-provider profile (protocol, base URL, key) that Coffer writes into each agent's config | [Model providers](/guides/providers) |
 
-Coffer also provides some capabilities that are not resource kinds: an encrypted [credential store](/guides/credentials), a web [Conversations](/guides/chat) page, an [activity and audit](/guides/activity) record, and [vault sync](/guides/vault-sync) with a git remote you own.
+Coffer also provides some capabilities that are not resource kinds: an encrypted [secret store](/guides/secret-store), a web [Conversations](/guides/chat) page, an [activity and audit](/guides/activity) record, and [vault sync](/guides/vault-sync) with a git remote you own.
 
 ## Where you use it
 

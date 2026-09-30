@@ -1,6 +1,6 @@
 ---
 title: Core concepts
-description: The mental model behind Coffer (daemon, vault, resources and kinds, reach, the MCP gateway, skills, knowledge, memory, providers, channels, credentials, audit and experimental features) with links to the guide and architecture page for each.
+description: The mental model behind Coffer (daemon, vault, resources and kinds, reach, the MCP gateway, skills, knowledge, memory, providers, channels, secrets, audit and experimental features) with links to the guide and architecture page for each.
 ---
 
 # Core concepts
@@ -19,7 +19,7 @@ flowchart TB
     GW["MCP gateway"]
     BT["coffer__ tools"]
     RF["Resource framework"]
-    CR["Credential store"]
+    CR["Secret store"]
     AU["Audit log"]
   end
   subgraph vault["Vault: ~/.coffer"]
@@ -45,7 +45,7 @@ Guide: [Running the daemon](/guides/daemon). Architecture: [Daemon and processes
 
 ## Vault
 
-The vault is the directory `~/.coffer` and everything in it. `coffer.db` (SQLite) is the system of record for configuration, resources, the audit log and encrypted credentials. Skills, knowledge and memory are plain file trees next to it, and those files are the only copy: Coffer does not index or embed them. To back up Coffer, copy this directory with the daemon stopped.
+The vault is the directory `~/.coffer` and everything in it. `coffer.db` (SQLite) is the system of record for configuration, resources, the audit log and encrypted secrets. Skills, knowledge and memory are plain file trees next to it, and those files are the only copy: Coffer does not index or embed them. To back up Coffer, copy this directory with the daemon stopped.
 
 Reference: [Files and directories](/reference/filesystem). Architecture: [Persistence](/architecture/persistence).
 
@@ -119,7 +119,7 @@ Guide: [Memory](/guides/memory). Architecture: [Memory](/architecture/memory).
 
 ## Providers
 
-A **provider** is a model-provider profile: a wire protocol, a base URL and one credential ref. **Switching** to a provider writes it into the native config of each agent in its scope, so you change gateways once instead of once per agent. Switching back to an agent's own login is a separate action. One provider can also be marked as the default for Coffer's own model, which curation, memory distillation and transcription run on.
+A **provider** is a model-provider profile: a wire protocol, a base URL and one secret ref. **Switching** to a provider writes it into the native config of each agent in its scope, so you change gateways once instead of once per agent. Switching back to an agent's own login is a separate action. One provider can also be marked as the default for Coffer's own model, which curation, memory distillation and transcription run on.
 
 Guide: [Model providers](/guides/providers).
 
@@ -129,11 +129,11 @@ A **channel** is a Telegram or SeaTalk bot bound to your registered agents. You 
 
 Guide: [Channels](/guides/channels), [Conversations](/guides/chat). Architecture: [Chat and turns](/architecture/chat).
 
-## Credential refs
+## Secret refs
 
-Coffer stores secrets only as Fernet ciphertext, under a master key kept in a `0600` file (or in the macOS keychain if you choose). Resources never contain a secret. They contain a **credential ref**, a name such as `github.token`, which the daemon resolves only at the moment it starts an upstream server or sends a request. Set a secret with `coffer credentials set <ref>`. Plaintext never reaches the database, the logs or the audit log.
+Coffer stores secrets only as Fernet ciphertext, under a master key kept in a `0600` file (or in the macOS keychain if you choose). Resources never contain a secret. They contain a **secret ref**, a name such as `github.token`, which the daemon resolves only at the moment it starts an upstream server or sends a request. Set a secret with `coffer secret set <ref>`. Plaintext never reaches the database, the logs or the audit log.
 
-Guide: [Credentials](/guides/credentials). Architecture: [Security model](/architecture/security).
+Guide: [Secret store](/guides/secret-store). Architecture: [Security model](/architecture/security).
 
 ## Audit log
 

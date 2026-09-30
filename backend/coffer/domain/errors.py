@@ -102,13 +102,13 @@ class ScopeInvalidError(CofferError):
     code = "SCOPE_INVALID"
 
 
-# credential-store error family: re-exported from coffer.domain.credential_errors
+# secret-store error family: re-exported from coffer.domain.secret_errors
 # (split for the file-size limit) so the coffer.domain.errors.X import paths keep working.
-from coffer.domain.credential_errors import (  # noqa: E402, I001
-    CredentialInUse as CredentialInUse,
-    CredentialLocked as CredentialLocked,
-    CredentialMissing as CredentialMissing,
-    CredentialUnreadable as CredentialUnreadable,
+from coffer.domain.secret_errors import (  # noqa: E402, I001
+    SecretInUse as SecretInUse,
+    SecretLocked as SecretLocked,
+    SecretMissing as SecretMissing,
+    SecretUnreadable as SecretUnreadable,
     MasterKeyMissing as MasterKeyMissing,
 )
 

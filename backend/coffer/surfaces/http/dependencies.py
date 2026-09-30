@@ -18,7 +18,7 @@ needs ``Any`` and nothing here can pull a kind into the core:
 - ``surfaces.http.memory.dependencies``    — the memory kind
 - ``surfaces.http.chat.dependencies``      — the turn platform (chat)
 - ``surfaces.http.provider_dependencies``  — the provider kind
-- ``surfaces.http.credential_composition`` — the credential store + master key
+- ``surfaces.http.secret_composition`` — the secret store + master key
 """
 
 from __future__ import annotations

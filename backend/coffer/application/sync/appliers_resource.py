@@ -40,14 +40,14 @@ class ResourceApplier:
     below is not a bookkeeping nicety — it runs the real
     ``ResourceService.delete``, whose cascade takes the kind-owned state
     (paired chats, capability preferences, skill bindings) and whose
-    orphaned-credential release takes the secret nothing else cites. A rename
+    orphaned-secret release takes the secret nothing else cites. A rename
     was therefore destructive or survivable according to whether the new name
     sorted before or after the old one in the path-ordered apply loop.
 
     Upsert runs the kind's import gate first, so a document that cannot apply
     on this machine is reported before anything is written. Removal goes
-    through ``ResourceService.delete``, which releases the credentials no
-    remaining resource cites — the orphaned-credential path that seeded the
+    through ``ResourceService.delete``, which releases the secrets no
+    remaining resource cites — the orphaned-secret path that seeded the
     2026-07-10 clobber.
 
     What an incoming document may change is narrower than what it used to be.

@@ -22,7 +22,7 @@ export function configTestBodyOf(
   const plan = secretPlanOf(form.rows, t);
   const parsed = JSON.parse(configTextFrom(config, form)) as { transport: Record<string, unknown> };
   const transport: Record<string, unknown> = { ...parsed.transport };
-  delete transport.credential_refs;
+  delete transport.secret_refs;
   if (Object.keys(plan.cited).length > 0) transport.secret_refs = plan.cited;
   return {
     name,

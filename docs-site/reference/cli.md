@@ -47,7 +47,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer discard`](#coffer-discard) | Remove one scanned item from the agent that holds it |
 | [`coffer mcp`](#coffer-mcp) | Manage MCP servers and their capabilities |
 | [`coffer tool`](#coffer-tool) | Manage custom tools: HTTP API requests your agents call as tools |
-| [`coffer credentials`](#coffer-credentials) | Manage encrypted credentials. |
+| [`coffer secret`](#coffer-secret) | Manage encrypted secrets. |
 | [`coffer agent`](#coffer-agent) | Manage registered AI agents |
 | [`coffer channel`](#coffer-channel) | Manage messaging channels (Telegram, SeaTalk) |
 | [`coffer skill`](#coffer-skill) | Manage skills (AgentSkills standard) |
@@ -463,7 +463,7 @@ Register an agent's direct MCP entry as a Coffer MCP server and remove it from t
 | `AGENT:ENTRY` | argument | text | required | The ref the scan printed |
 | `--name` | option | text |  | Register the server under this name |
 | `--source` | option | text |  | Config-file key when the entry is in several files |
-| `--secret` | option | text (repeatable) |  | KEY=CREDENTIAL_REF for a secret-like env/header key (repeatable) |
+| `--secret` | option | text (repeatable) |  | KEY=SECRET_REF for a secret-like env/header key (repeatable) |
 
 ## coffer discard
 
@@ -516,14 +516,14 @@ coffer mcp add [OPTIONS] NAME
 
 Register a new MCP server (stdio OR http; pick one).
 
-A --credential citing a secret that already goes somewhere else waits for approval in the Coffer app before the server receives it; the command says so and exits 9, or waits with --wait.
+A --secret citing a secret that already goes somewhere else waits for approval in the Coffer app before the server receives it; the command says so and exits 9, or waits with --wait.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Server name (fixed once registered, ≤24 chars) |
 | `--stdio` | option | text |  | Command line to launch, quoted as one string, e.g. 'npx -y my-server --flag' |
 | `--http` | option | text |  | HTTP MCP server URL |
-| `--credential` | option | text (repeatable) |  | ENV_OR_HEADER=CREDENTIAL_REF (repeatable) |
+| `--secret` | option | text (repeatable) |  | ENV_OR_HEADER=SECRET_REF (repeatable) |
 | `--description` | option | text |  |  |
 | `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
@@ -558,7 +558,7 @@ Show one MCP server, by name or uid.
 coffer mcp edit [OPTIONS] NAME
 ```
 
-Change an MCP server's description, transport, env, headers, credential refs or timeouts (its name is fixed). Only the options given change.
+Change an MCP server's description, transport, env, headers, secret refs or timeouts (its name is fixed). Only the options given change.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -573,8 +573,8 @@ Change an MCP server's description, transport, env, headers, credential refs or 
 | `--header` | option | text (repeatable) |  | Plain header KEY=VALUE for an http server (repeatable) |
 | `--clear-headers` | option | flag |  | Drop every plain header first |
 | `--cwd` | option | text |  | Working directory (stdio); empty clears it |
-| `--credential` | option | text (repeatable) |  | ENV_OR_HEADER=CREDENTIAL_REF (repeatable) |
-| `--clear-credentials` | option | flag |  | Drop every credential ref first |
+| `--secret` | option | text (repeatable) |  | ENV_OR_HEADER=SECRET_REF (repeatable) |
+| `--clear-secrets` | option | flag |  | Drop every secret ref first |
 | `--spawn-timeout-seconds` | option | integer |  | Start-up timeout (5-120) |
 | `--request-timeout-seconds` | option | integer |  | Per-request timeout (5-1800) |
 
@@ -978,34 +978,34 @@ Call one tool once with sample arguments and print the response. Exits 7 on fail
 | `--arg-value` | option | text (repeatable) |  | An argument KEY=VALUE, JSON when it parses (repeatable) |
 | `--args` | option | text |  | All arguments as a JSON object |
 
-## coffer credentials
+## coffer secret
 
 ```sh
-coffer credentials [OPTIONS] COMMAND [ARGS]...
+coffer secret [OPTIONS] COMMAND [ARGS]...
 ```
 
-Manage encrypted credentials.
+Manage encrypted secrets.
 
-### credentials set
+### secret set
 
 ```sh
-coffer credentials set [OPTIONS] REF
+coffer secret set [OPTIONS] REF
 ```
 
-Store a secret in the encrypted credential store (via the daemon).
+Store a secret in the encrypted secret store (via the daemon).
 
 Without --value the secret is read from stdin, or prompted for. --value still stores, but warns that the value lands in your shell history; the value itself is never echoed.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `REF` | argument | text | required | Credential reference key |
+| `REF` | argument | text | required | Secret reference key |
 | `--value` | option | text |  | Provide the secret on the command line (UNSAFE — visible in shell history; prefer stdin) |
 | `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
-### credentials get
+### secret get
 
 ```sh
-coffer credentials get [OPTIONS] REF
+coffer secret get [OPTIONS] REF
 ```
 
 Check that a secret is stored, without its value.
@@ -1014,13 +1014,13 @@ Prints [redacted] when it is, exits 4 when it is not. No value leaves the daemon
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `REF` | argument | text | required | Credential reference key |
+| `REF` | argument | text | required | Secret reference key |
 | `--json` | option | flag |  | JSON output for scripts |
 
-### credentials list
+### secret list
 
 ```sh
-coffer credentials list [OPTIONS]
+coffer secret list [OPTIONS]
 ```
 
 List every stored secret and every ref a resource cites.
@@ -1031,25 +1031,25 @@ Shows whether the store holds each one, what uses it (resources, skills citing c
 | --- | --- | --- | --- | --- |
 | `--json` | option | flag |  | JSON output for scripts |
 
-### credentials rm
+### secret rm
 
 ```sh
-coffer credentials rm [OPTIONS] REF
+coffer secret rm [OPTIONS] REF
 ```
 
-Delete a secret from the encrypted credential store (via the daemon).
+Delete a secret from the encrypted secret store (via the daemon).
 
 Asks first unless --force is given.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `REF` | argument | text | required | Credential reference key |
+| `REF` | argument | text | required | Secret reference key |
 | `--force, -f` | option | flag |  | Skip confirmation prompt |
 
-### credentials approvals
+### secret approvals
 
 ```sh
-coffer credentials approvals [OPTIONS]
+coffer secret approvals [OPTIONS]
 ```
 
 List what waits for approval in the Coffer app.
@@ -1061,36 +1061,36 @@ Approving takes Touch ID or your password in the desktop app; the terminal can o
 | `--all` | option | flag |  | Include decided approvals |
 | `--json` | option | flag |  | JSON output for scripts |
 
-### credentials reject
+### secret reject
 
 ```sh
-coffer credentials reject [OPTIONS] APPROVAL_ID
+coffer secret reject [OPTIONS] APPROVAL_ID
 ```
 
 Refuse a pending approval. Refusing needs no presence check.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `APPROVAL_ID` | argument | text | required | Approval id (see `coffer credentials approvals`) |
+| `APPROVAL_ID` | argument | text | required | Approval id (see `coffer secret approvals`) |
 
-### credentials scan
+### secret scan
 
 ```sh
-coffer credentials scan [OPTIONS]
+coffer secret scan [OPTIONS]
 ```
 
 Find plaintext secrets in ~/.coffer/secrets/ and in your skills.
 
-Prints where each one is and the name it would get — never the value. Move them into the encrypted store with `coffer credentials import`.
+Prints where each one is and the name it would get — never the value. Move them into the encrypted store with `coffer secret import`.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `--json` | option | flag |  | JSON output for scripts |
 
-### credentials import
+### secret import
 
 ```sh
-coffer credentials import [OPTIONS]
+coffer secret import [OPTIONS]
 ```
 
 Move plaintext secrets into the encrypted store, leaving references.
@@ -1440,15 +1440,15 @@ coffer channel add [OPTIONS] NAME
 
 Register a channel.
 
-Its secrets are credential refs: store each secret first with `coffer credentials set`, then pass the ref here.
+Its secrets are secret refs: store each secret first with `coffer secret set`, then pass the ref here.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Channel name |
 | `--type` | option | text | required | telegram \| seatalk |
-| `--bot-token-ref` | option | text |  | Credential ref of the Telegram bot token (store it with `coffer credentials set`) |
+| `--bot-token-ref` | option | text |  | Secret ref of the Telegram bot token (store it with `coffer secret set`) |
 | `--app-id` | option | text |  | SeaTalk App ID |
-| `--app-secret-ref` | option | text |  | Credential ref of the SeaTalk app secret (store it with `coffer credentials set`) |
+| `--app-secret-ref` | option | text |  | Secret ref of the SeaTalk app secret (store it with `coffer secret set`) |
 | `--agent` | option | text | required | Name of the agent this channel drives by default (required) |
 | `--agent-config` | option | text |  | Default agent config as JSON |
 | `--runs-on` | option | text |  | machine_id of the machine that runs this channel (default: this one) |
@@ -2196,9 +2196,9 @@ Create an LLM connection.
 
 With --local the base URL must be a loopback address; Coffer detects the runtime there read-only (nothing is pulled or loaded) and records the wires it serves and each model's served context window.
 
-For anthropic/openai/unknown supply exactly one of --secret / --credential-ref; an ollama connection needs neither. The new connection starts on the wire's own default reach; route it to specific agents (e.g. an openai gateway to Claude Code) with `coffer provider scope <name> --agents claude-code`. The model is chosen at the point of use, not on the connection.
+For anthropic/openai/unknown supply exactly one of --secret / --secret-ref; an ollama connection needs neither. The new connection starts on the wire's own default reach; route it to specific agents (e.g. an openai gateway to Claude Code) with `coffer provider scope <name> --agents claude-code`. The model is chosen at the point of use, not on the connection.
 
-A --credential-ref key that already goes somewhere else waits for approval in the Coffer app before this connection may send it: the command says so and exits 9, or waits for the answer with --wait.
+A --secret-ref key that already goes somewhere else waits for approval in the Coffer app before this connection may send it: the command says so and exits 9, or waits for the answer with --wait.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2206,7 +2206,7 @@ A --credential-ref key that already goes somewhere else waits for approval in th
 | `--protocol` | option | text | required | Protocol: anthropic \| openai \| ollama \| unknown |
 | `--base-url` | option | text | required | Upstream endpoint base URL |
 | `--secret` | option | text |  | API key (stored encrypted) |
-| `--credential-ref` | option | text |  | Reuse an existing credential ref instead of --secret |
+| `--secret-ref` | option | text |  | Reuse an existing secret ref instead of --secret |
 | `--title` | option | text |  | Display title (≤80 chars) |
 | `--description` | option | text |  |  |
 | `--local` | option | flag |  | A model runtime on this machine (Ollama, LM Studio, vLLM, llama-server): detect it, curate its tool-capable models, no key needed |
@@ -2425,6 +2425,8 @@ Model usage through Coffer's proxy, and subscription quota
 | `--from` | option | text |  | First day of a custom range |
 | `--to` | option | text |  | Last day of a custom range, inclusive |
 | `--by` | option | text | `model` | model \| agent \| day |
+| `--agent` | option | text |  | Only requests this agent type sent (claude_code \| codex) |
+| `--provider` | option | text |  | Only requests this provider (by name) served |
 | `--json` | option | flag |  | JSON output for scripts |
 | `--csv` | option | flag |  | CSV output |
 
@@ -2596,8 +2598,8 @@ On a configured remote an option not given keeps its stored value, and a paused 
 | `URL` | argument | text | required | Git remote URL you own (https, ssh, or file://) |
 | `--branch` | option | text |  | Default main |
 | `--interval` | option | integer |  | Seconds between automatic rounds (default 3600) |
-| `--with-credentials / --without-credentials` | option | boolean |  | Carry credential ciphertext (never the master key); default off |
-| `--credential-ref` | option | text |  | Name of the push credential in the credential store ('' removes it) |
+| `--with-secrets / --without-secrets` | option | boolean |  | Carry secret ciphertext (never the master key); default off |
+| `--secret-ref` | option | text |  | Name of the secret holding the push token ('' removes it) |
 | `--worktree` | option | text |  | Absolute path of the git working tree, outside the vault (default ~/.coffer/sync) |
 | `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
@@ -2689,9 +2691,11 @@ coffer sync key import [OPTIONS] PATH
 
 Install a master key brought from another machine.
 
+A ``.cfk`` backup asks for the passphrase it was exported with, without echoing it.
+
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `PATH` | argument | text | required | File holding key material from another machine |
+| `PATH` | argument | text | required | The key backup (coffer-master-key.cfk) exported from another machine, or a bare key |
 
 ### sync key fingerprint
 

@@ -316,11 +316,11 @@ class Kind:
     # that lets a second route quietly miss it.
     validate_delete: Callable[[Resource], None] | None = None
 
-    # Optional kind-supplied credential-ref extractor: given a validated config
+    # Optional kind-supplied secret-ref extractor: given a validated config
     # dict, return ``{logical_key: keychain_ref}``. ResourceService probes each
-    # ref at register/update time so a missing credential fails before any DB
+    # ref at register/update time so a missing secret fails before any DB
     # write — without the core knowing where a kind stores its refs.
-    credential_ref_extractor: Callable[[dict[str, Any]], dict[str, str]] | None = None
+    secret_ref_extractor: Callable[[dict[str, Any]], dict[str, str]] | None = None
     # Optional kind-supplied audit redactor: given a validated config dict,
     # return an audit-safe copy with secret-bearing fields stripped. Keeps the
     # kind-agnostic ResourceService from hardcoding any one kind's config shape

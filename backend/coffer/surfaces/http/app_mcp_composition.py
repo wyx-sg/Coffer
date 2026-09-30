@@ -51,7 +51,6 @@ from coffer.domain.retention import MEDIA_RETENTION_DAYS
 from coffer.domain.secrets import SecretDestination
 from coffer.infrastructure.channel.seatalk_media import default_media_dir
 from coffer.infrastructure.chat.media_store import FileChatMediaStore, default_chat_media_dir
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.http_api_runner import HttpApiToolRunner
 from coffer.infrastructure.mcp.openapi_fetch import OpenApiDocumentSource
@@ -62,7 +61,7 @@ from coffer.infrastructure.mcp.persistence import (
     MCPToolReachRepo,
 )
 from coffer.infrastructure.media_retention import prune_media_dir
-from coffer.surfaces.http.credential_composition import boundary_resolver
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.surfaces.http.mcp.custom_tool_dependencies import set_custom_tool_services
 from coffer.surfaces.http.mcp.dependencies import (
     set_capability_discovery,
@@ -75,6 +74,7 @@ from coffer.surfaces.http.secret_boundary_wiring import (
     optional_secret_boundary,
     register_resource_destination,
 )
+from coffer.surfaces.http.secret_composition import boundary_resolver
 from coffer.surfaces.http.sync_contributions import SyncContributions
 
 _log = logging.getLogger(__name__)
@@ -105,7 +105,7 @@ def wire_mcp_kind(
     resource_svc: ResourceService,
     audit: AuditService,
     sm: async_sessionmaker[AsyncSession],
-    credential_store: EncryptedCredentialStore,
+    secret_store: EncryptedSecretStore,
     builtin_tools: BuiltinToolRegistry,
     sync: SyncContributions,
 ) -> McpWiring:
@@ -125,7 +125,7 @@ def wire_mcp_kind(
     mcp_kind = make_mcp_kind(session_supervisors)
     app.state.kinds["mcp_server"] = mcp_kind
     # Where each server's secrets go, for the secret boundary's adoption and
-    # listing (spec credentials "Hold a secret for a new destination until a
+    # listing (spec secret "Hold a secret for a new destination until a
     # person approves it").
     register_resource_destination("mcp_server", _mcp_secret_destination)
 
@@ -135,7 +135,7 @@ def wire_mcp_kind(
     #    routing).
     process_supervisor = SubprocessSupervisor(
         resource_service=resource_svc,
-        credential_resolver=boundary_resolver(credential_store),
+        secret_resolver=boundary_resolver(secret_store),
         upstream_factory=build_upstream,
     )
     process_discovery = CapabilityDiscovery(
@@ -161,7 +161,7 @@ def wire_mcp_kind(
     def mcp_session_factory(session_id: str) -> MCPGatewaySession:
         supervisor = SubprocessSupervisor(
             resource_service=resource_svc,
-            credential_resolver=boundary_resolver(credential_store),
+            secret_resolver=boundary_resolver(secret_store),
             upstream_factory=build_upstream,
         )
         session_supervisors[session_id] = supervisor
@@ -196,7 +196,7 @@ def wire_mcp_kind(
     set_invocation_repo(inv_repo)
     set_health_repo(health_repo)
     set_mcp_session_factory(mcp_session_factory)
-    wire_custom_tools(resource_svc, audit, credential_store, tool_reach, inv_repo)
+    wire_custom_tools(resource_svc, audit, secret_store, tool_reach, inv_repo)
     return McpWiring(
         process_supervisor=process_supervisor,
         session_supervisors=session_supervisors,
@@ -207,7 +207,7 @@ def wire_mcp_kind(
 def wire_custom_tools(
     resource_svc: ResourceService,
     audit: AuditService,
-    credential_store: EncryptedCredentialStore,
+    secret_store: EncryptedSecretStore,
     tool_reach: MCPToolReachRepo,
     inv_repo: MCPInvocationRepo,
 ) -> CustomToolService:
@@ -216,7 +216,7 @@ def wire_custom_tools(
     viewer = GroupViewer(
         reach=tool_reach,
         outcomes=inv_repo,
-        secrets=credential_store,
+        secrets=secret_store,
         boundary=optional_secret_boundary,
         clock=lambda: datetime.now(tz=UTC),
     )
@@ -225,7 +225,7 @@ def wire_custom_tools(
         audit=audit,
         reach=tool_reach,
         viewer=viewer,
-        resolver=lambda: boundary_resolver(credential_store),
+        resolver=lambda: boundary_resolver(secret_store),
         runner=HttpApiToolRunner(),
     )
     set_custom_tool_services(service, CustomToolImporter(service, OpenApiDocumentSource()))
@@ -381,5 +381,5 @@ def reaper_kwargs_from_env() -> dict[str, float]:
 
 def _mcp_secret_destination(resource: Resource) -> tuple[SecretDestination, dict[str, str]] | None:
     config = MCPServerConfig.model_validate(resource.config)
-    refs = dict(config.transport.credential_refs)
+    refs = dict(config.transport.secret_refs)
     return (mcp_destination(resource.uid, resource.name, config), refs) if refs else None

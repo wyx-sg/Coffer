@@ -242,7 +242,7 @@ def _edit(spec: KindVerbs) -> Callable[..., None]:
             _cli_client.check(r, verbose=verbose)
             typer.echo(f"updated: {spec.noun} {label(r.json())}")
             # A secret sent somewhere new waits for the Coffer app (spec
-            # credentials "Hold a secret for a new destination until a person
+            # secret "Hold a secret for a new destination until a person
             # approves it"): say so, and exit 9 unless --wait.
             settle(c, pending_for(c, current["uid"], verbose=verbose), wait=wait, verbose=verbose)
 

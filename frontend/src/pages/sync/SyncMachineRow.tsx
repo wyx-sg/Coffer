@@ -7,7 +7,7 @@
 //           sit under it so two machines the user called "laptop" are still
 //           tellable apart, since the id is what `scope` actually references.
 //   key   — a ✓/✗ rather than two fingerprints to compare by eye. ✗ means that
-//           machine's credentials cannot be decrypted here; "—" means one side
+//           machine's secrets cannot be decrypted here; "—" means one side
 //           has published no fingerprint yet, which is not a mismatch.
 //   retire — says out loud that it also strips the machine from every scope
 //           naming it, because that is a change to OTHER resources.

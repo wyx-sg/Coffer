@@ -131,7 +131,7 @@ that succeeded, ends the run — or, with no such calls, the time of the failing
 of the last successful call; when the health record was last written; and the first secret the server's
 transport cites that has no value on this machine, by the environment or header key that cites it and by
 the secret's own reference (a vault restored on a new machine carries references, not values). A secret's
-value is never read for this; a server that cites none never asks the credential store.
+value is never read for this; a server that cites none never asks the secret store.
 
 #### Scenario: a failing server says its last error and since when
 - **GIVEN** a server whose last calls are a success, a transport error, a denied call and a timeout, newest last

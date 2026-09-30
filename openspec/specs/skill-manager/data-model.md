@@ -508,7 +508,7 @@ reason).
 ## Composition root wiring
 
 `surfaces/http/kind_wiring.py` calls
-`wire_agent_and_skill_kinds(app, resource_svc, audit, sm, builtin_tools, credential_store, sync)`
+`wire_agent_and_skill_kinds(app, resource_svc, audit, sm, builtin_tools, secret_store, sync)`
 from `surfaces/http/agent_skill_wiring.py`, which wires the agent and skill kinds
 in lockstep and returns an `AgentSkillWiring`. The wiring function:
 

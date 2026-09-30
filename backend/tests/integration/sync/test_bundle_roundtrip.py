@@ -12,7 +12,7 @@ argument for calling an absence a deletion, so each has a test of its own.
 out of that same working tree. Each applier owns a prefix and has exactly two
 operations, and the interesting behaviour is at the edges: a gate that refuses
 before anything is written, a removal of something already gone, an area no
-module claims, a credential blob that arrives older than the one in the vault.
+module claims, a secret blob that arrives older than the one in the vault.
 
 Everything is under ``tmp_path`` — separate SQLite files, separate homes,
 separate knowledge and skill trees — and the mirrored-tree roots are pinned, so
@@ -34,7 +34,7 @@ import yaml
 from cryptography.fernet import Fernet
 
 from coffer.application.sync.appliers import (
-    CredentialApplier,
+    SecretApplier,
     StateApplier,
     TreeApplier,
 )
@@ -165,7 +165,7 @@ async def _populate(machine: VaultMachine) -> None:
     machine.write_knowledge("notes", "beta", "beta body\n")
     machine.write_skill("demo", "# demo skill\n")
     machine.state_provider.docs["peer-1"] = {"paired": True}
-    machine.set_credential("mcp/files/token", "s3cret")
+    machine.set_secret("mcp/files/token", "s3cret")
 
 
 # --- export ----------------------------------------------------------------
@@ -177,7 +177,7 @@ async def _populate(machine: VaultMachine) -> None:
 async def test_export_writes_every_area_and_counts_it(vault: VaultMachine) -> None:
     await _populate(vault)
 
-    summary = await vault.exporter.export(vault.bundle, with_credentials=False)
+    summary = await vault.exporter.export(vault.bundle, with_secrets=False)
     root = pathlib.Path(vault.bundle.path)
 
     manifest = Manifest.from_dict(json.loads((root / "manifest.json").read_text("utf-8")))
@@ -195,7 +195,7 @@ async def test_export_writes_every_area_and_counts_it(vault: VaultMachine) -> No
         "kind": "mcp_server",
         "name": "files",
         "description": None,
-        "config": {"value": "files", "config_dir": "", "credential_ref": ""},
+        "config": {"value": "files", "config_dir": "", "secret_ref": ""},
     }
     assert (root / await vault.doc_path("agent", "coder")).is_file()
 
@@ -204,9 +204,9 @@ async def test_export_writes_every_area_and_counts_it(vault: VaultMachine) -> No
     assert (root / "skills" / "demo" / "SKILL.md").read_text(encoding="utf-8") == "# demo skill\n"
     assert _doc(root / "state" / "peers" / "peer-1.yaml") == {"paired": True}
 
-    # Opt-in: the vault holds a credential and the bundle carries no trace.
+    # Opt-in: the vault holds a secret and the bundle carries no trace.
     assert not (root / "credentials").exists()
-    assert summary.credentials_included is False
+    assert summary.secrets_included is False
 
     assert _areas(summary) == {
         "resources": 2,
@@ -322,9 +322,7 @@ async def test_every_production_state_area_reaches_the_working_tree(
             await MCPCapabilityPreferenceRepo(sm).insert(server.id, "tool", "x", False, seen, seen)
             # channel-peers: a channel bound to no machine (so nothing starts)
             # with one paired chat.
-            r = await api.post(
-                "/credentials", json={"ref": "channel/tg/bot-token", "value": "123:abc"}
-            )
+            r = await api.post("/secrets", json={"ref": "channel/tg/bot-token", "value": "123:abc"})
             assert r.status_code == 204, r.text
             channel = await resources.register(
                 kind="channel",
@@ -344,8 +342,8 @@ async def test_every_production_state_area_reaches_the_working_tree(
 
             worktree = tmp_path / "worktree"
             worktree.mkdir()
-            exporter = SyncExporter(resources, _NoCredentials(), providers, home=str(home))
-            summary = await exporter.export(Bundle(worktree, trees=[]), with_credentials=False)
+            exporter = SyncExporter(resources, _NoSecrets(), providers, home=str(home))
+            summary = await exporter.export(Bundle(worktree, trees=[]), with_secrets=False)
     finally:
         await engine.dispose()
         set_active_token(None)
@@ -366,14 +364,14 @@ async def test_every_production_state_area_reaches_the_working_tree(
     assert (peers["channel_uid"], peers["chat_id"]) == (channel.uid, "c1")
 
 
-class _NoCredentials:
-    """The export is asked for no credentials, so the port is never read."""
+class _NoSecrets:
+    """The export is asked for no secrets, so the port is never read."""
 
     def list_refs(self) -> list[str]:
-        raise AssertionError("credentials were not requested")
+        raise AssertionError("secrets were not requested")
 
     def read_ciphertext(self, ref: str) -> bytes | None:
-        raise AssertionError("credentials were not requested")
+        raise AssertionError("secrets were not requested")
 
 
 async def test_export_leaves_reach_behind(vault: VaultMachine) -> None:
@@ -388,7 +386,7 @@ async def test_export_leaves_reach_behind(vault: VaultMachine) -> None:
     await vault.set_enabled("mcp_server", "files", False)
     await vault.set_scope("mcp_server", "files", Scope(agents=["codex"]))
 
-    await vault.exporter.export(vault.bundle, with_credentials=False)
+    await vault.exporter.export(vault.bundle, with_secrets=False)
 
     path = pathlib.Path(vault.bundle.path) / await vault.doc_path("mcp_server", "files")
     assert set(_doc(path)) == {"uid", "kind", "name", "description", "config"}
@@ -414,7 +412,7 @@ async def test_export_writes_a_channel_document_like_any_other(vault: VaultMachi
     await vault.register("mcp_server", "files", {"value": "files"})
     await vault.register("channel", "seatalk", {"value": "port-8787", "runs_on": vault.machine_id})
 
-    summary = await vault.exporter.export(vault.bundle, with_credentials=False)
+    summary = await vault.exporter.export(vault.bundle, with_secrets=False)
 
     root = pathlib.Path(vault.bundle.path)
     document = root / await vault.doc_path("channel", "seatalk")
@@ -444,7 +442,7 @@ async def test_export_withholds_a_kind_whose_rows_are_derived_on_each_machine(
     await vault.register("mcp_server", "files", {"value": "files"})
     await vault.register("memory", "coffer", {"value": "/Users/someone/work/coffer"})
 
-    summary = await vault.exporter.export(vault.bundle, with_credentials=False)
+    summary = await vault.exporter.export(vault.bundle, with_secrets=False)
 
     root = pathlib.Path(vault.bundle.path)
     assert not (root / "resources" / "memory").exists()
@@ -482,7 +480,7 @@ async def test_export_removes_a_derived_document_an_older_build_published(
         ),
     )
 
-    await vault.exporter.export(vault.bundle, with_credentials=False)
+    await vault.exporter.export(vault.bundle, with_secrets=False)
 
     assert not (root / stale).exists()
     assert (root / await vault.doc_path("mcp_server", "files")).is_file()
@@ -497,12 +495,12 @@ async def test_a_second_export_of_an_unchanged_vault_is_identical_and_rewrites_n
     await _populate(vault)
     root = pathlib.Path(vault.bundle.path)
 
-    await vault.exporter.export(vault.bundle, with_credentials=True)
+    await vault.exporter.export(vault.bundle, with_secrets=True)
     _age(root)
     before_mtimes, before_bytes = _mtimes(root), _bytes(root)
     assert before_mtimes, "the bundle really does hold documents to leave alone"
 
-    await vault.exporter.export(vault.bundle, with_credentials=True)
+    await vault.exporter.export(vault.bundle, with_secrets=True)
 
     # Byte-identical (spec vault-sync "Serialize deterministically") — the
     # manifest included, which is why it can be rewritten harmlessly.
@@ -522,14 +520,14 @@ async def test_a_locally_deleted_resource_removes_exactly_its_document(
     await vault.register("mcp_server", "gone", {"value": "gone"})
     root = pathlib.Path(vault.bundle.path)
 
-    await vault.exporter.export(vault.bundle, with_credentials=True)
+    await vault.exporter.export(vault.bundle, with_secrets=True)
     _age(root)
     before = _mtimes(root)
     gone = await vault.doc_path("mcp_server", "gone")
     assert gone in before
 
     await vault.delete_resource("mcp_server", "gone")
-    await vault.exporter.export(vault.bundle, with_credentials=True)
+    await vault.exporter.export(vault.bundle, with_secrets=True)
 
     # Exactly one document disappeared, and every other file kept the mtime it
     # had: the export diffs, it does not clear and rewrite the directory.
@@ -542,7 +540,7 @@ async def test_an_export_never_deletes_a_path_this_vault_has_not_absorbed(
 ) -> None:
     await _populate(vault)
     root = pathlib.Path(vault.bundle.path)
-    await vault.exporter.export(vault.bundle, with_credentials=True)
+    await vault.exporter.export(vault.bundle, with_secrets=True)
 
     # What a merge leaves behind when this vault could not apply the other
     # machine's documents: files in the tree that local state does not produce.
@@ -566,7 +564,7 @@ async def test_an_export_never_deletes_a_path_this_vault_has_not_absorbed(
 
     for rel in pending:
         await vault.state.hold(rel, applicable=True)
-    await vault.exporter.export(vault.bundle, with_credentials=True)
+    await vault.exporter.export(vault.bundle, with_secrets=True)
 
     for rel, payload in pending.items():
         assert (root / rel).read_text(encoding="utf-8") == payload, (
@@ -579,7 +577,7 @@ async def test_an_export_never_deletes_a_path_this_vault_has_not_absorbed(
     # And the hold is what saved them: released, the same export removes them.
     for rel in pending:
         await vault.state.release(rel)
-    await vault.exporter.export(vault.bundle, with_credentials=True)
+    await vault.exporter.export(vault.bundle, with_secrets=True)
 
     for rel in pending:
         assert not (root / rel).exists(), rel
@@ -587,7 +585,7 @@ async def test_an_export_never_deletes_a_path_this_vault_has_not_absorbed(
     assert (root / "skills" / "demo" / "SKILL.md").is_file()
 
 
-async def test_credentials_are_opt_in_and_the_master_key_never_enters_the_bundle(
+async def test_secrets_are_opt_in_and_the_master_key_never_enters_the_bundle(
     vault: VaultMachine,
 ) -> None:
     await _populate(vault)
@@ -595,17 +593,17 @@ async def test_credentials_are_opt_in_and_the_master_key_never_enters_the_bundle
     key = vault.master_key.export_key()
     assert key is not None
 
-    without = await vault.exporter.export(vault.bundle, with_credentials=False)
+    without = await vault.exporter.export(vault.bundle, with_secrets=False)
     assert not (root / "credentials").exists()
     assert "credentials" not in _areas(without)
 
-    summary = await vault.exporter.export(vault.bundle, with_credentials=True)
-    assert summary.credentials_included is True
+    summary = await vault.exporter.export(vault.bundle, with_secrets=True)
+    assert summary.secrets_included is True
     assert _areas(summary)["credentials"] == 1
 
     blob = (root / "credentials" / "mcp" / "files" / "token.enc").read_bytes()
     # Ciphertext, and the exact ciphertext the vault holds.
-    assert blob == vault.credentials.read_ciphertext("mcp/files/token")
+    assert blob == vault.secrets.read_ciphertext("mcp/files/token")
     assert Fernet(key).decrypt(blob) == b"s3cret"
 
     listed = vault.bundle.list_files()
@@ -629,7 +627,7 @@ async def test_home_paths_leave_the_vault_as_a_portable_token(vault: VaultMachin
     )
     root = pathlib.Path(vault.bundle.path)
 
-    await vault.exporter.export(vault.bundle, with_credentials=False)
+    await vault.exporter.export(vault.bundle, with_secrets=False)
 
     document = root / await vault.doc_path("agent", "coder")
     config = _doc(document)["config"]
@@ -647,7 +645,7 @@ async def test_a_machine_publishes_its_own_descriptor_and_no_other(vault: VaultM
     await vault.register("agent", "writer", {"value": "writer"})
     root = pathlib.Path(vault.bundle.path)
     today = date(2026, 9, 13)
-    await vault.exporter.export(vault.bundle, with_credentials=True)
+    await vault.exporter.export(vault.bundle, with_secrets=True)
 
     theirs = MachineDescriptor(
         machine_id=MACHINE_B,
@@ -675,7 +673,7 @@ async def test_a_machine_publishes_its_own_descriptor_and_no_other(vault: VaultM
 
     # A whole export plus a second publish on the same day: every other area
     # converges against local state, and none of them may sweep the registry.
-    await vault.exporter.export(vault.bundle, with_credentials=True)
+    await vault.exporter.export(vault.bundle, with_secrets=True)
     await vault.registry.publish_self(vault.bundle, commit="abc1234", today=today)
 
     assert _mtimes(root) == stamps
@@ -1191,7 +1189,7 @@ async def test_state_docs_carry_home_as_a_sentinel_both_ways(vault: VaultMachine
     home = str(vault.home)
     vault.state_provider.docs["peer-1"] = {"log": f"{home}/logs/peer-1.log", "paired": True}
 
-    await vault.exporter.export(vault.bundle, with_credentials=False)
+    await vault.exporter.export(vault.bundle, with_secrets=False)
     written = _doc(vault.worktree / "state" / "peers" / "peer-1.yaml")
     assert written == {"log": "${HOME}/logs/peer-1.log", "paired": True}
 
@@ -1227,12 +1225,12 @@ async def test_state_applier_skips_an_area_no_module_claims(vault: VaultMachine)
 
 @pytest.mark.acceptance(
     spec="vault-sync",
-    scenario="a credential blob is written as ciphertext and its deletion deletes the credential",
+    scenario="a secret blob is written as ciphertext and its deletion deletes the secret",
 )
-async def test_credential_applier_writes_ciphertext_and_refuses_a_staler_blob(
+async def test_secret_applier_writes_ciphertext_and_refuses_a_staler_blob(
     vault: VaultMachine,
 ) -> None:
-    applier = CredentialApplier(vault.credentials, worktree=vault.worktree)
+    applier = SecretApplier(vault.secrets, worktree=vault.worktree)
     key = vault.master_key.export_key()
     assert key is not None
     fernet = Fernet(key)
@@ -1249,22 +1247,22 @@ async def test_credential_applier_writes_ciphertext_and_refuses_a_staler_blob(
 
     _stage(vault.worktree, path, newer)
     await applier.upsert(path)
-    assert vault.credentials.read_ciphertext(ref) == newer
+    assert vault.secrets.read_ciphertext(ref) == newer
     assert fernet.decrypt(newer) == b"new-secret"
 
     # A blob that reaches this machine already stale is refused: writing it
     # would orphan a working secret.
     _stage(vault.worktree, path, older)
     await applier.upsert(path)
-    assert vault.credentials.read_ciphertext(ref) == newer
+    assert vault.secrets.read_ciphertext(ref) == newer
 
     await applier.remove(path)
-    assert vault.credentials.read_ciphertext(ref) is None
-    assert vault.credentials.list_refs() == []
+    assert vault.secrets.read_ciphertext(ref) is None
+    assert vault.secrets.list_refs() == []
 
 
-async def test_credential_applier_accepts_a_fresher_blob(vault: VaultMachine) -> None:
-    applier = CredentialApplier(vault.credentials, worktree=vault.worktree)
+async def test_secret_applier_accepts_a_fresher_blob(vault: VaultMachine) -> None:
+    applier = SecretApplier(vault.secrets, worktree=vault.worktree)
     key = vault.master_key.export_key()
     assert key is not None
     fernet = Fernet(key)
@@ -1275,10 +1273,10 @@ async def test_credential_applier_accepts_a_fresher_blob(vault: VaultMachine) ->
 
     ref = "mcp/files/token"
     path = f"credentials/{ref}.enc"
-    vault.credentials.write_ciphertext(ref, older)
+    vault.secrets.write_ciphertext(ref, older)
 
     _stage(vault.worktree, path, newer)
     await applier.upsert(path)
 
-    assert vault.credentials.read_ciphertext(ref) == newer
-    assert fernet.decrypt(vault.credentials.read_ciphertext(ref) or b"") == b"new-secret"
+    assert vault.secrets.read_ciphertext(ref) == newer
+    assert fernet.decrypt(vault.secrets.read_ciphertext(ref) or b"") == b"new-secret"

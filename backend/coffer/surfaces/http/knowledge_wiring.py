@@ -79,7 +79,7 @@ def wire_knowledge_kind(
     audit: AuditService,
     builtin_tools: BuiltinToolRegistry,
     models: ModelSelectorPort,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     on_catalogue_changed: CatalogueChanged,
 ) -> KnowledgeWiring:
     """Wire the ``knowledge`` kind into the app and return what it built."""
@@ -110,7 +110,7 @@ def wire_knowledge_kind(
         registry=default_registry(),
         models=models,
         completion=LangchainLlmCompletion(),
-        credential_resolver=credential_resolver,
+        secret_resolver=secret_resolver,
         read_timeout=read_internal_engine_timeout,
     )
     set_ingest_service(ingest_service)

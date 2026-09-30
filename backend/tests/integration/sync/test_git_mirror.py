@@ -157,7 +157,7 @@ async def test_resolve_revision_accepts_a_date(
 
 @pytest.mark.acceptance(
     spec="vault-sync",
-    scenario="the push credential never reaches the repository",
+    scenario="the push secret never reaches the repository",
 )
 @pytest.mark.asyncio
 async def test_the_token_never_lands_in_git_config(
@@ -193,9 +193,7 @@ async def test_the_token_leaves_nothing_behind_in_the_temp_dir(
     assert set(tmp.glob("coffer-*")) == before
 
 
-@pytest.mark.acceptance(
-    spec="vault-sync", scenario="the push credential never reaches the repository"
-)
+@pytest.mark.acceptance(spec="vault-sync", scenario="the push secret never reaches the repository")
 def test_the_credential_reaches_git_as_a_helper_not_a_prompt() -> None:
     """The regression that stopped sync dead, and why it was invisible.
 
@@ -471,7 +469,7 @@ async def test_both_sides_of_a_conflict_are_readable_as_merge_stages(
 async def test_read_file_returns_raw_bytes_or_none(
     worktree: pathlib.Path, remote: pathlib.Path
 ) -> None:
-    """Credential ciphertext must survive the trip; a decode would corrupt it."""
+    """Secret ciphertext must survive the trip; a decode would corrupt it."""
     blob = b"\x00\x01\xfe\xff gAAAA"
     mirror = await _seeded(worktree, remote, {"notes.md": _LINES})
     (worktree / "credentials").mkdir()

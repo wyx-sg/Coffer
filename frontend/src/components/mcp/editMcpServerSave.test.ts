@@ -1,6 +1,6 @@
 // frontend/src/components/mcp/editMcpServerSave.test.ts
 //
-// The save path's two dealings with credential refs: which address a secret is
+// The save path's two dealings with secret refs: which address a secret is
 // written to, and which no-longer-cited addresses may be deleted afterwards.
 // Both used to read `resource.name` — refs were built as `<name>.<key>` and the
 // cleanup owned whatever started with `<name>.` — so the tests here rename the
@@ -17,7 +17,7 @@ vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
 
 const t = ((key: string) => key) as never;
 
-/** A ref as `lib/credentialRef.ts` mints one. */
+/** A ref as `lib/secretRef.ts` mints one. */
 const MINTED = "mcp_server/0123456789abcdef0123456789abcdef/GITHUB_TOKEN";
 /** One the user typed, or pasted in to share a secret with another server. */
 const HAND_WRITTEN = "shared/github-token";
@@ -36,7 +36,7 @@ function resource(overrides: Record<string, unknown> = {}) {
         command: "npx",
         args: [],
         env: {},
-        credential_refs: { GITHUB_TOKEN: MINTED },
+        secret_refs: { GITHUB_TOKEN: MINTED },
       },
     },
     ...overrides,
@@ -80,7 +80,7 @@ describe("which address a secret is written to", () => {
     // a delete plus an add of something the other machine cannot place.
     await save([row({ ref: null, value: "ghp_new" })]);
 
-    expect(api.POST).toHaveBeenCalledWith("/credentials", {
+    expect(api.POST).toHaveBeenCalledWith("/secrets", {
       body: { ref: MINTED, value: "ghp_new" },
     });
     expect(api.DELETE).not.toHaveBeenCalled();
@@ -104,7 +104,7 @@ describe("which address a secret is written to", () => {
     expect(patchedRefs()).toEqual({ GH_TOKEN: written });
     // The address the config left behind is one Coffer minted for this server,
     // so it goes — even though the server's name no longer resembles it.
-    expect(api.DELETE).toHaveBeenCalledWith("/credentials/{ref}", {
+    expect(api.DELETE).toHaveBeenCalledWith("/secrets/{ref}", {
       params: { path: { ref: MINTED } },
     });
   });
@@ -117,14 +117,14 @@ describe("which no-longer-cited refs may be deleted", () => {
     // nothing, leaving a secret in the store that nothing would ever cite.
     await save([]);
 
-    expect(api.DELETE).toHaveBeenCalledWith("/credentials/{ref}", {
+    expect(api.DELETE).toHaveBeenCalledWith("/secrets/{ref}", {
       params: { path: { ref: MINTED } },
     });
   });
 
   test("a hand-written or shared ref is never deleted", async () => {
     const shared = resource({
-      config: { transport: { type: "stdio", credential_refs: { GITHUB_TOKEN: HAND_WRITTEN } } },
+      config: { transport: { type: "stdio", secret_refs: { GITHUB_TOKEN: HAND_WRITTEN } } },
     });
     await save([], shared);
 
@@ -148,9 +148,9 @@ test("renaming an env key without re-entering its value is refused", async () =>
 
 function patchedRefs(): Record<string, string> {
   const body = api.PATCH.mock.calls[0][1] as {
-    body: { config: { transport: { credential_refs: Record<string, string> } } };
+    body: { config: { transport: { secret_refs: Record<string, string> } } };
   };
-  return body.body.config.transport.credential_refs;
+  return body.body.config.transport.secret_refs;
 }
 
 describe("a rotation that waits for approval", () => {
@@ -178,7 +178,7 @@ describe("the Secret | Plain row model", () => {
     expect(api.POST).not.toHaveBeenCalled();
     expect(patchedRefs()).toEqual({ GITHUB_TOKEN: "secret/GITHUB_PAT" });
     // The server's own minted secret is no longer cited, so it is released.
-    expect(api.DELETE).toHaveBeenCalledWith("/credentials/{ref}", {
+    expect(api.DELETE).toHaveBeenCalledWith("/secrets/{ref}", {
       params: { path: { ref: MINTED } },
     });
   });
@@ -186,7 +186,7 @@ describe("the Secret | Plain row model", () => {
   test("a new value on a row loaded from a Secrets-page secret mints; never overwrites it", async () => {
     const shared = resource({
       config: {
-        transport: { type: "stdio", credential_refs: { GITHUB_TOKEN: "secret/GITHUB_PAT" } },
+        transport: { type: "stdio", secret_refs: { GITHUB_TOKEN: "secret/GITHUB_PAT" } },
       },
     });
     await save([row({ ref: null, storedRef: "secret/GITHUB_PAT", value: "ghp_mine" })], shared);
@@ -207,7 +207,7 @@ describe("the Secret | Plain row model", () => {
     await save([row({ isSecret: false, value: "public" })]);
 
     expect(patchedRefs()).toEqual({});
-    expect(api.DELETE).toHaveBeenCalledWith("/credentials/{ref}", {
+    expect(api.DELETE).toHaveBeenCalledWith("/secrets/{ref}", {
       params: { path: { ref: MINTED } },
     });
   });

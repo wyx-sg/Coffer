@@ -60,12 +60,12 @@ def _env_carries_secrets(r: Resource) -> bool:
     by other processes on this Mac" (spec mcp-gateway "Mark a stdio server
     whose environment carries a secret"). Read off the stored shape rather than
     through the MCP kind's model, which this kind-agnostic route does not
-    import: a ``stdio`` transport citing any credential ref.
+    import: a ``stdio`` transport citing any secret ref.
     """
     transport = r.config.get("transport") if isinstance(r.config, dict) else None
     if not isinstance(transport, dict) or transport.get("type") != "stdio":
         return False
-    return bool(transport.get("credential_refs"))
+    return bool(transport.get("secret_refs"))
 
 
 _actor = get_actor
@@ -161,9 +161,9 @@ async def update_resource(
 
     # A rename ALONE touches no config, so it runs no config write. Rewriting
     # the stored config back over itself is not a no-op: it re-validates, it
-    # re-probes every credential the config cites, it fires the kind's update
+    # re-probes every secret the config cites, it fires the kind's update
     # hook and it records a `resource_updated` with identical before and after.
-    # A rename refused because a credential this resource mentions has since
+    # A rename refused because a secret this resource mentions has since
     # been deleted is a refusal about something the caller did not touch.
     r = await _reachable(svc, uid)
     # A fixed name (``mcp_server``, ``skill``) refuses a change FIRST, so the

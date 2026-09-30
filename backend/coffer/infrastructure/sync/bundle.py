@@ -44,7 +44,7 @@ from coffer.infrastructure.sync.tree_mirror import _converge_files, _mirror_tree
 _logger = logging.getLogger(__name__)
 
 _RESOURCES = "resources"
-_CREDENTIALS = "credentials"
+_SECRETS = "credentials"
 _STATE = "state"
 _MACHINES = "machines"
 
@@ -57,7 +57,7 @@ _MACHINES = "machines"
 #: converging it here would delete every other machine's descriptor on every
 #: export. Disjoint ownership is exactly what makes the registry unconflictable
 #: (spec vault-sync "Derive the registry from the descriptors").
-_OWNED_DIRS = (_RESOURCES, _STATE, _CREDENTIALS)
+_OWNED_DIRS = (_RESOURCES, _STATE, _SECRETS)
 
 
 def _dump(doc: Mapping[str, object]) -> bytes:
@@ -85,7 +85,7 @@ class Bundle:
         It sits on the constructor rather than on each write method, and beside
         ``trees`` rather than instead of it, for the same reason ``trees``
         does: it is one machine-wide fact that every area obeys — resources,
-        state, credentials *and* the mirrored trees — so a per-method parameter
+        state, secrets *and* the mirrored trees — so a per-method parameter
         would be the same argument repeated five times with five chances to
         forget one. It is a callable, not a set, because the holds are read
         asynchronously from convergence state while these methods are
@@ -228,7 +228,7 @@ class Bundle:
         A row the exporter could not render is absent from ``docs`` for a
         reason that has nothing to do with the user, and converging on ``docs``
         alone would publish it as a deletion — the other machine would then
-        drop the registration and release its credentials. "Could not render"
+        drop the registration and release its secrets. "Could not render"
         is not "the user deleted it", so those paths are protected exactly like
         a held one.
 
@@ -293,15 +293,13 @@ class Bundle:
         desired = {f"{rel}.yaml": _dump(doc) for rel, doc in docs}
         _converge_files(self._root / _STATE / area, desired, protected=self._held_under(prefix))
 
-    # --- credential blobs --------------------------------------------------
+    # --- secret blobs --------------------------------------------------
 
-    def write_credential_blobs(self, blobs: Mapping[str, bytes]) -> None:
+    def write_secret_blobs(self, blobs: Mapping[str, bytes]) -> None:
         # Refs are namespaced with slashes (``channel/seatalk/app-secret``), so
         # a ``.enc`` file lives in a nested dir the convergence helper creates.
         desired = {f"{ref}.enc": blob for ref, blob in blobs.items()}
-        _converge_files(
-            self._root / _CREDENTIALS, desired, protected=self._held_under(_CREDENTIALS)
-        )
+        _converge_files(self._root / _SECRETS, desired, protected=self._held_under(_SECRETS))
 
     # --- machine descriptors -----------------------------------------------
 

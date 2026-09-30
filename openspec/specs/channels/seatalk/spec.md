@@ -55,18 +55,18 @@ Deliberately out of scope:
 A SeaTalk channel's configuration MUST carry **`app_id` and `app_secret_ref`**
 and no inbound-transport field: SeaTalk inbound has one transport (see "Receive
 every event over one outbound websocket connection"), and the register handshake
-authenticates it from those two values alone. The secret lives in the credential
-store; the configuration carries the reference, probed at registration ([channels](../spec.md) "Register channels as a credential-referencing resource kind").
+authenticates it from those two values alone. The secret lives in the secret
+store; the configuration carries the reference, probed at registration ([channels](../spec.md) "Register channels as a secret-referencing resource kind").
 
 A channel stored while webhook delivery existed MUST be rewritten once, by a
 migration, so that it carries none of `delivery`, `signing_secret_ref`,
 `public_base_url` or `tunnel_token_ref`: a stored key that configures nothing
-misdescribes the running system. The credential values those refs cited MUST be
-left in the credential store rather than deleted, because a migration that
+misdescribes the running system. The secret values those refs cited MUST be
+left in the secret store rather than deleted, because a migration that
 destroys secrets cannot be undone by its downgrade.
 
 #### Scenario: a seatalk channel without an app id or secret reference is refused
-- **GIVEN** a stored SeaTalk app secret under a credential reference
+- **GIVEN** a stored SeaTalk app secret under a secret reference
 - **WHEN** a seatalk channel is registered missing `app_id`, or missing `app_secret_ref`
 - **THEN** the registration is rejected and nothing is persisted
 - **AND** the same registration carrying both is accepted with the secret held only as a reference
@@ -75,7 +75,7 @@ destroys secrets cannot be undone by its downgrade.
 - **GIVEN** a stored seatalk channel carrying `delivery: webhook`, a signing secret ref, a public base URL and a tunnel token ref
 - **WHEN** the daemon's startup migrations run
 - **THEN** the channel's configuration carries its `app_id`, its `app_secret_ref` and its common fields, and none of the four webhook-era keys
-- **AND** the credential values the removed refs cited are still in the credential store
+- **AND** the secret values the removed refs cited are still in the secret store
 
 ### Requirement: Load the websocket client library from an operator-supplied directory
 The WebSocket client library MUST be an **operator-supplied optional

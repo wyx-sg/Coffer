@@ -22,10 +22,10 @@ class LangchainLlmCompletion:
         system: str,
         user: str,
         model: ResolvedConnection,
-        credential_resolver: Callable[[str], str],
+        secret_resolver: Callable[[str], str],
         timeout: float | None = None,
     ) -> str:
-        chat = build_chat_model(model, credential_resolver, timeout=timeout)
+        chat = build_chat_model(model, secret_resolver, timeout=timeout)
         resp = await chat.ainvoke([SystemMessage(content=system), HumanMessage(content=user)])
         content = resp.content
         return content if isinstance(content, str) else str(content)

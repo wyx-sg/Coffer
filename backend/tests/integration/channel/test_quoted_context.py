@@ -1,6 +1,6 @@
 """A quoted message grounds the turn ("Ground a turn in the message it quotes").
 
-The transport resolves the quoted body with its own credentials and the core
+The transport resolves the quoted body with its own secrets and the core
 folds it in as ``> sender: …`` lines right above the message — so "repeat this"
 or "as above" points at something the agent can read.
 """

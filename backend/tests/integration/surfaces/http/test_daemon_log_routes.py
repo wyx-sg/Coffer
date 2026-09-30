@@ -79,6 +79,18 @@ async def test_newest_first(monkeypatch, tmp_path) -> None:
     assert [rec["event"] for rec in r.json()["records"]] == ["newer", "older"]
 
 
+# revise-web-ui-ia: daemon "the daemon log tail names the file it read" — the
+# acceptance marker is added when the change is archived.
+@pytest.mark.asyncio
+async def test_names_the_file_it_read(monkeypatch, tmp_path) -> None:
+    """The Activity page names the log file and opens it; the answer carries its path."""
+    _write_log(monkeypatch, tmp_path, [_json_line("info", "coffer.started")])
+    async with _client() as c:
+        r = await c.get("/api/v1/daemon/logs")
+    assert r.json()["path"] == str(tmp_path / "logs" / "daemon.log")
+    assert len(r.json()["records"]) == 1
+
+
 @pytest.mark.asyncio
 async def test_errors_only_keeps_errors_and_unparseable_lines(monkeypatch, tmp_path) -> None:
     _write_log(
@@ -277,7 +289,7 @@ async def test_a_missing_log_file_is_an_empty_list_not_a_500(monkeypatch, tmp_pa
     async with _client() as c:
         r = await c.get("/api/v1/daemon/logs")
     assert r.status_code == 200
-    assert r.json() == {"records": []}
+    assert r.json() == {"records": [], "path": str(tmp_path / "logs" / "daemon.log")}
 
 
 @pytest.mark.asyncio

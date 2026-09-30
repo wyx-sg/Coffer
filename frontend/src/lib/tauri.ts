@@ -17,7 +17,7 @@
 
 import { setDaemonConnection } from "./auth";
 import { resetApiClient } from "./api/client";
-import type { components } from "./api/generated/credentials";
+import type { components } from "./api/generated/secret";
 
 export function isTauri(): boolean {
   // @ts-expect-error — Tauri injects __TAURI_INTERNALS__ in its WebView
@@ -256,10 +256,10 @@ export interface MasterKeyBackup {
   fingerprint: string;
 }
 
-/** Write a master key backup after a presence check; the key never reaches the page. */
-export async function exportMasterKeyBackup(): Promise<MasterKeyBackup> {
+/** Write the passphrase-protected `.cfk` key backup after a presence check; no key reaches the page. */
+export async function exportMasterKeyBackup(passphrase: string): Promise<MasterKeyBackup> {
   if (!isTauri()) throw new PresenceUnavailableError("export_master_key_backup");
-  return shellInvoke<MasterKeyBackup>("export_master_key_backup");
+  return shellInvoke<MasterKeyBackup>("export_master_key_backup", { passphrase });
 }
 
 /** Approve one pending approval after a presence check. Throws outside the shell. */

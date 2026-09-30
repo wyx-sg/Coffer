@@ -5,7 +5,7 @@ description: Register upstream MCP servers once in Coffer, curate their tools, c
 
 # MCP servers
 
-Coffer's gateway aggregates the MCP servers you register and serves them to every connected agent through one endpoint. This page covers registering stdio and HTTP servers, keeping their secrets in the credential store, curating what each server exposes, choosing which agents reach it, and how the gateway behaves when you have many tools.
+Coffer's gateway aggregates the MCP servers you register and serves them to every connected agent through one endpoint. This page covers registering stdio and HTTP servers, keeping their secrets in the secret store, curating what each server exposes, choosing which agents reach it, and how the gateway behaves when you have many tools.
 
 ## What the gateway does
 
@@ -85,12 +85,12 @@ The Brave Search server reads its API key from the `BRAVE_API_KEY` environment v
 
 ```sh
 # 1. Store the secret (read from stdin, so it never lands in shell history)
-printf '%s' "$BRAVE_API_KEY" | coffer credentials set brave/api-key
+printf '%s' "$BRAVE_API_KEY" | coffer secret set brave/api-key
 
-# 2. Register the server, mapping the env var to the credential ref
+# 2. Register the server, mapping the env var to the secret ref
 coffer mcp add brave \
   --stdio "npx -y @modelcontextprotocol/server-brave-search" \
-  --credential BRAVE_API_KEY=brave/api-key
+  --secret BRAVE_API_KEY=brave/api-key
 
 # 3. Check it starts and lists tools
 coffer mcp test brave
@@ -109,7 +109,7 @@ The stored config holds only the reference:
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-brave-search"],
     "env": {},
-    "credential_refs": { "BRAVE_API_KEY": "brave/api-key" },
+    "secret_refs": { "BRAVE_API_KEY": "brave/api-key" },
     "cwd": null
   },
   "spawn_timeout_seconds": 30,
@@ -117,9 +117,9 @@ The stored config holds only the reference:
 }
 ```
 
-When Coffer starts the server, it decrypts `brave/api-key` in memory and puts it in the child's environment as `BRAVE_API_KEY`. The child does **not** inherit the daemon's own environment: it gets a minimal safe set (such as `PATH` and `HOME`), the server's static `env`, and its materialised credentials — nothing else.
+When Coffer starts the server, it decrypts `brave/api-key` in memory and puts it in the child's environment as `BRAVE_API_KEY`. The child does **not** inherit the daemon's own environment: it gets a minimal safe set (such as `PATH` and `HOME`), the server's static `env`, and its materialised secrets — nothing else.
 
-In the web UI's Add server dialog, environment variables whose name or value looks like a secret are pre-marked **Secret**. Values marked Secret are stored in the credential store under a generated ref and cited from `credential_refs`; the rest stay in `env`.
+In the web UI's Add server dialog, environment variables whose name or value looks like a secret are pre-marked **Secret**. Values marked Secret are stored in the secret store under a generated ref and cited from `secret_refs`; the rest stay in `env`.
 
 ## Register an HTTP server
 
@@ -129,17 +129,17 @@ An HTTP server is a remote MCP endpoint that speaks the streamable HTTP transpor
 
 ```sh
 # 1. Store the whole header value, including the scheme
-printf 'Bearer %s' "$GITHUB_PAT" | coffer credentials set github/authorization
+printf 'Bearer %s' "$GITHUB_PAT" | coffer secret set github/authorization
 
-# 2. Register the server, mapping the header to the credential ref
+# 2. Register the server, mapping the header to the secret ref
 coffer mcp add github \
   --http https://api.githubcopilot.com/mcp/ \
-  --credential Authorization=github/authorization
+  --secret Authorization=github/authorization
 
 coffer mcp test github
 ```
 
-For an HTTP server each `--credential NAME=REF` entry becomes a request header: the decrypted secret is sent as the header's **entire** value, so store `Bearer …` when the server expects that form. Non-secret headers go in the transport's `headers` map (edit the config JSON in the web UI).
+For an HTTP server each `--secret NAME=REF` entry becomes a request header: the decrypted secret is sent as the header's **entire** value, so store `Bearer …` when the server expects that form. Non-secret headers go in the transport's `headers` map (edit the config JSON in the web UI).
 
 The config Coffer stores:
 
@@ -149,7 +149,7 @@ The config Coffer stores:
     "type": "http",
     "url": "https://api.githubcopilot.com/mcp/",
     "headers": {},
-    "credential_refs": { "Authorization": "github/authorization" }
+    "secret_refs": { "Authorization": "github/authorization" }
   },
   "spawn_timeout_seconds": 30,
   "request_timeout_seconds": 120
@@ -157,11 +157,11 @@ The config Coffer stores:
 ```
 
 ::: warning Secrets cannot sit in `env` or `headers`
-A static `env` or `headers` value that looks like a secret — starting with `Bearer `, `ghp_`, `gho_`, `github_pat_`, `sk-`, `xoxb-`/`xoxa-`/`xoxp-`, or a JWT — is rejected at registration with a message telling you to move it into `credential_refs`. A `credential_refs` entry citing a ref the store does not hold is also rejected, naming the missing credential.
+A static `env` or `headers` value that looks like a secret — starting with `Bearer `, `ghp_`, `gho_`, `github_pat_`, `sk-`, `xoxb-`/`xoxa-`/`xoxp-`, or a JWT — is rejected at registration with a message telling you to move it into `secret_refs`. A `secret_refs` entry citing a ref the store does not hold is also rejected, naming the missing secret.
 :::
 
 ::: info Pasting an HTTP server with `headers`
-The **Add server** paste box reads an HTTP server's (`"url": …`) `headers` object and reviews each value for secrets exactly as it does `env`: a value whose name or content looks like a secret (an `Authorization` header, for example) is pre-marked **Secret**, stored in the credential store and cited from `credential_refs`; the rest stay in the transport's `headers`. An `env` object on an HTTP server is sent as headers too; when both name the same key, the `headers` value wins.
+The **Add server** paste box reads an HTTP server's (`"url": …`) `headers` object and reviews each value for secrets exactly as it does `env`: a value whose name or content looks like a secret (an `Authorization` header, for example) is pre-marked **Secret**, stored in the secret store and cited from `secret_refs`; the rest stay in the transport's `headers`. An `env` object on an HTTP server is sent as headers too; when both name the same key, the `headers` value wins.
 :::
 
 ## Server names and descriptions
@@ -302,7 +302,7 @@ See [MCP gateway](/architecture/mcp-gateway) for the full request lifecycle.
 ## Related
 
 - [Connect a client](/guides/connect-a-client) — the shim, the HTTP endpoint, agent identity
-- [Credentials](/guides/credentials) — storing the secrets servers cite
+- [Secret store](/guides/secret-store) — storing the secrets servers cite
 - [Agents](/guides/agents#manage-the-agent-s-own-mcp-entries) — adopting MCP entries already in an agent's config
 - [MCP tools reference](/reference/mcp-tools) — Coffer's own `coffer__…` tools
 - [Tool Overload: List a Usage-Ranked Slice, Search the Rest](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md), [Tool Overload: List a Usage-Ranked Slice, Search the Rest](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md), [Session Subprocess Model](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/session-subprocess-model.md)

@@ -11,7 +11,7 @@ available over REST (`PATCH /api/v1/providers/{uid}`: `base_url`, `protocol`, `m
 `secret_value`, `description`, `fallback`), over the CLI
 (`coffer provider edit <name> [--name <new>] [--title <text>] [--description <text>] [--protocol <wire>] [--base-url <url>] [--secret <value>] [--fallback|--no-fallback]`)
 and from its detail page, including correcting the wire. `coffer provider add <name> --protocol <p>
---base-url <url> [--secret <value> | --credential-ref <ref> | --local]` takes no model; `--local`
+--base-url <url> [--secret <value> | --secret-ref <ref> | --local]` takes no model; `--local`
 creates a local runtime connection (see "Configure a local model connection"). No command or route
 returns a provider's key: the agents reach a connection through the local model proxy, which injects
 the key itself (see "Reach API-key and local connections through the local model proxy"). Reverting is
@@ -71,7 +71,7 @@ The web surfaces:
 #### Scenario: update a provider profile
 - **GIVEN** a connection exists,
 - **WHEN** the user patches `base_url` (no `secret_value`),
-- **THEN** only that field is updated, `credential_ref` is unchanged, and `resource_updated` is audited.
+- **THEN** only that field is updated, `secret_ref` is unchanged, and `resource_updated` is audited.
 #### Scenario: the command line covers create, list, switch and revert
 - **GIVEN** the daemon is running,
 - **WHEN** the user runs `coffer provider add`, `coffer provider list --json`, `coffer provider switch` and `coffer provider builtin <agent_type>` from the CLI,
@@ -178,7 +178,7 @@ compatibility key is a field the user sets.
 #### Scenario: create a keyless local runtime connection
 - **GIVEN** an Ollama runtime answering on a loopback port
 - **WHEN** the user runs `coffer provider add ollama --protocol anthropic --base-url http://127.0.0.1:11434 --local`
-- **THEN** the connection persists with no credential, records the runtime, version and wires it serves, and curates its tool-capable models with their served windows
+- **THEN** the connection persists with no secret, records the runtime, version and wires it serves, and curates its tool-capable models with their served windows
 
 #### Scenario: a local connection sets Claude Code's compatibility key
 - **GIVEN** a Claude Code agent switched to a local model connection whose model records a 131072-token window

@@ -4,7 +4,7 @@
 // (disabled until the draft is changed and valid), an auto-saving "converge
 // automatically" switch that only works once a remote exists, a "converge
 // now" button, and the invariant that nothing on it can hold a secret — the
-// push credential is named by REFERENCE and resolved by the daemon at push
+// push secret is named by REFERENCE and resolved by the daemon at push
 // time.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -60,8 +60,8 @@ function status(configured: boolean): SyncStatus {
       ? {
           url: "https://git.example.com/me/vault.git",
           branch: "main",
-          credential_ref: "sync.PUSH_TOKEN",
-          include_credentials: false,
+          secret_ref: "sync.PUSH_TOKEN",
+          include_secrets: false,
           interval_seconds: 3600,
           enabled: true,
           worktree_path: "/home/me/.coffer/sync",
@@ -86,7 +86,7 @@ describe("SyncRemoteCard", () => {
     expect(screen.getByLabelText(/repository url/i)).toHaveValue(
       "https://git.example.com/me/vault.git",
     );
-    expect(screen.getByLabelText(/push credential/i)).toHaveValue("sync.PUSH_TOKEN");
+    expect(screen.getByLabelText(/push secret/i)).toHaveValue("sync.PUSH_TOKEN");
     expect(screen.getByText(/\/home\/me\/\.coffer\/sync/)).toBeInTheDocument();
   });
 
@@ -148,12 +148,12 @@ describe("SyncRemoteCard", () => {
   test("an adopted working tree rides along unchanged rather than resetting", () => {
     stub();
     render(<SyncRemoteCard status={status(true)} />);
-    fireEvent.click(screen.getByLabelText(/include credentials/i));
+    fireEvent.click(screen.getByLabelText(/include secrets/i));
     fireEvent.click(saveButton());
     expect(saveMutate).toHaveBeenCalledWith(
       expect.objectContaining({
         worktree_path: "/home/me/.coffer/sync",
-        include_credentials: true,
+        include_secrets: true,
       }),
       expect.anything(),
     );
@@ -219,17 +219,17 @@ describe("SyncRemoteCard", () => {
     expect(previewMutate).toHaveBeenCalled();
   });
 
-  acceptance("vault-sync", "the push credential never reaches the repository", () => {
+  acceptance("vault-sync", "the push secret never reaches the repository", () => {
     stub();
     // What the daemon serves is a ref and nothing secret-shaped...
     const served = status(true).remote as unknown as Record<string, unknown>;
-    expect(served.credential_ref).toBe("sync.PUSH_TOKEN");
-    const secretish = /token|secret|password|credential(?!_ref)/i;
-    expect(Object.keys(served).filter((k) => secretish.test(k))).toEqual(["include_credentials"]);
+    expect(served.secret_ref).toBe("sync.PUSH_TOKEN");
+    const secretish = /token|secret(?!_ref)|password/i;
+    expect(Object.keys(served).filter((k) => secretish.test(k))).toEqual(["include_secrets"]);
 
     // ...and what the card renders is that ref, never a password field.
     render(<SyncRemoteCard status={status(true)} />);
-    expect(screen.getByLabelText(/push credential/i)).toHaveValue("sync.PUSH_TOKEN");
+    expect(screen.getByLabelText(/push secret/i)).toHaveValue("sync.PUSH_TOKEN");
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0);
   });
 });

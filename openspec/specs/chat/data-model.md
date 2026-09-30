@@ -8,7 +8,7 @@ union, which is a wire contract and not storage.
 
 One row per thread, whatever opened it. Not a Resource of the kind-agnostic
 Resource framework (see "Persist conversations and messages in SQLite") —
-conversations have no scope, no reach, and no credential, and they are created
+conversations have no scope, no reach, and no secret, and they are created
 by a message rather than by registration.
 
 | Column | Type | Notes |

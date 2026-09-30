@@ -221,14 +221,14 @@ export const agentConfigKey = (conversationId: string) =>
  *  would clobber the partial the turn hooks are writing into this key. */
 export const messagesKey = (conversationId: string) => ["messages", conversationId] as const;
 
-// --- credentials — the secret boundary's approvals -------------------------
+// --- secrets — the secret boundary's approvals -------------------------
 
-export const credentialsKey = ["credentials"] as const;
+export const secretsKey = ["secrets"] as const;
 /** The approvals still waiting for a present human. */
-export const pendingApprovalsKey = ["credentials", "approvals", "pending"] as const;
-export const secretBoundaryKey = ["credentials", "secret-boundary"] as const;
-export const credentialsListKey = ["credentials", "list"] as const;
-export const credentialScanKey = ["credentials", "scan"] as const;
+export const pendingApprovalsKey = ["secrets", "approvals", "pending"] as const;
+export const secretBoundaryKey = ["secrets", "secret-boundary"] as const;
+export const secretsListKey = ["secrets", "list"] as const;
+export const secretScanKey = ["secrets", "scan"] as const;
 
 // ---------------------------------------------------------------------------
 // clis — the commands managed skills require (/clis)
@@ -241,7 +241,7 @@ export const cliKey = (command: string) => ["clis", command] as const;
 
 // --- settings — daemon-side settings the Settings pages edit ---------------
 
-export const credentialSettingsKey = ["settings", "credentials"] as const;
+export const secretSettingsKey = ["settings", "secrets"] as const;
 export const internalEngineKey = ["settings", "internalEngine"] as const;
 
 // --- cross-kind helpers ----------------------------------------------------

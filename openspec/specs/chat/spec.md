@@ -851,7 +851,7 @@ speech-to-text connection and model ([internal-engine](../internal-engine/spec.m
 connection, flagged `transcribe_default`, never the one Coffer's engine runs
 on. This is the one place in Coffer where user content may leave the machine,
 and it is **off by default**: with no connection marked for transcription, no
-model chosen for it, an unsupported protocol, or a credential that will not
+model chosen for it, an unsupported protocol, or a secret that will not
 resolve, nothing is uploaded and the audio is handed to the agent as an
 ordinary file instead. Transcription that yields nothing degrades the same way;
 it never wedges or fails the turn.

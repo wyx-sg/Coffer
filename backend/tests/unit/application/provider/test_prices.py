@@ -84,7 +84,7 @@ GATEWAY = _row(
     {
         "protocol": "openai",
         "base_url": "https://gw.example/v1",
-        "credential_ref": "provider/x/key",
+        "secret_ref": "provider/x/key",
         "models": [{"id": "gpt-9", "price": {"input": 2, "output": 3}}, {"id": "gpt-9-mini"}],
     },
 )
@@ -139,7 +139,7 @@ async def test_a_listing_remembers_what_the_api_reported() -> None:
 
     svc = ModelIntrospectionService(_Port(), lambda _ref: "k", reported_prices=store)  # type: ignore[arg-type]
     listed = await svc.list_models(
-        provider="openai", base_url="https://openrouter.ai/api/v1", credential_ref="r"
+        provider="openai", base_url="https://openrouter.ai/api/v1", secret_ref="r"
     )
     assert [m.id for m in listed.models] == ["a", "b", "c"]
     assert dict(store.data["https://openrouter.ai/api"].prices) == {"a": ModelPrice(1, 2)}

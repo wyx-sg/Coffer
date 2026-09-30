@@ -18,7 +18,7 @@ interface PillOption {
 }
 
 /** @ui-only A labelled run of choices ("Not an agent"). */
-export interface PillGroup {
+interface PillGroup {
   label?: string;
   options: PillOption[];
 }
@@ -34,6 +34,12 @@ interface Props {
   /** The pill's text when nothing is chosen ("Any"). */
   anyLabel?: string;
 }
+
+/** The look every Activity filter pill shares (design 6.1: 28 high, r7, 12px). */
+export const PILL_TRIGGER = cn(
+  "inline-flex h-7 shrink-0 items-center gap-[5px] rounded-md border border-border bg-surface-raised px-[9px] text-xs text-text-muted",
+  "transition-colors duration-fast hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+);
 
 export function FilterPill({ label, value, anyValue, groups, onChange, anyLabel }: Props) {
   const { t } = useTranslation();
@@ -53,11 +59,7 @@ export function FilterPill({ label, value, anyValue, groups, onChange, anyLabel 
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={cn(
-            "inline-flex h-control-sm shrink-0 items-center gap-1 rounded-md border border-border bg-surface-raised px-2 text-xs text-text-muted",
-            "transition-colors duration-fast hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-            value !== anyValue && "bg-surface-selected",
-          )}
+          className={cn(PILL_TRIGGER, (value !== anyValue || open) && "bg-surface-selected")}
         >
           {label}:<span className="font-label text-text">{shown}</span>
           <ChevronDown className="size-3.5 text-text-subtle" aria-hidden />

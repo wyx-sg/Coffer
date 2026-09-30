@@ -15,9 +15,9 @@ In-process tests can call `create_app()` directly and override
 
 MCP-specific composition (upstream factory, session supervisors,
 prunable registry, reaper env knobs) lives in
-:mod:`coffer.surfaces.http.app_mcp_composition`; credential-store DI
+:mod:`coffer.surfaces.http.app_mcp_composition`; secret-store DI
 singletons and the master-key bootstrap in
-:mod:`coffer.surfaces.http.credential_composition` — both for the 400-line
+:mod:`coffer.surfaces.http.secret_composition` — both for the 400-line
 guideline.
 """
 
@@ -65,11 +65,6 @@ from coffer.surfaces.http.attention_wiring import lifespan_attention_sources
 from coffer.surfaces.http.background_workers import start_background_workers
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
 from coffer.surfaces.http.chat_wiring import wire_chat
-from coffer.surfaces.http.credential_composition import (
-    init_credential_store,
-    make_credential_resolver,
-    run_credential_startup,
-)
 from coffer.surfaces.http.curation_wiring import wire_curation
 from coffer.surfaces.http.daemon_identity import publish_daemon_identity
 from coffer.surfaces.http.dependencies import (
@@ -98,6 +93,11 @@ from coffer.surfaces.http.reconcile_wiring import (
 )
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.routing import include_all_routers
+from coffer.surfaces.http.secret_composition import (
+    init_secret_store,
+    make_secret_resolver,
+    run_secret_startup,
+)
 from coffer.surfaces.http.sync_contributions import SyncContributions
 
 
@@ -150,12 +150,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     sm = session_maker(engine)
 
     db_path = pathlib.Path(_db_url().split("///", 1)[1]).expanduser()
-    credentials = await init_credential_store(engine, db_path)
-    credential_store = credentials.store
+    secrets = await init_secret_store(engine, db_path)
+    secret_store = secrets.store
     # Computed once, up front, so every internal-LLM consumer below (knowledge
     # ingest, the curation pass, the memory distil pass, the sync conflict
     # resolver) shares one resolver rather than each re-wrapping the store.
-    credential_resolver = make_credential_resolver(credential_store)
+    secret_resolver = make_secret_resolver(secret_store)
 
     audit_repo = SqlAlchemyAuditRepo(sm)
     resource_repo = SqlAlchemyResourceRepo(sm)
@@ -175,11 +175,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         kinds=app.state.kinds,
         repo=HintingResourceRepo(resource_repo, events.hint_sink),
         audit=audit,
-        # Wired so register/update_config can probe credential_refs against
+        # Wired so register/update_config can probe secret_refs against
         # the encrypted store BEFORE persisting (spec mcp-gateway "Manage MCP
-        # servers as resources": a missing credential must fail registration
+        # servers as resources": a missing secret must fail registration
         # with a named ref, no partial state).
-        credentials=credential_store,
+        secrets=secret_store,
     )
 
     retention_svc = build_retention_service(sm, audit=audit)
@@ -214,8 +214,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         audit=audit,
         sm=sm,
         builtin_tools=builtin_tools,
-        credential_store=credential_store,
-        credential_resolver=credential_resolver,
+        secret_store=secret_store,
+        secret_resolver=secret_resolver,
         sync=sync_contributions,
         platform=platform,
         agent_catalog=agent_catalog,
@@ -228,7 +228,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # the system prompt").
     chat = wire_chat(
         sm,
-        credential_store,
+        secret_store,
         kinds.agent_skill.agent_service,
         resource_svc,
         agent_catalog,
@@ -243,17 +243,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # new material into a collection's documents. It carries
     # the skill delivery too, because a document nothing has re-rendered a
     # catalogue for is a document no agent has a path to (spec knowledge).
-    curation_pass = wire_curation(kinds.knowledge.models, credential_resolver, kinds.guide)
+    curation_pass = wire_curation(kinds.knowledge.models, secret_resolver, kinds.guide)
 
     # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
     # drives turns through the chat platform's handles, and `/kb` through the
     # knowledge kind's.
     channel_runtime = wire_channel_kind(
-        app, resource_svc, audit, sm, credential_store, chat, kinds.knowledge, sync_contributions
+        app, resource_svc, audit, sm, secret_store, chat, kinds.knowledge, sync_contributions
     )
 
     # Legacy keychain move + one-time adoption of the secret bindings in use.
-    await run_credential_startup(app.state.kinds, sm, credential_store, audit, resource_svc)
+    await run_secret_startup(app.state.kinds, sm, secret_store, audit, resource_svc)
 
     # An agent's Coffer connection spans two kinds (the gateway entry is the
     # agent kind's, the memory hook the memory kind's), so it is composed here.
@@ -294,11 +294,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         audit=audit,
         engine_config=internal_engine_config_svc,
         internal_connection=kinds.provider.internal_connection,
-        credential_resolver=credential_resolver,
+        secret_resolver=secret_resolver,
         db_path=db_path,
         sm=sm,
-        credential_store=credential_store,
-        master_key=credentials.master_key,
+        secret_store=secret_store,
+        master_key=secrets.master_key,
         sync_contributions=sync_contributions,
         platform=platform,
     )
@@ -322,7 +322,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         features.is_enabled,
         lifespan_attention_sources(
             resource_svc=resource_svc,
-            credential_store=credential_store,
+            secret_store=secret_store,
             connection_service=connection,
             sync_service=workers.sync.service,
         ),

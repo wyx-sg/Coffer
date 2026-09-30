@@ -9,7 +9,7 @@ Sync persists in three places, and which one holds what is the whole design:
 | the working tree | every vault document, and the machine registry | it is what git merges |
 
 The vault itself keeps its existing system of record: knowledge and skills are
-files, config resources are rows reached through `ResourceService`, credentials
+files, config resources are rows reached through `ResourceService`, secrets
 are ciphertext rows. Sync owns none of them.
 
 ## SQLite — `sync_remotes`
@@ -24,8 +24,8 @@ the tree.
 | `id` | int | pinned to 1 |
 | `url` | str | the user's own repository |
 | `branch` | str | default `main` |
-| `credential_ref` | str? | a **reference** into the credential store, never a secret |
-| `include_credentials` | bool | whether ciphertext rides along; default off |
+| `secret_ref` | str? | a **reference** into the secret store, never a secret |
+| `include_secrets` | bool | whether ciphertext rides along; default off |
 | `interval_seconds` | int | default 3600, `> 0` by check constraint |
 | `enabled` | bool | sync is off until the user configures a remote; `false` pauses a configured remote — rounds report `disabled` and record nothing — while the remote, pointer and history are kept |
 | `worktree_path` | str | default `~/.coffer/sync` |
@@ -33,12 +33,12 @@ the tree.
 | `last_run_at` | ts? | when the most recent round finished |
 | `last_status` | str? | see the vocabulary below |
 | `last_join` | str? | `new` / `returning` when the most recent round joined a remote; null otherwise |
-| `last_error` | str? | redacted of the push credential before it is written |
+| `last_error` | str? | redacted of the push secret before it is written |
 | `last_commit` | str? | the commit the last round landed on |
 | `last_run_json` | str? | everything else that round carried, as one JSON document — the two diff summaries and their paths, the conflicted and agent-resolved paths, the per-path failures, the locked refs and any held confirmation. The same column-versus-payload split as `sync_runs` below, so the status surface reads one row and no column can disagree with the payload beside it |
 | `updated_at` | ts | |
 
-Because `credential_ref` is a reference, the whole row can be read into an API
+Because `secret_ref` is a reference, the whole row can be read into an API
 response or a log line without redaction.
 
 `last_status` gains the round's whole vocabulary, written verbatim from
@@ -77,7 +77,7 @@ the record of what *changed*.
 | `status` | str | the same vocabulary as `last_status` |
 | `join_kind` | str? | `new` / `returning` when the round joined; else null |
 | `commit_sha` | str? | `commit` is reserved in SQL |
-| `error` | str? | redacted of the push credential before it is written |
+| `error` | str? | redacted of the push secret before it is written |
 | `payload_json` | str? | everything else a `ConvergeRun` carries |
 
 Same column-versus-payload split as the remote row, and for the same reason:
@@ -245,7 +245,7 @@ this vault does not hold is created *at the uid the document carries*, so both
 machines keep one identity for one resource, and a document whose `name`
 differs from the local row's is applied as a **rename** of that row — which is
 what fires the kind's own `on_rename` and moves a directory named after it.
-Applying a deletion deletes the resource, which releases the credentials no
+Applying a deletion deletes the resource, which releases the secrets no
 remaining resource cites. After the whole diff is applied, each kind's post-import hook
 re-applies its machine-local side effects — native config projections, shims,
 skill deliveries — from current state.
@@ -308,7 +308,7 @@ agents: [claude-code, codex]
 | `os`, `hostname`, `coffer_version` | descriptive, for the machines table; `os` is the platform name and release (`Darwin 24.6.0`) |
 | `last_converged_on` | a **date**, restamped at most once per calendar day, so an idle machine does not commit a heartbeat every round. The UI says "last converged day", not "last converged at" |
 | `last_converged_commit` | this machine's pointer, published so the remote can hand it back. Restamped with `last_converged_on`, so at most once per calendar day — and filled in once if the day's first descriptor carried none. This is what a **returning** machine recovers its base from when its local pointer is gone |
-| `key_fingerprint` | the same short hash `GET /sync/key/fingerprint` returns, so the machines table can state that another machine's credentials cannot be decrypted here |
+| `key_fingerprint` | the same short hash `GET /sync/key/fingerprint` returns, so the machines table can state that another machine's secrets cannot be decrypted here |
 | `agents` | the names of the agents registered on that machine |
 
 The id is cached in `daemon-config.json` and recomputed if lost; the name lives
@@ -398,7 +398,7 @@ Skill delivery bindings (`skill_agent_bindings`) stay machine-local by decision:
 delivery is a side-effectful file operation against directories that differ per
 machine.
 
-### Credential blob (`credentials/<ref>.enc`)
+### Secret blob (`credentials/<ref>.enc`)
 
 The Fernet ciphertext for `ref`, base64-encoded as text. No master key, no
 plaintext, no metadata beyond the ref, which is the path.

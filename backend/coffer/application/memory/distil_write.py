@@ -191,7 +191,7 @@ async def rewrite_note(
     partition: str,
     model: Any,
     completion: LlmCompletionPort,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     timeout: float = _TIMEOUT_SECONDS,
 ) -> WrittenNote | None:
     """Rewrite one note from its current text plus the entries routed to it."""
@@ -201,7 +201,7 @@ async def rewrite_note(
                 system=WRITE_SYSTEM,
                 user=write_payload(entries, existing=existing, partition=partition),
                 model=model,
-                credential_resolver=credential_resolver,
+                secret_resolver=secret_resolver,
                 timeout=timeout,
             ),
             timeout=timeout,

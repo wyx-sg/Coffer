@@ -15,7 +15,7 @@ export interface ProviderProbe {
   provider: string;
   model?: string;
   base_url?: string | null;
-  credential_ref?: string | null;
+  secret_ref?: string | null;
   /** Inline, not-yet-saved key so the dialog can test/fetch before save. */
   secret_value?: string | null;
 }
@@ -42,7 +42,7 @@ export function useListProviderModels() {
       post<EndpointModelsOut>("/models/list-models", {
         provider: p.provider,
         base_url: p.base_url ?? null,
-        credential_ref: p.credential_ref ?? null,
+        secret_ref: p.secret_ref ?? null,
         secret_value: p.secret_value ?? null,
       }),
   });
@@ -70,7 +70,7 @@ export function useEndpointModels(uid: string, probe: ProviderProbe) {
       post<EndpointModelsOut>("/models/list-models", {
         provider: probe.provider,
         base_url: probe.base_url ?? null,
-        credential_ref: probe.credential_ref ?? null,
+        secret_ref: probe.secret_ref ?? null,
         secret_value: probe.secret_value ?? null,
       }),
     enabled: uid !== "",

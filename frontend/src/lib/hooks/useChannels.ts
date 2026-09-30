@@ -218,7 +218,7 @@ export function useUpdateChannel() {
         // The new secret is stored sealed; the channel keeps the old one until
         // someone approves in the Coffer app.
         void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
-        toast.info(t("credentials.savedAwaitingApproval"));
+        toast.info(t("secrets.savedAwaitingApproval"));
       } else {
         toast.success(t("channels.edit.saved", { name }));
       }
@@ -228,7 +228,7 @@ export function useUpdateChannel() {
 }
 
 /** What a rebind needs: the channel's CURRENT config (so the PATCH preserves
- *  every credential ref and platform field beside the binding) and the machine
+ *  every secret ref and platform field beside the binding) and the machine
  *  it should run on. */
 export interface ChannelRebind {
   config: Record<string, unknown>;

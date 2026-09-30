@@ -31,7 +31,7 @@ class MachineView:
 
     descriptor: MachineDescriptor
     is_self: bool
-    #: Whether this machine's credentials can be decrypted here. None when
+    #: Whether this machine's secrets can be decrypted here. None when
     #: either side has published no fingerprint yet.
     key_matches: bool | None
 

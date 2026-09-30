@@ -2,7 +2,7 @@
 
 Spec mcp-gateway "Manage custom tools on REST and the command line"; design
 add-http-custom-tools §9. Read-only: it reads the group's row and config, the
-invocation log, the credential store and the secret boundary, and writes
+invocation log, the secret store and the secret boundary, and writes
 nothing but what ``SecretBoundary.check`` records (a pending approval appears
 the moment a change needs one, as the approvals list does).
 """
@@ -85,7 +85,7 @@ class GroupViewer:
             return "present", []
         config = MCPServerConfig(transport=transport)
         dest = mcp_destination(resource.uid, resource.name, config)
-        pending = await asyncio.to_thread(boundary.check, dest, dict(transport.credential_refs))
+        pending = await asyncio.to_thread(boundary.check, dest, dict(transport.secret_refs))
         if pending:
             return "pending_approval", [a.id for a in pending]
         return "present", []

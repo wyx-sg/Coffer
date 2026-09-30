@@ -114,7 +114,7 @@ Explained in: [Knowledge](/architecture/knowledge), [Memory](/architecture/memor
 | Knowledge Curation Merges New Material Into the Documents | [`knowledge-curation`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-curation.md) |
 | Aggregate the Agents' Memory; Never Write It | [`aggregate-agent-memory-never-write-it`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md) |
 
-## Sync & credentials
+## Sync & secrets
 
 Explained in: [Vault sync](/architecture/vault-sync), [Security model](/architecture/security).
 

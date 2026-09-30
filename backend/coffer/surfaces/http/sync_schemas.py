@@ -1,7 +1,7 @@
 """Wire shapes for /api/v1/sync (spec vault-sync).
 
 Split out of ``sync_routes.py`` for the file-size tier. Remote shapes carry
-``credential_ref`` and never the push credential itself, so a remote can be
+``secret_ref`` and never the push secret itself, so a remote can be
 rendered in a browser, logged, or pasted into a bug report with nothing to
 redact.
 """
@@ -173,10 +173,10 @@ class SyncRemoteIn(BaseModel):
 
     url: str = Field(pattern=URL_PATTERN)
     branch: str = Field(default=DEFAULT_BRANCH, pattern=BRANCH_PATTERN)
-    #: A name in the credential store — never the secret. The daemon resolves
+    #: A name in the secret store — never the secret. The daemon resolves
     #: it at push time and nowhere else.
-    credential_ref: str | None = None
-    include_credentials: bool = False
+    secret_ref: str | None = None
+    include_secrets: bool = False
     interval_seconds: int = Field(default=DEFAULT_INTERVAL_SECONDS, ge=MIN_INTERVAL_SECONDS)
     enabled: bool = True
     worktree_path: str = Field(default=DEFAULT_WORKTREE, min_length=1)
@@ -201,8 +201,8 @@ class SyncRemoteIn(BaseModel):
 class SyncRemoteOut(BaseModel):
     url: str
     branch: str
-    credential_ref: str | None
-    include_credentials: bool
+    secret_ref: str | None
+    include_secrets: bool
     interval_seconds: int
     enabled: bool
     worktree_path: str
@@ -246,7 +246,7 @@ class MachineOut(BaseModel):
     #: because an idle machine must not commit a heartbeat every round.
     last_converged_on: date | None
     #: Null when either side has published no fingerprint yet. ``False`` means
-    #: that machine's credentials cannot be decrypted here.
+    #: that machine's secrets cannot be decrypted here.
     key_matches: bool | None
     agents: list[str]
     is_self: bool
@@ -275,10 +275,39 @@ class RestoreIn(BaseModel):
 
 
 class KeyMaterialIn(BaseModel):
+    #: The key file's text as the person picked it: a ``.cfk`` backup or a
+    #: bare key.
     material: str
 
 
+class KeyPreviewOut(BaseModel):
+    """A key file beside this machine's key, before anything is replaced."""
+
+    #: The key in the file (12 hex characters, never the key).
+    fingerprint: str
+    #: This machine's key, or null when it holds none yet.
+    current_fingerprint: str | None
+    #: True when both are the same key, so importing changes nothing.
+    same: bool
+    #: True for a passphrase-protected ``.cfk`` backup.
+    protected: bool
+
+
+class KeyImportIn(BaseModel):
+    material: str
+    #: Opens a ``.cfk`` backup; not needed for a bare key. Never stored or
+    #: recorded.
+    passphrase: str | None = None
+
+
 class KeyImportOut(BaseModel):
+    #: The key this machine now uses.
+    fingerprint: str
+    #: True when a different key was installed before (it is kept as a backup).
+    replaced: bool
+    #: How many stored secrets the key decrypts.
+    readable: int
+    #: The stored secrets it still cannot decrypt.
     locked_refs: list[str]
 
 

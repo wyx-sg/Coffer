@@ -23,7 +23,6 @@ vi.mock("@/lib/hooks/useSync", () => ({
   useRunConverge: vi.fn(),
   usePreviewJoin: vi.fn(),
   useAdoptRemote: vi.fn(),
-  useExportMasterKeyBackup: vi.fn(),
   useImportMasterKey: vi.fn(),
   useKeyFingerprint: vi.fn(),
 }));
@@ -43,8 +42,8 @@ const STATUS: SyncStatus = {
   remote: {
     url: "https://git.example.com/me/vault.git",
     branch: "main",
-    credential_ref: "sync.PUSH_TOKEN",
-    include_credentials: false,
+    secret_ref: "sync.PUSH_TOKEN",
+    include_secrets: false,
     interval_seconds: 3600,
     enabled: true,
     worktree_path: "/home/me/.coffer/sync",
@@ -103,7 +102,6 @@ function seed() {
     sync.useRunConverge,
     sync.usePreviewJoin,
     sync.useAdoptRemote,
-    sync.useExportMasterKeyBackup,
     sync.useImportMasterKey,
     machines.useRenameSelf,
     machines.useRetireMachine,

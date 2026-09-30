@@ -1,6 +1,6 @@
 // frontend/src/components/channel/ChannelReplaceSecretDialog.tsx
 // Replace a channel's bot token (Telegram) or app secret (SeaTalk). The new
-// value overwrites the credential the channel already points at, so pairing
+// value overwrites the secret the channel already points at, so pairing
 // and settings are kept; then the adapter restarts on it. When the daemon
 // holds the new value for approval instead, the channel keeps the old one
 // until someone approves in the Coffer app, and nothing is restarted.

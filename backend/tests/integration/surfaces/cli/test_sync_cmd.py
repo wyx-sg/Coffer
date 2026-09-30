@@ -37,6 +37,7 @@ import coffer.surfaces.cli._client as _cli_client
 from coffer.domain.scope import Scope
 from coffer.domain.sync.backup import BackupRemote
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
+from coffer.infrastructure.secret import key_backup
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
@@ -159,7 +160,7 @@ def test_remote_set_probes_the_remote_and_stores_the_defaults(fleet: Fleet) -> N
 
     assert "branch" in result.output
     assert "every 3600s" in result.output
-    assert "credentials excluded" in result.output
+    assert "secrets excluded" in result.output
     assert "enabled" in result.output
     assert "working tree" in result.output
 
@@ -176,11 +177,11 @@ def test_remote_set_carries_the_options_it_was_given(fleet: Fleet) -> None:
         fleet.a.remote_url,
         "--interval",
         "60",
-        "--with-credentials",
+        "--with-secrets",
     )
 
     assert "every 60s" in result.output
-    assert "credentials included" in result.output
+    assert "secrets included" in result.output
 
 
 @pytest.mark.acceptance(spec="vault-sync", scenario="reconfiguring a paused remote keeps it paused")
@@ -248,13 +249,13 @@ def test_remote_pause_and_resume_without_a_remote_exit_4(fleet: Fleet) -> None:
 def _configured(fleet: Fleet, tmp_path: pathlib.Path) -> Any:
     """A remote carrying a non-default value in every option ``remote set``
     takes, plus a custom working tree it has no flag for."""
-    fleet.a.set_credential("sync-push", "tok-123")
+    fleet.a.set_secret("sync-push", "tok-123")
     remote = fleet.run(fleet.a.remote_config())
     custom = dataclasses.replace(
         remote,
         branch="vault",
-        credential_ref="sync-push",
-        include_credentials=True,
+        secret_ref="sync-push",
+        include_secrets=True,
         interval_seconds=300,
         worktree_path=str(tmp_path / "custom-tree"),
     )
@@ -277,16 +278,14 @@ def test_remote_set_changes_only_the_option_it_names(fleet: Fleet, tmp_path) -> 
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="reconfiguring a remote changes only what it names"
 )
-def test_remote_set_without_credentials_switches_credential_sync_off(
-    fleet: Fleet, tmp_path
-) -> None:
+def test_remote_set_without_secrets_switches_secret_sync_off(fleet: Fleet, tmp_path) -> None:
     before = _configured(fleet, tmp_path)
 
-    result = fleet.ok("sync", "remote", "set", fleet.a.remote_url, "--without-credentials")
+    result = fleet.ok("sync", "remote", "set", fleet.a.remote_url, "--without-secrets")
 
     stored = fleet.run(fleet.a.service().get_remote())
-    assert stored == dataclasses.replace(before, include_credentials=False)
-    assert "credentials excluded" in result.output
+    assert stored == dataclasses.replace(before, include_secrets=False)
+    assert "secrets excluded" in result.output
 
 
 def test_remote_set_moves_the_working_tree_it_names(fleet: Fleet, tmp_path) -> None:
@@ -351,7 +350,7 @@ def test_first_remote_set_stores_the_defaults(fleet: Fleet) -> None:
     stored = fleet.run(fleet.a.service().get_remote())
     assert stored is not None
     assert (stored.branch, stored.interval_seconds) == ("main", 3600)
-    assert (stored.include_credentials, stored.credential_ref) == (False, None)
+    assert (stored.include_secrets, stored.secret_ref) == (False, None)
     assert stored.enabled is True
     assert stored.worktree_path == BackupRemote(url=fleet.a.remote_url).worktree_path
 
@@ -780,13 +779,13 @@ def test_status_json_reports_every_setting_of_the_remote(fleet: Fleet, tmp_path)
     assert remote["url"] == custom.url
     assert remote["branch"] == "vault"
     assert remote["interval_seconds"] == 300
-    assert remote["include_credentials"] is True
-    assert remote["credential_ref"] == "sync-push"
+    assert remote["include_secrets"] is True
+    assert remote["secret_ref"] == "sync-push"
     assert remote["worktree_path"] == custom.worktree_path
     assert remote["enabled"] is True
 
     table = fleet.ok("sync", "status")
-    for shown in ("branch vault", "every 300s", "credentials included", "sync-push"):
+    for shown in ("branch vault", "every 300s", "secrets included", "sync-push"):
         assert shown in " ".join(table.output.split()), shown
     assert "enabled" in table.output
 
@@ -883,7 +882,7 @@ def test_key_fingerprint_prints_the_short_hash(fleet: Fleet) -> None:
 
 
 def test_key_import_reads_a_key_file_and_there_is_no_export(fleet: Fleet, tmp_path) -> None:
-    """A key backup is written only by the desktop app (spec credentials "Release
+    """A key backup is written only by the desktop app (spec secret "Release
     plaintext only to a present human in the desktop app"); the CLI imports."""
     key = fleet.a.master_key.export_key()
     assert key is not None
@@ -897,17 +896,42 @@ def test_key_import_reads_a_key_file_and_there_is_no_export(fleet: Fleet, tmp_pa
     imported = fleet.ok("sync", "key", "import", str(target))
 
     assert "installed" in imported.output
-    assert "every credential decrypts here" in imported.output
+    assert "every secret decrypts here" in imported.output
     assert fleet.a.master_key.export_key() == key
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="credentials this machine cannot decrypt are reported locked"
+    spec="vault-sync", scenario="a protected key file opens only with its passphrase"
+)
+def test_key_import_asks_for_a_backups_passphrase_without_echoing_it(
+    fleet: Fleet, tmp_path
+) -> None:
+    other = fleet.b.master_key.export_key()
+    assert other is not None
+    carried = tmp_path / "coffer-master-key.cfk"
+    carried.write_text(key_backup.wrap(other, "correct horse"), encoding="utf-8")
+
+    wrong = _runner.invoke(cli_app, ["sync", "key", "import", str(carried)], input="not the one\n")
+    assert wrong.exit_code != 0
+    assert fleet.a.master_key.export_key() != other
+
+    right = _runner.invoke(
+        cli_app, ["sync", "key", "import", str(carried)], input="correct horse\n"
+    )
+
+    assert right.exit_code == 0, right.output
+    assert "Passphrase" in right.output and "correct horse" not in right.output
+    assert "replaced" in right.output and str(fleet.b.key_fingerprint()) in right.output
+    assert fleet.a.master_key.export_key() == other
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="secrets this machine cannot decrypt are reported locked"
 )
 def test_key_import_names_what_it_still_cannot_read(fleet: Fleet, tmp_path) -> None:
-    fleet.a.set_credential("mcp/files/token", "s3cret-value")
+    fleet.a.set_secret("mcp/files/token", "s3cret-value")
     fleet.run(
-        fleet.a.register("mcp_server", "files", {"value": "f", "credential_ref": "mcp/files/token"})
+        fleet.a.register("mcp_server", "files", {"value": "f", "secret_ref": "mcp/files/token"})
     )
     other = fleet.b.master_key.export_key()
     assert other is not None
@@ -995,9 +1019,9 @@ def test_the_sync_group_offers_every_command_and_option_it_owes() -> None:
         ("sync", "remote", "set"): {
             "--branch",
             "--interval",
-            "--with-credentials",
-            "--without-credentials",
-            "--credential-ref",
+            "--with-secrets",
+            "--without-secrets",
+            "--secret-ref",
             "--worktree",
         },
         ("sync", "remote", "clear"): set(),

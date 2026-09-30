@@ -15,9 +15,9 @@ import sqlite3
 
 import pytest
 
-from coffer.domain.credential_errors import CredentialLocked
-from coffer.infrastructure.credentials.master_key import MasterKeyManager
-from coffer.infrastructure.sync.credentials import ResolvedMasterKey
+from coffer.domain.secret_errors import SecretLocked
+from coffer.infrastructure.secret.master_key import MasterKeyManager
+from coffer.infrastructure.sync.secret import ResolvedMasterKey
 from tests.integration.sync.harness import settle, two_machines
 
 pytestmark = pytest.mark.timeout(120)
@@ -38,7 +38,7 @@ class _EmptyKeychain:
 
 class _LockedKeychain:
     def get(self, ref: str) -> str | None:
-        raise CredentialLocked("keychain is locked")
+        raise SecretLocked("keychain is locked")
 
     def set(self, ref: str, value: str) -> None:  # pragma: no cover - unused
         raise AssertionError("unused")
@@ -56,8 +56,8 @@ async def pair(tmp_path: pathlib.Path):
 
 
 async def _deliver_ciphertext(a, b):  # type: ignore[no-untyped-def]
-    a.set_credential("mcp/files/token", "s3cret-value")
-    await a.register("mcp_server", "files", {"value": "f", "credential_ref": "mcp/files/token"})
+    a.set_secret("mcp/files/token", "s3cret-value")
+    await a.register("mcp_server", "files", {"value": "f", "secret_ref": "mcp/files/token"})
     await settle(a)
     await b.remote_config()
     return b.service()
@@ -70,7 +70,7 @@ async def test_a_failing_locked_ref_check_still_records_the_round(pair, monkeypa
     def busy() -> list[str]:
         raise sqlite3.OperationalError("database is locked")
 
-    monkeypatch.setattr(b.credentials, "locked_refs", busy)
+    monkeypatch.setattr(b.secrets, "locked_refs", busy)
     run = await service.run_once(adopt=True)
 
     assert run.ok, run.error
@@ -89,7 +89,7 @@ async def test_an_unreadable_key_reports_no_ref_locked_and_records_the_round(
     a, b = pair
     service = await _deliver_ciphertext(a, b)
     unreadable = ResolvedMasterKey(MasterKeyManager(tmp_path / "none" / "k", _LockedKeychain()))
-    monkeypatch.setattr(b.credentials, "_master_key", unreadable)
+    monkeypatch.setattr(b.secrets, "_master_key", unreadable)
 
     run = await service.run_once(adopt=True)
 
@@ -108,13 +108,13 @@ async def test_a_machine_with_no_key_reports_every_ref_locked(pair, tmp_path, mo
     a, b = pair
     service = await _deliver_ciphertext(a, b)
     keyless = ResolvedMasterKey(MasterKeyManager(tmp_path / "none" / "k", _EmptyKeychain()))
-    monkeypatch.setattr(b.credentials, "_master_key", keyless)
+    monkeypatch.setattr(b.secrets, "_master_key", keyless)
 
     run = await service.run_once(adopt=True)
 
     assert run.ok, run.error
     assert "mcp/files/token" in run.locked_refs
-    assert set(run.locked_refs) == set(b.credentials.list_refs())
+    assert set(run.locked_refs) == set(b.secrets.list_refs())
     recorded = await service.last_run()
     assert recorded is not None
     assert recorded.locked_refs == run.locked_refs

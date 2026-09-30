@@ -85,7 +85,7 @@ class MemoryService:
         readers: Mapping[str, MemoryReader],
         completion: LlmCompletionPort | None = None,
         model_selector: ModelSelectorPort | None = None,
-        credential_resolver: Callable[[str], str] | None = None,
+        secret_resolver: Callable[[str], str] | None = None,
         read_timeout: TimeoutReader | None = None,
     ) -> None:
         self._read_timeout = read_timeout
@@ -98,7 +98,7 @@ class MemoryService:
         self._readers: Mapping[str, MemoryReader] = dict(readers)
         self._completion = completion
         self._models = model_selector
-        self._credential_resolver = credential_resolver
+        self._secret_resolver = secret_resolver
         self._propose_trigger: TriggerProposer | None = None
 
     def set_trigger_proposer(self, proposer: TriggerProposer) -> None:
@@ -225,7 +225,7 @@ class MemoryService:
             completion=self._completion,
             model_selector=self._models,
             repository_path=placement_of(row).repository_path,
-            credential_resolver=self._credential_resolver,
+            secret_resolver=self._secret_resolver,
             read_timeout=self._read_timeout,
         )
         if self._propose_trigger is not None:

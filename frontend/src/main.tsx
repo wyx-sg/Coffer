@@ -12,7 +12,7 @@ import "./index.css";
 import "highlight.js/styles/github.css"; // Code-block syntax theme (chat markdown)
 
 /**
- * Credential the page on the desktop host, without holding up the paint.
+ * Secret the page on the desktop host, without holding up the paint.
  *
  * In a browser there is nothing to do: whoever served this document already
  * put the running daemon's token on `window.__COFFER_TOKEN__` (see lib/auth.ts).

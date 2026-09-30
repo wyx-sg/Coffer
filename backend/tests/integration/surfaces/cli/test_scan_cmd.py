@@ -29,7 +29,7 @@ _runner = CliRunner()
 
 @pytest.fixture
 def daemon(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+    from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 
     keyring: dict[str, str] = {}
     monkeypatch.setattr(KeyringAdapter, "get", lambda self, ref: keyring.get(ref))

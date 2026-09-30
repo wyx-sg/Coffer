@@ -105,34 +105,34 @@ async def _read_bytes(path: str) -> bytes:
 
 def remote_transcriber(
     connection: ResolvedConnection | None,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     timeout: float = DEFAULT_MODEL_TIMEOUT_S,
 ) -> RemoteTranscriber | None:
     """Build a transcriber for ``connection``, or ``None`` to send nothing.
 
     ``None`` is the default answer and the safe one: no connection marked for
     transcription, no model chosen for it, a protocol with no transcription
-    endpoint, or a credential that will not resolve all mean the audio stays
+    endpoint, or a secret that will not resolve all mean the audio stays
     on this machine.
     """
     if connection is None:
         return None
     if connection.config.protocol not in _TRANSCRIBING_PROTOCOLS:
         return None
-    ref = connection.config.credential_ref
+    ref = connection.config.secret_ref
     key: str | None = None
     if ref is not None:
         try:
-            key = credential_resolver(ref)
+            key = secret_resolver(ref)
         except Exception:
-            _logger.info("transcribe.credential_unresolved", extra={"ref": ref})
+            _logger.info("transcribe.secret_unresolved", extra={"ref": ref})
             return None
     return RemoteTranscriber(connection, key, timeout)
 
 
 def remote_transcriber_factory(
     resolve_connection: Callable[[], Awaitable[ResolvedConnection | None]],
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     read_timeout: TimeoutReader | None = None,
 ) -> Callable[[], Awaitable[RemoteTranscriber | None]]:
     """A per-turn factory: the connection is resolved when a turn needs it, so
@@ -144,9 +144,7 @@ def remote_transcriber_factory(
         except Exception:
             _logger.info("transcribe.connection_unresolved", exc_info=True)
             return None
-        return remote_transcriber(
-            connection, credential_resolver, await resolve_timeout(read_timeout)
-        )
+        return remote_transcriber(connection, secret_resolver, await resolve_timeout(read_timeout))
 
     return _build
 

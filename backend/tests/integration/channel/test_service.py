@@ -1,7 +1,7 @@
 """Channel registration + ChannelService (pairing codes, notify) over real SQLite.
 
 Registration goes through the real ResourceService with the channel Kind and
-its credential-ref probing; notify goes through a real ChannelRuntime whose
+its secret-ref probing; notify goes through a real ChannelRuntime whose
 adapter factory produces the recording FakeChannelAdapter.
 """
 
@@ -13,7 +13,7 @@ import pytest
 
 from coffer.application.channel.store_ports import ChannelPeer
 from coffer.domain.channel.errors import ChannelNotPaired
-from coffer.domain.errors import CredentialMissing, ResourceNotFound
+from coffer.domain.errors import ResourceNotFound, SecretMissing
 
 from .conftest import ChannelEnv
 
@@ -46,9 +46,9 @@ async def test_register_telegram_channel_is_listed_with_config_and_audited(
     assert entries[0].details["config"]["bot_token_ref"] == "channel/tg/bot-token"
 
 
-@pytest.mark.acceptance(spec="channels", scenario="reject a channel with a missing credential")
-async def test_register_with_dangling_credential_ref_persists_nothing(env: ChannelEnv) -> None:
-    with pytest.raises(CredentialMissing):
+@pytest.mark.acceptance(spec="channels", scenario="reject a channel with a missing secret")
+async def test_register_with_dangling_secret_ref_persists_nothing(env: ChannelEnv) -> None:
+    with pytest.raises(SecretMissing):
         await env.resources.register(
             kind="channel",
             name="tg",

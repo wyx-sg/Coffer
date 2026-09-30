@@ -5,7 +5,7 @@ Split out for the file-size tier, the same way ``service_machines.py`` and
 runs rounds against a remote, while this decides which remote there is. Kept
 as a mixin rather than a second service because configuring the remote takes
 the round's lock, probes it through the same mirror factory and resolves the
-same push credential — a second object holding all three would be the service
+same push secret — a second object holding all three would be the service
 under another name.
 
 Two refusals live here besides reachability. A working tree that would overlap
@@ -21,8 +21,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coffer.domain.credential_errors import SecretBindingPending
 from coffer.domain.error_base import CofferError
+from coffer.domain.secret_errors import SecretBindingPending
 from coffer.domain.sync.backup import DEFAULT_WORKTREE, BackupRemote, worktree_conflict
 from coffer.domain.sync.errors import BackupRemoteInvalid
 
@@ -64,7 +64,7 @@ class RemoteMixin:
 
         A remote that cannot be reached is rejected at the front door rather
         than discovered by a worker tick an hour later: the user is here now,
-        with the URL and the credential in front of them, and that is the only
+        with the URL and the secret in front of them, and that is the only
         moment the fix is cheap.
 
         Under the round's lock, because it prepares the working tree — an
@@ -92,7 +92,7 @@ class RemoteMixin:
                 await mirror.ensure_repo(remote_url=remote.url, branch=remote.branch)
                 await mirror.fetch(token=token)
             except CofferError as e:
-                # The adapter has already redacted the push credential out of
+                # The adapter has already redacted the push secret out of
                 # the message, and this one is never audited.
                 raise BackupRemoteInvalid(str(e)) from e
             await self._remotes.set(remote)

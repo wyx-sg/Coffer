@@ -3,7 +3,7 @@
 // The key is never shown — only the secret reference it is stored under
 // (`secret:` + ref), write-only, with Replace key. A replaced key that is in
 // use waits for approval in the Coffer app before it takes effect (spec
-// credentials "Hold a replaced value in use until a person approves it"), so
+// secret "Hold a replaced value in use until a person approves it"), so
 // while that approval is pending the row says so and offers Review. The
 // protocol is locked while an agent runs on the provider (spec
 // provider-switching "Refuse to move the wire of a live connection"). Route
@@ -50,7 +50,7 @@ interface Props {
 export function ProviderEndpoint({ provider, use, rejectedStatus, onReplaceKey }: Props) {
   const { t } = useTranslation();
   const approvals = usePendingApprovals();
-  const pending = pendingReplaceFor(approvals.data?.approvals, provider.credential_ref);
+  const pending = pendingReplaceFor(approvals.data?.approvals, provider.secret_ref);
   const lockedBy = useLockedBy(provider, use);
   const runtime = provider.local_runtime;
   const proxy = useProxyAddress();
@@ -97,12 +97,12 @@ export function ProviderEndpoint({ provider, use, rejectedStatus, onReplaceKey }
           </Row>
         ) : null}
         <Row label={t("providers.fields.apiKey")}>
-          {provider.credential_ref ? (
+          {provider.secret_ref ? (
             <div className="flex min-w-0 flex-col gap-1">
               <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                 <KeyRound className="size-3.5 text-text-muted" aria-hidden />
                 <span className="text-xs text-text-muted">{t("providers.key.secretPrefix")}</span>
-                <span className="truncate font-mono text-xs">{provider.credential_ref}</span>
+                <span className="truncate font-mono text-xs">{provider.secret_ref}</span>
                 {rejectedStatus !== null ? (
                   <StatusWord tone="err">
                     {rejectedStatus

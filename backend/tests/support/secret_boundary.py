@@ -1,9 +1,9 @@
 """An in-memory stand-in for the secret boundary's tables, for tests.
 
-Same contract as ``infrastructure.credentials.boundary_store.SqliteBoundaryStore``
+Same contract as ``infrastructure.secret.boundary_store.SqliteBoundaryStore``
 (the application's ``BoundaryStorePort``), held in dicts, so the gate's rules
 can be exercised without a database and route tests can install a real
-``SecretBoundary`` over a fake credential store.
+``SecretBoundary`` over a fake secret store.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import dataclasses
 from datetime import UTC, datetime
 from typing import Any
 
-from coffer.application.credentials.boundary import SecretBoundary
+from coffer.application.secret.boundary import SecretBoundary
 from coffer.domain.secrets import SecretApproval, SecretBinding
 
 
@@ -109,7 +109,7 @@ class InMemoryBoundaryStore:
 
 
 def install_boundary(values: Any) -> SecretBoundary:
-    """Publish a real gate over ``values`` (a fake credential store) for route tests."""
+    """Publish a real gate over ``values`` (a fake secret store) for route tests."""
     from coffer.surfaces.http.secret_boundary_wiring import set_secret_boundary
 
     boundary = SecretBoundary(InMemoryBoundaryStore(), values)
@@ -118,7 +118,7 @@ def install_boundary(values: Any) -> SecretBoundary:
 
 
 class FakeSealedValues:
-    """A credential store stand-in with the slice the boundary reads."""
+    """A secret store stand-in with the slice the boundary reads."""
 
     def __init__(self) -> None:
         self.values: dict[str, str] = {}

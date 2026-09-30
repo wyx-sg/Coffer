@@ -28,6 +28,10 @@ const STATUS = {
   machine_name: "work-mac",
   features: { knowledge: true, memory: false, sync: true },
   upstream_summary: null,
+  pid: 4242,
+  commit: "3909da95",
+  data_dir: "~/.coffer",
+  connected_agents: 1,
 };
 
 function mockStatus() {
@@ -59,11 +63,15 @@ describe("AboutPage", () => {
     const { container } = render(<AboutPage />, { wrapper: wrap });
 
     await waitFor(() => {
-      expect(screen.getByText("Version 0.7.42 · stable channel")).toBeInTheDocument();
+      expect(screen.getByText("Version 0.7.42")).toBeInTheDocument();
     });
     expect(screen.getByText("Version")).toBeInTheDocument();
     expect(screen.getByText("License")).toBeInTheDocument();
     expect(screen.getByText("Source")).toBeInTheDocument();
+    // The details name the build and where its data lives; no release channel is shown.
+    expect(screen.getByText("0.7.42 (3909da95)")).toBeInTheDocument();
+    expect(screen.getByText("~/.coffer")).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/stable/);
     // A user never needs to know Coffer runs a background daemon.
     expect(container.textContent).not.toMatch(/daemon/i);
     expect(screen.queryByText("8000")).not.toBeInTheDocument();
@@ -75,7 +83,8 @@ describe("AboutPage", () => {
     } as unknown as ReturnType<typeof getApiClient>);
     render(<AboutPage />, { wrapper: wrap });
 
-    expect(screen.getAllByText("—")).toHaveLength(1);
+    // The version and the data folder both wait for the status probe.
+    expect(screen.getAllByText("—")).toHaveLength(2);
     expect(screen.getByText(/reading the version/i)).toBeInTheDocument();
   });
 
@@ -89,7 +98,7 @@ describe("AboutPage", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
     render(<AboutPage />, { wrapper: wrap });
-    await screen.findByText("Version 0.7.42 · stable channel");
+    await screen.findByText("Version 0.7.42");
 
     fireEvent.click(screen.getByRole("button", { name: /copy diagnostics/i }));
 

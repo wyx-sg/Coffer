@@ -331,7 +331,7 @@ acceptance(
       const url = req.url();
       if (
         url.includes("/api/v1/resources") ||
-        url.includes("/api/v1/credentials")
+        url.includes("/api/v1/secrets")
       ) {
         apiCalls.push(`${req.method()} ${url}`);
       }

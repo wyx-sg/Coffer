@@ -148,7 +148,7 @@ which is spec knowledge's domain):
 
 (Paths are shown for the default config dir. `global` is `~/.claude.json` for the default `~/.claude` and `<config_dir>/.claude.json` for any other `config_dir` — Claude Code run with `CLAUDE_CONFIG_DIR` keeps the file inside that directory and never reads the home one; spec agent-registry/claude-code "Allowlist exactly the files Claude Code reads".)
 
-`~/.codex/auth.json` is deliberately excluded (credential/state, not a
+`~/.codex/auth.json` is deliberately excluded (secret/state, not a
 hand-edited config). `~/.claude.json` is included (per product decision) and
 protected by the rotated `.bak` backups on every write.
 
@@ -400,7 +400,7 @@ removal step of an adoption), `secret_env_keys`
 (TOKEN/SECRET/PASSWORD/PASSWD/API_KEY/APIKEY/CREDENTIAL/AUTHORIZATION patterns,
 applied to the entry's env and HTTP headers alike on adoption), and
 `to_transport_config` (entry → `mcp_server` transport config with secret keys
-moved to `credential_refs` for adoption). Malformed files raise
+moved to `secret_refs` for adoption). Malformed files raise
 `AgentConfigParseError`, which the listing degrades to a `parse_errors` item
 instead of failing the view (see "Degrade a facet to a parse-error state when
 its config file is unparseable").
@@ -457,8 +457,8 @@ agent's installed plugins without writing anything").
 | Method                                                                | Purpose                                                                                                                                                                                                                                                                     |
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list_entries(uid)`                                                  | Parse all MCP-bearing files of the agent's type; mark `is_coffer` and `matches_resource`; collect per-file `parse_errors`.                                                                                                                                                  |
-| `remove_entry(uid, entry, source=None, actor)`                       | Removal: edit only the entry's source file (`source` disambiguates when claude_code carries the name in both, else `McpEntrySourceAmbiguous`), atomic write + `.bak`, drop any credential refs it owned, audit `agent_mcp_entry_removed`. Coffer's own entry is refused. |
-| `adopt(uid, entry, source=None, new_name=None, secrets=None, actor)` | Adoption: secret-looking keys MUST map to credential refs (`AdoptSecretUnresolved` lists unresolved keys); register the `mcp_server` resource → verify it reads back → remove the source entry (atomic + `.bak`; `source` disambiguates when claude_code carries the name in both files, else `McpEntrySourceAmbiguous`), with rollback on any later failure; audits `agent_mcp_entry_adopted`. |
+| `remove_entry(uid, entry, source=None, actor)`                       | Removal: edit only the entry's source file (`source` disambiguates when claude_code carries the name in both, else `McpEntrySourceAmbiguous`), atomic write + `.bak`, drop any secret refs it owned, audit `agent_mcp_entry_removed`. Coffer's own entry is refused. |
+| `adopt(uid, entry, source=None, new_name=None, secrets=None, actor)` | Adoption: secret-looking keys MUST map to secret refs (`AdoptSecretUnresolved` lists unresolved keys); register the `mcp_server` resource → verify it reads back → remove the source entry (atomic + `.bak`; `source` disambiguates when claude_code carries the name in both files, else `McpEntrySourceAmbiguous`), with rollback on any later failure; audits `agent_mcp_entry_adopted`. |
 
 There is no `set_enabled`: a per-entry enable toggle was removed (see the note
 in spec "List the MCP entries in the agent's own config files") because
@@ -581,7 +581,7 @@ The `on_delete` hook is bound to a callable supplied by the skill module (spec s
 ## Constraints summary
 
 - All HTTP routes bind `127.0.0.1`, share `X-Coffer-Token` auth (per spec mcp-gateway).
-- No new credential-store entries — `agent` config has no credentials. Config-file
+- No new secret-store entries — `agent` config has no secrets. Config-file
   reads do not parse or extract secrets; each type's credential file is excluded
   from its allowlist (see agent-registry/codex "Never expose Codex's credential file").
 - Config files are editable through Coffer. All writes to an agent's own config

@@ -1,55 +1,35 @@
 // frontend/src/pages/sync/SyncMasterKeyCard.test.tsx
 //
-// Master-key export/import (spec vault-sync). Export runs only in the desktop
-// app: the shell checks presence and writes the backup itself, and the card
-// shows where it went; a browser gets "Open in Coffer app" in its place.
+// Master-key export/import (spec vault-sync). Export is a link to Settings ›
+// Security, which owns the passphrase-protected backup.
 // Import reads a picked File with `file.text()` and POSTs the material from
 // any host. Neither path names a host path the page typed.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render as rtlRender, screen, waitFor, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { MemoryRouter } from "react-router-dom";
 
 import { ApiError } from "@/lib/api/errors";
 import { SyncMasterKeyCard } from "./SyncMasterKeyCard";
 
 vi.mock("@/lib/hooks/useSync", () => ({
-  useExportMasterKeyBackup: vi.fn(),
   useImportMasterKey: vi.fn(),
   useKeyFingerprint: vi.fn(),
 }));
-let inShell = false;
-vi.mock("@/lib/tauri", () => ({ presenceAvailable: () => inShell }));
-const { useExportMasterKeyBackup, useImportMasterKey, useKeyFingerprint } =
-  await import("@/lib/hooks/useSync");
-const useExportMock = vi.mocked(useExportMasterKeyBackup);
+const { useImportMasterKey, useKeyFingerprint } = await import("@/lib/hooks/useSync");
 const useImportMock = vi.mocked(useImportMasterKey);
 const useFingerprintMock = vi.mocked(useKeyFingerprint);
 
-const exportMutate = vi.fn();
 const importMutate = vi.fn();
 
-const BACKUP = { path: "/Users/me/Backups/coffer-master.key", fingerprint: "abc123def456" };
+const render = (ui: ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
 
-/** Stub both mutations. `exportResult` is what a successful backup returns. */
-function stub(
-  opts: {
-    exportResult?: { path: string; fingerprint: string };
-    exportError?: unknown;
-    importError?: unknown;
-  } = {},
-) {
-  exportMutate.mockImplementation((_vars, handlers) => {
-    if (opts.exportError) return;
-    handlers?.onSuccess?.(opts.exportResult ?? BACKUP);
-  });
+/** Stub the import mutation and the fingerprint query. */
+function stub(opts: { importError?: unknown } = {}) {
   importMutate.mockImplementation((_material, handlers) => {
     if (opts.importError) return;
     handlers?.onSuccess?.({ locked_refs: [] });
   });
-  useExportMock.mockReturnValue({
-    mutate: exportMutate,
-    isPending: false,
-    error: opts.exportError ?? null,
-  } as unknown as ReturnType<typeof useExportMasterKeyBackup>);
   useImportMock.mockReturnValue({
     mutate: importMutate,
     isPending: false,
@@ -61,7 +41,6 @@ function stub(
 }
 
 afterEach(() => {
-  inShell = false;
   vi.clearAllMocks();
   vi.restoreAllMocks();
 });
@@ -91,28 +70,15 @@ describe("SyncMasterKeyCard", () => {
     expect(screen.getByTestId("key-fingerprint")).toBeInTheDocument();
   });
 
-  test("in the desktop app, export writes a backup through the shell and says where", async () => {
-    inShell = true;
+  test("export links to Settings › Security, which owns the key backup", () => {
     stub();
     render(<SyncMasterKeyCard />);
 
-    fireEvent.click(screen.getByRole("button", { name: /^export key$/i }));
-
-    expect(exportMutate).toHaveBeenCalled();
-    const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent(BACKUP.path);
-    expect(status).toHaveTextContent(BACKUP.fingerprint);
-  });
-
-  test("in a browser, export is replaced by Open in Coffer app", () => {
-    stub();
-    render(<SyncMasterKeyCard />);
-
+    expect(screen.getByRole("link", { name: /^export key$/i })).toHaveAttribute(
+      "href",
+      "/settings/security",
+    );
     expect(screen.queryByRole("button", { name: /^export key$/i })).not.toBeInTheDocument();
-    const inApp = screen.getByRole("button", { name: /open in coffer app/i });
-    expect(inApp).toBeDisabled();
-    fireEvent.click(inApp);
-    expect(exportMutate).not.toHaveBeenCalled();
   });
 
   test("import reads the picked file's contents, confirms, then posts the material", async () => {
@@ -188,17 +154,6 @@ describe("SyncMasterKeyCard", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  test("a failed or cancelled backup claims nothing", () => {
-    inShell = true;
-    stub({ exportError: new Error("presence check cancelled") });
-    render(<SyncMasterKeyCard />);
-
-    fireEvent.click(screen.getByRole("button", { name: /^export key$/i }));
-
-    expect(exportMutate).toHaveBeenCalled();
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
-  });
-
   test("an imported key that still leaves references locked says so", async () => {
     stub();
     importMutate.mockImplementation((_material, handlers) =>
@@ -208,6 +163,6 @@ describe("SyncMasterKeyCard", () => {
 
     await importFile("FERNET-KEY-MATERIAL");
 
-    expect(await screen.findByRole("status")).toHaveTextContent(/2 credential/i);
+    expect(await screen.findByRole("status")).toHaveTextContent(/2 secret/i);
   });
 });

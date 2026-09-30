@@ -2,64 +2,46 @@
 //
 // Out-of-band master-key transfer (spec vault-sync "Never write the master key
 // into the repository"). It lives on the Sync page rather than in Settings
-// because its whole purpose is convergence: credentials sync as Fernet
+// because its whole purpose is convergence: secrets sync as Fernet
 // ciphertext only, so another machine can read what this one publishes exactly
 // when it holds this same key.
 //
 // The two directions go through different hosts:
 //
-//   Export → only in the desktop app. The shell runs a presence check (Touch ID
-//            or the login password) and writes the backup file itself, so the
-//            key never reaches the page; the card shows where it went and its
-//            fingerprint. No daemon route returns the key, so a browser offers
-//            "Open in Coffer app" in the button's place.
+//   Export → a link to Settings › Security, which owns the passphrase-protected
+//            backup (desktop app only, behind a presence check) and says so in
+//            a browser.
 //   Import → a hidden `<input type="file">`; its change handler reads
 //            `file.text()`, asks the user to confirm — a different key makes
-//            every credential stored under the current one unreadable — and
+//            every secret stored under the current one unreadable — and
 //            only then POSTs the material. Any host may do this.
 //
 // The key is never written into the synced repository under any setting.
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { HelpTip } from "@/components/HelpTip";
-import {
-  useExportMasterKeyBackup,
-  useImportMasterKey,
-  useKeyFingerprint,
-} from "@/lib/hooks/useSync";
-import { presenceAvailable, type MasterKeyBackup } from "@/lib/tauri";
+import { useImportMasterKey, useKeyFingerprint } from "@/lib/hooks/useSync";
 
 export function SyncMasterKeyCard() {
   const { t } = useTranslation();
   const fileInput = useRef<HTMLInputElement>(null);
   // Local status lines: the mutations toast transport errors, but an empty
   // file never reaches the daemon, so that one is validated here.
-  const [exported, setExported] = useState<MasterKeyBackup | null>(null);
   const [imported, setImported] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   // Key material read from the picked file, held while the confirmation is
   // open. Never persisted anywhere on the page; cleared as soon as it closes.
   const [pendingMaterial, setPendingMaterial] = useState<string | null>(null);
   const importKey = useImportMasterKey();
-  const exportKey = useExportMasterKeyBackup();
-  const inShell = presenceAvailable();
   const fingerprint = useKeyFingerprint();
 
   const reset = () => {
-    setExported(null);
     setImported(null);
     setLocalError(null);
-  };
-
-  const onExport = () => {
-    reset();
-    exportKey.mutate(undefined, {
-      onSuccess: (backup) => setExported(backup),
-    });
   };
 
   const onFileChosen = async (file: File | undefined) => {
@@ -108,18 +90,9 @@ export function SyncMasterKeyCard() {
           </p>
         ) : null}
         <div className="flex gap-2">
-          {inShell ? (
-            <Button variant="secondary" onClick={onExport} disabled={exportKey.isPending}>
-              {t("sync.key.export")}
-            </Button>
-          ) : (
-            <span className="inline-flex items-center gap-1">
-              <Button variant="secondary" disabled>
-                {t("sync.key.exportInApp")}
-              </Button>
-              <HelpTip>{t("sync.key.exportInAppHint")}</HelpTip>
-            </span>
-          )}
+          <Button variant="secondary" asChild>
+            <Link to="/settings/security">{t("sync.key.export")}</Link>
+          </Button>
           <Button
             variant="secondary"
             onClick={() => fileInput.current?.click()}
@@ -142,11 +115,6 @@ export function SyncMasterKeyCard() {
             }}
           />
         </div>
-        {exported ? (
-          <p className="text-xs text-status-ok" role="status">
-            {t("sync.key.exported", { path: exported.path, fingerprint: exported.fingerprint })}
-          </p>
-        ) : null}
         {imported ? (
           <p className="text-xs text-status-ok" role="status">
             {imported}
