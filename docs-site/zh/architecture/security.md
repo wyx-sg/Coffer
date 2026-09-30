@@ -177,7 +177,7 @@ flowchart LR
 
 ## 回环绑定 {#loopback-binding}
 
-守护进程只绑定 `127.0.0.1`（[`infrastructure/daemon/port_alloc.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/port_alloc.py)）。交给 Uvicorn 的是一个预先绑定好的 socket，而不是主机和端口，所以下游的任何东西都无法扩大绑定范围。Coffer 还监听另一个 socket：[本地模型代理](/zh/architecture/model-proxy)——守护进程的兄弟进程——只绑定 `127.0.0.1:8001`（`daemon-config.json` 中的 `proxy_port`），并运行它自己的 Host 和 Origin 检查（见[下文](#the-model-proxy-listener)）。除此之外没有别的监听：Telegram 在守护进程内部长轮询，每个 SeaTalk 消息渠道持有一条出站 websocket 连接。没有哪个消息渠道需要公网 URL、隧道或入站端口。
+守护进程只绑定 `127.0.0.1`。交给 Uvicorn 的是一个预先绑定好的 socket，而不是主机和端口，所以下游的任何东西都无法扩大绑定范围。Coffer 还监听另一个 socket：[本地模型代理](/zh/architecture/model-proxy)——守护进程的兄弟进程——只绑定 `127.0.0.1:8001`（`daemon-config.json` 中的 `proxy_port`），并运行它自己的 Host 和 Origin 检查（见[下文](#the-model-proxy-listener)）。除此之外没有别的监听：Telegram 在守护进程内部长轮询，每个 SeaTalk 消息渠道持有一条出站 websocket 连接。没有哪个消息渠道需要公网 URL、隧道或入站端口。
 
 ## Host 和 Origin 检查 {#the-host-and-origin-checks}
 
@@ -185,7 +185,7 @@ flowchart LR
 
 ### Host：DNS 重绑定 {#host-dns-rebinding}
 
-假设攻击者控制了 `evil.example`，并把它的 DNS 名称重新指向 `127.0.0.1`。对浏览器来说，页面仍然与 `evil.example` 同源，所以 CORS 根本不起作用，页面能读到响应体。守护进程会把 API 令牌放进 Web 界面的 `index.html`（见下文），所以从那个页面发一次 `fetch("/")` 就能拿到令牌，随之拿到 API 能做的一切：修改 Coffer 的配置、注册服务器、刷爆你的提供商账单。
+假设攻击者控制了 `evil.example`，并把它的 DNS 名称重新指向 `127.0.0.1`。对浏览器来说，页面仍然与 `evil.example` 同源，所以 CORS 根本不起作用，页面能读到响应体。守护进程会把 API 令牌放进 Web 界面的 `index.html`（见下文），所以从那个页面请求一次 `/` 就能拿到令牌，随之拿到 API 能做的一切：修改 Coffer 的配置、注册服务器、刷爆你的提供商账单。
 
 DNS 重绑定不会改变 `Host` 请求头。一个重绑定的请求仍然写着 `Host: evil.example:8000`。所以守护进程只在 `Host` 指明 `127.0.0.1`、`localhost` 或 `[::1]`，**并且**端口就是请求到达的那个端口时才接受请求。其他一律拒绝，包括没有 `Host` 的请求，以及回环名字配上其他端口的请求：
 
@@ -224,23 +224,23 @@ HTTP/1.1 403 Forbidden
 
 ### 模型代理的监听端 {#the-model-proxy-listener}
 
-[本地模型代理](/zh/architecture/model-proxy)是 Coffer 的第二个监听端，它在做任何事之前先运行自己的检查（[`infrastructure/model_proxy/app.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/model_proxy/app.py)）。这些检查比守护进程的更严格。`Host` 不是请求到达端口上的回环名字的请求得到 403，而且 `COFFER_ALLOWED_HOSTS` 在这里不适用。**任何**带 `Origin` 请求头的请求也得到 403，因为没有浏览器页面是代理的客户端。只有在这之后，模型路由才检查智能体的本地代理令牌。守护进程的控制路由由另一个来自 `~/.coffer/proxy.json` 的控制令牌把守。
+[本地模型代理](/zh/architecture/model-proxy)是 Coffer 的第二个监听端，它在做任何事之前先运行自己的检查。这些检查比守护进程的更严格。`Host` 不是请求到达端口上的回环名字的请求得到 403，而且 `COFFER_ALLOWED_HOSTS` 在这里不适用。**任何**带 `Origin` 请求头的请求也得到 403，因为没有浏览器页面是代理的客户端。只有在这之后，模型路由才检查智能体的本地代理令牌。守护进程的控制路由由另一个来自 `~/.coffer/proxy.json` 的控制令牌把守。
 
 ## API 令牌 {#the-api-token}
 
 ### 生成与存储 {#minting-and-storage}
 
-每次启动时，守护进程用 `secrets.token_urlsafe(32)`（256 位）生成一个新令牌，并连同 pid 和端口一起写进 `~/.coffer/daemon.json`。文件先用 `mkstemp` 暂存，再原子地移到位，所以它从不以宽于 `0600` 的权限存在。令牌不会跨重启保留，不放进任何环境变量，也不写进任何智能体的配置：shim 在运行时从 `daemon.json` 读取它。
+每次启动时，守护进程用 32 字节随机数（256 位）生成一个新的 URL 安全令牌，并连同 pid 和端口一起写进 `~/.coffer/daemon.json`。文件先作为私有临时文件暂存，再原子地移到位，所以它从不以宽于 `0600` 的权限存在。令牌不会跨重启保留，不放进任何环境变量，也不写进任何智能体的配置：shim 在运行时从 `daemon.json` 读取它。
 
 ### 检查令牌 {#checking-it}
 
-`/api/v1/*` 下的每条路由和 `/mcp` 端点都要求 `X-Coffer-Token` 请求头，并以常数时间（`hmac.compare_digest`）与守护进程进程内的令牌比较。缺失或错误的令牌得到 `401`；在守护进程发布令牌之前到达的请求得到 `503`。唯一不需要认证的 API 路由是 `GET /api/v1/daemon/status`，这是命令行和 shim 在拿到令牌之前调用的就绪探针；它返回生命周期阶段、版本、可执行文件、端口、发布渠道、功能开关、机器名和上游健康状况汇总——没有任何密钥。
+`/api/v1/*` 下的每条路由和 `/mcp` 端点都要求 `X-Coffer-Token` 请求头，并以常数时间与守护进程进程内的令牌比较。缺失或错误的令牌得到 `401`；在守护进程发布令牌之前到达的请求得到 `503`。唯一不需要认证的 API 路由是 `GET /api/v1/daemon/status`，这是命令行和 shim 在拿到令牌之前调用的就绪探针；它返回生命周期阶段、版本、可执行文件、端口、发布渠道、功能开关、机器名和上游健康状况汇总——没有任何密钥。
 
 `coffer daemon rotate-token`（或 `POST /api/v1/daemon/rotate-token`）会生成新令牌、重写 `daemon.json`、立即使旧令牌失效，并在审计日志中记录 `token_rotated`。
 
 ### 把令牌交给页面 {#getting-it-into-the-page}
 
-Web 界面也需要令牌，而 URL 是错误的渠道：它会进入浏览器历史、会话恢复、截图和粘贴出去的 bug 报告。所以守护进程通过**响应体**交付它。每当它提供 `index.html`——无论是 `/`，还是经由 SPA 回退的每一条客户端路由——都会把 `window.__COFFER_TOKEN__` 作为 `<head>` 中的第一个脚本注入，其值读自令牌检查所比较的同一个进程内变量，所以页面持有的令牌不会与 API 接受的令牌偏移（[`webui.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/webui.py)）。
+Web 界面也需要令牌，而 URL 是错误的渠道：它会进入浏览器历史、会话恢复、截图和粘贴出去的 bug 报告。所以守护进程通过**响应体**交付它。每当它提供 `index.html`——无论是 `/`，还是经由 SPA 回退的每一条客户端路由——都会把令牌作为页面全局变量，放在 `<head>` 中的第一个脚本里注入，其值读自令牌检查所比较的同一个进程内的值，所以页面持有的令牌不会与 API 接受的令牌偏移。
 
 - 该文档以 `Cache-Control: no-store` 提供，不带 ETag 或 Last-Modified，所以重启后的守护进程所对应的浏览器永远不会从缓存里拿到上一个守护进程的令牌。`/assets` 下带哈希的文件照常缓存。
 - 页面不持久化任何东西：守护进程重启后刷新页面，就会对新的守护进程完成认证。
@@ -252,7 +252,7 @@ Web 界面也需要令牌，而 URL 是错误的渠道：它会进入浏览器�
 
 ### CORS {#cors}
 
-CORS 只授予 [Origin 表](#origin-requests-from-other-sites)中的跨源条目：默认是桌面应用的来源，你选择开启时再加上开发用来源。浏览器提供的界面与 API 同源，不需要 CORS。CORS 从不使用通配符，`allow_credentials` 始终为 false，所以不会附带任何 cookie。CORS 和 Origin 检查读的是同一份列表，因此不可能不一致。
+CORS 只授予 [Origin 表](#origin-requests-from-other-sites)中的跨源条目：默认是桌面应用的来源，你选择开启时再加上开发用来源。浏览器提供的界面与 API 同源，不需要 CORS。CORS 从不使用通配符，也从不允许携带凭据，所以不会附带任何 cookie。CORS 和 Origin 检查读的是同一份列表，因此不可能不一致。
 
 ## 密钥存储 {#the-secret-store}
 
@@ -271,7 +271,7 @@ CORS 只授予 [Origin 表](#origin-requests-from-other-sites)中的跨源条目
 
 ### 主密钥 {#the-master-key}
 
-唯一不是密文的密钥，是 Fernet 主密钥，由 [`MasterKeyManager`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/secret/master_key.py) 在一个存储端口之后管理。它用哪种存储由构建方式决定，从不由设置或环境变量决定：
+唯一不是密文的密钥，是 Fernet 主密钥，由一个主密钥组件在一个存储端口之后管理。它用哪种存储由构建方式决定，从不由设置或环境变量决定：
 
 | 构建 | 密钥存放位置 | 能防 `~/.coffer/` 的离线副本吗？ | 能防同用户进程吗？ |
 | --- | --- | --- | --- |
@@ -287,7 +287,7 @@ CORS 只授予 [Origin 表](#origin-requests-from-other-sites)中的跨源条目
 
 每种构建的启动都是失败即关闭的。守护进程在解析密钥*之前*先统计密文文件，只有在一个都没有时才创建新密钥。有密文却解析不到密钥，守护进程以 `MASTER_KEY_MISSING` 停止；钥匙串拒绝读取时，以 `SECRET_LOCKED` 停止，而不是创建第二把会遮住它的密钥。
 
-`keyring` 只被一个模块导入：[`infrastructure/secret/keyring_adapter.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/secret/keyring_adapter.py)，如果接口层或应用层代码导入它，一条导入契约会让构建失败。
+`keyring` 只被一个模块导入：密钥基础设施包里的 keyring 适配器，如果接口层或应用层代码导入它，一条导入契约会让构建失败。
 
 ::: warning 签名发布版的 Keychain 后端尚未在真实构建上验证
 访问组后端已在存储端口之后实现，并用一个假 Keychain 测试过。一个用 Developer ID 签名、以裸二进制形式在 app bundle 之外运行的 `coffer-daemon` 能否获得访问组，还需要在签名构建上证明；如果不能，守护进程将从签名的 app bundle 内部运行。在签名构建出现之前，实际运行的是上面的开发构建方案。
@@ -299,14 +299,14 @@ CORS 只授予 [Origin 表](#origin-requests-from-other-sites)中的跨源条目
 
 ## 出站请求 {#outbound-requests}
 
-[`infrastructure/net/ssrf_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/net/ssrf_guard.py) 会解析 URL 的主机，只要解析出的任一地址是回环、私有（RFC 1918、`fc00::/7`）、链路本地、运营商级 NAT（`100.64.0.0/10`）、组播、未指定或保留地址，就拒绝它。解析失败的名字按拦截处理。
+SSRF 防护会解析 URL 的主机，只要解析出的任一地址是回环、私有（RFC 1918、`fc00::/7`）、链路本地、运营商级 NAT（`100.64.0.0/10`）、组播、未指定或保留地址，就拒绝它。解析失败的名字按拦截处理。
 
-规则（[原则 → 网络默认值](/zh/architecture/principles)）是：Coffer 根据用户在表单里输入的内容、代表你去探测或获取的 URL 要经过防护，而你配置为自己端点的地址不用。有四条路径会根据输入的内容发起请求。第一条是提供商探测器（[`infrastructure/provider/introspector.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/provider/introspector.py)），位于连接编辑器在保存任何东西之前运行的三个探测之后——`POST /api/v1/models/list-models`、`/test-connection` 和 `/detect-protocol`。每个探测在第一次请求之前检查基础 URL。有两种情况跳过检查：
+规则（[原则 → 网络默认值](/zh/architecture/principles)）是：Coffer 根据用户在表单里输入的内容、代表你去探测或获取的 URL 要经过防护，而你配置为自己端点的地址不用。有四条路径会根据输入的内容发起请求。第一条是提供商探测器，位于连接编辑器在保存任何东西之前运行的三个探测之后——`POST /api/v1/models/list-models`、`/test-connection` 和 `/detect-protocol`。每个探测在第一次请求之前检查基础 URL。有两种情况跳过检查：
 
 - 协议本来就是本地的连接（`ollama`）从不检查，因为它的 URL 就是回环。
 - `detect-protocol` 会把回环主机（`localhost`、`127.0.0.1`、`::1`、`0.0.0.0`、`host.docker.internal`）直接归类为 `ollama`，不发送任何请求。
 
-[自定义工具](/zh/guides/custom-tools)的 OpenAPI 导入是第二条：在导入表单里输入的规格 URL 会在获取之前检查，它返回的每一次重定向也会检查（`infrastructure/mcp/openapi_fetch.py`，上限 5 MiB、20 秒）。位于私有主机上的规格改为以文件形式导入。
+[自定义工具](/zh/guides/custom-tools)的 OpenAPI 导入是第二条：在导入表单里输入的规格 URL 会在获取之前检查，它返回的每一次重定向也会检查（获取上限 5 MiB、20 秒）。位于私有主机上的规格改为以文件形式导入。
 
 第三条是 MCP 服务器页面对一个尚未添加的服务器所做的测试（`POST /api/v1/resources/mcp_server/test-config`）：HTTP 服务器输入的 URL 会在测试连接之前检查，而 MCP SDK 只在该 URL 自己的源内跟随重定向，所以测试不会被引到防护没见过的主机上。位于私有或回环地址上的服务器，在添加之后再测试。同一个测试只在测试期间启动 stdio 服务器，放在它自己的进程组里，测试结束时整个进程组一起停止；并且不向它放出任何存储的密钥——只有为这次测试在表单里输入的值，而这些值会从 stderr 行和返回的消息中脱敏。
 
@@ -321,7 +321,7 @@ CORS 只授予 [Origin 表](#origin-requests-from-other-sites)中的跨源条目
 - **保险库同步**，它是针对你配置的远端运行的 `git` 子进程。
 - **技能的 Git 仓库**，同样是针对你输入的 URL 运行的 `git` 子进程，运行时不弹任何提示，只允许 `https`、`http`、`ssh`、`git` 和 `file` 传输，不拉子模块；公司自己的 Git 主机通常位于私有地址上（见[技能](/zh/architecture/skills#git-repositories)）。
 
-有一个出站请求发往的是 Coffer 自己选定的地址，而不是你输入或配置的，因此不受防护：**每日价格表刷新**（[`infrastructure/usage/price_refresh.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/usage/price_refresh.py)）。守护进程启动后不久一次，之后每 24 小时一次，它向 pydantic/genai-prices 发布的文件 `https://raw.githubusercontent.com/pydantic/genai-prices/refs/heads/main/prices/new_data/v2/data.json` 发送一个只读 `GET`，超时 10 秒，上限 16 MiB，不跟随重定向，不带凭据，也不带任何关于你或你用量的信息。响应在缓存之前会先校验，计算请求费用时从不临时去查价格。在防火墙后面的机器上，可以用设置 › 通用中的**刷新模型价格**（`coffer config set prices.refresh off`）关掉它；之后 Coffer 按构建中附带的价格表计价。
+有一个出站请求发往的是 Coffer 自己选定的地址，而不是你输入或配置的，因此不受防护：**每日价格表刷新**。守护进程启动后不久一次，之后每 24 小时一次，它向 pydantic/genai-prices 发布的文件 `https://raw.githubusercontent.com/pydantic/genai-prices/refs/heads/main/prices/new_data/v2/data.json` 发送一个只读 `GET`，超时 10 秒，上限 16 MiB，不跟随重定向，不带凭据，也不带任何关于你或你用量的信息。响应在缓存之前会先校验，计算请求费用时从不临时去查价格。在防火墙后面的机器上，可以用设置 › 通用中的**刷新模型价格**（`coffer config set prices.refresh off`）关掉它；之后 Coffer 按构建中附带的价格表计价。
 
 防护在校验时解析 DNS，HTTP 客户端在连接时会再解析一次，所以在两次之间重新指向的主机可能溜过去。把解析出的地址一路钉到客户端会破坏 TLS 证书校验；对于一个 URL 由你自己输入的单用户守护进程，这个残余风险是可以接受的。
 
@@ -331,9 +331,9 @@ CORS 只授予 [Origin 表](#origin-requests-from-other-sites)中的跨源条目
 
 ## 智能体身份 {#agent-identity}
 
-Coffer 把它的 MCP 条目装进某个智能体时，写入的是 `coffer-mcp-shim --agent-uid <uid>`。shim 把这个 uid 作为 `_meta["coffer/agent-uid"]` 标记在 MCP 握手上，网关用它做两件事：
+Coffer 把它的 MCP 条目装进某个智能体时，写入的是 `coffer-mcp-shim --agent-uid <uid>`。shim 把这个 uid 标记在 MCP 握手上，放在 `_meta` 字段的 `coffer/agent-uid` 键下，网关用它做两件事：
 
-1. **生效范围。** 每个有范围的资源都用 `is_active(scope, agent_uid)` 过滤。没有身份的会话——你手工配置的 shim——只匹配没有范围限制的资源，所以它看到的只会更少，绝不会更多。发送基于名字的键的旧版 shim 会被当作身份不明；没有任何回退能让一个过期的标签去匹配范围。
+1. **生效范围。** 每个有范围的资源都按它的范围是否覆盖会话的智能体 uid 来过滤。没有身份的会话——你手工配置的 shim——只匹配没有范围限制的资源，所以它看到的只会更少，绝不会更多。发送基于名字的键的旧版 shim 会被当作身份不明；没有任何回退能让一个过期的标签去匹配范围。
 2. **归属。** 每次内置工具调用都带一个 `agent` 参数指明调用者，`coffer__write` 这类工具会把它记录下来。网关**总是**根据握手身份设置它（解析为智能体当前的名字）：客户端提供的值会被无条件丢弃，没有身份时这个参数干脆不存在。没有哪个内置工具对外声明这个参数，所以模型无从填写。
 
 身份是由一个以你身份运行的进程自己报告的。它不是抵御恶意本地进程的安全边界——任何这样的进程本来就持有令牌——规格也如实这么说，而不是暗示更强的隔离。
@@ -352,7 +352,7 @@ Coffer 把它的 MCP 条目装进某个智能体时，写入的是 `coffer-mcp-s
 ## 哪些内容会进入日志和审计 {#what-goes-into-logs-and-audit}
 
 - **日志**（`~/.coffer/logs/`，每行一个 JSON 对象）记录事件、标识符和错误。没有任何代码路径会记录密钥值、令牌或解密后的密钥。
-- **审计**记录每一次生命周期变更及其操作者。密钥事件（`secret_set`、`secret_revealed`、`secret_deleted`、`secret_migrated`、`secret_resolved`、`secret_imported` 以及 `secret_approval_*` 事件）只记录**引用**、密钥的名字或目的地。资源配置先经过该类型的 `audit_redactor`——MCP 类型会整个剥掉 `transport.env` 和 `transport.headers`——所以即使把值粘贴进了错误的字段，它也到不了 `audit_log`。主密钥事件（`master_key_relocated`、`master_key_exported`、`master_key_imported`）只记录事件发生过，不记录密钥。
+- **审计**记录每一次生命周期变更及其操作者。密钥事件（`secret_set`、`secret_revealed`、`secret_deleted`、`secret_migrated`、`secret_resolved`、`secret_imported` 以及 `secret_approval_*` 事件）只记录**引用**、密钥的名字或目的地。资源配置先经过该类型的审计脱敏器——MCP 类型会整个剥掉 `transport.env` 和 `transport.headers`——所以即使把值粘贴进了错误的字段，它也到不了审计日志。主密钥事件（`master_key_relocated`、`master_key_exported`、`master_key_imported`）只记录事件发生过，不记录密钥。
 - **同步历史**存储远端的提交和错误，推送密钥已被脱敏去除。
 
 ## 同步只携带密文 {#sync-carries-ciphertext-only}
@@ -387,21 +387,16 @@ Coffer 把它的 MCP 条目装进某个智能体时，写入的是 `coffer-mcp-s
 
 ## 在代码中的位置 {#where-it-lives-in-the-code}
 
-| 路径 | 内容 |
+| 包 | 内容 |
 | --- | --- |
-| [`surfaces/http/auth.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/auth.py) | 令牌检查。 |
-| [`surfaces/http/host_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/host_guard.py) | `Host` 和 `Origin` 检查。 |
-| [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py)、[`middleware.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/middleware.py) | CORS 白名单和中间件顺序。 |
-| [`surfaces/http/webui.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/webui.py) | 提供注入了令牌的界面。 |
-| [`infrastructure/daemon/bootstrap.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/bootstrap.py)、[`atomic_write.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/atomic_write.py) | 令牌生成、`daemon.json`、`0600` 写入。 |
-| [`infrastructure/secret/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/secret) | 加密存储、主密钥及其存储后端、keyring 适配器、绑定与审批存储、明文扫描。 |
-| [`application/secret/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/application/secret) | 密钥边界（目的地、绑定、审批）、存在性授权、受保护的解析器。 |
-| [`surfaces/http/secret_boundary_routes.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/secret_boundary_routes.py) | 受存在性校验保护的查看和密钥备份、审批、`coffer run` 的解析、扫描和导入。 |
-| [`surfaces/cli/run_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/run_cmd.py) | `coffer run` 及其输出遮蔽。 |
-| [`desktop/src/`](https://github.com/wyx-sg/Coffer/tree/main/desktop/src) | 桌面应用的存在性校验、授权签名和审批通知。 |
-| [`infrastructure/net/ssrf_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/net/ssrf_guard.py) | SSRF 防护。 |
-| [`application/mcp/gateway_parsing.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_parsing.py)、[`gateway_builtin.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_builtin.py) | 握手身份以及 `agent` 参数的覆盖。 |
-| [`application/channel/pairing.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/channel/pairing.py)、[`inbound.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/channel/inbound.py) | 配对码和所有者闸门。 |
+| HTTP 接口层 | 令牌检查、`Host` 和 `Origin` 检查、CORS 白名单和中间件顺序、提供注入了令牌的界面，以及密钥边界路由（受存在性校验保护的查看和密钥备份、审批、`coffer run` 的解析、扫描和导入）。 |
+| 守护进程基础设施 | 令牌生成、`daemon.json`、`0600` 写入、回环绑定。 |
+| 密钥基础设施 | 加密存储、主密钥及其存储后端、keyring 适配器、绑定与审批存储、明文扫描。 |
+| 密钥应用层 | 密钥边界（目的地、绑定、审批）、存在性授权、受保护的解析器。 |
+| 命令行接口层 | `coffer run` 及其输出遮蔽。 |
+| `desktop/` | 桌面应用的存在性校验、授权签名和审批通知。 |
+| 网络基础设施 | SSRF 防护。 |
+| MCP 网关与消息渠道应用层 | 握手身份以及 `agent` 参数的覆盖；配对码和所有者闸门。 |
 
 ## 相关内容 {#related}
 

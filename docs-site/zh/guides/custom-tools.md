@@ -134,7 +134,7 @@ coffer tool op add deploy rollback --method POST \
 | `coffer tool op scope <group> <tool>` | 查看、缩小或清除单个工具的生效范围 |
 | `coffer tool op test <group> <tool>` | 用示例参数调用一次工具 |
 
-所有选项见 [CLI 参考](/zh/reference/cli#coffer-tool)。
+所有选项见 [CLI 参考](/zh/reference/cli/tool)。
 
 ## 相关 {#related}
 

@@ -32,15 +32,17 @@ Coffer is a Python program, but its users are people running AI coding agents, n
 
 ## The binaries
 
-| Binary | Entry point | Spec file | What it contains |
-| --- | --- | --- | --- |
-| `coffer-daemon` | `coffer/infrastructure/daemon/entry.py` | [`backend/coffer-daemon.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-daemon.spec) | The whole backend: FastAPI and uvicorn, SQLAlchemy and aiosqlite, alembic with its migration scripts as data files, the MCP SDK, document converters, model SDKs, and the built web UI when `frontend/dist/index.html` exists at build time. |
-| `coffer-mcp-shim` | `coffer/surfaces/shim/main.py` | [`backend/coffer-mcp-shim.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-mcp-shim.spec) | The stdio-to-HTTP bridge an MCP client launches. Excludes FastAPI, uvicorn, SQLAlchemy, alembic and structlog, so it starts quickly for clients that spawn it every session. |
-| `coffer` | `coffer/surfaces/cli/main.py` | [`backend/coffer.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer.spec) | The Typer CLI, httpx, and the `keyring` backends. Excludes the server stack and the MCP SDK. |
+Each binary is frozen from its own PyInstaller spec in `backend/`, one per entry point: the daemon's, the shim's and the CLI's.
 
-Each spec is a single-file `EXE` with `console=True` and `upx=False`, and each freezes the interpreter option `-X utf8` in. That option matters only for the shipped binary: an unfrozen interpreter in the C locale turns UTF-8 mode on by itself, but a frozen binary started from Finder or launchd with no `LANG` would otherwise fall back to ASCII.
+| Binary | What it contains |
+| --- | --- |
+| `coffer-daemon` | The whole backend: FastAPI and uvicorn, SQLAlchemy and aiosqlite, alembic with its migration scripts as data files, the MCP SDK, document converters, model SDKs, and the built web UI when the frontend has been built (`frontend/dist`) at build time. |
+| `coffer-mcp-shim` | The stdio-to-HTTP bridge an MCP client launches. Excludes FastAPI, uvicorn, SQLAlchemy, alembic and structlog, so it starts quickly for clients that spawn it every session. |
+| `coffer` | The Typer CLI, httpx, and the `keyring` backends. Excludes the server stack and the MCP SDK. |
 
-PyInstaller finds imports by static analysis, so anything imported lazily inside a function — document converters, model SDKs — is pinned in the spec's `hiddenimports`, and package data files are collected explicitly. [`scripts/check_pyinstaller_specs.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_pyinstaller_specs.py) runs in `make lint` and fails when a spec's entry script or a `datas` source path no longer exists, or when a spec loses `-X utf8`. No CI job other than the release runs PyInstaller, so this check is what keeps the specs level with the tree between releases.
+Each spec builds a single-file console executable without UPX compression, and each freezes the interpreter option `-X utf8` in. That option matters only for the shipped binary: an unfrozen interpreter in the C locale turns UTF-8 mode on by itself, but a frozen binary started from Finder or launchd with no `LANG` would otherwise fall back to ASCII.
+
+PyInstaller finds imports by static analysis, so anything imported lazily inside a function — document converters, model SDKs — is pinned in the spec's list of hidden imports, and package data files are collected explicitly. A spec check runs in `make lint` and fails when a spec's entry script or a data-file source path no longer exists, or when a spec loses `-X utf8`. No CI job other than the release runs PyInstaller, so this check is what keeps the specs level with the tree between releases.
 
 ### Building locally
 
@@ -49,22 +51,22 @@ make bundle-binaries        # runs scripts/build_binaries.sh → dist/coffer, di
 bash scripts/smoke_test_bundle.sh dist
 ```
 
-[`scripts/build_binaries.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/build_binaries.sh) runs PyInstaller from `backend/` (where the specs' relative paths resolve) with output redirected to the repository's `dist/` and `build/`. It detects the host's target triple (`aarch64-apple-darwin`, `x86_64-apple-darwin`, the Linux and Windows triples) for naming, but builds only for the host.
+The build script runs PyInstaller from `backend/` (where the specs' relative paths resolve) with output redirected to the repository's `dist/` and `build/`. It detects the host's target triple (`aarch64-apple-darwin`, `x86_64-apple-darwin`, the Linux and Windows triples) for naming, but builds only for the host.
 
-[`scripts/smoke_test_bundle.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/smoke_test_bundle.sh) starts the bundled daemon under an isolated `HOME`, waits for `daemon.json` and `/api/v1/daemon/status`, checks that `/` serves the bundled web UI, then sends one JSON-RPC `initialize` through the bundled shim and expects a reply within 15 seconds.
+The smoke test starts the bundled daemon under an isolated `HOME`, waits for `daemon.json` and `/api/v1/daemon/status`, checks that `/` serves the bundled web UI, then sends one JSON-RPC `initialize` through the bundled shim and expects a reply within 15 seconds.
 
 ## The release workflow
 
-[`.github/workflows/release.yml`](https://github.com/wyx-sg/Coffer/blob/main/.github/workflows/release.yml) runs on a pushed `v*` tag (and on manual dispatch, which builds artifacts without publishing). It has one build job on a `macos-14` runner for `aarch64-apple-darwin`, and one publish job.
+The release workflow (in `.github/workflows/`) runs on a pushed `v*` tag (and on manual dispatch, which builds artifacts without publishing). It has one build job on a `macos-14` runner for `aarch64-apple-darwin`, and one publish job.
 
 ```mermaid
 flowchart TD
     T["push tag v*"] --> I["uv sync --frozen, npm ci"]
     I --> F["build frontend (codegen + vite build)"]
-    F --> P["release_plan.py: which secrets are present"]
-    P --> S["stamp_channel.py stable (+ access group when signing)"]
-    S --> B["build_binaries.sh (PyInstaller x3, signed when possible)"]
-    B --> K["smoke_test_bundle.sh (+ verify signatures, notarise)"]
+    F --> P["release plan: which secrets are present"]
+    P --> S["stamp channel stable (+ access group when signing)"]
+    S --> B["build binaries (PyInstaller x3, signed when possible)"]
+    B --> K["smoke test (+ verify signatures, notarise)"]
     K --> A["coffer-cli-aarch64-apple-darwin.tar.gz"]
     K --> D["stage binaries → tauri build (sign, notarise, updater archive)"]
     D --> G["Coffer[-unsigned]-aarch64-apple-darwin.dmg"]
@@ -75,29 +77,29 @@ flowchart TD
     H --> R["GitHub Release"]
 ```
 
-1. Install the backend from `backend/uv.lock` with `uv sync --frozen`, so the tagged build uses exactly the locked dependency set.
+1. Install the backend from its lockfile (`uv.lock`) with `uv sync --frozen`, so the tagged build uses exactly the locked dependency set.
 2. Build the frontend (`npm run codegen`, `npm run build`). The daemon spec picks up `frontend/dist` as the served web UI.
-3. Decide which signing steps can run (`scripts/release_plan.py`, see [Signing, notarisation and updates](#signing-notarisation-and-updates)). When a Developer ID is present, import it into a temporary keychain and stamp the keychain access group.
-4. On a tag, run `scripts/stamp_channel.py stable` (see [Release channels](#release-channels)).
+3. Decide which signing steps can run (see [Signing, notarisation and updates](#signing-notarisation-and-updates)). When a Developer ID is present, import it into a temporary keychain and stamp the keychain access group.
+4. On a tag, stamp the channel `stable` (see [Release channels](#release-channels)).
 5. Freeze the three binaries — signed with the Developer ID when there is one — and run the smoke test against `dist/`. A signed build then has its signatures verified and the binaries notarised.
 6. Package `coffer`, `coffer-daemon` and `coffer-mcp-shim` into `coffer-cli-<triple>.tar.gz`.
-7. Copy the same three files to `desktop/binaries/<name>-<triple>` and run `tauri build`, producing the `.dmg` — `Coffer-<triple>.dmg` when signed (then notarised and stapled), `Coffer-unsigned-<triple>.dmg` otherwise — and, with the updater key, the signed updater archive and `latest.json`.
+7. Stage the same three files in the desktop crate as `<name>-<triple>` and run `tauri build`, producing the `.dmg` — `Coffer-<triple>.dmg` when signed (then notarised and stapled), `Coffer-unsigned-<triple>.dmg` otherwise — and, with the updater key, the signed updater archive and `latest.json`.
 8. Write `SHA256SUMS` over every artifact, then create (or update, with `--clobber`) the GitHub Release for the tag.
 
 Only macOS on Apple Silicon is published. The specs and build script are cross-platform, so widening the release matrix is a workflow change rather than a redesign.
 
-Versions are kept in several files that must agree exactly — the Python package, the frontend `package.json` and lockfile, the desktop crate and `tauri.conf.json` among them. [`scripts/bump_version.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/bump_version.py) rewrites all of them in one step, and an integration test pins that they agree. The desktop app compares its own version with the `version` reported by `/api/v1/daemon/status`; when they differ, the web UI shows a **Daemon out of date** banner with a restart action.
+Versions are kept in several files that must agree exactly — the Python package, the frontend `package.json` and lockfile, the desktop crate and its Tauri configuration among them. One version-bump script rewrites all of them in one step, and an integration test pins that they agree. The desktop app compares its own version with the `version` reported by `/api/v1/daemon/status`; when they differ, the web UI shows a **Daemon out of date** banner with a restart action.
 
 ## The desktop bundle
 
-The desktop app is a Tauri 2 shell around the same web UI the daemon serves ([`desktop/tauri.conf.json`](https://github.com/wyx-sg/Coffer/blob/main/desktop/tauri.conf.json)). It bundles `app` and `dmg` targets, loads `frontend/dist` as local assets, and lists the three binaries as `externalBin`. Tauri resolves each `binaries/<name>` entry to `binaries/<name>-<target-triple>` and places it in `Coffer.app/Contents/MacOS/`, next to the app's own executable.
+The desktop app is a Tauri 2 shell around the same web UI the daemon serves. Its Tauri configuration bundles `app` and `dmg` targets, loads the built frontend as local assets, and lists the three binaries as external binaries. Tauri resolves each binary name to `<name>-<target-triple>` and places it in `Coffer.app/Contents/MacOS/`, next to the app's own executable.
 
 When the app starts, it resolves a daemon in a fixed order: an already-running daemon named by `~/.coffer/daemon.json` (attached to, never re-spawned); the binary inside the app bundle; `~/.coffer/bin/coffer-daemon`; `coffer-daemon` on `PATH`; otherwise a message telling you to install the CLI. The shell never writes to `~/.coffer/bin` itself — the daemon it starts does that (next section). Installing the app therefore installs the CLI too.
 
 | Target | What it does |
 | --- | --- |
 | `make desktop` | Builds the frontend, runs `make bundle-binaries`, stages the binaries under the host triple, and runs `tauri build`. Produces an unsigned `.app` and `.dmg` under `desktop/target/release/bundle/`. Takes roughly 50 minutes, mostly PyInstaller. |
-| `make desktop-stage-binaries` | Stages placeholder scripts for any missing `externalBin` entry, so `cargo` can compile the crate without a frozen build. |
+| `make desktop-stage-binaries` | Stages placeholder scripts for any missing external binary, so `cargo` can compile the crate without a frozen build. |
 | `make desktop-lint` | `cargo check` and `cargo clippy -D warnings`. |
 | `make desktop-test` | `cargo test`. |
 
@@ -109,7 +111,7 @@ See [Desktop app](/guides/desktop-app) for using it.
 
 ### The one-line installer
 
-[`install.sh`](https://github.com/wyx-sg/Coffer/blob/main/docs-site/public/install.sh) is served from the documentation site and is POSIX `sh`:
+`install.sh` is served from the documentation site and is POSIX `sh`:
 
 ```sh
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
@@ -119,7 +121,7 @@ It accepts only macOS on `arm64` and points everyone else at a source install. I
 
 ### Versioned directories and the symlink flip
 
-Every frozen daemon, whichever tier it came from, deploys its sibling binaries at startup ([`application/binary_deploy.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/binary_deploy.py)). A source install skips this, because `pip install` already put the console scripts on `PATH`.
+Every frozen daemon, whichever tier it came from, deploys its sibling binaries at startup. A source install skips this, because `pip install` already put the console scripts on `PATH`.
 
 ```text
 ~/.coffer/bin/
@@ -162,17 +164,11 @@ Before running database migrations, the daemon also copies `runs.db` (and its `-
 
 ## Release channels
 
-Every build carries a channel in [`backend/coffer/build_channel.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/build_channel.py):
-
-```python
-CHANNEL: Literal["stable", "dev"] = "dev"
-```
-
-The repository always says `dev`. The release workflow runs `scripts/stamp_channel.py stable` before PyInstaller on a tag, so only a tagged release is `stable`. Whether the binary is frozen is not the signal: the owner's own testing build is frozen too and stays `dev`. The channel is reported as `channel` by `/api/v1/daemon/status`, and its only effect is the default state of experimental features.
+Every build carries a channel, `stable` or `dev`, recorded in a single constant in the backend package. The repository always says `dev`. On a tag, the release workflow rewrites it to `stable` before PyInstaller runs, so only a tagged release is `stable`. Whether the binary is frozen is not the signal: the owner's own testing build is frozen too and stays `dev`. The channel is reported as `channel` by `/api/v1/daemon/status`, and its only effect is the default state of experimental features.
 
 ## Experimental features
 
-An experimental feature is a capability that ships in every build but is switched off by default on `stable`. The registry in [`backend/coffer/domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py) is the one list; anything not in it is always on. Each entry names a key, the REST prefixes the feature owns and the resource kinds it owns.
+An experimental feature is a capability that ships in every build but is switched off by default on `stable`. The feature registry in the domain layer is the one list; anything not in it is always on. Each entry names a key, the REST prefixes the feature owns and the resource kinds it owns.
 
 The registry is empty right now. Sync (`vault_sync`), Knowledge (`knowledge`) and Memory (`memory`) were its entries before 1.0 and graduated at 1.0: their entries and every gate that named them were deleted, and a migration stripped their stored switches from `daemon-config.json`. A stored key the registry no longer declares is ignored, so a leftover one is harmless.
 
@@ -184,7 +180,7 @@ A feature's state is resolved on every read, highest precedence first:
 
 ```mermaid
 flowchart LR
-    Q["request under a feature's prefix"] --> G{"require_feature(key)"}
+    Q["request under a feature's prefix"] --> G{"feature gate (key)"}
     G -->|pin?| P["COFFER_FEATURES"]
     G -->|setting?| S["daemon-config.json"]
     G -->|else| C["channel default"]
@@ -194,7 +190,7 @@ flowchart LR
 
 The gates are request-time:
 
-- Every router whose prefix falls under a feature's prefix is mounted with a `require_feature` dependency. The routes stay registered, so the OpenAPI document never changes with the switch, and a switch takes effect on the next request.
+- Every router whose prefix falls under a feature's prefix is mounted with a feature-gate dependency that checks the feature's state. The routes stay registered, so the OpenAPI document never changes with the switch, and a switch takes effect on the next request.
 - The kind-agnostic `/api/v1/resources` routes refuse a resource whose kind a switched-off feature owns, and leave such resources out of lists.
 - The MCP gateway drops the feature's builtin tools from the tool list and answers a call to one as an unknown tool; the handshake instructions stop naming them.
 - CLI commands reach the daemon over the gated routes and print one line naming `coffer config set feature.<key> on`, then exit 1.
@@ -204,17 +200,17 @@ Switching a feature off never deletes, moves or rewrites what it holds; switchin
 
 ## Signing, notarisation and updates
 
-Three kinds of credential turn an unsigned release into a signed one, and each is optional. [`scripts/release_plan.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/release_plan.py) is handed only whether each secret is set — never its value — and answers three questions the later steps' `if:` read. Every step it turns off is announced on the run page with the secret it is missing, and the unsigned release is built and published exactly as before, so a fork or a repository without the secrets stays green.
+Three kinds of credential turn an unsigned release into a signed one, and each is optional. A release-plan step is handed only whether each secret is set — never its value — and answers three questions the later steps' `if:` conditions read. Every step it turns off is announced on the run page with the secret it is missing, and the unsigned release is built and published exactly as before, so a fork or a repository without the secrets stays green.
 
 | Step | Runs when these are set | What it does |
 | --- | --- | --- |
-| Developer ID signing | `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_TEAM_ID` | Imports the certificate into a temporary keychain; stamps `<TEAM_ID>.coffer` into `build_identity.py` and the shell; PyInstaller signs each frozen binary and every library it collects, and Tauri signs the app, under the hardened runtime with the `keychain-access-groups` entitlement and without `get-task-allow`; the signatures are verified before packaging. |
+| Developer ID signing | `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_TEAM_ID` | Imports the certificate into a temporary keychain; stamps `<TEAM_ID>.coffer` into the backend's build identity and the shell; PyInstaller signs each frozen binary and every library it collects, and Tauri signs the app, under the hardened runtime with the `keychain-access-groups` entitlement and without `get-task-allow`; the signatures are verified before packaging. |
 | Notarisation | the above, plus `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` | `notarytool` notarises the CLI binaries (as a zip; a bare binary cannot be stapled), Tauri notarises and staples the app before building the `.dmg` and the updater archive from it, and the workflow notarises and staples the `.dmg`. |
-| Updater feed | `TAURI_SIGNING_PRIVATE_KEY` (and its password, if it has one), and the repository variable `COFFER_UPDATER_PUBKEY` | Tauri signs `Coffer.app.tar.gz` with the updater key; `scripts/make_update_manifest.py` writes `latest.json`; the public key is compiled into the shell. |
+| Updater feed | `TAURI_SIGNING_PRIVATE_KEY` (and its password, if it has one), and the repository variable `COFFER_UPDATER_PUBKEY` | Tauri signs `Coffer.app.tar.gz` with the updater key; a manifest step writes `latest.json`; the public key is compiled into the shell. |
 
 ### The keychain access group
 
-The master key lives in the data-protection Keychain in the access group `<TEAM_ID>.coffer`, which only binaries signed by that team and carrying the `keychain-access-groups` entitlement can read ([ADR: the master key lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)). One Team ID sets it in three places at once: [`scripts/stamp_build_identity.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/stamp_build_identity.py) rewrites `KEYCHAIN_ACCESS_GROUP` in `backend/coffer/infrastructure/secret/build_identity.py` before PyInstaller freezes it, the shell is compiled with `COFFER_KEYCHAIN_ACCESS_GROUP`, and [`desktop/entitlements/coffer.entitlements.in`](https://github.com/wyx-sg/Coffer/blob/main/desktop/entitlements/coffer.entitlements.in) is rendered with the same ID for every signature. A build that is not stamped — every build from source and every unsigned release — keeps the development fallback: the key in a `0600` file, reported as a development build. Whether a Developer ID build needs a provisioning profile for the entitlement is still to be proven; an optional `APPLE_PROVISIONING_PROFILE` secret is embedded in the app when present.
+The master key lives in the data-protection Keychain in the access group `<TEAM_ID>.coffer`, which only binaries signed by that team and carrying the `keychain-access-groups` entitlement can read ([ADR: the master key lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)). One Team ID sets it in three places at once: a stamping step rewrites the access-group constant in the backend's build identity before PyInstaller freezes it, the shell is compiled with `COFFER_KEYCHAIN_ACCESS_GROUP`, and the entitlements template in `desktop/` is rendered with the same ID for every signature. A build that is not stamped — every build from source and every unsigned release — keeps the development fallback: the key in a `0600` file, reported as a development build. Whether a Developer ID build needs a provisioning profile for the entitlement is still to be proven; an optional `APPLE_PROVISIONING_PROFILE` secret is embedded in the app when present.
 
 ### How the desktop app updates
 
@@ -234,7 +230,7 @@ sequenceDiagram
     App->>D: spawn the new version's daemon, wait for it to answer
 ```
 
-The updater (`tauri-plugin-updater`) runs in the shell's Rust process; the webview has none of its permissions and its content policy stays loopback-only. The shell checks the manifest named in `plugins.updater.endpoints` of [`desktop/tauri.conf.json`](https://github.com/wyx-sg/Coffer/blob/main/desktop/tauri.conf.json) and verifies each archive against the public key it was compiled with. `requireSignedVersion` also rejects an archive signed for a different version than the manifest names, so an altered manifest cannot pair a new version number with an older release. A build compiled without a key never checks. After installing, the shell relaunches with a marker in its environment, and the relaunched shell's first handshake replaces the previous version's daemon through the same restart the menu bar uses. See [Desktop app → Update](/guides/desktop-app#update).
+The updater (Tauri's updater plugin) runs in the shell's Rust process; the webview has none of its permissions and its content policy stays loopback-only. The shell checks the manifest named as the updater endpoint in its Tauri configuration and verifies each archive against the public key it was compiled with. The updater also requires the signed version to match, rejecting an archive signed for a different version than the manifest names, so an altered manifest cannot pair a new version number with an older release. A build compiled without a key never checks. After installing, the shell relaunches with a marker in its environment, and the relaunched shell's first handshake replaces the previous version's daemon through the same restart the menu bar uses. See [Desktop app → Update](/guides/desktop-app#update).
 
 ### An unsigned release
 
@@ -262,24 +258,14 @@ Without a Developer ID, macOS quarantines a downloaded archive or `.dmg`. Clear 
 
 ## Where it lives in the code
 
-| Path | What it does |
+| Directory | What it holds |
 | --- | --- |
-| [`backend/coffer-daemon.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-daemon.spec), [`coffer-mcp-shim.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer-mcp-shim.spec), [`coffer.spec`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer.spec) | PyInstaller specs |
-| [`scripts/build_binaries.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/build_binaries.sh) | freezes all three binaries into `dist/` |
-| [`scripts/smoke_test_bundle.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/smoke_test_bundle.sh) | post-build daemon and shim round-trip |
-| [`scripts/check_pyinstaller_specs.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_pyinstaller_specs.py) | lint gate for stale spec paths and `-X utf8` |
-| [`scripts/stamp_channel.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/stamp_channel.py), [`backend/coffer/build_channel.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/build_channel.py) | release channel |
-| [`scripts/bump_version.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/bump_version.py) | sets the version in every file that carries it |
-| [`.github/workflows/release.yml`](https://github.com/wyx-sg/Coffer/blob/main/.github/workflows/release.yml) | release build and publish |
-| [`scripts/release_plan.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/release_plan.py), [`scripts/release_signing.sh`](https://github.com/wyx-sg/Coffer/blob/main/scripts/release_signing.sh) | which signing steps run; keychain, verification, notarytool, stapler |
-| [`scripts/stamp_build_identity.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/stamp_build_identity.py), [`desktop/entitlements/coffer.entitlements.in`](https://github.com/wyx-sg/Coffer/blob/main/desktop/entitlements/coffer.entitlements.in) | the keychain access group, stamped and granted |
-| [`scripts/make_update_manifest.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/make_update_manifest.py), [`desktop/src/updater.rs`](https://github.com/wyx-sg/Coffer/blob/main/desktop/src/updater.rs) | the update manifest, and the shell that reads it |
-| [`.github/workflows/desktop.yml`](https://github.com/wyx-sg/Coffer/blob/main/.github/workflows/desktop.yml) | desktop crate check, clippy and tests |
-| [`desktop/tauri.conf.json`](https://github.com/wyx-sg/Coffer/blob/main/desktop/tauri.conf.json), [`desktop/src/resolve.rs`](https://github.com/wyx-sg/Coffer/blob/main/desktop/src/resolve.rs) | bundle config and daemon resolution order |
-| [`docs-site/public/install.sh`](https://github.com/wyx-sg/Coffer/blob/main/docs-site/public/install.sh) | one-line installer |
-| [`backend/coffer/application/binary_deploy.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/binary_deploy.py) | versioned deploy and symlink flip |
-| [`backend/coffer/surfaces/http/migrations_runner.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/migrations_runner.py) | pre-migration database copy |
-| [`backend/coffer/domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py), [`application/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/features.py), [`surfaces/http/feature_dependencies.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/feature_dependencies.py) | feature registry, state resolution, request-time gates |
+| `backend/` | the three PyInstaller specs |
+| `scripts/` | building, smoke-testing, spec checking, channel and build-identity stamping, release planning and signing, the update manifest, version bumping |
+| `.github/workflows/` | the release workflow and the `desktop` check workflow |
+| `desktop/` | the Tauri shell: bundle configuration, entitlements, daemon resolution order, the updater |
+| `docs-site/public/` | the one-line installer |
+| the backend's application layer | the versioned deploy and symlink flip, experimental-feature state; the HTTP surface holds the request-time gates and the pre-migration database copy |
 
 ## Related
 

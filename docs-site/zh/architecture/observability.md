@@ -32,7 +32,7 @@ Coffer 是一个供其他程序调用的后台进程。出问题时，发现问�
 
 ### 一种格式 {#one-format}
 
-Coffer 自己的模块通过标准库（`logging.getLogger`）记日志。根 logger 的 handler 使用 `structlog.stdlib.ProcessorFormatter`，所以每条记录——Coffer 自己的，以及在守护进程里运行的库（如 MCP SDK、asyncio 和 alembic）的——都以一个字段相同的 JSON 对象输出：
+Coffer 自己的模块通过 Python 标准库的 logging 记日志。根 logger 上的每个 handler 都用 structlog 为标准库记录提供的格式化器来格式化，所以每条记录——Coffer 自己的，以及在守护进程里运行的库（如 MCP SDK、asyncio 和 alembic）的——都以一个字段相同的 JSON 对象输出：
 
 | 字段 | 来源 |
 | --- | --- |
@@ -41,7 +41,7 @@ Coffer 自己的模块通过标准库（`logging.getLogger`）记日志。根 lo
 | `level` | `debug`、`info`、`warning`、`error` 或 `critical` |
 | `logger` | 记录这条日志的模块 |
 | `trace_id` | 当前请求的 trace id，请求之外为 `-` |
-| 任何 `extra={...}` 键 | 调用处传入的内容 |
+| 任何额外的键 | 记录这条日志的代码附带的结构化字段 |
 | `exception` | 渲染后的 traceback，保留在同一行内 |
 
 一行真实的日志长这样：
@@ -50,15 +50,15 @@ Coffer 自己的模块通过标准库（`logging.getLogger`）记日志。根 lo
 {"event": "mcp.upstream.spawn_failed", "logger": "coffer.application.mcp.supervisor", "level": "warning", "timestamp": "2026-09-24T13:50:15.869933Z", "server": "smart", "attempt": 1, "error": "upstream init failed: ConnectError", "trace_id": "44e10b60da1b4f26"}
 ```
 
-`structlog` 也配置成走同一组 handler，所以将来使用 `structlog.get_logger()` 的调用处也会产出同样的形状，而不是打印到 stdout。
+`structlog` 也配置成走同一组 handler，所以将来通过 structlog 自己的 API 记日志的代码也会产出同样的形状，而不是打印到 stdout。
 
-时间戳来自 `LogRecord`，而不是格式化时的时钟。这样即使两个 handler 格式化同一条记录，它也只有一个时间，而且时间戳可以按字典序排序，读取方的 `since` 过滤依赖这一点。
+时间戳是记录被创建的那一刻，而不是格式化时的时钟。这样即使两个 handler 格式化同一条记录，它也只有一个时间，而且时间戳可以按字典序排序，读取方的 `since` 过滤依赖这一点。
 
 ### 每个文件一个写入者 {#one-writer-per-file}
 
 `daemon.log` 按设计有两个写入者：
 
-1. 守护进程的滚动文件 handler（`RotatingFileHandler`，每个文件 10 MB，保留 3 个备份：`daemon.log.1` … `daemon.log.3`）。
+1. 守护进程的滚动文件 handler（每个文件 10 MB，保留 3 个备份：`daemon.log.1` … `daemon.log.3`）。
 2. 守护进程进程自身的输出。CLI 的探测或启动、`coffer daemon start` 和 MCP shim 会以追加方式打开 `daemon.log`，作为子进程的 stdout 和 stderr；桌面应用也把它启动的守护进程重定向到同一个文件。一个拒绝启动的守护进程（比如端口已被占用）会把原因打印到错误信息让你去查的那个文件里。
 
 因此，如果再加一个 stderr handler，每条记录都会写两遍。守护进程只在 stderr *不是* `daemon.log` 同一个文件时（按设备号和 inode 比较）才挂上 stderr handler，也就是前台运行的情况——终端或测试——这时它是看到输出的唯一途径。
@@ -78,7 +78,7 @@ Coffer 自己的模块通过标准库（`logging.getLogger`）记日志。根 lo
 
 ### 宽容的读取器 {#the-tolerant-reader}
 
-因为 `daemon.log` 同时也是守护进程子进程的 stdio，它永远不能保证是纯 JSON。`application/log_reader.py` 是「活动」页和 `coffer log daemon` 共用的唯一读取器。它：
+因为 `daemon.log` 同时也是守护进程子进程的 stdio，它永远不能保证是纯 JSON。「活动」页和 `coffer log daemon` 共用应用层里的同一个读取器。它：
 
 - 只读文件的最后 512 KiB，所以 10 MB 的日志永远不会整个读进内存；
 - 去掉 ANSI 颜色和光标控制序列；
@@ -91,7 +91,7 @@ HTTP 路由 `GET /api/v1/daemon/logs` 暴露这个读取器，支持 `since`、`
 
 ## Trace id {#trace-ids}
 
-每个 HTTP 请求在其他任何东西运行之前都会先拿到一个 trace id。`surfaces/http/trace.py` 是一个原始的 ASGI 中间件（不是 `BaseHTTPMiddleware`，后者会缓冲，干扰 `/mcp` 提供的长连接流），它：
+每个 HTTP 请求在其他任何东西运行之前都会先拿到一个 trace id。HTTP 层的 trace 中间件是一个原始的 ASGI 中间件（不是 Starlette 那个便捷的中间件基类，后者会缓冲，干扰 `/mcp` 提供的长连接流）。它：
 
 1. 如果客户端带了 `X-Coffer-Trace` 请求头就采用它，裁剪到 `[A-Za-z0-9._:-]` 和 64 个字符以内，否则生成一个新的 16 位十六进制 id；
 2. 把它绑定到一个上下文变量，日志格式化器会为该请求产生的每条记录读取它；
@@ -137,7 +137,7 @@ sequenceDiagram
 有两个决策塑造了它：
 
 - **身份和标签分开存储。** 资源的轨迹按 uid 查询，所以给资源改名不影响它的历史，旧记录保留写入时为真的名字。不存在只按标签审计事件的方式；见[资源框架](/zh/architecture/resource-framework)。
-- **脱敏在存储之前、按类型进行。** 每种资源类型都可以提供一个 `audit_redactor`，在配置变成 `details` 之前剥掉密钥字段。MCP 服务器类型用它从传输配置里去掉 `env` 和 `headers` 映射，只保留密钥引用。
+- **脱敏在存储之前、按类型进行。** 每种资源类型都可以提供一个审计脱敏器，在配置变成 `details` 之前剥掉密钥字段。MCP 服务器类型用它从传输配置里去掉 `env` 和 `headers` 映射，只保留密钥引用。
 
 操作者来自 `X-Coffer-Actor` 请求头，必须匹配 `^[a-z][a-z0-9_-]{0,31}$`；没有这个头表示 `api`，其他值一律以 `400` 拒绝。
 
@@ -145,7 +145,7 @@ sequenceDiagram
 
 ### 事件词汇表 {#event-vocabulary}
 
-词汇表是一个封闭的枚举，即 `backend/coffer/domain/audit.py` 里的 `AuditEventType`。
+词汇表是一个封闭的枚举，定义在 domain 层。
 
 | 领域 | 事件 |
 | --- | --- |
@@ -208,7 +208,7 @@ sequenceDiagram
 
 所有类似日志的东西都由同一套机制限定大小。
 
-`application/retention_registry.py` 定义了 `PrunableTable`，它是对保留 worker 所清扫的一张表的声明式描述：策略键、时间戳列、默认窗口、显示名，以及一个 `delete` 或 `archive` 的 `action`。组合根把每张这样的表注册到同一个 `PrunableRegistry` 里，仓储层接受的 SQL 白名单也由这些注册推导，所以没注册的表无法被清理。
+保留 worker 所清扫的每张表都有一份声明式描述：策略键、时间戳列、默认窗口、显示名，以及 `delete` 或 `archive` 之一的动作。组合根把每份这样的描述注册到同一个注册表里，仓储层接受的 SQL 白名单也由这些注册推导，所以没注册的表无法被清理。
 
 | 策略（`name`） | 表 | 时间戳列 | 默认 | 动作 |
 | --- | --- | --- | --- | --- |
@@ -222,17 +222,17 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    W["RetentionWorker（每 6 小时）"] --> S["RetentionService.prune"]
-    S --> R["PrunableRegistry"]
+    W["保留 worker（每 6 小时）"] --> S["清理"]
+    S --> R["已注册的可清理表"]
     R --> T1["删除超出窗口的行"]
     R --> T2["归档闲置对话"]
     S --> M["清扫消息渠道媒体目录"]
-    W --> F["prune_log_dir：超过 7 天的 shim 和上游日志"]
+    W --> F["日志文件清理：超过 7 天的 shim 和上游日志"]
     S --> P["local/retention.json：last_pruned_at、rows"]
 ```
 
-- `RetentionService.initialize_defaults` 在启动时为每张已注册的表在 `~/.coffer/local/retention.json` 里写入默认策略，从不覆盖你改过的策略。
-- `RetentionWorker` 在启动时立即执行一次清理（补跑），之后每 6 小时一次。清理失败会记日志，worker 继续运行。
+- 保留服务在启动时为每张已注册的表在 `~/.coffer/local/retention.json` 里写入默认策略，从不覆盖你改过的策略。
+- 保留 worker 在启动时立即执行一次清理（补跑），之后每 6 小时一次。清理失败会记日志，worker 继续运行。
 - 完整的清理还会清扫消息渠道的媒体目录，worker 也按同样的节奏清理旧的 shim 和上游日志文件。`daemon.log` 本身由自己的滚动限定大小，从不被删除。
 - 窗口设为 “none” 会关闭该表的清理。修改窗口会在审计日志里记一条 `retention_updated`。
 
@@ -255,7 +255,7 @@ flowchart LR
 
 ## 评测采集 {#eval-capture}
 
-Coffer 的确定性测试证明管道是通的。它的非确定性行为的质量——最重要的是 `coffer__search_tools` 给上游工具排序排得多好——由 [`evals/`](https://github.com/wyx-sg/Coffer/tree/main/evals) 里的评测框架衡量，并通过一个需要手动开启的采集输出，从真实使用中不断扩充。
+Coffer 的确定性测试证明管道是通的。它的非确定性行为的质量——最重要的是 `coffer__search_tools` 给上游工具排序排得多好——由仓库 `evals/` 目录里的评测框架衡量，并通过一个需要手动开启的采集输出，从真实使用中不断扩充。
 
 ```mermaid
 flowchart LR
@@ -267,7 +267,7 @@ flowchart LR
 ```
 
 - **采集。** 为守护进程设置 `COFFER_EVAL_CAPTURE` 后，每次 `coffer__search_tools` 调用都会向一个 JSONL 文件追加一行——查询以及返回的排序后工具名：值为 `1`/`true`/`yes` 时写到 `~/.coffer/eval-capture.jsonl`，否则写到给定的路径。采集 logger 不向上传播，所以这些行永远不会进入 `daemon.log`。变量未设置时什么都不写。工具参数和结果从不采集。
-- **整理。** `make eval-curate`（`python -m evals.curate`）读取采集输出，去掉数据集已经覆盖的查询，并让你标出哪些返回的工具是相关的。确认后的用例追加到 `evals/datasets/tool_search.jsonl`，标记为 `"source": "captured"`。
+- **整理。** `make eval-curate` 读取采集输出，去掉数据集已经覆盖的查询，并让你标出哪些返回的工具是相关的。确认后的用例追加到 `evals/datasets/tool_search.jsonl`，标记为 `"source": "captured"`。
 - **门禁。** `make eval` 运行确定性的工具检索套件（用网关所用的同一个排序器计算 recall@k 和 MRR），分数低于已提交基线减去容差时失败。`evals` GitHub 工作流会在涉及 `evals/`、MCP、知识或记忆代码的推送和 pull request 上运行它。`make eval-routing` 额外提供一个需要模型参与的工具路由套件，它需要一个模型端点，不进 CI。
 
 调用日志对带内工具错误如实记为 `error`，这才让它能在这里作为信号使用：一个把失败的工具调用记成 `ok` 的日志，分不清路由决策是好是坏。
@@ -278,7 +278,7 @@ flowchart LR
 
 **每个写入者一个日志文件。** 给桌面壳或脱离终端的守护进程的 stdio 各自一个文件，能让 `daemon.log` 保持纯 JSON。Coffer 选择只保留一个文件加一个宽容的读取器，因为所有“去看日志”的提示都指向同一个路径，多出来的文件就是一个没人被告知要去看的地方。上游 MCP 服务器是例外，因为它们的量会把 Coffer 自己的记录挤掉。
 
-**通过 structlog 自己的 API 做结构化日志。** 把一百多个 `logging.getLogger` 调用处都改掉，得不到标准库格式化器没有提供的任何东西。格式化器在标准库记录上运行 structlog 的 processor，所以文件只有一种形状，调用处无需改动。
+**通过 structlog 自己的 API 做结构化日志。** 把一百多个使用标准库 logging 的调用处都改掉，得不到标准库格式化器没有提供的任何东西。格式化器在标准库记录上运行 structlog 的 processor，所以文件只有一种形状，调用处无需改动。
 
 **只在守护进程日志里记审计事件。** 日志行无法按资源 id 过滤，也撑不过一年的滚动。表才是记录本身；日志行只是给正在 tail 文件的人的方便。
 
@@ -286,24 +286,16 @@ flowchart LR
 
 ## 代码位置 {#where-it-lives-in-the-code}
 
-| 路径 | 作用 |
+| 包 | 作用 |
 | --- | --- |
-| [`backend/coffer/infrastructure/logging/setup.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/setup.py) | JSON 格式化器、滚动文件 handler、stderr 规则、trace id 上下文 |
-| [`backend/coffer/infrastructure/logging/files.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/files.py) | 日志目录、每个上游的 stderr 文件、日志文件清理 |
-| [`backend/coffer/application/log_reader.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/log_reader.py) | 「活动」页和 `coffer log daemon` 共用的宽容尾部读取器 |
-| [`backend/coffer/surfaces/http/trace.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/trace.py) | trace id 中间件 |
-| [`backend/coffer/surfaces/http/middleware.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/middleware.py) | 中间件顺序 |
-| [`backend/coffer/domain/audit.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/audit.py) | 审计条目和事件词汇表 |
-| [`backend/coffer/application/audit_service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/audit_service.py) | 记录和查询审计行 |
-| [`backend/coffer/application/mcp/gateway_handlers.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_handlers.py) | 经代理调用的调用状态 |
-| [`backend/coffer/application/mcp/gateway_builtin.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_builtin.py) | 内置工具的调用记录、评测采集挂钩 |
-| [`backend/coffer/infrastructure/mcp/invocation_writer.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/mcp/invocation_writer.py) | `mcp_invocations` 表和缓冲写入器 |
-| [`backend/coffer/application/retention_registry.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/retention_registry.py) | `PrunableTable` 和 `PrunableRegistry` |
-| [`backend/coffer/application/retention_service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/retention_service.py)、[`retention_worker.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/retention_worker.py) | 清理逻辑和节奏 |
-| [`backend/coffer/surfaces/http/app_mcp_composition.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app_mcp_composition.py) | 已注册的可清理表 |
-| [`backend/coffer/surfaces/cli/log_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/log_cmd.py)、[`path_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/path_cmd.py) | `coffer log` 和 `coffer path` |
-| [`backend/coffer/application/eval_capture.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/eval_capture.py)、[`infrastructure/logging/eval_capture.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/eval_capture.py) | 评测采集的发出与输出 |
-| [`evals/`](https://github.com/wyx-sg/Coffer/tree/main/evals) | 评测框架、数据集、基线、整理 CLI |
+| `infrastructure/logging/` | JSON 格式化器、滚动文件 handler、stderr 规则、trace id 上下文、日志目录、每个上游的 stderr 文件、日志文件清理、评测采集输出 |
+| 应用层 | 「活动」页和 `coffer log daemon` 共用的宽容尾部读取器；记录和查询审计行；可清理表、清理逻辑和节奏；评测采集的发出 |
+| MCP 网关，位于 `application/mcp/` | 经代理调用的调用状态；内置工具的调用记录；评测采集挂钩 |
+| `infrastructure/mcp/` | `mcp_invocations` 表和缓冲写入器 |
+| `domain/` | 审计条目和事件词汇表 |
+| HTTP 层 | trace id 中间件、中间件顺序，以及已注册的可清理表（组合根） |
+| CLI 层 | `coffer log` 和 `coffer path` |
+| `evals/` | 评测框架、数据集、基线、整理 CLI |
 
 ## 相关链接 {#related}
 

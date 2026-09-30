@@ -1,49 +1,73 @@
 ---
 layout: home
 title: Coffer
-description: Coffer 是给 AI 编程智能体用的本地优先保险库。它给 Claude Code 和 Codex 一个 MCP 端点、一个技能库，以及共享的知识、记忆和模型提供商，全部保存在你的机器上。
+description: Coffer 是给 AI 编程智能体用的本地优先保险库。MCP 服务器、自定义工具、技能、知识、记忆和模型提供商只配一次，Claude Code 和 Codex 共同使用，全部保存在你的机器上。
 
 hero:
   name: Coffer
-  text: 你的 AI 编程智能体的本地保险库
-  tagline: MCP 服务器、技能、知识和模型提供商只配一次，本机的每个智能体都用同一套配置。
+  text: 你的 AI 编程智能体的本地优先保险库
+  tagline: MCP 服务器、技能、知识、记忆和模型提供商只配一次，本机的每个智能体都共享同一套。
   actions:
     - theme: brand
-      text: 开始使用
-      link: /zh/start/quickstart
-    - theme: alt
-      text: Coffer 是什么？
+      text: 从这里开始
       link: /zh/start/
+    - theme: alt
+      text: 安装
+      link: /zh/start/install
     - theme: alt
       text: GitHub
       link: https://github.com/wyx-sg/Coffer
 
 features:
   - title: 所有智能体共用一个 MCP 端点
-    details: 上游 MCP 服务器只注册一次，也可以把 HTTP API 变成自定义工具。Claude Code 和 Codex 连到 Coffer 的同一个端点，看到的工具名是 server__tool，哪些智能体能用哪些工具由你决定。
+    details: 上游 MCP 服务器只注册一次。Claude Code 和 Codex 连到 Coffer 的同一个端点，看到的工具名是 server__tool；每个服务器暴露哪些工具、哪些智能体能用由你决定，每次调用都会记录（从不记录参数）。
     link: /zh/guides/mcp-servers
     linkText: MCP 服务器
+  - title: 任何 HTTP API 都能变成自定义工具
+    details: 导入一份 OpenAPI 规范或描述一个请求，这个 API 就成了智能体可调用的工具。请求由网关发出，并在出站时加上你的密钥。
+    link: /zh/guides/custom-tools
+    linkText: 自定义工具
   - title: 一个技能库，自动投递
-    details: AgentSkills 格式的技能文件夹只导入一次。Coffer 把它链接进每个智能体的技能目录，保持链接正确，并由你选择哪些智能体拿到它。
+    details: AgentSkills 技能文件夹只添加一次，来源可以是文件夹、压缩包或 git 仓库。Coffer 把它们链接进每个智能体的技能目录，跟踪上游更新，并告诉你技能需要的命令行工具哪些缺失或未登录。
     link: /zh/guides/skills
     linkText: 技能
-  - title: 知识与记忆，彼此共享
-    details: 用 Markdown 写知识，每个智能体都用自己的文件工具去读。Coffer 还会读取每个智能体自己的记忆，整理成其他智能体也能用的笔记。
+  - title: 每个智能体都能读的知识
+    details: 由普通 Markdown 组成的知识集，智能体用自己的文件工具读取，并通过 coffer__write 往里添加。可选的整理流程会把新材料合并进已有文档，并保留可撤销的历史。
     link: /zh/guides/knowledge
     linkText: 知识
-  - title: 模型提供商只切换一次
-    details: 保存一份提供商配置（接入地址和 API 密钥），把智能体切换过去。智能体与 Coffer 的本地模型代理通信，由代理在上游加上 API 密钥、在连接之间故障切换并统计用量，API 密钥不会写进智能体的配置。
+  - title: 跨智能体共享的记忆
+    details: Coffer 只读不写地读取每个智能体自己的记忆，按仓库提炼成笔记（外加一套全局笔记），再把合适的笔记交还给每个智能体——Claude Code 学到的，Codex 也知道。
+    link: /zh/guides/memory
+    linkText: 记忆
+  - title: 模型提供商与用量
+    details: 提供商只保存一次，把智能体切换过去。智能体与 Coffer 的本地模型代理通信，由代理在上游加上 API 密钥、在连接之间故障切换并统计用量，API 密钥不会写进智能体的配置。
     link: /zh/guides/providers
     linkText: 模型提供商
   - title: 在浏览器或手机上对话
-    details: 在 Web 的对话页驱动 Claude Code 或 Codex，或者配对一个 Telegram、SeaTalk 机器人，随时随地给智能体发消息。
+    details: 在 Web 的对话页驱动 Claude Code 或 Codex，或者配对一个 Telegram、SeaTalk 机器人，在私聊、群组和线程里给智能体发消息。
     link: /zh/guides/chat
     linkText: 对话
+  - title: 多台机器共用一个保险库
+    details: 保险库是一个由普通文件组成、可以手工编辑的 git 仓库。让每台机器指向你自己的 git 远端；干净的合并直接应用，冲突等你决定，密钥只以密文传输。
+    link: /zh/guides/vault-sync
+    linkText: 保险库同步
   - title: 本地优先，AI 原生
-    details: 守护进程只监听 127.0.0.1，密钥以密文保存、主密钥由你持有，多台机器通过你自己的 git 远端同步。依赖你机器环境的杂事，会写成一段提示词交给你的智能体，由你决定何时发送。
+    details: 守护进程只监听 127.0.0.1，密钥在你持有的主密钥下加密保存，每次改动都有审计。依赖你机器环境的杂事，会写成一段提示词交给你的智能体，由你决定是否发送。
     link: /zh/start/why-coffer
     linkText: 为什么用 Coffer
 ---
+
+## 从这里开始 {#start-here}
+
+第一次接触 Coffer？按顺序读这五页。全部读完大约半小时，读完后 Coffer 已经在运行，你也知道它是怎么工作的。
+
+1. **[Coffer 是什么？](/zh/start/)** 它解决什么问题、管理什么、在哪里使用。
+2. **[安装](/zh/start/install)** 把安装交给你的编程智能体，或者自己选一种安装方式。
+3. **[快速上手](/zh/start/quickstart)** 大约十五分钟接入 Claude Code、注册一个 MCP 服务器并添加一个技能。
+4. **[核心概念](/zh/start/concepts)** 资源、类型、生效范围和保险库：其他每一页都会用到的术语。
+5. **[架构总览](/zh/architecture/)** 守护进程、网关和保险库如何配合，以及为什么这样设计。
+
+之后，要完成某件事就去[指南](/zh/guides/)，要查某条命令就去[参考](/zh/reference/cli)。
 
 ## 工作原理 {#how-it-works}
 
@@ -78,24 +102,22 @@ flowchart LR
 
 [架构总览](/zh/architecture/)会逐一深入讲解各个部分。
 
-## 一行命令安装 {#install-in-one-line}
+## 安装 {#install}
 
-在 Apple 芯片的 Mac 上：
+Coffer 运行在你的 Mac 上，最快的安装方式是让你已经在用的编程智能体来装。把[让你的智能体来安装](/zh/start/install#let-your-agent-install-it)里的提示词粘贴给 Claude Code 或 Codex：智能体会阅读安装页，选出适合这台机器的方式并检查结果，动到 Coffer 自己目录以外的任何东西之前都会先问你。
+
+如果要手动安装，[安装页](/zh/start/install)介绍了每一种方式。一行命令安装脚本、桌面应用和发布压缩包都从 GitHub 上打了标签的版本下载，适用于 Apple 芯片的 macOS：
 
 ```sh
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
 ```
 
-这会把 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim` 装进 `~/.coffer/bin`，并把这个目录加进你的 `PATH`。[安装指南](/zh/start/install)还介绍了桌面应用、从源码构建、升级和卸载。
-
-::: warning 还没有正式发布的版本
-安装脚本从 GitHub 上打了标签的正式版本下载，而目前还没有发布，所以现在请[从源码安装](/zh/start/install#from-source)。
-:::
+这会把 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim` 装进 `~/.coffer/bin`，并把这个目录加进你的 `PATH`。在打出发布版本之前，以及在没有发布构建的机器上，请用 Python 3.12 或更高版本[从源码安装](/zh/start/install#from-source)。
 
 ## 接下来读什么 {#where-to-next}
 
 - **[入门](/zh/start/)**：Coffer 是什么、为什么这样设计，以及一个 [15 分钟快速上手](/zh/start/quickstart)。
-- **[指南](/zh/guides/agents)**：智能体、MCP 服务器、技能、知识、记忆、提供商、对话、消息渠道和同步的分步操作。
+- **[指南](/zh/guides/)**：智能体、MCP 服务器、技能、知识、记忆、提供商、对话、消息渠道和同步的分步操作。
 - **[架构](/zh/architecture/)**：守护进程、网关、资源框架和保险库如何配合，以及这样设计的原因。
 - **[参考](/zh/reference/cli)**：每一条 CLI 命令、MCP 工具、配置项和错误码。
 - **[参与贡献](/zh/contributing/)**：如何搭建开发环境，以及如何通过规格来修改 Coffer。

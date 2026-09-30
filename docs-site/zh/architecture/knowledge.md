@@ -49,13 +49,13 @@ description: Coffer 的知识层如何工作：一个 Markdown 文件目录、�
 ```
 
 - **知识集** 是一个顶层目录，也是一个 `knowledge` 类型的资源，存为 `vault/resources/knowledge/<name>.json`。你需要有意地创建它：用 `coffer knowledge add`、`POST /api/v1/knowledge/collections` 或 Web 界面。读取、写入和工作目录都不会自动创建知识集，也没有任何东西会从智能体的 cwd 推导出边界。知识层在任何地方都没有加表。
-- **README** 位于知识集根目录，它的第一段就是这个知识集的描述。每次列出时都从磁盘读取，从不复制进资源文件，因为一旦有人编辑了 README，副本就错了。README 从不作为文档列出、计数或整理。知识集没有自己的标题：每个界面都用文件夹名展示它，知识集路由不带 `title`，资源更新也会拒绝它。编辑描述（`PUT /api/v1/knowledge/collections/{uid}/description`、`coffer knowledge edit <name> --description`）只改写第一段，README 其余部分保持不动（`infrastructure/knowledge/collection_files.py`），作为一次写明用户的提交；之后会重新渲染指南技能，因为智能体正是靠描述来认出这个知识集的。
+- **README** 位于知识集根目录，它的第一段就是这个知识集的描述。每次列出时都从磁盘读取，从不复制进资源文件，因为一旦有人编辑了 README，副本就错了。README 从不作为文档列出、计数或整理。知识集没有自己的标题：每个界面都用文件夹名展示它，知识集路由不带 `title`，资源更新也会拒绝它。编辑描述（`PUT /api/v1/knowledge/collections/{uid}/description`、`coffer knowledge edit <name> --description`）只改写第一段，README 其余部分保持不动，作为一次写明用户的提交；之后会重新渲染指南技能，因为智能体正是靠描述来认出这个知识集的。
 - **嵌套** 由归档文档的一方决定，可能是人，也可能是整理。Coffer 不赋予文件夹任何含义。
-- **隐藏条目**（以点开头）不计入任何文档计数，也不进目录。在知识集内部，Coffer 只写一个：`.inbox/`。保险库仓库的 `.git/info/exclude` 忽略知识集里其他所有隐藏条目，所以它们既不会被提交，也不会被同步。树路由会把知识集根目录下的 `.inbox/` 作为目录列出，读路由也能读其中的条目，所以人能看到有什么在等待；其他隐藏条目都不会被列出或读取，也没有任何界面会写入或删除收件箱条目（`infrastructure/knowledge/paths.py` 里的 `inbox_parts`）。
+- **隐藏条目**（以点开头）不计入任何文档计数，也不进目录。在知识集内部，Coffer 只写一个：`.inbox/`。保险库仓库的 `.git/info/exclude` 忽略知识集里其他所有隐藏条目，所以它们既不会被提交，也不会被同步。树路由会把知识集根目录下的 `.inbox/` 作为目录列出，读路由也能读其中的条目，所以人能看到有什么在等待；其他隐藏条目都不会被列出或读取，也没有任何界面会写入或删除收件箱条目。
 
 ### 路径即身份 {#path-as-identity}
 
-文件名是由标题派生的 slug（`infrastructure/knowledge/naming.py`）。slug 经过 NFKC 规范化并转为小写。CJK 字符保留，因为音译出来的名字谁都认不出。长度上限 80 个字符。重名时追加 `-2`、`-3`，以此类推：
+文件名是由标题派生的 slug。slug 经过 NFKC 规范化并转为小写。CJK 字符保留，因为音译出来的名字谁都认不出。长度上限 80 个字符。重名时追加 `-2`、`-3`，以此类推：
 
 ```text
 payments/session-ownership.md
@@ -77,11 +77,11 @@ reviewed_by: alice          # a key a person added; always preserved
 ---
 ```
 
-Coffer 按固定顺序写五个键：`title`、`description`、`actor`（`agent` 或 `user`）、`created_at` 和 `updated_at`。人加的任何其他键，在 Coffer 改写文件时都会保留，解析出的值不变（`infrastructure/knowledge/fs.py`）。这一点很重要，因为整理会在无人值守时改写文档。丢掉一个不认识的键，就等于悄悄删掉了人写的 `tags:`。
+Coffer 按固定顺序写五个键：`title`、`description`、`actor`（`agent` 或 `user`）、`created_at` 和 `updated_at`。人加的任何其他键，在 Coffer 改写文件时都会保留，解析出的值不变。这一点很重要，因为整理会在无人值守时改写文档。丢掉一个不认识的键，就等于悄悄删掉了人写的 `tags:`。
 
 ### 所有路径由一个模块负责 {#one-module-owns-every-path}
 
-`infrastructure/knowledge/paths.py` 是唯一构建路径的模块。每一段都要经过一个守卫，它拒绝空段、全是点的段、以点开头的段以及不在白名单里的段，所以 `payments/.inbox/x.md` 从任何界面都无法寻址。解析后的路径还会在它最近的已存在祖先上与知识根目录比对，所以根目录里的一个符号链接目录没法把写入带到外面去。写入先写到一个用 `O_EXCL | O_NOFOLLOW` 打开的同级临时文件，再做一次原子重命名，并通过保险库唯一的写入者提交。根目录永远是 `~/.coffer/vault/knowledge`，不能覆盖。
+知识基础设施里有一个模块负责构建所有路径，别处都不构建路径。每一段都要经过一个守卫，它拒绝空段、全是点的段、以点开头的段以及不在白名单里的段，所以 `payments/.inbox/x.md` 从任何界面都无法寻址。解析后的路径还会在它最近的已存在祖先上与知识根目录比对，所以根目录里的一个符号链接目录没法把写入带到外面去。写入先写到一个用 `O_EXCL | O_NOFOLLOW` 打开的同级临时文件，再做一次原子重命名，并通过保险库唯一的写入者提交。根目录永远是 `~/.coffer/vault/knowledge`，不能覆盖。
 
 ## 从素材到文档 {#from-material-to-document}
 
@@ -99,7 +99,7 @@ Coffer 按固定顺序写五个键：`title`、`description`、`actor`（`agent`
 
 ```mermaid
 flowchart TD
-  W["coffer__write / CLI / REST"] --> S["KnowledgeService.submit"]
+  W["coffer__write / CLI / REST"] --> S["提交进收件箱"]
   U["上传或渠道 /kb"] --> C["转成 Markdown"]
   C --> D["生成描述：模型或开头正文"]
   D --> S
@@ -116,7 +116,7 @@ flowchart TD
 
 ### 提交 {#submission}
 
-`KnowledgeService.submit`（`application/knowledge/service.py`）先检查知识集是否存在，然后写一个收件箱条目。条目的 frontmatter 和 Markdown 形态与文档相同，按标题的 slug 命名。它从不覆盖已有条目，因为同一标题的两次提交就是两份素材。提交只是一次普通的文件写入，没有模型、转换或索引步骤。它记录一条 `knowledge_written` 审计事件。
+提交时先检查知识集是否存在，然后写一个收件箱条目。条目的 frontmatter 和 Markdown 形态与文档相同，按标题的 slug 命名。它从不覆盖已有条目，因为同一标题的两次提交就是两份素材。提交只是一次普通的文件写入，没有模型、转换或索引步骤。它记录一条 `knowledge_written` 审计事件。
 
 返回结果说明素材的去向：
 
@@ -127,10 +127,10 @@ flowchart TD
 
 ### 上传 {#uploads}
 
-`IngestService`（`application/knowledge/ingest.py`）按顺序做四件事：
+一次上传按顺序经过四步：
 
-1. **限定上传。** 每次调用只收一个文件，最大 20 MiB（`MAX_UPLOAD_BYTES`）。在付出转换成本之前，先拒绝不存在的知识集。
-2. **转换。** `infrastructure/knowledge/converters/registry.py` 按扩展名分发。先走直通（Markdown、文本和源代码文件），再走 CSV，其他一律交给 MarkItDown。不支持的类型以 `INGEST_REJECTED` 和 `reason: unsupported_type` 拒绝。转换出来没有文本的（比如只有图片的 PDF）也会被拒绝。两种情况都什么都不写。
+1. **限定上传。** 每次调用只收一个文件，最大 20 MiB。在付出转换成本之前，先拒绝不存在的知识集。
+2. **转换。** 一个转换器注册表按扩展名分发。先走直通（Markdown、文本和源代码文件），再走 CSV，其他一律交给 MarkItDown。不支持的类型以 `INGEST_REJECTED` 和 `reason: unsupported_type` 拒绝。转换出来没有文本的（比如只有图片的 PDF）也会被拒绝。两种情况都什么都不写。
 3. **生成描述。** 配置了内部模型并且它及时响应时，描述由模型生成。否则取文档的第一段正文，再不行就用标题。描述从不为空，因为目录给智能体看的就是它。
 4. **把 Markdown 作为素材提交**，`actor: user`。
 
@@ -142,25 +142,25 @@ flowchart TD
 
 直接写、改或删文档（在你的编辑器里，或者用智能体自己的文件工具），是修改知识的完整方式；`coffer path knowledge [<collection>]` 会打印目录，CLI 没有专门用来读取或删除文档的命令。不需要任何导入或注册步骤，改动在下一次读取时就生效。整理扫描会根据内容注意到这次编辑（见下文 [结清一个条目](#settling-an-item)），并把它传播到知识集的其余部分。删除文档是人通过 REST、CLI 和 Web 界面做的操作，没有任何面向智能体的工具会删除东西。
 
-Web 界面也可以原地编辑文档。`PUT /api/v1/knowledge/file` 替换文档的 **正文**，保留 frontmatter（`KnowledgeService.save_document`、`fs.save_body`）。读路由带回文件的指纹，保存时必须回传编辑器加载时拿到的那个：如果磁盘上的文件在此期间变了（无论是人自己的编辑器还是一轮整理改的），保存会以 `KNOWLEDGE_FILE_CONFLICT`（409）被拒绝，文件保持不动。拒绝结果带 `saved: false` 和磁盘上当前的文档（正文和指纹），这样编辑器可以提供「重新加载」「比较」和「复制我的文字」，而不会再覆盖保存一次；要再次保存这个人的文字，需要用新的指纹。这个路由服务于 Web 界面的编辑器；在命令行里，文档就像其他文件一样在磁盘上编辑。这次保存是一个 `user` 提交，所以扫描把它当作人的编辑，和在编辑器里改的完全一样。收件箱条目、README 以及文档以外的任何路径都会被拒绝。每次保存记录一条 `knowledge_edited` 审计事件，并且是一次写明用户的提交（见 [历史](#history)）。在编辑器里或用智能体文件工具做的修改也会被提交，记为一次磁盘上的编辑。
+Web 界面也可以原地编辑文档。`PUT /api/v1/knowledge/file` 替换文档的 **正文**，保留 frontmatter。读路由带回文件的指纹，保存时必须回传编辑器加载时拿到的那个：如果磁盘上的文件在此期间变了（无论是人自己的编辑器还是一轮整理改的），保存会以 `KNOWLEDGE_FILE_CONFLICT`（409）被拒绝，文件保持不动。拒绝结果带 `saved: false` 和磁盘上当前的文档（正文和指纹），这样编辑器可以提供「重新加载」「比较」和「复制我的文字」，而不会再覆盖保存一次；要再次保存这个人的文字，需要用新的指纹。这个路由服务于 Web 界面的编辑器；在命令行里，文档就像其他文件一样在磁盘上编辑。这次保存是一个 `user` 提交，所以扫描把它当作人的编辑，和在编辑器里改的完全一样。收件箱条目、README 以及文档以外的任何路径都会被拒绝。每次保存记录一条 `knowledge_edited` 审计事件，并且是一次写明用户的提交（见 [历史](#history)）。在编辑器里或用智能体文件工具做的修改也会被提交，记为一次磁盘上的编辑。
 
 ## 整理轮次 {#the-curation-pass}
 
-整理把素材变成知识，并把一篇文档里的修改传播到其他文档。一个 **轮次**（pass）整理一个条目；一次 **运行**（run）通过一轮接一轮地执行来清空一个知识集。它是一个有边界的智能体循环，跑在 Coffer 的内部模型连接上（见 `coffer config set engine.model`）。实现在 `application/knowledge/curate.py`，由 `infrastructure/llm/agentic_reorg.py` 里的 LangGraph ReAct 循环驱动。知识包只通过 `AgenticCurationPort` 协议接触这个循环，所以从不导入 LangChain。
+整理把素材变成知识，并把一篇文档里的修改传播到其他文档。一个 **轮次**（pass）整理一个条目；一次 **运行**（run）通过一轮接一轮地执行来清空一个知识集。它是一个有边界的智能体循环，跑在 Coffer 的内部模型连接上（见 `coffer config set engine.model`）。它由位于 LLM 基础设施里的一个 LangGraph ReAct 循环驱动。知识包只通过它自己定义的一个窄端口接触这个循环，所以从不导入 LangChain。
 
 ### 一个轮次能看到什么 {#what-a-pass-sees}
 
 一个轮次处理 **一个条目**：一份素材，或者一篇自上次整理以来被编辑过的文档。它的上下文是有边界的：
 
-- **完整的条目。** 超过 120,000 个字符（`MAX_SOURCE_CHARS`）的条目从不给模型看，见 [结果](#outcomes)。
-- **最多五篇完整的候选文档**（`DEFAULT_CANDIDATE_LIMIT`）。
+- **完整的条目。** 超过 120,000 个字符的条目从不给模型看，见 [结果](#outcomes)。
+- **最多五篇完整的候选文档。**
 - **整个知识集的目录**：路径、标题和描述。
 
 规则放在系统轮次里，每个轮次都完全相同，方便提供商缓存。简报可能有几十 KB，放在用户轮次里。
 
 ### 候选选择 {#candidate-selection}
 
-因为没有索引，`application/knowledge/candidates.py` 按字面选择候选：
+因为没有索引，候选是按字面选出来的：
 
 1. 从条目里提取最多 24 个有区分度的词，越具体越靠前：反引号里的标识符、带点的服务名、全大写常量、标题和小标题里的词，以及 CJK 字串。短词和一小张停用词表会被去掉。拉丁词至少 4 个字符，CJK 词至少 2 个字符。
 2. 把它们拼成一个转义过的多选正则，用 ripgrep 在知识集的文档上跑一遍。
@@ -170,13 +170,13 @@ Web 界面也可以原地编辑文档。`PUT /api/v1/knowledge/file` 替换文�
 
 ### Ripgrep 与 Python 兜底 {#ripgrep-and-the-python-fallback}
 
-`infrastructure/knowledge/grep.py` 运行 `rg --json --no-hidden`，超时 5 秒，最多 200 条匹配。之所以显式传 `--no-hidden`，是因为用户的 `$RIPGREP_CONFIG_PATH` 否则可能打开隐藏文件。rg 退出码 2 会呈现为无效模式，而不是「没有匹配」。超时会杀掉 rg 并报告被截断。
+搜索运行 `rg --json --no-hidden`，超时 5 秒，最多 200 条匹配。之所以显式传 `--no-hidden`，是因为用户的 `$RIPGREP_CONFIG_PATH` 否则可能打开隐藏文件。rg 退出码 2 会呈现为无效模式，而不是「没有匹配」。超时会杀掉 rg 并报告被截断。
 
-在没有 `rg` 的机器上，`grep_fallback.py` 在一个 worker 线程里用同样的规则遍历同样的文件：逐行正则、按文件设上限、跳过隐藏条目和二进制文件，时间预算也一样。切换到兜底时每个进程只记一次日志。这是知识层里唯一还保留字面匹配的地方，守护进程之外的任何东西都访问不到它。
+在没有 `rg` 的机器上，一个纯 Python 兜底在一个 worker 线程里用同样的规则遍历同样的文件：逐行正则、按文件设上限、跳过隐藏条目和二进制文件，时间预算也一样。切换到兜底时每个进程只记一次日志。这是知识层里唯一还保留字面匹配的地方，守护进程之外的任何东西都访问不到它。
 
 ### 四个工具 {#the-four-tools}
 
-`application/knowledge/curate_tools.py` 构建轮次的全部工具面，限定在一个知识集的文档之内：
+一个轮次只有四个工具，别无其他。它们合起来就是轮次的全部工具面，限定在一个知识集的文档之内：
 
 | 工具 | 作用 | 代码中强制执行的约束 |
 | --- | --- | --- |
@@ -187,9 +187,9 @@ Web 界面也可以原地编辑文档。`PUT /api/v1/knowledge/file` 替换文�
 
 这些工具是内部的。它们没有注册到 MCP 网关，也不在内置工具注册表里。
 
-**写入上限。** 一个轮次最多写八次（`MAX_WRITES_PER_PASS`），retire 算一次。超过之后，每次写入都返回错误，告诉模型停下。一个条目永远不会引发整个语料的重写。
+**写入上限。** 一个轮次最多写八次，retire 算一次。超过之后，每次写入都返回错误，告诉模型停下。一个条目永远不会引发整个语料的重写。
 
-**不许内部引用。** 写入前，`offending_reference` 会扫描正文里看起来像 Markdown 文件名的 token。如果某个 token 以 `<collection>/` 开头，或者它的文件名和本知识集里的某个文件相同，就拒绝写入。文档仍然可以提到别的仓库的 `AGENTS.md`，因为拒绝这个就成了模型无法满足的规则。这项检查放在代码里，因为当初正是靠提示词要求，才产生了那些死链。
+**不许内部引用。** 写入前，工具会扫描正文里看起来像 Markdown 文件名的 token。如果某个 token 以 `<collection>/` 开头，或者它的文件名和本知识集里的某个文件相同，就拒绝写入。文档仍然可以提到别的仓库的 `AGENTS.md`，因为拒绝这个就成了模型无法满足的规则。这项检查放在代码里，因为当初正是靠提示词要求，才产生了那些死链。
 
 **retire 规则。** 代码证明不了事实已经搬走了。但它可以拒绝所有不可能搬走的 retire：在任何写入之前、针对本轮从没看过的文档、或者之后唯一的写入就是这篇文档本身。
 
@@ -197,7 +197,7 @@ Web 界面也可以原地编辑文档。`PUT /api/v1/knowledge/file` 替换文�
 
 ### 优先级规则 {#precedence-rules}
 
-有两条规则没法用代码裁决，所以放在系统提示词里（`application/knowledge/curate_prompt.py`）：
+有两条规则没法用代码裁决，所以放在系统提示词里：
 
 - **新的说法胜出。** 新素材和某篇文档矛盾时，文档会被更正，被取代的说法保留可读，并注明它改变的日期，比如「(previously recorded as X; corrected 2026-09-20)」。
 - **人的修改作数。** 当条目是一篇被人编辑过的文档时，人写的就是事实。轮次不能回退或改写它，而是把这次修改向外传播：更正与之矛盾的其他文档，把属于别处的小节搬过去。
@@ -209,11 +209,11 @@ Web 界面也可以原地编辑文档。`PUT /api/v1/knowledge/file` 替换文�
 ```mermaid
 sequenceDiagram
   participant T as "触发方（扫描或路由）"
-  participant P as run_curation
+  participant P as "整理轮次"
   participant FS as "知识文件"
   participant RG as ripgrep
   participant L as "智能体循环"
-  participant G as BuiltinGuide
+  participant G as "coffer-guide 渲染器"
   T->>P: 知识集 uid，可选条目
   P->>P: 解析行，获取内部模型
   alt 没有模型
@@ -240,7 +240,7 @@ sequenceDiagram
 
 只有在轮次完成之后，条目才会被结清。整理过的素材从收件箱删除；它的文字留在历史里，因为收件箱在历史里是被跟踪的。整个轮次（它的写入和结清）合起来是一次提交（见 [历史](#history)）。被编辑的文档会被记为已结清，内容一点不变。一个抛出异常、或被递归上限截断的轮次会让条目保持原样，这样后面的扫描会重试它，而不是把它弄丢。
 
-**水位线看内容，从不看修改时间。** `local/curation.json` 按文档记录它上次被整理结清时的 blob（`infrastructure/knowledge/curation_state.py`）。当一篇文档在 `HEAD` 上的 blob 与结清时的不同，并且最近一次触及它的提交不是 `curation` 或 `sync` 写入时，这篇文档就欠一个轮次：人或智能体的修改会被向外传播，而 Coffer 自己的输出和另一台机器已经整理过的改动则不会。一次只改动修改时间的检出、备份恢复或时钟变更，不会让任何东西变成待处理。这个文件只属于本机，让整理把所有东西看一遍就能重建。
+**水位线看内容，从不看修改时间。** `local/curation.json` 按文档记录它上次被整理结清时的 blob。当一篇文档在 `HEAD` 上的 blob 与结清时的不同，并且最近一次触及它的提交不是 `curation` 或 `sync` 写入时，这篇文档就欠一个轮次：人或智能体的修改会被向外传播，而 Coffer 自己的输出和另一台机器已经整理过的改动则不会。一次只改动修改时间的检出、备份恢复或时钟变更，不会让任何东西变成待处理。这个文件只属于本机，让整理把所有东西看一遍就能重建。
 
 ### 结果 {#outcomes}
 
@@ -255,13 +255,13 @@ sequenceDiagram
 | `truncated` | 递归上限截断了轮次。已做的写入保留，条目仍然欠着。同一条目连续第三次被截断时，`gave_up` 为 `true`，条目被提升或结清。 |
 | `failed` | 循环抛出异常。条目不变。 |
 
-对于不存在的知识集，路由返回 404；同一知识集已有一次运行在进行时，返回 409 `UPKEEP_ALREADY_RUNNING`。连续截断次数记在内存里（`curate_settle.py` 中的 `TruncationLedger`），所以不会为了计数往同步树里写任何东西。重启会清零，代价是每次重启每个条目最多多跑三轮。
+对于不存在的知识集，路由返回 404；同一知识集已有一次运行在进行时，返回 409 `UPKEEP_ALREADY_RUNNING`。连续截断次数记在内存里，所以不会为了计数往同步树里写任何东西。重启会清零，代价是每次重启每个条目最多多跑三轮。
 
 每个跑过的轮次，不管有没有被截断，都记录一条 `knowledge_curated` 审计事件。整理没有审核步骤，所以人要通过历史和审计日志才能看到有东西改写了语料；不同意的轮次可以整体撤销。
 
 ## 扫描 {#the-sweep}
 
-`CurationWorker`（`application/knowledge/curate_worker.py`）是一个由 `surfaces/http/curation_wiring.py` 启动的 asyncio 任务，结构与保留期 worker 相同。
+扫描是守护进程里的一个后台 asyncio 任务，在 HTTP 界面装配整理时启动，结构与保留期 worker 相同。
 
 ```mermaid
 stateDiagram-v2
@@ -280,9 +280,9 @@ stateDiagram-v2
 
 1. **重新渲染指南技能**，在闸门之前，而且不受闸门影响。创建或删除知识集会改变每个智能体得到的说明，即使在整理已关闭、或者不是所有者的机器上也是如此。渲染结果字节相同时什么都不写。
 2. **结清磁盘上的编辑。** 自上次提交以来树里改动过的任何东西（比如人的编辑器或智能体的文件工具改的），都会通过保险库写入者作为一次磁盘上的编辑提交，不管闸门是否允许整理运行，以保证历史是最新的。
-3. **检查闸门**（`curation_may_run`）。`auto_curate_enabled` 必须打开（默认打开），`curate_owner_machine_id` 必须指向本机或者未设置。当某一轮同步在等用户时（因冲突而停下、因删除而挂起，或者在等加入时的选择），轮次也不会运行。
+3. **检查闸门。**`auto_curate_enabled` 必须打开（默认打开），`curate_owner_machine_id` 必须指向本机或者未设置。当某一轮同步在等用户时（因冲突而停下、因删除而挂起，或者在等加入时的选择），轮次也不会运行。
 4. **拿保险库写锁**，就是同步轮次持有的那把锁。见 [与同步的加锁](#locking-with-sync)。
-5. **逐个处理知识集**，按 uid 识别；每个知识集都会列出来。待处理条目先是全部收件箱素材（从旧到新），然后是被编辑过的文档（从旧到新）。worker 在进程内的维护运行注册表里认领这个知识集，如果被一次手动运行占着就跳过。它在认领之内重新读取待处理列表，把上次被截断的条目排到后面，最多跑五轮（`MAX_PASSES_PER_SWEEP`）。`no_model` 或 `failed` 会结束这个知识集的扫描；`truncated` 不会，这样一个顽固的条目不会饿死其他条目。
+5. **逐个处理知识集**，按 uid 识别；每个知识集都会列出来。待处理条目先是全部收件箱素材（从旧到新），然后是被编辑过的文档（从旧到新）。worker 在进程内的维护运行注册表里认领这个知识集，如果被一次手动运行占着就跳过。它在认领之内重新读取待处理列表，把上次被截断的条目排到后面，最多跑五轮。`no_model` 或 `failed` 会结束这个知识集的扫描；`truncated` 不会，这样一个顽固的条目不会饿死其他条目。
 6. **等待下一次触发。** 间隔默认一小时；想更快时，手动运行会立刻清空一个知识集。间隔在等待期间会被重新读取，所以用 `coffer config set engine.upkeep.curate.interval` 或在知识页面的「自动」弹出框里做的修改，在一个时间片内就生效，而不是等到启动时就定下的那次等待结束。
 
 一次失败的扫描会被记录日志，但从不结束循环。关闭时直接取消任务，不等轮次跑完。水位线让扫描是幂等的，所以下次启动会接着处理剩下的东西。
@@ -295,7 +295,7 @@ stateDiagram-v2
 
 ### 手动运行 {#manual-runs}
 
-`coffer knowledge curate <collection>` 和知识页面上的 **整理** 操作，通过一次清空（`application/knowledge/curate_drain.py`）调用 worker 使用的同一个 `CurationPass` 对象。路由先认领知识集，所以第二个请求会立刻以 409 `UPKEEP_ALREADY_RUNNING` 被拒绝，而不是阻塞。
+`coffer knowledge curate <collection>` 和知识页面上的 **整理** 操作，通过一次清空（一轮接一轮地执行）运行 worker 使用的同一个轮次。路由先认领知识集，所以第二个请求会立刻以 409 `UPKEEP_ALREADY_RUNNING` 被拒绝，而不是阻塞。
 
 一次运行只读 **一次** 待处理列表：先是收件箱条目（从旧到新），然后是在带外被编辑的文档。接着对每个条目跑一轮，一次一个，每轮仍然限定最多八次写入，直到当初待处理的东西都处理完。它每一轮拿一次保险库写锁，而不是整个运行期间一直拿着，所以同步轮次可以穿插在轮次之间。运行期间新到的条目等下一次运行或扫描，这样「n of m」里的 *m* 保持不变。
 
@@ -311,13 +311,13 @@ stateDiagram-v2
 
 ## 与同步的加锁 {#locking-with-sync}
 
-整理轮次和 [保险库同步](/zh/architecture/vault-sync) 轮次都会写保险库。如果在改写进行到一半时检出一次合并，结果会落在一个撕裂的状态上。所以两者都拿同一把由同步服务拥有的锁：手动路由每轮拿一次，`start_curation_worker` 把这把锁传给 worker。
+整理轮次和 [保险库同步](/zh/architecture/vault-sync) 轮次都会写保险库。如果在改写进行到一半时检出一次合并，结果会落在一个撕裂的状态上。所以两者都拿同一把由同步服务拥有的锁：手动路由每轮拿一次，worker 启动时也拿到同一把锁。
 
 有两把锁在起作用，范围不同：
 
 | 锁 | 范围 | 防止的冲突 |
 | --- | --- | --- |
-| 维护运行认领（`application/upkeep_runs.py`） | 一个知识集，进程内 | 同一知识集上的手动运行和扫描 |
+| 维护运行认领（进程内的维护运行注册表） | 一个知识集，进程内 | 同一知识集上的手动运行和扫描 |
 | 保险库写锁（同步服务的锁） | 整个保险库 | 一个整理轮次和一轮同步 |
 
 ## 历史 {#history}
@@ -348,7 +348,7 @@ stateDiagram-v2
 
 一篇文档的各个版本按从新到旧列出，带写入者和时间，每个版本的 diff 都可以读（`GET /api/v1/knowledge/history`、`.../history/diff`；`coffer knowledge history <path> [--version V]`）。恢复某个版本（`POST /api/v1/knowledge/history/restore`；`coffer knowledge restore <path> <version>`）会把那个版本的字节作为一次写明用户的新提交写回去；之前的历史保持完整。恢复是人的改动，所以扫描会像对待其他编辑一样把它向外传播。被删除的文档也用同样的方式恢复，取删除之前的那个版本。
 
-一次删除（一篇文档或整个知识集）本身就是改动流里的一条改动，列出它移除的每个文件。恢复它（`POST /api/v1/knowledge/changes/{version}/restore`；`coffer knowledge restore --deleted <version>`；在「最近改动」里这次删除那一行上点 **恢复**）会从删除之前的那次提交读出每个被删的文件，逐字节写回，作为一次写明用户、带 `Coffer-Restored-From` 的新提交（`application/knowledge/collection_writes.py`）。文档回到它的知识集。知识集会以原来的名字得到一个新的资源文件，然后是它的文档、README，以及当时在收件箱里等待的条目；收件箱条目以条目的身份回来，所以整理仍然欠它们一轮。如果恢复会覆盖东西，就什么都不写：同一路径上已有文档时返回 409 `KNOWLEDGE_RESTORE_CONFLICT` 并指出它，同名知识集已存在时返回 409 `KNOWLEDGE_COLLECTION_EXISTS`，不是删除的改动返回 400 `KNOWLEDGE_NOT_A_DELETE`。一次恢复会记录一条 `knowledge_edited` 审计事件，写明它撤回的是哪次删除。
+一次删除（一篇文档或整个知识集）本身就是改动流里的一条改动，列出它移除的每个文件。恢复它（`POST /api/v1/knowledge/changes/{version}/restore`；`coffer knowledge restore --deleted <version>`；在「最近改动」里这次删除那一行上点 **恢复**）会从删除之前的那次提交读出每个被删的文件，逐字节写回，作为一次写明用户、带 `Coffer-Restored-From` 的新提交。文档回到它的知识集。知识集会以原来的名字得到一个新的资源文件，然后是它的文档、README，以及当时在收件箱里等待的条目；收件箱条目以条目的身份回来，所以整理仍然欠它们一轮。如果恢复会覆盖东西，就什么都不写：同一路径上已有文档时返回 409 `KNOWLEDGE_RESTORE_CONFLICT` 并指出它，同名知识集已存在时返回 409 `KNOWLEDGE_COLLECTION_EXISTS`，不是删除的改动返回 400 `KNOWLEDGE_NOT_A_DELETE`。一次恢复会记录一条 `knowledge_edited` 审计事件，写明它撤回的是哪次删除。
 
 ### 最近改动 {#recent-changes}
 
@@ -371,10 +371,10 @@ stateDiagram-v2
 
 ### 渲染 {#rendering}
 
-`application/knowledge/guide_render.py` 是纯函数式的：文本进、文本出，除了它自己包里的资源文件，没有端口，也不访问文件系统。它渲染：
+渲染器是纯函数式的：文本进、文本出，除了它自己包里的资源文件，没有端口，也不访问文件系统。它渲染：
 
 - **frontmatter 里的描述。** 这是唯一始终在模型上下文里的部分。它说出 Coffer 和它的内置工具，以及各知识集涵盖的主题，每个主题取自该知识集 README 的第一句。上限 1024 个字符，这是各种技能导入方里最严的限制；超出时从尾部整条丢掉主题，而不是截断句子。它通过一个不限宽度的 YAML dumper 输出，所以 README 里含有 `: ` 或 ` #` 也不会弄坏或悄悄截断这个块。
-- **正文。** 先是作为包数据发布的手写说明书（`application/knowledge/skill_assets/coffer-guide.md`）。它讲内置工具、工具分层契约、Coffer 从不写智能体的记忆，以及没有任何 Coffer 工具会等待审批。后面跟着生成的目录：知识根目录，以及每个知识集里每篇文档相对于知识集的路径、标题和描述。说明书告诉智能体用自己的工具读文件，用 `coffer__write` 记录持久的事实，并且可以直接编辑文档。
+- **正文。** 先是作为包数据发布的手写说明书。它讲内置工具、工具分层契约、Coffer 从不写智能体的记忆，以及没有任何 Coffer 工具会等待审批。后面跟着生成的目录：知识根目录，以及每个知识集里每篇文档相对于知识集的路径、标题和描述。说明书告诉智能体用自己的工具读文件，用 `coffer__write` 记录持久的事实，并且可以直接编辑文档。
 
 正文只有在模型打开它时才付出成本；描述则常驻在每个会话里。这就是 Coffer 只发一个技能而不是一组技能的原因。一条目录条目大约 40 个 token；实测一份 58 篇文档的目录约 5.2K token。
 
@@ -382,15 +382,15 @@ stateDiagram-v2
 
 渲染出的 `SKILL.md` 是构建和传入目录的纯函数。绝对家目录、时间戳、构建路径都不会进入其中。知识根目录写作 `~/.coffer/vault/knowledge`。
 
-确定性在本地就有回报。`BuiltinSkillSeed.seed` 把渲染出的文字与主文件夹比较，如果完全一致，就什么都不写、不审计、不重新投递。所以一次没有任何变化的启动或扫描触发不会留下任何痕迹，行上的 `version_hash` 意味着「内容变了」，而不是「时间过去了」。
+确定性在本地就有回报。技能类型的内置 seed 步骤把渲染出的文字与主文件夹比较，如果完全一致，就什么都不写、不审计、不重新投递。所以一次没有任何变化的启动或扫描触发不会留下任何痕迹，资源的版本哈希意味着「内容变了」，而不是「时间过去了」。
 
 ### 为什么不参与同步 {#why-it-is-withheld-from-sync}
 
-指南依赖本机自己的输入：它的知识根目录和记忆根目录在哪里。两台知识完全相同、但根目录不同的机器会渲染出不同的字节，各自在自己那里都是对的。如果任一方发布了自己的副本，另一方就会覆盖它，在下一次触发时重新渲染并发布回去，结果两台机器每次触发都产生一次提交和一条审计事件，无休无止。所以技能类型把这一个资源归入派生类别（`application/skill/kind.py` 中的 `Kind.storage_row`）：它的资源文件和文件夹都在 `~/.coffer/derived/` 下，在保险库仓库之外，同步在两个方向上都带不走它们。每台机器渲染自己的那份。见 [保险库同步](/zh/architecture/vault-sync)。
+指南依赖本机自己的输入：它的知识根目录和记忆根目录在哪里。两台知识完全相同、但根目录不同的机器会渲染出不同的字节，各自在自己那里都是对的。如果任一方发布了自己的副本，另一方就会覆盖它，在下一次触发时重新渲染并发布回去，结果两台机器每次触发都产生一次提交和一条审计事件，无休无止。所以技能类型把这一个资源归入派生类别：它的资源文件和文件夹都在 `~/.coffer/derived/` 下，在保险库仓库之外，同步在两个方向上都带不走它们。每台机器渲染自己的那份。见 [保险库同步](/zh/architecture/vault-sync)。
 
 ### 接合点与触发时机 {#the-join-and-its-triggers}
 
-知识类型和技能类型不能互相导入。`surfaces/http/guide_wiring.py` 是组合根里唯一让渲染器和技能类型的 seed 相遇的模块，两者之间的接缝是一段 Markdown 字符串。`BuiltinGuide.refresh` 用一把锁把并发调用串行化，并且从不抛出异常：渲染或写入失败时，之前的主文件夹保持不动。它在这些时候运行：
+知识类型和技能类型不能互相导入。渲染器和技能类型的 seed 只在组合根里的一个模块中相遇，两者之间的接缝是一段 Markdown 字符串。刷新用一把锁把并发调用串行化，并且从不抛出异常：渲染或写入失败时，之前的主文件夹保持不动。它在这些时候运行：
 
 - 启动时，在技能偏移自愈之后、后台 worker 启动之前；
 - 任何改变了语料的整理轮次之后；
@@ -410,29 +410,16 @@ Coffer 不做任何 embedding。它没有向量存储、没有 embedding 模型�
 - **历史随每次写入增长。** 没有任何东西修剪它。它和文档放在一起，保存着整理已经并掉的、或者已被删除的文字。
 - **用户内容可能离开本机。** 内部模型连接是唯一的出口。整理和上传时生成的描述，是这一层唯一会发往那里的东西。
 - **这里没有任何访问控制。** 有 shell 工具的智能体能读知识根目录下的任何文件。每个知识集都告诉了每个智能体；不让智能体看到某个知识集的唯一办法就是删掉它。
-- **没有读工具，就没有读取遥测。** `mcp_invocations` 只记录写入。事后衡量读取靠的是智能体自己的对话记录。
+- **没有读工具，就没有读取遥测。** MCP 调用日志只记录写入。事后衡量读取靠的是智能体自己的对话记录。
 
 ## 在代码里的位置 {#where-it-lives-in-the-code}
 
-| 路径 | 职责 |
+| 包 | 职责 |
 | --- | --- |
-| [`application/knowledge/service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/service.py) | 知识集、提交、没配置模型时的提升、供人使用的界面的读取、候选匹配 |
-| [`application/knowledge/builtin_tools.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/builtin_tools.py) | `coffer__write` |
-| [`application/knowledge/ingest.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/ingest.py) | 上传限制、转换、描述 |
-| [`application/knowledge/curate.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/curate.py) | 一个轮次：简报、循环、结果、审计 |
-| [`application/knowledge/candidates.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/candidates.py) | 区分词和候选排序 |
-| [`application/knowledge/curate_tools.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/curate_tools.py) | 四个受限工具、写入上限、引用检查、retire 规则 |
-| [`application/knowledge/curate_settle.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/curate_settle.py) | 待处理条目、结清、提升、放弃、截断账本 |
-| [`application/knowledge/curate_prompt.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/curate_prompt.py) | 系统规则 |
-| [`application/knowledge/curate_drain.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/curate_drain.py) | 一次手动运行：一轮一轮跑，直到当初待处理的都处理完，并报告进度 |
-| [`application/knowledge/curate_worker.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/curate_worker.py) | 定时扫描 |
-| [`application/knowledge/recording.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/recording.py)、[`history_service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/history_service.py) | 每次写入一次写明写入者的提交；历史读取、恢复、最近改动、撤销 |
-| [`application/knowledge/guide_render.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/guide_render.py)、[`skill_assets/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/application/knowledge/skill_assets) | `coffer-guide` 的文字 |
-| [`infrastructure/knowledge/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/knowledge) | `paths.py`、`fs.py`、`frontmatter.py`、`naming.py`、`catalogue.py`、`grep.py`、`grep_fallback.py`、`history.py`（历史仓库）、`converters/` |
-| [`infrastructure/llm/agentic_reorg.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/llm/agentic_reorg.py) | `AgenticCurationPort` 背后的 LangGraph 循环 |
-| [`surfaces/http/curation_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/curation_wiring.py) | 轮次构建、所有者闸门、worker 启动 |
-| [`surfaces/http/guide_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/guide_wiring.py) | 渲染器与技能 seed 的接合 |
-| [`surfaces/http/knowledge/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/surfaces/http/knowledge) | `/api/v1/knowledge` 路由、历史路由、保险库写锁提供方 |
+| `application/knowledge/` | 知识集、提交、没配置模型时的提升、上传、`coffer__write`、整理轮次（候选、四个受限工具、系统规则、结清）、手动运行、定时扫描、历史读取、恢复、最近改动与撤销，以及 `coffer-guide` 的文字 |
+| `infrastructure/knowledge/` | 路径及其守卫、文件读写、frontmatter、命名、目录、ripgrep 及其兜底、历史仓库、转换器 |
+| `infrastructure/llm/` | 整理端口背后的 LangGraph 循环 |
+| `surfaces/http/` | 轮次构建、所有者闸门和 worker 启动；渲染器与技能 seed 的接合；`/api/v1/knowledge` 路由、历史路由和保险库写锁提供方 |
 
 以上路径都在 `backend/coffer/` 下。
 

@@ -56,7 +56,7 @@ flowchart LR
 | **runs** | `runs.db` | Audit log, MCP invocations, conversations, channel threads and outbox, sync rounds, usage, quota. | Never | It *is* history | You lose history |
 | **derived** | `derived/` | `derived.db`, the memory tree, the agent transcript cache, the uid index, Coffer's own guide skill, editor copies of sync conflicts. | Never | No | Yes: it is rebuilt |
 
-Which class a resource belongs to is declared by its kind (`Kind.storage`), with a per-row refinement: most kinds live in the vault, `agent` is local (an agent's config directory is a fact about this machine), `memory` partitions are derived, and the builtin `coffer-guide` skill is derived because every machine renders its own.
+Which class a resource belongs to is declared by its kind, with a per-row refinement: most kinds live in the vault, `agent` is local (an agent's config directory is a fact about this machine), `memory` partitions are derived, and the builtin `coffer-guide` skill is derived because every machine renders its own.
 
 ### The vault
 
@@ -146,7 +146,7 @@ Each file is one JSON object, read whole, changed under a per-file lock and writ
 The migration chain also creates `workflow_runs`, `workflow_events`, `workflow_node_attempts` and `workflow_approvals`. No module in this build reads them; they exist because migrations are one linear history and later revisions build on the ones that created them.
 :::
 
-Every connection runs this pragma suite ([`infrastructure/persistence/engine.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/persistence/engine.py)):
+Every connection runs this pragma suite:
 
 | Pragma | Value | Why |
 | --- | --- | --- |
@@ -174,7 +174,7 @@ Every connection runs this pragma suite ([`infrastructure/persistence/engine.py`
 
 ## The one write path into the vault
 
-Three writers change the vault: you (an editor, a shell, an agent's file tools), the daemon (a save in the web UI, a CLI or API change, a curation pass) and sync. Every change any of them makes is admitted the same way, by the vault writer ([`infrastructure/vault/writer.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/vault/writer.py)):
+Three writers change the vault: you (an editor, a shell, an agent's file tools), the daemon (a save in the web UI, a CLI or API change, a curation pass) and sync. Every change any of them makes is admitted the same way, by the one vault writer:
 
 ```mermaid
 flowchart LR
@@ -195,13 +195,13 @@ A hand edit is found, not intercepted. File events are a hint (debounced until t
 
 Every file and folder in the vault has a history you can read, diff and restore: `coffer vault history|diff|show|restore`, the REST routes under `/api/v1/vault/`, and the **History** tab of a skill. A restore is a new commit through the same checks. See [Edit the vault by hand](/guides/vault-files).
 
-The vault needs `git`. A machine without it fails at startup with a message saying so. How git is installed depends on the machine, so the `GIT_MISSING` error names no installer. It carries the install hand-off for the person's agent in `details.handoff` (`domain/git_handoff.py`), and the Sync status reports the problem `git_missing` with the same prompt.
+The vault needs `git`. A machine without it fails at startup with a message saying so. How git is installed depends on the machine, so the `GIT_MISSING` error names no installer. It carries the install hand-off for the person's agent in `details.handoff`, and the Sync status reports the problem `git_missing` with the same prompt.
 
 ## Migrations of runs.db
 
-Schema changes to `runs.db` are Alembic revisions under [`infrastructure/persistence/migrations/versions/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/persistence/migrations/versions), named `YYYYMMDD_NNNN_<slug>.py`. The head is `0136`, the revision that turned the old database into `runs.db`: it re-keyed the history tables to uids and dropped every table whose state moved into files. A schema change is always a migration, never an implicit `create_all`.
+Schema changes to `runs.db` are Alembic revisions kept in the persistence package, one file per revision named `YYYYMMDD_NNNN_<slug>`. The head is `0136`, the revision that turned the old database into `runs.db`: it re-keyed the history tables to uids and dropped every table whose state moved into files. A schema change is always a migration, never tables created implicitly from the models.
 
-Migrations run in the daemon's lifespan, before any service is built ([`surfaces/http/migrations_runner.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/migrations_runner.py)):
+Migrations run in the daemon's lifespan, before any service is built:
 
 ```mermaid
 flowchart TB
@@ -239,16 +239,15 @@ Two small JSON files sit directly under `~/.coffer`. `daemon.json` is runtime st
 
 ## Where it lives in the code
 
-| Path | Contents |
+| Place | Contents |
 | --- | --- |
-| [`backend/coffer/infrastructure/vault/home.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/vault/home.py) | The class roots under `~/.coffer`. |
-| [`backend/coffer/domain/vault/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/domain/vault) | Layout, documents, format versions, writers and trailers. |
-| [`backend/coffer/infrastructure/vault/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/vault) | The repository, the writer, the scanner, the resource and state stores, reach, local JSON, the one-time upgrade. |
-| [`backend/coffer/application/vault/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/application/vault) | Validation rules, history and restore, problems. |
-| [`backend/coffer/infrastructure/persistence/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/persistence) | The runs.db engine, models and Alembic revisions; `derived_db.py`. |
-| [`backend/coffer/surfaces/http/migrations_runner.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/migrations_runner.py) | Startup migration, backup, too-new guard, the refusal of an old home. |
-| [`backend/coffer/infrastructure/secret/encrypted_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/secret/encrypted_store.py) | Secret ciphertext as files. |
-| [`backend/coffer/infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) | `daemon-config.json`. |
+| The `vault` package in the domain layer | Layout, documents, format versions, writers and trailers. |
+| The `vault` package in the application layer | Validation rules, history and restore, problems. |
+| The `vault` package in the infrastructure layer | The class roots under `~/.coffer`, the repository, the writer, the scanner, the resource and state stores, reach, local JSON, the one-time upgrade. |
+| The `persistence` package in the infrastructure layer | The runs.db engine, models and Alembic revisions; `derived.db`. |
+| The HTTP surface | Startup migration, backup, too-new guard, the refusal of an old home. |
+| The `secret` package in the infrastructure layer | Secret ciphertext as files. |
+| The `daemon` package in the infrastructure layer | `daemon-config.json`. |
 
 ## Related
 

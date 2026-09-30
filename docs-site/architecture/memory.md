@@ -55,13 +55,13 @@ A partition is a top-level directory under `~/.coffer/derived/memory/`:
 | `MEMORY.md` | distil only | Findable. One line per note, grouped by type, newest first. |
 | `RETIRED.md` | distil only | Makes a retirement stick. The next distil pass reads it as an exclusion list. |
 
-Because each directory has exactly one writer, you can re-run a bad distillation without reading the agents again: `.raw/` still holds everything they said. The rule is checkable in the code. `infrastructure/memory/raw_store.py` holds the only write path into `.raw/`, and the distil pass does not import it for writing.
+Because each directory has exactly one writer, you can re-run a bad distillation without reading the agents again: `.raw/` still holds everything they said. The rule is checkable in the code: exactly one module writes into `.raw/`, and the distil pass never uses it to write.
 
 The memory root is always `~/.coffer/derived/memory/`, in the derived storage class (see [Persistence](/architecture/persistence)); there is no override. The test suite gives every test its own `HOME`, so a test can never rewrite a developer's real memory tree.
 
 ### A partition is a repository
 
-A partition is identified by a **repository**, not by a path. The main checkout, its worktrees and a second clone all file into one partition. `domain/memory/repository.py` derives the identity key:
+A partition is identified by a **repository**, not by a path. The main checkout, its worktrees and a second clone all file into one partition. The identity key is derived like this:
 
 - When the repository has a remote, the key is the normalised remote URL. The normaliser drops the scheme, the user, the port, a trailing `.git` and a trailing slash, and lowercases the host. It keeps the case of the path, because `owner/Repo` and `owner/repo` are different repositories on most forges. So `git@host:owner/repo.git` and `https://host/owner/repo` produce the same key.
 - A repository with no remote falls back to its own root path. A prefix on the key keeps a path from ever colliding with a URL.
@@ -74,17 +74,17 @@ Three routes lead to `global`:
 - An entry with no working directory, or whose working directory is your home directory, goes to `global`.
 - An entry learned in a directory that is inside no repository goes to `global`'s `.raw/`. No partition is created for that directory. The distil pass then judges the entry on its merits and either keeps it in `global` or keeps nothing.
 
-Only aggregation creates partitions. The `memory` kind sets `generic_create_allowed=False`, and `MemoryService` registers a new partition through the lifecycle opt-in. Composing a context never creates one. A partition whose recorded repository no longer exists on disk is reported as `unresolvable` in the partition list, and you can still delete it. Aggregation itself never deletes a partition.
+Only aggregation creates partitions. The `memory` kind refuses the generic create route, and the memory service registers a new partition itself, through the resource lifecycle's opt-in. Composing a context never creates one. A partition whose recorded repository no longer exists on disk is reported as `unresolvable` in the partition list, and you can still delete it. Aggregation itself never deletes a partition.
 
 ### No per-agent reach and no switch
 
-Most resource kinds carry a per-agent **reach** (see [Resource framework](/architecture/resource-framework)). Memory does not: its kind leaves `supports_scope` at `False`, and it declares `toggleable=False`, so a partition has no enabled switch either and the generic enable/disable route refuses one with `RESOURCE_NOT_TOGGLEABLE`. **Every** partition is delivered to **every** agent. The notes themselves are files under the memory root.
+Most resource kinds carry a per-agent **reach** (see [Resource framework](/architecture/resource-framework)). Memory does not: its kind declares no per-agent scope, and it declares itself not toggleable, so a partition has no enabled switch either and the generic enable/disable route refuses one with `RESOURCE_NOT_TOGGLEABLE`. **Every** partition is delivered to **every** agent. The notes themselves are files under the memory root.
 
 This is deliberate. A per-agent default is the natural thing to reach for, namely "scope a partition to the agents it was aggregated from". But that default is exactly the opposite of what this layer is for. A partition filled only from Claude Code would be withheld from Codex working in the same repository, and Codex is the agent that has not learned it yet. Reach would not be a real boundary anyway. A note is a plain file that any local process can open, so no switch on a partition could decide more than what Coffer *serves*; a disabled partition was still a file any agent could read.
 
 ### Nothing syncs
 
-The memory tree is derived from the agents installed on *this* machine, so it never reaches the [vault-sync](/architecture/vault-sync) remote. The `memory` kind declares the derived storage class (`Kind.storage`): its resource files and the whole tree live under `~/.coffer/derived/`, outside the vault repository, so there is nothing for sync to carry. Each machine aggregates its own agents. Only the triggers a person wrote or armed live in the vault (`vault/memory-triggers/`), because they are authored, not derived.
+The memory tree is derived from the agents installed on *this* machine, so it never reaches the [vault-sync](/architecture/vault-sync) remote. The `memory` kind declares the derived storage class: its resource files and the whole tree live under `~/.coffer/derived/`, outside the vault repository, so there is nothing for sync to carry. Each machine aggregates its own agents. Only the triggers a person wrote or armed live in the vault (`vault/memory-triggers/`), because they are authored, not derived.
 
 ### No table of its own
 
@@ -92,14 +92,14 @@ Notes, raw entries, the index, the retirement record and the per-source digests 
 
 ## Reading native memory
 
-Each supported agent has one reader, implementing the `MemoryReader` protocol in `domain/memory/reader.py`. The protocol has two steps:
+Each supported agent has one reader, and every reader follows the same two-step contract:
 
-- `sources(config_dir)` lists the agent's memory files and hashes each one, without parsing it.
-- `read(source)` parses one file into `RawEntry` values: title, description, type, verbatim body, anchor, project root, and optional search terms.
+- **List the sources**: list the agent's memory files and hash each one, without parsing it.
+- **Read a source**: parse one file into raw entries: title, description, type, verbatim body, anchor, project root, and optional search terms.
 
-Splitting the two steps is what lets aggregation skip an unchanged file before paying to parse it. Coffer reads only agents that are **registered and enabled**, at paths derived from each agent's own `config_dir`.
+Splitting the two steps is what lets aggregation skip an unchanged file before paying to parse it. Coffer reads only agents that are **registered and enabled**, at paths derived from each agent's own config directory (`config_dir` below).
 
-| | Claude Code (`readers/claude_code.py`) | Codex (`readers/codex.py`) |
+| | Claude Code | Codex |
 | --- | --- | --- |
 | Files read | `<config_dir>/projects/<slug>/memory/*.md` | `<config_dir>/memories/MEMORY.md` and `memory_summary.md` |
 | One entry per | fact file | populated bullet section of a task group (`User preferences`, `Reusable knowledge`, `Failures and how to do differently`), plus the profile and profile preferences in the summary |
@@ -113,17 +113,17 @@ Neither reader opens session transcripts or rollouts as a source. Both agents al
 
 Codex's search-term join is deliberately conservative. Codex rewords a group's title in its summary, so an exact title match finds almost nothing. The reader matches on token coverage instead, and attaches terms only when exactly one group clears the bar *and* exactly one summary topic claims that group. A wrong attribution is worse than none.
 
-A reader that cannot parse a file raises `UnreadableMemory` with the file's path. Aggregation isolates that failure to the one file. The pass reports the failure with the agent, the path and the reason, the other sources still aggregate, and nothing the broken source produced earlier is pruned. Aggregation also isolates unexpected exceptions from a reader the same way.
+A reader that cannot parse a file reports it as unreadable, with the file's path. Aggregation isolates that failure to the one file. The pass reports the failure with the agent, the path and the reason, the other sources still aggregate, and nothing the broken source produced earlier is pruned. Aggregation also isolates unexpected exceptions from a reader the same way.
 
 ## The aggregation pass
 
-`application/memory/aggregate.py` holds the pass as a pure function over plain values and the derived tree. `MemoryService.aggregate` wraps it with the resource parts: it lists the enabled agents and the existing partition rows, registers the new partitions, and records one `memory_aggregated` audit event.
+The pass itself is a pure function over plain values and the derived tree. The memory service wraps it with the resource parts: it lists the enabled agents and the existing partition rows, registers the new partitions, and records one `memory_aggregated` audit event.
 
 ```mermaid
 flowchart TD
   A["List sources per enabled agent"] --> B{"Digest unchanged and entries still on disk?"}
   B -- yes --> S["Skip: count as skipped"]
-  B -- no --> R["reader.read(source)"]
+  B -- no --> R["The reader parses the source"]
   R -- raises --> F["Record failure; keep old entries; do not save digest"]
   R -- entries --> P["Place each entry: global or repository partition"]
   P --> W["Write verbatim to partition/.raw/"]
@@ -145,7 +145,7 @@ The second condition is what makes the tree truly derived. If you delete a parti
 
 If the digest file is lost or corrupt, the next pass re-parses everything. Correctness is not affected.
 
-The `version` is the version of the filing rules (`STATE_VERSION` in `infrastructure/memory/source_state.py`). A digest says a source is unchanged, not that the rule that placed its entries is, so a build that changes where an entry belongs bumps the version. A file written under another version reads as empty: the next pass re-reads every source once, files its entries under the current rules, and removes the ones it wrote elsewhere before.
+The `version` is the version of the filing rules. A digest says a source is unchanged, not that the rule that placed its entries is, so a build that changes where an entry belongs bumps the version. A file written under another version reads as empty: the next pass re-reads every source once, files its entries under the current rules, and removes the ones it wrote elsewhere before.
 
 ### Stable raw entries
 
@@ -161,7 +161,7 @@ Before anything is routed, the pass retires every note none of whose `origins` i
 
 ```mermaid
 sequenceDiagram
-  participant P as distil_partition
+  participant P as Distil pass
   participant M as Internal model
   participant FS as Partition files
   P->>FS: retire notes whose .raw entries are all gone
@@ -201,7 +201,7 @@ This record is not an exclusion. It names no entry ids, and its title is not sen
 
 ### Degrading safely
 
-- **No internal connection.** `_distil_mechanically` is a synchronous function that has no completion port to call a model with. Each new entry becomes a note of its own, carrying the source's title, description, text, type and search terms, and the index is written from their frontmatter. The result is thinner, but it still works.
+- **No internal connection.** The pass falls back to a mechanical distil, which has no way to call a model at all. Each new entry becomes a note of its own, carrying the source's title, description, text, type and search terms, and the index is written from their frontmatter. The result is thinner, but it still works.
 - **Malformed model output.** An unknown slug, a non-JSON answer, or an action naming an entry outside the batch is logged and skipped. The affected entries stay in `.raw/` for the next pass. The pass never raises for bad output.
 - **`MEMORY.md` is written on every path**, including when nothing changed and when every model call failed. Session-start delivery comes from the index, so a partition without one would deliver nothing at session start.
 
@@ -213,13 +213,13 @@ The interval worker and Update memory (`POST /api/v1/memory/sync`, `coffer memor
 
 ## The index line
 
-`application/memory/index.py` renders one line per note. `MEMORY.md` and delivery both use it, so the two can never disagree:
+One renderer writes one line per note. `MEMORY.md` and delivery both use it, so the two can never disagree:
 
 ```md
 - **Worktrees for parallel sessions** (`worktree-for-parallel-sessions.md`) — Another session edits the main checkout; work in a git worktree. · look up: worktree, parallel session
 ```
 
-A line carries the note's conclusion, not a pointer to it, so reading the index is usually the end of the errand. It names the file relatively, because the directory is stated once per surface. It repeats the source's own search terms when the source supplied any. Both surfaces sort by one definition of "newest", `index.recency`: the note's `updated_at`, falling back to `created_at` and then to origin timestamps. It is a fallback chain rather than a `max()`: right after a rebuild, every origin shares one capture time, and a `max()` would collapse the ordering.
+A line carries the note's conclusion, not a pointer to it, so reading the index is usually the end of the errand. It names the file relatively, because the directory is stated once per surface. It repeats the source's own search terms when the source supplied any. Both surfaces sort by one shared definition of "newest": the note's `updated_at`, falling back to `created_at` and then to origin timestamps. It is a fallback chain rather than the latest of the three: right after a rebuild, every origin shares one capture time, and taking the latest would collapse the ordering.
 
 ## Delivery
 
@@ -250,7 +250,7 @@ In live runs on six traps that had bitten before, the session-start index alone 
 
 ### At session start: the bounded index
 
-`compose_context` in `application/memory/context.py` builds the session-start payload for a working directory:
+Composing the context builds the session-start payload for a working directory:
 
 1. It resolves `cwd` to a partition by the longest recorded `repository_path` that contains it. A worktree therefore resolves to its repository's partition. An unknown directory resolves to `global`.
 2. It emits, in order: a `## Coffer memory` header, `global`'s lines under *Known about you:*, the current repository's lines, a line giving the absolute path of the `notes/` directory with the instruction to read a note as a file, and a line naming the memory root to search for a note from another repository.
@@ -258,8 +258,8 @@ In live runs on six traps that had bitten before, the session-start index alone 
 
 The payload has two bounds:
 
-- **A token ceiling** of 12,000 estimated tokens (`DEFAULT_CEILING_TOKENS`), sized for a whole index rather than for a handful of lines.
-- **A byte ceiling** of 9,500 UTF-8 bytes (`DELIVERY_CEILING_BYTES`) for anything an installed hook prints. Both agents cut a hook's output that is longer, and both cuts lose the lines that matter:
+- **A token ceiling** of 12,000 estimated tokens, sized for a whole index rather than for a handful of lines.
+- **A byte ceiling** of 9,500 UTF-8 bytes for anything an installed hook prints. Both agents cut a hook's output that is longer, and both cuts lose the lines that matter:
   - **Claude Code** keeps a hook's output inline up to about 10,000 characters. Past that, it saves the output to a file and shows the model a ~2 KB preview, which holds the newest few `global` lines and nothing about the repository.
   - **Codex** keeps `additionalContext` up to 2,500 tokens, counted as UTF-8 bytes / 4. Past that, it keeps the head and the tail and cuts the middle.
 
@@ -271,7 +271,7 @@ Composing a context sends nothing anywhere. Note content leaves the machine only
 
 ### At each prompt: lexical retrieval
 
-On `UserPromptSubmit`, the daemon ranks the notes of the session's repository partition and of `global` against the prompt, and adds the best few to the session. `domain/memory/retrieval.py` holds the ranker and `application/memory/retrieval.py` the service around it.
+On `UserPromptSubmit`, the daemon ranks the notes of the session's repository partition and of `global` against the prompt, and adds the best few to the session.
 
 - **What is ranked.** Each note's title, description, search terms and body, as one document.
 - **How.** Okapi BM25 over word tokens, with CJK text split into overlapping two-character bigrams, so a Chinese prompt finds a Chinese note without a word segmenter. A small stopword list drops words too common to say anything.
@@ -378,7 +378,7 @@ Two promises rest on remembering what each session was given: a note retrieved f
 
 It is never keyed on a process id. Every session of one Codex app-server shares a parent pid, so a guard keyed on `$PPID` would fire only for the first session of each app-server under Codex Desktop and the IDE hosts.
 
-The ledger survives a daemon restart without a table of its own. Every fire that delivered something is already a `memory_delivery_fired` audit event naming its session, its notes and, for a trigger, the trigger. Before a new daemon answers its first prompt or command, `restore_from_audit` (`application/memory/ledger_restore.py`) reads the fires of the last seven days back, oldest first, into the ledger. A running session therefore is not given a note again after a restart, and a trigger does not hold a second command in it. A session idle for more than seven days is treated as new. If the audit log cannot be read, the failure is logged and the ledger starts empty; the cost is one repeated line or one extra deny.
+The ledger survives a daemon restart without a table of its own. Every fire that delivered something is already a `memory_delivery_fired` audit event naming its session, its notes and, for a trigger, the trigger. Before a new daemon answers its first prompt or command, it reads the fires of the last seven days back, oldest first, into the ledger. A running session therefore is not given a note again after a restart, and a trigger does not hold a second command in it. A session idle for more than seven days is treated as new. If the audit log cannot be read, the failure is logged and the ledger starts empty; the cost is one repeated line or one extra deny.
 
 ### Audit and the delivery views
 
@@ -419,14 +419,14 @@ An ordinary pass never installs a hook: a connected agent missing it is reported
 
 ### Channel turns
 
-Coffer drives a turn that arrives from Telegram or SeaTalk itself, so it composes that turn's memory itself. `wire_chat` hands both agent providers two closures from `surfaces/http/memory_turn_wiring.py`, and both close over `TurnRetrieval` (`application/memory/turn_retrieval.py`):
+Coffer drives a turn that arrives from Telegram or SeaTalk itself, so it composes that turn's memory itself. When the daemon wires up chat, it hands both agent providers two memory callbacks, and both share one turn-retrieval service:
 
-- `memory_context_composer` answers the index. `compose_system_context` in `infrastructure/chat/adapter_support.py` calls it only for a channel-driven turn, with the conversation's working directory. It runs the same `compose_context` the hook uses, so a channel turn gets the same index and notes path in its system prompt that a terminal session would. The delivery is recorded as a `session_start` fire of the answering agent, with event `ChannelTurn`.
-- `memory_turn_retriever` answers the notes the prompt names. The provider binds it to the turn (`infrastructure/chat/prompt_memory.py`) only for a channel-driven turn, and the adapter adds what it returns after the user's text in the prompt it sends — where a `UserPromptSubmit` hook's context lands, so the notes stay in the agent's own session. `TurnRetrieval` calls the same `RetrievalService` the hook answers through, with `conversation:<id>` as the session id, so a note is given once per conversation; it records the delivery as a `prompt` fire of the answering agent, with event `ChannelTurn`. The message stored in the conversation is the user's own text.
+- **The index callback** answers the index. The chat adapter calls it while it composes the system prompt, only for a channel-driven turn, with the conversation's working directory. It runs the same context composition the hook uses, so a channel turn gets the same index and notes path in its system prompt that a terminal session would. The delivery is recorded as a `session_start` fire of the answering agent, with event `ChannelTurn`.
+- **The retrieval callback** answers the notes the prompt names. The provider binds it to the turn only for a channel-driven turn, and the adapter adds what it returns after the user's text in the prompt it sends — where a `UserPromptSubmit` hook's context lands, so the notes stay in the agent's own session. The turn-retrieval service calls the same retrieval service the hook answers through, with `conversation:<id>` as the session id, so a note is given once per conversation; it records the delivery as a `prompt` fire of the answering agent, with event `ChannelTurn`. The message stored in the conversation is the user's own text.
 
-Each closure answers nothing when it finds nothing, or when the tree cannot be read (logged; memory is an addition to the turn, not a precondition of it).
+Each callback answers nothing when it finds nothing, or when the tree cannot be read (logged; memory is an addition to the turn, not a precondition of it).
 
-The agent process Coffer spawns for that turn still loads the agent's own settings: the Agent SDK reads the user's `settings.json`, and `codex app-server` runs a trusted `hooks.json`. So on a connected agent, Coffer's hook fires inside a channel turn as well, and without a rule of its own it would hand the agent the index and the notes a second time, from a ledger keyed on the agent's session id that never saw the turn's, and audit each prompt twice. Each moment therefore has one owner. The provider sets `COFFER_CHANNEL_TURN=1` in the environment of a channel turn's process (`domain/channel_turn.py`, merged over the daemon's own), the agent hands that environment to every hook it runs, and `coffer memory hook` answers nothing on `SessionStart` or `UserPromptSubmit` when it sees the mark. It does not contact the daemon, so nothing is recorded. The guard and the error context still go through the hook, because the turn delivers neither: a channel turn on a connected agent is held by an armed trigger just as a terminal session is.
+The agent process Coffer spawns for that turn still loads the agent's own settings: the Agent SDK reads the user's `settings.json`, and `codex app-server` runs a trusted `hooks.json`. So on a connected agent, Coffer's hook fires inside a channel turn as well, and without a rule of its own it would hand the agent the index and the notes a second time, from a ledger keyed on the agent's session id that never saw the turn's, and audit each prompt twice. Each moment therefore has one owner. The provider sets `COFFER_CHANNEL_TURN=1` in the environment of a channel turn's process (merged over the daemon's own), the agent hands that environment to every hook it runs, and `coffer memory hook` answers nothing on `SessionStart` or `UserPromptSubmit` when it sees the mark. It does not contact the daemon, so nothing is recorded. The guard and the error context still go through the hook, because the turn delivers neither: a channel turn on a connected agent is held by an armed trigger just as a terminal session is.
 
 A turn from the web Conversations page is not marked and gets neither closure. It receives memory through the agent's own hook, so no turn gets memory both ways.
 
@@ -442,14 +442,14 @@ A search over the files never sees a raw entry or a retired note as a note: raw 
 
 ## Workers and scheduling
 
-Both passes run as asyncio tasks that the daemon starts from `surfaces/http/memory_wiring.py`:
+Both passes run as background tasks that the daemon starts at boot:
 
 | Worker | First pass | Default interval | Audit actor |
 | --- | --- | --- | --- |
-| `AggregateWorker` | immediately on start | 1 hour | `system:memory-aggregate-worker` |
-| `DistilWorker` | after 60 s | 6 hours | `system:memory-distil-worker` |
+| Aggregation | immediately on start | 1 hour | `system:memory-aggregate-worker` |
+| Distil | after 60 s | 6 hours | `system:memory-distil-worker` |
 
-Both are on by default. They read the agents' files and write only the derived tree, so an unattended run carries no risk. Each pass reads its switch and interval from the internal-engine configuration (`aggregate`, `distil`) **per pass**, so a change in Settings applies without a restart. A failed pass is logged and never ends the loop. On shutdown, a pending pass is dropped, because the next boot sweeps everything again. You can also run both by hand in one action: `coffer memory sync`, `POST /api/v1/memory/sync` or the web UI's **Update memory** button (`application/memory/update.py`) aggregates, then distils every partition left holding undistilled raw entries. A partition whose distil pass is already running is reported as `skipped` rather than failing the call. The answer carries what the aggregation wrote and the `distilled` and `skipped` partitions.
+Both are on by default. They read the agents' files and write only the derived tree, so an unattended run carries no risk. Each pass reads its switch and interval from the internal-engine configuration (`aggregate`, `distil`) **per pass**, so a change in Settings applies without a restart. A failed pass is logged and never ends the loop. On shutdown, a pending pass is dropped, because the next boot sweeps everything again. You can also run both by hand in one action: `coffer memory sync`, `POST /api/v1/memory/sync` or the web UI's **Update memory** button aggregates, then distils every partition left holding undistilled raw entries. A partition whose distil pass is already running is reported as `skipped` rather than failing the call. The answer carries what the aggregation wrote and the `distilled` and `skipped` partitions.
 
 ## Trade-offs and alternatives
 
@@ -461,33 +461,17 @@ Both are on by default. They read the agents' files and write only the derived t
 - **Embeddings for ranking, or triggers derived from the notes' text.** Embeddings gained three points of recall for a 2.2 GB model; derived triggers were either noisy or missed the traps. The ranker stays lexical and triggers stay authored until the eval set shows a replacement earns its cost.
 - **Literal de-duplication across agents.** Two agents never phrase a lesson the same way, so a literal comparison merges nothing. Merging is a judgement about meaning, made by the distil model.
 - **Keying partitions on working directories.** This splits a repository across its worktrees, orphans partitions when directories disappear, and turns scratch folders into permanent partitions. Keying on the repository avoids all three.
-- **A third reader abstraction.** Two readers are written as two readers. A third agent gets an adapter against the existing `MemoryReader` and `DeliveryAdapter` protocols, not a capability matrix.
+- **A third reader abstraction.** Two readers are written as two readers. A third agent gets an adapter against the existing reader and delivery-adapter contracts, not a capability matrix.
 
-## Where it lives in the code
+## Where it lives {#where-it-lives-in-the-code}
 
-| Concern | Path |
+| Concern | Where |
 | --- | --- |
-| Reader protocol, `RawEntry`, `SourceFile` | [`domain/memory/reader.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/reader.py) |
-| Note, origin key, note types | [`domain/memory/note.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/note.py) |
-| Repository identity, partition slugs | [`domain/memory/repository.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/repository.py), [`domain/memory/partition.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/partition.py) |
-| Hook marker, the four entries, install transform and hook ceiling | [`domain/memory/hook_entries.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/hook_entries.py), [`domain/memory/delivery.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/delivery.py) |
-| Ranker, trigger matching, delivered wording | [`domain/memory/retrieval.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/retrieval.py), [`domain/memory/trigger.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/trigger.py), [`domain/memory/hook_output.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/hook_output.py) |
-| Answering a hook fire, retrieval, triggers, session ledger and its restore, delivery views | [`application/memory/hook_service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/hook_service.py), [`retrieval.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/retrieval.py), [`triggers.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/triggers.py), [`session_ledger.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/session_ledger.py), [`ledger_restore.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/ledger_restore.py), [`delivery_stats.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery_stats.py) |
-| Aggregation pass and worker | [`application/memory/aggregate.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/aggregate.py), [`aggregate_worker.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/aggregate_worker.py) |
-| Which partition an entry files into | [`application/memory/placement.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/placement.py) |
-| Distil pass (routing, plan, write, apply) and worker | [`application/memory/distil.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/distil.py) and its `distil_*.py` siblings |
-| Index rendering | [`application/memory/index.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/index.py) |
-| Context composition | [`application/memory/context.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/context.py) |
-| Delivery service and the delivery-hook reconcile target | [`application/memory/delivery.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery.py), [`delivery_reconcile.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/delivery_reconcile.py) |
-| Kind (derived storage class, no scope) and service | [`application/memory/kind.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/kind.py), [`service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/service.py) |
-| Native-memory readers | [`infrastructure/memory/readers/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory/readers) |
-| Hook adapters per agent | [`infrastructure/memory/delivery/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory/delivery) |
-| Paths, raw store, note store, digest cache, trigger files, notes-read count | [`infrastructure/memory/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory) |
-| Transcript `cwd` lookup shared with the agent kind | [`infrastructure/agent_files/claude_code_transcripts.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/agent_files/claude_code_transcripts.py) |
-| Wiring, workers, the delivery-hook target | [`surfaces/http/memory_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/memory_wiring.py) |
-| The channel-turn composer and per-prompt retriever | [`surfaces/http/memory_turn_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/memory_turn_wiring.py), [`application/memory/turn_retrieval.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/turn_retrieval.py) |
-| REST routes | [`surfaces/http/memory/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/surfaces/http/memory) |
-| CLI | [`surfaces/cli/memory_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/memory_cmd.py), [`memory_hook_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/memory_hook_cmd.py) (`hook`, `trigger`, `delivered`) |
+| Repository identity, notes, triggers, the ranker, the hook entries and the delivered wording | the domain layer's `memory` package |
+| Aggregation, placement, distil, the index, context composition, delivery, the session ledger, the delivery views and the delivery-hook reconcile target | the application layer's `memory` package |
+| Native-memory readers, per-agent hook adapters, and the files under the memory root and `vault/memory-triggers/` | the infrastructure layer's `memory` package |
+| Workers, wiring, the channel-turn callbacks and the REST routes | the HTTP surface |
+| `coffer memory` (including `hook`, `trigger`, `delivered`) | the CLI surface |
 
 ## Related
 

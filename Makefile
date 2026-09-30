@@ -397,8 +397,9 @@ frontend-codegen:
 		cd $(FRONTEND) && npm run codegen; \
 	fi
 
-# The CLI reference page (English and Chinese) is generated from the code;
-# scripts/check_cli_reference.py (in `lint`) fails when they drift.
+# The CLI reference pages (an index plus one page per command group, English
+# and Chinese) are generated from the code; scripts/check_cli_reference.py (in
+# `lint`) fails when they drift.
 docs-reference:
 	$(PY) docs-site/scripts/gen_cli_reference.py
 

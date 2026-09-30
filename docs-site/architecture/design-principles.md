@@ -45,7 +45,7 @@ Coffer is a **custodian, not an owner**. It holds your assets on your machine, h
 
 Sync is bidirectional but only under the sync spec's safety rules: git computes the merge outside the vault, only a clean merge is applied, any conflict stops the round for you with nothing changed, a round that would lose too much stops and asks, and every round can be rolled back from its snapshot.
 
-**In the code.** The daemon binds `127.0.0.1` in [`infrastructure/daemon/port_alloc.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/port_alloc.py). Channels reach Telegram and SeaTalk only over connections the daemon opens, so the loopback socket is the only one Coffer listens on. The sync remote defaults to absent, and secret ciphertext is carried only when you set `--with-secrets`.
+**In the code.** The daemon binds `127.0.0.1` when it allocates its port. Channels reach Telegram and SeaTalk only over connections the daemon opens, so the loopback socket is the only one Coffer listens on. The sync remote defaults to absent, and secret ciphertext is carried only when you set `--with-secrets`.
 
 **Rules out.** A hosted Coffer endpoint; a "Coffer cloud" account; any design where losing the remote loses data; a sync that overwrites a vault wholesale; replicating vault state to a vendor-controlled service.
 
@@ -55,7 +55,7 @@ Sync is bidirectional but only under the sync spec's safety rules: git computes 
 
 **Rationale.** Coffer is developed by people and AI coding agents together. An agent is only as good as the contract it can read, and a contract that lives in a PR description or a chat log is gone the moment the session ends. A spec that is enforced by the build is a contract every future contributor — human or agent — can rely on.
 
-**In the code.** Every requirement must own at least one scenario (`openspec validate --strict`), and every scenario must be covered by a test that carries an `acceptance` marker ([`scripts/audit_acceptance.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/audit_acceptance.py)). The wire contract runs in one direction: the backend's Pydantic models are the only hand-written description of the wire, the generator writes each spec's `contracts/api.openapi.yaml` from them so a wire change shows up as a reviewed diff, and the frontend's typed client and wire types are generated from that file. No wire type is written by hand on either side, so the compiler compares types where a gate over two hand-written documents could only compare names. A citation of a requirement by title is checked by [`scripts/check_spec_citations.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_spec_citations.py).
+**In the code.** Every requirement must own at least one scenario (`openspec validate --strict`), and every scenario must be covered by a test that carries an `acceptance` marker (an acceptance-audit gate checks this). The wire contract runs in one direction: the backend's Pydantic models are the only hand-written description of the wire, the generator writes each spec's `contracts/api.openapi.yaml` from them so a wire change shows up as a reviewed diff, and the frontend's typed client and wire types are generated from that file. No wire type is written by hand on either side, so the compiler compares types where a gate over two hand-written documents could only compare names. A citation of a requirement by title is checked by a spec-citation gate.
 
 **Rules out.** Behaviour that exists only in code; "documentation" specs that describe intent rather than obligation; a wire shape the contract does not declare. See [Spec-driven workflow](/contributing/spec-workflow).
 
@@ -63,11 +63,11 @@ Sync is bidirectional but only under the sync spec's safety rules: git computes 
 
 **Statement.** Every entity you manage — an MCP server, an agent, a skill, a knowledge collection, a memory partition, a channel, a model provider — is a **Resource** of some **kind**. The framework unifies identity, lifecycle, audit, schema validation and reach. It does not unify behaviour: how an MCP server is invoked and how a skill is delivered stay entirely inside their kinds.
 
-**Rationale.** Every kind needs the same things: to be named, listed, edited, enabled, disabled, deleted, audited and scoped. Building those seven times is more code and seven chances to drift. But a framework that tried to own behaviour too — one `invoke()` for everything — would be a leaky abstraction over things that have nothing in common.
+**Rationale.** Every kind needs the same things: to be named, listed, edited, enabled, disabled, deleted, audited and scoped. Building those seven times is more code and seven chances to drift. But a framework that tried to own behaviour too — one invoke operation for everything — would be a leaky abstraction over things that have nothing in common.
 
-**In the code.** One frozen [`Kind`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/resource.py) descriptor per kind, one kind-agnostic `ResourceService`, one JSON file per resource in the vault (`resources/<kind>/<name>.json`), one `/api/v1/resources` router, one `audit_log`. The kind-agnostic core is tested against a fake kind and an import contract forbids it from importing any real one. See [Resource framework](/architecture/resource-framework).
+**In the code.** One immutable kind descriptor per kind, one kind-agnostic resource service, one JSON file per resource in the vault (`resources/<kind>/<name>.json`), one `/api/v1/resources` router, one `audit_log`. The kind-agnostic core is tested against a fake kind and an import contract forbids it from importing any real one. See [Resource framework](/architecture/resource-framework).
 
-**Rules out.** A generic `invoke` method; a third-party plugin system (a plugin contract needs several concrete implementations to design against, and Coffer serves one user); per-kind CRUD, audit or scope implementations.
+**Rules out.** A generic invoke operation; a third-party plugin system (a plugin contract needs several concrete implementations to design against, and Coffer serves one user); per-kind CRUD, audit or scope implementations.
 
 ::: info Why this principle was built up front
 Coffer's general rule is to extract shared code only on second use. The Resource framework is the deliberate exception: it is core domain, not a cross-cutting helper, and extracting it later from MCP-specific code would have meant re-modelling the audit table, the routes and retention at once. See [Resource Framework Designed Upfront](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-framework-upfront.md).
@@ -75,11 +75,11 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 ## Identity is an immutable uid
 
-**Statement.** A resource's identity is its `uid`: an opaque `uuid4().hex` minted once at creation, never reused, and the same value on every machine that holds the resource. The `name` is a label, unique within its kind, and mutable unless agents quote it: an MCP server's name (the prefix of every tool name) and a skill's name (the folder an agent loads it from) are fixed once registered, and an agent's name is its type (one agent per type). The kinds whose name is free — providers, channels, knowledge collections, memory partitions — also carry an optional `title` for display. The uid is written inside the resource's own file, so the file's path and name are only its location and label; there is no integer surrogate key.
+**Statement.** A resource's identity is its `uid`: an opaque random (version 4) UUID written as 32 hex characters, minted once at creation, never reused, and the same value on every machine that holds the resource. The `name` is a label, unique within its kind, and mutable unless agents quote it: an MCP server's name (the prefix of every tool name) and a skill's name (the folder an agent loads it from) are fixed once registered, and an agent's name is its type (one agent per type). The kinds whose name is free — providers, channels, knowledge collections, memory partitions — also carry an optional `title` for display. The uid is written inside the resource's own file, so the file's path and name are only its location and label; there is no integer surrogate key.
 
 **Rationale.** Once a vault syncs across machines, the question an identifier must answer is "is the thing on that machine the same thing as the thing on this one?" A name cannot answer it, because a name is exactly what you are allowed to change: a rename would cross the sync remote as a deletion plus a creation, cascading away everything attached to the old row. An autoincrement row number cannot answer it either, because two machines allocate the same number to different resources.
 
-**In the code.** `/api/v1/resources/{uid}` addresses every resource; a resource `scope` and a channel's `default_agent` hold agent uids; the vault files each resource as `resources/<kind>/<name>.json` with its uid inside, so a moved or renamed file is still the same resource; rename is an ordinary field on `PATCH`, refused with `409 NAME_IMMUTABLE` for a kind that declares `name_fixed`, and `title` is editable on the kinds that carry one. The CLI still takes names and resolves them to uids itself, so nobody types a UUID.
+**In the code.** `/api/v1/resources/{uid}` addresses every resource; a resource `scope` and a channel's `default_agent` hold agent uids; the vault files each resource as `resources/<kind>/<name>.json` with its uid inside, so a moved or renamed file is still the same resource; rename is an ordinary field on `PATCH`, refused with `409 NAME_IMMUTABLE` for a kind that declares its names fixed, and `title` is editable on the kinds that carry one. The CLI still takes names and resolves them to uids itself, so nobody types a UUID.
 
 **Rules out.** `<kind>:<name>` identifiers; cross-resource references by name; per-kind rename endpoints; keying anything on a file's path.
 
@@ -89,7 +89,7 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 **Rationale.** A copy of someone else's state drifts the moment they change it, and the agent changes its own state constantly. Deriving at read time means Coffer is never wrong about what the agent has, and uninstalling Coffer leaves every agent exactly as functional as before.
 
-**In the code.** The `agent` kind stores only a config directory and install state; everything else is read through [`infrastructure/agent/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent) and [`infrastructure/agent_files/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent_files). Codex TOML is edited with `tomlkit` so comments and ordering survive. An agent's internal state (for example Claude Code's `installed_plugins.json`) is only read; a change that must reach it is delegated to the agent's own CLI. The memory layer reads each agent's native memory and never writes it; everything under `~/.coffer/derived/memory/` is derived and rebuildable. See [Memory](/architecture/memory).
+**In the code.** The `agent` kind stores only a config directory and install state; everything else is read from the agent's own files by the agent adapters in the infrastructure layer (the `infrastructure/agent/` and `infrastructure/agent_files/` packages). Codex TOML is edited with `tomlkit` so comments and ordering survive. An agent's internal state (for example Claude Code's `installed_plugins.json`) is only read; a change that must reach it is delegated to the agent's own CLI. The memory layer reads each agent's native memory and never writes it; everything under `~/.coffer/derived/memory/` is derived and rebuildable. See [Memory](/architecture/memory).
 
 **Rules out.** Mirroring an agent's config into Coffer's own store; writing into an agent's memory files; editing undocumented internal files; any change an agent could not survive Coffer being removed.
 
@@ -109,7 +109,7 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 **Rationale.** Anything in the MCP handshake or a session-start hook is charged to every session whether or not it is needed. A skill has the opposite cost structure: its short description is always in context, its body costs nothing until a model opens it. So the resident budget is spent once, on one description a model can match against.
 
-**In the code.** The gateway's handshake `instructions` are capped at 800 characters ([`application/mcp/gateway_instructions.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_instructions.py)): what Coffer is, the builtin tool names, the per-session count of hidden upstream tools, and a pointer to the skill. `coffer-guide` is an ordinary `skill` resource rendered by [`application/knowledge/guide_render.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/guide_render.py) and delivered by the skill kind. The one session-start delivery Coffer offers — the memory index — is a hook you install explicitly per agent, remove the same way, and whose every fire is an audit event.
+**In the code.** The gateway's handshake `instructions` are capped at 800 characters: what Coffer is, the builtin tool names, the per-session count of hidden upstream tools, and a pointer to the skill. `coffer-guide` is an ordinary `skill` resource rendered by the knowledge layer and delivered by the skill kind. The one session-start delivery Coffer offers — the memory index — is a hook you install explicitly per agent, remove the same way, and whose every fire is an audit event.
 
 **Rules out.** Silently installed hooks; context injected into a session without an audit trail; writing Coffer's output into an agent's own memory; a catalogue spread across several always-resident skills.
 
@@ -125,21 +125,21 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 ## Each kind enforces reach at its own choke point
 
-**Statement.** The framework stores reach; each kind enforces it where the asking identity is known. Every enforcement point asks the same question of the same function, `is_active(scope, agent_uid)` in [`domain/scope.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/scope.py).
+**Statement.** The framework stores reach; each kind enforces it where the asking identity is known. Every enforcement point asks the same question of the same predicate in the domain layer: given a resource's scope and the asking agent's uid, is the resource active for that agent?
 
 **Rationale.** A central gate would have to sit on every kind's read path and know every kind's notion of "use". The gateway already knows which agent is asking for tools; skill delivery already iterates agents; the provider projection already knows which config file it is writing. Putting the check there costs one function call and no new machinery.
 
-**In the code.** `mcp_server` filters in the gateway, `skill` in delivery reconciliation, `provider` in `application/provider/targets.py`, and `channel` — whose scope is inverted to name the agents it may *drive* — in its agent routing and its runtime. An unidentified session matches only an unrestricted scope, so it sees strictly less, never more. See the [kinds table](/architecture/resource-framework#the-seven-kinds).
+**In the code.** `mcp_server` filters in the gateway, `skill` in delivery reconciliation, `provider` where the provider projection chooses which agent config files to write, and `channel` — whose scope is inverted to name the agents it may *drive* — in its agent routing and its runtime. An unidentified session matches only an unrestricted scope, so it sees strictly less, never more. See the [kinds table](/architecture/resource-framework#the-seven-kinds).
 
 **Rules out.** A reach evaluator object; a deny-list (a new agent would silently gain access); a kind inventing its own "which agents" field.
 
 ## Secrets are never plaintext at rest
 
-**Statement.** Secrets live only as Fernet ciphertext, one file per secret under `~/.coffer/vault/secret/`. Plaintext exists in memory solely between decrypt and the spawn or header injection that consumes it, and never reaches a file, logs, audit or any structured event. All other code holds secret **refs**. The master key is managed only by `coffer.infrastructure.secret` — a `0600` file, `~/.coffer/master.key`, by default, the OS keychain when you opt in — and that module is the only importer of `keyring`.
+**Statement.** Secrets live only as Fernet ciphertext, one file per secret under `~/.coffer/vault/secret/`. Plaintext exists in memory solely between decrypt and the spawn or header injection that consumes it, and never reaches a file, logs, audit or any structured event. All other code holds secret **refs**. The master key is managed only by the secret module in the infrastructure layer — a `0600` file, `~/.coffer/master.key`, by default, the OS keychain when you opt in — and that module is the only importer of `keyring`.
 
 **Rationale.** Envelope encryption gives zero keychain prompts under an unsigned, frequently rebuilt binary, while the keychain opt-in still defends against offline copying of `~/.coffer/`. Refs make every config document safe to audit, sync and display.
 
-**In the code.** An import contract confines `keyring`; another stops the CLI from importing the secret store at all, so the daemon is the single reader of the key. The MCP server schema rejects static `env` and header values that look like tokens. Kinds supply an `audit_redactor` so config written to the audit log carries no secret-bearing maps. See [Security model](/architecture/security).
+**In the code.** An import contract confines `keyring`; another stops the CLI from importing the secret store at all, so the daemon is the single reader of the key. The MCP server schema rejects static `env` and header values that look like tokens. Kinds supply an audit redactor so config written to the audit log carries no secret-bearing maps. See [Security model](/architecture/security).
 
 **Rules out.** Secrets in resource config; the CLI decrypting in-process; the master key inside anything the vault publishes; re-encrypting data to switch key storage (the key moves, the ciphertext does not).
 
@@ -149,7 +149,7 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 **Rationale.** The daemon outlives the CLI and shim processes that attach to it, so version skew is a normal state right after an upgrade. Refusing would break every agent's tools until the user noticed; killing the daemon could interrupt work in progress. A one-line warning that names both versions and the daemon's executable lets the user restart at a moment of their choosing.
 
-**In the code.** `GET /api/v1/daemon/status` reports `version` and `executable`; every CLI command and the shim compare it with their own build through [`infrastructure/daemon/version_skew.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/version_skew.py) and print a warning on stderr; the desktop shell shows a restart affordance. `coffer daemon restart` is the fix.
+**In the code.** `GET /api/v1/daemon/status` reports `version` and `executable`; every CLI command and the shim compare it with their own build through one shared version-skew check and print a warning on stderr; the desktop shell shows a restart affordance. `coffer daemon restart` is the fix.
 
 The same stance governs other mismatches Coffer can detect but not safely resolve: a database migrated by a newer build fails fast with `DB_SCHEMA_TOO_NEW` rather than guessing, and a sync remote laid out by a newer build is refused with an upgrade message.
 
@@ -161,7 +161,7 @@ The same stance governs other mismatches Coffer can detect but not safely resolv
 
 **Rationale.** A second release branch drifts and collides on every rebase. A runtime switch lets the owner keep testing everything while releasing only what is ready — and a switch that destroyed data would make trying a feature a one-way door.
 
-**In the code.** [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py) registers each experimental feature with the route prefixes and resource kinds it owns; it is empty right now, since Sync, Knowledge and Memory graduated at 1.0. Gates run at request time: gated routes answer `404 FEATURE_DISABLED`, the generic resource routes refuse and hide the feature's kinds, builtin tools leave `tools/list`, and workers skip their round. Kinds stay registered and migrations always run. The switch is per machine, in `~/.coffer/daemon-config.json`. See [Experimental features](/guides/experimental-features).
+**In the code.** A registry in the domain layer records each experimental feature with the route prefixes and resource kinds it owns; it is empty right now, since Sync, Knowledge and Memory graduated at 1.0. Gates run at request time: gated routes answer `404 FEATURE_DISABLED`, the generic resource routes refuse and hide the feature's kinds, builtin tools leave `tools/list`, and workers skip their round. Kinds stay registered and migrations always run. The switch is per machine, in `~/.coffer/daemon-config.json`. See [Experimental features](/guides/experimental-features).
 
 **Rules out.** Wiring-time gates that need a restart; a switch stored in the synced vault; deleting a feature's data when it is switched off.
 
@@ -171,7 +171,7 @@ The same stance governs other mismatches Coffer can detect but not safely resolv
 
 **Rationale.** An abstraction designed against one use case either over-fits it or is too generic to enforce anything. Waiting for the second caller means the shared shape is discovered, not guessed.
 
-**In the code.** Shared packages exist exactly where two kinds met: [`infrastructure/net/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/net) (the SSRF guard), [`infrastructure/agent_files/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent_files) (transcript readers shared by agent and memory), and [`domain/hook_trust.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/hook_trust.py) (whether an agent will run a hook, which memory reports and the agent kind's hooks listing shows). The cross-kind import contracts make any other sharing fail the build. The Resource framework is the one declared exception, described above.
+**In the code.** Shared packages exist exactly where two kinds met: `infrastructure/net/` (the SSRF guard), `infrastructure/agent_files/` (transcript readers shared by agent and memory), and the hook-trust check in the domain layer (whether an agent will run a hook, which memory reports and the agent kind's hooks listing shows). The cross-kind import contracts make any other sharing fail the build. The Resource framework is the one declared exception, described above.
 
 **Rules out.** Speculative "common" packages; a utilities module that grows ahead of its callers; one kind importing another's services.
 

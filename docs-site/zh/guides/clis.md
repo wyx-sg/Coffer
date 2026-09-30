@@ -101,7 +101,7 @@ coffer cli prompt gh            # the prompt to give your agent
 coffer cli prompt gh | pbcopy   # straight to the clipboard on macOS
 ```
 
-`coffer cli prompt` 打印的正是页面复制的那段文字，对已就绪的命令以非零退出。全部选项见 [CLI 参考](/zh/reference/cli#coffer-cli)。
+`coffer cli prompt` 打印的正是页面复制的那段文字，对已就绪的命令以非零退出。全部选项见 [CLI 参考](/zh/reference/cli/cli)。
 
 ## 相关 {#related}
 

@@ -7,6 +7,19 @@ description: Coffer 是怎么搭起来的：它有哪些进程、守护进程内
 
 这一页是整个架构章节的地图：一张图画出所有活动部件，列出运行中的进程、四条主要数据流如何穿过它们，以及底层用到的技术。它面向想先弄清 Coffer 怎么搭、为什么这么搭，再深入某个子系统的工程师。
 
+::: tip 第一次来？
+按顺序读这六页，整个设计就都在脑子里了；本章其余页面都是对其中某一部分的深入。
+
+1. 本页，看全局地图。
+2. [原则](/zh/architecture/principles)，看每次改动都要守住的规则。
+3. [资源框架](/zh/architecture/resource-framework)，看每个受管对象共用的那一个抽象。
+4. [守护进程与进程](/zh/architecture/daemon)，看谁拥有状态、每个客户端怎样找到它。
+5. [MCP 网关](/zh/architecture/mcp-gateway)，看智能体的一次工具调用怎样流转。
+6. [持久化](/zh/architecture/persistence)，看每类数据放在哪里、怎样写入。
+
+如果还没用过 Coffer，先读[快速上手](/zh/start/quickstart)和[核心概念](/zh/start/concepts)。
+:::
+
 ## Coffer 的架构要解决的问题 {#the-problem-coffer-s-architecture-solves}
 
 同时用多个 AI 编程智能体的开发者，会把同一批资产攒上好几份：MCP 服务器的注册、API 密钥、技能、关于自己环境的笔记，以及每个智能体各自学到的东西。每个智能体按自己的格式保存一份，没有任何东西让它们保持一致。
@@ -201,7 +214,7 @@ Coffer 的大部分形态都来自少数几项决策。下面每一项都在它�
 | 路径 | 内容 |
 | --- | --- |
 | [`backend/coffer/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer) | 守护进程、CLI 和 shim，分四层。 |
-| [`backend/coffer/surfaces/http/app.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app.py) | 组合根：迁移、接线、worker。 |
+| [`backend/coffer/surfaces/http/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/surfaces/http) | HTTP 界面层，其中的组合根负责执行迁移、装配每种类型并启动 worker。 |
 | [`frontend/src/`](https://github.com/wyx-sg/Coffer/tree/main/frontend/src) | Web 界面。 |
 | [`desktop/`](https://github.com/wyx-sg/Coffer/tree/main/desktop) | Tauri 壳。 |
 | [`openspec/specs/`](https://github.com/wyx-sg/Coffer/tree/main/openspec/specs) | 产品契约，每项能力一个规格。 |
