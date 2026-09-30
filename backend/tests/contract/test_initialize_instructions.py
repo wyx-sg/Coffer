@@ -169,26 +169,24 @@ def test_instructions_only_name_tools_that_exist() -> None:
 
 
 def test_instructions_name_only_the_tools_the_list_carries() -> None:
-    """A tool a switched-off feature took out of the list is not advertised,
-    nor the memory root while memory is off (spec experimental-features
-    "Withdraw what a switched-off feature put in front of agents"), and neither
-    is the knowledge layer without its tool."""
-    without_memory = build_instructions(hidden_count=0, tools=["write"])
-    assert "coffer__write" in without_memory
-    assert "coffer__search_tools" in without_memory
-    assert "memory" not in without_memory
+    """A tool the session's list does not carry is not advertised (spec
+    experimental-features "Withdraw what a switched-off feature put in front of
+    agents"); the memory root and the log readers are always named."""
+    search_only = build_instructions(hidden_count=0, tools=[], memory_root=_ROOT)
+    assert "coffer__write" not in search_only
+    assert "coffer__search_tools" in search_only
+    assert _ROOT in search_only
+    assert "coffer log" in search_only
+    assert (
+        len(build_instructions(hidden_count=999_999, tools=[], memory_root=_ROOT))
+        <= MAX_INSTRUCTIONS_CHARS
+    )
 
-    neither = build_instructions(hidden_count=0, tools=[])
-    assert "coffer__write" not in neither
-    assert "knowledge" not in neither
-    assert "memory" not in neither
-    assert "coffer__search_tools" in neither
-    assert "coffer log" in neither
 
-    memory_only = build_instructions(hidden_count=0, tools=[], memory_root=_ROOT)
-    assert _ROOT in memory_only
-    assert "coffer__write" not in memory_only
-    assert len(build_instructions(hidden_count=999_999, tools=[])) <= MAX_INSTRUCTIONS_CHARS
+def test_an_unregistered_memory_root_is_named_by_its_command() -> None:
+    text = build_instructions(hidden_count=0)
+    assert "coffer path memory" in text
+    assert len(text) <= MAX_INSTRUCTIONS_CHARS
 
 
 def test_every_tool_listed_reads_as_the_full_text() -> None:

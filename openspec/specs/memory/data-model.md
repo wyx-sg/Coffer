@@ -359,8 +359,8 @@ every kind shares.
 |---|---|
 | `memory_aggregated` | an aggregation pass completes, with the actor distinguishing a scheduled pass from a requested one |
 | `memory_distilled` | a distil pass completes — scheduled, or as part of an Update memory action — with its merge / open / retire / kept-nothing counts and whether a model was used |
-| `memory_delivery_installed` | the hook is installed for an agent — by connecting it, or by switching `memory` on while it is connected |
-| `memory_delivery_removed` | the hook is removed from an agent — by disconnecting it, or by switching `memory` off |
+| `memory_delivery_installed` | the hook is installed for an agent — by connecting it, or by applying its drift item |
+| `memory_delivery_removed` | the hook is removed from an agent — by disconnecting it |
 | `memory_delivery_fired` | an installed hook fires and delivers — its `details` name the `moment` (`session_start`, `prompt`, `guard`, `error`), the `session_id`, the `notes` it carried and, for a trigger, the `trigger`; never their text ("Audit every delivery fire") |
 | `memory_trigger_added` | a person writes a trigger, armed as it is written |
 | `memory_trigger_proposed` | distil proposes a trigger, unarmed |

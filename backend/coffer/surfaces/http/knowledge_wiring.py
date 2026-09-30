@@ -115,26 +115,18 @@ def wire_knowledge_kind(
     )
     set_ingest_service(ingest_service)
 
-    features = app.state.feature_service
-
     async def _render_guide() -> str:
         # One rendering for the whole machine: the catalogue carries no
-        # per-agent slice, so there is one text and every agent gets it.
-        # While the knowledge feature is off the skill carries no catalogue
-        # and documents no knowledge tool, and while memory is off it does not
-        # name the memory root (spec experimental-features); nothing either
-        # holds moves. The memory root is read off the registry the memory
-        # kind put it in, which answers None while that feature is off.
-        on = features.is_enabled("knowledge")
+        # per-agent slice, so there is one text and every agent gets it. The
+        # memory root is read off the registry the memory kind put it in: this
+        # kind may not import that one.
         memory_root = builtin_tools.directory("memory")
+        if memory_root is None:
+            raise RuntimeError("the memory kind registered no memory root")
         return guide_render.render(
             guide_render.display_root(paths.knowledge_root()),
-            await service.catalogue() if on else None,
-            memory_root=(
-                guide_render.display_memory_root(pathlib.Path(memory_root))
-                if memory_root is not None
-                else None
-            ),
+            await service.catalogue(),
+            memory_root=guide_render.display_memory_root(pathlib.Path(memory_root)),
         )
 
     register_knowledge_builtin_tools(builtin_tools, knowledge_service=service)

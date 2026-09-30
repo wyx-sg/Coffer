@@ -33,7 +33,7 @@ class SyncRunsPort(Protocol):
 
 class SyncAttentionSource:
     name = "sync"
-    feature: str | None = "vault_sync"
+    feature: str | None = None
 
     def __init__(self, *, sync: SyncRunsPort) -> None:
         self._sync = sync

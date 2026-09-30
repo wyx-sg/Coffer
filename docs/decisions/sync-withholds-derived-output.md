@@ -14,10 +14,7 @@ Some of what sits in the vault is not authored by anyone; each machine
   Its master folder under `~/.coffer/skills/` and its `skill` resource row
   (whose `version_hash` is that folder's digest) are regenerated at every boot
   and after curation, from the running build, the knowledge files — and
-  **this machine's own inputs**: its experimental-feature switches, which
-  decide which sections of the manual render
-  ([Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md)),
-  and its own knowledge root path.
+  **this machine's own inputs**: its own knowledge and memory root paths.
 - **The memory tree and its `memory` partition rows**, aggregated from the
   agents installed on *this* machine
   ([Aggregate Agent Memory, Never Write It](aggregate-agent-memory-never-write-it.md)).
@@ -87,9 +84,9 @@ the same bytes. This was the first answer.
 Pros: nothing special in sync.
 
 Cons: determinism removes only accidental differences. Some inputs to the
-manual are *meant* to differ per machine — which experimental features are on
-decides which sections render; no byte ordering makes a laptop with `memory`
-switched off agree with a desktop that has it on. Version skew defeats it again on every release.
+manual are *meant* to differ per machine — its own knowledge and memory root
+paths; no byte ordering makes a laptop and a desktop with different roots
+agree. Version skew defeats it again on every release.
 
 Lost: the two machines are not supposed to agree. Determinism survives for a
 smaller reason — an unchanged catalogue re-rendering to identical bytes lets the

@@ -39,7 +39,7 @@ def daemon(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[
     shim.chmod(0o755)
     monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(shim))
     claude = fake_agent_dir(home, AgentType.CLAUDE_CODE)
-    for client in boot(tmp_path, monkeypatch, features="memory=on,knowledge=off,vault_sync=off"):
+    for client in boot(tmp_path, monkeypatch):
         r = client.post("/agents", json={"type": "claude_code"})
         assert r.status_code == 201, r.text
         uid = r.json()["uid"]

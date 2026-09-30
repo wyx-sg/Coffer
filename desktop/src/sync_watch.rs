@@ -7,17 +7,15 @@
 //! a marked menu bar icon, a badged Dock icon, and one native notification.
 //!
 //! It has no thread of its own: `tray_watch.rs` reads the daemon's status on
-//! its short tick and hands each answer here, so the status that carries the
-//! `vault_sync` experimental feature is read once per tick for both. A tick
-//! that could not reach a daemon is never handed over, which leaves every
-//! surface exactly as it was rather than clearing a real alert because the
-//! daemon happened to be restarting.
+//! its short tick and calls this once per tick that reached a daemon. A tick
+//! that could not reach a daemon never calls it, which leaves every surface
+//! exactly as it was rather than clearing a real alert because the daemon
+//! happened to be restarting.
 //!
 //! The sync poll behind it keeps a slow interval. A converge round runs on an
 //! interval measured in tens of minutes, and a hold, a conflict or a failed
 //! push persists until a person acts, so there is nothing a tighter loop could
-//! learn sooner. While the feature is off nothing is polled or marked; the
-//! first tick after it comes on polls at once (`sync_gate.rs`).
+//! learn sooner. The first tick polls at once.
 
 use std::time::{Duration, Instant};
 
@@ -26,12 +24,11 @@ use tauri_plugin_notification::NotificationExt;
 
 use crate::daemon_http::fetch_ok as fetch_json;
 use crate::sync_alert::{next_action, parse_sync_status, AlertAction};
-use crate::sync_gate::plan_tick;
 use crate::sync_presentation::{notification_body, notification_title};
 use crate::tray::set_sync_alert;
 use crate::tray_locale;
 
-/// How often the sync status is polled while the feature is on. Ten minutes.
+/// How often the sync status is polled. Ten minutes.
 /// The alert's condition changes at most once a converge interval and then
 /// waits for a person; polling harder buys nothing and costs a wakeup.
 pub const POLL_INTERVAL: Duration = Duration::from_secs(600);
@@ -46,28 +43,14 @@ pub struct SyncWatch {
     /// The status the last raised notification was about. `None` means no
     /// mark is showing — see `sync_alert::next_action` for the whole rule.
     notified: Option<String>,
-    /// When the sync status was last asked, since the feature last came on.
+    /// When the sync status was last asked; `None` before the first poll.
     last_sync_poll: Option<Instant>,
 }
 
 impl SyncWatch {
-    /// One tick, given a daemon that answered and the `vault_sync` flag its
-    /// status reported.
-    pub fn tick(&mut self, app: &AppHandle, port: u16, token: &str, vault_sync: bool) {
-        let plan = plan_tick(
-            vault_sync,
-            self.notified.is_some(),
-            self.last_sync_poll.map(|at| at.elapsed()),
-            POLL_INTERVAL,
-        );
-        if plan.clear_marks {
-            self.notified = None;
-            apply(app, &AlertAction::Clear);
-        }
-        if !vault_sync {
-            self.last_sync_poll = None;
-        }
-        if !plan.poll_sync {
+    /// One tick, given a daemon that answered.
+    pub fn tick(&mut self, app: &AppHandle, port: u16, token: &str) {
+        if !poll_due(self.last_sync_poll.map(|at| at.elapsed()), POLL_INTERVAL) {
             return;
         }
         self.last_sync_poll = Some(Instant::now());
@@ -83,6 +66,12 @@ impl SyncWatch {
             apply(app, &action);
         }
     }
+}
+
+/// Whether this tick asks for the sync status: at once on the first tick, then
+/// once a `sync_interval` has passed since the last poll.
+fn poll_due(since_sync_poll: Option<Duration>, sync_interval: Duration) -> bool {
+    since_sync_poll.is_none_or(|elapsed| elapsed >= sync_interval)
 }
 
 /// Perform one decision. Every failure here is logged and swallowed: a tray
@@ -140,9 +129,13 @@ mod tests {
     }
 
     #[test]
-    fn the_feature_tick_follows_a_switch_far_faster_than_the_sync_poll() {
-        // The feature switches live; the tray should follow within a minute,
-        // while the sync poll behind it keeps its slow interval.
-        assert!(crate::tray_watch::STATUS_TICK <= Duration::from_secs(60));
+    fn the_first_tick_polls_at_once() {
+        assert!(poll_due(None, POLL_INTERVAL));
+    }
+
+    #[test]
+    fn the_sync_poll_keeps_its_own_slow_interval() {
+        assert!(!poll_due(Some(Duration::from_secs(30)), POLL_INTERVAL));
+        assert!(poll_due(Some(POLL_INTERVAL), POLL_INTERVAL));
     }
 }
