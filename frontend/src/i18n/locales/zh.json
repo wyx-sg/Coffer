@@ -1238,6 +1238,17 @@
         "clearing": "正在清除…",
         "cleared": "已清除 {{size}}。记忆会在下次更新时重建。"
       }
+    },
+    "prices": {
+      "label": "刷新模型价格",
+      "description": "每天从 genai-prices 获取一次最新的价格表。关闭时使用这个版本附带的价格表。",
+      "origin": {
+        "bundled": "正在使用 Coffer 附带的价格表，更新于 {{date}}",
+        "refreshed": "正在使用 {{date}} 刷新的价格表"
+      },
+      "unknownDate": "日期未知",
+      "pinnedOff": "已被 COFFER_PRICE_REFRESH 关闭",
+      "lastFailed": "上次刷新失败；保留当前使用的价格表"
     }
   },
   "daemon": {
@@ -4416,12 +4427,13 @@
       },
       "unknownModel": "未知模型",
       "unknownAgent": "未知智能体",
-      "noPriceTip": "这个模型没有已知价格：它的提供商上没有设置，提供商也没有报告，Coffer 附带的价格表里也没有。在“模型提供商”中设置一个价格。",
+      "noPriceTip": "这个模型没有已知价格：它的提供商上没有设置，提供商也没有报告，Coffer 的价格表里也没有。在“模型提供商”中设置一个价格。",
       "partlyPricedTip_other": "{{n}} 次请求没有价格，未计入此费用。",
       "unknownTip_other": "{{n}} 次请求在上报用量前结束，其 token 未计入。",
       "total": "合计 · {{range}}",
       "partlyPricedTip_one": "{{n}} 次请求没有价格，未计入此费用。",
-      "unknownTip_one": "{{n}} 次请求在上报用量前结束，其 token 未计入。"
+      "unknownTip_one": "{{n}} 次请求在上报用量前结束，其 token 未计入。",
+      "noPriceTipOn": "这个模型没有已知价格：它的提供商上没有设置，提供商也没有报告，Coffer 的价格表（更新于 {{date}}）里也没有。在“模型提供商”中设置一个价格。"
     },
     "empty": {
       "firstTitle": "还没有 API 密钥用量",
@@ -4752,12 +4764,13 @@
     },
     "prices": {
       "helpLabel": "关于模型价格",
-      "help": "模型的价格取以下第一个有的来源：你设置的价格（你设置）、列出模型时提供商自己的 API 报告的价格（来自 <提供商>）、随每个 Coffer 版本附带的价格表（内置）——从不在线查询。没有已知价格的模型显示“—”；设置一个价格，用量页才能显示费用。",
+      "help": "模型的价格取以下第一个有的来源：你设置的价格（你设置）、列出模型时提供商自己的 API 报告的价格（来自 <提供商>）、Coffer 的价格表（内置）——随每个版本附带，并且每天从 genai-prices 刷新一次，除非在“设置 › 通用”中关闭。没有已知价格的模型显示“—”；设置一个价格，用量页才能显示费用。",
       "rates": "{{input}} · {{output}} / 100 万",
       "source": {
         "user": "你设置",
         "provider": "来自 {{name}}",
-        "bundled": "内置"
+        "bundled": "内置",
+        "bundledOn": "内置 · 更新于 {{date}}"
       },
       "tiered": "基础档：输入 token 超过阈值后，长请求更贵",
       "local": "本地 · 不计费",

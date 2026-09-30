@@ -1238,6 +1238,17 @@
         "clearing": "Clearing…",
         "cleared": "Cleared {{size}}. Memory is rebuilt on the next update."
       }
+    },
+    "prices": {
+      "label": "Refresh model prices",
+      "description": "Once a day, fetch the latest price list from genai-prices. Off: price from the list shipped with this release.",
+      "origin": {
+        "bundled": "Using the list shipped with Coffer, updated {{date}}",
+        "refreshed": "Using the list refreshed {{date}}"
+      },
+      "unknownDate": "date unknown",
+      "pinnedOff": "Turned off by COFFER_PRICE_REFRESH",
+      "lastFailed": "The last refresh failed; the list in use is kept"
     }
   },
   "daemon": {
@@ -4416,12 +4427,13 @@
       },
       "unknownModel": "Unknown model",
       "unknownAgent": "Unknown agent",
-      "noPriceTip": "No price is known for this model: it isn’t set on its provider, reported by the provider, or in the price list bundled with Coffer. Set one in Model providers.",
+      "noPriceTip": "No price is known for this model: it isn’t set on its provider, reported by the provider, or in Coffer’s price list. Set one in Model providers.",
       "partlyPricedTip_one": "{{n}} request has no price and is not in this cost.",
       "partlyPricedTip_other": "{{n}} requests have no price and are not in this cost.",
       "unknownTip_one": "{{n}} request ended before reporting its usage; its tokens are not counted.",
       "unknownTip_other": "{{n}} requests ended before reporting their usage; their tokens are not counted.",
-      "total": "Total · {{range}}"
+      "total": "Total · {{range}}",
+      "noPriceTipOn": "No price is known for this model: it isn’t set on its provider, reported by the provider, or in Coffer’s price list (updated {{date}}). Set one in Model providers."
     },
     "empty": {
       "firstTitle": "No API-key usage yet",
@@ -4752,12 +4764,13 @@
     },
     "prices": {
       "helpLabel": "About model prices",
-      "help": "A model’s price comes from the first of: the price you set (You set), what the provider’s own API reports when its models are listed (From <provider>), or the price list bundled with each Coffer release (Bundled) — never a network lookup. A model with no known price shows “—”; set one so Usage can show its cost.",
+      "help": "A model’s price comes from the first of: the price you set (You set), what the provider’s own API reports when its models are listed (From <provider>), or Coffer’s price list (Bundled) — shipped with each release and refreshed from genai-prices once a day unless that is turned off in Settings › General. A model with no known price shows “—”; set one so Usage can show its cost.",
       "rates": "{{input}} · {{output}} / 1M",
       "source": {
         "user": "You set",
         "provider": "From {{name}}",
-        "bundled": "Bundled"
+        "bundled": "Bundled",
+        "bundledOn": "Bundled · updated {{date}}"
       },
       "tiered": "Base tier: long requests cost more past a threshold of input tokens",
       "local": "Local · no cost",

@@ -9,6 +9,7 @@
 import { useTranslation } from "react-i18next";
 
 import type { ModelPrice } from "@/lib/api/providers";
+import { formatPriceDate } from "@/lib/providers/priceDate";
 
 const TAG =
   "inline-flex h-[18px] items-center whitespace-nowrap rounded-sm bg-chip px-1.5 text-2xs font-label text-text-muted";
@@ -61,7 +62,11 @@ export function ModelPriceCell({ id, price, onEdit, onReset, disabled }: Props) 
       ? t("providers.prices.source.user")
       : price.source === "provider"
         ? t("providers.prices.source.provider", { name: price.source_name ?? "" })
-        : t("providers.prices.source.bundled");
+        : price.source_updated
+          ? t("providers.prices.source.bundledOn", {
+              date: formatPriceDate(price.source_updated, i18n.language),
+            })
+          : t("providers.prices.source.bundled");
   return (
     <span className="inline-flex flex-wrap items-center justify-end gap-1.5 text-xs text-text">
       {onEdit ? (

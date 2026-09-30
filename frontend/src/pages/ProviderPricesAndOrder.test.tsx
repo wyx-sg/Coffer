@@ -79,6 +79,7 @@ const price = (model: string, over: Partial<ModelPrice>): ModelPrice => ({
   cache_write_5m: null,
   cache_write_1h: null,
   tiered: false,
+  source_updated: null,
   ...over,
 });
 
@@ -120,7 +121,13 @@ describe("prices, fallback and order", () => {
       prices: [
         price("mine", { source: "user", input: 1.5, output: 12 }),
         price("reported", { source: "provider", source_name: "OpenRouter", input: 3, output: 15 }),
-        price("listed", { source: "bundled", source_name: "OpenAI", input: 1.25, output: 10 }),
+        price("listed", {
+          source: "bundled",
+          source_name: "OpenAI",
+          input: 1.25,
+          output: 10,
+          source_updated: "2026-09-30",
+        }),
         price("unknown", {}),
       ],
     });
@@ -132,7 +139,7 @@ describe("prices, fallback and order", () => {
     await waitFor(() => expect(within(rowOf("mine")).getByText("You set")).toBeInTheDocument());
     expect(within(rowOf("mine")).getByText("$1.50 · $12.00 / 1M")).toBeInTheDocument();
     expect(within(rowOf("reported")).getByText("From OpenRouter")).toBeInTheDocument();
-    expect(within(rowOf("listed")).getByText("Bundled")).toBeInTheDocument();
+    expect(within(rowOf("listed")).getByText(/^Bundled · updated .*2026/)).toBeInTheDocument();
     expect(within(rowOf("unknown")).getByLabelText("No price known for unknown")).toHaveTextContent(
       "—",
     );

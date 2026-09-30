@@ -33,6 +33,7 @@ Links point at the file that reads each variable on GitHub.
 | `COFFER_CORS_ORIGINS` | unset | Comma-separated list of exact origins that replaces the cross-origin allow-list entirely, for both CORS and the `Origin` check. Without it the daemon allows only the desktop app's origins (`tauri://localhost`, `http://tauri.localhost`). The daemon's own origins are always allowed; any other origin gets `403 ORIGIN_NOT_ALLOWED`. | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
 | `COFFER_DEV_CORS` | unset | `1` adds the Vite dev server origins `http://localhost:5173` and `http://127.0.0.1:5173` to the default allow-list, for both CORS and the `Origin` check. Ignored when `COFFER_CORS_ORIGINS` is set. `make dev` sets it. | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
 | `COFFER_WEBUI_DIR` | built-in | Directory holding a built web UI (`index.html`). Without it the daemon serves the UI bundled into the frozen binary, or `frontend/dist` in a source checkout. | [`surfaces/http/webui.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/webui.py) |
+| `COFFER_PRICE_REFRESH` | unset | `off` pins the daily model price-list refresh off, whatever `price_refresh` says; prices come from the list shipped in the build. The test suite and the e2e daemon set it. | [`infrastructure/usage/price_refresh.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/usage/price_refresh.py) |
 | `COFFER_MODEL_PROXY` | unset | `off` keeps the daemon from starting or supervising the [local model proxy](/architecture/model-proxy); any other value, or none, leaves it on. The test suite sets it. | [`surfaces/http/model_proxy_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/model_proxy_wiring.py) |
 
 ### MCP gateway
@@ -119,7 +120,8 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
   "proxy_port": 8001,
   "machine_name": "studio",
   "machine_id": "3f0c9a…",
-  "features": {}
+  "features": {},
+  "price_refresh": true
 }
 ```
 
@@ -130,6 +132,7 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
 | `machine_name` | string | host name without `.local` | This machine's display label in vault sync. Free to change; nothing references it. | **Sync** page, `coffer sync machine rename` |
 | `machine_id` | string | derived from the host | Cache of the host-derived machine id that names this machine in a synced vault. Deleting it recomputes the same value. | written by the daemon |
 | `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. A key the registry does not declare is ignored. | **Settings → General**, `coffer config set feature.<key> on\|off` |
+| `price_refresh` | boolean | `true` | Whether the daemon refreshes the model price list from genai-prices once a day. Off, it prices from the list shipped in the build. Read at each refresh. | **Settings › General → Refresh model prices**, `coffer config set prices.refresh on\|off` |
 
 The daemon's runtime state — its pid, port and API token — lives in a different file, `~/.coffer/daemon.json`, which is created on start and removed on exit. See [Files and directories](/reference/filesystem#daemon-files).
 
@@ -195,6 +198,7 @@ The internal engine settings are one record, and all of them are *synced*. Each 
 | **Automatic upkeep** — aggregate | on, every 1 h | Reads the agents' own memory files into the derived memory tree. | `coffer config set engine.upkeep.aggregate.enabled on\|off`, `coffer config set engine.upkeep.aggregate.interval <s>` |
 | **Automatic upkeep** — distil | on, every 6 h | On its own interval, not after each aggregation: turns each partition's new raw entries into notes with Coffer's model and rewrites its `MEMORY.md`. A partition with nothing new costs no call. | `coffer config set engine.upkeep.distil.…` |
 | **Automatic upkeep** — curate | on, every 1 h | Folds new material from each knowledge collection's inbox into its documents. | `coffer config set engine.upkeep.curate.…` |
+| **Refresh model prices** | on | Once a day, fetch the latest model price list from genai-prices; off, price from the list shipped in the build. This one is **machine-local** (`price_refresh` in `daemon-config.json`), not synced. | `coffer config set prices.refresh on\|off`, `coffer config unset prices.refresh` |
 | Curation owner (**Runs on:**) | every machine | The one machine allowed to run curation in a synced vault. | `coffer config set engine.curate_owner this\|<machine id>`, `coffer config unset engine.curate_owner` |
 
 Upkeep intervals have a floor of 60 seconds; `coffer config unset engine.upkeep.<pass>.interval` returns a pass to its default. `coffer daemon status` shows the passes in flight.

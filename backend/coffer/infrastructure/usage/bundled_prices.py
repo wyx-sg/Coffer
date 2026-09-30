@@ -2,9 +2,9 @@
 
 ``price_list/genai-prices.json`` is pydantic/genai-prices (MIT; the licence sits
 beside it), written by ``make refresh-prices`` at release time. It is read
-once per process and never fetched: Coffer makes no network lookup for prices
-(spec provider-switching "Resolve each model's price from the provider, its
-API, or the bundled list"). A build that lost the file still prices the
+once per process; the daily refresh (:mod:`.price_refresh`) may cache a newer
+copy, and pricing reads whichever is fresher (spec provider-switching "Refresh
+the bundled price list in the background"). A build that lost the file still prices the
 models Coffer's own supplement knows, and logs why the rest are unpriced.
 """
 

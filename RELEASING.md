@@ -83,8 +83,8 @@ The updater does not need Apple signing; it can be turned on first.
       app's update check compares against `tauri.conf.json`'s version).
 - [ ] `make refresh-prices` so the bundled model price list
       (`backend/coffer/infrastructure/usage/price_list/genai-prices.json`, from
-      pydantic/genai-prices, MIT) is current; commit it if it moved. Coffer
-      never looks prices up at runtime, so this is the only way new prices ship.
+      pydantic/genai-prices, MIT) is current; commit it if it moved. It is
+      what a machine with the daily refresh turned off prices from.
 - [ ] Merge to `main`, tag `v<version>`, push the tag.
 - [ ] On the run page, read the three **plan release signing** annotations:
       each should say **ON**. A **SKIPPED** line names the missing secret.

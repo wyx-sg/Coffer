@@ -317,6 +317,83 @@ paths:
       summary: Reorder Providers
       tags:
       - providers
+  /api/v1/providers/price-list:
+    get:
+      description: The price list in use and its refresh.
+      operationId: get_price_list_api_v1_providers_price_list_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Price List
+      tags:
+      - providers
+    put:
+      description: |-
+        Turn the daily refresh on or off on this machine. Nothing is fetched now;
+        the next tick of the refresh reads the setting.
+      operationId: put_price_list_api_v1_providers_price_list_put
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceListIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Put Price List
+      tags:
+      - providers
   /api/v1/providers/use-builtin/{agent_type}:
     post:
       description: |-
@@ -1616,6 +1693,12 @@ components:
           - type: string
           - type: 'null'
           title: Source Name
+        source_updated:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          title: Source Updated
         tiered:
           default: false
           title: Tiered
@@ -1630,6 +1713,7 @@ components:
       - cache_write_1h
       - cache_read
       - tiered
+      - source_updated
       title: ModelPriceOut
       type: object
     ModelPricesIn:
@@ -1659,6 +1743,62 @@ components:
       - prices
       - bundled_version
       title: ModelPricesOut
+      type: object
+    PriceListIn:
+      properties:
+        refresh:
+          title: Refresh
+          type: boolean
+      required:
+      - refresh
+      title: PriceListIn
+      type: object
+    PriceListOut:
+      description: |-
+        The price list pricing reads now, and its daily refresh (spec
+        provider-switching "Refresh the bundled price list in the background").
+      properties:
+        last_attempt_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Attempt At
+        last_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Error
+        origin:
+          enum:
+          - bundled
+          - refreshed
+          title: Origin
+          type: string
+        pinned_off:
+          title: Pinned Off
+          type: boolean
+        refresh:
+          title: Refresh
+          type: boolean
+        updated:
+          anyOf:
+          - format: date
+            type: string
+          - type: 'null'
+          title: Updated
+        version:
+          title: Version
+          type: string
+      required:
+      - version
+      - updated
+      - origin
+      - refresh
+      - pinned_off
+      - last_attempt_at
+      - last_error
+      title: PriceListOut
       type: object
     PriceSource:
       description: Where a model's price came from, in the order they are consulted.

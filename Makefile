@@ -369,9 +369,10 @@ docs-reference:
 	$(PY) docs-site/scripts/gen_cli_reference.py
 	$(PY) docs-site/scripts/gen_rest_reference.py
 
-# The bundled model price list is refreshed once per release, never looked up
-# at runtime (spec provider-switching "Resolve each model's price from the
-# provider, its API, or the bundled list"). Needs the network; not in verify.
+# The bundled model price list shipped in each build is refreshed once per
+# release; the daemon keeps a daily cached copy on top of it (spec
+# provider-switching "Refresh the bundled price list in the background").
+# Needs the network; not in verify.
 refresh-prices:
 	$(PY) scripts/refresh_model_prices.py
 

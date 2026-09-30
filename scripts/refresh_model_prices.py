@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """Refresh the bundled model price list from pydantic/genai-prices.
 
-Run at release time (``make refresh-prices``), never at runtime: Coffer prices
-usage from the file this writes and makes no network lookup of its own (spec
-provider-switching "Resolve each model's price from the provider, its API, or
-the bundled list").
+Run at release time (``make refresh-prices``): the file this writes ships in
+every build. Between releases the daemon refreshes a cached copy of the same
+published file once a day (spec provider-switching "Refresh the bundled price
+list in the background"); this keeps the shipped snapshot current.
 
 What it does:
 
 1. resolves the head commit of ``pydantic/genai-prices``'s default branch;
-2. downloads ``prices/data.json`` and ``LICENSE`` at that commit;
+2. downloads ``prices/new_data/v2/data.json`` (the file genai-prices' own
+   ``UpdatePrices`` fetches) and ``LICENSE`` at that commit;
 3. keeps only what pricing reads — each provider's id, name, ``api_pattern``,
    ``model_match``, ``provider_match`` and ``fallback_model_providers``, and
    each model's id, ``match``, ``prices`` and ``context_window`` — so the file
@@ -76,7 +77,7 @@ def slim(providers: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def build(commit: str, today: str) -> tuple[str, str]:
-    raw = json.loads(_get(f"https://raw.githubusercontent.com/{REPO}/{commit}/prices/data.json"))
+    raw = json.loads(_get(f"https://raw.githubusercontent.com/{REPO}/{commit}/prices/new_data/v2/data.json"))
     licence = _get(f"https://raw.githubusercontent.com/{REPO}/{commit}/LICENSE").decode("utf-8")
     document = {
         "source": f"https://github.com/{REPO}",

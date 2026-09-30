@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 244 operations in 26 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 246 operations in 26 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -128,7 +128,7 @@ The daemon mounts 244 operations in 26 groups. Groups follow the order the daemo
 | [models](#models) | 3 |
 | [chat](#chat) | 16 |
 | [channels](#channels) | 3 |
-| [providers](#providers) | 12 |
+| [providers](#providers) | 14 |
 | [proxy](#proxy) | 5 |
 | [usage](#usage) | 6 |
 
@@ -472,6 +472,8 @@ The daemon mounts 244 operations in 26 groups. Groups follow the order the daemo
 
 | Method | Path | Summary |
 | --- | --- | --- |
+| `GET` | `/api/v1/providers/price-list` | The price list in use and its refresh. |
+| `PUT` | `/api/v1/providers/price-list` | Turn the daily refresh on or off on this machine. |
 | `GET` | `/api/v1/providers` | List all provider profiles. |
 | `POST` | `/api/v1/providers` | Create a provider profile (422 when the credential source is invalid). |
 | `POST` | `/api/v1/providers/detect-local` | Which local model runtime answers where (spec provider-switching "Detect a local model runtime without changing it"). |

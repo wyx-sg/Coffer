@@ -13,7 +13,8 @@ Coffer itself embeds nothing.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -190,12 +191,36 @@ class ModelPriceOut(BaseModel):
     cache_write_1h: float | None = None
     cache_read: float | None = None
     tiered: bool = False
+    #: For ``bundled``: the day the price list in use was taken from
+    #: genai-prices — "Bundled · updated <date>".
+    source_updated: date | None = None
 
 
 class ModelPricesOut(BaseModel):
     prices: list[ModelPriceOut]
-    #: The bundled price list this build ships (``genai-prices@<commit>…``).
+    #: The price list in use (``genai-prices@<commit or refresh day>…``).
     bundled_version: str
+
+
+class PriceListOut(BaseModel):
+    """The price list pricing reads now, and its daily refresh (spec
+    provider-switching "Refresh the bundled price list in the background")."""
+
+    version: str
+    #: The day its data was taken from genai-prices; ``None`` when unknown.
+    updated: date | None
+    #: ``refreshed``: fetched by the daily refresh; ``bundled``: shipped in this build.
+    origin: Literal["bundled", "refreshed"]
+    #: The machine's setting (``coffer config set prices.refresh on|off``).
+    refresh: bool
+    #: ``COFFER_PRICE_REFRESH=off`` pins the refresh off whatever the setting says.
+    pinned_off: bool
+    last_attempt_at: datetime | None = None
+    last_error: str | None = None
+
+
+class PriceListIn(BaseModel):
+    refresh: bool
 
 
 class ActivateOut(BaseModel):

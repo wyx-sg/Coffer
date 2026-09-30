@@ -310,7 +310,7 @@ describe("API-key usage", () => {
     // price is set.
     expect(
       within(rows[2]).getByLabelText(
-        "No price is known for this model: it isn’t set on its provider, reported by the provider, or in the price list bundled with Coffer. Set one in Model providers.",
+        "No price is known for this model: it isn’t set on its provider, reported by the provider, or in Coffer’s price list. Set one in Model providers.",
       ),
     ).toHaveTextContent(/^—$/);
     expect(within(rows[2]).queryByText("$0.00")).not.toBeInTheDocument();

@@ -60,9 +60,9 @@ Ranges are local days: **today**, **7d** and **30d** (both including today), **m
 
 Cost is an **estimate**, worked out per model and per token category:
 
-- Each request is priced at the price of the provider that actually answered it, taken from the first source that has one: the price **you set** on the provider (relays and resellers charge differently), free for a **local** runtime, the price the provider's **own API** reported when its models were listed, or the **bundled** price list shipped with each release (pydantic's genai-prices: per provider, with historical prices, long-context tiers and cache rates). Coffer never looks a price up over the network; the list is refreshed at release time. See [Model prices](./providers.md#model-prices).
+- Each request is priced at the price of the provider that actually answered it, taken from the first source that has one: the price **you set** on the provider (relays and resellers charge differently), free for a **local** runtime, the price the provider's **own API** reported when its models were listed, or Coffer's **bundled** price list (pydantic's genai-prices: per provider, with historical prices, long-context tiers and cache rates) — shipped with each release and refreshed once a day unless **Refresh model prices** is off in Settings › General. A price is never looked up while a request is being costed. See [Model prices](./providers.md#model-prices).
 - A cache category a price leaves out is charged at its input rate, so the estimate errs high.
-- A model no source prices is marked **unpriced** and counted separately — never costed at zero. Its cost reads `—` on the page and in `coffer usage` until you set a price on the provider.
+- A model no source prices is marked **unpriced** and counted separately — never costed at zero. Its cost reads `—` on the page and in `coffer usage` until you set a price on the provider; the dash's tooltip names the date of the price list in use.
 - Each request's cost is stored with the price it was costed with, so a later price list never rewrites history.
 
 ### How long it is kept

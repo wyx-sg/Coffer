@@ -77,6 +77,7 @@ def price_out(model: str, resolved: ResolvedPrice | None) -> ModelPriceOut:
         cache_write_1h=p.cache_write_1h,
         cache_read=p.cache_read,
         tiered=bool(p.tiers),
+        source_updated=resolved.source_updated,
     )
 
 

@@ -138,6 +138,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/providers/price-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Price List
+         * @description The price list in use and its refresh.
+         */
+        get: operations["get_price_list_api_v1_providers_price_list_get"];
+        /**
+         * Put Price List
+         * @description Turn the daily refresh on or off on this machine. Nothing is fetched now;
+         *     the next tick of the refresh reads the setting.
+         */
+        put: operations["put_price_list_api_v1_providers_price_list_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/providers/use-builtin/{agent_type}": {
         parameters: {
             query?: never;
@@ -678,6 +703,8 @@ export interface components {
             source: components["schemas"]["PriceSource"] | null;
             /** Source Name */
             source_name: string | null;
+            /** Source Updated */
+            source_updated: string | null;
             /**
              * Tiered
              * @default false
@@ -698,6 +725,35 @@ export interface components {
             bundled_version: string;
             /** Prices */
             prices: components["schemas"]["ModelPriceOut"][];
+        };
+        /** PriceListIn */
+        PriceListIn: {
+            /** Refresh */
+            refresh: boolean;
+        };
+        /**
+         * PriceListOut
+         * @description The price list pricing reads now, and its daily refresh (spec
+         *     provider-switching "Refresh the bundled price list in the background").
+         */
+        PriceListOut: {
+            /** Last Attempt At */
+            last_attempt_at: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "bundled" | "refreshed";
+            /** Pinned Off */
+            pinned_off: boolean;
+            /** Refresh */
+            refresh: boolean;
+            /** Updated */
+            updated: string | null;
+            /** Version */
+            version: string;
         };
         /**
          * PriceSource
@@ -1497,6 +1553,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_price_list_api_v1_providers_price_list_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_price_list_api_v1_providers_price_list_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PriceListIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

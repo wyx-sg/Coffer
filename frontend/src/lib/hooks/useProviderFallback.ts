@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
-import { providersApi, type Provider } from "@/lib/api/providers";
+import { priceListKey, providersApi, type Provider } from "@/lib/api/providers";
 import {
   proxyAddress,
   proxyApi,
@@ -25,6 +25,26 @@ export function useModelPrices(uid: string, models: readonly string[], listedAt:
     queryFn: async () => (await providersApi.prices(uid, [...models])).prices,
     enabled: uid !== "" && models.length > 0,
     placeholderData: (previous) => previous,
+  });
+}
+
+/** The price list in use and its daily refresh (Settings › General, Usage). */
+export function usePriceList() {
+  return useQuery({
+    queryKey: priceListKey,
+    queryFn: () => providersApi.priceList(),
+    staleTime: 60_000,
+  });
+}
+
+export function useSetPriceRefresh() {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (refresh: boolean) => providersApi.setPriceRefresh(refresh),
+    onSuccess: (doc) => qc.setQueryData(priceListKey, doc),
+    onError: (error) => toast.error(translateApiError(t, error)),
   });
 }
 

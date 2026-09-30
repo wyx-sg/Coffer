@@ -18,7 +18,7 @@ their official quota.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -59,16 +59,24 @@ class ProviderPriceResolver:
     def __init__(
         self,
         service: ProviderService,
-        bundled: BundledPrices,
+        bundled: BundledPrices | Callable[[], BundledPrices],
         reported: ReportedPriceStore | None = None,
     ) -> None:
         self._service = service
-        self._bundled = bundled
+        # A callable when the daily refresh may swap the list under us: each
+        # lookup reads whichever list is fresher right now, never the network.
+        self._bundled: Callable[[], BundledPrices] = (
+            bundled if callable(bundled) else (lambda: bundled)
+        )
         self._reported = reported
 
     @property
+    def bundled_list(self) -> BundledPrices:
+        return self._bundled()
+
+    @property
     def bundled_version(self) -> str:
-        return self._bundled.version
+        return self._bundled().version
 
     def for_config(
         self,
@@ -95,11 +103,16 @@ class ProviderPriceResolver:
                     return ResolvedPrice(
                         price, PriceSource.PROVIDER, reported_label(resource.uid), resource.name
                     )
-        found = self._bundled.lookup(model, base_url=cfg.base_url if cfg else None, at=at)
+        bundled = self._bundled()
+        found = bundled.lookup(model, base_url=cfg.base_url if cfg else None, at=at)
         if found is None:
             return None
         return ResolvedPrice(
-            found.price, PriceSource.BUNDLED, self._bundled.label, found.provider_name
+            found.price,
+            PriceSource.BUNDLED,
+            bundled.label,
+            found.provider_name,
+            bundled.updated,
         )
 
     async def _connection(self, uid: str | None) -> tuple[Resource | None, ProviderConfig | None]:

@@ -29,6 +29,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from datetime import date
 from enum import StrEnum
 
 from coffer.domain.usage.records import UsageRecord
@@ -196,6 +197,9 @@ class ResolvedPrice:
     #: The provider that reported it, for ``PROVIDER``; the price list's
     #: provider (``Anthropic``, ``OpenAI``…) for ``BUNDLED``.
     source_name: str | None = None
+    #: For ``BUNDLED``: the day the price list in use was taken from
+    #: genai-prices (the bundled snapshot's, or the daily refresh's).
+    source_updated: date | None = None
 
 
 #: Costs nothing: what a local runtime's models are priced at.

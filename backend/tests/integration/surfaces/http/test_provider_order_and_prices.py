@@ -137,3 +137,12 @@ def test_each_price_names_its_source(tmp_path, monkeypatch):
         assert rows["nobody-knows"]["source"] is None
         assert rows["nobody-knows"]["input"] is None
         assert body["bundled_version"].startswith("genai-prices@")
+        assert rows["anthropic/claude-sonnet-4.5"]["source_updated"]
+
+        # The price list and its refresh: on by default, off on request.
+        doc = c.get("/api/v1/providers/price-list").json()
+        assert (doc["origin"], doc["refresh"], doc["pinned_off"]) == ("bundled", True, True)
+        assert doc["updated"]
+        off = c.put("/api/v1/providers/price-list", json={"refresh": False}).json()
+        assert off["refresh"] is False
+        assert c.get("/api/v1/providers/price-list").json()["refresh"] is False

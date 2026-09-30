@@ -1157,8 +1157,10 @@ fetched per request; (4) the price list bundled with the release — pydantic/ge
 provider-scoped by the connection's base URL (an endpoint no provider claims is priced as the
 model's vendor), with historical prices by the request's start time, tiered prices by the
 request's total input tokens, and cache read and write rates — supplemented by Coffer's own
-Anthropic rates for models the list has not caught up with. Coffer MUST NOT look prices up over the
-network at runtime; the bundled list is refreshed at release time (`make refresh-prices`). Each
+Anthropic rates for models the list has not caught up with. The bundled snapshot is refreshed at
+release time (`make refresh-prices`), and between releases the daemon refreshes it once a day (see
+"Refresh the bundled price list in the background"); whichever copy is fresher is used, and no
+price is ever looked up over the network per request or while a request is being costed. Each
 cost MUST be stored with the label of the price it used (`override:<connection uid>`,
 `provider:<connection uid>`, `bundled:<list version>` or `local`) so a later list never rewrites
 history. A cache category a price leaves out is charged at its input rate. A model none of them
@@ -1193,7 +1195,7 @@ only their official quota.
 #### Scenario: each price names where it came from
 - **GIVEN** a provider whose models are priced from different sources, and one model nothing prices
 - **WHEN** its Models section renders
-- **THEN** each priced model shows its input and output price per 1M tokens with You set, From <provider> or Bundled, and the unpriced one shows `—` with Set price…
+- **THEN** each priced model shows its input and output price per 1M tokens with You set, From <provider> or Bundled · updated <the date of the list in use>, and the unpriced one shows `—` with Set price…
 
 #### Scenario: a model with no price reads as a dash, never zero
 - **GIVEN** usage of a model through a connection that records no price for it, whose API reported none, and that the bundled list does not know
@@ -1334,3 +1336,40 @@ second time logs nothing twice. Reordering the list is recorded as `provider_reo
 - **WHEN** the daemon ingests the spool file
 - **THEN** one `provider_failover` names the connection it left, the one that answered, the model and the status
 - **AND** the answering connection's attempt carries the request's usage and cost
+
+### Requirement: Refresh the bundled price list in the background
+Besides the snapshot shipped in the build, the daemon MUST refresh the model price list from the
+file pydantic/genai-prices publishes — the one its own `UpdatePrices` fetches,
+`https://raw.githubusercontent.com/pydantic/genai-prices/refs/heads/main/prices/new_data/v2/data.json`,
+a fixed URL Coffer chose, never one a user typed — once shortly after it starts and then every
+24 hours. The fetch MUST be a read-only `GET` with a timeout and a size cap that sends nothing about
+the user. The payload MUST be validated (a provider array that parses, with Anthropic and OpenAI in
+it) before it is kept, and cached atomically at `~/.coffer/derived/genai-prices.json` with when it
+was fetched. Pricing MUST use whichever of the cache and the bundled snapshot is fresher, and MUST
+never wait on the network: a failed fetch keeps the list in use and is logged once per run of
+failures, not on every attempt. The refresh is on by default and is switched per machine —
+**Refresh model prices** in Settings › General under Coffer's model, `coffer config set
+prices.refresh on|off`, `PUT /api/v1/providers/price-list` — and `COFFER_PRICE_REFRESH=off` pins it
+off. `GET /api/v1/providers/price-list` says which list is in use, the day its data is from, and
+the refresh's state; a bundled price reads "Bundled · updated <that day>", and the Usage page's
+dash tooltip names the same day.
+
+#### Scenario: a refreshed list is cached and used
+- **GIVEN** the published list prices a model differently from the bundled snapshot
+- **WHEN** the refresh runs
+- **THEN** the list is cached with when it was fetched, the model is priced from it, and a daemon started later uses the cache without fetching
+
+#### Scenario: a failed refresh keeps the list in use
+- **GIVEN** a refreshed list in use
+- **WHEN** the next two refreshes fail, one unreachable and one returning something that is not a price list
+- **THEN** the list in use and its cache are unchanged, and the failure is logged once
+
+#### Scenario: the fresher of the cache and the bundled list is used
+- **GIVEN** a cached list older than the bundled snapshot, and another newer than it
+- **WHEN** a price is looked up with each
+- **THEN** the older cache gives way to the bundled snapshot and the newer cache is used
+
+#### Scenario: the refresh can be turned off
+- **GIVEN** Refresh model prices turned off
+- **WHEN** the refresh's schedule comes round
+- **THEN** nothing is fetched and prices come from the bundled snapshot

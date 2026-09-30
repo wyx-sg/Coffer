@@ -1,8 +1,9 @@
 """The price list shipped with each release (spec provider-switching "Resolve
 each model's price from the provider, its API, or the bundled list").
 
-The data is pydantic/genai-prices (MIT), refreshed at release time by
-``make refresh-prices`` and never looked up over the network. It is
+The data is pydantic/genai-prices (MIT): the snapshot ``make refresh-prices``
+ships, or the copy the daemon refreshes daily; a lookup never touches the
+network. It is
 PROVIDER-SCOPED: the same model id can cost differently at two providers, so a
 price is looked up at the provider the connection points at — found from its
 base URL (each provider's ``api_pattern``) — and only an endpoint no provider
@@ -16,9 +17,10 @@ wins), time-of-day prices, and TIERED prices (a threshold of total input
 tokens past which every token is charged at the tier's rate); all three are
 read. The categories map onto Coffer's disjoint ones: ``input_mtok`` →
 uncached input, ``cache_write_mtok`` → the 5-minute cache write,
-``cache_read_mtok`` → cache reads, ``output_mtok`` → output. Anthropic's
-1-hour cache write is twice the input rate, the vendor's published rule; the
-list has no field for it.
+``cache_write_1h_mtok`` → the 1-hour one, ``cache_read_mtok`` → cache reads,
+``output_mtok`` → output, ``web_searches_kcount`` → web search. Where the list
+gives no 1-hour rate for an Anthropic model, it is twice the input rate, the
+vendor's published rule.
 
 After the list, Coffer's own :data:`~coffer.domain.usage.pricing.BUNDLED_SNAPSHOT`
 supplies Anthropic models the list has not caught up with yet. Both are
@@ -106,10 +108,15 @@ def to_model_price(prices: Mapping[str, Any], *, anthropic: bool) -> ModelPrice 
         "output": _base_and_tiers(prices.get("output_mtok")),
         "cache_write_5m": _base_and_tiers(prices.get("cache_write_mtok")),
         "cache_read": _base_and_tiers(prices.get("cache_read_mtok")),
+        "cache_write_1h": _base_and_tiers(prices.get("cache_write_1h_mtok")),
     }
     if fields["input"][0] is None and fields["output"][0] is None:
         return None
     starts = sorted({start for _base, tiers in fields.values() for start, _ in tiers})
+    searches = prices.get("web_searches_kcount")
+    web_search = (
+        float(searches) if isinstance(searches, int | float) else (10.0 if anthropic else None)
+    )
 
     def at(start: int | None) -> ModelPrice:
         values: dict[str, float | None] = {}
@@ -120,13 +127,16 @@ def to_model_price(prices: Mapping[str, Any], *, anthropic: bool) -> ModelPrice 
                     chosen = price
             values[name] = chosen
         inp = values["input"] if values["input"] is not None else 0.0
+        one_hour = values["cache_write_1h"]
+        if one_hour is None and anthropic:
+            one_hour = inp * 2
         return ModelPrice(
             input=inp,
             output=values["output"] if values["output"] is not None else 0.0,
             cache_write_5m=values["cache_write_5m"],
-            cache_write_1h=inp * 2 if anthropic else None,
+            cache_write_1h=one_hour,
             cache_read=values["cache_read"],
-            web_search=10.0 if anthropic else None,
+            web_search=web_search,
         )
 
     base = at(None)
@@ -204,17 +214,24 @@ class BundledPrices:
         *,
         version: str,
         supplement: PriceSnapshot | None = BUNDLED_SNAPSHOT,
+        updated: date | None = None,
+        refreshed: bool = False,
     ) -> None:
         self._providers = list(providers)
         self._by_id = {p.id: p for p in self._providers}
         self.version = version
         self._supplement = supplement
+        #: The day the list's data was taken from genai-prices.
+        self.updated = updated
+        #: Fetched by the daemon's daily refresh, not shipped in the build.
+        self.refreshed = refreshed
 
     @classmethod
     def from_document(
         cls, document: Mapping[str, Any], *, supplement: PriceSnapshot | None = BUNDLED_SNAPSHOT
     ) -> BundledPrices:
-        """Parse the document ``make refresh-prices`` writes."""
+        """Parse the document ``make refresh-prices`` writes (``commit`` and
+        ``fetched``), or the cache the daily refresh writes (``fetched_at``)."""
         providers = [
             _Provider(
                 id=str(p["id"]),
@@ -230,10 +247,26 @@ class BundledPrices:
             )
             for p in document.get("providers", [])
         ]
-        version = f"genai-prices@{str(document.get('commit') or 'unknown')[:12]}"
+        refreshed = "fetched_at" in document
+        updated = _day(document.get("fetched_at") or document.get("fetched"))
+        tag = (
+            f"refreshed-{updated.isoformat() if updated else 'unknown'}"
+            if refreshed
+            else str(document.get("commit") or "unknown")[:12]
+        )
+        version = f"genai-prices@{tag}"
         if supplement is not None:
             version += f"+coffer@{supplement.version}"
-        return cls(providers, version=version, supplement=supplement)
+        return cls(
+            providers, version=version, supplement=supplement, updated=updated, refreshed=refreshed
+        )
+
+    @property
+    def provider_count(self) -> int:
+        return len(self._providers)
+
+    def knows_provider(self, provider_id: str) -> bool:
+        return provider_id in self._by_id
 
     @classmethod
     def empty(cls) -> BundledPrices:
@@ -302,4 +335,40 @@ class BundledPrices:
         return None
 
 
-__all__ = ["BundledMatch", "BundledPrices", "compile_match", "to_model_price"]
+def _day(value: Any) -> date | None:
+    """``2026-09-30`` or an ISO timestamp, as a day; ``None`` when unreadable."""
+    if not value:
+        return None
+    text = str(value)
+    try:
+        return datetime.fromisoformat(text).date() if "T" in text else date.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def validate_payload(payload: Any) -> list[dict[str, Any]]:
+    """The provider array genai-prices publishes, checked before it may be
+    cached: a non-empty list of providers with ids and models, among them
+    Anthropic and OpenAI, that parses. Raises ``ValueError`` otherwise."""
+    if not isinstance(payload, list) or not payload:
+        raise ValueError("expected a non-empty provider array")
+    ids = set()
+    for provider in payload:
+        if not isinstance(provider, Mapping) or not isinstance(provider.get("id"), str):
+            raise ValueError("a provider has no id")
+        if not isinstance(provider.get("models"), list):
+            raise ValueError(f"provider {provider['id']} has no model list")
+        ids.add(provider["id"])
+    if not {"anthropic", "openai"} <= ids:
+        raise ValueError("the list is missing Anthropic or OpenAI")
+    BundledPrices.from_document({"providers": payload}, supplement=None)
+    return [dict(p) for p in payload]
+
+
+__all__ = [
+    "BundledMatch",
+    "BundledPrices",
+    "compile_match",
+    "to_model_price",
+    "validate_payload",
+]

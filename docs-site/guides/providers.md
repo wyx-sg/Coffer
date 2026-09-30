@@ -207,7 +207,7 @@ Each model row shows its price per 1M tokens (input · output) and where the pri
 
 - **You set** — a price you recorded on this provider; it wins over everything else. **Set price…** (or click the price) records one; **Reset** removes it. `coffer provider price <name> <model> --input <usd> --output <usd>` does the same, `--reset` removes it, and `coffer provider price <name>` lists every price with its source.
 - **From <provider>** — the provider's own API reported it when its models were listed (OpenRouter does). It is refreshed each time the models are listed or refreshed, never per request.
-- **Bundled** — the price list shipped with each Coffer release (pydantic's genai-prices, with Coffer's own Anthropic rates for the newest models). It knows prices per provider, historical prices and long-context tiers. Coffer never looks prices up over the network.
+- **Bundled · updated <date>** — Coffer's price list: pydantic's genai-prices, with Coffer's own Anthropic rates for the newest models. It knows prices per provider, historical prices and long-context tiers. A copy ships with each release, and the daemon refreshes it from genai-prices once a day; the date is when the data in use was taken. **Refresh model prices** in **Settings › General** (`coffer config set prices.refresh off`) turns the refresh off on a firewalled machine. No price is ever looked up while a request is being costed.
 - **Local · no cost** — a model runtime on this Mac.
 - **—** — nothing prices it. Usage shows `—` for it until you set one.
 
