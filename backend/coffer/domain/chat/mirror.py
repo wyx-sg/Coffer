@@ -14,7 +14,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
 
-__all__ = ["MirrorResult", "MirrorState", "MirrorView", "UndeliveredReply"]
+__all__ = [
+    "ChannelPlaceView",
+    "MirrorResult",
+    "MirrorState",
+    "MirrorView",
+    "UndeliveredReply",
+]
 
 #: What became of a mirrored reply: ``sent`` to the chat now, ``pending`` in the
 #: channel's outbox until it can send, or ``kept`` in Coffer only (a group's
@@ -57,3 +63,20 @@ class MirrorResult:
 
     state: MirrorState
     on_start: Callable[[asyncio.Queue[Any]], None] | None = None
+
+
+@dataclass(frozen=True)
+class ChannelPlaceView:
+    """Where in its channel a conversation lives, for the Conversations list's
+    source badge (spec chat "Show every conversation on the Conversations page").
+
+    ``chat_kind`` is ``direct`` / ``group`` (``None`` when never learnt);
+    ``thread`` says the conversation lives in a thread or topic rather than the
+    chat's main timeline; ``parallel_mark`` is the ``🧵#N title`` of a
+    ``/thread`` parallel conversation; ``chat_name`` is the group's display name
+    when Coffer knows one."""
+
+    chat_kind: str | None
+    thread: bool
+    parallel_mark: str | None = None
+    chat_name: str | None = None

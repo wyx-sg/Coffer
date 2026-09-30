@@ -26,52 +26,31 @@ import { cn, formatBytes } from "@/lib/utils";
 import { AttachmentChip } from "./AttachmentChip";
 
 interface Props {
-  /**
-   * Send the message with the uploads that finished, in attach order. May
-   * return a promise of whether the send was accepted: the chips stay attached
-   * until it resolves `true`, and a refused message's text comes back, so a
-   * refused send (the error surfaces wherever the caller shows send errors) can
-   * be retried as it was. Returning nothing counts as accepted.
-   */
+  /** Send with the finished uploads, in attach order. A promise of whether it was
+   *  accepted keeps the chips (and gives the text back) until it resolves true. */
   onSend: (text: string, attachments: ChatAttachment[]) => void | Promise<boolean>;
-  /**
-   * Hard-disable the composer (textarea + send). Used for the brief
-   * draft-creation window — NOT for streaming, which never locks the composer.
-   */
+  /** Hard-disable (the draft's create window) — never for streaming. */
   disabled?: boolean;
-  /**
-   * True while a turn streams. The composer stays ENABLED — a message sent now
-   * queues server-side. Swaps Send for Stop and shows a "will queue" hint.
-   */
+  /** A turn is running: still enabled (a send queues), Send becomes Stop. */
   streaming?: boolean;
-  /** Called when the user stops an in-flight turn. Shown only while streaming. */
   onStop?: () => void;
-  /**
-   * A refused message to put back — the draft's first message, refused after
-   * the draft's own composer was gone. Applied once; `onRestored` then fires.
-   */
+  /** A refused message to put back once; `onRestored` then fires. */
   restore?: ComposerRestore | null;
   onRestored?: () => void;
+  /** The input's placeholder — "Message Claude Code…", "Reply…", "…it queues". */
+  placeholder?: string;
 }
 
-/**
- * Imperative handle: lets the parent load text into the composer. Used when the
- * user edits a queued message — it is pulled out of the queue and back into the
- * input to amend, then re-sent (re-queuing it at the tail).
- */
+/** Lets the parent load text in — a queued message pulled back to be edited. */
 export interface ComposerHandle {
   setText: (text: string) => void;
 }
 
-/**
- * Max height (px) the textarea grows to before it scrolls internally — roughly
- * ten lines, matching Claude Code / Codex's grow-then-scroll input. Kept in sync
- * with the `max-h-[200px]` class below.
- */
+/** Grow-then-scroll cap (px), in sync with the `max-h-[200px]` class below. */
 const MAX_HEIGHT = 200;
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { onSend, disabled = false, streaming = false, onStop, restore, onRestored },
+  { onSend, disabled = false, streaming = false, onStop, restore, onRestored, placeholder },
   ref,
 ) {
   const { t } = useTranslation();
@@ -155,93 +134,106 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const showStop = streaming && !!onStop;
 
   return (
-    <div
-      className={cn(
-        "border-t border-border bg-background px-4 py-3",
-        dragging && "bg-surface-selected ring-2 ring-inset ring-ring",
-      )}
-      {...dropHandlers}
-      data-testid="composer"
-    >
-      {files.items.length > 0 && (
-        <ul className="mb-2 flex flex-wrap gap-1.5" aria-label={t("chat.attachments.listLabel")}>
-          {files.items.map((it) => (
-            <li key={it.key}>
-              <AttachmentChip
-                name={it.name}
-                detail={formatBytes(it.size)}
-                mime={it.mime}
-                state={it.status === "ready" ? undefined : it.status}
-                error={it.error}
-                onRemove={() => files.remove(it.key)}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="flex items-end gap-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          hidden
-          data-testid="composer-file-input"
-          onChange={(e) => {
-            files.add(Array.from(e.target.files ?? []));
-            // Reset so picking the same file again still fires a change.
-            e.target.value = "";
-          }}
-        />
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={disabled}
-          aria-label={t("chat.composer.attach")}
-          className="mb-0.5 shrink-0"
-        >
-          <Paperclip className="size-4" aria-hidden="true" />
-        </Button>
-        <Textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          placeholder={dragging ? t("chat.composer.dropHint") : t("chat.composer.placeholder")}
-          disabled={disabled}
-          rows={1}
-          className="max-h-[200px] min-h-[40px] resize-none py-2 leading-5"
-          aria-label={t("chat.composer.ariaLabel")}
-        />
-        {showStop ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onStop}
-            aria-label={t("chat.composer.stop")}
-            className="mb-0.5 shrink-0"
-          >
-            <Square className="size-4" />
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleSend}
-            disabled={!canSend}
-            aria-label={t("chat.composer.send")}
-            className="mb-0.5 shrink-0"
-          >
-            <Send className="size-4" />
-          </Button>
+    // A file dragged over the page restyles only this box — an accent border
+    // and "Drop to attach" — never a full-pane overlay; the limits are said
+    // only by a chip the composer rejects.
+    <div className="px-8 pb-4 pt-2" {...dropHandlers} data-testid="composer">
+      <div
+        className={cn(
+          "mx-auto w-full max-w-[720px] rounded-xl border bg-surface-raised px-3 py-2 transition-colors duration-fast",
+          dragging ? "border-accent" : "border-border",
         )}
+        data-dragging={dragging || undefined}
+      >
+        {files.items.length > 0 && (
+          <ul
+            className="mb-2 flex flex-wrap gap-1.5"
+            aria-label={t("conversations.attachments.listLabel")}
+          >
+            {files.items.map((it) => (
+              <li key={it.key}>
+                <AttachmentChip
+                  name={it.name}
+                  detail={formatBytes(it.size)}
+                  mime={it.mime}
+                  state={it.status === "ready" ? undefined : it.status}
+                  error={it.error}
+                  onRemove={() => files.remove(it.key)}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex items-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            hidden
+            data-testid="composer-file-input"
+            onChange={(e) => {
+              files.add(Array.from(e.target.files ?? []));
+              // Reset so picking the same file again still fires a change.
+              e.target.value = "";
+            }}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={disabled}
+            aria-label={t("conversations.composer.attach")}
+            className="mb-0.5 shrink-0"
+          >
+            <Paperclip className="size-4" aria-hidden="true" />
+          </Button>
+          <Textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={
+              dragging
+                ? t("conversations.composer.dropHint")
+                : (placeholder ??
+                  t(
+                    streaming
+                      ? "conversations.composer.queuePlaceholder"
+                      : "conversations.composer.placeholderAny",
+                  ))
+            }
+            disabled={disabled}
+            rows={1}
+            className="max-h-[200px] min-h-[36px] resize-none border-0 bg-transparent px-1 py-1.5 leading-5 shadow-none focus-visible:ring-0"
+            aria-label={t("conversations.composer.ariaLabel")}
+          />
+          {showStop ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onStop}
+              className="mb-0.5 shrink-0"
+            >
+              <Square aria-hidden />
+              {t("conversations.composer.stop")}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleSend}
+              disabled={!canSend}
+              aria-label={t("conversations.composer.send")}
+              className="mb-0.5 shrink-0"
+            >
+              <Send className="size-4" />
+            </Button>
+          )}
+        </div>
       </div>
-      {streaming && (
-        <p className="mt-1.5 text-xs text-muted-foreground">{t("chat.composer.streaming")}</p>
-      )}
     </div>
   );
 });

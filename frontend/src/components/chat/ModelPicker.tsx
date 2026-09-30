@@ -91,11 +91,11 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
       value={selectValue}
       onValueChange={(v) => commit(v === INHERIT ? null : v)}
     >
-      <SelectTrigger className="h-7 w-44 text-sm" aria-label={t("chat.modelPicker.label")}>
-        <SelectValue placeholder={t("chat.modelPicker.placeholder")} />
+      <SelectTrigger className="h-7 w-44 text-sm" aria-label={t("conversations.modelPicker.label")}>
+        <SelectValue placeholder={t("conversations.modelPicker.placeholder")} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={INHERIT}>{t("chat.modelPicker.inheritNoModel")}</SelectItem>
+        <SelectItem value={INHERIT}>{t("conversations.modelPicker.inheritNoModel")}</SelectItem>
         {/* Lead with the display name when the catalogue supplies one: an id
             like `claude-opus-4-8` is unambiguous but unreadable at this width,
             and "Opus 4.8" is exactly the distinction the user needs to make. */}

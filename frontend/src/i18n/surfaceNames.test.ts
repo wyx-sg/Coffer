@@ -30,7 +30,7 @@ const TITLE_KEY_BY_ROUTE: Record<string, string> = {
   "/": "overview.title",
   "/agents": "agents.title",
   "/model-providers": "settings.connections.title",
-  "/conversations": "chat.title",
+  "/conversations": "conversations.title",
   "/channels": "channels.title",
   "/mcp-servers": "resources.title",
   "/custom-tools": "customTools.title",

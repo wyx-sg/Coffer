@@ -1,13 +1,21 @@
 // components/chat/MessageBubble.tsx
-// Renders a single chat message (user or assistant) including tool call cards.
+// One message of a conversation: the user's as a bubble on the right (with its
+// files and, for a channel conversation, the not-delivered mark); the agent's as
+// a column under its mark, name and time — text and tool-call cards in the order
+// the turn emitted them, then the files it changed and its token counts.
 // Memoised: a streaming turn re-renders the thread per token, and every
 // already-persisted bubble keeps the same `message` reference across those.
 import { memo } from "react";
+import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock, Message } from "@/lib/api/chat";
 import type { LiveMessage } from "@/lib/hooks/useChatTurn";
 import { messageText } from "@/lib/chat/mirror";
 import { HelpTip } from "@/components/HelpTip";
+import { AgentBadge } from "@/components/agent/AgentBadge";
+import { filesChanged } from "@/lib/conversations/filesChanged";
+import { clock } from "@/lib/conversations/time";
+import { FilesChangedCard } from "./FilesChangedCard";
 import { AttachmentChip } from "./AttachmentChip";
 import { ToolCallCard } from "./ToolCallCard";
 import { MarkdownContent } from "./MarkdownContent";
@@ -18,6 +26,9 @@ interface Props {
   /** For a user message the conversation's channel has not received yet: the
    *  platform's name (spec chat "Show where a reply will also be sent"). */
   undeliveredTo?: string;
+  /** The conversation's agent, for the header over its replies. */
+  agentKey?: string;
+  agentName?: string;
 }
 
 type Segment =
@@ -52,7 +63,7 @@ function attachmentBlocks(blocks: ContentBlock[]): ContentBlock[] {
   return blocks.filter((b) => b.type === "attachment");
 }
 
-function MessageBubbleImpl({ message, live, undeliveredTo }: Props) {
+function MessageBubbleImpl({ message, live, undeliveredTo, agentKey, agentName }: Props) {
   const { t } = useTranslation();
   const isUser = message ? message.role === "user" : false;
   const isLive = live !== undefined;
@@ -63,7 +74,7 @@ function MessageBubbleImpl({ message, live, undeliveredTo }: Props) {
     return (
       <div className="flex flex-col items-end gap-1">
         {text && (
-          <div className="w-fit max-w-[min(48rem,100%)] whitespace-pre-wrap break-words rounded-xl rounded-tr-sm bg-primary/10 px-4 py-2.5 text-sm text-foreground">
+          <div className="w-fit max-w-[min(48rem,100%)] whitespace-pre-wrap break-words rounded-xl bg-accent-soft px-3.5 py-2.5 text-sm leading-relaxed text-text">
             {text}
           </div>
         )}
@@ -81,9 +92,9 @@ function MessageBubbleImpl({ message, live, undeliveredTo }: Props) {
         )}
         {undeliveredTo && (
           <div className="flex items-center gap-0.5 text-xs text-muted-foreground">
-            <span>{t("chat.mirror.notDelivered", { platform: undeliveredTo })}</span>
+            <span>{t("conversations.mirror.notDelivered", { platform: undeliveredTo })}</span>
             <HelpTip>
-              <p className="text-sm">{t("chat.mirror.notDeliveredHelp")}</p>
+              <p className="text-sm">{t("conversations.mirror.notDeliveredHelp")}</p>
             </HelpTip>
           </div>
         )}
@@ -92,7 +103,9 @@ function MessageBubbleImpl({ message, live, undeliveredTo }: Props) {
   }
 
   // Assistant (persisted or live)
-  const segments = buildSegments(isLive ? live!.blocks : (message?.content ?? []));
+  const blocks = isLive ? live!.blocks : (message?.content ?? []);
+  const segments = buildSegments(blocks);
+  const files = filesChanged(blocks);
   const failed = !isLive && message?.status === "failed";
   // A persisted streaming placeholder (turn still running server-side, seen
   // after a reload/switch-back) renders as in-progress, not as a blank bubble.
@@ -102,37 +115,51 @@ function MessageBubbleImpl({ message, live, undeliveredTo }: Props) {
   const showTokens = !isLive && (promptTokens != null || completionTokens != null);
 
   return (
-    <div className="flex justify-start">
-      <div className="w-fit max-w-[min(48rem,100%)] space-y-1">
+    <div className="flex min-w-0 flex-col gap-2">
+      {agentKey ? (
+        <div className="flex items-center gap-2">
+          <AgentBadge type={agentKey} name={agentName} size="sm" tooltip={false} />
+          <span className="text-xs font-semibold text-text">{agentName}</span>
+          {message ? (
+            <time dateTime={message.created_at} className="text-2xs text-text-subtle">
+              {clock(message.created_at)}
+            </time>
+          ) : null}
+        </div>
+      ) : null}
+      <div className={cn("min-w-0 space-y-2.5", agentKey && "pl-[30px]")}>
         {segments.map((seg) =>
           seg.kind === "tool" ? (
             <ToolCallCard key={seg.key} toolUse={seg.use} toolResult={seg.result} />
           ) : (
-            <div
-              key={seg.key}
-              className="rounded-xl rounded-tl-sm border border-border-subtle bg-surface-raised px-4 py-2.5 text-sm text-foreground"
-            >
+            <div key={seg.key} className="text-sm leading-relaxed text-text">
               <MarkdownContent content={seg.text} />
             </div>
           ),
         )}
         {((isLive && live!.streaming) || serverStreaming) && segments.length === 0 && (
-          <div className="flex items-center gap-1 px-4 py-2 text-xs text-muted-foreground">
-            <span className="animate-pulse">{t("chat.thinking")}</span>
+          <div className="flex items-center gap-1 py-1 text-xs text-text-muted">
+            <span className="animate-pulse">{t("conversations.thinking")}</span>
           </div>
         )}
-        {failed && <p className="px-4 text-xs text-destructive">{t("chat.message.failed")}</p>}
+        {failed && <p className="text-xs text-danger">{t("conversations.message.failed")}</p>}
+        {!isLive || !live!.streaming ? <FilesChangedCard files={files} /> : null}
         {showTokens && (
-          <p className="px-4 text-xs text-muted-foreground">
-            {t("chat.message.tokens", {
-              prompt: promptTokens ?? 0,
-              completion: completionTokens ?? 0,
+          <p className="text-2xs text-text-subtle">
+            {t("conversations.message.tokens", {
+              prompt: formatTokens(promptTokens ?? 0),
+              completion: formatTokens(completionTokens ?? 0),
             })}
           </p>
         )}
       </div>
     </div>
   );
+}
+
+/** 18234 → "18.2k": the header counts, not the invoice. */
+function formatTokens(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
 export const MessageBubble = memo(MessageBubbleImpl);

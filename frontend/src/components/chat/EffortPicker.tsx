@@ -69,12 +69,15 @@ export function EffortPicker({ agentKey, model, value, onCommit, disabled = fals
       value={selectValue}
       onValueChange={(v) => commit(v === INHERIT ? null : v)}
     >
-      <SelectTrigger className="h-7 w-32 text-sm" aria-label={t("chat.effortPicker.label")}>
-        <SelectValue placeholder={t("chat.effortPicker.placeholder")} />
+      <SelectTrigger
+        className="h-7 w-32 text-sm"
+        aria-label={t("conversations.effortPicker.label")}
+      >
+        <SelectValue placeholder={t("conversations.effortPicker.placeholder")} />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={INHERIT}>
-          {t("chat.effortPicker.inheritNoEffort")}
+          {t("conversations.effortPicker.inheritNoEffort")}
           {/* Naming the level the agent would pick makes "its own default" a
               fact the user can weigh, not a shrug. */}
           {entry?.default_effort && (

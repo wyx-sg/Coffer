@@ -2477,7 +2477,7 @@
       "loadFailed": "Couldn't load what is delivered."
     }
   },
-  "chat": {
+  "conversations": {
     "title": "Conversations",
     "thinking": "Thinking…",
     "message": {
@@ -2485,29 +2485,21 @@
       "tokens": "{{prompt}} in · {{completion}} out"
     },
     "history": {
-      "new": "New chat",
-      "empty": "No conversations yet — start a new chat",
       "search": "Search conversations",
       "noMatches": "No matching conversations",
       "ariaLabel": "Conversation history",
       "rename": "Rename",
       "renameAria": "Rename conversation",
       "delete": "Delete",
-      "collapse": "Collapse history",
-      "expand": "Expand history",
       "restore": "Restore",
       "archive": "Archive",
-      "archivedEmpty": "No archived conversations",
-      "filterLabel": "Filter conversations",
-      "filterActive": "Active",
-      "filterArchived": "Archived",
-      "viaChannel": "via {{channel}}"
+      "archivedEmpty": "No archived conversations"
     },
     "thread": {
       "empty": "Send a message to start the conversation.",
       "notFoundTitle": "Conversation not found",
       "notFoundBody": "It may have been deleted, or the link may be stale.",
-      "notFoundCta": "Start a new chat"
+      "notFoundCta": "Start a new conversation"
     },
     "archivedThread": {
       "notice": "This conversation is archived.",
@@ -2515,13 +2507,15 @@
       "restoring": "Restoring…"
     },
     "composer": {
-      "placeholder": "Type a message… (Enter to send, Shift+Enter for new line)",
+      "placeholder": "Message {{agent}}…",
       "ariaLabel": "Message input",
       "send": "Send",
       "stop": "Stop",
-      "streaming": "A reply is streaming — your next message will queue.",
       "attach": "Attach files",
-      "dropHint": "Drop files to attach"
+      "dropHint": "Drop to attach",
+      "placeholderAny": "Type a message…",
+      "replyPlaceholder": "Reply…",
+      "queuePlaceholder": "Reply — it queues until this turn finishes"
     },
     "queue": {
       "label": "Queued:",
@@ -2530,9 +2524,9 @@
     },
     "toolCard": {
       "unknown": "unknown tool",
-      "running": "running",
-      "done": "done",
-      "error": "error",
+      "running": "Running",
+      "done": "Done",
+      "error": "Error",
       "input": "Input",
       "result": "Result",
       "errorLabel": "Error",
@@ -2553,9 +2547,10 @@
       "inheritNoEffort": "Agent default"
     },
     "draft": {
-      "guide": "Message {{agent}} to start a new conversation.",
+      "guide": "Your first message starts the conversation with {{agent}}.",
       "noAgentTitle": "No managed agent available",
-      "noAgentBody": "Chat talks to a Coffer-managed agent. Install or configure Claude Code or Codex, then register it under Agents."
+      "noAgentBody": "Conversations run on a Coffer-managed agent. Install Claude Code or Codex on this Mac, then add it on the Agents page.",
+      "workspace": "Coffer’s workspace"
     },
     "delete": {
       "title": "Delete this conversation?",
@@ -2589,6 +2584,63 @@
       },
       "notDelivered": "Not delivered to {{platform}} yet",
       "notDeliveredHelp": "Coffer will send it, and the agent's answer, when the channel is running again."
+    },
+    "source": {
+      "coffer": "Coffer",
+      "channel": "Channel",
+      "dm": "DM",
+      "group": "Group",
+      "thread": "thread",
+      "topic": "topic",
+      "viaChannel": "Through the channel {{channel}}"
+    },
+    "day": {
+      "today": "Today",
+      "yesterday": "Yesterday"
+    },
+    "list": {
+      "running": "Running",
+      "ariaLabel": "Conversations",
+      "cols": {
+        "conversation": "Conversation",
+        "source": "Source",
+        "agent": "Agent",
+        "lastActivity": "Last activity"
+      },
+      "emptyTitle": "No conversations yet",
+      "emptyBody": "Every conversation shows up here — the ones you start in Coffer and the ones that come in through SeaTalk or Telegram.",
+      "noMatches": "No conversations match these filters"
+    },
+    "filters": {
+      "source": "Source",
+      "allSources": "All sources",
+      "agent": "Agent",
+      "allAgents": "All agents",
+      "channel": "Channel: {{channel}}",
+      "clearChannel": "Show every source",
+      "showArchived": "Archived",
+      "showActive": "Active"
+    },
+    "new": {
+      "action": "New conversation",
+      "title": "New conversation",
+      "hint": "Model and effort start from the agent’s Model tab; you can switch them in the conversation.",
+      "agent": "Agent",
+      "unavailable": "not available on this Mac",
+      "workingDir": "Working directory",
+      "workingDirPlaceholder": "Coffer’s workspace (~/.coffer/workspace)",
+      "start": "Start"
+    },
+    "header": {
+      "more": "More actions for this conversation"
+    },
+    "files": {
+      "title": "Files changed · {{count}}"
+    },
+    "streamLost": {
+      "title": "Lost the live stream from the daemon",
+      "body": "Five reconnect attempts failed. The turn may still be running — reloading shows everything it has written so far.",
+      "reload": "Reload conversation"
     }
   },
   "channels": {

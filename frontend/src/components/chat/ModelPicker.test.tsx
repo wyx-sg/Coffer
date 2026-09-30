@@ -80,7 +80,13 @@ describe("ModelPicker", () => {
       // did know the connection's stored model/fast_model.
       useAgentModelsMock.mockImplementation(() => ({
         data: [
-          { id: "claude-sonnet-4-6", label: "", description: "", efforts: [], default_effort: null },
+          {
+            id: "claude-sonnet-4-6",
+            label: "",
+            description: "",
+            efforts: [],
+            default_effort: null,
+          },
           { id: "claude-3-5-haiku", label: "", description: "", efforts: [], default_effort: null },
         ],
       }));

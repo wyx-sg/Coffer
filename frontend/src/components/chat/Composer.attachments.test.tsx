@@ -141,13 +141,13 @@ describe("Composer attachments", () => {
     act(() => {
       fireEvent.dragOver(composer, { dataTransfer: { types: ["Files"], files: [doc] } });
     });
-    expect(screen.getByRole("textbox")).toHaveAttribute("placeholder", "Drop files to attach");
+    expect(screen.getByRole("textbox")).toHaveAttribute("placeholder", "Drop to attach");
     act(() => {
       fireEvent.drop(composer, { dataTransfer: { types: ["Files"], files: [doc] } });
     });
 
     expect(uploadMock).toHaveBeenCalledWith(doc, expect.any(AbortSignal));
-    expect(screen.getByRole("textbox")).not.toHaveAttribute("placeholder", "Drop files to attach");
+    expect(screen.getByRole("textbox")).not.toHaveAttribute("placeholder", "Drop to attach");
   });
 
   test("a message may carry only attachments", async () => {
@@ -325,11 +325,11 @@ describe("Composer attachments", () => {
       fireEvent.dragEnter(textbox, { dataTransfer });
       fireEvent.dragLeave(composer, { dataTransfer });
     });
-    expect(textbox).toHaveAttribute("placeholder", "Drop files to attach");
+    expect(textbox).toHaveAttribute("placeholder", "Drop to attach");
     act(() => {
       fireEvent.dragLeave(textbox, { dataTransfer });
     });
-    expect(textbox).not.toHaveAttribute("placeholder", "Drop files to attach");
+    expect(textbox).not.toHaveAttribute("placeholder", "Drop to attach");
   });
 
   test("the attach button is disabled with the composer", () => {

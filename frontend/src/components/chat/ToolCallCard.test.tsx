@@ -31,12 +31,12 @@ describe("ToolCallCard", () => {
 
   test("shows 'running' status when no result", () => {
     render(<ToolCallCard toolUse={makeToolUse()} />);
-    expect(screen.getByText("running")).toBeInTheDocument();
+    expect(screen.getByText("Running")).toBeInTheDocument();
   });
 
   test("shows 'done' status when result provided", () => {
     render(<ToolCallCard toolUse={makeToolUse()} toolResult={makeToolResult()} />);
-    expect(screen.getByText("done")).toBeInTheDocument();
+    expect(screen.getByText("Done")).toBeInTheDocument();
   });
 
   test("shows 'error' status when result has an error", () => {
@@ -46,7 +46,7 @@ describe("ToolCallCard", () => {
         toolResult={makeToolResult({ output: null, error: "file not found" })}
       />,
     );
-    expect(screen.getByText("error")).toBeInTheDocument();
+    expect(screen.getByText("Error")).toBeInTheDocument();
   });
 
   test("expands to show input on click", () => {
@@ -54,7 +54,7 @@ describe("ToolCallCard", () => {
     const btn = screen.getByRole("button");
     fireEvent.click(btn);
     expect(screen.getByText("Input")).toBeInTheDocument();
-    expect(screen.getByText(/\/etc\/hosts/)).toBeInTheDocument();
+    expect(screen.getAllByText(/\/etc\/hosts/).length).toBeGreaterThan(1);
   });
 
   test("expands to show result on click", () => {

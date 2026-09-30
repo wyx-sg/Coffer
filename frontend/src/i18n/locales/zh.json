@@ -2477,7 +2477,7 @@
       "loadFailed": "加载投递内容失败。"
     }
   },
-  "chat": {
+  "conversations": {
     "title": "对话",
     "thinking": "思考中…",
     "message": {
@@ -2485,29 +2485,21 @@
       "tokens": "输入 {{prompt}} · 输出 {{completion}}"
     },
     "history": {
-      "new": "新对话",
-      "empty": "暂无对话——点「新对话」开始",
       "search": "搜索对话",
       "noMatches": "没有匹配的对话",
       "ariaLabel": "对话历史",
       "rename": "重命名",
       "renameAria": "重命名对话",
       "delete": "删除",
-      "collapse": "折叠历史面板",
-      "expand": "展开历史面板",
       "restore": "恢复",
       "archive": "归档",
-      "archivedEmpty": "没有已归档的对话",
-      "filterLabel": "筛选对话",
-      "filterActive": "活跃",
-      "filterArchived": "归档",
-      "viaChannel": "来自 {{channel}}"
+      "archivedEmpty": "没有已归档的对话"
     },
     "thread": {
       "empty": "发送消息开始对话。",
       "notFoundTitle": "未找到该对话",
       "notFoundBody": "它可能已被删除，或者链接已失效。",
-      "notFoundCta": "开始新对话"
+      "notFoundCta": "新建对话"
     },
     "archivedThread": {
       "notice": "该对话已归档。",
@@ -2515,13 +2507,15 @@
       "restoring": "恢复中…"
     },
     "composer": {
-      "placeholder": "输入消息…（Enter 发送，Shift+Enter 换行）",
+      "placeholder": "给 {{agent}} 发消息…",
       "ariaLabel": "消息输入框",
       "send": "发送",
       "stop": "停止",
-      "streaming": "回复正在生成中——你的下一条消息将进入队列。",
       "attach": "添加附件",
-      "dropHint": "松开以添加附件"
+      "dropHint": "松开以添加附件",
+      "placeholderAny": "输入消息…",
+      "replyPlaceholder": "回复…",
+      "queuePlaceholder": "回复——会排队到这一轮结束"
     },
     "queue": {
       "label": "队列中：",
@@ -2532,7 +2526,7 @@
       "unknown": "未知工具",
       "running": "运行中",
       "done": "完成",
-      "error": "错误",
+      "error": "出错",
       "input": "输入",
       "result": "结果",
       "errorLabel": "错误",
@@ -2553,9 +2547,10 @@
       "inheritNoEffort": "智能体默认"
     },
     "draft": {
-      "guide": "给 {{agent}} 发消息，开始新对话。",
+      "guide": "发出第一条消息即开始与 {{agent}} 的对话。",
       "noAgentTitle": "没有可用的受管智能体",
-      "noAgentBody": "聊天需要连接 Coffer 受管的智能体。请安装或配置 Claude Code 或 Codex，然后在「智能体」页面注册。"
+      "noAgentBody": "对话需要一个由 Coffer 管理的智能体。请在本机安装 Claude Code 或 Codex，然后在「智能体」页面添加。",
+      "workspace": "Coffer 的工作区"
     },
     "delete": {
       "title": "删除此对话？",
@@ -2589,6 +2584,63 @@
       },
       "notDelivered": "尚未送达 {{platform}}",
       "notDeliveredHelp": "渠道恢复运行后，Coffer 会发送这条消息以及智能体的回答。"
+    },
+    "source": {
+      "coffer": "Coffer",
+      "channel": "消息渠道",
+      "dm": "私聊",
+      "group": "群聊",
+      "thread": "话题",
+      "topic": "话题",
+      "viaChannel": "来自消息渠道 {{channel}}"
+    },
+    "day": {
+      "today": "今天",
+      "yesterday": "昨天"
+    },
+    "list": {
+      "running": "运行中",
+      "ariaLabel": "对话",
+      "cols": {
+        "conversation": "对话",
+        "source": "来源",
+        "agent": "智能体",
+        "lastActivity": "最近活动"
+      },
+      "emptyTitle": "还没有对话",
+      "emptyBody": "所有对话都会出现在这里——在 Coffer 里发起的，以及通过 SeaTalk 或 Telegram 进来的。",
+      "noMatches": "没有符合这些筛选条件的对话"
+    },
+    "filters": {
+      "source": "来源",
+      "allSources": "全部来源",
+      "agent": "智能体",
+      "allAgents": "全部智能体",
+      "channel": "消息渠道：{{channel}}",
+      "clearChannel": "显示全部来源",
+      "showArchived": "已归档",
+      "showActive": "进行中"
+    },
+    "new": {
+      "action": "新建对话",
+      "title": "新建对话",
+      "hint": "模型和思考强度沿用智能体「模型」标签页的设置；在对话里可以随时切换。",
+      "agent": "智能体",
+      "unavailable": "本机不可用",
+      "workingDir": "工作目录",
+      "workingDirPlaceholder": "Coffer 的工作区（~/.coffer/workspace）",
+      "start": "开始"
+    },
+    "header": {
+      "more": "这个对话的更多操作"
+    },
+    "files": {
+      "title": "改动的文件 · {{count}}"
+    },
+    "streamLost": {
+      "title": "与守护进程的实时连接已断开",
+      "body": "重连五次都失败了。这一轮可能仍在运行——重新加载会显示它目前写下的全部内容。",
+      "reload": "重新加载对话"
     }
   },
   "channels": {

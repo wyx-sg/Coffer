@@ -30,6 +30,20 @@ Indexes: `idx_conversations_updated (updated_at)` — the recency ordering of
 one filtered list — and `idx_conversations_owner (owner)`, because every
 listing filters out owned conversations.
 
+### What a listed conversation carries beyond its row
+
+`ConversationOut` (the chat contract) adds three things read at request time,
+never stored on the row. Each is read once for a whole page — the channels, the
+places of the channel-bound conversations and the previews are one query each —
+so a longer page costs no more queries.
+
+| Field | Meaning |
+| --- | --- |
+| `preview` | The newest message's text blocks on one line (whitespace collapsed, clipped to 160 characters with an ellipsis). A channel turn's leading context blocks (`[Message origin]` and the like) are left out. A message with no words (tool-only) is skipped for the newest one that has some; null when none does. |
+| `running` | A turn is in flight right now — the orchestrator's in-process state, which a `streaming` message row only mirrors. |
+| `channel_binding.platform` | The channel's type key (`seatalk` / `telegram`); null once the channel is deleted. |
+| `channel_binding.place` | Where in the channel the conversation lives, from `channel_thread_history` and its thread row: `chat_kind` (`direct` / `group`, null when never learnt), `thread` (a thread or topic, not the chat's main timeline), `parallel_mark` (the `🧵#N title` of a `/thread` parallel conversation) and `chat_name` (a group's name when Coffer knows one; Coffer stores no group titles today, so it is null). Null when no chat is known for the conversation. |
+
 ### `agent_config` — the JSON column's shape
 
 A frozen value object, not a free dict; the providers validate raw input into

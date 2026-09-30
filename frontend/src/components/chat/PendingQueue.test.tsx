@@ -5,9 +5,7 @@ import { PendingQueue } from "./PendingQueue";
 
 describe("PendingQueue", () => {
   test("renders nothing when the queue is empty", () => {
-    const { container } = render(
-      <PendingQueue pending={[]} onEdit={vi.fn()} onRemove={vi.fn()} />,
-    );
+    const { container } = render(<PendingQueue pending={[]} onEdit={vi.fn()} onRemove={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
   });
 

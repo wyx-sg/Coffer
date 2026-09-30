@@ -155,6 +155,18 @@ class FakeMessageRepo:
         )
         return rows if limit is None else rows[-limit:]
 
+    async def latest_with_text(
+        self, conversation_ids: Any, *, depth: int
+    ) -> dict[str, list[Message]]:
+        out: dict[str, list[Message]] = {}
+        for m in sorted(self._messages, key=lambda m: m.seq, reverse=True):
+            has_text = any(isinstance(b, TextBlock) for b in m.content)
+            if m.conversation_id in conversation_ids and has_text:
+                rows = out.setdefault(m.conversation_id, [])
+                if len(rows) < depth:
+                    rows.append(m)
+        return out
+
     async def next_seq(self, conversation_id: str) -> int:
         msgs = [m for m in self._messages if m.conversation_id == conversation_id]
         return len(msgs)

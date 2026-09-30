@@ -1,136 +1,72 @@
-import { describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+// components/chat/ConversationList.test.tsx
+import { describe, expect, test } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
-import { acceptance } from "@/test/acceptance";
-import { ConversationList } from "./ConversationList";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Conversation } from "@/lib/api/chat";
+import { acceptance } from "@/test/acceptance";
+import { makeBinding, makeConversation } from "@/test/conversationFixtures";
+import { ConversationList } from "./ConversationList";
 
-const conv = (id: string, title: string): Conversation => ({
-  id,
-  agent_key: "builtin",
-  title,
-  archived_at: null,
-  channel_binding: null,
-  created_at: "2026-01-01T00:00:00Z",
-  updated_at: "2026-01-01T00:00:00Z",
-});
+const conv = (id: string, title: string, overrides: Partial<Conversation> = {}) =>
+  makeConversation({ id, title, ...overrides });
 
-function renderList(
-  conversations: Conversation[],
-  overrides: Partial<React.ComponentProps<typeof ConversationList>> = {},
-) {
-  const handlers = {
-    onToggleView: vi.fn(),
-    onArchive: vi.fn(),
-    onRestore: vi.fn(),
-  };
+function renderList(conversations: Conversation[], activeId: string | null = null) {
   render(
-    <ConversationList
-      conversations={conversations}
-      activeId={null}
-      loading={false}
-      view="active"
-      onToggleView={handlers.onToggleView}
-      onSelect={vi.fn()}
-      onCreate={vi.fn()}
-      onRename={vi.fn()}
-      onDelete={vi.fn()}
-      onArchive={handlers.onArchive}
-      onRestore={handlers.onRestore}
-      {...overrides}
-    />,
+    <MemoryRouter>
+      <TooltipProvider>
+        <ConversationList
+          conversations={conversations}
+          activeId={activeId}
+          loading={false}
+          listPath="/conversations?source=seatalk"
+          hrefFor={(id) => `/conversations/${id}?source=seatalk`}
+          agentNames={new Map([["claude_code", "Claude Code"]])}
+          onCreate={() => {}}
+        />
+      </TooltipProvider>
+    </MemoryRouter>,
   );
-  return handlers;
 }
 
-describe("ConversationList search", () => {
-  test("filters the list by title as the user types", () => {
-    renderList([conv("1", "OAuth notes"), conv("2", "Dinner recipes")]);
-    expect(screen.getByText("OAuth notes")).toBeInTheDocument();
-    expect(screen.getByText("Dinner recipes")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByRole("textbox", { name: /search conversations/i }), {
-      target: { value: "oauth" },
-    });
-
-    expect(screen.getByText("OAuth notes")).toBeInTheDocument();
-    expect(screen.queryByText("Dinner recipes")).not.toBeInTheDocument();
+describe("ConversationList", () => {
+  test("each row links to its conversation, keeping the list's filters", () => {
+    renderList([conv("1", "OAuth notes")], "1");
+    const link = screen.getByRole("link", { name: /OAuth notes/ });
+    expect(link).toHaveAttribute("href", "/conversations/1?source=seatalk");
+    expect(link).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /conversations/i })).toHaveAttribute(
+      "href",
+      "/conversations?source=seatalk",
+    );
   });
 
-  test("shows a no-matches message when nothing matches", () => {
-    renderList([conv("1", "OAuth notes")]);
-    fireEvent.change(screen.getByRole("textbox", { name: /search conversations/i }), {
-      target: { value: "zzz" },
-    });
-    expect(screen.getByText(/no matching conversations/i)).toBeInTheDocument();
-  });
-
-  test("hides the search box when there are no conversations at all", () => {
-    renderList([]);
-    expect(
-      screen.queryByRole("textbox", { name: /search conversations/i }),
-    ).not.toBeInTheDocument();
-  });
-});
-
-describe("ConversationList archive", () => {
-  test("active view exposes an archive action per row", () => {
-    const { onArchive } = renderList([conv("1", "Keep me")]);
-    fireEvent.click(screen.getByRole("button", { name: /^archive$/i }));
-    expect(onArchive).toHaveBeenCalledWith("1");
-  });
-
-  test("the archived filter tab switches to archived", () => {
-    const { onToggleView } = renderList([conv("1", "A")]);
-    fireEvent.click(screen.getByRole("tab", { name: /archived/i }));
-    expect(onToggleView).toHaveBeenCalledOnce();
-  });
-
-  test("clicking the already-selected filter tab is a no-op", () => {
-    const { onToggleView } = renderList([conv("1", "A")]);
-    fireEvent.click(screen.getByRole("tab", { name: /active/i }));
-    expect(onToggleView).not.toHaveBeenCalled();
-  });
-
-  test("archived view exposes a restore action and selects the archived tab", () => {
-    const { onRestore } = renderList([conv("1", "Old chat")], { view: "archived" });
-    fireEvent.click(screen.getByRole("button", { name: /restore/i }));
-    expect(onRestore).toHaveBeenCalledWith("1");
-    expect(screen.getByRole("tab", { name: /archived/i })).toHaveAttribute("aria-selected", "true");
-  });
-});
-
-describe("ConversationListItem keyboard reachability", () => {
-  // The row action buttons are hover-only (opacity-0 group-hover:opacity-100),
-  // which makes them invisible — and thus effectively unreachable — for keyboard
-  // users. They must also reveal on keyboard focus, so each carries
-  // focus-visible:opacity-100 (the button itself) and group-focus-within:opacity-100
-  // (any sibling focused within the row).
-  test("hover-only action buttons reveal on focus, not just hover", () => {
-    renderList([conv("1", "Keep me")]);
-    for (const name of [/^rename$/i, /^archive$/i, /^delete$/i]) {
-      const btn = screen.getByRole("button", { name });
-      expect(btn.className).toContain("focus-visible:opacity-100");
-      expect(btn.className).toContain("group-focus-within:opacity-100");
-    }
+  test("a running conversation says so", () => {
+    renderList([conv("1", "Busy", { running: true })]);
+    expect(screen.getByText("Running")).toBeInTheDocument();
   });
 });
 
 acceptance("chat", "a channel's conversation is listed beside the web's with a badge", () => {
   renderList([
     conv("web", "Started on the web"),
-    {
-      ...conv("im", "Started on the phone"),
-      channel_binding: { channel_uid: "ch-1", channel: "telegram", chat_id: "c-9", mirror: null },
-    },
+    conv("im", "Started on the phone", {
+      channel_binding: makeBinding({
+        platform: "telegram",
+        channel: "Personal",
+        place: null,
+      }),
+    }),
   ]);
 
   const items = screen.getAllByRole("listitem");
   expect(items).toHaveLength(2);
   const web = items.find((li) => li.textContent?.includes("Started on the web"))!;
   const im = items.find((li) => li.textContent?.includes("Started on the phone"))!;
-  expect(im).toHaveTextContent(/via telegram/i);
-  expect(web).not.toHaveTextContent(/via /i);
+  expect(im).toHaveTextContent("Telegram · Personal");
+  expect(web).toHaveTextContent("Coffer");
+  expect(web).not.toHaveTextContent("Telegram");
 });
 
 // spec chat "Search the conversation list by title".
@@ -146,7 +82,6 @@ acceptance("chat", "search narrows the conversation list by title", () => {
   expect(items).toHaveLength(1);
   expect(items[0]).toHaveTextContent("Alpha rollout");
 
-  // Clearing the query brings every conversation back.
   fireEvent.change(screen.getByRole("textbox", { name: /search conversations/i }), {
     target: { value: "" },
   });

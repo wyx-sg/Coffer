@@ -16,12 +16,13 @@ Concrete SQLAlchemy implementations live in ``infrastructure/chat/persistence.py
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from coffer.application.chat.conversation_repo import ConversationRepo as ConversationRepo
 from coffer.application.chat.conversation_repo import page_conversations
+from coffer.application.chat.preview import message_preview
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
@@ -31,6 +32,9 @@ from coffer.domain.pagination import Page
 
 _TITLE_MAX_CHARS = 60
 _PLACEHOLDER_TITLE = "New conversation"
+#: How many text-bearing messages back a preview looks: the newest may hold only
+#: blank text, so a couple more are read in the same query.
+_PREVIEW_DEPTH = 3
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +73,14 @@ class MessageRepo(Protocol):
     ) -> list[Message]:
         """Return messages ordered by ``seq`` ascending; ``limit`` keeps only
         the most recent N (still oldest-first)."""
+        ...
+
+    async def latest_with_text(
+        self, conversation_ids: Sequence[str], *, depth: int
+    ) -> dict[str, list[Message]]:
+        """Up to ``depth`` of each conversation's newest messages that carry a
+        text block, newest first, in ONE read; a conversation with none is
+        absent."""
         ...
 
     async def next_seq(self, conversation_id: str) -> int:
@@ -353,6 +365,18 @@ class ChatService:
         ``None`` returns everything (the message API)."""
         await self.get_conversation(conversation_id)  # existence check
         return await self._messages.list_by_conversation(conversation_id, limit=limit)
+
+    async def previews(self, conversation_ids: Sequence[str]) -> dict[str, str]:
+        """The one-line preview of each conversation's newest message that has
+        words in it (``message_preview``), one read for the whole page; a
+        conversation with none is absent."""
+        latest = await self._messages.latest_with_text(conversation_ids, depth=_PREVIEW_DEPTH)
+        out: dict[str, str] = {}
+        for conversation_id, messages in latest.items():
+            line = next((p for p in map(message_preview, messages) if p is not None), None)
+            if line is not None:
+                out[conversation_id] = line
+        return out
 
     async def get_user_message(self, conversation_id: str, message_id: str) -> Message:
         """One of the conversation's user messages, to send again; raises

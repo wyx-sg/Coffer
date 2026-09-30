@@ -65,6 +65,10 @@ export interface UseChatTurnResult {
   pending: string[];
   /** Replace the pending queue (resume / drop / reorder). */
   setPending: (texts: string[]) => Promise<void>;
+  /** The stream dropped mid-turn and every reconnect failed; the turn may still run. */
+  streamLost: boolean;
+  /** Re-subscribe and refetch the messages — what the stream-lost banner's Reload does. */
+  reload: () => void;
 }
 
 export function useChatTurn(conversationId: string): UseChatTurnResult {
@@ -76,6 +80,9 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
   const [echoes, setEchoes] = useState<PendingEcho[]>([]);
   // The last error that was a refused POST rather than a failed turn.
   const [refused, setRefused] = useState<Error | null>(null);
+  const [streamLost, setStreamLost] = useState(false);
+  // Bumped by `reload` to open a fresh subscription on the same conversation.
+  const [subscription, setSubscription] = useState(0);
 
   // Mirror of isStreaming for send(): a message sent while a turn is in flight
   // is queued server-side and shown by the queue chip, so it gets no echo.
@@ -112,6 +119,7 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
     setError(null);
     setPendingState([]);
     setEchoes([]);
+    setStreamLost(false);
     priorReplyCountRef.current = 0;
 
     // Reconcile against the persisted messages once the stream ends. Returns
@@ -207,7 +215,9 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
         if (!turnInFlight || reconnects >= MAX_STREAM_RECONNECTS) {
           // Idle close with no turn to recover, or too many drops — stop, leaving
           // the bubble so the next send's refetch still surfaces any late reply.
+          // Too many drops mid-turn is said out loud: the turn may still run.
           setIsStreaming(false);
+          if (turnInFlight) setStreamLost(true);
           return;
         }
         // A turn was mid-flight when the stream dropped — reconnect to replay it.
@@ -220,6 +230,12 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
       cancelled = true;
       controller.abort();
     };
+  }, [conversationId, qc, subscription]);
+
+  const reload = useCallback(() => {
+    if (!conversationId) return;
+    void qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
+    setSubscription((n) => n + 1);
   }, [conversationId, qc]);
 
   const { send, resend } = useChatSend({
@@ -268,5 +284,7 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
     interrupt,
     pending,
     setPending,
+    streamLost,
+    reload,
   };
 }
