@@ -136,8 +136,8 @@ If ANY answer is "no", fix BEFORE force-pushing. Combine title + body updates in
 ```bash
 git checkout main && git pull --ff-only
 git checkout -b feature/<short-name>
-git add <files> && git commit -m "feat(<scope>): <subject>"
 make verify
+git add <files> && git commit -m "feat(<scope>): <subject>"
 git reset --soft main && git commit -m "<final-subject>"   # squash
 git push -u origin feature/<short-name>
 gh pr create --fill --base main

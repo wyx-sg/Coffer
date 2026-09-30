@@ -8,13 +8,17 @@
 // the map never carries a dot, and each signal answers `false` while it has
 // not loaded or its read failed, so the sidebar never shows an error.
 //
-// Today there is one signal, Sync's (spec vault-sync "Say a vault needs a
-// human where the user already is"), cleared by visiting the page.
+// Two signals today: Sync's (spec vault-sync "Say a vault needs a human where
+// the user already is"), cleared by visiting the page, and the CLIs entry's,
+// raised while any required command is missing, too old or not logged in (the
+// rows the attention list reports as kind `cli`) and cleared by fixing them.
+import { useClisAttention } from "@/lib/hooks/useClis";
 import { useSyncAttention } from "@/lib/hooks/useSyncAttention";
 
 export type AttentionSignals = Readonly<Record<string, boolean>>;
 
 export function useAttentionSignals(): AttentionSignals {
   const sync = useSyncAttention();
-  return { "/sync": sync };
+  const clis = useClisAttention();
+  return { "/sync": sync, "/clis": clis };
 }

@@ -1,14 +1,19 @@
-// frontend/src/components/mcp/McpServerDetailTabs.tsx — the tab strip and panes of one MCP server's detail page.
+// frontend/src/components/mcp/McpServerDetailTabs.tsx — the tab strip and panes of the open MCP server.
+//
+// Overview · Tools · Resources · Prompts · Invocations, the tab in the path
+// (`/mcp-servers/<name>/tools`; spec web-ui "Lay out every detail page's tabs
+// alike"). The pane hands in what Overview and Tools show; Resources and
+// Prompts are the shared capability table, Invocations the invocation log
+// scoped to this server (spec web-ui "Scope Activity's calls table to one
+// server on its page").
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CodeView } from "@/components/preview/CodeView";
-import { CapabilityList } from "./CapabilityList";
-import { InvocationsTable } from "./InvocationsTable";
 import type { components } from "@/lib/api/types";
 import { useDetailTab } from "@/lib/detailTabs";
+import { CapabilityList } from "./CapabilityList";
+import { InvocationsTable } from "./InvocationsTable";
 import { MCP_SERVER_TABS } from "./mcpServerTabs";
 
 type CapabilityListOut = components["schemas"]["CapabilityListOut"];
@@ -19,32 +24,8 @@ interface Props {
   basePath: string;
   capabilities: CapabilityListOut | undefined;
   capsError?: unknown;
-  config: unknown;
-  isCapsPending: boolean;
-  onRefresh: () => void;
-}
-
-interface OverviewFields {
-  transportType: string;
-  command: string | null;
-  url: string | null;
-}
-
-function extractOverview(config: unknown): OverviewFields {
-  const transport = (config as Record<string, unknown> | null)?.transport;
-  if (transport && typeof transport === "object") {
-    const t = transport as Record<string, unknown>;
-    const transportType = typeof t.type === "string" ? t.type : "unknown";
-    const command = typeof t.command === "string" ? t.command : null;
-    const args = Array.isArray(t.args) ? t.args.map(String).join(" ") : "";
-    const url = typeof t.url === "string" ? t.url : null;
-    return {
-      transportType,
-      command: command ? (args ? `${command} ${args}` : command) : null,
-      url,
-    };
-  }
-  return { transportType: "unknown", command: null, url: null };
+  overview: ReactNode;
+  tools: ReactNode;
 }
 
 export function McpServerDetailTabs({
@@ -52,101 +33,44 @@ export function McpServerDetailTabs({
   basePath,
   capabilities,
   capsError,
-  config,
-  isCapsPending,
-  onRefresh,
+  overview,
+  tools,
 }: Props) {
   const { t } = useTranslation();
-  const overview = extractOverview(config);
-  // The open tab lives in the path (`<basePath>/tools`), so a reload or a
-  // shared link lands on the same tab — addressable state belongs to the
-  // router, not to component state (.agents/frontend.md).
   const [tab, setTab] = useDetailTab(MCP_SERVER_TABS, "overview", basePath);
+  const count = (n: number | undefined) =>
+    n ? (
+      <span className="text-text-muted" aria-hidden>
+        · {n}
+      </span>
+    ) : null;
 
   return (
     <Tabs value={tab} onValueChange={setTab}>
-      <div className="flex flex-wrap items-center gap-3">
-        <TabsList>
-          <TabsTrigger value="overview">{t("mcp.server.tabs.overview")}</TabsTrigger>
-          <TabsTrigger value="tools">{t("mcp.server.tabs.tools")}</TabsTrigger>
-          <TabsTrigger value="resources">{t("mcp.server.tabs.resources")}</TabsTrigger>
-          <TabsTrigger value="prompts">{t("mcp.server.tabs.prompts")}</TabsTrigger>
-          <TabsTrigger value="invocations">{t("mcp.server.tabs.invocations")}</TabsTrigger>
-        </TabsList>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={onRefresh}
-          disabled={isCapsPending}
-          aria-label={t("mcp.server.refresh")}
-        >
-          <RefreshCw className="mr-1 size-3" />
-          {t("mcp.server.refresh")}
-        </Button>
-      </div>
+      <TabsList>
+        <TabsTrigger value="overview">{t("mcp.server.tabs.overview")}</TabsTrigger>
+        <TabsTrigger value="tools">
+          {t("mcp.server.tabs.tools")}
+          {count(capabilities?.tools?.length)}
+        </TabsTrigger>
+        <TabsTrigger value="resources">
+          {t("mcp.server.tabs.resources")}
+          {count(capabilities?.resources?.length)}
+        </TabsTrigger>
+        <TabsTrigger value="prompts">
+          {t("mcp.server.tabs.prompts")}
+          {count(capabilities?.prompts?.length)}
+        </TabsTrigger>
+        <TabsTrigger value="invocations">{t("mcp.server.tabs.invocations")}</TabsTrigger>
+      </TabsList>
 
-      <TabsContent value="overview" className="pt-6">
-        <Card className="paper-card">
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold">
-              {t("mcp.server.overview.config")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid gap-3 text-sm sm:grid-cols-[minmax(8rem,auto)_1fr]">
-              <dt className="text-muted-foreground">{t("mcp.server.overview.transport")}</dt>
-              <dd className="font-mono">{overview.transportType}</dd>
-
-              {overview.transportType === "stdio" && overview.command ? (
-                <>
-                  <dt className="text-muted-foreground">{t("mcp.server.overview.command")}</dt>
-                  <dd className="break-all font-mono text-xs">{overview.command}</dd>
-                </>
-              ) : null}
-
-              {overview.transportType === "http" && overview.url ? (
-                <>
-                  <dt className="text-muted-foreground">{t("mcp.server.overview.url")}</dt>
-                  <dd className="break-all font-mono text-xs">{overview.url}</dd>
-                </>
-              ) : null}
-
-              <dt className="text-muted-foreground">{t("mcp.server.overview.tools")}</dt>
-              <dd>{capsError ? "—" : (capabilities?.tools?.length ?? 0)}</dd>
-
-              <dt className="text-muted-foreground">{t("mcp.server.overview.resources")}</dt>
-              <dd>{capsError ? "—" : (capabilities?.resources?.length ?? 0)}</dd>
-
-              <dt className="text-muted-foreground">{t("mcp.server.overview.prompts")}</dt>
-              <dd>{capsError ? "—" : (capabilities?.prompts?.length ?? 0)}</dd>
-            </dl>
-
-            <details className="mt-4">
-              <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                {t("mcp.server.overview.rawConfig")}
-              </summary>
-              <CodeView
-                value={JSON.stringify(config, null, 2)}
-                language="json"
-                maxHeight="24rem"
-                ariaLabel={t("mcp.server.overview.rawConfig")}
-                className="mt-2 bg-surface-sunken"
-              />
-            </details>
-          </CardContent>
-        </Card>
+      <TabsContent value="overview" className="pt-5">
+        {overview}
       </TabsContent>
-
-      <TabsContent value="tools" className="pt-6">
-        <CapabilityList
-          serverUid={serverUid}
-          kind="tool"
-          tools={capabilities?.tools}
-          error={capsError}
-          fromCache={capabilities?.from_cache}
-        />
+      <TabsContent value="tools" className="pt-5">
+        {tools}
       </TabsContent>
-      <TabsContent value="resources" className="pt-6">
+      <TabsContent value="resources" className="pt-5">
         <CapabilityList
           serverUid={serverUid}
           kind="resource"
@@ -155,7 +79,7 @@ export function McpServerDetailTabs({
           fromCache={capabilities?.from_cache}
         />
       </TabsContent>
-      <TabsContent value="prompts" className="pt-6">
+      <TabsContent value="prompts" className="pt-5">
         <CapabilityList
           serverUid={serverUid}
           kind="prompt"
@@ -164,7 +88,7 @@ export function McpServerDetailTabs({
           fromCache={capabilities?.from_cache}
         />
       </TabsContent>
-      <TabsContent value="invocations" className="pt-6">
+      <TabsContent value="invocations" className="pt-5">
         <InvocationsTable serverUid={serverUid} />
       </TabsContent>
     </Tabs>

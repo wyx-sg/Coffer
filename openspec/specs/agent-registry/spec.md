@@ -724,6 +724,8 @@ The report MUST also say whether the agent will run the hook, as its **trust**: 
 
 The listing MUST be served by `GET /api/v1/agents/{uid}/hooks` and `coffer agent hooks <name> [--json]`, and MUST write nothing and record no audit event. When the agent will not run a current hook, the CLI MUST say what the user does about it. A file that does not parse MUST be reported as a parse error beside the hooks the other files yield.
 
+On the agent's Hooks tab, Coffer's memory hook MUST be **one row** per file that declares it — including the row of a missing hook — whose event cell reads "Memory hook · N events" followed by one chip per event it sits on. Its entries MUST NOT be shown as one row each, and its events MUST NOT be shown joined into one string. The tab's summary counts it as one hook.
+
 #### Scenario: list an agent's hooks with Coffer's own marked
 - **GIVEN** a registered Claude Code agent whose `settings.json` carries a foreign `PreToolUse` hook and Coffer's memory hook, whose `settings.local.json` carries a `Stop` hook, and which has one enabled and one disabled plugin with a hook file each
 - **WHEN** the user lists the agent's hooks
@@ -734,6 +736,12 @@ The listing MUST be served by `GET /api/v1/agents/{uid}/hooks` and `coffer agent
 - **GIVEN** a registered Codex agent whose `hooks.json` carries Coffer's marked hook on `UserPromptSubmit` alone, as an older build wrote it, and one recorded fire
 - **WHEN** the user lists the agent's hooks
 - **THEN** Coffer's hook reads `stale` on `UserPromptSubmit`, the installed and expected commands differ, and the last fire is reported
+
+#### Scenario: coffer's memory hook is one row with a chip per event
+- **GIVEN** a Claude Code agent whose `settings.json` carries Coffer's four memory-hook entries beside three hooks of its own
+- **WHEN** the user opens the agent's Hooks tab
+- **THEN** Coffer's hook is one row whose event cell reads "Memory hook · 4 events" with a chip each for `PostToolUse`, `PreToolUse`, `SessionStart` and `UserPromptSubmit`
+- **AND** no cell shows the events joined into one string, and the summary reads four hooks, one of them Coffer's
 
 ### Requirement: Discover agents on this machine as candidates without registering them
 The system MUST provide a read-only discovery operation that looks, for each supported type, at its standard config directory — named in that type's child spec — and at the directory that type's own environment variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) names in the daemon's environment when set, and reports each type with no agent registered and with either detection signal of "Detect an agent by its program and its config directory" as one **candidate**, carrying the fields of "Report every supported type's detection state". Nothing else is scanned. Candidates are derived at scan time and never stored. Discovery MUST NOT register anything automatically — the user reviews candidates and confirms which to add, and an `installed_active` or `installed_never_run` candidate can be added — the second's registration creates its standard config directory with only the entries Coffer needs — while a `config_only` candidate cannot, because a directory whose program is gone belongs to no working agent. The daemon MUST NOT auto-register agents on startup.

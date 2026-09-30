@@ -46,10 +46,12 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer adopt`](#coffer-adopt) | Bring one scanned item under Coffer's management |
 | [`coffer discard`](#coffer-discard) | Remove one scanned item from the agent that holds it |
 | [`coffer mcp`](#coffer-mcp) | Manage MCP servers and their capabilities |
+| [`coffer tool`](#coffer-tool) | Manage custom tools: HTTP API requests your agents call as tools |
 | [`coffer credentials`](#coffer-credentials) | Manage encrypted credentials. |
 | [`coffer agent`](#coffer-agent) | Manage registered AI agents |
 | [`coffer channel`](#coffer-channel) | Manage messaging channels (Telegram, SeaTalk) |
 | [`coffer skill`](#coffer-skill) | Manage skills (AgentSkills standard) |
+| [`coffer cli`](#coffer-cli) | Check the command-line tools skills require |
 | [`coffer knowledge`](#coffer-knowledge) | Manage Coffer's knowledge collections, the Markdown under ~/.coffer/knowledge/&lt;collection&gt;/ (`coffer path knowledge` prints it). |
 | [`coffer memory`](#coffer-memory) | Browse and manage Coffer's memory layer |
 | [`coffer provider`](#coffer-provider) | Manage LLM connections and switch agents onto them |
@@ -694,6 +696,287 @@ Disable capabilities, each named by a typed ref.
 | --- | --- | --- | --- | --- |
 | `SERVER` | argument | text | required | Server name |
 | `REF...` | argument | text (variadic) | required | tool:&lt;name&gt; \| prompt:&lt;name&gt; \| resource:&lt;uri&gt; |
+
+## coffer tool
+
+```sh
+coffer tool [OPTIONS] COMMAND [ARGS]...
+```
+
+Manage custom tools: HTTP API requests your agents call as tools
+
+### tool list
+
+```sh
+coffer tool list [OPTIONS]
+```
+
+List every custom-tool group, failing ones first.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### tool show
+
+```sh
+coffer tool show [OPTIONS] NAME
+```
+
+Show one group: its definition, its last 24 hours and its tools.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Group name |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### tool add
+
+```sh
+coffer tool add [OPTIONS] NAME
+```
+
+Create a group, empty or imported from an OpenAPI document.
+
+With --openapi and no --operation, the GET operations are imported. Binding a stored secret waits for approval in the Coffer app; the command says so and exits 9, or waits with --wait.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Group name (the agents' prefix; fixed, ≤24 chars) |
+| `--base-url` | option | text |  | Every tool's path is added to it |
+| `--description` | option | text |  |  |
+| `--header` | option | text (repeatable) |  | Static header KEY=VALUE (repeatable) |
+| `--auth-header` | option | text |  | e.g. Authorization |
+| `--auth-prefix` | option | text |  | e.g. "Bearer " |
+| `--secret` | option | text |  | Secrets-page name for the auth header |
+| `--timeout` | option | integer | `30` | Per-request timeout in seconds (1-300) |
+| `--agents` | option | text |  | Only these agents (a,b) |
+| `--openapi` | option | text |  | Import from an OpenAPI URL or file |
+| `--operation` | option | text (repeatable) |  | With --openapi: an operation to import, as "POST /refunds" (repeatable) |
+| `--all-operations` | option | flag |  | Import every operation |
+| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
+
+### tool edit
+
+```sh
+coffer tool edit [OPTIONS] NAME
+```
+
+Change a group's description, base URL, headers, auth or timeout (its name is fixed).
+
+Moving the base URL or binding another secret waits for approval in the Coffer app before the secret is sent there.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Group name |
+| `--description` | option | text |  |  |
+| `--base-url` | option | text |  |  |
+| `--header` | option | text (repeatable) |  | Static header KEY=VALUE (repeatable) |
+| `--clear-headers` | option | flag |  | Drop every static header first |
+| `--auth-header` | option | text |  |  |
+| `--auth-prefix` | option | text |  |  |
+| `--secret` | option | text |  | Secrets-page name for the auth header |
+| `--clear-auth` | option | flag |  | Remove the auth header |
+| `--timeout` | option | integer |  | Per-request timeout (1-300) |
+| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
+
+### tool rm
+
+```sh
+coffer tool rm [OPTIONS] NAME
+```
+
+Remove a group and all its tools. The bound secret stays on the Secrets page.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Group name |
+| `--force, --yes, -f, -y` | option | flag |  | Do not ask |
+
+### tool reimport
+
+```sh
+coffer tool reimport [OPTIONS] NAME
+```
+
+Read the group's OpenAPI source again: preview what it adds and removes, then apply.
+
+Kept tools keep their switch, changes-data flag and reach override.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Group name |
+| `--file` | option | text |  | The document again (a file import) |
+| `--add` | option | text (repeatable) |  | An added operation to import, as "POST /refunds" |
+| `--add-all` | option | flag |  | Import every added operation |
+| `--yes, -y` | option | flag |  | Apply without asking |
+| `--json` | option | flag |  | Print the preview as JSON and stop |
+
+### tool enable
+
+```sh
+coffer tool enable [OPTIONS] NAME
+```
+
+Switch a custom-tool group on.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+
+### tool disable
+
+```sh
+coffer tool disable [OPTIONS] NAME
+```
+
+Switch a custom-tool group off: agents see none of its tools.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+
+### tool scope
+
+```sh
+coffer tool scope [OPTIONS] NAME
+```
+
+Show or set which agents a group reaches (this machine only).
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+| `--agents` | option | text |  | Only these agents (a,b) |
+| `--all` | option | flag |  | Every agent |
+| `--none` | option | flag |  | No agent (dormant) |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### tool op
+
+```sh
+coffer tool op [OPTIONS] COMMAND [ARGS]...
+```
+
+Add, change, switch, narrow and test one tool of a group
+
+Subcommands: `add`, `edit`, `rm`, `enable`, `disable`, `scope`, `test`.
+
+### tool op add
+
+```sh
+coffer tool op add [OPTIONS] GROUP TOOL
+```
+
+Add one request by hand to a group, using its base URL and auth.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `GROUP` | argument | text | required | Group name |
+| `TOOL` | argument | text | required | Tool name (what follows &lt;group&gt;__) |
+| `--method` | option | text |  | GET, POST, PUT, PATCH or DELETE |
+| `--path` | option | text |  | Path template, e.g. /items/{id}?q={q} |
+| `--description` | option | text |  | What the agent reads to decide |
+| `--header` | option | text (repeatable) |  | Header KEY=VALUE, may hold {arg} (repeatable) |
+| `--body` | option | text |  | JSON body template with {arg} holes |
+| `--arg` | option | text (repeatable) |  | Argument name:type[:required][:description] (repeatable) |
+| `--schema` | option | text |  | The whole argument schema as JSON |
+| `--changes-data / --no-changes-data` | option | boolean |  | Mark the tool as changing data (or not) |
+| `--off` | option | flag |  | Add it switched off |
+
+### tool op edit
+
+```sh
+coffer tool op edit [OPTIONS] GROUP TOOL
+```
+
+Change one tool's request; only the options given change (--arg replaces the arguments).
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `GROUP` | argument | text | required | Group name |
+| `TOOL` | argument | text | required | Tool name |
+| `--name` | option | text |  | A new tool name |
+| `--method` | option | text |  | GET, POST, PUT, PATCH or DELETE |
+| `--path` | option | text |  | Path template, e.g. /items/{id}?q={q} |
+| `--description` | option | text |  | What the agent reads to decide |
+| `--header` | option | text (repeatable) |  | Header KEY=VALUE, may hold {arg} (repeatable) |
+| `--body` | option | text |  | JSON body template with {arg} holes |
+| `--clear-body` | option | flag |  | Drop the body template |
+| `--arg` | option | text (repeatable) |  | Argument name:type[:required][:description] (repeatable) |
+| `--schema` | option | text |  | The whole argument schema as JSON |
+| `--changes-data / --no-changes-data` | option | boolean |  | Mark the tool as changing data (or not) |
+
+### tool op rm
+
+```sh
+coffer tool op rm [OPTIONS] GROUP TOOL
+```
+
+Remove one tool from its group.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `GROUP` | argument | text | required | Group name |
+| `TOOL` | argument | text | required | Tool name |
+| `--force, --yes, -f, -y` | option | flag |  | Do not ask |
+
+### tool op enable
+
+```sh
+coffer tool op enable [OPTIONS] GROUP TOOLS...
+```
+
+Switch tools on.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `GROUP` | argument | text | required | Group name |
+| `TOOLS` | argument | text (variadic) | required | Tool names |
+
+### tool op disable
+
+```sh
+coffer tool op disable [OPTIONS] GROUP TOOLS...
+```
+
+Switch tools off: agents no longer see or call them.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `GROUP` | argument | text | required | Group name |
+| `TOOLS` | argument | text (variadic) | required | Tool names |
+
+### tool op scope
+
+```sh
+coffer tool op scope [OPTIONS] GROUP TOOL
+```
+
+Show or narrow which agents one tool reaches (this machine only).
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `GROUP` | argument | text | required | Group name |
+| `TOOL` | argument | text | required | Tool name |
+| `--agents` | option | text |  | Narrow to these agents (a,b) |
+| `--group` | option | flag |  | Clear the override |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### tool op test
+
+```sh
+coffer tool op test [OPTIONS] GROUP TOOL
+```
+
+Call one tool once with sample arguments and print the response. Exits 7 on failure.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `GROUP` | argument | text | required | Group name |
+| `TOOL` | argument | text | required | Tool name |
+| `--arg-value` | option | text (repeatable) |  | An argument KEY=VALUE, JSON when it parses (repeatable) |
+| `--args` | option | text |  | All arguments as a JSON object |
 
 ## coffer credentials
 
@@ -1436,6 +1719,65 @@ Report drift between bindings and on-disk symlinks.
 | `--json` | option | flag |  | JSON output for scripts |
 | `--fix` | option | flag |  | Re-deliver repairable drift (missing/tampered links) from master; leaves foreign content untouched. |
 
+## coffer cli
+
+```sh
+coffer cli [OPTIONS] COMMAND [ARGS]...
+```
+
+Check the command-line tools skills require
+
+### cli list
+
+```sh
+coffer cli list [OPTIONS]
+```
+
+List every command a skill requires, problems first.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### cli show
+
+```sh
+coffer cli show [OPTIONS] COMMAND
+```
+
+Show one required command: where it is, its version and login state.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `COMMAND` | argument | text | required | The command, e.g. gh |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### cli check
+
+```sh
+coffer cli check [OPTIONS] [COMMAND]
+```
+
+Probe the required commands again (or one of them).
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `[COMMAND]` | argument | text |  | One command only |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### cli install
+
+```sh
+coffer cli install [OPTIONS] COMMAND
+```
+
+Install or upgrade a required command through Homebrew, after asking.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `COMMAND` | argument | text | required | The command, e.g. jq |
+| `--yes, -y` | option | flag |  | Run without asking |
+
 ## coffer knowledge
 
 ```sh
@@ -1695,7 +2037,7 @@ coffer memory context [OPTIONS]
 
 Print the composed session-start context to stdout.
 
-The installed session-start hook runs this; you rarely need to. It prints nothing, and exits 0, when the daemon is not running.
+This is the text the installed hook (``coffer memory hook``) delivers at session start, printed for you to read. It prints nothing, and exits 0, when the daemon is not running.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1854,6 +2196,8 @@ With --local the base URL must be a loopback address; Coffer detects the runtime
 
 For anthropic/openai/unknown supply exactly one of --secret / --credential-ref; an ollama connection needs neither. The new connection starts on the wire's own default reach; route it to specific agents (e.g. an openai gateway to Claude Code) with `coffer provider scope <name> --agents claude-code`. The model is chosen at the point of use, not on the connection.
 
+A --credential-ref key that already goes somewhere else waits for approval in the Coffer app before this connection may send it: the command says so and exits 9, or waits for the answer with --wait.
+
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Connection name |
@@ -1864,6 +2208,7 @@ For anthropic/openai/unknown supply exactly one of --secret / --credential-ref; 
 | `--title` | option | text |  | Display title (≤80 chars) |
 | `--description` | option | text |  |  |
 | `--local` | option | flag |  | A model runtime on this machine (Ollama, LM Studio, vLLM, llama-server): detect it, curate its tool-capable models, no key needed |
+| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
 ### provider edit
 
@@ -1877,6 +2222,8 @@ A rename changes the label and nothing else: the uid, the stored key and any pro
 
 A wire change is refused while the connection is switched on, because the wire decides whether a connection can cover any agent at all. Run `coffer provider builtin <agent_type>` first, edit, then `coffer provider switch <name>` again.
 
+A new --base-url for a connection whose key is already sent somewhere, or a new --secret for a key in use, waits for approval in the Coffer app: the change is saved, the command says what waits and exits 9, or waits for the answer with --wait.
+
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Name or uid |
@@ -1886,6 +2233,7 @@ A wire change is refused while the connection is switched on, because the wire d
 | `--protocol` | option | text |  | Correct the wire format: anthropic \| openai \| ollama \| unknown |
 | `--base-url` | option | text |  |  |
 | `--secret` | option | text |  | Rotate the stored API key |
+| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
 ### provider rm
 

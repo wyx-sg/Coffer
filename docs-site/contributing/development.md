@@ -26,20 +26,20 @@ CI runs Node 20. Other major versions can behave differently in the test runner.
 ```sh
 git clone https://github.com/wyx-sg/Coffer.git
 cd Coffer
-make install      # .venv + backend (editable) + frontend, OpenSpec CLI and e2e npm deps
+make install      # .venv from uv.lock + frontend, OpenSpec CLI and e2e npm deps
 make hooks        # pre-commit and commit-msg git hooks
 ```
 
-`make install` creates `.venv` with whatever `python3` is on your `PATH`. It installs `backend[dev]` in editable mode with pip, then runs `npm install` in `frontend/`, at the repository root (for the pinned OpenSpec CLI) and in `e2e/`. Browsers for the end-to-end suite are a separate, heavy download: `make install-e2e-browsers`.
-
-pip resolves the version ranges in `backend/pyproject.toml`, so it can give you versions CI has never tested. To get exactly the dependency set CI installs, sync from the lockfile into the same `.venv`:
+`make install` needs [uv](https://docs.astral.sh/uv/). It syncs the backend and its dev extras from `backend/uv.lock` into `.venv` exactly as CI does, with the backend itself editable:
 
 ```sh
 UV_PROJECT_ENVIRONMENT=.venv uv sync --frozen --extra dev --project backend --python 3.12
 ```
 
+It then runs `npm install` in `frontend/`, at the repository root (for the pinned OpenSpec CLI) and in `e2e/`. Browsers for the end-to-end suite are a separate, heavy download: `make install-e2e-browsers`.
+
 ::: tip When a local result disagrees with CI
-Re-sync with the frozen command above before you debug anything else. An unlocked install is the most common reason a test fails locally but passes in CI.
+Re-run `make install` before you debug anything else. A venv that drifted from the lock, for example after a `pip install` of the `>=` floors, is the most common reason a test fails locally but passes in CI.
 :::
 
 ## Run Coffer from source
@@ -134,7 +134,7 @@ Run `make help` for the same list.
 
 | Target | What it does |
 | --- | --- |
-| `make install` | Create `.venv`, install the backend editable with dev extras, and run `npm install` for frontend, OpenSpec CLI and e2e |
+| `make install` | Sync `.venv` from `backend/uv.lock` (backend editable, dev extras), and run `npm install` for frontend, OpenSpec CLI and e2e |
 | `make install-e2e-browsers` | Download Playwright's Chromium build |
 | `make hooks` | Install the pre-commit and commit-msg git hooks (trailing whitespace, YAML/TOML/JSON checks, ruff, prettier, commitlint) |
 | `make dev` | Run the daemon and Vite together (see above) |

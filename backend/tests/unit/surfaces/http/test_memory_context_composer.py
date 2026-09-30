@@ -14,7 +14,7 @@ from dataclasses import dataclass
 import pytest
 
 from coffer.domain.memory.note import TYPE_USER, Note, Origin
-from coffer.surfaces.http.memory_wiring import memory_context_composer
+from coffer.surfaces.http.memory_turn_wiring import memory_context_composer
 
 
 @dataclass(frozen=True)

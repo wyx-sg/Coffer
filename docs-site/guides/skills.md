@@ -48,7 +48,7 @@ Coffer validates every folder before it accepts it:
 | Symlinks inside the folder | none may point outside the folder |
 | Total folder size | at most 50 MB |
 
-Coffer also reads the optional `license` field and the experimental `allowed-tools` field (a list, or a comma- or space-separated string). Any other frontmatter key is kept and ignored.
+Coffer also reads the optional `license` field, the experimental `allowed-tools` field (a list, or a comma- or space-separated string), and `requires:` — the command-line tools the skill drives, which Coffer checks on this machine and shows on the skill's **Requires** tab and the [CLIs page](/guides/clis). Any other frontmatter key is kept and ignored.
 
 A folder that breaks a rule is refused with the reason, and nothing is written to `~/.coffer/skills/` or the database.
 

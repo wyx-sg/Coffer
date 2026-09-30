@@ -154,7 +154,7 @@ request time on every surface.** Rules a change must respect:
 - A tagged release shows only stable features; the owner's own frozen build is
   `dev` and shows everything.
 - Experimental is not removal. The three features stayed part of the product
-  while gated, and graduated at 1.0 (migration 0121 stripped their stored
+  while gated, and graduated at 1.0 (migration 0116 stripped their stored
   switches); the gate only decided who saw them by default.
 - Every surface a gated feature touches carries a gate, and a surface added
   later must add one; the spec's "Close every surface of a switched-off feature"

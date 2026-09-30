@@ -110,3 +110,59 @@ class DaemonLogRecordOut(BaseModel):
 
 class DaemonLogListOut(BaseModel):
     records: list[DaemonLogRecordOut]
+
+
+class DaemonPortOut(BaseModel):
+    """The port of the next start beside the port this daemon answers on.
+
+    ``pending`` is a saved port this daemon is not on: it takes effect at the
+    next start (spec daemon "Bind a fixed, settable port"), so until then the page
+    says so and the status keeps showing ``bound_port``.
+    """
+
+    #: The configured port, or the 8000 default when none is configured.
+    port: int
+    bound_port: int
+    pending: bool
+
+
+class DaemonPortIn(BaseModel):
+    port: int
+
+
+class VaultUsageOut(BaseModel):
+    #: The synced git repository, or the coffer home when sync is not set up.
+    path: str
+    bytes: int
+    #: Commits on the repository's HEAD; null when it is no repository.
+    versions: int | None
+
+
+class LocalContentUsageOut(BaseModel):
+    #: The one folder "Open folder" opens.
+    folder: str
+    locations: list[str]
+    bytes: int
+
+
+class HistoryUsageOut(BaseModel):
+    #: The database file holding the records; empty for a non-SQLite database.
+    path: str
+    bytes: int
+
+
+class CacheUsageOut(BaseModel):
+    bytes: int
+
+
+class StorageSummaryOut(BaseModel):
+    """What Coffer keeps on this machine, by kind (Settings > Data)."""
+
+    vault: VaultUsageOut
+    local_content: LocalContentUsageOut
+    history: HistoryUsageOut
+    cache: CacheUsageOut
+
+
+class CacheClearOut(BaseModel):
+    cleared_bytes: int

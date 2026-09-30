@@ -219,6 +219,16 @@ Rules a future change must respect:
 - Adding a platform: one adapter module set under `infrastructure/channel/`,
   one member of the config union in `domain/channel/config.py`, its
   import-linter entries, and a child spec under `openspec/specs/channels/`.
+- A platform that delivers events only by webhook (none of the supported ones
+  do: Telegram long-polls, SeaTalk holds a websocket) cannot be added as-is,
+  because no channel code path may listen. The webhook listener, signature
+  check and supervised tunnel that PR #431 deleted are not the pattern to
+  bring back ([SeaTalk Inbound Over WebSocket](seatalk-websocket-inbound.md),
+  Option B). The expected shape is an owner-held relay outside the machine —
+  it receives the platform's webhook and queues the event — which the adapter
+  drains over an outbound connection, so the machine still has no public
+  address and one relay can serve every webhook-only platform. That design
+  gets its own ADR when the first such platform is added.
 - A channel's reported status is what is actually running, because only the
   reconciler changes it; a channel that is dark because it is bound to another
   machine or routes nowhere logs why once rather than every tick.

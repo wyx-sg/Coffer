@@ -19,6 +19,35 @@ needs one").
 - **THEN** the response carries the phase, port, start time, version, executable and channel the shell footer and Settings → Daemon show,
 - **AND** `coffer daemon status --json` reports the same version, channel and port.
 
+### Requirement: Report what Coffer stores and clear the rebuildable cache
+The daemon MUST report, for Settings › Data, what Coffer keeps on this machine in the four kinds
+of [Storage Is Five Classes by Nature](../../../../docs/decisions/storage-is-five-classes-by-nature.md)
+the user acts on, through `GET /api/v1/storage`: the **vault** (the synced git repository — its
+path, size and how many versions it holds — or, while sync is not set up, the knowledge and skill
+trees it would carry, with no version count), the **local content** (chat uploads and channel
+media, which never sync: their locations, the one folder to open, and their size), the **history**
+(the database file holding the records, and its size) and the **rebuildable cache** (the memory
+tree and the transcript summary cache, and their size). Every path MUST come from the same place
+its owner resolves it, so an override the owner honours is honoured here.
+
+`POST /api/v1/storage/cache/clear` MUST delete the files of the memory tree and of the transcript
+summary cache, and nothing else: no vault, local content, history or memory trigger, and no
+partition row, so the next memory update rebuilds each partition from the agents' own memory. It
+MUST be refused (`UPKEEP_ALREADY_RUNNING`) while a memory pass is running, because that pass is
+writing into the tree, and MUST record the clear in the audit log with the bytes freed.
+
+#### Scenario: the storage summary reports the four kinds
+- **GIVEN** knowledge and skill trees, chat and channel media, a database and a memory tree, and no sync set up
+- **WHEN** `GET /api/v1/storage` is called
+- **THEN** it reports the vault as the coffer home with the trees' size and no version count, the local content with both media locations and their size, the history as the database file with its WAL, and the cache as the memory tree and the transcript cache
+- **AND** with a sync repository of three commits, the vault is that repository with 3 versions
+
+#### Scenario: clearing the cache leaves everything else
+- **GIVEN** a memory tree, a transcript summary cache, knowledge, chat media, a memory trigger and the database
+- **WHEN** `POST /api/v1/storage/cache/clear` is called
+- **THEN** the memory tree and the transcript cache are empty, everything else is untouched, the answer carries the bytes freed and the audit log records the clear
+- **AND** while a memory pass is running the clear is refused and nothing is deleted
+
 ## MODIFIED Requirements
 
 ### Requirement: Bind a fixed, settable port
@@ -57,10 +86,11 @@ exactly as `coffer config set daemon.port` does and answer that the change is pe
 keeps answering on its current port. A change takes effect at the next start, which
 `coffer daemon restart` — or the desktop shell's Restart — applies in one step. After a restart on a
 new port the daemon records it in `~/.coffer/daemon.json`, so the desktop shell, the CLI and the MCP
-shim find it by the discovery file as they find any daemon, and the first reconcile after the
-start MUST re-project every connected agent's Coffer entries that name the daemon's address — its
-MCP entry and its memory delivery hook — to the new port, so every agent reconnects without a
-manual step. This setting is deliberately outside the audit obligation every kind inherits: it is
+shim find it by the discovery file as they find any daemon, and no agent's configuration needs a
+rewrite: Coffer's MCP entry in an agent's config runs
+the shim, and the memory delivery hook runs `coffer memory hook`, and both find the daemon through
+`daemon.json` when they run rather than naming a port, so every agent reconnects without a manual
+step. This setting is deliberately outside the audit obligation every kind inherits: it is
 neither a resource nor a capability but process configuration read before the database opens, and
 the CLI that owns it must work with no daemon running — so the audit table is unreachable on
 exactly the path that matters most, and recording a change only when a daemon happens to be up
@@ -96,4 +126,4 @@ would be less honest than recording none.
 #### Scenario: after a restart on a new port every agent reconnects
 - **GIVEN** a daemon configured for 8123 while answering on 8000, and Claude Code and Codex connected to Coffer
 - **WHEN** the daemon is restarted
-- **THEN** it binds 8123 and records it in `~/.coffer/daemon.json`, the first reconcile rewrites each agent's Coffer MCP entry and delivery hook to 8123, and the desktop shell, the CLI and an MCP shim reach the daemon on 8123
+- **THEN** it binds 8123 and records it in `~/.coffer/daemon.json`, each agent's Coffer MCP entry and delivery hook name no port and are left as they are, and the desktop shell, the CLI, an MCP shim and the hook reach the daemon on 8123

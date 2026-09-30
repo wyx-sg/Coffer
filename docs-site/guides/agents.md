@@ -332,7 +332,7 @@ The **Hooks** tab lists every hook the agent will run in one table (owner filter
 | Plugins | each enabled plugin's `hooks/hooks.json` | each enabled plugin's `hooks/hooks.json`, where it has one |
 | Coffer's own hook | `SessionStart`, `UserPromptSubmit`, `PreToolUse` and `PostToolUse` in `settings.json` | the same four events in `hooks.json` |
 
-Coffer's own hook — the [memory delivery hook](/guides/memory#install-the-hook) — is marked on each of its four entries and reported as one hook, and a line above the table says how it is doing:
+Coffer's own hook — the [memory delivery hook](/guides/memory#install-the-hook) — is marked on each of its four entries and reported as one hook. On the tab it is a single row: the Event column reads **Memory hook · 4 events** with a chip for each event it sits on, and the summary above the table counts it once. Its state says how it is doing:
 
 - **Current** — installed on exactly the four events, each with exactly the command this version of Coffer writes.
 - **Out of date** — Coffer's hook is there but carries a command an older version wrote, or sits on another set of events (an older build installed one `SessionStart` entry). The daemon rewrites it on its next reconcile pass; **Repair** does it now.

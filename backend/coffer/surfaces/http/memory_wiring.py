@@ -49,7 +49,6 @@ from coffer.application.engine_ports import ModelSelectorPort
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.memory.aggregate import AgentSource
 from coffer.application.memory.aggregate_worker import AggregateWorker
-from coffer.application.memory.context import MemoryPort, compose_context
 from coffer.application.memory.delivery import DeliveryService
 from coffer.application.memory.delivery_reconcile import (
     ConnectedAgents,
@@ -60,10 +59,12 @@ from coffer.application.memory.distil import DistilResult
 from coffer.application.memory.distil_worker import WORKER_ACTOR, DistilWorker
 from coffer.application.memory.hook_service import MemoryHookService
 from coffer.application.memory.kind import make_memory_kind
+from coffer.application.memory.ledger_restore import restore_from_audit
 from coffer.application.memory.retrieval import RetrievalService
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.application.memory.session_ledger import SessionLedger
 from coffer.application.memory.triggers import TriggerService
+from coffer.application.memory.turn_retrieval import TurnRetrieval
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.facets import AgentCatalog
@@ -111,12 +112,14 @@ def _agent_source(resource: Resource) -> AgentSource:
 
 @dataclass(frozen=True)
 class MemoryWiring:
-    """What the memory kind hands back: its two services and the distil runner
-    the background worker sweeps with."""
+    """What the memory kind hands back: its two services, the distil runner
+    the background worker sweeps with, and the per-prompt retrieval a channel
+    turn reads through (``memory_turn_wiring``)."""
 
     service: MemoryService
     delivery_service: DeliveryService
     distil: DistilRunner
+    turn_retrieval: TurnRetrieval
 
 
 def register_delivery_hook_target(
@@ -181,7 +184,8 @@ def wire_memory_kind(
 
     # Prompt-time retrieval, the once-per-session guard and the delivery views.
     triggers = TriggerService(audit=audit)
-    ledger = SessionLedger()
+    # Rebuilt from the delivery fires in the audit log after a restart.
+    ledger = SessionLedger(restore=lambda led: restore_from_audit(led, audit))
     retrieval = RetrievalService(service, ledger)
     set_memory_hook_service(
         MemoryHookService(
@@ -204,36 +208,8 @@ def wire_memory_kind(
         service=service,
         delivery_service=delivery_service,
         distil=service.distil,
+        turn_retrieval=TurnRetrieval(retrieval, delivery_service, agent_service),
     )
-
-
-def memory_context_composer(memory: MemoryPort) -> Callable[[str, str], Awaitable[str | None]]:
-    """The closure a channel turn's system prompt reads memory through (spec
-    memory "Deliver to channel turns through the system prompt").
-
-    Handed to ``wire_chat`` and from there to every agent provider as its
-    ``compose_memory_context``; the providers call it only for a turn that
-    came from a channel, so a turn the developer drives from the web page gets
-    memory through its agent's own hook instead, never both.
-
-    ``None`` whenever nothing should be appended: when the composed index is
-    empty, because an empty memory header is worse than none. A failure to read
-    the tree is logged and also answers ``None``. ``agent_key`` is accepted and
-    ignored: every enabled partition is served to every agent.
-    """
-
-    async def _compose(agent_key: str, cwd: str) -> str | None:
-        del agent_key
-        try:
-            composed = await compose_context(memory, cwd=cwd)
-        except Exception:
-            # Memory is an append to the turn, not a precondition of it: a
-            # tree that cannot be read costs this turn its index, not its reply.
-            logger.exception("memory.channel_context.failed")
-            return None
-        return composed.text or None
-
-    return _compose
 
 
 def _upkeep_enabled(

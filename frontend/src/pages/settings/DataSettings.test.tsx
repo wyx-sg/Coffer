@@ -1,170 +1,237 @@
 // frontend/src/pages/settings/DataSettings.test.tsx
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+import { ToastProvider } from "@/components/ui/toast";
 import { DataSettings } from "./DataSettings";
 
-vi.mock("@/lib/api/client", () => ({
-  getApiClient: vi.fn(),
+vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/fs", () => ({
+  fsApi: {
+    open: vi.fn().mockResolvedValue(undefined),
+    reveal: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 
 const { getApiClient } = await import("@/lib/api/client");
+const { fsApi } = await import("@/lib/api/fs");
 const getApiClientMock = vi.mocked(getApiClient);
 
-const MOCK_POLICIES = [
+const POLICIES = [
   {
     table_name: "audit_log",
     display_name: "Audit log",
-    description: "Tracks every lifecycle event.",
-    default_retention_days: 90,
-    retention_days: 30,
-    last_pruned_at: null,
-    last_pruned_rows: 0,
+    description: "x",
+    default_retention_days: 365,
+    retention_days: 365,
+    last_pruned_at: "2026-09-30T03:00:00Z",
+    last_pruned_rows: 1000,
   },
   {
     table_name: "mcp_invocations",
     display_name: "MCP Invocations",
-    description: "Tool call history.",
+    description: "x",
     default_retention_days: 30,
     retention_days: null,
-    last_pruned_at: "2026-05-01T00:00:00Z",
-    last_pruned_rows: 100,
+    last_pruned_at: "2026-09-30T03:00:00Z",
+    last_pruned_rows: 284,
+  },
+  {
+    table_name: "conversations",
+    display_name: "Delete archived chats",
+    description: "x",
+    default_retention_days: 30,
+    retention_days: 90,
+    last_pruned_at: null,
+    last_pruned_rows: 0,
+  },
+  {
+    table_name: "sync_runs",
+    display_name: "Sync rounds",
+    description: "x",
+    default_retention_days: 90,
+    retention_days: 90,
+    last_pruned_at: null,
+    last_pruned_rows: 0,
   },
 ];
 
+const STORAGE = {
+  vault: { path: "/Users/u/.coffer/sync", bytes: 13_002_342, versions: 1382 },
+  local_content: {
+    folder: "/Users/u/.coffer",
+    locations: ["/Users/u/.coffer/chat-media", "/Users/u/.coffer/channel-media"],
+    bytes: 224_395_264,
+  },
+  history: { path: "/Users/u/.coffer/coffer.db", bytes: 50_541_363 },
+  cache: { bytes: 100_663_296 },
+};
+
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={qc}>
+      <ToastProvider>{ui}</ToastProvider>
+    </QueryClientProvider>
+  );
 }
 
-function mockPolicies(
-  policies: typeof MOCK_POLICIES,
-  {
-    patchMock = vi.fn().mockResolvedValue({ data: {}, error: undefined }),
-    postMock = vi.fn().mockResolvedValue({ data: {}, error: undefined }),
-  }: {
-    patchMock?: ReturnType<typeof vi.fn>;
-    postMock?: ReturnType<typeof vi.fn>;
-  } = {},
-) {
-  getApiClientMock.mockReturnValue({
-    GET: vi.fn().mockResolvedValue({
-      data: { policies },
-      error: undefined,
-    }),
-    POST: postMock,
-    PATCH: patchMock,
-  } as unknown as ReturnType<typeof getApiClient>);
-  return { patchMock, postMock };
+function mockApi({
+  storage = STORAGE,
+  patch = vi.fn().mockResolvedValue({ data: {}, error: undefined }),
+  post = vi
+    .fn()
+    .mockImplementation(async (path: string) =>
+      path === "/storage/cache/clear"
+        ? { data: { cleared_bytes: 100_663_296 }, error: undefined }
+        : { data: { tables: { mcp_invocations: 12 } }, error: undefined },
+    ),
+}: {
+  storage?: typeof STORAGE;
+  patch?: ReturnType<typeof vi.fn>;
+  post?: ReturnType<typeof vi.fn>;
+} = {}) {
+  const get = vi
+    .fn()
+    .mockImplementation(async (path: string) =>
+      path === "/storage"
+        ? { data: storage, error: undefined }
+        : { data: { policies: POLICIES }, error: undefined },
+    );
+  getApiClientMock.mockReturnValue({ GET: get, POST: post, PATCH: patch } as unknown as ReturnType<
+    typeof getApiClient
+  >);
+  return { get, patch, post };
 }
 
 describe("DataSettings", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  beforeEach(() => vi.clearAllMocks());
+
+  // revise-web-ui-ia: web-ui "the data tab shows four blocks and no this-mac
+  // block" — the acceptance marker is added when the change is archived.
+  test("the data tab shows four blocks and no this-mac block", async () => {
+    mockApi();
+    render(wrap(<DataSettings />));
+    const vault = await screen.findByTestId("settings-data-vault");
+    await within(vault).findByText("12.4 MB · 1,382 versions");
+    expect(within(vault).getByText("~/.coffer/sync")).toBeInTheDocument();
+    const local = screen.getByTestId("settings-data-local");
+    expect(within(local).getByText(/not synced — back it up yourself/i)).toBeInTheDocument();
+    expect(within(local).getByText("~/.coffer/chat-media")).toBeInTheDocument();
+    const history = screen.getByTestId("settings-data-history");
+    expect(within(history).getByText("48.2 MB")).toBeInTheDocument();
+    expect(await within(history).findByText("Changes")).toBeInTheDocument();
+    expect(within(history).getByText("MCP calls")).toBeInTheDocument();
+    expect(within(history).getByText("Conversations")).toBeInTheDocument();
+    // Only the three record kinds; the other pruned tables keep their defaults.
+    expect(within(history).queryByText("Sync rounds")).toBeNull();
+    expect(within(history).getByRole("button", { name: /clear expired data now/i })).toBeVisible();
+    const cache = screen.getByTestId("settings-data-cache");
+    expect(within(cache).getByText("96 MB")).toBeInTheDocument();
+    expect(screen.queryByText(/this mac only/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
   });
 
-  test("renders all retention policy cards", async () => {
-    mockPolicies(MOCK_POLICIES);
+  test("the history footer names the last nightly clear", async () => {
+    mockApi();
     render(wrap(<DataSettings />));
-
-    expect(await screen.findByText("Data retention")).toBeInTheDocument();
-    expect(screen.getByText("Audit log")).toBeInTheDocument();
-    expect(screen.getByText("MCP invocations")).toBeInTheDocument();
+    expect(await screen.findByText(/last cleared .* — 1284 rows/i)).toBeInTheDocument();
   });
 
-  test("days input hidden when 'keep forever' is toggled on", async () => {
-    mockPolicies([MOCK_POLICIES[0]]);
+  test("Open folder opens the vault's folder through the daemon", async () => {
+    mockApi();
     render(wrap(<DataSettings />));
-
-    await screen.findByText("Audit log");
-    expect(screen.getByLabelText("Keep for (days)")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText("Keep forever"));
-    expect(screen.queryByLabelText("Retention (days)")).not.toBeInTheDocument();
+    const vault = await screen.findByTestId("settings-data-vault");
+    await within(vault).findByText("~/.coffer/sync");
+    fireEvent.click(within(vault).getByRole("button", { name: /open folder/i }));
+    expect(fsApi.open).toHaveBeenCalledWith("/Users/u/.coffer/sync");
   });
 
-  test("auto-saves: no Save button — retention persists on edit", async () => {
-    mockPolicies([MOCK_POLICIES[0]]);
-    render(wrap(<DataSettings />));
-
-    await screen.findByText("Audit log");
-    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
-  });
-
-  test("editing days and blurring auto-saves the PATCH", async () => {
-    const patchMock = vi.fn().mockResolvedValue({ data: {}, error: undefined });
-    mockPolicies([MOCK_POLICIES[0]], { patchMock });
-
-    render(wrap(<DataSettings />));
-    await screen.findByText("Audit log");
-
-    const daysInput = screen.getByLabelText("Keep for (days)");
-    fireEvent.change(daysInput, { target: { value: "90" } });
-    fireEvent.blur(daysInput);
-
-    await waitFor(() => {
-      expect(patchMock).toHaveBeenCalledWith(
-        "/retention/policies/{table_name}",
-        expect.objectContaining({
-          params: { path: { table_name: "audit_log" } },
-          body: { retention_days: 90 },
-        }),
-      );
+  test("a vault that is not a repository says how to get versions", async () => {
+    mockApi({
+      storage: {
+        ...STORAGE,
+        vault: { path: "/Users/u/.coffer", bytes: 1024, versions: null as unknown as number },
+      },
     });
+    render(wrap(<DataSettings />));
+    expect(
+      await screen.findByText(/set up sync to keep it as a git repository/i),
+    ).toBeInTheDocument();
   });
 
-  test("clearing expired data asks first, then reports rows per policy by its display name", async () => {
-    const postMock = vi.fn().mockResolvedValue({
-      data: { tables: { audit_log: 12, mcp_invocations: 0 } },
-      error: undefined,
-    });
-    mockPolicies(MOCK_POLICIES, { postMock });
+  // revise-web-ui-ia: web-ui "clear expired now removes what retention has
+  // passed" (the page half: the confirmed prune reports what went) — the
+  // acceptance marker is added when the change is archived.
+  test("clear expired now asks first, then reports what went by its record name", async () => {
+    const { post } = mockApi();
     render(wrap(<DataSettings />));
-    await screen.findByText("Audit log");
-
-    fireEvent.click(screen.getByRole("button", { name: "Clear expired data now" }));
-    expect(postMock).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: /clear expired data now/i }));
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("Clear expired data now?");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear expired data now" }));
-
-    await waitFor(() => expect(postMock).toHaveBeenCalledWith("/retention/prune", { body: {} }));
-    // Named the way the rows are, never by table name; zero-row tables are left out.
-    expect(await screen.findByRole("status")).toHaveTextContent("Removed 12 rows from Audit log");
-    expect(screen.getByRole("status")).not.toHaveTextContent("audit_log");
-    expect(screen.getByRole("status")).not.toHaveTextContent("MCP invocations");
+    fireEvent.click(within(dialog).getByRole("button", { name: /clear expired data now/i }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/retention/prune", { body: {} }));
+    expect(await screen.findByText("Removed 12 rows from MCP calls")).toBeInTheDocument();
   });
 
-  test("a prune that removed nothing says so", async () => {
-    const postMock = vi.fn().mockResolvedValue({ data: { tables: {} }, error: undefined });
-    mockPolicies([MOCK_POLICIES[0]], { postMock });
+  // revise-web-ui-ia: web-ui "clearing the cache is confirmed and rebuilt"
+  // (the page half; the backend half is test_daemon_port_and_storage_routes) —
+  // the acceptance marker is added when the change is archived.
+  test("clearing the cache is confirmed, says what comes back, and closes only on success", async () => {
+    const { post } = mockApi();
     render(wrap(<DataSettings />));
-    await screen.findByText("Audit log");
-
-    fireEvent.click(screen.getByRole("button", { name: "Clear expired data now" }));
+    const cache = await screen.findByTestId("settings-data-cache");
+    await within(cache).findByText("96 MB");
+    fireEvent.click(within(cache).getByRole("button", { name: /^clear$/i }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Clear expired data now" }));
-
-    expect(await screen.findByRole("status")).toHaveTextContent("Nothing to clear");
+    expect(
+      within(dialog).getByText(/rebuilds memory from the agents' own memory/i),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/sources are gone won't come back/i)).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: /clear cache/i }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/storage/cache/clear"));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
-  test("toggling 'keep forever' auto-saves retention_days: null", async () => {
-    const patchMock = vi.fn().mockResolvedValue({ data: {}, error: undefined });
-    mockPolicies([MOCK_POLICIES[0]], { patchMock });
-
-    render(wrap(<DataSettings />));
-    await screen.findByText("Audit log");
-
-    fireEvent.click(screen.getByLabelText("Keep forever"));
-
-    await waitFor(() => {
-      expect(patchMock).toHaveBeenCalledWith(
-        "/retention/policies/{table_name}",
-        expect.objectContaining({
-          params: { path: { table_name: "audit_log" } },
-          body: { retention_days: null },
-        }),
-      );
+  test("a failed cache clear keeps the dialog open with its error", async () => {
+    const post = vi.fn().mockResolvedValue({
+      data: undefined,
+      error: {
+        error: {
+          code: "UPKEEP_ALREADY_RUNNING",
+          message: "an upkeep pass is already running",
+          details: {},
+        },
+      },
     });
+    mockApi({ post });
+    render(wrap(<DataSettings />));
+    const cache = await screen.findByTestId("settings-data-cache");
+    await within(cache).findByText("96 MB");
+    fireEvent.click(within(cache).getByRole("button", { name: /^clear$/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /clear cache/i }));
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  test("a retention save that fails says so, marks the row and offers Try again", async () => {
+    const patch = vi.fn().mockResolvedValue({
+      data: undefined,
+      error: { error: { code: "INTERNAL_ERROR", message: "database is locked", details: {} } },
+    });
+    mockApi({ patch });
+    render(wrap(<DataSettings />));
+    const forever = await screen.findByRole("switch", { name: /keep forever/i, checked: true });
+    fireEvent.click(forever);
+    // Turning keep-forever off shortens, so it asks first.
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /shorten/i }));
+    expect(await screen.findByTestId("settings-data-save-failed")).toBeInTheDocument();
+    expect(screen.getByText("Not saved")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(2));
   });
 });

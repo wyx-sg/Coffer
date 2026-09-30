@@ -31,7 +31,7 @@ join it with one registry entry, and leave it the same way.
   - the sync attention source is untagged, so sync items and the desktop shell's sync marks
     always show.
 - **The Knowledge, Memory and Sync sidebar entries lose their "Experimental" marker.**
-- **Migration 0121** strips `vault_sync`, `knowledge` and `memory` from the `features` object of
+- **Migration 0116** strips `vault_sync`, `knowledge` and `memory` from the `features` object of
   `~/.coffer/daemon-config.json`, keeping every other key and leaving a missing or unreadable file
   alone. A stored setting for a key the registry does not name is ignored by every read — logged,
   never listed.
@@ -69,7 +69,7 @@ join it with one registry entry, and leave it the same way.
 
 - Backend: `domain/features.py` (empty registry), `application/features.py` (unregistered keys
   ignored), the route, kind, tool, path, hook, guide, channel, worker, curation and attention gates
-  on the three keys, and migration `0121`.
+  on the three keys, and migration `0116`.
 - Frontend: the sidebar's feature tags on Knowledge, Memory and Sync, the Experimental features
   card rendered only while the registry is non-empty, and the tests that switched the three.
 - Desktop: the shell's `sync_gate` on the sync attention marks.

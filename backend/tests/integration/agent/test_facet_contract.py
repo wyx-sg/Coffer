@@ -25,7 +25,8 @@ from coffer.domain.agent.hooks import parse_hooks
 from coffer.domain.agent.types import AgentType
 from coffer.domain.memory.delivery import DELIVERY_EVENTS, events_label
 from coffer.domain.provider.agent_projection import ProviderProjectionRequest
-from coffer.domain.provider.api_key_helper import anthropic_api_key_helper
+from coffer.domain.provider.api_key_helper import proxy_token_args, proxy_token_helper
+from coffer.domain.provider.codex_projection import CodexAuthCommand
 from coffer.domain.provider.model_binding import ModelBinding, ProjectedModel
 from tests.support.facets import agent_catalog
 from tests.support.homes import FakeAgentDir, IsolatedHome, fake_agent_dir
@@ -77,8 +78,8 @@ def test_the_provider_projection_round_trips_and_keeps_user_keys(
         connection_name="gw",
         agent_uid="a" * 32,
         base_url="https://gw.example/v1",
-        key_helper=anthropic_api_key_helper(_UID, coffer_cli="/opt/coffer/bin/coffer"),
-        codex_auth=None,
+        key_helper=proxy_token_helper("a" * 32, coffer_cli="/opt/coffer/bin/coffer"),
+        codex_auth=CodexAuthCommand("/opt/coffer/bin/coffer", proxy_token_args("a" * 32)),
         binding=ModelBinding(),
         wire_api=None,
         models=(ProjectedModel(id="m-1"),),

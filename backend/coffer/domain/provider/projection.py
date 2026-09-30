@@ -39,15 +39,9 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from coffer.domain.agent.tiers import CLAUDE_TIERS, tier_env_key
-from coffer.domain.provider.api_key_helper import (
-    anthropic_api_key_helper as anthropic_api_key_helper,
-)
 from coffer.domain.provider.api_key_helper import is_managed_api_key_helper
 from coffer.domain.provider.codex_projection import (
     CODEX_CATALOG_TRUNCATION_LIMIT as CODEX_CATALOG_TRUNCATION_LIMIT,
-)
-from coffer.domain.provider.codex_projection import (
-    CODEX_ENV_KEY as CODEX_ENV_KEY,
 )
 from coffer.domain.provider.codex_projection import (
     CODEX_MODEL_CATALOG_FILENAME as CODEX_MODEL_CATALOG_FILENAME,
@@ -241,13 +235,11 @@ def remove_anthropic_settings(
 
 __all__ = [
     "CODEX_CATALOG_TRUNCATION_LIMIT",
-    "CODEX_ENV_KEY",
     "CODEX_MODEL_CATALOG_FILENAME",
     "CODEX_MODEL_CATALOG_KEY",
     "CODEX_PROVIDER_ID",
     "LOOPBACK_NO_PROXY",
     "PICKER_MARKER",
-    "anthropic_api_key_helper",
     "apply_anthropic_settings",
     "apply_codex_provider",
     "codex_model_catalog_json",

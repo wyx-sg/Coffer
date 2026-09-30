@@ -619,8 +619,9 @@ now, from every source whose experimental feature is on: the reconciler's
 drift that a pass could not fix, MCP servers whose last test failed, whose
 launcher is missing or whose cited secret is absent, agents whose program is
 missing, whose connection is partial or who are not connected, a sync stopped on
-a conflict or holding deletions, and channels reconnecting, disconnected or not
-running. Each item MUST carry its kind, the resource's uid and title, a stable
+a conflict or holding deletions, channels reconnecting, disconnected or not
+running, and commands a skill requires that are missing, older than a skill's
+minimum or not logged in (kind `cli`, the command as the uid). Each item MUST carry its kind, the resource's uid and title, a stable
 reason code with one sentence, a severity (`error`, `warning`, `info`), when
 the condition was first seen where that is known, and exactly one action: a
 verb and the REST route and body the kind's own page uses — the list has no
@@ -641,6 +642,12 @@ items, and the answer MUST count the items per kind.
 - **GIVEN** an attention source tagged with a registered experimental feature that is switched off, holding an item it would report
 - **WHEN** the attention list is read
 - **THEN** that source's item is not listed and the source is not reported as failing
+
+#### Scenario: a required command that needs attention is listed
+- **GIVEN** a skill requiring `gh` with minimum `2.40` and `gh 2.30` installed
+- **WHEN** the attention list is read
+- **THEN** it carries one `cli` item for `gh` with reason `cli_outdated` whose action is `check` through `POST /api/v1/clis/gh/check`
+- **AND** once `gh` is current, present and logged in, no `cli` item is listed
 
 ### Requirement: Carry a monotonic revision on every resource
 Every resource MUST carry an integer revision that is 1 when the row is

@@ -88,24 +88,25 @@ const pageRoutes: RouteObject[] = gateRoutes([
   { path: "chat", element: <ChatRedirect /> },
   { path: "chat/:id", element: <ChatRedirect /> },
   { path: "mcp-servers", element: <ResourcesPage /> },
-  {
-    path: "mcp-servers/:name",
-    element: lazyPage(() => import("./pages/ResourceDetailPage"), "ResourceDetailPage"),
-  },
-  {
-    path: "mcp-servers/:name/:tab",
-    element: lazyPage(() => import("./pages/ResourceDetailPage"), "ResourceDetailPage"),
-  },
+  { path: "mcp-servers/:name", element: <ResourcesPage /> },
+  { path: "mcp-servers/:name/:tab", element: <ResourcesPage /> },
   // Legacy route — this surface used to live at /resources.
   { path: "resources", element: <Navigate to="/mcp-servers" replace /> },
   {
     path: "custom-tools",
     element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
   },
+  // One custom-tool group, by its fixed name — one page with no tabs.
+  {
+    path: "custom-tools/:group",
+    element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
+  },
   { path: "clis", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
-  // A skill's Requires tab links each command here; the CLIs page item gives
-  // it its own detail page.
-  { path: "clis/:command", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
+  // One required command, by the command itself — one page with no tabs.
+  {
+    path: "clis/:command",
+    element: lazyPage(() => import("./pages/CliDetailPage"), "CliDetailPage"),
+  },
   { path: "agents", element: <AgentsPage /> },
   // An agent's pages are addressed by its TYPE (one agent per type), the
   // detail page's tab by the path (`/agents/<type>/<tab>`, Overview bare),

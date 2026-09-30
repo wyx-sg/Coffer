@@ -45,7 +45,7 @@ function agent(type: AgentOut["type"]): AgentOut {
 const SETTINGS = "/home/u/.claude/settings.json";
 const LOCAL = "/home/u/.claude/settings.local.json";
 const PLUGIN_HOOKS = "/home/u/.claude/plugins/cache/superpowers/hooks/hooks.json";
-const COFFER_CMD = "coffer memory index --agent-uid u-claude_code";
+const COFFER_CMD = 'coffer memory hook --agent-uid u-claude_code --cwd "$PWD"';
 
 function hook(over: Partial<NativeHook>): NativeHook {
   return {
@@ -159,20 +159,69 @@ describe("AgentHooksTab", () => {
     ).toBeInTheDocument();
   });
 
+  acceptance(
+    "agent-registry",
+    "coffer's memory hook is one row with a chip per event",
+    async () => {
+      const cofferEntries = (
+        [
+          ["UserPromptSubmit", null],
+          ["SessionStart", null],
+          ["PreToolUse", "Bash"],
+          ["PostToolUse", "Bash"],
+        ] as const
+      ).map(([event, matcher]) => hook({ event, matcher, command: COFFER_CMD, coffer: true }));
+      renderTab({
+        items: [...cofferEntries, ...OWN_ROWS],
+        coffer_hook: { ...COFFER, event: "PostToolUse,PreToolUse,SessionStart,UserPromptSubmit" },
+        parse_errors: [],
+      });
+
+      expect(
+        await screen.findByText("4 hooks in 3 files · 1 is Coffer’s · 3 the agent’s own"),
+      ).toBeInTheDocument();
+      // One row for all four entries, never the events joined into one string.
+      expect(screen.getAllByText(COFFER_CMD)).toHaveLength(1);
+      const row = await rowOf(COFFER_CMD);
+      expect(within(row).getByText("Memory hook · 4 events")).toBeInTheDocument();
+      for (const event of ["PostToolUse", "PreToolUse", "SessionStart", "UserPromptSubmit"]) {
+        expect(within(row).getByText(event)).toBeInTheDocument();
+      }
+      expect(within(row).getByText("matcher Bash")).toBeInTheDocument();
+      expect(screen.queryByText(/PostToolUse,PreToolUse/)).not.toBeInTheDocument();
+    },
+  );
+
+  test("a missing Coffer hook lists its events as chips too", async () => {
+    renderTab({
+      items: [],
+      coffer_hook: {
+        ...COFFER,
+        health: "missing",
+        event: "PostToolUse,PreToolUse,SessionStart,UserPromptSubmit",
+      },
+      parse_errors: [],
+    });
+    const row = await rowOf(en.agents.hooksTab.missing.title);
+    expect(within(row).getByText("Memory hook · 4 events")).toBeInTheDocument();
+    expect(within(row).getByText("UserPromptSubmit")).toBeInTheDocument();
+    expect(screen.queryByText(/PostToolUse,PreToolUse/)).not.toBeInTheDocument();
+  });
+
   acceptance("agent-registry", "report a stale Coffer hook", async () => {
     const onRepair = vi.fn();
     renderTab(
       {
-        items: [{ ...COFFER_ROW, command: "coffer memory index --agent codex" }],
+        items: [{ ...COFFER_ROW, command: "coffer memory context --agent codex" }],
         coffer_hook: { ...COFFER, health: "stale", installed_command: "old" },
         parse_errors: [],
       },
       { onRepair },
     );
-    const row = await rowOf("coffer memory index --agent codex");
+    const row = await rowOf("coffer memory context --agent codex");
     expect(await within(row).findByText("Out of date")).toBeInTheDocument();
     expect(within(row).getByText(/^fired /)).toBeInTheDocument();
-    fireEvent.click(within(row).getByRole("button", { name: "Repair Coffer’s SessionStart hook" }));
+    fireEvent.click(within(row).getByRole("button", { name: "Repair Coffer’s memory hook" }));
     expect(onRepair).toHaveBeenCalledTimes(1);
   });
 

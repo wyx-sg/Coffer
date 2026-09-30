@@ -21,11 +21,12 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from sqlalchemy import TIMESTAMP, Index, Integer, Select, String, Text, func, select
+from sqlalchemy import TIMESTAMP, Index, Integer, Select, String, Text, case, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
 from coffer.domain.mcp.capability import MCPInvocation
+from coffer.infrastructure.mcp.invocation_summary import InvocationSummary, summarize
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.keyset import newest_first_after
 from coffer.infrastructure.persistence.models import ResourceModel
@@ -276,7 +277,58 @@ class MCPInvocationRepo:
             rows = (await session.execute(stmt)).all()
         return {(r.name, r.capability_key): int(r.n) for r in rows}
 
+    async def summary(self, *, resource_uid: str, since: datetime) -> InvocationSummary:
+        """One server's call counts since ``since`` (``invocation_summary``)."""
+        return await summarize(self._sm, MCPInvocationModel, resource_uid=resource_uid, since=since)
+
     # --- internals ------------------------------------------------------- #
+
+    async def tool_outcomes(
+        self, *, resource_uids: list[str], since: datetime
+    ) -> dict[str, dict[str, tuple[int, int]]]:
+        """``{server uid: {tool: (calls, failures)}}`` at or after ``since``.
+
+        The custom tools page's 24-hour summary (spec mcp-gateway "Manage
+        custom tools on REST and the command line"). A failure is an ``error``
+        or a ``timeout``; a ``denied`` call is counted as a call only.
+        """
+        if not resource_uids:
+            return {}
+        failed = case((MCPInvocationModel.status.in_(("error", "timeout")), 1), else_=0)
+        async with self._sm() as session:
+            stmt = (
+                select(
+                    MCPInvocationModel.resource_uid,
+                    MCPInvocationModel.capability_key,
+                    func.count().label("n"),
+                    func.sum(failed).label("f"),
+                )
+                .where(MCPInvocationModel.capability_type == "tool")
+                .where(MCPInvocationModel.resource_uid.in_(resource_uids))
+                .where(MCPInvocationModel.timestamp >= since)
+                .group_by(MCPInvocationModel.resource_uid, MCPInvocationModel.capability_key)
+            )
+            rows = (await session.execute(stmt)).all()
+        out: dict[str, dict[str, tuple[int, int]]] = {}
+        for r in rows:
+            out.setdefault(r.resource_uid, {})[r.capability_key] = (int(r.n), int(r.f or 0))
+        return out
+
+    async def last_tool_call(self, resource_uid: str, *, since: datetime) -> MCPInvocation | None:
+        """The newest tool call on one server at or after ``since`` that
+        reached it (a ``denied`` call never did)."""
+        async with self._sm() as session:
+            stmt = (
+                select(MCPInvocationModel)
+                .where(MCPInvocationModel.resource_uid == resource_uid)
+                .where(MCPInvocationModel.capability_type == "tool")
+                .where(MCPInvocationModel.status != "denied")
+                .where(MCPInvocationModel.timestamp >= since)
+                .order_by(MCPInvocationModel.timestamp.desc(), MCPInvocationModel.id.desc())
+                .limit(1)
+            )
+            row = (await session.execute(stmt)).scalar_one_or_none()
+        return _inv_to_domain(row) if row is not None else None
 
     async def _commit_one(self, inv: MCPInvocation) -> None:
         async with self._sm() as session:

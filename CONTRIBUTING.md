@@ -7,7 +7,7 @@ Thanks for the interest in Coffer. This file is the **human contributor** entry 
 ```bash
 git clone https://github.com/wyx-sg/Coffer.git
 cd Coffer
-make install                       # venv + backend deps
+make install                       # .venv from uv.lock + frontend, OpenSpec CLI and e2e npm deps
 make hooks                         # wire pre-commit + commit-msg hooks
 make dev                           # backend (:8000) + frontend (:5173)
 ```
@@ -42,9 +42,9 @@ gates and add a migration that strips its stored switch, in the same PR. Do not 
 Four tiers, see [`.agents/testing.md`](./.agents/testing.md):
 
 ```bash
-make verify-unit          # < 5s
-make verify-integration   # < 30s
-make verify-contract      # < 5s
+make verify-unit          # backend unit tests + frontend vitest: about a minute and a half
+make verify-integration   # the longest tier, several minutes (CI runs it as four shards)
+make verify-contract      # about 15 s
 make verify-e2e           # both Playwright projects (see below)
 
 make verify               # lint + unit + integration + contract + acceptance audit
@@ -52,10 +52,10 @@ make verify-all           # verify + e2e
 ```
 
 `make verify-e2e` runs the two projects `e2e/playwright.config.ts` defines. The **web**
-project runs eight browser-driven specs against the frontend, covering the agent workspace
-and the activity, agents, cold-start, knowledge, MCP-flow, settings and skills shells. The
-**mcp** project spawns the daemon and the shim as OS subprocesses and drives a real MCP
-client through them to upstream servers.
+project runs the browser-driven specs in `e2e/web/specs/` against the frontend, one per page
+or flow. The **mcp** project spawns the daemon and the shim as OS subprocesses and drives a
+real MCP client through them to upstream servers. Download the browser once with
+`make install-e2e-browsers`.
 
 ## Lockfile
 
@@ -71,7 +71,7 @@ client through them to upstream servers.
 
   Commit the updated `uv.lock` in the same change as the `pyproject.toml` edit. CI's frozen install will reject a PR whose lockfile drifted from `pyproject.toml`.
 
-- **Local install** (`make install`) uses an editable `pip install`, so day-to-day development does not require uv. Only the lock-refresh step and the CI/release installs go through uv.
+- **Local install** (`make install`) syncs the same frozen lock into `.venv` (`uv sync --frozen --extra dev`), so a local run tests the versions CI tests. It needs [uv](https://docs.astral.sh/uv/).
 
 ## Security
 

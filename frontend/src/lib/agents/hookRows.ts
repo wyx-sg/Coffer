@@ -4,8 +4,11 @@
 // declare plus Coffer's own hook's health, trust and last fire. The tab shows
 // them in one table (spec agent-registry "List every hook in the agent's native
 // config"): each declared hook is a row, owned by Coffer when it carries
-// Coffer's marker, and a MISSING Coffer hook — which no file declares any more —
-// becomes a row of its own so the tab can say so and offer Repair.
+// Coffer's marker. Coffer's memory hook sits on several events with one command,
+// so its entries in one file are ONE row listing every event it sits on — never
+// one row per event, and never the events joined into one string. A MISSING
+// Coffer hook — which no file declares any more — becomes a row of its own so the
+// tab can say so and offer Repair.
 import type { StatusTone } from "@/components/status/statusTone";
 import type { Owner } from "@/lib/agents/owner";
 import type { AgentHooksOut, CofferHook, NativeHook } from "@/lib/api/agents";
@@ -13,7 +16,11 @@ import type { AgentHooksOut, CofferHook, NativeHook } from "@/lib/api/agents";
 export interface HookRow {
   key: string;
   owner: Owner;
+  /** The row's event; on Coffer's grouped row, its events comma-joined (for search). */
   event: string;
+  /** Every event the row's hook sits on: one for the agent's own hooks, each of
+   * them on Coffer's memory hook. */
+  events: string[];
   /** Null on the synthetic row of a missing Coffer hook. */
   command: string | null;
   matcher: string | null;
@@ -24,24 +31,67 @@ export interface HookRow {
   coffer: CofferHook | null;
 }
 
+/** The events a comma-joined label names ("PostToolUse,SessionStart"): sorted, once each. */
+function splitEvents(label: string): string[] {
+  return [
+    ...new Set(
+      label
+        .split(",")
+        .map((e) => e.trim())
+        .filter(Boolean),
+    ),
+  ].sort();
+}
+
+/** The named matchers a group of entries carries, or null when none names one. */
+function groupMatcher(hooks: NativeHook[]): string | null {
+  const named = [...new Set(hooks.map((h) => h.matcher).filter((m): m is string => !!m))].sort();
+  return named.length ? named.join(", ") : null;
+}
+
 export function hookRows(data: AgentHooksOut | undefined): HookRow[] {
   if (!data) return [];
   const cofferHook = data.coffer_hook;
-  const rows: HookRow[] = data.items.map((h: NativeHook, i) => ({
-    key: `${h.path}:${h.event}:${h.matcher ?? ""}:${h.command}:${i}`,
-    owner: h.coffer ? "coffer" : "own",
-    event: h.event,
-    command: h.command,
-    matcher: h.matcher,
-    path: h.path,
-    plugin: h.source === "plugin" ? h.plugin : null,
-    coffer: h.coffer ? cofferHook : null,
-  }));
+  const rows: HookRow[] = [];
+  // Coffer's entries, grouped by the file that declares them: one row per file.
+  const cofferByPath = new Map<string, NativeHook[]>();
+  data.items.forEach((h: NativeHook, i) => {
+    if (h.coffer) {
+      const group = cofferByPath.get(h.path);
+      if (group) {
+        group.push(h);
+        return;
+      }
+      cofferByPath.set(h.path, [h]);
+    }
+    rows.push({
+      key: h.coffer
+        ? `coffer:${h.path}`
+        : `${h.path}:${h.event}:${h.matcher ?? ""}:${h.command}:${i}`,
+      owner: h.coffer ? "coffer" : "own",
+      event: h.event,
+      events: [h.event],
+      command: h.command,
+      matcher: h.matcher,
+      path: h.path,
+      plugin: h.source === "plugin" ? h.plugin : null,
+      coffer: h.coffer ? cofferHook : null,
+    });
+  });
+  for (const row of rows) {
+    const group = row.owner === "coffer" ? cofferByPath.get(row.path) : undefined;
+    if (!group) continue;
+    row.events = splitEvents(group.map((h) => h.event).join(","));
+    row.event = row.events.join(",");
+    row.matcher = groupMatcher(group);
+  }
   if (cofferHook?.health === "missing") {
+    const events = splitEvents(cofferHook.event);
     rows.unshift({
       key: `coffer-missing:${cofferHook.path}`,
       owner: "coffer",
-      event: cofferHook.event,
+      event: events.join(","),
+      events,
       command: null,
       matcher: null,
       path: cofferHook.path,
@@ -53,7 +103,8 @@ export function hookRows(data: AgentHooksOut | undefined): HookRow[] {
 }
 
 interface HookSummaryCounts {
-  /** Hooks a file declares (a missing Coffer hook is not one). */
+  /** Hooks a file declares, Coffer's memory hook counted once per file however
+   * many events it sits on (a missing Coffer hook is not one). */
   hooks: number;
   files: number;
   coffer: number;
@@ -63,12 +114,13 @@ interface HookSummaryCounts {
 
 export function hookSummaryCounts(data: AgentHooksOut | undefined): HookSummaryCounts {
   const items = data?.items ?? [];
-  const coffer = items.filter((h) => h.coffer).length;
+  const coffer = new Set(items.filter((h) => h.coffer).map((h) => h.path)).size;
+  const own = items.filter((h) => !h.coffer).length;
   return {
-    hooks: items.length,
+    hooks: own + coffer,
     files: new Set(items.map((h) => h.path)).size,
     coffer,
-    own: items.length - coffer,
+    own,
     cofferMissing: data?.coffer_hook?.health === "missing",
   };
 }

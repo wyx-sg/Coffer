@@ -22,9 +22,10 @@ asked by the caller.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from enum import StrEnum
+
+from coffer.domain.versions import parse_version
 
 
 class DetectionState(StrEnum):
@@ -61,19 +62,6 @@ def classify(program: ProgramInfo, *, config_dir_exists: bool) -> DetectionState
             else DetectionState.INSTALLED_NEVER_RUN
         )
     return DetectionState.CONFIG_ONLY if config_dir_exists else DetectionState.MISSING
-
-
-_VERSION = re.compile(r"\d+\.\d+(?:\.\d+)?(?:[-+][0-9A-Za-z.\-]+)?")
-
-
-def parse_version(output: str) -> str | None:
-    """The first version number in a ``--version`` output.
-
-    ``2.1.281 (Claude Code)`` and ``codex-cli 0.155.1`` both carry exactly one;
-    anything without a dotted number is not a version the probe claims.
-    """
-    match = _VERSION.search(output)
-    return match.group(0) if match else None
 
 
 __all__ = ["DetectionState", "ProgramInfo", "classify", "parse_version"]

@@ -30,7 +30,7 @@ channel command — needs its own withdrawal, and the spec requirement "Withdraw
 switched-off feature put in front of agents" names that obligation.
 
 A feature **leaves** by deleting its entry and every gate and tag naming it, in the same change,
-plus a migration that strips its key from `~/.coffer/daemon-config.json`. Migration 0121 does
+plus a migration that strips its key from `~/.coffer/daemon-config.json`. Migration 0116 does
 this for `vault_sync`, `knowledge` and `memory`.
 
 ### 3. An unregistered stored key is ignored, not an error

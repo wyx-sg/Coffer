@@ -106,9 +106,9 @@ export const providersApi = {
   // There is no `rename` here. It was a route of this kind's own, and it
   // existed because the connection's name was its identity: the projection
   // Coffer wrote into an agent's config spelled it, so moving it had to be a
-  // deliberate act with its own endpoint. The projection now spells the uid
-  // (`coffer provider key --connection-uid …`), which leaves a rename as an
-  // ordinary label edit — `resourcesApi.rename`, the same PATCH every other
+  // deliberate act with its own endpoint. The projection now names no
+  // connection at all (it runs `coffer proxy token --agent-uid …`), which
+  // leaves a rename as an ordinary label edit — `resourcesApi.rename`, the same PATCH every other
   // kind uses.
 
   remove: (uid: string) => call<void>(`/providers/${enc(uid)}`, { method: "DELETE" }),

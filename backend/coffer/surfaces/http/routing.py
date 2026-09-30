@@ -39,8 +39,10 @@ from coffer.surfaces.http.chat.agent_provider_routes import router as agent_prov
 from coffer.surfaces.http.chat.attachment_routes import router as chat_attachment_router
 from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
 from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
+from coffer.surfaces.http.cli_routes import router as cli_router
 from coffer.surfaces.http.credential_boundary_routes import router as credential_boundary_router
 from coffer.surfaces.http.credential_routes import router as credential_router
+from coffer.surfaces.http.daemon_port_routes import router as daemon_port_router
 from coffer.surfaces.http.event_routes import router as event_router
 from coffer.surfaces.http.feature_dependencies import require_feature
 from coffer.surfaces.http.feature_routes import router as feature_router
@@ -49,10 +51,12 @@ from coffer.surfaces.http.internal_engine_routes import router as internal_engin
 from coffer.surfaces.http.knowledge import history_router as knowledge_history_router
 from coffer.surfaces.http.knowledge import router as knowledge_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
+from coffer.surfaces.http.mcp.custom_tool_routes import router as custom_tool_router
 from coffer.surfaces.http.mcp.invocation_routes import (
     aggregate_router as mcp_invocation_aggregate_router,
 )
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
+from coffer.surfaces.http.mcp.page_routes import router as mcp_page_router
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
 from coffer.surfaces.http.mcp.server_test_routes import router as mcp_server_test_router
 from coffer.surfaces.http.memory import routers as memory_routers
@@ -67,6 +71,7 @@ from coffer.surfaces.http.settings_routes import router as settings_router
 from coffer.surfaces.http.skill_file_routes import router as skill_file_router
 from coffer.surfaces.http.skill_routes import router as skill_router
 from coffer.surfaces.http.skill_source_routes import router as skill_source_router
+from coffer.surfaces.http.storage_routes import router as storage_router
 from coffer.surfaces.http.sync_routes import router as sync_router
 from coffer.surfaces.http.upkeep_routes import router as upkeep_router
 from coffer.surfaces.http.usage_routes import router as usage_router
@@ -76,6 +81,8 @@ def include_all_routers(app: FastAPI) -> None:
     """Mount every sub-router, grouped by spec (kind-agnostic core first)."""
     routers: tuple[APIRouter, ...] = (
         daemon_routes.router,
+        daemon_port_router,  # spec daemon (the port of the next start)
+        storage_router,  # spec daemon (Settings > Data: what Coffer stores)
         feature_router,  # spec experimental-features
         resource_router,
         audit_router,
@@ -104,12 +111,15 @@ def include_all_routers(app: FastAPI) -> None:
         skill_router,
         skill_source_router,
         skill_file_router,
+        cli_router,  # the commands skills require (spec skill-manager)
         # MCP
         mcp_protocol_router,
         mcp_capability_router,
         mcp_server_test_router,
+        custom_tool_router,  # spec mcp-gateway: custom-tool groups
         mcp_invocation_router,
         mcp_invocation_aggregate_router,
+        mcp_page_router,  # the MCP server page's 24 h summary, log and tiering reads
         knowledge_router,  # the one knowledge kind (experimental: knowledge)
         knowledge_history_router,  # … and its history
         *memory_routers,  # the one memory kind (experimental: memory)

@@ -52,7 +52,7 @@ class ExperimentalFeature:
 
 #: Empty: no capability is experimental right now. Sync, knowledge and memory
 #: graduated at 1.0 — their entries and every gate that named them were
-#: deleted, and migration 0121 stripped their stored settings. A feature joins
+#: deleted, and migration 0116 stripped their stored settings. A feature joins
 #: by adding one entry here; it leaves by deleting that entry, every gate that
 #: names it, and its stored settings (spec experimental-features "Declare the
 #: experimental features in one registry").

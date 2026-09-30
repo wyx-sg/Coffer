@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
-import { agentsKey, ownListKeyForKind, resourceScopeKey, resourcesKey } from "@/lib/api/queryKeys";
+import { agentsKey, ownListKeysForKind, resourceScopeKey, resourcesKey } from "@/lib/api/queryKeys";
 import { scopeApi, type Scope } from "@/lib/api/scope";
 import { useToast } from "@/components/ui/toast";
 
@@ -58,10 +58,11 @@ export function useUpdateResourceScope(kind: string, uid: string) {
       // control from that field rather than from this query — so a write here
       // has to refresh them too, or a row would keep showing its pre-write
       // reach. The kind's own list key is the same rule useResourceMutations
-      // applies (`ownListKeyForKind`).
+      // applies (`ownListKeysForKind`).
       void qc.invalidateQueries({ queryKey: resourcesKey });
-      const own = ownListKeyForKind(kind);
-      if (own) void qc.invalidateQueries({ queryKey: own });
+      for (const own of ownListKeysForKind(kind)) {
+        void qc.invalidateQueries({ queryKey: own });
+      }
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

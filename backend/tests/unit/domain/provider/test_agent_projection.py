@@ -17,7 +17,8 @@ from coffer.domain.provider.agent_projection import (
     ProjectedFile,
     ProviderProjectionRequest,
 )
-from coffer.domain.provider.api_key_helper import anthropic_api_key_helper
+from coffer.domain.provider.api_key_helper import proxy_token_args, proxy_token_helper
+from coffer.domain.provider.codex_projection import CodexAuthCommand
 from coffer.domain.provider.model_binding import ModelBinding, ProjectedModel
 
 _UID = "0123456789abcdef0123456789abcdef"
@@ -32,8 +33,8 @@ def _req(
         connection_name="agnes",
         agent_uid="a" * 32,
         base_url="https://gw.example/v1",
-        key_helper=anthropic_api_key_helper(_UID, coffer_cli="/opt/coffer/bin/coffer"),
-        codex_auth=None,
+        key_helper=proxy_token_helper("a" * 32, coffer_cli="/opt/coffer/bin/coffer"),
+        codex_auth=CodexAuthCommand("/opt/coffer/bin/coffer", proxy_token_args("a" * 32)),
         binding=binding or ModelBinding(model="m-1"),
         wire_api=None,
         models=tuple(ProjectedModel(id=m) for m in models),
@@ -49,13 +50,13 @@ def test_each_facet_declares_its_agent_file_and_protocols() -> None:
     assert by_type[AgentType.CODEX].protocols == ("openai",)
 
 
-def test_claude_code_plan_is_one_file_naming_the_connection_by_uid() -> None:
+def test_claude_code_plan_is_one_file_naming_the_agent_by_uid() -> None:
     facet = ClaudeCodeProviderProjection()
     plan = facet.apply('{"theme": "dark"}', _req(), pathlib.Path("/h/.claude/settings.json"))
     assert plan.before == () and plan.after == ()
     doc = json.loads(plan.text)
     assert doc["theme"] == "dark"
-    assert doc["apiKeyHelper"].endswith(f"--connection-uid {_UID}")
+    assert doc["apiKeyHelper"].endswith("proxy token --agent-uid " + "a" * 32)
     assert doc["model"] == "m-1"
     # No tier stored: every tier is pinned to the model on a non-Claude endpoint.
     for tier in ("OPUS", "SONNET", "HAIKU"):

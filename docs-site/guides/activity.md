@@ -161,12 +161,12 @@ coffer log prune --table mcp_invocations
 ```
 
 ```text [Web UI]
-Settings → Data → Data retention
+Settings → Data → History
 ```
 
 :::
 
-A number of days must be at least 1. In the web UI, shortening a window asks for confirmation first, because the next prune deletes the older rows; **Clear expired data now** applies every policy immediately. A policy change is itself audited as `retention_updated`.
+A number of days must be at least 1. The web UI's **History** block shows the three a person usually tunes — **Changes** (`audit_log`), **MCP calls** (`mcp_invocations`) and **Conversations** (`conversations`); the others are set from the CLI. In the web UI, shortening a window asks for confirmation first, because the next prune deletes the older rows; **Clear expired data now** applies every policy immediately. A policy change is itself audited as `retention_updated`.
 
 The daemon log is a file, not a table, so it has no policy: `daemon.log` rotates at 10 MB and keeps three rotations. Per-process shim logs and rolled-aside upstream logs in `~/.coffer/logs/` are deleted after seven days.
 

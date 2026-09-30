@@ -1,37 +1,50 @@
 // frontend/src/components/mcp/importMcpServers.ts
-// The plumbing behind "Add MCP server": turn each parsed JSON server into a
-// Coffer config plus credential writes, register it, and roll it back when
-// its secrets cannot be stored. Pure functions + one async batch, so the
-// dialog stays a view and the mutation hook (useMcpServerMutations.ts) stays
-// one line.
+// The plumbing behind "Add MCP server": turn each parsed server into a Coffer
+// config plus credential writes, register it, write its secrets (rolling the
+// registration back when they cannot be stored), then give it its reach.
+// Pure functions + one async batch, so the dialog stays a view and the
+// mutation hook (useMcpServerMutations.ts) stays one line.
 import type { TFunction } from "i18next";
 
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError, translateApiError } from "@/lib/api/errors";
+import { scopeApi } from "@/lib/api/scope";
 import { mintCredentialRef } from "@/lib/credentialRef";
-import type { ParsedServer } from "./jsonImport";
+import type { ParsedServer } from "@/lib/mcp/pasteParse";
+
+/** One server as the dialog confirmed it: the parsed shape plus the title
+ *  the user may have typed (`""` = none). */
+export interface NewServer extends ParsedServer {
+  title?: string;
+}
+
+/** Which agents the new servers reach: every agent (no scope written), the
+ *  ticked ones (a scope), or none (registered switched off). */
+export type ReachIntent =
+  | { mode: "everywhere" }
+  | { mode: "restricted"; agents: string[] }
+  | { mode: "disabled" };
 
 interface ServerPlan {
   config: Record<string, unknown>;
   secrets: { ref: string; value: string }[];
 }
 
+/** The secret keys of `srv` still without a value — a `bearer_token_env_var`
+ *  header arrives that way. The dialog asks for them; nothing is sent while
+ *  any is empty, so an empty secret never reaches the credential store. */
+export function missingSecretValues(srv: ParsedServer): string[] {
+  return srv.env.filter((e) => e.isSecret && e.value === "").map((e) => e.key);
+}
+
 /**
- * Turn a parsed JSON server into a Coffer config plus the list of
- * credential writes to perform. Pure (no network) — so the config is fully
- * built before any side effect runs. Secret values become
- * `credential_refs`; non-secret values stay inline — in `env` for stdio,
- * in `headers` for http (the parser has already gathered an http server's
- * `headers` block, and any `env` block, into `srv.env`; HttpTransport has no
- * `env` field), mirroring how the secret path routes to each transport's
- * credential_refs.
- *
- * Each secret's ref is minted opaque (`mcp_server/<uuid4 hex>/<env key>`) and
- * NOT from the server's name, which is what `<name>.<env key>` used to do. A
- * server can now be renamed like every other resource, and a ref built from the
- * name would be left describing a label the resource no longer has — while the
- * secret itself sits in the encrypted store under the old address, reachable
- * only because something still cites it.
+ * A parsed server as a Coffer config plus the credential writes to perform.
+ * Pure — the config is fully built before any side effect runs. A secret value
+ * becomes a `credential_refs` entry under an opaque minted ref
+ * (`mcp_server/<uuid4 hex>/<key>`, never derived from the name); a plain value
+ * stays inline — in `env` for stdio, in `headers` for http (HttpTransport has
+ * no `env` field; the parser already gathered an http server's env into
+ * `srv.env`).
  */
 function planServer(srv: ParsedServer): ServerPlan {
   const credentialRefs: Record<string, string> = {};
@@ -59,113 +72,131 @@ function planServer(srv: ParsedServer): ServerPlan {
   return { config: { transport }, secrets };
 }
 
-/** Registers the server and returns its uid — which is what a rollback needs:
- *  the resource is addressed by identity, and the name it was registered under
- *  is only how the failure is reported. */
-async function registerResource(name: string, config: Record<string, unknown>): Promise<string> {
-  const client = getApiClient();
-  const { data, error } = await client.POST("/resources", {
-    body: { kind: "mcp_server", name, config },
+/** Registers the server (with its title, which the create body accepts) and
+ *  returns its uid — the handle a rollback and the reach write need. */
+async function registerResource(srv: NewServer, config: Record<string, unknown>): Promise<string> {
+  const title = srv.title?.trim() || null;
+  const { data, error } = await getApiClient().POST("/resources", {
+    body: { kind: "mcp_server", name: srv.name, title, config },
   });
   if (error) throwApiError(error, "INTERNAL_ERROR", "register failed");
   if (!data) throw new ApiError("INTERNAL_ERROR", "empty register response");
   return data.uid;
 }
 
-async function writeCredential(ref: string, value: string): Promise<void> {
-  const client = getApiClient();
-  const { error } = await client.POST("/credentials", { body: { ref, value } });
+/** Writes one secret. `true` when the daemon answered 202: the value is
+ *  stored sealed and waits for approval in the Coffer app. */
+async function writeCredential(ref: string, value: string): Promise<boolean> {
+  const { data, error } = await getApiClient().POST("/credentials", { body: { ref, value } });
   if (error) throwApiError(error, "INTERNAL_ERROR", "credential write failed");
+  return data?.approval !== undefined && data?.approval !== null;
 }
 
-/**
- * Best-effort rollback of a just-registered resource whose secret writes
- * failed. We try to leave nothing behind referencing a credential that
- * was never stored; any cleanup error is logged but not surfaced — the
- * primary failure (the secret write) is what the user needs to act on.
- */
+/** Best-effort rollback of a just-registered server whose secrets failed, so
+ *  nothing is left citing a credential that was never stored. A cleanup error
+ *  is logged, not surfaced — the secret failure is what the user acts on. */
 async function rollbackResource(uid: string, name: string): Promise<void> {
   try {
-    const client = getApiClient();
-    await client.DELETE("/resources/{uid}", { params: { path: { uid } } });
+    await getApiClient().DELETE("/resources/{uid}", { params: { path: { uid } } });
   } catch (e) {
     console.warn(`[importMcpServers] rollback delete failed for ${name}:`, e);
   }
 }
 
-/** A batch that partly failed: the servers that did register stay; the
- * dialog lists every one that did not, one line each. */
-export class BatchImportError extends Error {
-  constructor(readonly failed: string[]) {
-    super(failed.join("; "));
-    this.name = "BatchImportError";
+async function applyReach(uid: string, reach: ReachIntent): Promise<void> {
+  if (reach.mode === "restricted") {
+    await scopeApi.put(uid, { agents: reach.agents });
+  } else if (reach.mode === "disabled") {
+    const { error } = await getApiClient().POST("/resources/{uid}/disable", {
+      params: { path: { uid } },
+    });
+    if (error) throwApiError(error, "INTERNAL_ERROR", "disable failed");
   }
 }
 
-/** One server this import registered: the name the batch named it, and the uid
- *  it now has — which is what a caller follows to its page. */
-export interface ImportedServer {
+/** One server this import registered: its fixed name and its uid. */
+interface ImportedServer {
   name: string;
   uid: string;
 }
 
+/** One server that was not added, and why. `nameTaken` marks the daemon's 409,
+ *  which the dialog shows under the name field. */
+export interface FailedServer {
+  name: string;
+  message: string;
+  nameTaken: boolean;
+}
+
+export interface ImportReport {
+  created: ImportedServer[];
+  failed: FailedServer[];
+  /** Created servers one of whose secrets waits for approval. */
+  awaitingApproval: string[];
+  /** Created servers whose reach could not be written (they reach every agent). */
+  reachFailed: string[];
+}
+
 export interface ImportMcpServersArgs {
-  servers: ParsedServer[];
-  /** What a prior attempt of THIS import session already registered, keyed by
-   *  the name the pasted batch used, so a retry after a partial failure
-   *  re-attempts only the servers that failed instead of re-POSTing the created
-   *  ones (which would 409). Mutated in place as servers succeed.
-   *
-   *  A map rather than a set of names: the uid is the half a caller acts on,
-   *  and a retry that skips an already-registered server still has to report
-   *  it. Keyed by NAME because that is what the pasted document says, and the
-   *  question being asked here is "did this batch already register this
-   *  entry" — a question about the input, not about a resource. */
+  servers: NewServer[];
+  /** What a prior attempt of THIS dialog session already registered — name to
+   *  uid, mutated in place — so a retry re-attempts only the failures instead
+   *  of re-POSTing the created ones (which would 409). */
   created: Map<string, string>;
+  /** Defaults to every agent. */
+  reach?: ReachIntent;
   t: TFunction;
 }
 
+/** The daemon's 409 for a name another server already has. */
+function isNameTaken(err: unknown): boolean {
+  return err instanceof ApiError && err.code === "RESOURCE_ALREADY_EXISTS";
+}
+
 /**
- * Import a batch. Each server is registered before its secrets are written
- * to the encrypted credential store, so a failed registration leaves nothing
- * orphaned; a failed secret write rolls the registration back. Resolves with
- * the servers created; rejects with a BatchImportError naming every server that
- * failed (the ones that did register stay registered).
+ * Add a batch, one server at a time: register → write its secrets (a failed
+ * write rolls the registration back, so a failed registration never orphans a
+ * credential and a failed secret never leaves a server citing nothing) → reach.
+ * Never rejects: every server lands in `created` or `failed`.
  */
 export async function importMcpServers({
   servers,
   created,
+  reach = { mode: "everywhere" },
   t,
-}: ImportMcpServersArgs): Promise<ImportedServer[]> {
-  const done: ImportedServer[] = [];
-  const failed: string[] = [];
+}: ImportMcpServersArgs): Promise<ImportReport> {
+  const report: ImportReport = { created: [], failed: [], awaitingApproval: [], reachFailed: [] };
   for (const srv of servers) {
     const already = created.get(srv.name);
     if (already !== undefined) {
-      done.push({ name: srv.name, uid: already });
+      report.created.push({ name: srv.name, uid: already });
       continue;
     }
     const { config, secrets } = planServer(srv);
-    // The uid the registration returned, and the handle a rollback needs;
-    // `null` while nothing has been registered yet.
-    let registeredUid: string | null = null;
+    let uid: string | null = null;
+    let waiting = false;
     try {
-      registeredUid = await registerResource(srv.name, config);
+      uid = await registerResource(srv, config);
       for (const s of secrets) {
-        await writeCredential(s.ref, s.value);
+        if (await writeCredential(s.ref, s.value)) waiting = true;
       }
-      created.set(srv.name, registeredUid);
-      done.push({ name: srv.name, uid: registeredUid });
     } catch (e) {
-      // Secret write failed after registration — roll the resource back so we
-      // don't leave a Coffer server pointing at a credential ref that was
-      // never stored in the encrypted store.
-      if (registeredUid !== null) {
-        await rollbackResource(registeredUid, srv.name);
-      }
-      failed.push(`${srv.name}: ${translateApiError(t, e)}`);
+      if (uid !== null) await rollbackResource(uid, srv.name);
+      report.failed.push({
+        name: srv.name,
+        message: translateApiError(t, e),
+        nameTaken: isNameTaken(e),
+      });
+      continue;
+    }
+    created.set(srv.name, uid);
+    report.created.push({ name: srv.name, uid });
+    if (waiting) report.awaitingApproval.push(srv.name);
+    try {
+      await applyReach(uid, reach);
+    } catch {
+      report.reachFailed.push(srv.name);
     }
   }
-  if (failed.length > 0) throw new BatchImportError(failed);
-  return done;
+  return report;
 }

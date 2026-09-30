@@ -39,7 +39,7 @@ coffer credentials set github/token
 
 An empty value is rejected. `--value <secret>` also works but prints a warning, because the value lands in your shell history.
 
-Most of the time you do not create refs by hand. The dialogs that ask for a secret — **Add MCP server**, the MCP server **Edit** dialog's credentials, **Add model provider**, a channel's token field, the sync remote's push credential — write the secret to the store first and save only the generated ref (for example `mcp_server/<uuid>/GITHUB_TOKEN` or `provider/<uuid>/key`). If the registration that follows fails, the just-written credential is deleted again.
+Most of the time you do not create refs by hand. The dialogs that ask for a secret — **Add server** on the MCP servers page, the MCP server **Edit** dialog's credentials, **Add model provider**, a channel's token field, the sync remote's push credential — write the secret to the store first and save only the generated ref (for example `mcp_server/<uuid>/GITHUB_TOKEN` or `provider/<uuid>/key`). If the registration that follows fails, the just-written credential is deleted again.
 
 ## Cite a credential
 

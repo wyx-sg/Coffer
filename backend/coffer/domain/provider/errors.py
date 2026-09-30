@@ -67,8 +67,9 @@ class ProviderInternalOnly(CofferError):  # noqa: N818
 
 
 class NoActiveProvider(CofferError):  # noqa: N818
-    """No active provider profile exists for the requested wire format. Maps
-    to 404 — e.g. ``coffer provider key`` before any profile was activated."""
+    """A connection has no credential to hand the local model proxy — raised
+    by the service's key lookup, which the proxy's membership check treats as
+    "not a member". Maps to 404."""
 
     code = "NO_ACTIVE_PROVIDER"
 

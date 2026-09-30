@@ -27,6 +27,9 @@ class AuditEventType(StrEnum):
     # autostart installed or removed
     DAEMON_RESIDENCY_UPDATED = "daemon_residency_updated"
     RETENTION_UPDATED = "retention_updated"
+    # Settings > Data "Rebuildable cache": the memory tree and the transcript
+    # summary cache were cleared, to be rebuilt by the next memory update.
+    STORAGE_CACHE_CLEARED = "storage_cache_cleared"
     INTERNAL_ENGINE_MODEL_SET = "internal_engine_model_set"
     CREDENTIAL_SET = "credential_set"
     CREDENTIAL_READ = "credential_read"
@@ -62,6 +65,10 @@ class AuditEventType(StrEnum):
     SKILL_DRIFT_REMEDIATED = "skill_drift_remediated"
     SKILL_ADOPTED = "skill_adopted"
     SKILL_UNMANAGED_DELETED = "skill_unmanaged_deleted"
+    # A Homebrew install of a command a skill requires (spec skill-manager
+    # "Install a required command only through Homebrew and only when asked").
+    CLI_INSTALL_STARTED = "cli_install_started"
+    CLI_INSTALL_FINISHED = "cli_install_finished"
     # spec knowledge
     KNOWLEDGE_WRITTEN = "knowledge_written"
     KNOWLEDGE_DELETED = "knowledge_deleted"

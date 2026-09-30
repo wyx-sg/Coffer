@@ -169,7 +169,7 @@ An approval ends as `approved`, `rejected`, or `superseded` — when the resourc
 
 ### On the command line
 
-A command whose change waits — `coffer mcp add`, any `coffer <kind> edit`, `coffer channel add`, `coffer sync remote set`, `coffer credentials set`, `coffer config set secrets.require_approval off` — saves what it can, prints what waits and exits `9`:
+A command whose change waits — `coffer mcp add`, any `coffer <kind> edit` (including `coffer provider edit --secret` or `--base-url`), `coffer channel add`, `coffer provider add`, `coffer sync remote set`, `coffer credentials set`, `coffer config set secrets.require_approval off` — saves what it can, prints what waits and exits `9`:
 
 ```text
 $ coffer mcp add gh-work --stdio "npx -y @modelcontextprotocol/server-github" --credential GITHUB_TOKEN=github/token

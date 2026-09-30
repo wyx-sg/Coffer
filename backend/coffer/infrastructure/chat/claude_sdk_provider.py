@@ -32,6 +32,7 @@ from coffer.infrastructure.chat.claude_sdk_agent import (
 )
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 from coffer.infrastructure.chat.document_extract import default_document_extractor
+from coffer.infrastructure.chat.prompt_memory import MemoryRetriever, bind_prompt_memory
 from coffer.infrastructure.chat.transcribe import Transcriber
 
 #: The model ids this agent can be put on, looked up per turn. A narrow callable
@@ -43,7 +44,7 @@ from coffer.infrastructure.chat.transcribe import Transcriber
 #: ``MemoryContextComposer`` — a narrow callable, never
 #: ``application.memory.context.compose_context`` imported here, so this layer
 #: never reaches into the memory kind itself. The composition root builds the
-#: real closure over ``MemoryService`` (``memory_wiring.memory_context_composer``).
+#: real closure over ``MemoryService`` (``memory_turn_wiring.memory_context_composer``).
 
 #: Builds the transcriber for one turn, or ``None`` to leave audio untouched.
 #: Resolved per turn so designating (or clearing) the internal connection takes
@@ -74,6 +75,7 @@ class ClaudeSdkProvider:
         resolve_channel: ChannelNoteResolver | None = None,
         resolve_home_env: HomeEnvResolver | None = None,
         observe_quota: QuotaObserver | None = None,
+        retrieve_memory: MemoryRetriever | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: SdkSessionFactory = session_factory or default_session_factory
@@ -101,6 +103,9 @@ class ClaudeSdkProvider:
         # Where Claude Code's ``rate_limit_event`` goes (the usage kind's quota
         # service, bound at the composition root). ``None`` ⇒ dropped.
         self._observe_quota = observe_quota
+        # A channel turn's per-prompt notes (spec memory "Retrieve the notes a
+        # prompt names for a channel turn"). ``None`` ⇒ none.
+        self._retrieve_memory = retrieve_memory
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -179,6 +184,13 @@ class ClaudeSdkProvider:
             # "Extract document attachments to text").
             document_extractor=default_document_extractor(),
             observe_quota=self._observe_quota,
+            prompt_memory=bind_prompt_memory(
+                self._retrieve_memory,
+                channel_uid=conv.channel_uid or "",
+                agent_key=self.agent_key,
+                cwd=config.cwd,
+                conversation_id=conversation_id,
+            ),
         )
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:

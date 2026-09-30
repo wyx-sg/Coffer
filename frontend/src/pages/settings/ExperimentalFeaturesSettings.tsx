@@ -22,8 +22,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { SettingRow, SettingsSection } from "@/components/settings/SettingsLayout";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import { useFeatureList, useSetFeature, type Feature } from "@/lib/hooks/useFeatures";
@@ -63,55 +63,57 @@ export function ExperimentalFeaturesSettings() {
   if (!data || !data.features?.length) return null;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("settings.features.title")}</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          {t("settings.features.subtitle", {
-            channel: t(`settings.features.channel.${data.channel}`),
-          })}
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {data.features.map((feature) => {
-          const checked = pending[feature.key] ?? feature.enabled;
-          const pinned = feature.source === "pin";
-          const name = nameOf(feature.key);
-          return (
-            <div key={feature.key} className="space-y-1" data-testid={`feature-${feature.key}`}>
-              <div className="flex items-center justify-between gap-4">
-                <div className="space-y-0.5">
-                  <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                    {name}
-                    <Badge variant="outline" className="font-normal">
-                      {checked ? t("settings.features.on") : t("settings.features.off")}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {t(`settings.features.descriptions.${feature.key}`, { defaultValue: "" })}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
+    <SettingsSection
+      title={t("settings.features.title")}
+      description={t("settings.features.subtitle", {
+        channel: t(`settings.features.channel.${data.channel}`),
+      })}
+      testId="experimental-features"
+    >
+      {data.features.map((feature) => {
+        const checked = pending[feature.key] ?? feature.enabled;
+        const pinned = feature.source === "pin";
+        const name = nameOf(feature.key);
+        const description = t(`settings.features.descriptions.${feature.key}`, {
+          defaultValue: "",
+        });
+        return (
+          <div key={feature.key} data-testid={`feature-${feature.key}`}>
+            <SettingRow
+              label={
+                <span className="flex flex-wrap items-center gap-2">
+                  {name}
+                  <Badge variant="outline" className="font-normal">
+                    {checked ? t("settings.features.on") : t("settings.features.off")}
+                  </Badge>
+                </span>
+              }
+              description={description || undefined}
+              status={
+                <>
+                  <span className="text-xs text-text-muted">
                     {t(`settings.features.source.${feature.source}`, {
                       channel: t(`settings.features.channel.${data.channel}`),
                     })}
-                  </p>
-                </div>
-                <Switch
-                  checked={checked}
-                  disabled={pinned || feature.key in pending}
-                  onCheckedChange={(next) => toggle(feature, next)}
-                  aria-label={name}
-                />
-              </div>
-              {failed?.key === feature.key ? (
-                <p role="alert" className="text-sm text-destructive">
-                  {translateApiError(t, failed.error)}
-                </p>
-              ) : null}
-            </div>
-          );
-        })}
-      </CardContent>
-    </Card>
+                  </span>
+                  {failed?.key === feature.key ? (
+                    <p role="alert" className="text-xs text-danger">
+                      {translateApiError(t, failed.error)}
+                    </p>
+                  ) : null}
+                </>
+              }
+            >
+              <Switch
+                checked={checked}
+                disabled={pinned || feature.key in pending}
+                onCheckedChange={(next) => toggle(feature, next)}
+                aria-label={name}
+              />
+            </SettingRow>
+          </div>
+        );
+      })}
+    </SettingsSection>
   );
 }

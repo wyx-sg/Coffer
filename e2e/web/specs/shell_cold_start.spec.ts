@@ -169,27 +169,25 @@ acceptance(
         resources: Array<{ uid: string }>;
       };
       for (const r of body.resources) {
-        await fetch(
-          `http://127.0.0.1:${port}/api/v1/resources/${r.uid}`,
-          {
-            method: "DELETE",
-            headers: {
-              "X-Coffer-Token": token,
-              "X-Coffer-Actor": "e2e-cleanup",
-            },
+        await fetch(`http://127.0.0.1:${port}/api/v1/resources/${r.uid}`, {
+          method: "DELETE",
+          headers: {
+            "X-Coffer-Token": token,
+            "X-Coffer-Actor": "e2e-cleanup",
           },
-        );
+        });
       }
     }
 
     await page.goto("/mcp-servers");
 
     // Welcome card content
+    const welcome = page.getByTestId("mcp-welcome");
     await expect(
-      page.getByRole("heading", { name: /local-first vault/i }),
+      welcome.getByRole("heading", { name: /no mcp servers yet/i }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /Add MCP server/i }).first(),
+      welcome.getByRole("button", { name: /^add server$/i }),
     ).toBeVisible();
 
     // No ghost-table / "No resources yet" cell (we render the welcome

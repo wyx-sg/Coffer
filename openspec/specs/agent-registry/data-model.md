@@ -250,7 +250,7 @@ The workspace amendment adds:
 | `agent_plugin_toggled`       | A plugin was enabled or disabled on its documented surface                      |
 | `agent_plugin_uninstalled`   | A plugin was uninstalled, by config edit or by the agent's own CLI               |
 
-The lifecycle steps required by "Audit every agent lifecycle event" — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected agent's `uid`). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (the agent's `uid`, details `{key}`). Disabling or re-enabling an agent through the kind-agnostic `POST /api/v1/resources/{uid}/disable|enable` (or `coffer resource disable|enable agent <name>`) is recorded as the kind-agnostic `resource_disabled` / `resource_enabled`; discovery is read-only and registers nothing, so it emits no audit event.
+The lifecycle steps required by "Audit every agent lifecycle event" — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected agent's `uid`). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (the agent's `uid`, details `{key}`). Disabling or re-enabling an agent through the kind-agnostic `POST /api/v1/resources/{uid}/disable|enable` (or `coffer agent disable|enable <name>`) is recorded as the kind-agnostic `resource_disabled` / `resource_enabled`; discovery is read-only and registers nothing, so it emits no audit event.
 
 ## Application service contracts (`backend/coffer/application/agent/`)
 
@@ -348,21 +348,21 @@ Connects an agent to Coffer, or disconnects it, by installing or removing each
 **part** Coffer writes into the agent's own configuration ("Connect an agent to
 Coffer in one action", "Report an agent's Coffer connection part by part",
 "Disconnect an agent from Coffer"). A part is a `ConnectionPart` — a key,
-`supports(agent_type)`, `enabled()`, and `status` / `install` / `remove` by
+`supports(agent_type)`, and `status` / `install` / `remove` by
 agent uid — and owns its own atomic write, `.bak` and audit event; the service
 writes nothing itself and records no audit event of its own.
 
 | Part          | Owner                                         | Applies when                          | Audit events                                            |
 | ------------- | --------------------------------------------- | ------------------------------------- | ------------------------------------------------------- |
 | `mcp`         | `AgentMcpService` (via `McpConnectionPart`)   | always (every type declares one)      | `agent_mcp_installed` / `agent_mcp_uninstalled`         |
-| `memory_hook` | memory's `DeliveryService`, adapted in `surfaces/http/agent_connection_wiring.py` | the `memory` feature is on | `memory_delivery_installed` / `memory_delivery_removed` |
+| `memory_hook` | memory's `DeliveryService`, adapted in `surfaces/http/agent_connection_wiring.py` | the type has a hook adapter | `memory_delivery_installed` / `memory_delivery_removed` |
 
 | Method                                   | Purpose |
 | ---------------------------------------- | ------- |
 | `status(uid) -> ConnectionStatus`        | Each applicable part's `PartStatus(key, installed, detail)`, and a `state`: `connected` (all installed), `partial`, or `disconnected` (none). Read on demand, never stored. |
 | `connect(uid, *, actor)`                 | (Re)install every applicable part, the `mcp` part first so a missing shim refuses before anything is written. |
-| `disconnect(uid, *, actor)`              | Remove every part the type supports, applicable now or not. |
-| `connected_agents() -> list[str]`        | The uids of agents carrying the `mcp` entry — where switching `memory` on installs the hook. |
+| `disconnect(uid, *, actor)`              | Remove every part the type supports. |
+| `connected_agents() -> list[str]`        | The uids of agents carrying the `mcp` entry — the ones the hook's reconcile pass treats as connected. |
 
 The memory kind's part is adapted at the composition root because the agent
 kind may not import the memory kind; the HTTP shape is `CofferConnectionOut`
@@ -465,7 +465,8 @@ in spec "List the MCP entries in the agent's own config files") because
 claude_code's format has no such flag and codex's duplicates a switch its own UI
 owns. Removal and adoption stay, because each is a write Coffer alone has a
 reason to make. Both are exposed as `DELETE
-/api/v1/agents/{uid}/mcp-entries/{entry}` and `coffer agent mcp remove-entry`.
+/api/v1/agents/{uid}/mcp-entries/{entry}` and `coffer discard mcp <agent>:<entry>`
+(adoption: `coffer adopt mcp <agent>:<entry>`).
 
 ### `AgentPluginService` (`application/agent/plugin_service.py`)
 

@@ -58,15 +58,19 @@ const HOOK: CofferHook = {
   path: `${HOME}/.claude/settings.json`,
   health: "current",
   trust: "not_required",
-  installed_command: "coffer memory deliver",
-  expected_command: "coffer memory deliver",
+  installed_command: 'coffer memory hook --agent-uid u-cc --cwd "$PWD"',
+  expected_command: 'coffer memory hook --agent-uid u-cc --cwd "$PWD"',
   last_fired_at: new Date(Date.now() - 2 * 3600_000).toISOString(),
 };
 const CONNECTED: CofferConnection = {
   state: "connected",
   parts: [
     { key: "mcp", installed: true, detail: "coffer shim" },
-    { key: "memory_hook", installed: true, detail: "coffer memory deliver" },
+    {
+      key: "memory_hook",
+      installed: true,
+      detail: 'coffer memory hook --agent-uid u-cc --cwd "$PWD"',
+    },
   ],
 };
 

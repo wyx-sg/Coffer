@@ -90,6 +90,28 @@ give the status each code is actually sent with.
 | `TOOL_DISABLED` | 403 | The tool, resource or prompt is switched off on its server, the server is outside the calling agent's reach, or the name is not recognised. | Enable it with `coffer mcp cap enable <server> tool:<name>`, or widen the server's reach. |
 | `INVALID_PREFIX` | 400 | A name is not in Coffer's namespaced form (`<server>__<tool>`, `coffer://<server>/<uri>`). | Use the name exactly as `tools/list` or `coffer__search_tools` returned it. See [MCP tools](/reference/mcp-tools#upstream-names). |
 
+## Custom tools
+
+| Code | HTTP | Meaning | Typical fix |
+| --- | --- | --- | --- |
+| `NOT_A_CUSTOM_TOOL_GROUP` | 404 | The name belongs to an MCP server of another transport, not a custom-tool group. | Manage it with `coffer mcp`, or list groups with `coffer tool list`. |
+| `CUSTOM_TOOL_NOT_FOUND` | 404 | The group has no tool of that name. | List its tools with `coffer tool show <group>`. |
+| `CUSTOM_TOOL_EXISTS` | 409 | The group already has a tool of that name. | Pick another name, or edit the existing tool. |
+| `OPENAPI_UNREADABLE` | 422 | The OpenAPI document could not be fetched, parsed or read: not JSON or YAML, not OpenAPI 3.x, larger than 5 MiB, or a URL on a loopback, private or link-local host. | Fix the document, or import a spec on a private host as a file. |
+| `NOT_IMPORTED_FROM_OPENAPI` | 409 | Re-import was asked of a group whose tools were all added by hand. | Nothing to re-import; add tools by hand. |
+| `OPENAPI_FILE_NEEDED` | 422 | The group was imported from a file, and re-import needs that file again. | Give the file: `coffer tool reimport <group> --file <path>`. |
+
+## Required CLIs
+
+| Code | HTTP | Meaning | Typical fix |
+| --- | --- | --- | --- |
+| `CLI_NOT_REQUIRED` | 404 | No managed skill declares that command in its `requires:`. | List required commands with `coffer cli list`. |
+| `CLI_INSTALL_NOT_FOUND` | 404 | No install has run for that command since the daemon started. | Start one with `coffer cli install <command>`. |
+| `CLI_FORMULA_MISMATCH` | 422 | The install request named a different Homebrew formula than the skills declare. | Confirm the install again from the page or the command line. |
+| `CLI_NOT_INSTALLABLE` | 409 | There is nothing to install: the command is ready (`details.reason` `not_needed`), or no skill names a Homebrew formula for it (`no_formula`). | Install it yourself, then run `coffer cli check <command>`. |
+| `HOMEBREW_NOT_FOUND` | 409 | Homebrew is not on the agent's `PATH`. | Install Homebrew, or install the command another way and check again. |
+| `CLI_INSTALL_RUNNING` | 409 | An install for that command is already running. | Wait for it to finish; its output is on the command's page. |
+
 ## Agents and agent workspaces
 
 | Code | HTTP | Meaning | Typical fix |

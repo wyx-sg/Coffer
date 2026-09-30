@@ -81,7 +81,7 @@ def validate_skill_folder(
     sha = hashlib.sha256(raw_bytes).hexdigest()
     raw_text = raw_bytes.decode("utf-8", errors="replace")
 
-    frontmatter_data = _parse_frontmatter(raw_text)
+    frontmatter_data = parse_frontmatter(raw_text)
     if frontmatter_data is None:
         return ValidationFailure(
             "skill_md_frontmatter_missing",
@@ -141,7 +141,7 @@ def validate_skill_folder(
     return ValidationOk(frontmatter=fm, total_size_bytes=total, skill_md_sha256=sha)
 
 
-def _parse_frontmatter(text: str) -> dict[str, object] | None:
+def parse_frontmatter(text: str) -> dict[str, object] | None:
     """Extract the `---`-delimited YAML frontmatter at the top of SKILL.md.
 
     Returns `None` if no frontmatter block is found or the YAML is invalid.

@@ -183,8 +183,9 @@ Settings — the modal of "Open Settings as a modal from the sidebar footer" —
 MUST carry exactly five tabs, in this order, grouped by what they manage rather
 than by how Coffer is built, and MUST open on General:
 
-- **General** (`/settings/general`) — display preferences (the default page size
-  and the preferred external editor), the **Coffer's model** section: the
+- **General** (`/settings/general`) — display preferences (the interface language
+  and the theme, the default page size and the preferred external editor), the
+  **Coffer's model** section: the
   model Coffer's own engine runs on and the speech-to-text model (see "Choose
   Coffer's model in Settings › General"), and — only while the registry names
   an experimental feature — the Experimental features card (spec
@@ -435,7 +436,8 @@ machine only is a setting shown on the tab it belongs to:
   chat and channel attachments and media only, with their size and **Open
   folder**, and a line saying so.
 - **History** — the retention of each record kind — changes, MCP calls and
-  conversations — Keep forever or a number of days, cleaned up nightly, with a
+  conversations — Keep forever or a number of days, cleaned up by the retention
+  worker's schedule (at daemon start and every six hours), with a
   **Clear expired now** action; a saved value survives a reload.
 - **Rebuildable cache** — Coffer's memory tree and the transcript summary cache
   (`cache/agent/`), which Coffer rebuilds on its own: one **Clear** action,
@@ -459,7 +461,7 @@ Edits auto-save, like every settings surface: there is no Save button.
 #### Scenario: clear expired now removes what retention has passed
 - **GIVEN** MCP calls kept for 7 days and calls older than that
 - **WHEN** the user chooses Clear expired now
-- **THEN** the older calls are removed and the rest remain, as the nightly cleanup would have done
+- **THEN** the older calls are removed and the rest remain, as the scheduled cleanup would have done
 
 #### Scenario: clearing the cache is confirmed and rebuilt
 - **GIVEN** memory partitions with notes
@@ -538,6 +540,57 @@ command line (see "Keep the command-line record readers").
 - **WHEN** the user opens each of the Activity tabs in turn
 - **THEN** each tab shows only its own record's rows, read from that record's owner's route
 - **AND** no tab requests a route of the Activity page's own
+
+### Requirement: Use one shared table for every list surface
+Every list surface — agents, knowledge, memory, model providers, channels, each
+Activity tab, Sync's Runs tab — MUST use one shared searchable, filterable,
+paginated table, and a row click MUST open that item's detail page. The MCP
+servers and Skills pages are lists beside a reading pane instead: a filterable
+list of rows, each a link that opens its item in the pane at the item's own
+address, so a row click opens the item there. Sync's Setup tab is not a list
+surface: it is configuration cards, and the machine registry it carries is a
+small plain table.
+
+#### Scenario: a row click opens the item's detail page
+- **GIVEN** a list surface showing at least one row
+- **WHEN** the user clicks the row, or presses Enter on it
+- **THEN** the app navigates to that item's detail page
+
+### Requirement: Show reach as a labelled button on every list and detail page
+Every list surface of a scoped kind that is a table MUST carry a **reach** column — named for what
+it holds, not for the on/off flag it replaced: one button labelled with the answer it already
+holds — "Every agent", "2 agents", "Disabled", or "No agent selected" for a
+scope narrowed to nobody — so the reader learns the reach by reading it rather
+than by comparing which of three side-by-side segments looks pressed. A list
+beside a reading pane (MCP servers, Skills) shows each row's reach as a mark
+instead — Off, All agents, or the badges of the agents it reaches — and the
+button is in the open item's header. Every detail page MUST carry the same
+button in its header. A kind that declares no
+scope — an agent, a knowledge collection, a memory partition — MUST carry neither
+the column, the button, nor a bulk reach action; see "Offer reach as one choice in a panel".
+
+#### Scenario: the reach button states the reach it holds
+- **GIVEN** resources that reach every agent, two agents, nobody selected, and one that is disabled
+- **WHEN** each one's reach button renders
+- **THEN** they read "Every agent", "2 agents", "No agent selected" and "Disabled"
+- **AND** each is one button rather than a row of segments
+
+#### Scenario: a kind that cannot be disabled shows no status control
+- **GIVEN** the knowledge and memory list pages and one collection's and one partition's page
+- **WHEN** each renders
+- **THEN** no list has a Status or Reach column and no header carries a reach or status button
+
+### Requirement: Mount one reach control in three places
+The reach control MUST be one component mounted in every place a reach is
+changed — a table's row, the detail header and the multi-select bar — so they
+can never drift into different answers to one question. On a list beside a
+reading pane the row shows the reach as a mark and the header and the
+selection bar carry the control.
+
+#### Scenario: row, header and selection bar mount the same reach control
+- **GIVEN** an MCP server that reaches every agent
+- **WHEN** its list row, its detail header and the list's selection bar render
+- **THEN** the row reads its reach and the header and the selection bar each carry the same reach button, which opens the same reach panel
 
 ## ADDED Requirements
 

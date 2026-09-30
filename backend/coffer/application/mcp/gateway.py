@@ -36,6 +36,7 @@ from typing import Any
 from coffer.application.builtin_tools import (
     BuiltinToolRegistry,
 )
+from coffer.application.mcp.custom_tool_ports import ToolReachRepoPort
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway_aggregate_lists import (
     list_prompts_across,
@@ -59,11 +60,12 @@ from coffer.application.mcp.gateway_parsing import (
     _extract_cwd,
 )
 from coffer.application.mcp.gateway_recovery import DegradedTracker
-from coffer.application.mcp.gateway_scope import enabled_mcp_servers
+from coffer.application.mcp.gateway_scope import enabled_mcp_servers, visible_mcp_servers
 from coffer.application.mcp.gateway_server_requests import (
     ServerRequestRegistry,
     build_session_callbacks,
 )
+from coffer.application.mcp.gateway_tool_gate import hidden_tool_names
 from coffer.application.mcp.gateway_tool_search import TOOL_SEARCH_NAME
 from coffer.application.mcp.gateway_tools_list import build_tools_listing
 from coffer.application.mcp.ports import (
@@ -100,8 +102,10 @@ class MCPGatewaySession:
         on_dispose: Callable[[], None] | None = None,
         builtin_tools: BuiltinToolRegistry | None = None,
         tiering: TieringConfig | None = None,
+        tool_reach: ToolReachRepoPort | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
+        self._tool_reach = tool_reach  # custom tools' reach overrides (gateway_tool_gate)
         self._resources = resource_service
         self._supervisor = supervisor
         self._discovery = discovery
@@ -119,10 +123,8 @@ class MCPGatewaySession:
         # nothing — an unidentified session, which then sees only unscoped
         # servers.
         self._session_agent_uid: str | None = None
-        # Called once when the session is disposed so the composition
-        # root can drop this session's entry from its supervisor registry
-        # (otherwise disposed-but-registered supervisors accumulate for the
-        # daemon's lifetime and the on_delete hook walks dead ones).
+        # Called once on dispose so the composition root drops this session's
+        # supervisor from its registry (else dead ones accumulate).
         self._on_dispose = on_dispose
         # ``is not None``, not ``or``: the registry has a ``__len__``, so one whose
         # every tool is switched off is falsy, and ``or`` would swap it for an
@@ -136,18 +138,11 @@ class MCPGatewaySession:
         # once — the honest value, since nothing has been hidden yet.
         self.last_hidden_count = 0
         self._initialized = False
-        # The agent's launch cwd, reported by the shim at the ``initialize`` handshake
-        # (params._meta["coffer/cwd"]). Threaded into built-in tool calls so
-        # project-scope resolution works. Falls back to the daemon's own cwd when the
-        # client omits it. No spec states this handshake field: the requirement it was
-        # written for was deleted with the per-project store that read the launch cwd,
-        # and spec memory "Provision partitions only from aggregation" now says the opposite
-        # (a partition MUST NOT be created from an agent's cwd at read time). The shim
-        # still stamps it and this still threads it, so the behaviour outlives its
-        # requirement.
+        # The agent's launch cwd from the shim's handshake (params._meta["coffer/cwd"]),
+        # threaded into built-in tool calls; no spec states it any more (its
+        # requirement went with the per-project store), the shim still stamps it.
         self._session_cwd: str | None = None
-        # Track which servers we've subscribed to notifications on so we
-        # only attach the handler once per (session, server) pair.
+        # Servers whose notifications this session already subscribed to.
         self._notification_subscriptions: set[str] = set()
         # The event loop holds tasks weakly — an un-referenced
         # ensure_future() task can be garbage-collected mid-flight, silently
@@ -249,6 +244,11 @@ class MCPGatewaySession:
     async def _enabled_mcp_servers(self) -> list[str]:
         return await enabled_mcp_servers(self._resources, self._session_agent_uid)
 
+    async def _servers_and_hidden(self) -> tuple[list[str], frozenset[str]]:
+        rows = await visible_mcp_servers(self._resources, self._session_agent_uid)
+        hidden = await hidden_tool_names(rows, self._session_agent_uid, self._tool_reach)
+        return [r.name for r in rows], hidden
+
     async def _ensure_subscribed(self, server_name: str) -> None:
         """Attach notification + server-request handlers to the upstream connection lazily."""
         if server_name in self._notification_subscriptions:
@@ -285,10 +285,12 @@ class MCPGatewaySession:
     # module's header for the per-server budget + parallelism rationale.
 
     async def _handle_tools_list(self) -> dict[str, Any]:
+        servers, hidden = await self._servers_and_hidden()
         listing = await build_tools_listing(
             discovery=self._discovery,
             ensure_subscribed=self._ensure_subscribed,
-            servers=await self._enabled_mcp_servers(),
+            servers=servers,
+            hidden=hidden,
             builtin=self._builtin,
             invocations=self._invocations,
             tiering=self._tiering,
@@ -311,11 +313,13 @@ class MCPGatewaySession:
     async def _handle_tools_call(self, params: dict[str, Any]) -> Any:
         name = str(params.get("name") or "")
         if name == TOOL_SEARCH_NAME:
+            servers, hidden = await self._servers_and_hidden()
             return await run_tool_search(
                 params,
                 discovery=self._discovery,
                 ensure_subscribed=self._ensure_subscribed,
-                servers=await self._enabled_mcp_servers(),
+                servers=servers,
+                hidden=hidden,
                 **self._log_ctx,
             )
         if self._builtin.is_builtin(name):
@@ -354,6 +358,7 @@ class MCPGatewaySession:
             prefs=self._prefs,
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
+            tool_reach=self._tool_reach,
             **self._log_ctx,
         )
 

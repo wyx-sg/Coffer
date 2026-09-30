@@ -9,6 +9,7 @@ SQL so we don't materialise rows we'll throw away.
 from __future__ import annotations
 
 from coffer.application.resource_service import ResourceService
+from coffer.domain.resource import Resource
 from coffer.domain.scope import is_active
 
 
@@ -32,3 +33,13 @@ async def enabled_mcp_servers(
     """
     resource_list = await resources.list(kind="mcp_server", enabled=True)
     return [r.name for r in resource_list if is_active(r.scope, session_agent_uid)]
+
+
+async def visible_mcp_servers(
+    resources: ResourceService,
+    session_agent_uid: str | None,
+) -> list[Resource]:
+    """:func:`enabled_mcp_servers`, as the rows — the per-tool gate reads their
+    config (``gateway_tool_gate``)."""
+    resource_list = await resources.list(kind="mcp_server", enabled=True)
+    return [r for r in resource_list if is_active(r.scope, session_agent_uid)]

@@ -17,8 +17,10 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from coffer.application.resource_service import ResourceService
+from coffer.domain.mcp.http_api import HttpApiTransport
 from coffer.domain.mcp.secret_target import mcp_destination
 from coffer.domain.mcp.server_config import HttpTransport, MCPServerConfig, StdioTransport
+from coffer.infrastructure.mcp.http_api_client import HttpApiUpstreamConnection
 from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
 from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
 from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
@@ -64,15 +66,17 @@ async def test_mcp_server(
             overlay = await asyncio.to_thread(
                 resolver.materialize, config.transport.credential_refs, destination
             )
-            conn: StdioUpstreamConnection | HttpUpstreamConnection = StdioUpstreamConnection(
-                transport=config.transport,
-                env_overlay=overlay,
-                spawn_timeout_seconds=config.spawn_timeout_seconds,
-                request_timeout_seconds=config.request_timeout_seconds,
-                # The label, not the identity: this is what the connection puts
-                # in its spawn diagnostics, and a uid there would tell whoever
-                # reads them nothing.
-                server_name=resource.name,
+            conn: StdioUpstreamConnection | HttpUpstreamConnection | HttpApiUpstreamConnection = (
+                StdioUpstreamConnection(
+                    transport=config.transport,
+                    env_overlay=overlay,
+                    spawn_timeout_seconds=config.spawn_timeout_seconds,
+                    request_timeout_seconds=config.request_timeout_seconds,
+                    # The label, not the identity: this is what the connection puts
+                    # in its spawn diagnostics, and a uid there would tell whoever
+                    # reads them nothing.
+                    server_name=resource.name,
+                )
             )
         elif isinstance(config.transport, HttpTransport):
             overlay = await asyncio.to_thread(
@@ -83,6 +87,15 @@ async def test_mcp_server(
                 header_overlay=overlay,
                 spawn_timeout_seconds=config.spawn_timeout_seconds,
                 request_timeout_seconds=config.request_timeout_seconds,
+            )
+        elif isinstance(config.transport, HttpApiTransport):
+            # A custom-tool group: its "connection" is served in-process, so the
+            # test proves the config loads and the secret is released for it.
+            overlay = await asyncio.to_thread(
+                resolver.materialize, config.transport.credential_refs, destination
+            )
+            conn = HttpApiUpstreamConnection(
+                transport=config.transport, header_overlay=overlay, server_name=resource.name
             )
         else:
             return McpTestResultOut(

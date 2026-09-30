@@ -23,7 +23,8 @@ from coffer.application.provider.projector import ProviderProjector
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.agent_projection import CodexProviderProjection
-from coffer.domain.provider.api_key_helper import proxy_token_helper
+from coffer.domain.provider.api_key_helper import proxy_token_args, proxy_token_helper
+from coffer.domain.provider.codex_projection import CodexAuthCommand
 from coffer.domain.provider.projection import (
     apply_anthropic_settings,
     apply_codex_provider,
@@ -40,6 +41,7 @@ _CONNECTION_UID = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"
 _CLI = "/Users/me/.coffer/bin/coffer"
 #: Where the proxy-form projection points Claude Code (the default port).
 _PROXY_URL = "http://127.0.0.1:8001/anthropic"
+_AUTH = CodexAuthCommand(_CLI, proxy_token_args(_AGENT_UID))
 
 
 def _resource(
@@ -315,7 +317,7 @@ def test_a_leftover_codex_shell_exclude_is_not_a_projection() -> None:
     """The ``shell_environment_policy.exclude`` entry only hides the key; with the
     provider block removed by hand it selects nothing, so the flag is stale."""
     projected = apply_codex_provider(
-        "", base_url=_BASE_URL, model="m", wire_api="responses", display_name="x"
+        "", base_url=_BASE_URL, model="m", wire_api="responses", display_name="x", auth=_AUTH
     )
     facet = CodexProviderProjection()
     assert facet.is_present(projected)

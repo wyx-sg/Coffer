@@ -102,12 +102,18 @@ export const skillCompareKey = (uid: string, stagingId: string, path: string) =>
 
 export const mcpCapabilitiesKey = (serverUid: string) =>
   ["mcp", "capabilities", serverUid] as const;
-export const mcpStatusKey = (serverUid: string) => ["mcp", "status", serverUid] as const;
+/** Prefix of every server's status: a change to any MCP server refreshes them. */
+const mcpStatusesKey = ["mcp", "status"] as const;
+export const mcpStatusKey = (serverUid: string) => [...mcpStatusesKey, serverUid] as const;
 export const mcpInvocationsKey = (serverUid: string, filters: Record<string, unknown>) =>
   ["mcp", "invocations", serverUid, filters] as const;
 /** The gateway-wide invocation log (every server) — the Activity page. */
 export const mcpAllInvocationsKey = (filters: Record<string, unknown>) =>
   ["mcp", "invocations", "all", filters] as const;
+/** The server page's reads: the last 24 hours, its own log, the tiering split. */
+export const mcpSummaryKey = (serverUid: string) => ["mcp", "summary", serverUid] as const;
+export const mcpLogKey = (serverUid: string) => ["mcp", "log", serverUid] as const;
+export const mcpTieringKey = (serverUid: string) => ["mcp", "tiering", serverUid] as const;
 
 // --- attention — the cross-kind "needs you" list the Overview shows --------
 
@@ -144,6 +150,9 @@ export const daemonLogsKey = (filters: Record<string, unknown>) =>
 export const daemonVersionSkewKey = (version: string | undefined) =>
   ["daemon", "version-skew", version] as const;
 export const daemonResidencyKey = ["daemon", "residency"] as const;
+export const daemonPortKey = ["daemon", "port"] as const;
+/** Settings > Data: what Coffer keeps on this machine, by kind. */
+export const storageKey = ["storage"] as const;
 export const daemonFeaturesKey = ["daemon", "features"] as const;
 
 // --- fs — the loopback daemon's view of the local filesystem ---------------
@@ -232,6 +241,19 @@ export const secretBoundaryKey = ["credentials", "secret-boundary"] as const;
 export const credentialsListKey = ["credentials", "list"] as const;
 export const credentialScanKey = ["credentials", "scan"] as const;
 
+// customTools — keyed on a group's NAME, fixed once made and its routes' only id.
+export const customToolsKey = ["customTools"] as const;
+export const customToolGroupKey = (name: string) => ["customTools", name] as const;
+
+// ---------------------------------------------------------------------------
+// clis — the commands managed skills require (/clis)
+// ---------------------------------------------------------------------------
+
+export const clisKey = ["clis"] as const;
+/** One command. Keyed on the command itself: it is the row's only identity,
+ *  and no rename exists that could strand the entry. */
+export const cliKey = (command: string) => ["clis", command] as const;
+
 // --- settings — daemon-side settings the Settings pages edit ---------------
 
 export const credentialSettingsKey = ["settings", "credentials"] as const;
@@ -240,29 +262,33 @@ export const internalEngineKey = ["settings", "internalEngine"] as const;
 // --- cross-kind helpers ----------------------------------------------------
 
 /**
- * Some kinds are read through their OWN list key rather than the generic
+ * Some kinds are read through their OWN list keys rather than the generic
  * resource list — the Skills page reads `skillsKey`, `useProvider` reads
  * `providerKey(uid)`, agents read `agentKey(uid)`. Invalidating only
  * `resourcesKey` leaves those surfaces rendering the pre-write state (a skill
  * detail page would keep showing "enabled" after a successful disable), so a
- * kind-agnostic write (enable/disable/delete/scope) refreshes this key too.
- * Undefined for kinds that only live under `resourcesKey`.
+ * kind-agnostic write (enable/disable/delete/scope) refreshes these keys too.
+ * An `mcp_server` has two readers: the MCP servers page's statuses and the
+ * Custom tools page, whose groups are `mcp_server`s too. Empty for kinds that
+ * only live under `resourcesKey`.
  */
-export function ownListKeyForKind(kind: string): QueryKey | undefined {
+export function ownListKeysForKind(kind: string): readonly QueryKey[] {
   switch (kind) {
     case "skill":
-      return skillsKey;
+      return [skillsKey];
     case "provider":
-      return providersKey;
+      return [providersKey];
     case "agent":
-      return agentsKey;
+      return [agentsKey];
     case "knowledge":
-      return knowledgeCollectionsKey;
+      return [knowledgeCollectionsKey];
     case "memory":
-      return memoryPartitionsKey;
+      return [memoryPartitionsKey];
     case "channel":
-      return channelsKey;
+      return [channelsKey];
+    case "mcp_server":
+      return [mcpStatusesKey, customToolsKey];
     default:
-      return undefined;
+      return [];
   }
 }

@@ -8,7 +8,7 @@
 // actions (reveal a secret, write a key backup, approve an approval), each
 // behind a Touch ID / password check in the shell. In a browser those reject
 // and the page offers "Open in Coffer app". Components ask
-// `presenceAvailable()`, never `isTauri()` directly.
+// `presenceAvailable()` or `inDesktopShell()`, never `isTauri()` directly.
 //
 // Keep this list short. The shell owns only what a browser cannot do for
 // itself; native file dialogs and "reveal in Finder" deliberately do NOT live
@@ -228,6 +228,8 @@ export class PresenceUnavailableError extends Error {
 export function presenceAvailable(): boolean {
   return isTauri();
 }
+/** In the desktop shell? For Settings › Daemon's Restart and About's host line. */
+export const inDesktopShell = (): boolean => isTauri();
 
 /** What `presence_mode` reports about the daemon the shell signs for. */
 export interface PresenceMode {

@@ -1,7 +1,7 @@
 // src/components/usage/UsageTiles.tsx — the range's headline numbers: estimated cost, input, output, cache read, cache write.
 //
 // Cost is always labelled estimated, and a range whose every request is
-// unpriced reads "No price" — never $0.00.
+// unpriced reads "—" — never $0.00.
 import { useTranslation } from "react-i18next";
 
 import type { UsageTotals } from "@/lib/api/usage";

@@ -171,7 +171,7 @@ The same stance governs other mismatches Coffer can detect but not safely resolv
 
 **Rationale.** An abstraction designed against one use case either over-fits it or is too generic to enforce anything. Waiting for the second caller means the shared shape is discovered, not guessed.
 
-**In the code.** Shared packages exist exactly where two kinds met: [`infrastructure/net/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/net) (the SSRF guard), [`infrastructure/agent_files/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent_files) (transcript readers shared by agent and memory), and [`domain/connection.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/connection.py). The cross-kind import contracts make any other sharing fail the build. The Resource framework is the one declared exception, described above.
+**In the code.** Shared packages exist exactly where two kinds met: [`infrastructure/net/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/net) (the SSRF guard), [`infrastructure/agent_files/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent_files) (transcript readers shared by agent and memory), and [`domain/hook_trust.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/hook_trust.py) (whether an agent will run a hook, which memory reports and the agent kind's hooks listing shows). The cross-kind import contracts make any other sharing fail the build. The Resource framework is the one declared exception, described above.
 
 **Rules out.** Speculative "common" packages; a utilities module that grows ahead of its callers; one kind importing another's services.
 

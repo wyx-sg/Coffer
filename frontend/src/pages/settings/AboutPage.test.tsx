@@ -19,9 +19,15 @@ function wrap({ children }: PropsWithChildren) {
 
 const STATUS = {
   version: "0.7.42",
+  channel: "stable",
   status: "ready",
   started_at: "2026-05-01T08:00:00Z",
   port: 8000,
+  executable: "/Applications/Coffer.app/Contents/MacOS/coffer-daemon",
+  machine_id: "m-1",
+  machine_name: "work-mac",
+  features: { knowledge: true, memory: false, sync: true },
+  upstream_summary: null,
 };
 
 function mockStatus() {
@@ -45,12 +51,15 @@ describe("AboutPage", () => {
     expect(screen.getByText(/github\.com\/wyx-sg\/Coffer/)).toBeInTheDocument();
   });
 
+  // The requirement behind this marker is removed by change revise-web-ui-ia
+  // (the daemon now shows on Settings → Daemon); the marker goes at archive.
+  // About itself still names no daemon on screen.
   acceptance("web-ui", "settings shows no daemon tab and no daemon status", async () => {
     mockStatus();
     const { container } = render(<AboutPage />, { wrapper: wrap });
 
     await waitFor(() => {
-      expect(screen.getByText("0.7.42")).toBeInTheDocument();
+      expect(screen.getByText("Version 0.7.42 · stable channel")).toBeInTheDocument();
     });
     expect(screen.getByText("Version")).toBeInTheDocument();
     expect(screen.getByText("License")).toBeInTheDocument();
@@ -67,22 +76,32 @@ describe("AboutPage", () => {
     render(<AboutPage />, { wrapper: wrap });
 
     expect(screen.getAllByText("—")).toHaveLength(1);
+    expect(screen.getByText(/reading the version/i)).toBeInTheDocument();
   });
 
-  test("Copy diagnostics puts every row on the clipboard as label: value lines", async () => {
+  // web-ui "copy diagnostics carries no secret" (change revise-web-ui-ia; the
+  // acceptance marker is added when the change is archived and the scenario
+  // reaches openspec/specs).
+  test("copy diagnostics carries no secret", async () => {
     mockStatus();
+    const injected = window as unknown as { __COFFER_TOKEN__?: string };
+    injected.__COFFER_TOKEN__ = "tok-must-not-leak";
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
     render(<AboutPage />, { wrapper: wrap });
-    await screen.findByText("0.7.42");
+    await screen.findByText("Version 0.7.42 · stable channel");
 
     fireEvent.click(screen.getByRole("button", { name: /copy diagnostics/i }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     const text = writeText.mock.calls[0][0] as string;
-    expect(text).toContain("Version: 0.7.42");
-    expect(text).toContain("License: MIT");
-    expect(text).not.toMatch(/daemon/i);
-    expect(text).toContain("Source: https://github.com/wyx-sg/Coffer");
+    expect(text).toContain("Coffer: 0.7.42");
+    expect(text).toContain("Channel: stable");
+    expect(text).toMatch(/Host: browser/);
+    expect(text).toContain("Daemon: running on port 8000");
+    expect(text).toContain("Features: knowledge, sync");
+    expect(text).not.toContain("tok-must-not-leak");
+    expect(text).not.toMatch(/token|secret/i);
+    delete injected.__COFFER_TOKEN__;
   });
 });

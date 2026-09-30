@@ -13,11 +13,11 @@
 Coffer is a daemon + CLI + web UI that gives every AI agent on your machine one safe, shared surface. All state lives on your machine — no cloud accounts, no vendor lock-in. Everything Coffer manages is a **resource kind**:
 
 - **MCP servers** — aggregate upstream MCP servers and re-expose them to MCP clients (Claude Code, Codex) through a unified, namespaced surface. Configure once; every client sees the same tools.
-- **Agents** — detect and register your local AI coding agents, edit their config files in-app, and connect any of them to Coffer in one action — which installs its gateway MCP entry and, while memory is on, the session-start memory hook.
-- **Providers** — one shared registry of model-provider profiles (base URL plus credential), projected atomically into each agent's own native config, so you switch provider once instead of once per agent. Credentials stay Fernet ciphertext and are isolated per agent.
+- **Agents** — detect and register your local AI coding agents, edit their config files in-app, and connect any of them to Coffer in one action — which installs its gateway MCP entry and, while memory is on, the memory delivery hook.
+- **Providers** — one shared registry of model-provider connections (base URL, encrypted credential, curated models), so you switch provider once instead of once per agent. Switching points the agent's native config at Coffer's local model proxy on `127.0.0.1:8001` and installs a helper, `coffer proxy token --agent-uid <uid>`, that prints the agent's own local proxy token. The proxy exchanges that token for the connection's key upstream, fails over to another connection serving the same model before the first byte, and meters usage (`coffer usage`, `coffer proxy status`). No provider key is written into an agent's config; credentials stay Fernet ciphertext.
 - **Skills** — keep a master library of agent skill bundles and deliver them into one or more agents' skill directories, with drift reconciliation.
 - **Knowledge** — a directory of markdown files, not an index. You create a **collection**, nest folders in it however you like, and drop files in from your own editor or file manager; agents read the same bytes with their own file tools, find things by walking a generated catalogue and grepping, and add to it through `coffer__write`, with nothing chunked, embedded or reconciled in between. Every collection is served to every agent; a collection cannot be disabled. A curation pass merges new material into coherent documents, on a sweep or on request.
-- **Memory** — Coffer aggregates each registered agent's own native memory read-only, normalises it into derived facts partitioned by project plus a `global` partition, and delivers a budgeted digest back at session start, naming the memory root (`coffer path memory`) that an agent greps with its own file tools for whatever the digest left out. Coffer never writes an agent's memory files, and everything under `~/.coffer/memory/` is derived and rebuildable.
+- **Memory** — Coffer aggregates each registered agent's own native memory read-only, normalises it into derived facts partitioned by project plus a `global` partition, and delivers it back through one hook at four moments — session start, each prompt, and before and after a shell command — naming the memory root (`coffer path memory`) that an agent greps with its own file tools for whatever the digest left out. Coffer never writes an agent's memory files, and everything under `~/.coffer/memory/` is derived and rebuildable.
 - **Channels** — chat with your registered coding agents (Claude Code, Codex) from Telegram or SeaTalk, and receive notifications from your phone.
 
 Run Coffer on more than one machine? The vault **converges bidirectionally** with one git remote you own. A background worker applies a diff against the last state the vault provably held, and git's three-way merge is the arbiter when both ends moved — so nothing is overwritten wholesale. A new machine bootstraps with `coffer sync adopt`. Secrets travel as ciphertext only; the master key never leaves a machine except through an explicit out-of-band transfer you perform yourself. One thing deliberately stays behind: a resource's **reach** — whether it is enabled, and which agents it is scoped to — is machine-local, so each machine answers that question for itself.
@@ -27,6 +27,25 @@ One **UI** ties them together — register and configure your agents, browse and
 📖 **Documentation site:** https://wyx-sg.github.io/Coffer/
 
 ## Download & install
+
+**Let your agent install it.** Coffer is for people who already work with a
+coding agent, so the quickest install is to paste this into Claude Code, Codex
+or any agent that can run commands on your machine:
+
+```text
+Install Coffer on this machine by following
+https://wyx-sg.github.io/Coffer/start/install — pick the install path that fits
+this machine (a release build if one is published for this OS and architecture,
+otherwise from source). Ask me before running anything with sudo or editing my
+shell profile. When it is installed, check it with `coffer daemon status`.
+Then, for each coding agent installed here (claude-code, codex), run
+`coffer agent add <type>` and `coffer agent connect <type>`, telling me which
+config files connect will change before you run it. Do not handle any
+credentials: if a step needs a login, tell me what to do instead.
+```
+
+The agent reads the install page, chooses the path for your machine and checks
+the result. To install by hand instead, use one of the paths below.
 
 > **No tagged release yet.** The desktop app, the prebuilt binaries, the one-line
 > installer and the release archive below ship with Coffer's first tagged release
@@ -114,22 +133,23 @@ See [Install from source (developers)](#install-from-source-developers) below.
 
 ## Install from source (developers)
 
+**Prerequisites**: Python ≥ 3.12, git, and Node.js to build the web UI.
+[ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) is recommended: knowledge curation uses it
+to select candidate documents, and falls back to a slower built-in search without it.
+
 ```bash
 git clone https://github.com/wyx-sg/Coffer.git
 cd Coffer
 python3.12 -m venv .venv && source .venv/bin/activate
-pip install -e ./backend[dev]
-make verify          # sanity-check the install
+pip install -e './backend[dev]'
+(cd frontend && npm install && npm run build)   # without it the daemon serves no UI
 ```
 
 `pip install` puts both the CLI (`coffer`) and the stdio shim (`coffer-mcp-shim`) on your `PATH`
 as console-script entry points — no separate deploy step. The daemon **auto-starts** the first
 time you run any `coffer` command or connect an MCP client — `coffer daemon start` exists for
-explicit control but is not a required setup step.
-
-**Prerequisites**: Python ≥ 3.12. [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) is
-recommended for fast knowledge search; without it Coffer falls back to a slower built-in search
-with the same results.
+explicit control but is not a required setup step. Contributors use `make install` instead, which
+installs the locked dependencies; see [Install](https://wyx-sg.github.io/Coffer/start/install).
 
 ---
 
@@ -159,9 +179,18 @@ dialog, the config-file editor, and a Connect to Coffer control.
 
 ```bash
 coffer scan                       # discover installed agents (confirm before registering)
-coffer agent add claude_code      # register one (--name optional; defaults to claude-code)
+coffer agent add claude-code      # register one per type; [--config-dir <dir>] for a non-standard home
 coffer agent config edit <name> <key>  # edit a curated config file in your $EDITOR
 coffer agent connect <name>       # connect the agent to Coffer (MCP entry + memory hook)
+```
+
+A few more commands worth knowing:
+
+```bash
+coffer attention                  # what needs you now, across every kind
+coffer drift list                 # where the agents' files differ from what Coffer wrote
+coffer usage                      # metered usage through the model proxy
+coffer run --secret NAME -- cmd   # hand one stored secret to one child process
 ```
 
 ---

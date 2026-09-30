@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when a published page, a shipped skill or an e2e spec quotes a removed command.
+"""Fail when a doc, a spec, a shipped skill, the web UI or an e2e spec quotes a removed command.
 
 The OpenSpec change reshape-cli-and-mcp-surface rebuilt the `coffer` command
 line around one grammar and removed two built-in MCP tools, with no
@@ -7,14 +7,24 @@ compatibility aliases (its design.md "Command mapping" lists every old
 spelling and its replacement). Anything that still quotes an old spelling tells
 a reader or an agent to run a command that no longer exists, and the failure
 only shows when someone follows it. The readers that matter are the docs site,
-the skills Coffer ships (an agent runs what they say verbatim) and the e2e
-suite, so those are the trees scanned here.
+the repository's own guides (README, AGENTS, CONTRIBUTING, ``.agents/``), the
+specs, the skills Coffer ships (an agent runs what they say verbatim), the web
+UI's source and the e2e suite, so those are the trees scanned here.
 
 Each entry is a whole command phrase matched on word boundaries, so a phrase
 that is a prefix of a live command is not caught by accident (`coffer mcp
 test` stays legal while `coffer mcp refresh` fails). The
 REST routes behind many removed commands still exist, so route paths are not
 matched — only `coffer ...` command phrases and the two tool names.
+
+A removed OPTION is matched as the command phrase followed, later on the same
+line, by the option (``REMOVED_OPTIONS``).
+
+Some lines name a removed spelling on purpose — a spec scenario asserting that
+the old command is gone, a note that recognises what earlier builds wrote.
+Each such line is listed in ``ALLOWED`` by file and phrase, with the reason,
+so the exception is reviewed like any other change; an ``ALLOWED`` entry that
+no longer matches anything fails the gate too, so the list cannot rot.
 
 Stdlib only. Exits non-zero with one line per hit: path, line and the phrase,
 and the replacement to use.
@@ -29,10 +39,17 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 #: Trees scanned, and the file suffixes read in each.
+#: A tree may also be a single file.
 SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("docs-site", (".md", ".mts", ".ts", ".vue", ".py", ".sh", ".json", ".yaml", ".yml")),
     ("backend/coffer", (".md",)),  # shipped skill bodies (`**/skill_assets/*.md`)
     ("e2e", (".ts", ".sh", ".json")),
+    ("README.md", (".md",)),
+    ("AGENTS.md", (".md",)),
+    ("CONTRIBUTING.md", (".md",)),
+    (".agents", (".md",)),
+    ("openspec/specs", (".md", ".yaml")),
+    ("frontend/src", (".ts", ".tsx", ".json")),
 )
 _SKIP_DIRS = {"node_modules", ".vitepress/cache", "dist", "__pycache__"}
 _SKIP_FILES = {"package-lock.json"}
@@ -117,13 +134,52 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer__diagnose", "coffer log audit|mcp|daemon, coffer path logs"),
 )
 
+#: (command phrase, removed option, what replaces it). Matches the phrase with
+#: the option later on the same line.
+REMOVED_OPTIONS: tuple[tuple[str, str, str], ...] = (
+    # One agent per type (change one-agent-per-type-and-no-titles): the type
+    # is the name.
+    ("coffer agent add", "--name", "coffer agent add <type> [--config-dir <dir>]"),
+    # No command prints a stored secret (spec credentials "Return no plaintext
+    # on any route, command or tool").
+    ("coffer credentials get", "--show", "coffer credentials get <ref> (metadata only)"),
+)
+
+#: (file, phrase, why this line may name it). The phrase is the removed phrase
+#: as it appears in REMOVED, or "<command> <option>" for REMOVED_OPTIONS.
+_ABSENT = "a requirement or scenario asserting the removed spelling does not exist"
+ALLOWED: tuple[tuple[str, str, str], ...] = (
+    ("openspec/specs/credentials/spec.md", "coffer credentials get --show", _ABSENT),
+    ("openspec/specs/credentials/spec.md", "coffer sync key export", _ABSENT),
+    ("openspec/specs/internal-engine/spec.md", "coffer engine", _ABSENT),
+    ("openspec/specs/resource-framework/spec.md", "coffer discard agent", _ABSENT),
+    ("openspec/specs/knowledge/spec.md", "coffer__recall", _ABSENT),
+    ("openspec/specs/knowledge/spec.md", "coffer__diagnose", _ABSENT),
+    ("openspec/specs/mcp-gateway/spec.md", "coffer__recall", _ABSENT),
+    ("openspec/specs/mcp-gateway/spec.md", "coffer__diagnose", _ABSENT),
+    ("openspec/specs/memory/spec.md", "coffer__recall", _ABSENT),
+    ("docs-site/architecture/security.md", "coffer credentials get --show", _ABSENT),
+    # The vault-sync data model is being rewritten on its own branch; delete
+    # this entry when that lands (the gate fails once it matches nothing).
+    ("openspec/specs/vault-sync/data-model.md", "coffer sync key export", "pending vault-sync rewrite"),
+)
+
+
 def _pattern(phrase: str) -> re.Pattern[str]:
     words = [re.escape(w) for w in phrase.split()]
     return re.compile(r"(?<![\w-])" + r"\s+".join(words) + r"(?![\w-])")
 
 
+def _option_pattern(phrase: str, option: str) -> re.Pattern[str]:
+    return re.compile(_pattern(phrase).pattern + r".*?(?<![\w-])" + re.escape(option) + r"(?![\w-])")
+
+
 PATTERNS: tuple[tuple[re.Pattern[str], str, str], ...] = (
     *((_pattern(phrase), phrase, instead) for phrase, instead in REMOVED),
+    *(
+        (_option_pattern(phrase, option), f"{phrase} {option}", instead)
+        for phrase, option, instead in REMOVED_OPTIONS
+    ),
 )
 
 
@@ -138,6 +194,9 @@ def _files() -> list[Path]:
     out: list[Path] = []
     for tree, suffixes in SCANNED:
         root = REPO_ROOT / tree
+        if root.is_file():
+            out.append(root)
+            continue
         if not root.is_dir():
             continue
         for path in sorted(root.rglob("*")):
@@ -149,15 +208,25 @@ def _files() -> list[Path]:
     return out
 
 
-def scan(paths: list[Path]) -> list[str]:
+def scan(
+    paths: list[Path], allowed: tuple[tuple[str, str, str], ...] = ALLOWED
+) -> list[str]:
     hits: list[str] = []
+    allow = {(rel, phrase) for rel, phrase, _why in allowed}
+    used: set[tuple[str, str]] = set()
     for path in paths:
+        rel = path.relative_to(REPO_ROOT).as_posix()
         text = path.read_text(encoding="utf-8", errors="replace")
         for lineno, line in enumerate(text.splitlines(), start=1):
             for pattern, phrase, instead in PATTERNS:
-                if pattern.search(line):
-                    rel = path.relative_to(REPO_ROOT).as_posix()
-                    hits.append(f"{rel}:{lineno}: removed `{phrase}` — use {instead}")
+                if not pattern.search(line):
+                    continue
+                if (rel, phrase) in allow:
+                    used.add((rel, phrase))
+                    continue
+                hits.append(f"{rel}:{lineno}: removed `{phrase}` — use {instead}")
+    for rel, phrase in sorted(allow - used):
+        hits.append(f"{rel}: ALLOWED entry for `{phrase}` matches nothing — delete it")
     return hits
 
 

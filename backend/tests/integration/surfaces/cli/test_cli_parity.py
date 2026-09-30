@@ -87,6 +87,11 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # tool, prompt or resource (spec mcp-gateway).
     "mcp": {*_LIFECYCLE, "add", "scope", "test", "cap"},
     "mcp cap": {"list", "enable", "disable"},
+    # Custom-tool groups (spec mcp-gateway "Manage custom tools on REST and the
+    # command line"): an `mcp_server` of the `http_api` transport. `reimport`
+    # previews then applies an OpenAPI re-read; `op` manages one tool.
+    "tool": {*_LIFECYCLE, "add", "scope", "reimport", "op"},
+    "tool op": {"add", "edit", "rm", "enable", "disable", "scope", "test"},
     # `get` checks presence only; no command prints a value (spec credentials
     # "Return no plaintext on any route, command or tool"). `approvals` and
     # `reject` are the terminal's half of the approvals the desktop app
@@ -124,6 +129,10 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # `add` also takes an archive or a Git URL, and `update` is a Git-imported
     # skill's upstream updates (check, preview, apply, keep mine).
     "skill": {*_LIFECYCLE - {"edit"}, "add", "update", "scope", "verify"},
+    # The commands skills require (spec skill-manager "Cover required commands
+    # on REST, the command line and the web"): read, probe again, and the one
+    # Homebrew install, which asks first.
+    "cli": {"list", "show", "check", "install"},
     # Exactly spec knowledge "Cover knowledge management on REST and the
     # CLI". Documents are listed, read, edited and deleted on disk under
     # `path knowledge`. A collection

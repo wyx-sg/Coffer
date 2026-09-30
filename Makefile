@@ -25,12 +25,12 @@ PYTEST_XDIST := -n $(PYTEST_WORKERS) --dist loadgroup
 	eval eval-routing eval-curate \
 	bundle-binaries \
 	desktop desktop-stage-binaries desktop-lint desktop-test \
-	contracts frontend-codegen docs-reference \
+	contracts frontend-codegen docs-reference docs-build \
 	lint format dev clean
 
 help:
 	@echo "Coffer Makefile targets:"
-	@echo "  make install               create venv + install backend + frontend deps"
+	@echo "  make install               create .venv from backend/uv.lock (uv, frozen) + npm deps (frontend, OpenSpec CLI, e2e)"
 	@echo "  make install-e2e-browsers  download the Playwright chromium build (heavy)"
 	@echo "  make hooks                 install pre-commit + commit-msg git hooks"
 	@echo ""
@@ -47,8 +47,9 @@ help:
 	@echo "  make verify-benchmark      gateway-overhead budget benchmark (COFFER_RUN_BENCHMARKS=1)"
 	@echo "  make test-durations        re-measure backend/.test_durations (CI's integration shard balance)"
 	@echo "  PYTEST_WORKERS=0 make ...  run a backend tier serially (default: auto = one xdist worker per core)"
-	@echo "  make lint                  ruff + mypy + eslint + tsc + knip + import-linter + file/response_model checks"
-	@echo "  make format                ruff format + prettier"
+	@echo "  make lint                  every static gate: repo checks (scripts/check_*.py, contract freshness),"
+	@echo "                            ruff, mypy, import-linter, then the frontend (i18n keys, codegen, eslint, tsc, knip)"
+	@echo "  make format                ruff format + ruff check --fix over backend/ and evals/ (prettier: run it per file)"
 	@echo "  make coverage              pytest --cov + vitest --coverage (no threshold gates yet)"
 	@echo "  make eval                  AI eval harness: tool-search suite (local) + baseline gate"
 	@echo "  make eval-routing          + tool-routing suite (needs a local LLM, e.g. ollama)"
@@ -66,20 +67,21 @@ help:
 	@echo "  make contracts             regenerate every spec's contracts/api.openapi.yaml from the Pydantic models, then the frontend types"
 	@echo "  make frontend-codegen      regenerate the frontend's OpenAPI types from the OpenSpec contracts"
 	@echo "  make docs-reference        regenerate the docs site's CLI and REST API reference pages"
+	@echo "  make docs-build            build the docs site with VitePress (fails on a dead link; not in verify)"
 	@echo "  make bundle-binaries       freeze the three CLI binaries with PyInstaller (into dist/)"
 	@echo "  make clean                 remove venv + node_modules + caches"
 
-# Use `./.venv/bin/python3` directly in the install recipe instead of $(PY).
-# $(PY) is evaluated at parse time: when .venv doesn't yet exist, it expands
-# to the system `python3`, which on Homebrew macOS is PEP-668-protected and
-# rejects `pip install --upgrade pip` with "externally-managed-environment".
-# By creating the venv inside the recipe and then calling its python directly,
-# the install path works on a fresh checkout regardless of the host OS's pip
-# policy.
+# The backend installs exactly what backend/uv.lock pins, the way CI and the
+# release do (`uv sync --frozen --extra dev`), into the repo-root .venv every
+# other target reads. A pip install of the `>=` floors would resolve versions
+# CI never tested, and a local verify could then fail (or pass) for reasons
+# CI does not share. uv installs the backend itself editable.
 install:
-	@if [ ! -d .venv ]; then python3 -m venv .venv; fi
-	./.venv/bin/python3 -m pip install --upgrade pip
-	./.venv/bin/python3 -m pip install -e '$(BACKEND)[dev]'
+	@command -v uv >/dev/null 2>&1 || { \
+		echo "install: uv not found — install it (https://docs.astral.sh/uv/)"; \
+		exit 1; \
+	}
+	UV_PROJECT_ENVIRONMENT=$(CURDIR)/.venv uv sync --frozen --extra dev --project $(BACKEND) --python 3.12
 	@if [ -d $(FRONTEND) ] && command -v npm >/dev/null 2>&1; then \
 		cd $(FRONTEND) && npm install; \
 	else \
@@ -259,10 +261,12 @@ visual-update:
 		cd e2e && $(VISUAL_PW) --update-snapshots; \
 	fi
 
+# Backend and evals only. The frontend tree is not prettier-clean as a whole,
+# so a whole-tree `prettier --write` would reformat files no change touched;
+# run `npx prettier --write <files>` in frontend/ on the files you changed.
 format:
 	$(PY) -m ruff format $(BACKEND) evals
 	$(PY) -m ruff check --fix $(BACKEND) evals
-	@if [ -d $(FRONTEND)/node_modules ]; then cd $(FRONTEND) && npm run format; fi
 
 eval:
 	$(PY) -m pytest evals/tests -q
@@ -363,6 +367,16 @@ frontend-codegen:
 docs-reference:
 	$(PY) docs-site/scripts/gen_cli_reference.py
 	$(PY) docs-site/scripts/gen_rest_reference.py
+
+# The published site, built the way .github/workflows/pages.yml builds it.
+# VitePress fails the build on a dead internal link, so this is the local way
+# to find one before CI's Pages job does. Not part of `verify`.
+docs-build:
+	@if [ ! -d docs-site/node_modules ]; then \
+		echo "docs-build: installing docs-site dependencies"; \
+		cd docs-site && npm ci; \
+	fi
+	cd docs-site && npm run build
 
 bundle-binaries:
 	bash ./scripts/build_binaries.sh

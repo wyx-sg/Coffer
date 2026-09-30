@@ -84,7 +84,7 @@ Before anything is forwarded, the proxy refuses:
 
 ## Failover
 
-A request can fail over only **before the first content byte** reaches the agent. The proxy holds a streamed response until its first content event — `content_block_start` on the Anthropic wire, the first output item or delta on the Responses wire — bounded to a few kilobytes and seconds, so an error that arrives first can still be retried invisibly. After the first content byte the proxy never switches. The error or truncation goes to the agent, and the agent's own retry lands on a healthy member, because the failure has marked this one.
+A request can fail over only **before the first content byte** reaches the agent. The proxy holds a streamed response until its first content event — `content_block_start` on the Anthropic wire, the first output item or delta on the Responses wire — bounded to 64 KiB and 5 seconds, so an error that arrives first can still be retried invisibly. Past either bound the proxy stops holding and relays what it has. After the first content byte the proxy never switches. The error or truncation goes to the agent, and the agent's own retry lands on a healthy member, because the failure has marked this one.
 
 - **What fails over:** a connect, TLS or DNS error; a 5xx, 529 or 429 status; 401 or 403 (the key is at fault, not the request); a first-byte timeout; an error event before the first content event.
 - **What never fails over:** 400, 404 and 413. The request is at fault, so a retry elsewhere would fail the same way.
@@ -112,7 +112,7 @@ The proxy opens no database. It appends records to spool files under `~/.coffer/
 
 The proxy's logs and records carry metadata only: the usage record above, and each failover decision. It never records a body, a prompt, a completion or a credential.
 
-The daemon decrypts the keys of the connections the proxy serves and pushes them over the proxy's authenticated loopback control route, on spawn, on re-attach, and after every reconcile pass. The proxy holds them in memory only. It never writes them to disk, argv, the environment or a log, and it never holds the master key.
+The daemon decrypts the keys of the connections the proxy serves and pushes them over the proxy's authenticated loopback control route, on spawn, on re-attach, after every reconcile pass, and as soon as a secret approval is applied in the desktop app. A connection whose key waits for approval — a new key for one in use, or a base URL the key has not gone to before — is left out of the pushed state, so the proxy keeps sending the old key, or sends nothing to the new URL, until you approve; the next request after the approval uses the new key or URL, with no restart of the daemon or the proxy. The proxy holds the keys in memory only. It never writes them to disk, argv, the environment or a log, and it never holds the master key.
 
 ## Local model runtimes
 

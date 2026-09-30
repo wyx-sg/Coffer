@@ -50,6 +50,8 @@ const PAGES: Record<string, { list: string; detail?: (uid: string) => string }> 
   sync: { list: "/sync" },
   // A target the reconciler could not check is written up in the daemon log.
   reconcile: { list: "/activity?tab=daemon" },
+  // A command a skill requires is addressed by the command itself.
+  cli: { list: "/clis", detail: (uid) => `/clis/${uid}` },
 };
 
 const encode = encodeURIComponent;
