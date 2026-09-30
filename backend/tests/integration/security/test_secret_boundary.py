@@ -11,7 +11,9 @@ from __future__ import annotations
 import base64
 import json
 import pathlib
+import time
 from collections.abc import Iterator
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -48,6 +50,26 @@ def daemon(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[
 def cli(daemon: BoundaryDaemon, monkeypatch: pytest.MonkeyPatch) -> BoundaryDaemon:
     point_cli_at(daemon, monkeypatch)
     return daemon
+
+
+def _approve_while_waiting(d: BoundaryDaemon, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Approve every pending request each time ``--wait`` pauses between polls.
+
+    Only the CLI's own wait loop sees the stand-in clock. Patching
+    ``time.sleep`` on the shared ``time`` module hands it to every thread in
+    the process: a daemon thread committing to the vault waits on its git
+    subprocess with ``Popen.wait``, whose poll sleeps, so it approved from
+    inside the vault writer's lock, and the approval, which writes the vault
+    too, waited on that lock for ever. It hung a whole xdist worker now and
+    then, more often the busier the machine.
+    """
+
+    def the_person_approves(_seconds: float) -> None:
+        for approval in d.pending():
+            d.approve(approval["id"])
+
+    fake = SimpleNamespace(monotonic=time.monotonic, sleep=the_person_approves)
+    monkeypatch.setattr(_approvals, "time", fake)
 
 
 def _two_servers(d: BoundaryDaemon) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -357,11 +379,7 @@ def test_the_command_line_waits_for_the_approval(
     d.register_stdio("first", "server-one", {"TOKEN": "gh/token"})
     d.pending()
 
-    def the_person_approves(_seconds: float) -> None:
-        for approval in d.pending():
-            d.approve(approval["id"])
-
-    monkeypatch.setattr(_approvals.time, "sleep", the_person_approves)
+    _approve_while_waiting(d, monkeypatch)
     added = _runner.invoke(
         cli_app,
         ["mcp", "add", "second", "--stdio", "b.sh", "--secret", "TOKEN=gh/token", "--wait"],
@@ -595,11 +613,7 @@ def test_provider_edit_waits_for_the_approval_with_wait(
     _provider(d, "gw", "https://gw.example.com/anthropic", secret_value="sk-wait-key-1")
     d.pending()
 
-    def the_person_approves(_seconds: float) -> None:
-        for approval in d.pending():
-            d.approve(approval["id"])
-
-    monkeypatch.setattr(_approvals.time, "sleep", the_person_approves)
+    _approve_while_waiting(d, monkeypatch)
     r = _runner.invoke(cli_app, ["provider", "edit", "gw", "--secret", "sk-wait-key-2", "--wait"])
     assert r.exit_code == 0, r.output
     assert "approved in the Coffer app" in r.output

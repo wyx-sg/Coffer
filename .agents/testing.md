@@ -247,7 +247,7 @@ Each budget is a test with a ceiling a few times above the measured cost, so it 
 
 All three carry `pytestmark = pytest.mark.benchmark`, so `-m benchmark` selects every budget; a budget cheap enough for verify simply has no `skipif`. When a budget moves, re-measure (serially and on xdist), update the numbers here, in the test's docstring and in docs-site `contributing/testing.md` (en + zh), and keep the ceiling at 2–3× the loaded measurement.
 
-**Flaky means a wall-clock assumption.** No test retries itself (no `pytest-rerunfailures`, no loop-until-green). A test that fails only under load is fixed at the root: replace a sleep-then-assert with a wait on the condition, bound only the thing that can hang, and never let a per-test `pytest.mark.timeout` sit within a small factor of the test's loaded runtime.
+**Flaky means a wall-clock assumption.** No test retries itself (no `pytest-rerunfailures`, no loop-until-green). A test that fails only under load is fixed at the root: replace a sleep-then-assert with a wait on the condition, bound only the thing that can hang, and never let a per-test `pytest.mark.timeout` sit within a small factor of the test's loaded runtime. A hang that shows up only under load is often a patch that reached too far: `monkeypatch.setattr(module.time, "sleep", …)` replaces `time.sleep` for every thread in the process (`subprocess.Popen.wait` polls with it), so patch the module's own name instead (`monkeypatch.setattr(module, "time", fake)`) — `test_secret_boundary.py`'s `--wait` tests once deadlocked a daemon thread inside the vault writer's lock this way.
 
 ## Make Targets
 
