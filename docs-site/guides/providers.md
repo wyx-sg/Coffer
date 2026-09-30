@@ -230,6 +230,7 @@ coffer provider rm deepseek
 - **Title** is an optional display name (up to 80 characters) that Coffer's pages and the CLI show in place of the name; an empty `--title` clears it.
 
 - **Rotating** the key overwrites the stored secret at the same ref; nothing that cites it changes.
+- **Waiting for approval.** A new `--secret` for a key in use, a new `--base-url` for a connection whose key already goes somewhere, and `coffer provider add … --credential-ref` with a key another connection uses are saved but held until you approve them in the Coffer app. The command prints `waiting for approval in the Coffer app` with the approval's id and exits `9`; with `--wait` it waits for your answer instead. The old key and URL stay in use until then.
 - **Changing the protocol** is refused with `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while the provider is switched on. Run `coffer provider builtin <agent_type>` for each agent type it reaches (the refusal names them), edit, then switch again.
 - **Renaming** changes only the label. The uid, the credential ref and the agents' files stay as they are; Codex's `name = "Coffer (<name>)"` label updates on the next switch.
 - **Deleting** removes the provider and deletes its credential if nothing else cites it.
