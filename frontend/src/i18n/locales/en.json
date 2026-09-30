@@ -2486,7 +2486,7 @@
       "loadFailed": "Couldn't load what is delivered."
     }
   },
-  "chat": {
+  "conversations": {
     "title": "Conversations",
     "thinking": "Thinking…",
     "message": {
@@ -2494,29 +2494,21 @@
       "tokens": "{{prompt}} in · {{completion}} out"
     },
     "history": {
-      "new": "New chat",
-      "empty": "No conversations yet — start a new chat",
       "search": "Search conversations",
       "noMatches": "No matching conversations",
       "ariaLabel": "Conversation history",
       "rename": "Rename",
       "renameAria": "Rename conversation",
       "delete": "Delete",
-      "collapse": "Collapse history",
-      "expand": "Expand history",
       "restore": "Restore",
       "archive": "Archive",
-      "archivedEmpty": "No archived conversations",
-      "filterLabel": "Filter conversations",
-      "filterActive": "Active",
-      "filterArchived": "Archived",
-      "viaChannel": "via {{channel}}"
+      "archivedEmpty": "No archived conversations"
     },
     "thread": {
       "empty": "Send a message to start the conversation.",
       "notFoundTitle": "Conversation not found",
       "notFoundBody": "It may have been deleted, or the link may be stale.",
-      "notFoundCta": "Start a new chat"
+      "notFoundCta": "Start a new conversation"
     },
     "archivedThread": {
       "notice": "This conversation is archived.",
@@ -2524,13 +2516,15 @@
       "restoring": "Restoring…"
     },
     "composer": {
-      "placeholder": "Type a message… (Enter to send, Shift+Enter for new line)",
+      "placeholder": "Message {{agent}}…",
       "ariaLabel": "Message input",
       "send": "Send",
       "stop": "Stop",
-      "streaming": "A reply is streaming — your next message will queue.",
       "attach": "Attach files",
-      "dropHint": "Drop files to attach"
+      "dropHint": "Drop to attach",
+      "placeholderAny": "Type a message…",
+      "replyPlaceholder": "Reply…",
+      "queuePlaceholder": "Reply — it queues until this turn finishes"
     },
     "queue": {
       "label": "Queued:",
@@ -2539,9 +2533,9 @@
     },
     "toolCard": {
       "unknown": "unknown tool",
-      "running": "running",
-      "done": "done",
-      "error": "error",
+      "running": "Running",
+      "done": "Done",
+      "error": "Error",
       "input": "Input",
       "result": "Result",
       "errorLabel": "Error",
@@ -2562,9 +2556,10 @@
       "inheritNoEffort": "Agent default"
     },
     "draft": {
-      "guide": "Message {{agent}} to start a new conversation.",
+      "guide": "Your first message starts the conversation with {{agent}}.",
       "noAgentTitle": "No managed agent available",
-      "noAgentBody": "Chat talks to a Coffer-managed agent. Install or configure Claude Code or Codex, then register it under Agents."
+      "noAgentBody": "Conversations run on a Coffer-managed agent. Install Claude Code or Codex on this Mac, then add it on the Agents page.",
+      "workspace": "Coffer’s workspace"
     },
     "delete": {
       "title": "Delete this conversation?",
@@ -2598,50 +2593,371 @@
       },
       "notDelivered": "Not delivered to {{platform}} yet",
       "notDeliveredHelp": "Coffer will send it, and the agent's answer, when the channel is running again."
+    },
+    "source": {
+      "coffer": "Coffer",
+      "channel": "Channel",
+      "dm": "DM",
+      "group": "Group",
+      "thread": "thread",
+      "topic": "topic",
+      "viaChannel": "Through the channel {{channel}}"
+    },
+    "day": {
+      "today": "Today",
+      "yesterday": "Yesterday"
+    },
+    "list": {
+      "running": "Running",
+      "ariaLabel": "Conversations",
+      "cols": {
+        "conversation": "Conversation",
+        "source": "Source",
+        "agent": "Agent",
+        "lastActivity": "Last activity"
+      },
+      "emptyTitle": "No conversations yet",
+      "emptyBody": "Every conversation shows up here — the ones you start in Coffer and the ones that come in through SeaTalk or Telegram.",
+      "noMatches": "No conversations match these filters"
+    },
+    "filters": {
+      "source": "Source",
+      "allSources": "All sources",
+      "agent": "Agent",
+      "allAgents": "All agents",
+      "channel": "Channel: {{channel}}",
+      "clearChannel": "Show every source",
+      "showArchived": "Archived",
+      "showActive": "Active"
+    },
+    "new": {
+      "action": "New conversation",
+      "title": "New conversation",
+      "hint": "Model and effort start from the agent’s Model tab; you can switch them in the conversation.",
+      "agent": "Agent",
+      "unavailable": "not available on this Mac",
+      "workingDir": "Working directory",
+      "workingDirPlaceholder": "Coffer’s workspace (~/.coffer/workspace)",
+      "start": "Start"
+    },
+    "header": {
+      "more": "More actions for this conversation"
+    },
+    "files": {
+      "title": "Files changed · {{count}}"
+    },
+    "streamLost": {
+      "title": "Lost the live stream from the daemon",
+      "body": "Five reconnect attempts failed. The turn may still be running — reloading shows everything it has written so far.",
+      "reload": "Reload conversation"
     }
   },
   "channels": {
     "title": "Channels",
-    "subtitle": "Connect the IM accounts you already use — Telegram and SeaTalk — to your agents.",
-    "add": "Add channel",
     "loadFailed": "Failed to load channels",
-    "searchPlaceholder": "Search channels…",
     "noMatches": "No channels match your search.",
-    "backToChannels": "Back to channels",
-    "paired": "Paired",
-    "notPaired": "Not paired",
-    "types": {
-      "telegram": "Telegram",
-      "seatalk": "SeaTalk"
-    },
-    "cols": {
-      "name": "Name",
-      "type": "Type",
-      "agent": "Default agent",
-      "health": "Health",
-      "runsOn": "Runs on",
-      "paired": "Paired"
-    },
-    "welcome": {
-      "title": "Talk to your agents from the IM apps you live in",
-      "body": "A channel connects one Telegram bot or SeaTalk app to Coffer's chat platform. Pair it with your own account, then message the bot to chat with an agent — replies and notifications all arrive in the IM chat.",
-      "featureChat": {
-        "title": "Chat anywhere",
-        "body": "Messages route into an ordinary conversation; the agent's reply comes back to the IM chat."
-      },
-      "featurePair": {
-        "title": "Paired to you only",
-        "body": "A single-use pairing code binds the channel to your account; strangers are ignored silently."
-      },
-      "featureNotify": {
-        "title": "Push notifications",
-        "body": "Coffer can push a message to the paired owner — no inbound message required."
+    "notFound": "This channel no longer exists",
+    "notFoundBody": "Choose a channel from the list.",
+    "list": {
+      "filter": "Filter",
+      "groups": {
+        "attention": "Needs attention",
+        "connected": "Connected",
+        "elsewhere": "Elsewhere",
+        "off": "Off"
       }
     },
-    "dialog": {
+    "state": {
+      "loading": {
+        "word": "Checking…",
+        "line": "Checking…"
+      },
+      "unavailable": {
+        "word": "Unknown",
+        "line": "Status unavailable"
+      },
+      "unbound": {
+        "word": "Runs nowhere",
+        "line": "Not bound to a machine"
+      },
+      "unknownMachine": {
+        "word": "Runs nowhere",
+        "line": "Bound to an unknown machine"
+      },
+      "elsewhere": {
+        "word": "Runs on {{machine}}",
+        "line": "Runs on {{machine}}"
+      },
+      "off": {
+        "word": "Off",
+        "line": "Off"
+      },
+      "connecting": {
+        "word": "Connecting",
+        "line": "Connecting…"
+      },
+      "reconnecting": {
+        "word": "Reconnecting",
+        "line": "Reconnecting…"
+      },
+      "kicked": {
+        "word": "Kicked",
+        "line": "Another process took the connection"
+      },
+      "sdkMissing": {
+        "word": "Can't start",
+        "line": "SeaTalk SDK not found"
+      },
+      "connectFailed": {
+        "word": "Can't connect",
+        "line": "Connection refused"
+      },
+      "stopped": {
+        "word": "Stopped",
+        "line": "Stopped"
+      },
+      "notPaired": {
+        "word": "Not paired",
+        "line": "Not paired yet"
+      },
+      "connected": {
+        "word": "Connected",
+        "line": "Connected"
+      }
+    },
+    "banner": {
+      "unavailable": {
+        "title": "Couldn't read this channel's status",
+        "body": "Your other channels are unaffected. Retry, or open Activity to see what the daemon last logged."
+      },
+      "unbound": {
+        "title": "Bound to no machine",
+        "body": "No machine starts a channel that names none, so the bot never answers. Run it here, or pick the machine that should run it in Settings."
+      },
+      "unknownMachine": {
+        "title": "Bound to a machine Coffer doesn't know ({{id}})",
+        "body": "No machine in your sync group claims it, so no machine starts the bot and it never answers. Pick the machine that should run it."
+      },
+      "elsewhere": {
+        "title": "Quiet here by design — {{machine}} runs this bot",
+        "body": "A bot takes one connection, so exactly one machine answers it. Settings and pairing sync; the connection doesn't."
+      },
+      "off": {
+        "title": "This channel is off",
+        "body": "Its bot starts no conversations. Turn it on to connect again — settings and pairing are kept."
+      },
+      "reconnecting": {
+        "title": "Lost the connection to {{platform}} — reconnecting",
+        "body": "Usually the network or a hiccup on {{platform}}'s side. Messages sent meanwhile arrive once it's back."
+      },
+      "kicked": {
+        "title": "{{platform}} handed this bot's connection to another process",
+        "body": "SeaTalk allows one connection per app. Something else is running app {{appId}} — often Coffer on another machine, or a test script. Stop it there, or take the connection back here."
+      },
+      "sdkMissing": {
+        "title": "SeaTalk's Python SDK isn't installed",
+        "body": "Coffer talks to SeaTalk through its official SDK, which isn't bundled. Install it where the message below says, then Retry."
+      },
+      "connectFailed": {
+        "title": "{{platform}} refused the connection",
+        "body": "Usually a wrong App ID, or an app secret regenerated on the SeaTalk Open Platform. Replace the secret — pairing and settings are kept."
+      },
+      "notPaired": {
+        "title": "Pair it with your {{platform}} account",
+        "body": "Generate a code and send it to the bot from your own account. That account becomes the only one it answers."
+      },
+      "stopped": {
+        "title": "The {{platform}} adapter isn't running",
+        "body": {
+          "telegram": "Often a bot token revoked or regenerated in @BotFather. Paste the new one — your pairing and settings are kept.",
+          "seatalk": "Often an app secret regenerated on the SeaTalk Open Platform. Replace it — your pairing and settings are kept."
+        }
+      }
+    },
+    "meta": {
+      "seatalkApp": "SeaTalk app {{appId}}",
+      "websocket": "WebSocket",
+      "longPolling": "Long polling",
+      "runsHere": "runs on this machine"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "settings": "Settings"
+    },
+    "actions": {
+      "more": "More actions for {{name}}",
+      "sendTest": "Send test",
+      "sendTestMessage": "Send test message",
+      "reconnect": "Reconnect now",
+      "takeBack": "Take it back",
+      "retryStart": "Retry",
+      "refresh": "Retry",
+      "replaceSecret": "Replace secret",
+      "replaceToken": "Replace token",
+      "runHere": "Run it here",
+      "runHereConfirm": "Run it here…",
+      "turnOn": "Turn on",
+      "changeMachine": "Change machine…",
+      "delete": "Delete channel"
+    },
+    "overview": {
+      "who": {
+        "title": "Who can use it",
+        "oneOwner": "1 owner",
+        "ownerLine": "Owner · direct chat · paired {{date}}",
+        "repair": "Re-pair…",
+        "nobody": "Nobody yet. Until you pair, the bot ignores every message.",
+        "onlyOwner": "Answers only the owner; strangers get silence."
+      },
+      "agents": {
+        "title": "Agents",
+        "default": "Default agent",
+        "reach": "Agents it may drive",
+        "help": "Each message becomes a conversation in Conversations. {{agentCommand}} switches between these agents, /model picks a model, /thread opens a parallel one."
+      },
+      "conversations": "Conversations from this channel",
+      "conversationsHint": "Opens Conversations filtered to {{name}}."
+    },
+    "settings": {
+      "saveState": {
+        "saving": "Saving…",
+        "saved": "Saved",
+        "error": "Couldn't save"
+      },
+      "credentials": {
+        "title": "Credentials",
+        "replace": "Replace",
+        "hint": "Stored in Coffer's credential store; the channel's config only carries a reference."
+      },
+      "machine": {
+        "runsOn": "Runs on",
+        "hint": "Exactly one machine holds the bot's connection."
+      },
+      "danger": {
+        "title": "Danger zone",
+        "body": "Stops the bot and removes the pairing. Conversations stay in Conversations.",
+        "button": "Delete…"
+      }
+    },
+    "add": {
+      "button": "Add channel",
       "title": "Add channel",
-      "subtitle": "Secrets are stored in Coffer's credential store; the channel config only carries references.",
-      "type": "Type",
+      "connectTitle": "Add {{platform}} channel",
+      "pairTitle": "Pair {{name}}",
+      "stepsLabel": "Steps",
+      "steps": {
+        "platform": "Platform",
+        "connect": "Connect",
+        "pair": "Pair"
+      },
+      "filter": "Filter by name or feature",
+      "platformHint": "One channel is one bot. It answers only you, and each message becomes a conversation with one of your agents.",
+      "next": "Next",
+      "back": "Back",
+      "connect": "Connect",
+      "connecting": "Connecting…",
+      "pairLater": "Pair later",
+      "paired": {
+        "title": "Paired with {{owner}}",
+        "body": "{{name}} answers only you. Everyone else is ignored silently."
+      }
+    },
+    "platforms": {
+      "count_one": "{{count}} platform",
+      "count_other": "{{count}} platforms",
+      "toConnect": "To connect:",
+      "seatalk": {
+        "body": "Work chats and groups, through an app on the SeaTalk Open Platform.",
+        "needs": "App ID + secret"
+      },
+      "telegram": {
+        "body": "A bot from @BotFather. Reach it from your phone, anywhere.",
+        "needs": "Bot token"
+      },
+      "capabilities": {
+        "privateChat": "Private chat",
+        "groups": "Groups",
+        "threads": "Threads",
+        "quotes": "Quoted messages",
+        "cards": "Cards",
+        "voice": "Voice",
+        "files": "Files"
+      }
+    },
+    "firstRun": {
+      "title": "Talk to your agents from a chat app",
+      "body": "Connect a bot, pair it with your account, and your messages reach your agents on this machine.",
+      "choose": "Choose a platform",
+      "benefits": {
+        "chat": {
+          "title": "Chat anywhere",
+          "body": "Each message becomes a conversation in Conversations; the reply goes back to the chat app."
+        },
+        "onlyYou": {
+          "title": "Answers only you",
+          "body": "A one-time code pairs your account. Strangers get silence."
+        },
+        "groups": {
+          "title": "Groups too",
+          "body": "Add the bot to a group and it answers there when you @mention it."
+        }
+      }
+    },
+    "pairing": {
+      "generate": "Generate pairing code",
+      "generating": "Generating…",
+      "copy": "Copy",
+      "copied": "Copied",
+      "expiresIn_one": "Expires in {{count}} min · single use",
+      "expiresIn_other": "Expires in {{count}} min · single use",
+      "expiresSoon": "Expires in under a minute",
+      "expired": "Expired",
+      "expiredBody": "The code ran out, or was guessed wrong too many times. Wrong guesses get no reply, so nobody learns the bot exists.",
+      "instruction": "In {{platform}}, open a direct chat with the bot and send exactly this code.",
+      "openIn": "Open in {{platform}}",
+      "openInHint": "Opens the chat with the code filled in.",
+      "waiting": "Waiting for your message…",
+      "newCode": "New code",
+      "newCodeAfterExpiry": "Generate a new code"
+    },
+    "repair": {
+      "title": "Re-pair {{name}}?",
+      "body": "A new code lets a different account take over. When someone sends it, {{owner}} stops being the owner and their direct messages go unanswered. The current owner keeps working until the new code is used.",
+      "confirm": "Generate new code"
+    },
+    "runHere": {
+      "title": "Run {{name}} on this machine?",
+      "body": "{{machine}} is still running this bot. Stop it there first if you can — otherwise both machines may answer until {{machine}} syncs."
+    },
+    "delete": {
+      "title": "Delete {{name}}?",
+      "body": "The bot stops answering, and the pairing with {{owner}} is removed. Conversations stay in Conversations. The app on {{platform}}'s side is untouched.",
+      "bodyUnpaired": "The bot stops answering. Conversations stay in Conversations. The app on {{platform}}'s side is untouched."
+    },
+    "replace": {
+      "token": {
+        "title": "Replace bot token",
+        "body": "Paste the new token from @BotFather. Pairing and settings are kept; the bot restarts on the new token.",
+        "label": "New bot token"
+      },
+      "secret": {
+        "title": "Replace app secret",
+        "body": "Paste the new secret from the SeaTalk Open Platform. Pairing and settings are kept; the bot restarts on the new secret.",
+        "label": "New app secret"
+      },
+      "hint": "Stored in Coffer's credential store; the old value is overwritten.",
+      "submit": "Replace and restart"
+    },
+    "test": {
+      "title": "Send a test message",
+      "message": "Message",
+      "goesTo": "Goes to {{owner}}'s direct chat. No turn is started.",
+      "send": "Send",
+      "sending": "Sending…",
+      "sent": "Test message sent",
+      "fixedMessage": "Test message from Coffer"
+    },
+    "dialog": {
       "name": "Name",
       "namePlaceholder": "e.g. my-telegram",
       "botToken": "Bot token",
@@ -2661,17 +2977,13 @@
       "created": "Channel {{name}} registered",
       "machineUnknown": "Coffer could not read this machine's id, so the channel has no machine to run on. Try again in a moment.",
       "agent": "Default agent",
-      "agentHint": "New conversations on this channel start on this agent."
+      "agentHint": "New conversations on this channel start on this agent.",
+      "seatalkDelivery": {
+        "title": "In SeaTalk's Developer Portal, set event delivery to WebSocket",
+        "body": "Do it after connecting here — the portal checks that a connection exists."
+      }
     },
     "edit": {
-      "title": "Edit channel",
-      "subtitle": "Change the bound agent, rotate a secret, set when the bot answers in a group, how long it waits for more messages, or the folders /dir can switch to. Leave a secret field blank to keep the current value.",
-      "agent": "Default agent",
-      "agentHint": "New conversations on this channel start on this agent.",
-      "newBotToken": "New bot token",
-      "newAppSecret": "New app secret",
-      "rotateHint": "Stored in Coffer's credential store; the existing reference is reused.",
-      "save": "Save changes",
       "saved": "Channel {{name}} updated",
       "groups": {
         "title": "In group chats",
@@ -2707,25 +3019,6 @@
         "tooMany": "List at most {{max}} directories."
       }
     },
-    "test": {
-      "send": "Send test message",
-      "sending": "Sending…",
-      "title": "Test delivery",
-      "subtitle": "Sends a fixed message to the paired account to confirm delivery works.",
-      "sent": "Test message sent",
-      "needsPeer": "Pair the channel first — there is no peer to notify yet.",
-      "fixedMessage": "Test message from Coffer — delivery works."
-    },
-    "status": {
-      "adapter": "Adapter",
-      "running": "Running",
-      "stopped": "Stopped",
-      "chatId": "Chat ID",
-      "pairedAt": "Paired at",
-      "conversation": "Active conversation",
-      "none": "No active conversation",
-      "pendingPairing": "A pairing code is outstanding."
-    },
     "machine": {
       "title": "Runs on",
       "pickerLabel": "Machine running {{name}}",
@@ -2733,41 +3026,10 @@
       "self": "{{name}} · this machine",
       "unbound": "Not bound",
       "unknown": "Unknown machine ({{id}})",
-      "unboundBody": "This channel is bound to no machine, so no daemon starts it and the bot never answers. Pick the machine that should answer it.",
-      "unknownBody": "This channel is bound to {{id}}, which no machine in the registry claims — it runs nowhere until it is bound to one that does.",
       "handover": "Rebinding needs no restart. The machine losing the channel stops within a couple of seconds; the machine gaining it starts after the next sync round brings the change over. Rebinding away from the machine you are on hands over cleanly — binding a channel to this machine while another still holds it can leave both answering until that machine's next round.",
-      "notReach": "This is which machine runs the adapter. Reach, in the header, is which agents this channel may drive.",
+      "notReach": "This is which machine runs the adapter. \"Agents it may drive\", on Overview, is which agents this channel may drive.",
       "rebound": "{{name}} now runs on {{machine}}",
       "helpLabel": "About the machine binding"
-    },
-    "pairing": {
-      "instruction": "Generate a code, then send it to the bot from your own account. The sender becomes this channel's sole owner — re-pairing replaces the previous one.",
-      "generate": "Generate pairing code",
-      "generating": "Generating…",
-      "copy": "Copy",
-      "copied": "Copied",
-      "openLink": "Open the pairing link",
-      "expires": "Expires at {{time}} (single use).",
-      "hint": "Generate a code, then send it to the bot from the account that should own this channel.",
-      "repair": "Re-pair",
-      "helpLabel": "About pairing"
-    },
-    "inbound": {
-      "title": "SeaTalk connection",
-      "state": {
-        "connecting": "Connecting…",
-        "connected": "Connected",
-        "kicked": "Kicked — another process holds this bot's connection",
-        "sdk_missing": "SDK not found",
-        "error": "Error",
-        "unknown": "Unknown"
-      }
-    },
-    "deleteTitle": "Delete channel",
-    "deleteConfirm": "Delete channel “{{name}}”? Its adapter stops and the pairing is removed.",
-    "bulkDeleteConfirm": "Delete {{count}} channels? Their adapters stop and their pairings are removed.",
-    "account": {
-      "title": "Account"
     }
   },
   "scope": {

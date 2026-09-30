@@ -1,8 +1,12 @@
 // src/lib/hooks/useChatController.ts
-// Orchestration for the Chat page: binds the conversation/agent queries, the
-// streaming turn, and the draft → create → first-message flow, exposing a flat
-// interface the ChatPage component renders. Keeping this out of the page keeps
-// the component presentational (and under the file-size limit).
+// Orchestration for the Conversations page: binds the conversation/agent
+// queries, the streaming turn, the URL filters and the draft → create →
+// first-message flow, exposing a flat interface the page renders.
+//
+// Addresses: `/conversations` is the list, `/conversations/:id` an open
+// conversation, `/conversations/new` the draft New conversation opens (spec chat
+// "Create the conversation on the first send": the draft is not a row, its first
+// send creates one). The list's filters ride along as search params.
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -18,7 +22,13 @@ import {
 } from "@/lib/hooks/useConversations";
 import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useChatTurn } from "@/lib/hooks/useChatTurn";
+import { useConversationFilters } from "@/lib/hooks/useConversationFilters";
+import { filterConversations } from "@/lib/conversations/filters";
+import { rememberWorkingDir } from "@/lib/conversations/lastWorkingDir";
 import type { ChatAttachment } from "@/lib/api/chat";
+
+/** The draft's route segment: `/conversations/new`. */
+const DRAFT_ID = "new";
 
 /** The draft's first message, bound for the conversation the draft created. */
 interface FirstMessage {
@@ -27,40 +37,41 @@ interface FirstMessage {
   attachments: ChatAttachment[];
 }
 
+/** What the draft will create: the agent, where it runs, and how. `model` and
+ *  `effort` null inherit the agent's own defaults; `cwd` null is Coffer's own
+ *  workspace (~/.coffer/workspace). */
+export interface DraftConfig {
+  agentKey: string;
+  cwd: string | null;
+  model: string | null;
+  effort: string | null;
+}
+
 export function useChatController() {
   const navigate = useNavigate();
-  const { id: routeId } = useParams<{ id?: string }>();
+  const { id: routeParam } = useParams<{ id?: string }>();
+  const isDraft = routeParam === DRAFT_ID;
+  const routeId = isDraft ? undefined : routeParam;
+  const { filters, setFilters, search } = useConversationFilters();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [archivingId, setArchivingId] = useState<string | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
-  // Draft top-bar selection (the agent + optional model + optional effort) before
-  // the conversation exists; null until the user touches a selector — the
-  // defaults are derived below. `model` is the agent's own per-conversation model
-  // (agent_config.model, the coffer-model-is-an-internal-engine and
-  // model-catalogue-read-from-the-agent ADRs); null inherits the active provider profile's
-  // default. `effort` is the reasoning level that model runs at — its own field
-  // beside the model, not part of its name — and it is carried here rather than
-  // set after the fact because the FIRST turn is the one a user most wants to
-  // pitch, and by the time the conversation exists that turn is already running.
-  // There is no per-turn working-directory choice anymore: a turn runs in the
-  // Coffer-managed workspace (~/.coffer/workspace) by default.
-  const [draftConfig, setDraftConfig] = useState<{
-    agentKey: string;
-    model: string | null;
-    effort: string | null;
-  } | null>(null);
+  // The draft's choices, null until New conversation (or a selector) sets them —
+  // the defaults are derived below. They are carried into the create call rather
+  // than set after the fact because the FIRST turn is the one a user most wants
+  // to pitch, and by the time the conversation exists that turn is running.
+  const [draftConfig, setDraftConfig] = useState<DraftConfig | null>(null);
   // After creating from the draft, the first message is sent once the turn hook
   // re-binds to the new conversation id (see effect below).
   const [pendingFirst, setPendingFirst] = useState<FirstMessage | null>(null);
   // A first message the daemon refused (e.g. ATTACHMENT_NOT_FOUND) once its
-  // conversation existed: the draft's composer is gone by then, so its text and
-  // chips are handed to the new conversation's composer rather than lost.
+  // conversation existed: its text and chips go to the new conversation's composer.
   const [refusedFirst, setRefusedFirst] = useState<FirstMessage | null>(null);
   const clearRefusedFirst = useCallback(() => setRefusedFirst(null), []);
 
   const { data: conversations = [], isPending: convLoading } = useConversations();
-  const { data: archivedConversations = [], isPending: archivedLoading } =
-    useArchivedConversations(showArchived);
+  const { data: archivedConversations = [], isPending: archivedLoading } = useArchivedConversations(
+    filters.archived,
+  );
   const { data: agents = [] } = useAgentProviders();
   const createConv = useCreateConversation();
   const renameConv = useRenameConversation();
@@ -68,10 +79,9 @@ export function useChatController() {
   const archiveConv = useArchiveConversation();
   const unarchiveConv = useUnarchiveConversation();
 
-  // Resolve the open conversation from the active list, the archived list,
-  // or — when neither has it (archived deep-link, archived list not loaded) —
-  // a by-id fetch. An archived or unknown id must never silently fall through
-  // to the draft surface, where typing would create a NEW conversation.
+  // Resolve the open conversation from the active list, the archived list, or —
+  // when neither has it — a by-id fetch. An archived or unknown id must never
+  // silently fall through to the draft surface.
   const listedConv =
     conversations.find((c) => c.id === routeId) ??
     archivedConversations.find((c) => c.id === routeId) ??
@@ -82,72 +92,65 @@ export function useChatController() {
   const activeLoading =
     !!routeId && !activeConv && (convLoading || (needsLookup && lookup.isPending));
   const activeNotFound = !!routeId && !activeConv && !activeLoading;
-  const activeArchived = !!activeConv?.archived_at;
   const activeAgent = activeConv
     ? agents.find((a) => a.agent_key === activeConv.agent_key)
     : undefined;
 
   const turn = useChatTurn(activeConv?.id ?? "");
 
-  // Once navigation has bound the turn hook to the freshly-created conversation,
-  // fire its first message. Gated on the id matching so it never sends to the
-  // wrong thread. Keyed on the stable `send`, not the `turn` object (new every
-  // render): a render that lands before `setPendingFirst(null)` is processed
-  // must not send the message a second time.
+  // Fire the draft's first message once the turn hook is bound to the new
+  // conversation. Keyed on the stable `send`: a render that lands before
+  // `setPendingFirst(null)` is processed must not send it a second time.
   const sendTurn = turn.send;
   useEffect(() => {
     if (pendingFirst && activeConv?.id === pendingFirst.convId) {
       const first = pendingFirst;
       setPendingFirst(null);
-      // A refusal is also the turn's `error`, shown in the thread's banner.
       void sendTurn(first.text, first.attachments).then((accepted) => {
         if (!accepted) setRefusedFirst(first);
       });
     }
   }, [pendingFirst, activeConv?.id, sendTurn]);
 
-  // Chat talks only to Coffer-managed agents (claude_code / codex). The draft
-  // defaults to the first available one; when none is available the draft
-  // surface shows an install/configure empty state instead.
+  // Conversations run only on Coffer-managed agents (claude_code / codex); with
+  // none available the draft shows how to get one instead of a composer.
   const firstAvailableAgent = agents.find((a) => a.available)?.agent_key ?? null;
-  const effectiveDraft = draftConfig ?? {
+  const effectiveDraft: DraftConfig = draftConfig ?? {
     agentKey: firstAvailableAgent ?? "",
+    cwd: null,
     model: null,
     effort: null,
   };
 
-  const startDraft = () => {
-    setDraftConfig({ ...effectiveDraft });
-    navigate("/conversations");
+  const listPath = `/conversations${search}`;
+  const pathFor = (id: string) => `/conversations/${encodeURIComponent(id)}${search}`;
+
+  /** New conversation's Start: open the draft with the agent and folder chosen. */
+  const startDraft = (config: { agentKey: string; cwd: string | null }) => {
+    setDraftConfig({ ...config, model: null, effort: null });
+    navigate(pathFor(DRAFT_ID));
   };
 
-  const selectConversation = (id: string) => {
-    setDraftConfig(null);
-    navigate(`/conversations/${id}`);
-  };
+  const selectConversation = (id: string) => navigate(pathFor(id));
 
   // Resolves whether the conversation was created; a failed create keeps the
-  // draft composer's chips (the error shows as `createError`). A first message
-  // refused after the create comes back as `refusedFirst`.
+  // draft composer's chips (the error shows as `createError`).
   const sendDraft = (text: string, attachments: ChatAttachment[] = []) =>
     new Promise<boolean>((resolve) => {
-      // No per-turn working directory: send an empty agent_config and let the
-      // backend default the cwd to the Coffer-managed workspace. Carry the chosen
-      // model and effort through only when set — unset inherits, respectively, the
-      // global default and the agent's own level.
+      // Only what was chosen is sent: unset inherits the agent's own model and
+      // level, and no cwd runs the turn in Coffer's workspace.
       const agent_config: Record<string, unknown> = {};
+      if (effectiveDraft.cwd) agent_config.cwd = effectiveDraft.cwd;
       if (effectiveDraft.model) agent_config.model = effectiveDraft.model;
       if (effectiveDraft.effort) agent_config.effort = effectiveDraft.effort;
       createConv.mutate(
-        {
-          agent_key: effectiveDraft.agentKey,
-          agent_config,
-        },
+        { agent_key: effectiveDraft.agentKey, agent_config },
         {
           onSuccess: (created) => {
+            rememberWorkingDir(effectiveDraft.cwd);
             setPendingFirst({ convId: created.id, text, attachments });
             setDraftConfig(null);
-            navigate(`/conversations/${created.id}`);
+            navigate(pathFor(created.id));
             resolve(true);
           },
           onError: () => resolve(false),
@@ -161,7 +164,7 @@ export function useChatController() {
     deleteConv.mutate(id, {
       onSuccess: () => {
         setDeletingId(null);
-        if (routeId === id) navigate("/conversations");
+        if (routeId === id) navigate(listPath);
       },
     });
   };
@@ -172,41 +175,44 @@ export function useChatController() {
     archiveConv.mutate(id, {
       onSuccess: () => {
         setArchivingId(null);
-        if (routeId === id) navigate("/conversations");
+        if (routeId === id) navigate(listPath);
       },
     });
   };
 
+  const listed = filters.archived ? archivedConversations : conversations;
+
   return {
-    conversations,
-    convLoading,
     agents,
+    filters,
+    setFilters,
+    listPath,
+    pathFor,
+    /** Every conversation of the current view, before the filters. */
+    allConversations: listed,
+    /** The current view (active or archived) narrowed by the URL filters. */
+    listConversations: filterConversations(listed, filters),
+    listLoading: filters.archived ? archivedLoading : convLoading,
+    isDraft,
+    routeId,
     activeConv,
-    // Route-id resolution state: still resolving / definitively unknown.
     activeLoading,
     activeNotFound,
-    // True when the open conversation is archived (rendered read-only).
-    activeArchived,
+    /** The open conversation is archived: read-only until restored. */
+    activeArchived: !!activeConv?.archived_at,
     activeAgent,
     turn,
     effectiveDraft,
-    // True when no Coffer-managed agent (claude_code / codex) is available, so
-    // the draft surface shows an install/configure empty state instead.
     noManagedAgent: !firstAvailableAgent,
-    // Changing the agent clears any draft model AND effort override (different
-    // agent → its own model namespace, its own default, and its own set of
-    // levels — a level carried over could name something the new agent has
-    // never heard of).
-    setDraftAgent: (agentKey: string) => setDraftConfig({ agentKey, model: null, effort: null }),
-    // Changing the model keeps the effort: the picker keeps a level it no longer
-    // offers selectable rather than silently dropping it, so the trigger never
-    // misreports what the first turn will run at.
+    // A different agent has its own models and levels: the draft's model and
+    // effort are cleared rather than carried over.
+    setDraftAgent: (agentKey: string) =>
+      setDraftConfig({ ...effectiveDraft, agentKey, model: null, effort: null }),
     setDraftModel: (model: string | null) => setDraftConfig({ ...effectiveDraft, model }),
     setDraftEffort: (effort: string | null) => setDraftConfig({ ...effectiveDraft, effort }),
     startDraft,
     selectConversation,
     sendDraft,
-    // The refused first message, for the open conversation's composer to take back.
     refusedFirst: refusedFirst?.convId === activeConv?.id ? refusedFirst : null,
     clearRefusedFirst,
     creating: createConv.isPending,
@@ -217,11 +223,6 @@ export function useChatController() {
     requestDelete: setDeletingId,
     confirmDelete,
     deletePending: deleteConv.isPending,
-    // Archive / restore
-    showArchived,
-    toggleView: () => setShowArchived((v) => !v),
-    listConversations: showArchived ? archivedConversations : conversations,
-    listLoading: showArchived ? archivedLoading : convLoading,
     archivingId,
     requestArchive: setArchivingId,
     confirmArchive,
@@ -230,3 +231,5 @@ export function useChatController() {
     restorePending: unarchiveConv.isPending,
   };
 }
+
+export type ChatController = ReturnType<typeof useChatController>;

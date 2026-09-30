@@ -111,11 +111,11 @@
 
 ## 6i. Conversations, Channels and Sessions
 
-- [ ] 6i.1 Rename Chat to Conversations: `/conversations` and `/conversations/:id`, `/chat` and `/chat/:id` redirect; list every conversation with a source badge (channel or Coffer) and filters by source and agent; conversation page with the full exchange and a reply box; New conversation as a secondary action; no welcome / suggestions page and no voice input in the composer — *shell part done*: `/conversations` and `/conversations/:id` with `/chat` redirects, and the Conversations name; the list with source badges and filters lands with the Conversations page item
-- [ ] 6i.2 Channels page: setup, connection status and settings only; a link per channel to Conversations filtered by it
+- [x] 6i.1 Rename Chat to Conversations: `/conversations` and `/conversations/:id`, `/chat` and `/chat/:id` redirect; list every conversation with a source badge (channel or Coffer) and filters by source and agent; conversation page with the full exchange and a reply box; New conversation as a secondary action; no welcome / suggestions page and no voice input in the composer (shipped with the Conversations and Channels page item: `pages/ConversationsPage.tsx`, the list at `/conversations` with source / channel / agent / archived filters in the query string, the conversation beside the list, New conversation as a dialog opening the draft at `/conversations/new`; the listing carries each row's place in its chat, latest line and running state)
+- [x] 6i.2 Channels page: setup, connection status and settings only; a link per channel to Conversations filtered by it (shipped with the Conversations and Channels page item: `pages/ChannelsPage.tsx` + `components/channel/`, the list beside the open channel at `/channels/<uid>` and `/channels/<uid>/settings`, statuses and their fixes, auto-saved settings, the three-step Add, and "Conversations from this channel" → `/conversations?channel=<uid>`)
 - [x] 6i.3 Agent detail: rename the Conversations tab to Sessions at `/agents/<type>/sessions`, the old path redirecting
 - [ ] 6i.4 chat spec: the other requirements' "Chat page" titles and bodies read Conversations page at archive — "Mirror a web reply into the channel it came from" and "Show where a reply will also be sent" included; chat Purpose follows
-- [ ] 6i.5 Conversations page keeps the web-reply mirror of chat "Show where a reply will also be sent": the composer's "Also sends to …" / stays-in-Coffer line and the not-delivered mark on each reply the channel has not received
+- [x] 6i.5 Conversations page keeps the web-reply mirror of chat "Show where a reply will also be sent": the composer's "Also sends to …" / stays-in-Coffer line and the not-delivered mark on each reply the channel has not received (kept in the rebuilt thread: `ChannelMirrorHint` above the reply box, the mark under each owed reply)
 
 ## 6j. Activity
 

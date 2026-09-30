@@ -1,5 +1,5 @@
 // frontend/src/components/channel/channelTurnSettings.ts
-// The per-channel turn settings the edit-channel form holds as typed text:
+// The per-channel turn settings a channel's Settings tab holds as typed text:
 // the two message-batching windows and the two reply settings (step list,
 // completion ping). Each has the backend's default for an absent key, a
 // reader for the stored value, and a parser for what the user typed.
@@ -30,16 +30,6 @@ export function parseBurstWait(text: string): number | null {
   const n = Number(text);
   if (!Number.isFinite(n) || n < BURST_WAIT_MIN || n > BURST_WAIT_MAX) return null;
   return n;
-}
-
-/** Whether both batching fields, as typed, parse to a value the backend accepts. */
-export function burstDraftValid(draft: {
-  waitAfterText: string;
-  waitAfterForward: string;
-}): boolean {
-  return (
-    parseBurstWait(draft.waitAfterText) !== null && parseBurstWait(draft.waitAfterForward) !== null
-  );
 }
 
 /**

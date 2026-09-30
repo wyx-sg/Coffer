@@ -1,28 +1,10 @@
 // frontend/src/components/channel/AddChannelDialog.tsx
-// Modal "Add channel" dialog. The user picks a type (Telegram / SeaTalk),
-// names the channel, and pastes the platform secrets; registration plumbing
-// (secrets-first write + rollback) lives in registerChannel.ts.
-//
-// Validation issues land under the field they name, translated (the schema's
-// messages are i18n keys) — never zod's own text, never a toast. Only a server
-// failure is toasted, and it is also stated inline so the dialog explains
-// itself once the toast is gone.
-//
-// The channel is bound to THIS machine at creation (spec channels "Bind each
-// channel to the one machine that runs it"): a channel that names no machine
-// is one no daemon will start, and "I filled in the form and the bot never
-// answered" is the worst possible first experience of the feature. The
-// binding is movable afterwards from the list row or the detail page.
-//
-// The form ASKS which agent the channel drives (AgentSelect). It used to send
-// a constant — the `claude_code` provider key — because the binding was
-// expressed in a vocabulary every install shared. It is an agent resource's uid
-// now, minted per vault, so there is no constant to send and the only honest
-// thing a create form can do is offer the agents this vault actually has.
-//
-// Validation lives in `addChannel.ts`, beside `editChannel.ts`, so this file is
-// the markup and the sequencing and neither file is both.
-import { useState } from "react";
+// Add channel, in three steps — 1 Platform · 2 Connect · 3 Pair. Choosing a
+// platform (here, or on the first-run page, which opens the dialog straight
+// at step 2) leads to the form; Connect registers the channel (secrets first,
+// rolled back on failure — registerChannel.ts); Pair issues a code and waits
+// for the owner's message. Closing after the channel exists opens it.
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -31,191 +13,92 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AgentSelect } from "@/components/agents/AgentSelect";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useThisMachineId } from "@/lib/hooks/useMachines";
 import { useToast } from "@/components/ui/toast";
-import { useAgents } from "@/lib/hooks/useAgents";
-import { translateApiError } from "@/lib/api/errors";
 import type { ChannelType } from "@/lib/api/channels";
-import { useCreateChannel } from "@/lib/hooks/useChannels";
-import { EMPTY_SECRET_DRAFT, validateAddChannel } from "./addChannel";
-import {
-  AddChannelSecretFields,
-  type ChannelFieldErrors,
-  type ChannelSecretDraft,
-} from "./AddChannelSecretFields";
-import { FieldError } from "./FieldError";
-import { planChannel, type ChannelPlan } from "./schema";
+import type { ResourceOut } from "@/lib/api/resources";
+import { channelPath } from "@/lib/channels/tabs";
+import { displayName } from "@/lib/resourceTitle";
+import { AddChannelConnectStep } from "./AddChannelConnectStep";
+import { AddChannelPairStep } from "./AddChannelPairStep";
+import type { AddStep } from "./addChannel";
+import { AddChannelPlatformStep, AddChannelStepper } from "./AddChannelSteps";
+import { platformLabel } from "./PlatformMark";
 
-export function AddChannelDialog({
-  open,
-  onOpenChange,
-}: {
+interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}) {
+  /** Open at step 2 for this platform (a first-run card was chosen). */
+  initialPlatform?: ChannelType | null;
+}
+
+export function AddChannelDialog({ open, onOpenChange, initialPlatform = null }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const navigate = useNavigate();
-  // This machine's id, which the new channel is bound to. It is read here and
-  // passed into the planner rather than fetched there, so planning stays pure.
-  const { machineId } = useThisMachineId();
-  // The agents this vault has, and the one the new channel will drive. The
-  // form opens on the first of them rather than on nothing: a channel bound to
-  // nobody never answers, so "none" is not a state the form may produce.
-  const { data: agents } = useAgents();
-  const [agentUid, setAgentUid] = useState("");
-  const defaultAgentUid = agentUid || (agents?.[0]?.uid ?? "");
-  const [channelType, setChannelType] = useState<ChannelType>("telegram");
-  const [name, setName] = useState("");
-  const [secrets, setSecrets] = useState<ChannelSecretDraft>(EMPTY_SECRET_DRAFT);
-  const patchSecrets = (patch: Partial<ChannelSecretDraft>) =>
-    setSecrets((s) => ({ ...s, ...patch }));
-  const [formError, setFormError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<ChannelFieldErrors>({});
+  const [step, setStep] = useState<AddStep>("platform");
+  const [platform, setPlatform] = useState<ChannelType | null>(null);
+  const [created, setCreated] = useState<ResourceOut | null>(null);
 
-  const reset = () => {
-    setAgentUid("");
-    setChannelType("telegram");
-    setName("");
-    setSecrets(EMPTY_SECRET_DRAFT);
-    setFormError(null);
-    setFieldErrors({});
+  useEffect(() => {
+    if (!open) return;
+    setPlatform(initialPlatform);
+    setStep(initialPlatform ? "connect" : "platform");
+    setCreated(null);
+  }, [open, initialPlatform]);
+
+  const close = () => {
+    onOpenChange(false);
+    if (created) navigate(channelPath(created.uid));
   };
 
-  // The hook invalidates the resources cache and toasts on error; what the
-  // dialog itself does with the outcome stays here.
-  const create = useCreateChannel();
-  const runCreate = (plan: ChannelPlan) =>
-    create.mutate(plan, {
-      // The registration hands back the whole resource: the name for the
-      // toast, the uid for the link. Two answers, and no longer one string.
-      onSuccess: (created) => {
-        toast.success(t("channels.dialog.created", { name: created.name }));
-        reset();
-        onOpenChange(false);
-        navigate(`/channels/${encodeURIComponent(created.uid)}`);
-      },
-      onError: (e) => setFormError(translateApiError(t, e)),
-    });
-
-  const submit = () => {
-    setFormError(null);
-    setFieldErrors({});
-    const parsed = validateAddChannel({ channelType, name, secrets }, t);
-    if (!parsed.ok) {
-      setFieldErrors(parsed.fieldErrors);
-      return;
-    }
-    // A channel is bound to the machine it is created from. Without this
-    // machine's id there is nothing to bind it to, and registering anyway
-    // would produce a channel that runs nowhere — so the form says why and
-    // stays open rather than creating a bot that will never answer.
-    if (machineId === null) {
-      setFormError(t("channels.dialog.machineUnknown"));
-      return;
-    }
-    // Same rule for the agent: a channel bound to nobody is a bot that never
-    // answers, and the form says so rather than registering one.
-    if (defaultAgentUid === "") {
-      setFormError(t("channels.dialog.errors.agent"));
-      return;
-    }
-    runCreate(planChannel(parsed.values, machineId, defaultAgentUid));
-  };
+  const title =
+    step === "pair" && created
+      ? t("channels.add.pairTitle", { name: displayName(created) })
+      : step === "connect" && platform
+        ? t("channels.add.connectTitle", { platform: platformLabel(platform) })
+        : t("channels.add.title");
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) {
-          create.reset();
-          reset();
-        }
-        onOpenChange(o);
-      }}
-    >
-      <DialogContent>
+    <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
+      <DialogContent className="max-w-[560px]">
         <DialogHeader>
-          <DialogTitle>{t("channels.dialog.title")}</DialogTitle>
-          <DialogDescription>{t("channels.dialog.subtitle")}</DialogDescription>
-        </DialogHeader>
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
-          }}
-        >
-          <div className="space-y-2">
-            <Label required>{t("channels.dialog.type")}</Label>
-            <div className="flex gap-2" role="group" aria-label={t("channels.dialog.type")}>
-              {(["telegram", "seatalk"] as const).map((ct) => (
-                <Button
-                  key={ct}
-                  type="button"
-                  size="sm"
-                  variant={channelType === ct ? "default" : "outline"}
-                  aria-pressed={channelType === ct}
-                  onClick={() => setChannelType(ct)}
-                >
-                  {t(`channels.types.${ct}`)}
-                </Button>
-              ))}
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription asChild>
+            <div>
+              <AddChannelStepper step={step} />
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="channel-agent" required>
-              {t("channels.dialog.agent")}
-            </Label>
-            <AgentSelect
-              id="channel-agent"
-              label={t("channels.dialog.agent")}
-              value={defaultAgentUid}
-              onChange={setAgentUid}
-            />
-            <p className="text-xs text-muted-foreground">{t("channels.dialog.agentHint")}</p>
-          </div>
-          <div className="space-y-2">
-            <Label required htmlFor="channel-name">
-              {t("channels.dialog.name")}
-            </Label>
-            <Input
-              id="channel-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t("channels.dialog.namePlaceholder")}
-              aria-required
-              aria-invalid={fieldErrors.name ? true : undefined}
-              aria-describedby="channel-name-error"
-            />
-            <FieldError id="channel-name-error" message={fieldErrors.name} />
-          </div>
-          <AddChannelSecretFields
-            channelType={channelType}
-            draft={secrets}
-            errors={fieldErrors}
-            onChange={patchSecrets}
+          </DialogDescription>
+        </DialogHeader>
+        {step === "platform" ? (
+          <>
+            <AddChannelPlatformStep selected={platform} onSelect={setPlatform} />
+            <DialogFooter>
+              <Button variant="ghost" onClick={close}>
+                {t("common.cancel")}
+              </Button>
+              <Button disabled={platform === null} onClick={() => setStep("connect")}>
+                {t("channels.add.next")}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : step === "connect" && platform ? (
+          <AddChannelConnectStep
+            platform={platform}
+            onBack={() => setStep("platform")}
+            onCancel={close}
+            onCreated={(channel) => {
+              toast.success(t("channels.dialog.created", { name: displayName(channel) }));
+              setCreated(channel);
+              setStep("pair");
+            }}
           />
-          {formError ? (
-            <p className="text-sm text-destructive" role="alert">
-              {formError}
-            </p>
-          ) : null}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              {t("common.cancel")}
-            </Button>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? t("common.saving") : t("channels.add")}
-            </Button>
-          </div>
-        </form>
+        ) : created ? (
+          <AddChannelPairStep channel={created} onDone={close} />
+        ) : null}
       </DialogContent>
     </Dialog>
   );

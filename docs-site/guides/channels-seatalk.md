@@ -101,13 +101,13 @@ Wait for `connected` before the next step. The channel's page shows the same sta
 
 ## 5. Pair your account
 
-1. On the channel's page choose **Generate pairing code** in the account section, or run `coffer channel pair my-seatalk`.
+1. On the channel's **Overview** choose **Generate pairing code**, or run `coffer channel pair my-seatalk`.
 2. In SeaTalk, open a direct chat with the bot and send the eight-character code.
 3. The bot confirms and sends the help card once. SeaTalk has no command menu, so this card is how the bot shows what it accepts; send `/help` to see it again.
 
 SeaTalk has no start links, so you type the code. It is single-use, expires after one hour, and is invalidated after 10 wrong guesses.
 
-Send the bot a message. A typing indicator appears at once, the reply streams into a single message, and the conversation shows up on the web [Conversations](/guides/chat) page marked `via my-seatalk`.
+Send the bot a message. A typing indicator appears at once, the reply streams into a single message, and the conversation shows up on the web [Conversations](/guides/chat) page with the source badge `SeaTalk · DM`.
 
 ## Connection states
 
@@ -150,7 +150,7 @@ Each group thread is its own conversation, so you can run Claude Code in one thr
 
 Because a main-chat @mention always roots a new thread, a command sent in the main chat sets the **group's defaults** instead: `@bot /model …`, `@bot /dir …` and `@bot /new <agent>` choose what every new thread in the group starts on, `@bot /status` shows those defaults and the running threads, and `@bot /stop` stops every turn running in the group. Inside a thread, commands apply to that thread. See [Group defaults on SeaTalk](/guides/channels#group-defaults-on-seatalk).
 
-To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** under **Edit** → **In group chats**, or run `coffer channel edit my-seatalk --ignore-other-mentions`. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
+To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** on the channel's **Settings** tab under **In group chats**, or run `coffer channel edit my-seatalk --ignore-other-mentions`. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
 
 The bot never reads recent messages from a group's main chat. SeaTalk does not grant that permission to a self-built app, and the message you address to the bot is meant to carry what it needs.
 
@@ -187,7 +187,7 @@ The agent sends a file back with a `MEDIA:/absolute/path` line. It arrives as an
 
 ## Rotate the app secret
 
-On the channel's page choose **Edit**, enter **New app secret** and **Save changes**. The secret is written under the channel's existing reference, so pairing and machine binding are unchanged. The **App ID** can be changed in the same dialog.
+On the channel's page choose **Replace secret** (in the **⋯** menu, or under **Settings** → **Credentials**), paste **New app secret** and choose **Replace and restart**. The secret is written under the channel's existing reference, so pairing and machine binding are unchanged. The **App ID** is edited in place under **Settings** → **Credentials**.
 
 ## Limits
 

@@ -16,8 +16,9 @@ function CountBadge({ count }: { count: TabCount }) {
   if (count.value === undefined) return null;
   const n = count.value.toLocaleString(i18n.language);
   return (
-    // How many records exist differs run to run; screenshot tests mask it.
-    <span data-visual-volatile className="text-2xs font-book text-text-subtle">
+    // How many records exist differs run to run; screenshot tests mask it and
+    // give it a fixed width.
+    <span data-visual-volatile="count" className="text-2xs font-book text-text-subtle">
       {count.floor ? t("activity.countFloor", { value: n }) : n}
     </span>
   );

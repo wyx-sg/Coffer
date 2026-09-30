@@ -21,23 +21,7 @@ type Schemas = components["schemas"];
 
 export type ChannelType = Schemas["ChannelStatusOut"]["channel_type"];
 
-/**
- * A SeaTalk channel's inbound state: the one outbound websocket connection it
- * receives every event on, and the last error behind it. Null for telegram.
- */
-export type InboundInfo = Schemas["InboundInfoOut"];
-
-/** Live state of a SeaTalk channel's websocket connection to the platform. */
-export type WebSocketState = NonNullable<InboundInfo["websocket_state"]>;
-
 export type ChannelStatus = Schemas["ChannelStatusOut"];
-
-/** The paired owner of a channel (null while unpaired). */
-
-/**
- * Something configured on the channel that the platform will not actually
- * honour. Empty is the healthy case; a diagnostic always names its fix.
- */
 
 export type PairingCode = Schemas["PairingCodeOut"];
 

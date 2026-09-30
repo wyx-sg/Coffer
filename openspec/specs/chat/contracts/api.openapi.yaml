@@ -927,10 +927,21 @@ components:
           anyOf:
           - $ref: '#/components/schemas/ChannelMirrorOut'
           - type: 'null'
+        place:
+          anyOf:
+          - $ref: '#/components/schemas/ChannelPlaceOut'
+          - type: 'null'
+        platform:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Platform
       required:
       - channel_uid
       - channel
       - chat_id
+      - platform
+      - place
       - mirror
       title: ChannelBindingOut
       type: object
@@ -970,6 +981,40 @@ components:
       - reason
       - undelivered
       title: ChannelMirrorOut
+      type: object
+    ChannelPlaceOut:
+      description: |-
+        Where in its channel a conversation lives — what the Conversations list's
+        source badge names ("SeaTalk · DM · 🧵#2", "SeaTalk · <group> > thread").
+      properties:
+        chat_kind:
+          anyOf:
+          - enum:
+            - direct
+            - group
+            type: string
+          - type: 'null'
+          title: Chat Kind
+        chat_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Chat Name
+        parallel_mark:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parallel Mark
+        thread:
+          default: false
+          title: Thread
+          type: boolean
+      required:
+      - chat_kind
+      - thread
+      - parallel_mark
+      - chat_name
+      title: ChannelPlaceOut
       type: object
     ChatAttachmentOut:
       description: |-
@@ -1129,6 +1174,15 @@ components:
         id:
           title: Id
           type: string
+        preview:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Preview
+        running:
+          default: false
+          title: Running
+          type: boolean
         title:
           title: Title
           type: string
@@ -1144,6 +1198,8 @@ components:
       - updated_at
       - archived_at
       - channel_binding
+      - preview
+      - running
       title: ConversationOut
       type: object
     ConversationPatch:
