@@ -12,7 +12,10 @@ is the page this spec's other requirements call the Chat page. The list MUST sho
 conversation Coffer runs, whatever opened it — a conversation an IM channel (SeaTalk, Telegram)
 opened, and one opened from Coffer's own UI, which is modelled as a built-in source named
 **Coffer** — each row carrying a **source badge** naming its channel or Coffer, with filters by
-source and by agent. A conversation carrying an `owner` belongs to that surface, is left out of the
+source and by agent. A channel's badge MUST also name where in the channel the conversation
+lives — a direct chat or a group (by its name when Coffer knows it), a thread or topic rather than
+the chat's main timeline, and a parallel thread's `🧵#N` mark — and every row MUST show the latest
+message's words on one line and whether a turn is running in it. A conversation carrying an `owner` belongs to that surface, is left out of the
 list, and stays readable by id. A conversation's page MUST show the full exchange and a reply box
 that continues it, whichever source opened it; **New conversation** is a secondary action, and the
 page opens on the list rather than on a welcome or suggestions page, which it does not have. The
@@ -26,6 +29,12 @@ one owner, and an agent cannot tell which window a turn arrived through.
 - **WHEN** the Conversations page's list renders
 - **THEN** both conversations are listed, the first with a Coffer badge and the second with a badge naming its channel
 - **AND** filtering by that channel lists only the second
+
+#### Scenario: a row names the chat and thread it came from
+- **GIVEN** a conversation a SeaTalk direct chat opened, one a group thread opened, and one a `/thread` parallel conversation opened, whose turn is running
+- **WHEN** the Conversations page's list renders
+- **THEN** the first row's badge names SeaTalk and the direct chat, the second the group and its thread, and the third its `🧵#N` mark
+- **AND** each row shows its latest message's line, and the third is marked running
 
 #### Scenario: a channel's conversation is continued from the page
 - **GIVEN** a conversation a SeaTalk channel opened

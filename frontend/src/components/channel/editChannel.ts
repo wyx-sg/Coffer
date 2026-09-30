@@ -1,5 +1,6 @@
 // frontend/src/components/channel/editChannel.ts
-// Apply plumbing for EditChannelDialog: rotated secrets are written to their
+// Apply plumbing for a channel's settings (the Settings tab's auto-save and
+// the Replace secret dialog): rotated secrets are written to their
 // existing credential refs FIRST (so the channel keeps working off the same
 // refs), then the resource config is PATCHed (bound agent / SeaTalk app id /
 // group gating / message batching / replies / /dir directories), with the
@@ -58,7 +59,7 @@ export async function applyChannelEdit(
 }
 
 /** Mutable edit-form inputs by channel type (secrets blank = "leave as-is"). */
-interface ChannelEditValues {
+export interface ChannelEditValues {
   /** The agent every new conversation on this channel binds to. */
   default_agent: string;
   /** New Telegram bot token; blank leaves the stored credential untouched. */

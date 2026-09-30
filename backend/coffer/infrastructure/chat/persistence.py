@@ -8,6 +8,7 @@ Implements the ``ConversationRepo`` and ``MessageRepo`` Protocols defined in
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -36,6 +37,11 @@ from coffer.infrastructure.persistence.keyset import newest_first_after
 def _tz(dt: datetime) -> datetime:
     """Ensure a datetime is timezone-aware (UTC)."""
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
+#: How ``_encode_content`` spells a text block's type — what
+#: ``MessageRepo.latest_with_text`` filters rows on.
+_TEXT_BLOCK_MARK = json.dumps({"type": "text"})[1:-1]
 
 
 def _encode_content(blocks: list[ContentBlock]) -> str:
@@ -312,6 +318,40 @@ class MessageRepo:
         if limit is not None:
             rows.reverse()
         return [self._to_domain(r) for r in rows]
+
+    async def latest_with_text(
+        self, conversation_ids: Sequence[str], *, depth: int
+    ) -> dict[str, list[Message]]:
+        """One windowed query for the whole page. A row "carries text" when its
+        JSON holds a text block — ``_encode_content``'s own spelling, which a
+        text quoted INSIDE a block cannot forge (its quotes are escaped)."""
+        if not conversation_ids:
+            return {}
+        rank = (
+            func.row_number()
+            .over(partition_by=MessageModel.conversation_id, order_by=MessageModel.seq.desc())
+            .label("rank")
+        )
+        ranked = (
+            select(MessageModel.id.label("id"), rank)
+            .where(
+                MessageModel.conversation_id.in_(list(conversation_ids)),
+                MessageModel.content.like(f"%{_TEXT_BLOCK_MARK}%"),
+            )
+            .subquery()
+        )
+        stmt = (
+            select(MessageModel)
+            .join(ranked, ranked.c.id == MessageModel.id)
+            .where(ranked.c.rank <= depth)
+            .order_by(MessageModel.conversation_id, MessageModel.seq.desc())
+        )
+        async with self._sm() as session:
+            rows = (await session.execute(stmt)).scalars().all()
+        out: dict[str, list[Message]] = {}
+        for row in rows:
+            out.setdefault(row.conversation_id, []).append(self._to_domain(row))
+        return out
 
     async def next_seq(self, conversation_id: str) -> int:
         """Return the next sequence number for the given conversation.

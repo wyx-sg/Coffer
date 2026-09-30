@@ -6,14 +6,15 @@ which renders the standard ``{error, message}`` envelope.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import replace
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
 from coffer.application.chat.ports import ChannelMirrorPort
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
+from coffer.application.chat.turn_state import is_running
 from coffer.application.resource_service import ResourceService
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.message import (
@@ -24,7 +25,7 @@ from coffer.domain.chat.message import (
     ToolResultBlock,
     ToolUseBlock,
 )
-from coffer.domain.chat.mirror import MirrorView
+from coffer.domain.chat.mirror import ChannelPlaceView, MirrorView
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.chat.dependencies import (
     get_channel_mirror,
@@ -36,6 +37,7 @@ from coffer.surfaces.http.chat.schemas import (
     AgentConfigPatch,
     ChannelBindingOut,
     ChannelMirrorOut,
+    ChannelPlaceOut,
     ContentBlockOut,
     ConversationCreate,
     ConversationListOut,
@@ -59,14 +61,48 @@ router = APIRouter(
 # ---------------------------------------------------------------------------
 
 
-async def _channel_names(resources: ResourceService) -> dict[str, str]:
-    """``uid -> name`` for every channel, built once per request.
+@dataclass(frozen=True)
+class _Channel:
+    name: str
+    #: The channel's type key (``seatalk`` / ``telegram``), or None if unset.
+    platform: str | None
 
-    Once per REQUEST rather than once per conversation: the list route renders
-    up to a page of them and a lookup each would be the N+1 the resource list
-    was ordered to avoid.
-    """
-    return {c.uid: c.name for c in await resources.list(kind="channel")}
+
+@dataclass(frozen=True)
+class _Extras:
+    """What a page of conversations is rendered with beyond its rows, read in a
+    CONSTANT number of queries whatever the page size: the channels once, the
+    places of the channel-bound ones once, the previews once. A read per row
+    would be the N+1 the resource list was ordered to avoid."""
+
+    channels: Mapping[str, _Channel]
+    places: Mapping[str, ChannelPlaceView]
+    previews: Mapping[str, str]
+
+
+async def _extras(
+    convs: Sequence[Conversation],
+    svc: ChatService,
+    resources: ResourceService,
+    mirror: ChannelMirrorPort | None,
+) -> _Extras:
+    channels = {
+        c.uid: _Channel(c.name, str(c.config.get("channel_type") or "") or None)
+        for c in await resources.list(kind="channel")
+    }
+    bound = [c.id for c in convs if c.channel_uid is not None]
+    places = await mirror.places(bound) if mirror is not None and bound else {}
+    previews = await svc.previews([c.id for c in convs]) if convs else {}
+    return _Extras(channels, places, previews)
+
+
+def _place_out(view: ChannelPlaceView) -> ChannelPlaceOut:
+    return ChannelPlaceOut(
+        chat_kind=view.chat_kind,  # type: ignore[arg-type]
+        thread=view.thread,
+        parallel_mark=view.parallel_mark,
+        chat_name=view.chat_name,
+    )
 
 
 def _mirror_out(view: MirrorView) -> ChannelMirrorOut:
@@ -84,7 +120,7 @@ def _mirror_out(view: MirrorView) -> ChannelMirrorOut:
 
 def _conv_out(
     conv: Conversation,
-    channel_names: Mapping[str, str],
+    extras: _Extras,
     mirror: MirrorView | None = None,
 ) -> ConversationOut:
     # A conversation "has a channel binding" iff channel_uid is set
@@ -93,10 +129,14 @@ def _conv_out(
     # resolved here, where a human reads it.
     binding: ChannelBindingOut | None = None
     if conv.channel_uid is not None:
+        channel = extras.channels.get(conv.channel_uid)
+        place = extras.places.get(conv.id)
         binding = ChannelBindingOut(
             channel_uid=conv.channel_uid,
-            channel=channel_names.get(conv.channel_uid),
+            channel=channel.name if channel is not None else None,
             chat_id=conv.peer_chat_id or "",
+            platform=channel.platform if channel is not None else None,
+            place=_place_out(place) if place is not None else None,
             mirror=_mirror_out(mirror) if mirror is not None else None,
         )
     return ConversationOut(
@@ -107,7 +147,19 @@ def _conv_out(
         updated_at=conv.updated_at,
         archived_at=conv.archived_at,
         channel_binding=binding,
+        preview=extras.previews.get(conv.id),
+        running=is_running(conv.id),
     )
+
+
+async def _one_out(
+    conv: Conversation,
+    svc: ChatService,
+    resources: ResourceService,
+    mirror: ChannelMirrorPort | None,
+    view: MirrorView | None = None,
+) -> ConversationOut:
+    return _conv_out(conv, await _extras([conv], svc, resources, mirror), view)
 
 
 def _block_out(block: ContentBlock) -> ContentBlockOut:
@@ -168,14 +220,15 @@ async def list_conversations(
     ),
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
+    mirror: ChannelMirrorPort | None = Depends(get_channel_mirror),  # noqa: B008
 ) -> ConversationListOut:
     """List conversations, newest activity first, paged by cursor.
     ``?archived=true`` returns the archived threads; the default lists active
     ones only. The conversation id breaks ties."""
     page = await svc.page_conversations(archived=archived, limit=limit, cursor=cursor)
-    names = await _channel_names(resources)
+    extras = await _extras(page.items, svc, resources, mirror)
     return ConversationListOut(
-        conversations=[_conv_out(c, names) for c in page.items],
+        conversations=[_conv_out(c, extras) for c in page.items],
         next_cursor=page.next_cursor,
     )
 
@@ -189,6 +242,7 @@ async def create_conversation(
     body: ConversationCreate,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
+    mirror: ChannelMirrorPort | None = Depends(get_channel_mirror),  # noqa: B008
 ) -> ConversationOut:
     """Create a conversation for the named Coffer-managed agent.
 
@@ -197,7 +251,7 @@ async def create_conversation(
     agent. An unknown agent or an invalid config is rejected with 400.
     """
     conv = await svc.create_conversation(agent_key=body.agent_key, agent_config=body.agent_config)
-    return _conv_out(conv, await _channel_names(resources))
+    return await _one_out(conv, svc, resources, mirror)
 
 
 @router.get("/conversations/{id}", response_model=ConversationOut)
@@ -216,7 +270,7 @@ async def get_conversation(
     view = None
     if conv.channel_uid is not None and mirror is not None:
         view = await mirror.describe(conv.id, conv.channel_uid)
-    return _conv_out(conv, await _channel_names(resources), view)
+    return await _one_out(conv, svc, resources, mirror, view)
 
 
 @router.patch("/conversations/{id}", response_model=ConversationOut)
@@ -225,6 +279,7 @@ async def update_conversation(
     body: ConversationPatch,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
+    mirror: ChannelMirrorPort | None = Depends(get_channel_mirror),  # noqa: B008
 ) -> ConversationOut:
     """Rename a conversation.
 
@@ -237,7 +292,7 @@ async def update_conversation(
         conv = await svc.rename_conversation(id, new_title=body.title)
     else:
         conv = await svc.get_conversation(id)
-    return _conv_out(conv, await _channel_names(resources))
+    return await _one_out(conv, svc, resources, mirror)
 
 
 @router.get("/conversations/{id}/agent-config", response_model=AgentConfigOut)
@@ -286,10 +341,11 @@ async def archive_conversation(
     id: str,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
+    mirror: ChannelMirrorPort | None = Depends(get_channel_mirror),  # noqa: B008
 ) -> ConversationOut:
     """Archive a conversation — hidden from the default list, still restorable."""
     conv = await svc.archive_conversation(id)
-    return _conv_out(conv, await _channel_names(resources))
+    return await _one_out(conv, svc, resources, mirror)
 
 
 @router.post("/conversations/{id}/unarchive", response_model=ConversationOut)
@@ -297,10 +353,11 @@ async def unarchive_conversation(
     id: str,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
+    mirror: ChannelMirrorPort | None = Depends(get_channel_mirror),  # noqa: B008
 ) -> ConversationOut:
     """Restore an archived conversation back into the active list."""
     conv = await svc.unarchive_conversation(id)
-    return _conv_out(conv, await _channel_names(resources))
+    return await _one_out(conv, svc, resources, mirror)
 
 
 @router.delete(

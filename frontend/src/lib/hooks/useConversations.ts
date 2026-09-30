@@ -32,10 +32,17 @@ function useConversationToastError() {
 // Queries
 // ---------------------------------------------------------------------------
 
+// Conversations are not on the daemon's change feed (they are not resources),
+// so the list re-reads itself while the page is visible: a channel's new
+// conversation, a Running mark and the latest line keep up without a reload.
+const LIST_REFRESH_MS = 10_000;
+
 export function useConversations() {
   return useQuery({
     queryKey: CONVERSATIONS_KEY,
     queryFn: async () => (await chatApi.listConversations(false)).conversations,
+    refetchInterval: LIST_REFRESH_MS,
+    refetchIntervalInBackground: false,
   });
 }
 

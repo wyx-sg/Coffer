@@ -1,12 +1,12 @@
 // frontend/src/components/channel/EditChannelReplyFields.tsx
-// The replies half of the edit-channel form: how a running turn shows itself
+// The replies half of a channel's Settings tab: how a running turn shows itself
 // in the chat. One switch — list each step under the live status line, or keep
 // only the header and the agent's latest narration line — and one seconds
 // field: a turn that runs at least this long ends with one short completion
 // ping where the answer would not notify on its own (0 turns it off).
 //
 // The seconds draft holds the raw text so a blank or out-of-range entry is
-// shown as an error (and blocks Save) instead of being silently coerced.
+// shown as an error and never saved, instead of being silently coerced.
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 

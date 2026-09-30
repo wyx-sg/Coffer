@@ -11,13 +11,13 @@ Code and Codex providers) and in tests (fakes).
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from typing import Any, Protocol, TypeVar
 
 from coffer.domain.chat.attachment import Attachment, UploadedAttachment
 from coffer.domain.chat.events import AgentEvent
 from coffer.domain.chat.message import Message
-from coffer.domain.chat.mirror import MirrorResult, MirrorView
+from coffer.domain.chat.mirror import ChannelPlaceView, MirrorResult, MirrorView
 
 
 class AgentAdapter(Protocol):
@@ -190,6 +190,12 @@ class ChannelMirrorPort(Protocol):
     async def mirror(self, conversation_id: str, channel_uid: str, text: str) -> MirrorResult:
         """Send ``text`` to the chat now, or keep it for later; the result's
         ``on_start`` is what the reply's turn is queued with."""
+        ...
+
+    async def places(self, conversation_ids: Sequence[str]) -> Mapping[str, ChannelPlaceView]:
+        """Where in its channel each of ``conversation_ids`` lives, for the ones
+        a channel opened; the others are absent. A constant number of reads
+        whatever the number of ids — the listing calls it once per page."""
         ...
 
 

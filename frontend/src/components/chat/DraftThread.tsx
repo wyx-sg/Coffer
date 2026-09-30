@@ -1,14 +1,14 @@
 // src/components/chat/DraftThread.tsx
-// The blank "new chat" surface shown before a conversation exists (the draft).
-// Chat talks only to Coffer-managed agents (Claude Code / Codex); sending the
-// first message is what actually creates the conversation (see
-// useChatController.sendDraft). The turn runs in the Coffer-managed workspace
-// (~/.coffer/workspace) by default — there is no per-turn working-directory
-// picker. When no managed agent is available, an install/configure empty state
-// is shown instead.
+// The draft New conversation opens (`/conversations/new`): a header with the
+// chosen agent, its model and effort and the folder it will work in, an empty
+// thread, and the composer whose first send creates the conversation (see
+// useChatController.sendDraft) — no welcome or suggestions. When no managed
+// agent is available, a state saying how to get one replaces the composer.
 import { useTranslation } from "react-i18next";
-import { Bot, MessageSquareOff } from "lucide-react";
+import { Folder, MessageSquareOff } from "lucide-react";
 
+import { AgentBadge } from "@/components/agent/AgentBadge";
+import { EmptyState } from "@/components/EmptyState";
 import {
   Select,
   SelectContent,
@@ -25,13 +25,13 @@ import { ModelPicker } from "./ModelPicker";
 interface Props {
   agents: AgentProviderInfo[];
   agentKey: string;
+  /** The folder the turn will run in; null is Coffer's own workspace. */
+  cwd?: string | null;
   /** True when no Coffer-managed agent is available (shows an empty state). */
   noManagedAgent?: boolean;
   onAgentChange: (agentKey: string) => void;
-  /** The chosen per-conversation model for the new conversation (null = default). */
   modelValue?: string | null;
   onModelChange?: (model: string | null) => void;
-  /** The reasoning level that model runs at (null = the agent's own default). */
   effortValue?: string | null;
   onEffortChange?: (effort: string | null) => void;
   /** Create the conversation and send; resolves whether the create succeeded. */
@@ -43,6 +43,7 @@ interface Props {
 export function DraftThread({
   agents,
   agentKey,
+  cwd = null,
   noManagedAgent = false,
   onAgentChange,
   modelValue = null,
@@ -55,69 +56,52 @@ export function DraftThread({
   const { t } = useTranslation();
   const agentName = agents.find((a) => a.agent_key === agentKey)?.display_name ?? agentKey;
 
-  // A Coffer LLM connection is an OPTIONAL override, not a prerequisite: chat
-  // shells out to the agent's own runtime (Claude Agent SDK / codex app-server),
-  // which runs on the agent's OWN login when nothing is projected (spec
-  // provider-switching "Revert an agent type to its built-in login"). So we never
-  // block the draft on "no connection" — the composer is always available and
-  // the turn runs on the built-in model.
-
-  // No Coffer-managed agent on PATH / registered — there is nothing to chat
-  // with, so guide the user to install or configure one.
   if (noManagedAgent) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-12 text-center">
-        <MessageSquareOff
-          className="size-12 text-muted-foreground/40"
-          strokeWidth={1.25}
-          aria-hidden
-        />
-        <div className="space-y-1">
-          <h2 className="text-lg font-semibold">{t("chat.draft.noAgentTitle")}</h2>
-          <p className="max-w-sm text-sm text-muted-foreground">{t("chat.draft.noAgentBody")}</p>
-        </div>
-      </div>
+      <EmptyState
+        className="flex-1"
+        icon={MessageSquareOff}
+        title={t("conversations.draft.noAgentTitle")}
+        description={t("conversations.draft.noAgentBody")}
+      />
     );
   }
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Top bar: the agent, chosen before the first message rather than in a modal. */}
-      <div className="flex items-center gap-3 border-b border-border bg-surface-raised px-4 py-2">
-        <div className="flex items-center gap-1.5">
-          <Bot className="size-4 shrink-0 text-primary" strokeWidth={1.75} />
-          <Select value={agentKey} onValueChange={onAgentChange}>
-            <SelectTrigger
-              className="h-7 w-48 border-none bg-transparent px-1 text-sm font-medium shadow-none"
-              aria-label={t("chat.newConversation.agent")}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {agents.map((a) => (
-                <SelectItem key={a.agent_key} value={a.agent_key} disabled={!a.available}>
-                  {a.display_name}
-                  {a.available ? "" : ` (${t("chat.newConversation.unavailable")})`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {/* Model for the new conversation, beside the agent picker. Offered
-            whether or not a connection is configured — with none, it lists the
-            agent's built-in models (spec provider-switching "Serve one model
-            list to every surface"). */}
+      <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border-subtle px-5">
+        <h1 className="text-md font-semibold text-text">{t("conversations.new.title")}</h1>
+        <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-text-muted">
+          <Folder className="size-3.5 shrink-0" aria-hidden />
+          <span className="truncate font-mono">{cwd ?? t("conversations.draft.workspace")}</span>
+        </span>
+        <span className="ml-auto" />
+        <Select value={agentKey} onValueChange={onAgentChange}>
+          <SelectTrigger
+            className="h-control-sm w-auto gap-2 border-none bg-transparent px-1.5 text-xs font-medium shadow-none"
+            aria-label={t("conversations.newConversation.agent")}
+          >
+            <AgentBadge type={agentKey} size="sm" tooltip={false} />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {agents.map((a) => (
+              <SelectItem key={a.agent_key} value={a.agent_key} disabled={!a.available}>
+                {a.display_name}
+                {a.available ? "" : ` (${t("conversations.newConversation.unavailable")})`}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {/* Offered with or without a connection: with none, the agent's built-in
+            models (spec provider-switching "Serve one model list to every surface"). */}
         <ModelPicker
           agentKey={agentKey}
           value={modelValue}
           onCommit={(model) => onModelChange?.(model)}
         />
-        {/* And how hard that model thinks, arranged exactly as in the open
-            conversation's AgentModelBar. Same self-hiding rule: an agent whose
-            models report no levels renders nothing here, so the draft bar looks
-            untouched for it. It belongs on the DRAFT and not only after the
-            fact because the first turn is the one a user most wants to pitch —
-            by the time the conversation exists, that turn is already running. */}
+        {/* Renders nothing for an agent whose models report no levels. It is on
+            the draft because the first turn runs the moment the conversation exists. */}
         <EffortPicker
           agentKey={agentKey}
           model={modelValue}
@@ -126,13 +110,16 @@ export function DraftThread({
         />
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-        <Bot className="mb-3 size-8 text-primary/70" strokeWidth={1.5} />
-        <p className="text-sm text-muted-foreground">
-          {t("chat.draft.guide", { agent: agentName })}
+      <div className="flex flex-1 items-end justify-center px-8 pb-2">
+        <p className="text-xs text-text-subtle">
+          {t("conversations.draft.guide", { agent: agentName })}
         </p>
       </div>
-      <Composer onSend={onSend} disabled={creating} />
+      <Composer
+        onSend={onSend}
+        disabled={creating}
+        placeholder={t("conversations.composer.placeholder", { agent: agentName })}
+      />
     </div>
   );
 }

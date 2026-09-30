@@ -28,7 +28,13 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
 const { chatApi } = await import("@/lib/api/chat");
 const chatApiMock = chatApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
-const BINDING = { channel: "st", channel_uid: "u-st", chat_id: "g-1" };
+const BINDING = {
+  channel: "st",
+  channel_uid: "u-st",
+  chat_id: "g-1",
+  platform: "seatalk",
+  place: null,
+};
 
 const LISTED: Conversation = {
   id: "conv-1",
@@ -38,6 +44,8 @@ const LISTED: Conversation = {
   channel_binding: { ...BINDING, mirror: null },
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
+  preview: null,
+  running: false,
 };
 
 const userMsg = (id: string, text: string): Message => ({

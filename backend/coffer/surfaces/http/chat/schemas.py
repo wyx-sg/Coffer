@@ -114,6 +114,20 @@ class ChannelMirrorOut(BaseModel):
     undelivered: list[UndeliveredReplyOut] = Field(default_factory=list)
 
 
+class ChannelPlaceOut(BaseModel):
+    """Where in its channel a conversation lives — what the Conversations list's
+    source badge names ("SeaTalk · DM · 🧵#2", "SeaTalk · <group> > thread")."""
+
+    #: ``direct`` (a DM) or ``group``; null when the channel never said.
+    chat_kind: Literal["direct", "group"] | None = None
+    #: The conversation lives in a thread or topic, not the chat's main timeline.
+    thread: bool = False
+    #: The ``🧵#N title`` mark of a ``/thread`` parallel conversation.
+    parallel_mark: str | None = None
+    #: The group's display name, when Coffer knows one.
+    chat_name: str | None = None
+
+
 class ChannelBindingOut(BaseModel):
     """The IM channel a conversation is also driven from (ADR chat-single-owner-live-mirror).
 
@@ -128,6 +142,12 @@ class ChannelBindingOut(BaseModel):
     #: come from a channel), but there is no longer a name to show for it.
     channel: str | None
     chat_id: str
+    #: The channel's type key (``seatalk`` / ``telegram``); null when the
+    #: channel has since been deleted.
+    platform: str | None = None
+    #: Which chat and thread of the channel the conversation lives in; null
+    #: when that is not known.
+    place: ChannelPlaceOut | None = None
     #: Where a reply would also go. Filled on the single-conversation read
     #: only; null in the list, which stays cheap.
     mirror: ChannelMirrorOut | None = None
@@ -145,6 +165,11 @@ class ConversationOut(BaseModel):
     # Optional channel binding, null for a desktop-only conversation
     # (ADR chat-single-owner-live-mirror).
     channel_binding: ChannelBindingOut | None = None
+    #: The newest message's words on one line (clipped), falling back to the
+    #: newest message that has any; null when none does.
+    preview: str | None = None
+    #: A turn is in flight right now.
+    running: bool = False
 
 
 class ConversationListOut(BaseModel):

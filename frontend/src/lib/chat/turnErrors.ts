@@ -20,6 +20,6 @@ export function isAgentNotLoggedIn(error: unknown): boolean {
 
 /** The one-line message the turn error banner shows for `error`. */
 export function describeTurnError(t: Translate, error: unknown): string {
-  if (isAgentNotLoggedIn(error)) return t("chat.errors.agentNotLoggedIn");
+  if (isAgentNotLoggedIn(error)) return t("conversations.errors.agentNotLoggedIn");
   return translateApiError(t, error);
 }

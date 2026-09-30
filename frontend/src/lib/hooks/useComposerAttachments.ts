@@ -91,9 +91,9 @@ export function useComposerAttachments(): ComposerAttachments {
         };
         let error: string | undefined;
         if (taken >= MAX_ATTACHMENTS_PER_MESSAGE) {
-          error = t("chat.attachments.tooMany");
+          error = t("conversations.attachments.tooMany");
         } else if (file.size > MAX_ATTACHMENT_BYTES) {
-          error = t("chat.attachments.tooLarge");
+          error = t("conversations.attachments.tooLarge");
         }
         if (error) {
           added.push({ ...base, status: "failed", error });

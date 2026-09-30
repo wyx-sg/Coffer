@@ -32,6 +32,7 @@ vi.mock("./useChatTurn", () => ({
 vi.mock("react-router-dom", () => ({
   useNavigate: () => navigate,
   useParams: () => ({}),
+  useSearchParams: () => [new URLSearchParams(), vi.fn()],
 }));
 
 import { useChatController } from "./useChatController";
@@ -91,8 +92,10 @@ describe("useChatController draft", () => {
     act(() => result.current.setDraftEffort("xhigh"));
     act(() => result.current.setDraftAgent("claude_code"));
 
+    // The folder stays: it is where the work is, whichever agent does it.
     expect(result.current.effectiveDraft).toEqual({
       agentKey: "claude_code",
+      cwd: null,
       model: null,
       effort: null,
     });
