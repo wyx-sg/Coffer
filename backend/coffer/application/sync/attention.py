@@ -7,12 +7,16 @@ One item per situation, each with the action that answers it:
   action opens the stopped round;
 - ``sync_deletions_held`` — the deletion breaker held a round;
 - ``sync_join_choices`` — a join left differing files for the person;
-- ``sync_auth_failed`` — the remote refused the push token;
+- ``sync_auth_failed`` — the remote refused the push secret;
+- ``sync_push_failed`` — the remote refused the push itself (a protected
+  branch, a secret without write access);
 - ``sync_paused`` — the vault is inside a folder another tool synchronises;
 - ``sync_layout`` — the remote is at another layout than this build's.
 
 Read off the round state and the last recorded round, only while a remote is
-configured.
+configured. A conflict an agent can merge, a refused sign-in and a refused
+push carry the hand-off prompt the Sync page offers (spec vault-sync "Hand a
+conflict's merge to an agent", "Hand a remote's failure to an agent").
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from datetime import datetime
 from typing import Protocol
 
 from coffer.application.attention import AttentionAction, AttentionItem, Severity
+from coffer.domain.sync.handoffs import remote_failure_handoff, scrub_git_text
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import RoundRecord, RoundStatus
 from coffer.domain.sync.stops import ConflictFile, Stop, StopKind
@@ -35,10 +40,17 @@ class SyncStatePort(Protocol):
     async def stop(self) -> Stop | None: ...
     async def join_choices(self) -> tuple[ConflictFile, ...]: ...
     async def last_round(self) -> RoundRecord | None: ...
+    async def conflict_handoff(self) -> str | None: ...
 
 
 def _item(
-    code: str, reason: str, severity: Severity, path: str, since: str | None, verb: str = "review"
+    code: str,
+    reason: str,
+    severity: Severity,
+    path: str,
+    since: str | None,
+    verb: str = "review",
+    handoff: str | None = None,
 ) -> AttentionItem:
     return AttentionItem(
         kind=KIND,
@@ -49,6 +61,7 @@ def _item(
         severity=severity,
         action=AttentionAction(verb=verb, method="GET", path=path),
         since=datetime.fromisoformat(since) if since else None,
+        handoff=handoff,
     )
 
 
@@ -64,7 +77,8 @@ class SyncAttentionSource:
         self._sync = sync
 
     async def items(self) -> Sequence[AttentionItem]:
-        if await self._sync.get_remote() is None:
+        remote = await self._sync.get_remote()
+        if remote is None:
             return []
         out: list[AttentionItem] = []
         stop = await self._sync.stop()
@@ -77,6 +91,7 @@ class SyncAttentionSource:
                     Severity.ERROR,
                     "/api/v1/sync/stop",
                     stop.raised_at,
+                    handoff=await self._sync.conflict_handoff(),
                 )
             )
         elif stop is not None and stop.hold is not None:
@@ -104,21 +119,42 @@ class SyncAttentionSource:
             )
         last = await self._sync.last_round()
         if last is not None:
-            found = _problem_item(last)
+            found = _problem_item(last, remote)
             if found is not None:
                 out.append(found)
         return out
 
 
-def _problem_item(last: RoundRecord) -> AttentionItem | None:
-    detail = last.detail or ""
+def _handoff(kind: str, detail: str, remote: SyncRemote) -> str | None:
+    return remote_failure_handoff(
+        kind,
+        url=remote.url,
+        branch=remote.branch,
+        detail=detail,
+        secret_ref=remote.secret_ref,
+        username=remote.username,
+    )
+
+
+def _problem_item(last: RoundRecord, remote: SyncRemote) -> AttentionItem | None:
+    detail = scrub_git_text(last.detail or "")
     if last.status is RoundStatus.AUTH_FAILED:
         return _item(
             "sync_auth_failed",
-            f"The sync remote refused this machine's credential. {detail}".strip(),
+            f"The sync remote refused this machine's secret. {detail}".strip(),
             Severity.ERROR,
             "/api/v1/sync/remote",
             last.finished_at,
+            handoff=_handoff("auth_failed", detail, remote),
+        )
+    if last.status is RoundStatus.PUSH_FAILED:
+        return _item(
+            "sync_push_failed",
+            f"The sync remote refused this machine's push. {detail}".strip(),
+            Severity.WARNING,
+            "/api/v1/sync/status",
+            last.finished_at,
+            handoff=_handoff("push_failed", detail, remote),
         )
     if last.status is RoundStatus.PAUSED_CLOUD_FOLDER:
         return _item(

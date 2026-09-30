@@ -223,6 +223,7 @@ give the status each code is actually sent with.
 | `SYNC_REMOTE_FAILED` | 502 | A git operation against the remote failed. The message is redacted. | Check network access, the remote URL and the token's permissions. |
 | `SYNC_NOTHING_STOPPED` | 409 | You answered a conflict, a hold or a join choice, but no round is waiting for that answer. | Nothing to do. |
 | `SYNC_CONFLICT_MARKERS_LEFT` | 422 | The hand-merged copy still has conflict markers; the message names the line. | Remove them, save, then mark the file resolved. |
+| `SYNC_SECRET_NOT_EDITABLE` | 422 | An encrypted secret in a stopped round was opened in the editor or answered as edited. | Keep this Mac's version or take the other's. |
 | `SYNC_ROUND_NOT_FOUND` | 404 | No round with that id. | Pick one from `coffer sync history`. |
 | `SYNC_NOTHING_TO_ROLL_BACK` | 409 | The round applied nothing, or is itself a rollback. | Nothing to do. |
 | `SYNC_MACHINE_NOT_FOUND` | 404 | No machine with that id shares this vault. | List them with `coffer sync machine list`. |
@@ -248,7 +249,7 @@ These are raised while the daemon starts, before it serves requests. They appear
 | `VAULT_MIGRATION_REQUIRED` | The home still keeps its state in `coffer.db`, from a Coffer before the vault layout. | Stop the daemon and run `coffer migrate`. See [Upgrading an existing Coffer](/guides/upgrading). |
 | `VAULT_MIGRATION_ON_HOLD` | `coffer migrate --rollback` put the home back and left its hold marker. | Run the previous build, or `coffer migrate --resume` and then `coffer migrate`. |
 | `VAULT_MIGRATION_REFUSED` | `coffer migrate` will not touch the home as it stands, for example an upgrade stopped half-way. | Follow the message; after a half-done upgrade, `coffer migrate --rollback` first. |
-| `GIT_MISSING` | The vault needs `git` and none was found. | Install git (`xcode-select --install` on macOS). |
+| `GIT_MISSING` | The vault needs `git` and none was found. | Install git the way that fits the machine; the error's `details.handoff` is a prompt for your agent. |
 | `MASTER_KEY_MISSING` | See [Secret store](#secrets). | |
 
 ## Chat turn errors

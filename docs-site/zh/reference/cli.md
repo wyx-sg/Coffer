@@ -2532,6 +2532,7 @@ Exits 1 while a round waits for a person — stopped on conflicts, held, unable 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `--json` | 选项 | 开关 |  | JSON output for scripts |
+| `--prompt` | 选项 | 开关 |  | Print the prompt that hands the current problem (a refused push or sign-in, an unreachable remote, git missing) to your agent |
 
 ### sync history
 
@@ -2580,20 +2581,25 @@ coffer sync conflicts [OPTIONS]
 
 The files the stopped round waits on (or the held deletions).
 
+| 名称 | 类别 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `--prompt` | 选项 | 开关 |  | Print the prompt that hands merging the conflicting files to your agent |
+
 ### sync resolve
 
 ```sh
-coffer sync resolve [OPTIONS] PATH
+coffer sync resolve [OPTIONS] [PATH]
 ```
 
-Answer one conflicting file. Nothing is written until 'continue'.
+Answer one conflicting file, or record an agent's merge of them all with --merged. Nothing is written until 'continue'.
 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `PATH` | 参数 | text | 必填 | Vault-relative path of a conflicting file |
+| `PATH` | 参数 | text |  | Vault-relative path of a conflicting file (not with --merged) |
 | `--mine` | 选项 | 开关 |  | Keep this machine's version |
 | `--theirs` | 选项 | 开关 |  | Take the other machine's version |
 | `--edited` | 选项 | 开关 |  | Take the hand-merged copy 'coffer sync edit' opened |
+| `--merged` | 选项 | 开关 |  | Record an agent's merge: every file handed to it takes its merged copy |
 
 ### sync edit
 
@@ -2669,7 +2675,7 @@ On a configured remote an option not given keeps its stored value, and a paused 
 | `--interval` | 选项 | integer |  | Seconds between automatic rounds (default 3600) |
 | `--with-secret / --without-secret` | 选项 | boolean |  | Carry the encrypted secrets (ciphertext, never the master key); default off |
 | `--secret-ref` | 选项 | text |  | Name of the push token in the secret store ('' removes it) |
-| `--username` | 选项 | text |  | Username sent with an HTTPS token (default coffer; Bitbucket and Azure DevOps need a real one) |
+| `--username` | 选项 | text |  | User name an HTTPS token is sent with, for a host that does not imply it (default coffer; GitLab: oauth2 or your user name; Bitbucket and Azure DevOps need a real one) |
 | `--wait` | 选项 | 开关 |  | Wait for approval in the Coffer app instead of exiting |
 
 ### sync remote clear

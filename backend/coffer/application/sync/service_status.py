@@ -18,6 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coffer.application.sync import round_answers
 from coffer.application.sync.views import (
     AreaCounts,
     FileVersions,
@@ -28,9 +29,18 @@ from coffer.application.sync.views import (
     SyncStatus,
     WaitingCommit,
 )
+from coffer.domain.git_handoff import git_install_handoff
+from coffer.domain.sync.handoffs import (
+    MergeFile,
+    agent_mergeable,
+    conflict_merge_handoff,
+    is_secret_file,
+    remote_failure_handoff,
+    scrub_git_text,
+)
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import AppliedChange, RoundRecord, RoundStatus
-from coffer.domain.sync.stops import HoldDirection, StopKind
+from coffer.domain.sync.stops import ConflictFile, HoldDirection, Stop, StopKind
 from coffer.domain.vault.layout import KNOWLEDGE, MACHINES, MANIFEST, RESOURCES, SKILLS
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -67,6 +77,8 @@ class StatusMixin:
     _vault_path: Callable[[], Path]
     _running_since: str | None
     _next_round_at: str | None
+    _git_available: Callable[[], bool]
+    _host_label: Callable[[], str]
 
     # --- the status ---------------------------------------------------------------
 
@@ -99,11 +111,28 @@ class StatusMixin:
             waiting=self._waiting(remote, head) if remote and head else (),
             vault_path=str(self._vault_path()),
             synchroniser=d.cloud_folder(),
-            problem=_problem(last, remote) if last and remote else None,
+            problem=self._current_problem(remote, last),
             conflicts=len(stop.unanswered) if stop and stop.kind is StopKind.CONFLICTS else 0,
             held=len(stop.hold.paths) if stop and stop.hold else 0,
             join_choices=len(d.state.join_choices()),
         )
+
+    def _current_problem(
+        self, remote: SyncRemote | None, last: RoundRecord | None
+    ) -> Problem | None:
+        """Git missing first (nothing else can work without it), then the last
+        round's failure."""
+        if remote is None:
+            return None
+        if not self._git_available():
+            return Problem(
+                kind="git_missing",
+                message="git is not installed on this machine",
+                handoff=git_install_handoff(
+                    self._host_label(), needed_for="keeping the vault's history and syncing it"
+                ),
+            )
+        return _problem(last, remote) if last else None
 
     def _waiting(self, remote: SyncRemote, head: str) -> tuple[WaitingCommit, ...]:
         """The commits ``origin/<branch>..HEAD``: what the next push carries."""
@@ -139,8 +168,19 @@ class StatusMixin:
         if stop is None:
             return None
         scratch = d.scratch
+        handed = (
+            tuple(c for c in stop.conflicts if agent_mergeable(c))
+            if stop.kind is StopKind.CONFLICTS and scratch is not None
+            else ()
+        )
+        handoff = self._merge_handoff(stop, handed) if handed else None
         files = tuple(
-            StoppedFile(c, editor_path=scratch.where(c.path) if scratch is not None else None)
+            StoppedFile(
+                c,
+                editor_path=scratch.where(c.path) if scratch is not None else None,
+                secret=is_secret_file(c.path),
+                agent_merge=c in handed,
+            )
             for c in stop.conflicts
         )
         groups: tuple[HoldGroup, ...] = ()
@@ -158,6 +198,36 @@ class StatusMixin:
             groups=groups,
             machines=machines,
             confirmed=d.state.confirmed() == (stop.local, stop.remote),
+            handoff=handoff,
+        )
+
+    def _merge_handoff(self, stop: Stop, handed: tuple[ConflictFile, ...]) -> str | None:
+        """The agent's prompt. Each handed file's marked-up copy is written
+        first (once; the same copy "Open in editor" opens), so the prompt can
+        name where the agent edits."""
+        d = self._engine.d
+        merge: list[MergeFile] = []
+        with d.lock:
+            for c in handed:
+                copy = round_answers.editor_copy(self._engine, c.path)
+                ours = d.git.log(c.path, start=stop.local, limit=1)
+                theirs = d.git.log(c.path, start=stop.remote, limit=1)
+                merge.append(
+                    MergeFile(
+                        c,
+                        copy=copy,
+                        ours_commit=ours[0].version if ours else None,
+                        theirs_commit=theirs[0].version if theirs else None,
+                    )
+                )
+        return conflict_merge_handoff(
+            vault=str(self._vault_path()),
+            machine=self._machine.label(),
+            local=stop.local,
+            remote=stop.remote,
+            base=stop.base,
+            files=merge,
+            secret_files=sum(1 for c in stop.unanswered if is_secret_file(c.path)),
         )
 
     async def file_versions(self, path: str) -> FileVersions | None:
@@ -167,7 +237,10 @@ class StatusMixin:
     def _file_versions(self, path: str) -> FileVersions | None:
         d = self._engine.d
         stop = d.state.stop()
-        found = next((c for c in (stop.conflicts if stop else ()) if c.path == path), None)
+        # A stopped round's file, or a join's differing file (the same answer
+        # "what does taking the other side change here" serves both).
+        candidates = (*(stop.conflicts if stop else ()), *d.state.join_choices())
+        found = next((c for c in candidates if c.path == path), None)
         if found is None:
             return None
         blobs = d.git.blobs([b for b in (found.ours, found.theirs, found.base) if b])
@@ -187,6 +260,7 @@ class StatusMixin:
                 tofile=f"{found.theirs_machine or 'the other machine'}/{path}",
             )
         )
+        saved = d.scratch.read(path) if d.scratch and not is_secret_file(path) else None
         return FileVersions(
             path=path,
             ours=texts["ours"],
@@ -194,6 +268,7 @@ class StatusMixin:
             base=texts["base"],
             take_theirs=take,
             binary=binary,
+            edited=saved.decode("utf-8", "replace") if saved is not None else None,
         )
 
 
@@ -213,11 +288,20 @@ def _problem(last: RoundRecord, remote: SyncRemote) -> Problem | None:
     kind = _PROBLEMS.get(last.status)
     if kind is None:
         return None
+    message = scrub_git_text(last.detail or last.status.value.replace("_", " "))
     return Problem(
         kind=kind,
-        message=last.detail or last.status.value.replace("_", " "),
+        message=message,
         secret_ref=remote.secret_ref if kind == "auth_failed" else None,
         since=last.finished_at,
+        handoff=remote_failure_handoff(
+            kind,
+            url=remote.url,
+            branch=remote.branch,
+            detail=message,
+            secret_ref=remote.secret_ref,
+            username=remote.username,
+        ),
     )
 
 

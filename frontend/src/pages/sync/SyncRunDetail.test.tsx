@@ -1,60 +1,88 @@
 // frontend/src/pages/sync/SyncRunDetail.test.tsx
 //
-// A round opened up names what its row could only count: the snapshot it took,
-// each commit it pulled and from whom, each file it changed here and pushed.
-import { describe, expect, test } from "vitest";
-import { render, screen } from "@testing-library/react";
+// A round's drawer (6.5.04) names what its row could only count, in the four
+// steps every round takes: the snapshot, the commits pulled and from whom, the
+// files applied here, the files pushed — and its footer rolls it back or opens
+// Activity.
+import { describe, expect, test, vi } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
+import type { SyncRound } from "@/lib/api/sync";
 import { SyncRunDetail } from "./SyncRunDetail";
 import { makeRound } from "./syncTestKit";
 
+function open(run: SyncRound, onRollback = vi.fn()) {
+  render(
+    <MemoryRouter>
+      <SyncRunDetail
+        row={{ kind: "run", id: String(run.id), run }}
+        onClose={vi.fn()}
+        onOpen={vi.fn()}
+        onRollback={onRollback}
+      />
+    </MemoryRouter>,
+  );
+  return within(screen.getByRole("dialog"));
+}
+
 describe("SyncRunDetail", () => {
   test("names the snapshot, the pulled commits and the files moved each way", () => {
-    render(
-      <SyncRunDetail
-        run={makeRound({
-          status: "pulled_and_pushed",
-          snapshot: "sync/pre-round/42",
-          pulled: [
-            {
-              version: "0123456789abcdef",
-              machine: "Mac mini",
-              files: 2,
-              time: "2026-09-13T08:00:00Z",
-            },
-          ],
-          applied: [
-            { path: "knowledge/notes/a.md", status: "modified" },
-            { path: "skills/old/SKILL.md", status: "removed" },
-          ],
-          pushed: [{ path: "resources/channel/seatalk.yaml", status: "added" }],
-        })}
-      />,
+    const drawer = open(
+      makeRound({
+        status: "pulled_and_pushed",
+        snapshot: "snap-0929-1432",
+        from_commit: "a81d03e000",
+        to_commit: "4f1c2a9000",
+        pulled: [
+          { version: "c9e1b07aaaa", machine: "Mac mini", files: 1, time: "2026-09-13T08:05:00Z" },
+          { version: "4f1c2a9bbbb", machine: "Mac mini", files: 2, time: "2026-09-13T08:29:00Z" },
+        ],
+        applied: [{ path: "knowledge/notes/standup.md", status: "added" }],
+        pushed: [{ path: "skills/x/SKILL.md", status: "modified" }],
+      }),
     );
-
-    expect(screen.getByTestId("sync-run-snapshot")).toHaveTextContent("sync/pre-round/42");
-    const pulled = screen.getByTestId("sync-run-pulled");
-    expect(pulled).toHaveTextContent("0123456");
-    expect(pulled).toHaveTextContent("Mac mini");
-    expect(screen.getByTestId("sync-run-applied")).toHaveTextContent("~ knowledge/notes/a.md");
-    expect(screen.getByTestId("sync-run-applied")).toHaveTextContent("− skills/old/SKILL.md");
-    expect(screen.getByTestId("sync-run-pushed")).toHaveTextContent(
-      "+ resources/channel/seatalk.yaml",
+    expect(drawer.getByText("Finished")).toBeInTheDocument();
+    expect(drawer.getByText("a81d03e..4f1c2a9")).toBeInTheDocument();
+    expect(drawer.getByTestId("sync-run-snapshot")).toHaveTextContent("snap-0929-1432");
+    const pulled = drawer.getByTestId("sync-run-pulled");
+    expect(pulled).toHaveTextContent("2 commits");
+    expect(pulled).toHaveTextContent("c9e1b07");
+    expect(pulled).toHaveTextContent("Mac mini: 1 file");
+    expect(pulled).toHaveTextContent("Mac mini: 2 files");
+    expect(drawer.getByTestId("sync-run-applied")).toHaveTextContent(
+      "+ knowledge/notes/standup.md",
     );
-    expect(screen.queryByText(/nothing further/i)).not.toBeInTheDocument();
+    expect(drawer.getByTestId("sync-run-pushed")).toHaveTextContent("~ skills/x/SKILL.md");
+    expect(drawer.getByRole("link", { name: "View in Activity" })).toHaveAttribute(
+      "href",
+      "/activity?tab=changes",
+    );
   });
 
-  test("a failed round shows git's own words", () => {
-    render(
-      <SyncRunDetail
-        run={makeRound({ status: "push_failed", detail: "rejected (fetch first)" })}
-      />,
+  test("says so where a step did nothing, and shows git's words for a round that failed", () => {
+    const drawer = open(
+      makeRound({ status: "unreachable", detail: "ssh: connect to host github.com port 22" }),
     );
-    expect(screen.getByRole("alert")).toHaveTextContent("rejected (fetch first)");
+    expect(drawer.getByTestId("sync-run-snapshot")).toHaveTextContent(/no snapshot/i);
+    expect(drawer.getByTestId("sync-run-pushed")).toHaveTextContent(
+      "Nothing from this Mac to push.",
+    );
+    expect(drawer.getByRole("alert")).toHaveTextContent("ssh: connect to host github.com");
+    // A round that changed nothing here has nothing to roll back.
+    expect(drawer.queryByRole("button", { name: /roll back/i })).toBeNull();
   });
 
-  test("a quiet round says there is nothing further", () => {
-    render(<SyncRunDetail run={makeRound()} />);
-    expect(screen.getByText(/nothing further/i)).toBeInTheDocument();
+  test("Roll back to before this round hands the round to the dialog", () => {
+    const onRollback = vi.fn();
+    const run = makeRound({
+      id: 9,
+      status: "pulled",
+      snapshot: "s",
+      applied: [{ path: "a.md", status: "added" }],
+    });
+    const drawer = open(run, onRollback);
+    fireEvent.click(drawer.getByRole("button", { name: "Roll back to before this round" }));
+    expect(onRollback).toHaveBeenCalledWith(run);
   });
 });

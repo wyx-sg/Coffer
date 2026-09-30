@@ -89,7 +89,8 @@ def remote_set(
     username: str | None = typer.Option(
         None,
         "--username",
-        help=f"Username sent with an HTTPS token (default {DEFAULT_USERNAME}; "
+        help=f"User name an HTTPS token is sent with, for a host that does not "
+        f"imply it (default {DEFAULT_USERNAME}; GitLab: oauth2 or your user name; "
         "Bitbucket and Azure DevOps need a real one)",
     ),
     wait: bool = WAIT_OPTION,

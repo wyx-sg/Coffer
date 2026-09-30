@@ -88,6 +88,8 @@ class SyncService(RemoteMixin, MachinesMixin, StatusMixin, KeyMixin):
         after_apply: Callable[[], Awaitable[object]] | None = None,
         lock: asyncio.Lock | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
+        git_available: Callable[[], bool] = lambda: True,
+        host_label: Callable[[], str] = lambda: "this machine",
     ) -> None:
         self._engine = engine
         self._remotes = remotes
@@ -104,6 +106,8 @@ class SyncService(RemoteMixin, MachinesMixin, StatusMixin, KeyMixin):
         self._after_apply = after_apply
         self._lock = lock or asyncio.Lock()
         self._clock = clock
+        self._git_available = git_available
+        self._host_label = host_label
         self._running_since: str | None = None
         self._next_round_at: str | None = None
 
@@ -285,6 +289,15 @@ class SyncService(RemoteMixin, MachinesMixin, StatusMixin, KeyMixin):
         """The absolute path of ``path``'s hand-merge copy, written when first
         asked for; the OS-open action opens it."""
         return await self._locked(lambda: round_answers.editor_copy(self._engine, path))
+
+    async def mark_merged(self) -> Stop:
+        """ "I merged it": answer every file handed to an agent with its copy."""
+        return await self._locked(lambda: round_answers.mark_merged(self._engine))
+
+    async def conflict_handoff(self) -> str | None:
+        """The prompt handing the stopped round's mergeable files to an agent."""
+        found = await self.stopped()
+        return found.handoff if found else None
 
     async def confirm_hold(self) -> Stop:
         return await self._locked(lambda: round_answers.confirm_hold(self._engine))

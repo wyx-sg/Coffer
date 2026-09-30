@@ -1,158 +1,140 @@
 // frontend/src/pages/sync/SyncMachineRow.tsx — one row of the machine registry.
 //
-// Three cells carry more meaning than their width suggests:
+// Beside the name: "This Mac" on the local row, "Runs curation" (read-only)
+// on the Mac that curates knowledge for the vault, and a warning tag only
+// when that Mac publishes a different master key — its secrets cannot be
+// decrypted here. Unknown ("no fingerprint yet") is not a mismatch and shows
+// nothing.
 //
-//   name  — editable in place, but only on the local row: a machine writes its
-//           own descriptor and no other machine's. The id's first 8 characters
-//           sit under it so two machines the user called "laptop" are still
-//           tellable apart, since the id is what `scope` actually references.
-//   key   — a ✓/✗ rather than two fingerprints to compare by eye. ✗ means that
-//           machine's secrets cannot be decrypted here; "—" means one side
-//           has published no fingerprint yet, which is not a mismatch.
-//   retire — removes only the machine's descriptor from the registry.
+// The "More" menu offers Rename on this Mac's row only — a machine writes its
+// own descriptor and no other machine's — and Retire on every other row.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Trash2 } from "lucide-react";
+import { Laptop, Monitor } from "lucide-react";
 
-import { TableActionButton } from "@/components/table/TableActionButton";
+import { AgentBadge } from "@/components/agent/AgentBadge";
 import { Badge } from "@/components/ui/badge";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Input } from "@/components/ui/input";
+import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import { TableCell, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Machine } from "@/lib/api/sync";
-import { useRenameSelf, useRetireMachine } from "@/lib/hooks/useMachines";
-import { formatDateTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { RenameMachineDialog, RetireMachineDialog } from "./SyncMachineDialogs";
+import { isStale, lastSeenLabel, roundTime } from "./syncMachineTimes";
 import { statusLabel } from "./syncRoundStatus";
 
-function KeyCell({ matches }: { matches: boolean | null }) {
-  const { t } = useTranslation();
-  if (matches === null) {
-    return (
-      <span className="text-muted-foreground" title={t("sync.machines.keyUnknown")}>
-        —
-      </span>
-    );
-  }
-  return matches ? (
-    <span className="text-status-ok" title={t("sync.machines.keyMatches")}>
-      ✓
-    </span>
-  ) : (
-    <span className="text-status-err" title={t("sync.machines.keyDiffers")}>
-      ✗ <span className="text-xs">{t("sync.machines.keyDiffers")}</span>
-    </span>
-  );
-}
-
-function NameCell({ machine }: { machine: Machine }) {
-  const { t } = useTranslation();
-  const rename = useRenameSelf();
-  const [draft, setDraft] = useState(machine.name);
-
-  const commit = () => {
-    const next = draft.trim();
-    if (!next || next === machine.name) {
-      setDraft(machine.name);
-      return;
-    }
-    rename.mutate(next);
-  };
-
+function Tagged({
+  label,
+  tip,
+  variant,
+}: {
+  label: string;
+  tip: string;
+  variant: "secondary" | "warning";
+}) {
   return (
-    <div className="space-y-1">
-      {machine.is_self ? (
-        <Input
-          value={draft}
-          aria-label={t("sync.machines.renameLabel")}
-          disabled={rename.isPending}
-          className="h-8 max-w-48"
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") e.currentTarget.blur();
-          }}
-        />
-      ) : (
-        <span className="font-medium">{machine.name}</span>
-      )}
-      <div className="flex items-center gap-2">
-        <span className="font-mono text-xs text-muted-foreground">
-          {machine.machine_id.slice(0, 8)}
-        </span>
-        {machine.is_self ? (
-          <Badge variant="secondary">{t("sync.machines.thisMachine")}</Badge>
-        ) : null}
-      </div>
-    </div>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge variant={variant} aria-label={`${label}: ${tip}`}>
+            {label}
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent>{tip}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
-export function SyncMachineRow({ machine }: { machine: Machine }) {
-  const { t } = useTranslation();
-  const retire = useRetireMachine();
-  const [confirming, setConfirming] = useState(false);
+interface Props {
+  machine: Machine;
+  /** This machine is the vault's curation owner. */
+  curates: boolean;
+  now: Date;
+}
+
+export function SyncMachineRow({ machine, curates, now }: Props) {
+  const { t, i18n } = useTranslation();
+  const [dialog, setDialog] = useState<"rename" | "retire" | null>(null);
+  const Icon = /book/i.test(`${machine.name} ${machine.hostname}`) ? Laptop : Monitor;
+
+  const actions: MenuAction[] = machine.is_self
+    ? [
+        {
+          key: "rename",
+          label: t("sync.machines.rename"),
+          onSelect: () => setDialog("rename"),
+        },
+      ]
+    : [
+        {
+          key: "retire",
+          label: t("sync.machines.retire"),
+          destructive: true,
+          onSelect: () => setDialog("retire"),
+        },
+      ];
 
   return (
     <TableRow data-testid={`machine-${machine.machine_id}`}>
-      <TableCell>
-        <NameCell machine={machine} />
+      <TableCell className="w-8 text-text-muted">
+        <Icon className="size-4" aria-hidden />
       </TableCell>
       <TableCell>
-        {machine.os}
-        <span className="block font-mono text-xs text-muted-foreground">{machine.hostname}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-medium text-text" title={machine.machine_id}>
+            {machine.name}
+          </span>
+          {machine.is_self ? <Badge variant="secondary">{t("sync.machines.thisMac")}</Badge> : null}
+          {curates ? (
+            <Tagged
+              variant="secondary"
+              label={t("sync.machines.curates")}
+              tip={t("sync.machines.curatesTip")}
+            />
+          ) : null}
+          {machine.key_matches === false ? (
+            <Tagged
+              variant="warning"
+              label={t("sync.machines.keyDiffers")}
+              tip={t("sync.machines.keyDiffersTip")}
+            />
+          ) : null}
+        </div>
       </TableCell>
-      <TableCell className="text-xs">
-        {machine.last_round_at ? (
-          formatDateTime(machine.last_round_at)
-        ) : (
-          <span className="text-muted-foreground">{t("sync.machines.never")}</span>
+      <TableCell
+        className={cn(
+          "text-sm",
+          isStale(machine.last_round_at, now) ? "text-warning" : "text-text-muted",
         )}
+      >
+        {lastSeenLabel(machine.last_round_at, now, t, i18n.language)}
       </TableCell>
-      <TableCell className="text-xs">
-        {machine.last_round ? statusLabel(t, machine.last_round) : "—"}
+      <TableCell className="text-sm text-text-muted">
+        {machine.last_round_at && machine.last_round
+          ? `${roundTime(machine.last_round_at, now, i18n.language)} · ${statusLabel(t, machine.last_round)}`
+          : "—"}
       </TableCell>
-      <TableCell>{machine.coffer_version}</TableCell>
+      <TableCell className="font-mono text-xs text-text-muted">{machine.coffer_version}</TableCell>
       <TableCell>
-        <KeyCell matches={machine.key_matches} />
-      </TableCell>
-      <TableCell className="text-xs">
         {machine.agents.length > 0 ? (
-          <ul className="space-y-0.5">
+          <div className="flex items-center gap-1">
             {machine.agents.map((agent) => (
-              <li key={`${agent.type}:${agent.name}`}>
-                {t("sync.machines.agent", { type: agent.type, count: agent.plugins.length })}
-              </li>
+              <AgentBadge key={`${agent.type}:${agent.name}`} type={agent.type} size="sm" />
             ))}
-          </ul>
+          </div>
         ) : (
-          <span className="text-muted-foreground">{t("sync.machines.noAgents")}</span>
+          <span className="text-text-subtle">—</span>
         )}
       </TableCell>
-      <TableCell className="text-right">
-        {machine.is_self ? null : (
-          <TableActionButton
-            icon={Trash2}
-            label={t("sync.machines.retire")}
-            destructive
-            onClick={() => setConfirming(true)}
-          />
-        )}
-        <ConfirmDialog
-          open={confirming}
-          onOpenChange={(next) => {
-            setConfirming(next);
-            if (!next) retire.reset();
-          }}
-          title={t("sync.machines.retireTitle", { name: machine.name })}
-          description={t("sync.machines.retireBody")}
-          confirmLabel={t("sync.machines.retire")}
-          pending={retire.isPending}
-          error={retire.error}
-          onConfirm={() => {
-            // Closes only on success, so a refusal stays up with its reason.
-            retire.mutate(machine.machine_id, { onSuccess: () => setConfirming(false) });
-          }}
-        />
+      <TableCell className="w-10 text-right">
+        <ActionMenu label={t("sync.machines.more", { name: machine.name })} actions={actions} />
+        {dialog === "rename" ? (
+          <RenameMachineDialog machine={machine} onClose={() => setDialog(null)} />
+        ) : null}
+        {dialog === "retire" ? (
+          <RetireMachineDialog machine={machine} now={now} onClose={() => setDialog(null)} />
+        ) : null}
       </TableCell>
     </TableRow>
   );

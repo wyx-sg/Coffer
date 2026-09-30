@@ -204,12 +204,12 @@ Triggers are yours: you write them, or you accept the ones Coffer proposes. Noth
 
 ### In channel turns
 
-A turn that comes from a [channel](/guides/channels) runs no hook of Coffer's, so Coffer delivers memory itself:
+Coffer drives a turn that comes from a [channel](/guides/channels) itself, so it delivers that turn's index and notes itself. On an agent connected to Coffer, the agent still runs Coffer's hook inside the turn, and the hook stands aside for session start and each prompt, so nothing arrives twice:
 
 - **The index.** The session-start payload — the `global` index, the index of the partition for the conversation's working directory, and where the notes are — goes into that turn's system prompt. A turn gets no memory header at all when the index is empty.
 - **The notes your message names.** Coffer ranks each message you send against the notes exactly as it does [at each prompt](#at-each-prompt-the-notes-your-prompt-names) — the same three-note limit, relevance bar and size cap — and adds what it finds after your message in what the agent receives. A note is given once per conversation, and each delivery is recorded in the audit log as a `prompt` fire of the agent. Your message is stored in the conversation as you wrote it.
 
-Nothing needs installing for this. Triggers are not applied to channel turns.
+Nothing needs installing for this. Triggers still apply on a connected agent: the hook keeps answering before and after each command in a channel turn, so an armed `block` trigger holds a command there, and a `context` trigger adds its note, just as in a terminal session.
 
 A turn you send from the [Conversations](/guides/chat) page does not get this append: it gets memory the way a terminal session does, through the agent's own hook when the agent is connected to Coffer. No turn gets memory both ways.
 

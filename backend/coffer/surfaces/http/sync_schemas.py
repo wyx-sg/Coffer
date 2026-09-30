@@ -25,6 +25,7 @@ from coffer.domain.sync.remote import (
     validate_url,
 )
 from coffer.domain.sync.rounds import RoundStatus
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 
 class SyncChangeOut(BaseModel):
@@ -188,10 +189,23 @@ class WaitingCommitOut(BaseModel):
 
 
 class ProblemOut(BaseModel):
-    kind: Literal["unreachable", "auth_failed", "push_failed", "cloud_folder", "layout", "failed"]
+    kind: Literal[
+        "unreachable",
+        "auth_failed",
+        "push_failed",
+        "cloud_folder",
+        "layout",
+        "git_missing",
+        "failed",
+    ]
+    #: Git's message, with any credential in it scrubbed.
     message: str
     secret_ref: str | None
     since: str | None
+    #: The chore for the person's agent when the fix is outside Coffer — a
+    #: rejected push, a refused sign-in, an unreachable remote, git missing.
+    #: Never carries a token or a secret's value.
+    handoff: HandoffOut | None = None
 
 
 class SyncStatusOut(BaseModel):

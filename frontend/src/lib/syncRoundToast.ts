@@ -36,6 +36,16 @@ export function roundToast(t: TFunction, round: SyncRound): RoundToast {
   if (NEEDS_ANSWER.has(round.status)) {
     return { variant: "info", message: t(`sync.toast.needs.${round.status}`) };
   }
+  // "Rolled back 3 files to sync/pre-round/…": what came back, and from where.
+  if (round.status === "rolled_back") {
+    return {
+      variant: "success",
+      message: t("sync.toast.rolledBack", {
+        count: round.applied.length,
+        snapshot: round.snapshot ?? "",
+      }),
+    };
+  }
   if (FAILED.has(round.status)) {
     return { variant: "error", message: round.detail ?? status };
   }

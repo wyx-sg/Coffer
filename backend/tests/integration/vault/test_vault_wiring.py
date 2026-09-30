@@ -187,13 +187,13 @@ async def test_an_invalid_resource_hand_edit_stays_out_of_head_and_is_flagged() 
         await scanning.stop()
 
 
-async def test_a_missing_git_is_a_startup_error_naming_the_install_step(
+async def test_a_missing_git_is_a_startup_error_saying_so(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(git, "git_available", lambda: False)
     # A vault root no writer has ensured yet in this process.
     monkeypatch.setenv("HOME", str(vault_root().parent.parent / f"elsewhere-{uuid.uuid4().hex}"))
-    with pytest.raises(RuntimeError, match="xcode-select --install"):
+    with pytest.raises(RuntimeError, match="git is not installed"):
         await _start(_Audit())
 
 

@@ -17,6 +17,7 @@ from rich.console import Console
 
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli import sync_stop_cmd
+from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli.sync_machine_cmd import key_app, machine_app
 from coffer.surfaces.cli.sync_print import NEEDS_PERSON, changes, print_round, verbose_of
 from coffer.surfaces.cli.sync_remote_cmd import print_remote, remote_app
@@ -44,6 +45,12 @@ def sync_now(ctx: typer.Context) -> None:
 def status(
     ctx: typer.Context,
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
+    prompt: bool = typer.Option(
+        False,
+        "--prompt",
+        help="Print the prompt that hands the current problem (a refused push or sign-in, an "
+        "unreachable remote, git missing) to your agent",
+    ),
 ) -> None:
     """The remote, the last round, and anything waiting for you.
 
@@ -53,7 +60,8 @@ def status(
     reading the text. A paused remote exits 0.
 
     \f
-    Spec vault-sync "Say a vault needs a human where the user already is".
+    Spec vault-sync "Say a vault needs a human where the user already is",
+    "Hand a remote's failure to an agent".
     """
     verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
@@ -61,6 +69,13 @@ def status(
         r = c.get("/sync/status")
         _cli_client.check(r, verbose=verbose)
         payload = r.json()
+    if prompt:
+        handoff = (payload.get("problem") or {}).get("handoff")
+        if not handoff:
+            typer.echo("sync has no problem to hand to an agent", err=True)
+            raise typer.Exit(int(ExitCode.CONFLICT))
+        typer.echo(handoff["prompt"])
+        return
     if output_json:
         typer.echo(_json.dumps(payload, indent=2))
     else:
@@ -106,8 +121,10 @@ def _print_status(payload: dict[str, Any]) -> None:
             _console.print(f"  [yellow]{payload[key]} {text}[/yellow]")
     problem = payload.get("problem")
     if problem:
-        ref = f" (token {problem['secret_ref']})" if problem.get("secret_ref") else ""
+        ref = f" (secret {problem['secret_ref']})" if problem.get("secret_ref") else ""
         _console.print(f"  [red]{problem['kind']}[/red]{ref}: {problem['message']}")
+        if problem.get("handoff"):
+            _console.print("  a prompt for your agent: coffer sync status --prompt")
     if payload.get("next_round_at"):
         _console.print(f"  next round: {payload['next_round_at']}")
     last = payload.get("last_round")
