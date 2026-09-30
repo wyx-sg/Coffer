@@ -20,19 +20,19 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
-from coffer.application.channel.command_text import GROUP_DEFAULT_SUFFIX
+from coffer.application.channel.command_text import GROUP_DEFAULT_SUFFIX, default_cwd
 from coffer.application.channel.new_conversation import open_fresh
-from coffer.application.channel.selection_cards import SelectionCard, dir_card
+from coffer.application.channel.selection_cards import SelectionCard, dir_card, path_label
 
 if TYPE_CHECKING:
     from coffer.application.channel.command_context import CommandContext
 
 __all__ = ["NO_DIRECTORIES", "apply_dir", "cmd_dir", "current_dir_card", "resolve_dir"]
 
-#: What `/dir` says for a channel whose allow-list is empty.
+#: What `/dir` says for a channel whose allow-list is empty: `/dir` is off.
 NO_DIRECTORIES = (
-    "No directories are allowed for this channel yet — in Coffer open Channels, "
-    "the channel, Edit, and fill in Directories for /dir; or run "
+    "/dir is off for this channel — no directories are allowed for it. In Coffer, open "
+    "Channels, the channel, Settings, and add them under Working directories; or run "
     "`coffer channel edit <name> --dir PATH`."
 )
 
@@ -97,20 +97,24 @@ async def apply_dir(ctx: CommandContext, path: str | None) -> None:
     await ctx.commands._threads.set_preferences(
         ctx.resource_id, ctx.chat_id, ctx.conversation_thread_id, cwd=path
     )
-    shown = path or "the default"
+    shown = path_label(path or default_cwd(ctx.binding))
     if ctx.group_main:
         await ctx.say(f"📁 Directory set to {shown}{GROUP_DEFAULT_SUFFIX}.")
         return
     if await open_fresh(ctx):
         await ctx.say(
-            f"📁 Directory set to {shown} — new conversation started "
-            "(the previous one is in /resume)."
+            f"📁 Now in {shown} — started a fresh conversation (the previous one is in /resume)."
         )
 
 
 async def current_dir_card(ctx: CommandContext, *, page: int | None = None) -> SelectionCard:
     settings = await ctx.settings()
-    return dir_card(current=settings.cwd, directories=ctx.binding.directories, page=page)
+    return dir_card(
+        current=settings.cwd,
+        directories=ctx.binding.directories,
+        default=default_cwd(ctx.binding),
+        page=page,
+    )
 
 
 async def _show(ctx: CommandContext) -> None:
@@ -118,10 +122,10 @@ async def _show(ctx: CommandContext) -> None:
     directories = ctx.binding.directories
     if directories and not ctx.group_main and await ctx.show(await current_dir_card(ctx)):
         return
-    lines = [f"📁 Directory: {settings.cwd or 'default'}"]
+    lines = [f"📁 Working directory: {path_label(settings.cwd)}"]
     if directories:
         lines.append("Allowed:")
-        lines += [f"{n}. {path}" for n, path in enumerate(directories, start=1)]
+        lines += [f"{n}. {path_label(path)}" for n, path in enumerate(directories, start=1)]
         lines.append("Send /dir <path|name> or /dir default.")
     else:
         lines.append(NO_DIRECTORIES)

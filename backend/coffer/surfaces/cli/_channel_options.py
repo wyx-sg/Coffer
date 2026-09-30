@@ -70,6 +70,34 @@ _NO_DIRS = typer.Option(
 )
 
 
+# The channel's default working directory — where its new conversations start
+# (spec channels "Choose the working directory from chat"). Stored as
+# ``default_agent_config.cwd``; ``--no-default-dir`` clears it.
+_DEFAULT_DIR = typer.Option(
+    None,
+    "--default-dir",
+    help="The directory new conversations start in (default: the agent's own)",
+)
+_NO_DEFAULT_DIR = typer.Option(
+    False, "--no-default-dir", help="Clear the default directory (the agent's own applies)"
+)
+
+
+def with_default_dir(
+    agent_config: dict[str, Any] | None, default_dir: str | None, no_default_dir: bool
+) -> dict[str, Any] | None:
+    """``agent_config`` with its ``cwd`` set to ``default_dir`` (made absolute), or
+    removed for ``no_default_dir``; ``None`` when neither was passed."""
+    if not no_default_dir and default_dir is None:
+        return None
+    merged = dict(agent_config or {})
+    if no_default_dir:
+        merged.pop("cwd", None)
+    else:
+        merged["cwd"] = os.path.abspath(os.path.expanduser(str(default_dir)))
+    return merged
+
+
 def directories(dirs: list[str] | None, no_dirs: bool) -> list[str] | None:
     """The allow-list the user passed, or ``None`` when they passed none. Relative
     paths are made absolute against the current directory, as a shell user means."""
@@ -118,6 +146,14 @@ def settings_config(resource: dict[str, Any], values: dict[str, Any]) -> dict[st
     dirs = directories(values.get("dirs"), bool(values.get("no_dirs")))
     if dirs is not None:
         changes["directories"] = dirs
+    stored = resource.get("config") or {}
+    agent_config = with_default_dir(
+        stored.get("default_agent_config"),
+        values.get("default_dir"),
+        bool(values.get("no_default_dir")),
+    )
+    if agent_config is not None:
+        changes["default_agent_config"] = agent_config or None
     if not changes:
         return None
     return {**(resource.get("config") or {}), **changes}

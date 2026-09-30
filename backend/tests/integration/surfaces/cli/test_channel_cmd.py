@@ -857,3 +857,20 @@ def test_notify_unpaired_channel_exits_5(channel_daemon: _Daemon) -> None:
     channel_daemon.runtime.adapters["tg"] = _StubAdapter()
     r = runner.invoke(app, ["channel", "notify", "tg", "hello"])
     assert r.exit_code == 5  # 409 CHANNEL_NOT_PAIRED → conflict exit code
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="the channel's default directory is edited from the Channels page and the CLI",
+)
+def test_edit_sets_and_clears_the_default_directory(channel_daemon: _Daemon, tmp_path) -> None:
+    assert _register_tg().exit_code == 0
+    home = tmp_path / "project"
+    r = runner.invoke(app, ["channel", "edit", "tg", "--default-dir", str(home)])
+    assert r.exit_code == 0, r.output
+    assert channel_daemon.channel("tg").config["default_agent_config"] == {"cwd": str(home)}
+    shown = runner.invoke(app, ["channel", "show", "tg"])
+    assert f"default:  {home}" in shown.output
+    r = runner.invoke(app, ["channel", "edit", "tg", "--no-default-dir"])
+    assert r.exit_code == 0, r.output
+    assert not channel_daemon.channel("tg").config.get("default_agent_config")

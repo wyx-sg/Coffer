@@ -19,8 +19,10 @@ import typer
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._approvals import WAIT_OPTION, pending_for, settle
 from coffer.surfaces.cli._channel_options import (
+    _DEFAULT_DIR,
     _DIRS,
     _IGNORE_OTHER_MENTIONS,
+    _NO_DEFAULT_DIR,
     _NO_DIRS,
     _NOTIFY_AFTER,
     _REQUIRE_MENTION,
@@ -31,6 +33,7 @@ from coffer.surfaces.cli._channel_options import (
     directories,
     edit_option,
     settings_config,
+    with_default_dir,
 )
 from coffer.surfaces.cli._kind_verbs import (
     Column,
@@ -100,6 +103,7 @@ def add(
     show_steps: bool | None = _SHOW_STEPS,
     notify_after: float | None = _NOTIFY_AFTER,
     dirs: list[str] | None = _DIRS,
+    default_dir: str | None = _DEFAULT_DIR,
     title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
     description: str | None = typer.Option(None, "--description"),
     wait: bool = WAIT_OPTION,
@@ -117,11 +121,9 @@ def add(
     """
     verbose = (ctx.obj or {}).get("verbose", False)
     # The channel stores the agent's UID, so a rename cannot silently unbind it
-    # — but a person types a NAME, so it is resolved here, once, like every
-    # other label this CLI takes. It is required rather than defaulted because
-    # a uid is minted per vault: no constant can stand for "the usual agent",
-    # and the old ``claude_code`` default was a fiction — there was never an
-    # agent behind it, so a channel created with it simply routed nowhere.
+    # — but a person types a NAME, so it is resolved here, once. It is required
+    # rather than defaulted because a uid is minted per vault: no constant can
+    # stand for "the usual agent".
     config: dict[str, Any] = {"channel_type": channel_type}
     config.update(
         _settings(
@@ -142,6 +144,9 @@ def add(
         except _json.JSONDecodeError:
             typer.echo("--agent-config must be valid JSON", err=True)
             raise typer.Exit(int(ExitCode.INVALID_INPUT)) from None
+    started_in = with_default_dir(config.get("default_agent_config"), default_dir, False)
+    if started_in is not None:
+        config["default_agent_config"] = started_in
     if channel_type == "telegram":
         if bot_token_ref is None:
             typer.echo("--bot-token-ref is required for telegram channels", err=True)
@@ -238,6 +243,9 @@ def show(
         f"gating:   require_mention={'on' if config.get('require_mention', True) else 'off'}"
         f"  ignore_other_mentions={'on' if config.get('ignore_other_mentions') else 'off'}"
     )
+    default_dir = (config.get("default_agent_config") or {}).get("cwd")
+    if default_dir:
+        typer.echo(f"default:  {default_dir}")
     for path in config.get("directories") or []:
         typer.echo(f"dir:      {path}")
     for key in sorted(k for k in config if k.endswith("_ref")):
@@ -361,6 +369,8 @@ _CHANNEL = KindVerbs(
             edit_option("notify_after", _NOTIFY_AFTER, float | None),
             edit_option("dirs", _DIRS, list[str] | None),
             edit_option("no_dirs", _NO_DIRS, bool),
+            edit_option("default_dir", _DEFAULT_DIR, str | None),
+            edit_option("no_default_dir", _NO_DEFAULT_DIR, bool),
         ),
         to_config=settings_config,
     ),
@@ -368,7 +378,7 @@ _CHANNEL = KindVerbs(
         "list": "List registered channels.",
         "edit": (
             "Change a channel's name, title, description, group gating, quiet windows, "
-            "live status, completion ping or `/dir` directories."
+            "live status, completion ping, default directory or `/dir` directories."
         ),
         "rm": "Remove a channel and its pairings.",
         "enable": "Enable a channel (its adapter starts on the machine it is bound to).",

@@ -1,7 +1,7 @@
 """A card's life in the chat after it is sent: route a tap, keep it honest.
 
 Why the tap half exists: a card offers choices (``model:``, ``effort:``,
-``dir:``, ``resume:``, ``collection:``) and actions (``cmd:<name>``, which runs
+``dir:``, ``resume:``, ``collection:``, ``agent:``) and actions (``cmd:<name>``, which runs
 exactly what typing ``/<name>`` would). Each tap is owner-gated by the
 processor and routed here to the same function the typed command calls (spec
 channels "Offer choices and actions as owner-gated cards").
@@ -24,7 +24,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from coffer.application.channel import document_save, model_switch
+from coffer.application.channel import document_save, model_switch, new_conversation
+from coffer.application.channel.agent_routing import routable_choices
+from coffer.application.channel.command_cards import PICK_AGENT
 from coffer.application.channel.command_context import deliver_card
 from coffer.application.channel.details_card import DETAILS_KINDS, apply_details_tap
 from coffer.application.channel.dir_switch import apply_dir, current_dir_card
@@ -52,7 +54,7 @@ __all__ = [
 _logger = logging.getLogger(__name__)
 
 #: The command that summons a fresh card of each kind.
-_COMMAND_FOR = {"collection": "kb", "effort": "model"}
+_COMMAND_FOR = {"collection": "kb", "effort": "model", "agent": "new"}
 
 
 async def dispatch_card_tap(ctx: CommandContext, data: str) -> None:
@@ -84,7 +86,17 @@ async def dispatch_card_tap(ctx: CommandContext, data: str) -> None:
         # A save is one-shot, not a toggle: nothing to re-tick.
         await document_save.apply_save_collection(ctx, value)
         return
-    if kind == "model":
+    if kind == "agent" and value == PICK_AGENT:
+        # The `/new` card's Agent button: offer the agents, change nothing yet.
+        card = await new_conversation.current_agent_card(ctx)
+        await ctx.show_or_say(card, card_as_text(card))
+        return
+    if kind == "agent":
+        if not any(key == value for key, _ in _agent_choices(ctx)):
+            await ctx.say("That agent is no longer one this channel may drive — send /new.")
+            return
+        await new_conversation.apply_agent(ctx, value)
+    elif kind == "model":
         await model_switch.apply_model(ctx, value)
         if await model_switch.after_model_tap(ctx):
             return
@@ -225,6 +237,12 @@ async def _current_card(
         return await model_switch.current_effort_card(ctx, page=page)
     if kind == "dir":
         return await current_dir_card(ctx, page=page)
+    if kind == "agent":
+        return await new_conversation.current_agent_card(ctx, page=page)
     if kind == "resume":
         return await current_resume_card(ctx, page=page)
     return None
+
+
+def _agent_choices(ctx: CommandContext) -> list[tuple[str, str]]:
+    return list(routable_choices(ctx.binding, ctx.commands._agents))

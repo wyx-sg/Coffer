@@ -236,5 +236,5 @@ async def test_new_keeps_the_chats_model_effort_and_directory(
     cfg = await env.chat.get_agent_config(fresh)
     assert cfg.cwd == str(tmp_path)
     assert adapter.texts()[-1] == (
-        f"🆕 New conversation · Coffer Assistant · opus medium · {tmp_path.name}"
+        f"🆕 New conversation · Coffer Assistant · opus · Medium · {tmp_path}"
     )

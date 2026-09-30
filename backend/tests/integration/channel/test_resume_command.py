@@ -6,6 +6,7 @@ from __future__ import annotations
 import pytest
 
 from coffer.application.channel.resume_switch import NOTHING_TO_RESUME
+from coffer.domain.channel.envelopes import ChoiceButton
 
 from .conftest import ChannelEnv, FakeChannelAdapter, Resource, inbound, tap_event
 
@@ -51,13 +52,20 @@ async def test_resume_lists_this_chats_earlier_conversations(env: ChannelEnv) ->
     assert not any(conversation_id in adapter.texts()[-1] for conversation_id in ids)
 
 
+def _resume_cards(adapter: FakeChannelAdapter) -> list[tuple[str, str, list[ChoiceButton]]]:
+    """The `/resume` cards sent — each `/new` along the way answers with a card too."""
+    return [
+        c for c, title in zip(adapter.cards, adapter.card_titles, strict=True) if title == "Resume"
+    ]
+
+
 async def test_resume_is_a_card_where_the_transport_takes_one(env: ChannelEnv) -> None:
     resource, adapter = await _card_channel(env)
     ids = await _three_conversations(env, resource)
 
     await env.processor.on_message(inbound("tg", "owner", "/resume"))
 
-    [(_chat, _text, buttons)] = adapter.cards
+    [(_chat, _text, buttons)] = _resume_cards(adapter)
     assert [b.value for b in buttons] == [f"resume:{i}" for i in reversed(ids)]
     assert buttons[0].label == "1. three ✓"
 
@@ -99,7 +107,7 @@ async def test_resume_never_offers_another_chats_conversation(env: ChannelEnv) -
     ids = await _three_conversations(env, resource)
 
     await env.processor.on_message(inbound("tg", "owner", "/resume"))
-    [(_chat, _text, buttons)] = [c for c in adapter.cards if c[0] == "owner"]
+    [(_chat, _text, buttons)] = [c for c in _resume_cards(adapter) if c[0] == "owner"]
     assert {b.value for b in buttons} == {f"resume:{i}" for i in ids}
 
     # A forged tap naming another chat's (or the web's) conversation is refused.

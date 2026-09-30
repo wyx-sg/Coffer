@@ -50,9 +50,8 @@ def test_help_text_lists_every_command_with_its_arguments() -> None:
     rendered = help_text()
     for command in COMMAND_ROSTER:
         assert f"/{command.name}" in rendered
-        assert command.description in rendered
-    assert "/new [agent] — " in rendered
-    assert "/model [name] [level] — " in rendered
+    assert rendered.startswith("/new [agent] · /stop · /model [name] [level] · ")
+    assert rendered.splitlines()[-1] == "Anything else is a message to the agent."
 
 
 def test_names_returns_typed_forms() -> None:

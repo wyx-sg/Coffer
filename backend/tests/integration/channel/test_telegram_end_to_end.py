@@ -155,7 +155,7 @@ async def test_a_group_command_answer_goes_to_the_asker_alone(env: ChannelEnv) -
         status = fake.calls_for("sendMessage")[1]
         assert status["ephemeral_message_parameters"] == {"receiver_user_id": _OWNER_ID}
         assert "reply_markup" not in status
-        assert "Agent:" in status["text"]
+        assert status["text"].startswith("Status")
     finally:
         await adapter.stop()
 
