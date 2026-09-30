@@ -229,7 +229,7 @@ export function presenceAvailable(): boolean {
   return isTauri();
 }
 /** In the desktop shell? For Settings › Daemon's Restart and About's host line. */
-export const inDesktopShell = presenceAvailable;
+export const inDesktopShell = (): boolean => isTauri();
 
 /** What `presence_mode` reports about the daemon the shell signs for. */
 export interface PresenceMode {
