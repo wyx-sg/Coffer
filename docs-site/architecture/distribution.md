@@ -172,13 +172,9 @@ The repository always says `dev`. The release workflow runs `scripts/stamp_chann
 
 ## Experimental features
 
-An experimental feature is a capability that ships in every build but is switched off by default on `stable`. The registry in [`backend/coffer/domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py) is the one list; anything not in it is always on.
+An experimental feature is a capability that ships in every build but is switched off by default on `stable`. The registry in [`backend/coffer/domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py) is the one list; anything not in it is always on. Each entry names a key, the REST prefixes the feature owns and the resource kinds it owns.
 
-| Key | REST prefix it owns | Resource kind it owns |
-| --- | --- | --- |
-| `vault_sync` | `/api/v1/sync` | |
-| `knowledge` | `/api/v1/knowledge` | `knowledge` |
-| `memory` | `/api/v1/memory` | `memory` |
+The registry is empty right now. Sync (`vault_sync`), Knowledge (`knowledge`) and Memory (`memory`) were its entries before 1.0 and graduated at 1.0: their entries and every gate that named them were deleted, and a migration stripped their stored switches from `daemon-config.json`. A stored key the registry no longer declares is ignored, so a leftover one is harmless.
 
 A feature's state is resolved on every read, highest precedence first:
 
@@ -188,7 +184,7 @@ A feature's state is resolved on every read, highest precedence first:
 
 ```mermaid
 flowchart LR
-    Q["request to /api/v1/knowledge/..."] --> G{"require_feature(knowledge)"}
+    Q["request under a feature's prefix"] --> G{"require_feature(key)"}
     G -->|pin?| P["COFFER_FEATURES"]
     G -->|setting?| S["daemon-config.json"]
     G -->|else| C["channel default"]
@@ -200,11 +196,11 @@ The gates are request-time:
 
 - Every router whose prefix falls under a feature's prefix is mounted with a `require_feature` dependency. The routes stay registered, so the OpenAPI document never changes with the switch, and a switch takes effect on the next request.
 - The kind-agnostic `/api/v1/resources` routes refuse a resource whose kind a switched-off feature owns, and leave such resources out of lists.
-- The MCP gateway drops the feature's builtin tools from the tool list and answers a call to one as an unknown tool; the handshake instructions and the `coffer-guide` skill stop naming them.
+- The MCP gateway drops the feature's builtin tools from the tool list and answers a call to one as an unknown tool; the handshake instructions stop naming them.
 - CLI commands reach the daemon over the gated routes and print one line naming `coffer config set feature.<key> on`, then exit 1.
 - Background passes owned by the feature skip their rounds.
 
-Switching a feature off never deletes, moves or rewrites what it holds; switching it back on resumes from the same state. Features change with `coffer config set feature.<key> on|off` or `PUT /api/v1/daemon/features/{key}`; a pinned feature refuses the change with `409 FEATURE_PINNED`. A feature leaves the registry once it is ready, and its gates are deleted with it. See [Experimental features](/guides/experimental-features).
+Switching a feature off never deletes, moves or rewrites what it holds; switching it back on resumes from the same state. Features change with `coffer config set feature.<key> on|off` or `PUT /api/v1/daemon/features/{key}`; a pinned feature refuses the change with `409 FEATURE_PINNED`. A feature joins by adding one registry entry and gating its surfaces through it; it leaves (graduates) once it is ready, by deleting its entry, every gate that names it, and, through a migration, its stored switch. See [Experimental features](/guides/experimental-features).
 
 ## Signing, notarisation and updates
 

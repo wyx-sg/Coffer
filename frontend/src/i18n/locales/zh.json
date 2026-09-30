@@ -925,16 +925,6 @@
         "setting": "在这台机器上设置",
         "channel": "{{channel}} 渠道的默认值"
       },
-      "names": {
-        "vault_sync": "同步",
-        "knowledge": "知识",
-        "memory": "记忆"
-      },
-      "descriptions": {
-        "vault_sync": "把这个 vault 与你自有的 git 远端双向同步。",
-        "knowledge": "~/.coffer/knowledge/ 下供智能体阅读的文档集合。",
-        "memory": "从各智能体自己的存储聚合来的记忆，以及投递它的 hook。"
-      },
       "offTitle": "{{name}}已关闭",
       "offBody": "{{name}}是实验功能，在这台机器上已关闭。它保存的内容都没有删除——在命令行里用 coffer config set feature.{{key}} on 开启即可。"
     },

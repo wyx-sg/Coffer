@@ -302,7 +302,7 @@ def write_cached_machine_id(machine_id: str) -> None:
 # and writes it here before it answers.
 
 #: The environment variable that pins features for tests and CI,
-#: ``vault_sync=on,memory=off``. Read once, when the daemon starts.
+#: ``<key>=on,<other>=off``. Read once, when the daemon starts.
 FEATURES_ENV = "COFFER_FEATURES"
 
 _ON = frozenset({"on", "true", "1"})

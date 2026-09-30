@@ -217,7 +217,7 @@ A chat turn runs against the config directory of the registered agent of its typ
 On top of the agent's own system prompt, Coffer appends, in this order:
 
 1. For a turn from a channel: a note that the agent is on a chat channel — keep replies short, and it cannot click dialogs on your computer.
-2. For a turn from a channel, while the `memory` feature is on: the [memory](/guides/memory#in-channel-turns) index for the conversation's working directory and `global`, and where the notes are.
+2. For a turn from a channel: the [memory](/guides/memory#in-channel-turns) index for the conversation's working directory and `global`, and where the notes are.
 3. On every turn: the note naming the model Coffer put the agent on.
 
 A turn you send from the Conversations page gets no memory append; the agent receives memory through Coffer's memory hook in its own settings, when the agent is connected to Coffer.

@@ -55,7 +55,7 @@ Skills, knowledge, memory and model providers work the same way: kept once, deli
 
 ## Does Coffer change my agents' configuration files?
 
-Only when you ask it to, and each change is recorded in the audit log. Connecting an agent to Coffer writes one MCP server entry into the agent's configuration and, while the `memory` feature is on, Coffer's memory hook (four entries: session start, each prompt, and before and after each shell command) into its settings. Delivering a skill places a link to it in the agent's skills directory (for Claude Code, `~/.claude/skills`). Switching a model provider writes the provider's settings into the agent's own configuration. Coffer reads an agent's own memory files but never writes them. See [Agents](/guides/agents).
+Only when you ask it to, and each change is recorded in the audit log. Connecting an agent to Coffer writes one MCP server entry into the agent's configuration and Coffer's memory hook (four entries: session start, each prompt, and before and after each shell command) into its settings. Delivering a skill places a link to it in the agent's skills directory (for Claude Code, `~/.claude/skills`). Switching a model provider writes the provider's settings into the agent's own configuration. Coffer reads an agent's own memory files but never writes them. See [Agents](/guides/agents).
 
 ## Do I have to start the daemon myself?
 
@@ -83,15 +83,11 @@ Credentials are encrypted with Fernet in `coffer.db`. The master key lives in `~
 
 ## Can two machines share one vault?
 
-Yes, through [vault sync](/guides/vault-sync), an experimental feature. Each machine converges with a private git repository you own. Knowledge, skills and resource definitions travel. Reach (whether a resource is enabled on a machine, and for which agents), conversations and logs stay on each machine.
+Yes, through [vault sync](/guides/vault-sync). Each machine converges with a private git repository you own. Knowledge, skills and resource definitions travel. Reach (whether a resource is enabled on a machine, and for which agents), conversations and logs stay on each machine.
 
 ## Can I open the web UI from my phone or another computer?
 
 No. The daemon binds to loopback only, so its UI and API are reachable from the machine they run on and nowhere else. To reach your agents from a phone, use a [channel](/guides/channels): Telegram or SeaTalk.
-
-## Why are Sync, Knowledge and Memory missing?
-
-They are [experimental features](/guides/experimental-features), switched off by default in release builds. Turn them on under **Settings → General → Experimental features**, or with `coffer config set feature.<key> on`. Switching one off never deletes what it holds.
 
 ## Why port 8000, and can I change it?
 

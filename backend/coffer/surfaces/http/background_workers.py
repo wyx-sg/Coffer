@@ -25,7 +25,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from coffer.application.agent.transcript_warm_worker import TranscriptWarmWorker
 from coffer.application.audit_service import AuditService
 from coffer.application.engine.resolve import InternalEngineConnection
-from coffer.application.features import FeatureService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.knowledge.curate import CurationPass
 from coffer.application.knowledge.service import KnowledgeService
@@ -83,7 +82,6 @@ def start_background_workers(
     credential_store: EncryptedCredentialStore,
     master_key: MasterKeyManager,
     sync_contributions: SyncContributions,
-    features: FeatureService,
     platform: PlatformPort,
 ) -> BackgroundWorkers:
     retention_worker = RetentionWorker(retention_svc, prune_logs=prune_log_dir)
@@ -108,23 +106,20 @@ def start_background_workers(
         credential_resolver=credential_resolver,
         platform=platform,
     )
-    # Every experimental feature's pass reads its switch at the top of each
-    # round and skips it while off (spec experimental-features); the sync
-    # graph is built regardless, because curation takes its lock.
-    converge_worker = start_converge_worker(sync, sm, features)
+    converge_worker = start_converge_worker(sync, sm)
 
     # Curation: a sweep that merges each collection's inbox into its
     # documents, then carries through any document edited since it was last
     # curated.
     curation_task = start_curation_worker(
-        knowledge_service, curation_pass, guide, resource_svc, engine_config, sync, features
+        knowledge_service, curation_pass, guide, resource_svc, engine_config, sync
     )
-    distil_task = start_distil_worker(distil, resource_svc, engine_config, features)
+    distil_task = start_distil_worker(distil, resource_svc, engine_config)
     # Aggregation (spec memory "Aggregate on an interval and on demand"): a
     # catch-up pass now, then hourly. It
     # only reads the agents' own memory and only writes the derived tree, so
     # nothing here has to wait on the vault rewriters above.
-    aggregate_task = start_aggregate_worker(memory_service, engine_config, features)
+    aggregate_task = start_aggregate_worker(memory_service, engine_config)
     # The transcript summary cache's warm pass, so the first visit to an
     # agent's Conversations tab is never the one that pays the cold read.
     warm_worker, warm_task = start_transcript_warm_worker(transcript_reader, resource_svc)

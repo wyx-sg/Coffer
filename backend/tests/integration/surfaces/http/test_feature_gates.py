@@ -1,11 +1,13 @@
 """What a switched-off experimental feature closes, through the real daemon.
 
-Spec experimental-features "Close every surface of a switched-off feature",
-"Keep what a switched-off feature holds" and "Withdraw what a switched-off
-feature put in front of agents". Every test boots ``create_app`` under a
-throwaway HOME (database, knowledge and memory roots all in ``tmp_path``), and
-switches features the way a person does — over REST or the CLI — on the same
-running process, so "without a restart" is what is being exercised.
+Spec experimental-features "Close every surface of a switched-off feature" and
+"Keep what a switched-off feature holds". The registry is empty while nothing
+is experimental, so each test registers a test-only feature that owns a real
+route prefix (and, where it matters, a real kind or a built-in tool) before it
+boots ``create_app`` under a throwaway HOME (database, knowledge and memory
+roots all in ``tmp_path``). Features are switched the way a person does — over
+REST or the CLI — on the same running process, so "without a restart" is what
+is being exercised.
 """
 
 from __future__ import annotations
@@ -22,19 +24,19 @@ from starlette.testclient import TestClient
 from typer.testing import CliRunner
 
 import coffer.surfaces.cli._client as cli_client
-from coffer.application.knowledge.guide_render import GUIDE_SKILL_NAME
-from coffer.domain.features import EXPERIMENTAL_FEATURES
-from coffer.domain.memory.delivery import MARKER
+from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
+from coffer.domain import features as domain_features
 from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.surfaces.cli.main import app as cli_app
+from coffer.surfaces.http import app as app_module
 from coffer.surfaces.http import feature_dependencies
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from tests.support.features import FAKE_FEATURE, register_fake_feature
 
 _TOKEN = "test-token-feature-gates"
 _HEADERS = {"X-Coffer-Token": _TOKEN, "X-Coffer-Actor": "user"}
-_CATALOGUE_HEADING = "## What is in this developer's knowledge"
 
 runner = CliRunner()
 
@@ -48,15 +50,22 @@ def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[pa
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59780")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59789")
     monkeypatch.delenv(daemon_config.FEATURES_ENV, raising=False)
-    # Connecting an agent writes the gateway entry first, so it needs a shim
-    # to point at.
-    shim = tmp_path / "coffer-mcp-shim"
-    shim.write_text("#!/bin/sh\n", encoding="utf-8")
-    monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(shim))
     (tmp_path / ".coffer").mkdir(parents=True, exist_ok=True)
     prior = feature_dependencies._feature_service
     yield tmp_path
     feature_dependencies._feature_service = prior
+
+
+@pytest.fixture
+def owns_sync(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fake feature that owns the sync routes."""
+    register_fake_feature(monkeypatch, route_prefixes=("/api/v1/sync",))
+
+
+@pytest.fixture
+def owns_knowledge(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fake feature that owns the knowledge routes and the ``knowledge`` kind."""
+    register_fake_feature(monkeypatch, route_prefixes=("/api/v1/knowledge",), kinds=("knowledge",))
 
 
 def _client() -> TestClient:
@@ -89,24 +98,29 @@ def _assert_disabled(r: Any, key: str) -> None:
     spec="experimental-features",
     scenario="a switched-off feature's routes answer feature disabled",
 )
-def test_a_switched_off_features_routes_answer_feature_disabled(home: pathlib.Path) -> None:
-    daemon_config.write_feature_setting("knowledge", False)
+def test_a_switched_off_features_routes_answer_feature_disabled(
+    home: pathlib.Path, owns_sync: None
+) -> None:
+    daemon_config.write_feature_setting(FAKE_FEATURE, False)
     with _client() as c:
-        _assert_disabled(c.get("/api/v1/knowledge/collections"), "knowledge")
-        # Only the feature that is off: the other two still answer.
+        _assert_disabled(c.get("/api/v1/sync/status"), FAKE_FEATURE)
+        # Only the feature's own prefix: everything else still answers.
+        assert c.get("/api/v1/knowledge/collections").status_code == 200
         assert c.get("/api/v1/memory/partitions").status_code == 200
-        assert c.get("/api/v1/sync/status").status_code == 200
 
 
-def test_every_route_under_a_features_prefixes_is_gated(home: pathlib.Path) -> None:
+def test_every_route_under_a_features_prefixes_is_gated(
+    home: pathlib.Path, owns_sync: None
+) -> None:
     """The registry's prefixes and the gated routers agree, route for route:
     no route of a switched-off feature is left answering."""
-    for feature in EXPERIMENTAL_FEATURES:
+    registered = domain_features.EXPERIMENTAL_FEATURES
+    for feature in registered:
         daemon_config.write_feature_setting(feature.key, False)
     with _client() as c:
         paths: dict[str, dict[str, Any]] = c.get("/api/v1/openapi.json").json()["paths"]
         checked = 0
-        for feature in EXPERIMENTAL_FEATURES:
+        for feature in registered:
             for path, operations in paths.items():
                 if not path.startswith(feature.route_prefixes):
                     continue
@@ -115,11 +129,20 @@ def test_every_route_under_a_features_prefixes_is_gated(home: pathlib.Path) -> N
                     r = c.request(method.upper(), url, json={})
                     _assert_disabled(r, feature.key)
                     checked += 1
-        assert checked > 30
-        # A route outside every feature is untouched by the switches: the
-        # agent-registry's native-memory surface is the agent's, not Coffer's
-        # memory layer's.
+        assert checked > 5
         assert c.get("/api/v1/agents").status_code == 200
+
+
+def test_an_empty_registry_gates_no_route(home: pathlib.Path) -> None:
+    """Sync, knowledge and memory graduated: their routes answer whatever a
+    stored setting left behind says."""
+    for key in ("vault_sync", "knowledge", "memory"):
+        daemon_config.write_feature_setting(key, False)
+    with _client() as c:
+        assert c.get("/api/v1/sync/status").status_code == 200
+        assert c.get("/api/v1/knowledge/collections").status_code == 200
+        assert c.get("/api/v1/memory/partitions").status_code == 200
+        assert c.get("/api/v1/daemon/features").json()["features"] == []
 
 
 @pytest.mark.acceptance(
@@ -127,19 +150,19 @@ def test_every_route_under_a_features_prefixes_is_gated(home: pathlib.Path) -> N
     scenario="switching a feature on opens its surfaces without a restart",
 )
 def test_switching_a_feature_on_opens_its_surfaces_without_a_restart(
-    home: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    home: pathlib.Path, monkeypatch: pytest.MonkeyPatch, owns_sync: None
 ) -> None:
-    daemon_config.write_feature_setting("vault_sync", False)
+    daemon_config.write_feature_setting(FAKE_FEATURE, False)
     with _client() as c:
         _patch_cli(monkeypatch, c)
-        _assert_disabled(c.get("/api/v1/sync/status"), "vault_sync")
+        _assert_disabled(c.get("/api/v1/sync/status"), FAKE_FEATURE)
 
-        res = runner.invoke(cli_app, ["config", "set", "feature.vault_sync", "on"])
+        res = runner.invoke(cli_app, ["config", "set", f"feature.{FAKE_FEATURE}", "on"])
         assert res.exit_code == 0, res.output
 
         # Same process, same app: no restart between the switch and the answer.
         assert c.get("/api/v1/sync/status").status_code == 200
-    assert _daemon_config(home)["features"]["vault_sync"] is True
+    assert _daemon_config(home)["features"][FAKE_FEATURE] is True
 
 
 # --- CLI ----------------------------------------------------------------------
@@ -190,16 +213,16 @@ def _patch_cli(monkeypatch: pytest.MonkeyPatch, c: TestClient) -> None:
     scenario="a switched-off feature's command says how to switch it on",
 )
 def test_a_switched_off_features_command_says_how_to_switch_it_on(
-    home: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    home: pathlib.Path, monkeypatch: pytest.MonkeyPatch, owns_sync: None
 ) -> None:
-    daemon_config.write_feature_setting("vault_sync", False)
+    daemon_config.write_feature_setting(FAKE_FEATURE, False)
     with _client() as c:
         _patch_cli(monkeypatch, c)
         res = runner.invoke(cli_app, ["sync", "status"])
     assert res.exit_code == 1, res.output
     lines = [line for line in res.output.splitlines() if line.strip()]
     assert len(lines) == 1, res.output
-    assert "coffer config set feature.vault_sync on" in lines[0]
+    assert f"coffer config set feature.{FAKE_FEATURE} on" in lines[0]
 
 
 # --- MCP ----------------------------------------------------------------------
@@ -226,14 +249,43 @@ def _unknown_as(called: Any, unknown: Any, name: str) -> bool:
     return json.dumps(called).replace(name, "coffer__nosuchtool") == json.dumps(unknown)
 
 
+async def _fake_handler(_args: dict[str, Any]) -> dict[str, Any]:
+    return {"content": [{"type": "text", "text": "fake"}]}
+
+
+@pytest.fixture
+def fake_tool(monkeypatch: pytest.MonkeyPatch) -> str:
+    """A fake feature owning one built-in tool, registered into the daemon's
+    own tool registry as it is built. Returns the tool's listed name."""
+    register_fake_feature(monkeypatch, route_prefixes=())
+
+    class _WithFakeTool(BuiltinToolRegistry):
+        def __init__(self, **kwargs: Any) -> None:
+            super().__init__(**kwargs)
+            self.register(
+                BuiltinTool(
+                    name="fake_tool",
+                    description="A tool the fake feature owns.",
+                    input_schema={"type": "object", "properties": {}},
+                    handler=_fake_handler,
+                    feature=FAKE_FEATURE,
+                )
+            )
+
+    monkeypatch.setattr(app_module, "BuiltinToolRegistry", _WithFakeTool)
+    return "coffer__fake_tool"
+
+
 @pytest.mark.acceptance(
     spec="experimental-features",
     scenario="a switched-off feature's tool leaves the tool list",
 )
-def test_a_switched_off_features_tool_leaves_the_tool_list(home: pathlib.Path) -> None:
+def test_a_switched_off_features_tool_leaves_the_tool_list(
+    home: pathlib.Path, fake_tool: str
+) -> None:
     with _client() as c:
         session = _mcp(c, None, "initialize", {}).headers["mcp-session-id"]
-        assert "coffer__write" in _tool_names(c, session)
+        assert fake_tool in _tool_names(c, session)
         unknown = _mcp(
             c, session, "tools/call", {"name": "coffer__nosuchtool", "arguments": {}}
         ).json()
@@ -241,22 +293,17 @@ def test_a_switched_off_features_tool_leaves_the_tool_list(home: pathlib.Path) -
         # An unknown tool is refused, not served.
         assert "error" in unknown or unknown["result"].get("isError") is True, unknown
 
-        _switch(c, "knowledge", False)
+        _switch(c, FAKE_FEATURE, False)
         names = _tool_names(c, session)
-        assert "coffer__write" not in names
-        # Only the knowledge feature's tool; the always-on one stays.
-        assert "coffer__search_tools" in names
+        assert fake_tool not in names
+        # Only the feature's tool; the always-on ones stay.
+        assert {"coffer__search_tools", "coffer__write"} <= names
 
-        called = _mcp(
-            c,
-            session,
-            "tools/call",
-            {"name": "coffer__write", "arguments": {"collection": "x", "title": "t"}},
-        ).json()
-        assert _unknown_as(called, unknown, "coffer__write")
+        called = _mcp(c, session, "tools/call", {"name": fake_tool, "arguments": {}}).json()
+        assert _unknown_as(called, unknown, fake_tool)
 
-        _switch(c, "knowledge", True)
-        assert "coffer__write" in _tool_names(c, session)
+        _switch(c, FAKE_FEATURE, True)
+        assert fake_tool in _tool_names(c, session)
 
 
 @pytest.mark.acceptance(
@@ -272,10 +319,7 @@ def test_the_gateway_advertises_exactly_two_built_in_tools(home: pathlib.Path) -
             c, session, "tools/call", {"name": "coffer__nosuchtool", "arguments": {}}
         ).json()
 
-        _switch(c, "knowledge", True)
         assert builtins(c, session) == {"coffer__search_tools", "coffer__write"}
-        _switch(c, "knowledge", False)
-        assert builtins(c, session) == {"coffer__search_tools"}
 
         for name, arguments in (
             ("coffer__recall", {"query": "x"}),
@@ -290,9 +334,11 @@ def test_the_gateway_advertises_exactly_two_built_in_tools(home: pathlib.Path) -
 
 @pytest.mark.acceptance(
     spec="experimental-features",
-    scenario="switching knowledge off and on keeps the collections",
+    scenario="switching a feature off and on keeps what it holds",
 )
-def test_switching_knowledge_off_and_on_keeps_the_collections(home: pathlib.Path) -> None:
+def test_switching_a_feature_off_and_on_keeps_what_it_holds(
+    home: pathlib.Path, owns_knowledge: None
+) -> None:
     with _client() as c:
         r = c.post("/api/v1/knowledge/collections", json={"name": "research"})
         assert r.status_code == 201, r.text
@@ -310,193 +356,33 @@ def test_switching_knowledge_off_and_on_keeps_the_collections(home: pathlib.Path
         tree_before = c.get("/api/v1/knowledge/tree").json()
         files_before = sorted(p.relative_to(home) for p in (home / "knowledge").rglob("*"))
 
-        _switch(c, "knowledge", False)
-        _assert_disabled(c.get("/api/v1/knowledge/collections"), "knowledge")
+        _switch(c, FAKE_FEATURE, False)
+        _assert_disabled(c.get("/api/v1/knowledge/collections"), FAKE_FEATURE)
         assert sorted(p.relative_to(home) for p in (home / "knowledge").rglob("*")) == files_before
 
-        _switch(c, "knowledge", True)
+        _switch(c, FAKE_FEATURE, True)
         assert c.get("/api/v1/knowledge/collections").json() == before
         assert c.get("/api/v1/knowledge/tree").json() == tree_before
 
 
-# --- what was put in front of agents -----------------------------------------
-
-
-def _hook_installed(config_dir: pathlib.Path) -> bool:
-    settings = config_dir / "settings.json"
-    return settings.is_file() and f": {MARKER}" in settings.read_text()
-
-
-def _agent(
-    c: TestClient, home: pathlib.Path, agent_type: str = "claude_code"
-) -> tuple[str, pathlib.Path]:
-    config_dir = home / f"{agent_type}-config"
-    config_dir.mkdir()
-    r = c.post("/api/v1/agents", json={"type": agent_type, "config_dir": str(config_dir)})
-    assert r.status_code == 201, r.text
-    return str(r.json()["uid"]), config_dir
-
-
-def _agent_with_hook(c: TestClient, home: pathlib.Path) -> tuple[str, pathlib.Path]:
-    """A Claude Code agent connected to Coffer, which with memory on puts the
-    delivery hook in its settings (spec agent-registry "Connect an agent to
-    Coffer in one action")."""
-    uid, config_dir = _agent(c, home)
-    r = c.post(f"/api/v1/agents/{uid}/coffer-connection")
-    assert r.status_code == 200, r.text
-    assert _hook_installed(config_dir)
-    return uid, config_dir
-
-
-@pytest.mark.acceptance(
-    spec="experimental-features",
-    scenario="switching memory off removes the delivery hook",
-)
-def test_switching_memory_off_removes_the_delivery_hook(home: pathlib.Path) -> None:
-    with _client() as c:
-        _uid, config_dir = _agent_with_hook(c, home)
-        # One agent per type: the one left unconnected is Codex.
-        _other_uid, other_dir = _agent(c, home, "codex")
-
-        _switch(c, "memory", False)
-        assert not _hook_installed(config_dir)
-
-        _switch(c, "memory", True)
-        assert _hook_installed(config_dir)
-        assert not _hook_installed(other_dir)
-
-
-def test_the_hook_comes_back_across_a_restart(home: pathlib.Path) -> None:
-    """Off, restart, on: the connected agents are read from their own files, so
-    nothing has to be remembered across the restart."""
-    with _client() as c:
-        _uid, config_dir = _agent_with_hook(c, home)
-        _switch(c, "memory", False)
-    with _client() as c:
-        assert not _hook_installed(config_dir)
-        _switch(c, "memory", True)
-        assert _hook_installed(config_dir)
-
-
-def test_switching_memory_on_skips_a_disconnected_agent(home: pathlib.Path) -> None:
-    """Disconnected while memory was off: switching it on gives it nothing."""
-    with _client() as c:
-        uid, config_dir = _agent_with_hook(c, home)
-        _switch(c, "memory", False)
-        assert c.delete(f"/api/v1/agents/{uid}/coffer-connection").status_code == 200
-        _switch(c, "memory", True)
-        assert not _hook_installed(config_dir)
-
-
-def test_a_boot_with_memory_off_removes_a_hook_left_in_place(home: pathlib.Path) -> None:
-    with _client() as c:
-        _uid, config_dir = _agent_with_hook(c, home)
-    daemon_config.write_feature_setting("memory", False)
-    with _client():
-        assert not _hook_installed(config_dir)
-
-
-def _guide(home: pathlib.Path) -> str:
-    return (home / ".coffer" / "skills" / GUIDE_SKILL_NAME / "SKILL.md").read_text()
-
-
-@pytest.mark.acceptance(
-    spec="experimental-features",
-    scenario="switching knowledge off drops the catalogue from the guide",
-)
-def test_switching_knowledge_off_drops_the_catalogue_from_the_guide(home: pathlib.Path) -> None:
-    with _client() as c:
-        r = c.post(
-            "/api/v1/knowledge/collections",
-            json={"name": "shopee", "description": "Shopee's account system."},
-        )
-        assert r.status_code == 201, r.text
-        assert _CATALOGUE_HEADING in _guide(home)
-        assert "### shopee" in _guide(home)
-
-        _switch(c, "knowledge", False)
-        text = _guide(home)
-        assert _CATALOGUE_HEADING not in text
-        assert "shopee" not in text
-        assert "coffer__write" not in text.split("---")[1]  # the description
-
-        _switch(c, "knowledge", True)
-        assert "### shopee" in _guide(home)
-
-
-def test_a_boot_with_knowledge_off_renders_the_guide_without_the_catalogue(
-    home: pathlib.Path,
-) -> None:
-    with _client() as c:
-        r = c.post("/api/v1/knowledge/collections", json={"name": "shopee"})
-        assert r.status_code == 201, r.text
-    daemon_config.write_feature_setting("knowledge", False)
-    with _client():
-        assert _CATALOGUE_HEADING not in _guide(home)
-
-
-# --- machine identity outlives the sync surface ----------------------------------
+# --- machine identity ---------------------------------------------------------------
 
 
 @pytest.mark.acceptance(
     spec="daemon",
     scenario="daemon status names this machine and its features",
 )
-def test_the_status_names_this_machine_while_sync_is_off(home: pathlib.Path) -> None:
-    """Machine identity is not sync's: a channel is bound to a machine whether or
-    not ``vault_sync`` is on, so the id the sync surface used to be the only
-    source of rides on the daemon's own status too."""
-    daemon_config.write_feature_setting("vault_sync", False)
+def test_the_status_names_this_machine_and_every_registered_feature(
+    home: pathlib.Path, owns_sync: None
+) -> None:
+    """Machine identity is not sync's: it rides on the daemon's own status, and
+    answers there even while a feature owning the sync routes is off."""
+    daemon_config.write_feature_setting(FAKE_FEATURE, False)
     with _client() as c:
         status = c.get("/api/v1/daemon/status", headers={"X-Coffer-Token": ""}).json()
-        _assert_disabled(c.get("/api/v1/sync/status"), "vault_sync")
+        _assert_disabled(c.get("/api/v1/sync/status"), FAKE_FEATURE)
     assert status["machine_id"] == daemon_config.read_cached_machine_id()
     assert status["machine_id"]
     assert status["machine_name"] == daemon_config.read_machine_name()
     assert status["channel"] in ("stable", "dev")
-    assert status["features"] == {"vault_sync": False, "knowledge": True, "memory": True}
-
-
-def test_a_channel_bound_here_registers_while_sync_is_off(
-    home: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    daemon_config.write_feature_setting("vault_sync", False)
-    with _client() as c:
-        _patch_cli(monkeypatch, c)
-        machine_id = c.get("/api/v1/daemon/status").json()["machine_id"]
-        (home / "cc-config").mkdir()
-        agent = c.post(
-            "/api/v1/agents",
-            json={"type": "claude_code", "config_dir": str(home / "cc-config")},
-        )
-        assert agent.status_code == 201, agent.text
-        stored = c.post("/api/v1/credentials", json={"ref": "tg-token", "value": "123:abc"})
-        assert stored.status_code == 204, stored.text
-        res = runner.invoke(
-            cli_app,
-            [
-                "channel",
-                "add",
-                "tg",
-                "--type",
-                "telegram",
-                "--bot-token-ref",
-                "tg-token",
-                "--agent",
-                "claude-code",
-            ],
-        )
-        channels = c.get("/api/v1/resources", params={"kind": "channel"}).json()
-    assert res.exit_code == 0, res.output
-    [channel] = channels["resources"]
-    assert channel["config"]["runs_on"] == machine_id
-
-
-def test_curate_owner_show_answers_while_sync_is_off(
-    home: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    daemon_config.write_feature_setting("vault_sync", False)
-    with _client() as c:
-        _patch_cli(monkeypatch, c)
-        res = runner.invoke(cli_app, ["config", "get", "engine.curate_owner", "--json"])
-    assert res.exit_code == 0, res.output
+    assert status["features"] == {FAKE_FEATURE: False}

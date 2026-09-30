@@ -29,8 +29,7 @@ Eight decisions change that architecture:
 - **The daemon made visible.** Hiding the daemon left a user unable to tell "healthy" from "not
   yet known", or to see which build and port are answering and whether it starts at login, without
   a terminal. The daemon's state becomes visible at all times; starting it stays automatic.
-- **Settings regrouped, and out of the sidebar.** The daemon gets its own tab, the Experimental
-  features card leaves with the switches it held (every flag graduates at 1.0), and Coffer's own
+- **Settings regrouped, and out of the sidebar.** The daemon gets its own tab and Coffer's own
   model becomes a section of General: machine-level configuration of Coffer itself. Settings
   is machine-level and visited rarely, so it leaves the sidebar for a modal opened from a labelled Settings row at
   the bottom of the sidebar or with ⌘,, still addressable at `/settings/<tab>`.
@@ -90,9 +89,9 @@ unarchived until that implementation lands.
   and ⌘, / Ctrl+, open it as a large modal over the current page. Each tab keeps its route
   (`/settings/<tab>`), so deep links, the palette and other pages' links open the modal over the
   page underneath, and closing it returns there.
-- Settings has five tabs: **General, Security, Data, Daemon, About**. The Experimental features
-  card leaves General and no tab replaces it; the Start at login card moves from General to
-  Daemon; Security holds machine-level items only.
+- Settings has five tabs: **General, Security, Data, Daemon, About**. General keeps the Experimental
+  features card, shown only while an experimental feature is registered; the Start at login card
+  moves from General to Daemon; Security holds machine-level items only.
 - **Coffer's model** becomes a section of Settings › General: two pickers (Engine model, Speech
   to text), each choosing a provider and then one of its models, a Test action each, and inline
   not-set / failing states. `/settings/engine` opens Settings › General.
@@ -196,9 +195,6 @@ unarchived until that implementation lands.
   Daemon, and a restart chosen there is the same restart; the shell checks for and installs
   signed updates, a third sanctioned host affordance rendered on Settings › About. The Purpose
   section's "auto-update is out of scope" is reversed with it.
-- `experimental-features`: the web UI's Experimental features card is removed and the switch
-  requirement no longer names a Settings page; a switched-off feature's notice says it is off, and
-  its pages and objects leave the command palette.
 - `knowledge`: the web UI's collection tree — its terms, Inbox, status line, Add a document and
   editor (the rest shipped with [knowledge-curate-and-history](../archive/2026-09-30-knowledge-curate-and-history/)).
 - `memory`: a partition's page has Memories (with a Retired group and learned-from agents, none of
@@ -229,8 +225,7 @@ unarchived until that implementation lands.
 - Frontend: `components/Layout.tsx`, `components/SidebarNav.tsx` (replaced), a new Secrets page,
   the agent detail page's tab set (`pages/AgentDetailPage.tsx` and `components/agents/*`), a new sidebar footer
   and command palette, `router.tsx` (index route, `/settings/*` tabs, `/settings/engine` redirect,
-  Model providers tabs), `pages/settings/*` (Daemon tab, residency card moved, Experimental
-  features card deleted),
+  Model providers tabs), `pages/settings/*` (Daemon tab, residency card moved),
   `pages/ModelProvidersPage.tsx`, the attention-dot hook generalised from `useSyncAttention`, i18n
   strings in both locales.
 - Desktop: the Tauri updater plugin with its public key in the bundle configuration, a
@@ -242,7 +237,7 @@ unarchived until that implementation lands.
   (`/daemon/status`, `/daemon/residency`, `/daemon/rotate-token`, `/daemon/features`,
   `/credentials`, the kind list routes, `/agents/{uid}/hooks`). Listing uncited secrets and the
   migration assistant arrive with their own changes.
-- Tests: web-ui, experimental-features, internal-engine, desktop-app, agent-registry,
+- Tests: web-ui, internal-engine, desktop-app, agent-registry,
   skill-manager and provider-switching acceptance markers for the new and renamed scenarios; e2e shell specs (`shell_cold_start`, `shell_settings`) and new ones
   for the palette, footer, Settings modal, Daemon tab and About tab's update states; the shell's
   `cargo test` for the update check's schedule and signature refusal.

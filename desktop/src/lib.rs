@@ -18,7 +18,6 @@
 //   * `spawn`     — start a daemon detached from the app
 //   * `restart`   — the pure restart policy: rate limit, stop-then-start
 //   * `daemon`    — the IPC commands and the detect-or-spawn policy
-//   * `sync_gate` — whether the sync surfaces exist (`vault_sync` feature)
 //   * `tray`      — system tray icon + close-to-tray logic
 //   * `tray_locale` — the interface language the tray labels itself in
 //   * `daemon_http` — JSON over loopback HTTP to the daemon
@@ -44,7 +43,6 @@ mod secrets;
 mod sidecar;
 mod spawn;
 mod sync_alert;
-mod sync_gate;
 mod sync_presentation;
 mod sync_watch;
 mod tray;

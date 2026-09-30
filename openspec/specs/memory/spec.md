@@ -327,7 +327,7 @@ For an agent the developer drives themselves, delivery MUST go through that agen
 
 Coffer's hook is **four entries**, one on each moment memory reaches a session, for both supported agents: `SessionStart` (matched on `startup|resume|clear|compact`), `UserPromptSubmit`, and `PreToolUse` and `PostToolUse` matched on the `Bash` tool. Every entry runs the same command, `coffer memory hook --agent-uid <uid> --cwd "$PWD"`, which reads the event the agent hands its hook on stdin and prints that event's JSON `hookSpecificOutput` — `additionalContext` to add context, `permissionDecision: "deny"` with a reason to hold a command — which both agents read on every event. Nothing once-per-session MAY be keyed on a process id: every session of one Codex app-server shares a parent pid, so it is keyed on the hook's `session_id`. `coffer memory context` stays the command that composes the session-start text alone.
 
-Installation MUST be an **explicit act** on Coffer's surface: connecting the agent to Coffer, of which the hook is one part (spec agent-registry "Connect an agent to Coffer in one action"), or switching `memory` on while the agent is connected. It MUST be marker-scoped, idempotent, and removable without disturbing entries Coffer did not write. An install or a remove MUST take out Coffer's marked entries on **every** event first, so an older build's entry on another event is never left behind beside the new ones. Coffer MUST NOT install the hook silently, and MUST NOT write into any file that is an agent's *memory*: a hook lives in the agent's settings, which is a different thing.
+Installation MUST be an **explicit act** on Coffer's surface: connecting the agent to Coffer, of which the hook is one part (spec agent-registry "Connect an agent to Coffer in one action"), or a person applying the missing hook's reconcile item. It MUST be marker-scoped, idempotent, and removable without disturbing entries Coffer did not write. An install or a remove MUST take out Coffer's marked entries on **every** event first, so an older build's entry on another event is never left behind beside the new ones. Coffer MUST NOT install the hook silently, and MUST NOT write into any file that is an agent's *memory*: a hook lives in the agent's settings, which is a different thing.
 
 #### Scenario: hook installation is marker-scoped and removable
 - **GIVEN** an agent whose settings file already carries a foreign hook on the same lifecycle events, other events' hooks, and unrelated top-level keys
@@ -355,7 +355,7 @@ The target therefore judges a hook by the **set of events** its entries sit on a
 
 For an agent that runs a hook only after the user has approved it (Codex), the target MUST also read whether the agent will run **every** installed entry. A current hook the agent will not run MUST be **reported, never written**, with the reason and the remedy (approve it with `/hooks` in Codex). Coffer MUST NOT write the agent's approval record: approving a hook is the user's act in the agent (spec agent-registry/codex "Leave Codex's internal-state tables untouched").
 
-With `memory` on, the hooks wanted are those of every connected agent and of every agent that already carries one. A pass MUST NOT install a hook for an agent that has none, unless it runs because `memory` was just switched on or because a person applied that item. Otherwise the missing hook is reported and the agent's connection reads partial. A repair that added the hook would be an install Coffer made silently, which "Install delivery hooks explicitly and removably" forbids.
+The hooks wanted are those of every connected agent and of every agent that already carries one. A pass — at boot or on its period — MUST NOT install a hook for an agent that has none; only a person applying that item, or connecting the agent, installs it. Otherwise the missing hook is reported and the agent's connection reads partial. A repair that added the hook would be an install Coffer made silently, which "Install delivery hooks explicitly and removably" forbids.
 
 #### Scenario: a hook whose command went stale is repaired without being asked
 - **GIVEN** an agent with Coffer's hook installed, and a Coffer build whose delivery command is no longer the one in that agent's settings file,
@@ -405,7 +405,7 @@ A REST family under `/api/v1/memory` MUST cover: list partitions and notes, show
 - **AND** `coffer memory` offers no `partitions`, `notes`, `note`, `retired`, `ls`, `read`, `distil`, `delivery`, `delivery-install` or `delivery-remove` command, and `coffer memory context` is unchanged
 
 #### Scenario: the agent's command-line view reports delivery state
-- **GIVEN** the `memory` feature on and two registered agents, one connected by `coffer agent connect <agent>` and one not
+- **GIVEN** two registered agents, one connected by `coffer agent connect <agent>` and one not
 - **WHEN** `coffer agent show <name> --json` runs for each
 - **THEN** the first's `coffer_connection` is `connected` with its `memory_hook` part installed, the second's is `disconnected`, and neither carries a last-fired time
 
@@ -488,7 +488,7 @@ Such a retirement MUST be recorded in `RETIRED.md` like any other (see "Record r
 The MCP gateway MUST expose no built-in tool for this layer: no tool that locates, reads, searches or records a note. An agent records something the way it already does, and Coffer reads it on the next pass. An agent finds a note the way it finds any file: session-start delivery (see "Deliver the index and the notes path at session start") MUST name the **absolute memory root** and state that every partition's notes are Markdown files under `<root>/<partition>/notes/`, so an agent looking for a note in a partition the session was not opened in searches that one directory with its own tools. The memory root is one directory, so one search covers every partition. On the command line `coffer path memory` prints the same root.
 
 #### Scenario: no memory tool is listed, and delivery names the memory root
-- **GIVEN** a running daemon with the `memory` feature on, a partition holding notes, and a `global` partition holding more
+- **GIVEN** a running daemon, a partition holding notes, and a `global` partition holding more
 - **WHEN** an agent lists the gateway's tools, and the session context is composed for a cwd inside that partition's repository
 - **THEN** no `coffer__recall`, no `coffer__remember` and no other memory tool is listed
 - **AND** the payload names the absolute memory root that `coffer path memory` prints, and states that each partition's notes are Markdown files under `<root>/<partition>/notes/` to be searched with the agent's own tools
@@ -636,11 +636,11 @@ Memory delivery MUST NOT be presented as the place for a rule about **every** tu
 
 #### Scenario: connecting an agent leaves its instructions files untouched
 - **GIVEN** a Claude Code agent with a `CLAUDE.md` and a Codex agent with an `AGENTS.md`
-- **WHEN** both are connected with `memory` on and every one of their hooks fires
+- **WHEN** both are connected and every one of their hooks fires
 - **THEN** both instructions files are byte-identical afterwards
 
 ### Requirement: Retrieve the notes a prompt names for a channel turn
-A **channel-driven turn** runs no hook of Coffer's, so Coffer MUST retrieve for each of its prompts itself: the prompt MUST be ranked by the same retrieval "Retrieve the notes a prompt names" defines — the same partitions, ranker, relevance floor, top three, 1,500-byte ceiling and trivial-prompt rule — with the conversation as the session, so a note is given once per conversation. What it finds MUST be added after the user's text in the prompt the agent receives, where a `UserPromptSubmit` hook's context would land; the message stored in the conversation MUST stay the user's own text. Each delivery MUST be audited as a `prompt` fire of the answering agent (see "Audit every delivery fire"). A turn the developer drives from the web page MUST NOT be ranked here, since its agent's own hook does that; the retrieval MUST stop on the next turn after the `memory` feature is switched off, and a retrieval that fails MUST cost the turn only its notes.
+A **channel-driven turn** runs no hook of Coffer's, so Coffer MUST retrieve for each of its prompts itself: the prompt MUST be ranked by the same retrieval "Retrieve the notes a prompt names" defines — the same partitions, ranker, relevance floor, top three, 1,500-byte ceiling and trivial-prompt rule — with the conversation as the session, so a note is given once per conversation. What it finds MUST be added after the user's text in the prompt the agent receives, where a `UserPromptSubmit` hook's context would land; the message stored in the conversation MUST stay the user's own text. Each delivery MUST be audited as a `prompt` fire of the answering agent (see "Audit every delivery fire"). A turn the developer drives from the web page MUST NOT be ranked here, since its agent's own hook does that, and a retrieval that fails MUST cost the turn only its notes.
 
 #### Scenario: a channel turn's prompt brings in the notes it names
 - **GIVEN** a channel-driven conversation on a registered agent in a repository whose partition holds a note about running `make verify` under Node 20, and a conversation the developer drives in the same repository

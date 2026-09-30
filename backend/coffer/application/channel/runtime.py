@@ -68,17 +68,11 @@ class ChannelRuntime:
         materialize: MaterializeFn | None = None,
         interval_seconds: float = _DEFAULT_INTERVAL_SECONDS,
         machine_id: Callable[[], Awaitable[str]] | None = None,
-        knowledge_enabled: Callable[[], bool] = lambda: True,
         on_tick: Callable[[ChannelBinding], Awaitable[None]] | None = None,
     ) -> None:
         # Handed each running channel's binding after every tick: the outbox
         # flush of spec chat "Mirror a web reply into the channel it came from".
         self._on_tick = on_tick
-        # Part of every binding's hash: a bot's command menu offers `/kb` only
-        # while knowledge is on, so switching the feature rebuilds the adapter,
-        # which registers its menu again (spec channels/telegram "Register
-        # command menus per chat scope and language").
-        self._knowledge_enabled = knowledge_enabled
         self._resources = resources
         self._factory = adapter_factory
         self._processor = processor
@@ -311,7 +305,6 @@ class ChannelRuntime:
             {
                 "config": resource.config,
                 "routing": routing.to_json() if routing else None,
-                "knowledge": self._knowledge_enabled(),
             },
             sort_keys=True,
             default=str,

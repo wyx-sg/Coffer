@@ -42,13 +42,13 @@ behind the Secrets page (uncited secrets, the migration assistant) are specified
   Skills           /skills                                              技能
   CLIs             /clis                                                命令行工具
  CONTEXT                                                               上下文
-  Knowledge        /knowledge               experimental: knowledge     知识
-  Memory           /memory                  experimental: memory        记忆
+  Knowledge        /knowledge                                           知识
+  Memory           /memory                                              记忆
  SYSTEM                                                                系统
   Secrets          /secrets                                             密钥
   Activity         /activity                                            活动
   Usage            /usage                                               用量
-  Sync             /sync                    experimental: vault_sync    同步
+  Sync             /sync                                                同步
  ─────────────────────────────────────────────────────────────────────
   footer: daemon status · ⚙ Settings (modal)   /settings/<tab>          设置
 ```
@@ -75,8 +75,8 @@ rules is deferred — so no Rules entry is specified here.
   Model tab, so there is one place to switch.
 - **Secrets sits in System**: it is shared infrastructure data cited by MCP servers, providers,
   skills and channels (decision 8).
-- **A group with no entry left hides its heading** — switching off both Knowledge and Memory
-  leaves no Context heading. *Rejected:* keeping an empty heading, which is the "soon"
+- **A group with no entry left hides its heading** — a group whose every entry belongs to a
+  switched-off experimental feature shows no heading. *Rejected:* keeping an empty heading, which is the "soon"
   placeholder the sidebar rules out.
 - **Routes do not move.** Only headings and order change, so no redirect is needed.
 
@@ -98,9 +98,10 @@ An entry whose feature is off is left out of the sidebar, its routes render the 
 and — new — its pages and objects are left out of the command palette. The registry, the order of
 decision (pin, setting, channel) and the gates are those of
 [experimental-features](../../specs/experimental-features/spec.md). The notice says the feature
-is off and links to no Settings tab, because Settings no longer lists features (decision 4). The
-spec text names today's mapping (Knowledge, Memory, Sync); a change that adds a feature to the
-registry adds its entry to that mapping and nothing else.
+is off. The registry names no feature today — Knowledge, Memory and Sync graduated with the
+`graduate-experimental-features` change — so the spec text is stated
+for a generic registered feature; a feature that joins the registry tags its entry and needs no
+change here.
 
 ### 3. Landing route
 
@@ -133,15 +134,16 @@ cannot have.
 
 | Tab | Route | Holds |
 | --- | --- | --- |
-| General | `/settings/general` | Default page size, preferred external editor |
+| General | `/settings/general` | Default page size, preferred external editor, Experimental features (only while a feature is registered) |
 | Security | `/settings/security` | Master-key location (machine-level items only) |
 | Data | `/settings/data` | Vault, Local content, History (retention, clear expired), Rebuildable cache |
 | Daemon | `/settings/daemon` | Status, restart, port, Start at login, token rotation |
 | About | `/settings/about` | Version, license, source, update check (desktop shell) |
 
-- **No Features tab.** At 1.0 every experimental feature graduates and its switch code is
-  deleted, so a Features tab would be empty; the Experimental features card leaves General with
-  nothing in its place. *Rejected:* a Features tab kept for later flags, which is the empty
+- **No Features tab.** The registry is empty now that Knowledge, Memory and Sync graduated, and
+  the mechanism stays for later features; the Experimental features card stays on General and
+  renders nothing while no feature is registered (spec experimental-features "List and switch the
+  features on the General tab"). *Rejected:* a Features tab of its own, which would be the empty
   placeholder the sidebar rules already refuse.
 - **Start at login moves to Daemon.** It is the one daemon setting, and the Daemon tab is where a
   user looks for why the daemon was or was not running. *Rejected:* leaving it on General beside

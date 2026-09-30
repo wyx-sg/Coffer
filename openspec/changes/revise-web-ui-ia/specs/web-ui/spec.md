@@ -70,9 +70,9 @@ tools and CLIs are specified by "Manage custom tools on their own page" and "Sho
 every CLI a skill requires on the CLIs page". An
 entry whose experimental feature is switched off (spec
 [experimental-features](../experimental-features/spec.md) "Close every surface of a switched-off feature")
-MUST be left out — today Knowledge for `knowledge`, Memory for `memory`, Sync for
-`vault_sync` — and MUST appear on the next render after the feature is switched
-on:
+MUST be left out, and MUST appear on the next render after the feature is
+switched on. Knowledge, Memory and Sync are ordinary entries, owned by no
+experimental feature:
 
 ```
   Overview         /                  — the landing page
@@ -108,9 +108,10 @@ on:
 - **AND** no navigation entry is Settings; a labelled Settings row sits at the bottom of the sidebar, above the daemon status
 
 #### Scenario: a switched-off feature leaves the sidebar
-- **GIVEN** `knowledge` and `vault_sync` switched off
+- **GIVEN** a sidebar entry owned by a registered experimental feature that is switched off
 - **WHEN** the app shell is rendered
-- **THEN** the sidebar lists Overview; Agents, Model providers; Conversations, Channels; MCP servers, Custom tools, Skills, CLIs; Memory; Secrets, Activity, Usage — with no Knowledge and no Sync entry
+- **THEN** the sidebar leaves that entry out and lists every other entry under its heading
+- **AND** with a registry that names no feature, the sidebar lists all fifteen entries
 
 ### Requirement: Give every scoped resource kind its own list surface
 Every scoped resource kind MUST have its own list surface, so the navigation and
@@ -183,10 +184,12 @@ MUST carry exactly five tabs, in this order, grouped by what they manage rather
 than by how Coffer is built, and MUST open on General:
 
 - **General** (`/settings/general`) — display preferences (the interface language
-  and the theme, the default page size and the preferred external editor) and
-  the **Coffer's model** section: the
+  and the theme, the default page size and the preferred external editor), the
+  **Coffer's model** section: the
   model Coffer's own engine runs on and the speech-to-text model (see "Choose
-  Coffer's model in Settings › General").
+  Coffer's model in Settings › General"), and — only while the registry names
+  an experimental feature — the Experimental features card (spec
+  [experimental-features](../experimental-features/spec.md) "List and switch the features on the General tab").
 - **Security** (`/settings/security`) — what is about this machine only: where
   the master encryption key lives, beside the database or in the OS keychain,
   and the daemon's access token (see "Show, copy and rotate the access token on
@@ -662,9 +665,9 @@ nothing. The decision and the options it was weighed against are in
 - **AND** Agents holds Agents then Model providers, Run holds Conversations then Channels, Capabilities holds MCP servers, Custom tools, Skills and CLIs, Context holds Knowledge then Memory, and System holds Secrets, Activity, Usage and Sync
 
 #### Scenario: a group with every entry switched off leaves the sidebar
-- **GIVEN** `knowledge` and `memory` both switched off
+- **GIVEN** a group whose every entry is owned by a registered experimental feature that is switched off
 - **WHEN** the app shell is rendered
-- **THEN** the sidebar shows no Context heading, and the other four headings and their entries are unchanged
+- **THEN** the sidebar shows no heading for that group, and the other headings and their entries are unchanged
 
 ### Requirement: Give each listed resource kind one sidebar entry
 Every resource kind with a list UI MUST have exactly one sidebar entry — today six
@@ -960,9 +963,9 @@ show an empty panel.
 - **AND** choosing any of them sends no request that changes state
 
 #### Scenario: the palette leaves out switched-off features
-- **GIVEN** `knowledge` switched off and a knowledge collection on disk
-- **WHEN** the user searches the palette for "knowledge" and for the collection's name
-- **THEN** neither the Knowledge page nor the collection is listed
+- **GIVEN** a registered experimental feature that is switched off, owning a sidebar entry and a kind with a resource on disk
+- **WHEN** the user searches the palette for the entry's name and for the resource's name
+- **THEN** neither the entry's page nor the resource is listed
 
 #### Scenario: the palette lists pages while objects load
 - **GIVEN** the palette opened before the object lists have answered
@@ -1052,7 +1055,7 @@ signal that has not loaded, or whose read failed, MUST leave no dot rather than
 an error in the sidebar.
 
 #### Scenario: an entry whose kind needs attention carries a dot
-- **GIVEN** `vault_sync` switched on and a sync round held for confirmation
+- **GIVEN** a sync round held for confirmation
 - **WHEN** the user is on any page other than Sync
 - **THEN** the Sync entry carries the attention dot, with an accessible name saying it needs attention
 - **AND** no other entry carries one
@@ -1433,8 +1436,8 @@ above the rows, saying that what it would report is missing. Rows MUST clear
 themselves as problems resolve: the page follows the daemon's event stream and
 rereads the list when an `attention` change arrives. **Health** follows: one
 tile per area whose backend exists and whose feature is switched on — Agents,
-Model providers, MCP servers, Skills, Channels, and Knowledge, Memory and Sync
-when their features are on — each with a status word drawn from that area's
+Model providers, MCP servers, Skills, Channels, Knowledge, Memory and Sync —
+each with a status word drawn from that area's
 attention items, a count from its own list and a one-line summary, opening the
 area's page; an area with no backend yet has no tile. Each tile loads and fails
 on its own: a failed tile says so with Retry and a link to its page while the
@@ -1464,9 +1467,9 @@ opens on connecting the agents Coffer found.
 - **THEN** the Knowledge tile says it could not load, with Retry and a link to Knowledge, and every other tile and the Needs you list render
 
 #### Scenario: overview hides an area whose backend or feature is off
-- **GIVEN** the knowledge feature switched off
+- **GIVEN** an area owned by a registered experimental feature that is switched off
 - **WHEN** the user opens Overview
-- **THEN** there is no Knowledge tile, and no tile for Custom tools or CLIs
+- **THEN** there is no tile for that area, and no tile for Custom tools or CLIs
 
 #### Scenario: a resolved problem leaves overview on its own
 - **GIVEN** Overview open with one item in Needs you

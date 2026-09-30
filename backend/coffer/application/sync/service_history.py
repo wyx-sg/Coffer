@@ -70,7 +70,7 @@ class HistoryMixin:
 
         The conflict is read off the newest round that reached the merge, not
         the newest round: one that failed before it (the network), did not run
-        (sync switched off) or stopped to ask about a join or a guard hold says
+        or stopped to ask about a join or a guard hold says
         nothing about whether the conflict was resolved, and only a round that
         converges again clears it ("once a later round converges cleanly").
         """

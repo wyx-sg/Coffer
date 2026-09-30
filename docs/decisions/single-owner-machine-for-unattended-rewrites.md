@@ -70,11 +70,6 @@ confirmation or stopped on a conflict
 deletion does meet an edit made elsewhere, the edit wins
 (spec vault-sync "Let an edit beat a curation deletion").
 
-With the `vault_sync` feature switched off, curation treats the vault as
-single-machine and reads only its own switch: no round runs, so there is no
-other machine to duplicate the work, and an owner or a hold the user cannot
-reach while sync is closed must not stall curation silently.
-
 Pros: removes the duplicate at its source; costs one field on a row that was
 already installation-wide and already synced; no coordination protocol.
 
