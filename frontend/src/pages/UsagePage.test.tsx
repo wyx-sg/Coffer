@@ -287,7 +287,7 @@ describe("subscription quota", () => {
 });
 
 describe("API-key usage", () => {
-  test("tiles, the cost chart and the by-model table; an unpriced model reads No price", async () => {
+  acceptance("provider-switching", "a model with no price reads as a dash, never zero", async () => {
     install();
     renderPage();
     const usage = usageSection();
@@ -305,7 +305,14 @@ describe("API-key usage", () => {
     const rows = within(table).getAllByRole("row");
     expect(within(rows[1]).getByText("claude-sonnet-4-5")).toBeInTheDocument();
     expect(within(rows[1]).getByText("Anthropic API")).toBeInTheDocument();
-    expect(within(rows[2]).getByText("No price")).toBeInTheDocument();
+    // No bundled price and none set on the connection: a dash, never $0.00,
+    // whose note says why and where a price is set.
+    expect(
+      within(rows[2]).getByLabelText(
+        "No price for this model: Coffer ships Anthropic’s rates only. Set a price on its connection in Model providers.",
+      ),
+    ).toHaveTextContent(/^—$/);
+    expect(within(rows[2]).queryByText("$0.00")).not.toBeInTheDocument();
     expect(within(rows[3]).getByText("Total · 7 days")).toBeInTheDocument();
     expect(
       within(usage).getByRole("link", { name: "Edit prices in Model providers" }),
