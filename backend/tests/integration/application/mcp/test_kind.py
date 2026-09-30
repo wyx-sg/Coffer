@@ -229,16 +229,14 @@ async def test_a_rename_is_refused_before_any_session_is_touched(tmp_path: Path)
         await engine.dispose()
 
 
-def test_new_mcp_server_names_are_capped_at_24_characters() -> None:
-    """The cap is a rule for NEW names (``validate_new_name``), never for the
-    name check a loaded or arriving row goes through (``validate_name``)."""
+def test_mcp_server_names_are_capped_at_24_characters() -> None:
+    """The cap is part of the kind's name rule, so it holds for every name the
+    framework validates — a registration here and one arriving with its uid."""
     mcp_kind = make_mcp_kind({})  # type: ignore[arg-type]
-    assert mcp_kind.validate_new_name is not None
     assert mcp_kind.validate_name is not None
-    mcp_kind.validate_new_name("a" * 24)
+    mcp_kind.validate_name("a" * 24)
     with pytest.raises(ValueError, match="24"):
-        mcp_kind.validate_new_name("a" * 25)
-    mcp_kind.validate_name("a" * 30)
+        mcp_kind.validate_name("a" * 25)
 
 
 def _live_fake_servers() -> set[int]:

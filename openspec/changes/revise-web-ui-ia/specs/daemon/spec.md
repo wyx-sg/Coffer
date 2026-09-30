@@ -152,7 +152,7 @@ prints the records as the route returns them. A refusal from the route MUST be p
 route's error and a non-zero exit.
 
 #### Scenario: the daemon log tail reads every writer's format
-- **GIVEN** a `daemon.log` holding Coffer's own structured JSON, a line in the format the daemon wrote before "Write one bounded daemon log in one format" was met, a uvicorn line, a colour-escaped line from an upstream, and a multi-line traceback,
+- **GIVEN** a `daemon.log` holding Coffer's own structured JSON, a uvicorn line, a `LEVEL - logger - message` line from an upstream, a colour-escaped line from an upstream, and a multi-line traceback,
 - **WHEN** `GET /api/v1/daemon/logs` is called with a token,
 - **THEN** the response is newest-first and bounded by `limit`, every record carries the time, level and logger its line actually stated, escape sequences are stripped, the traceback rides with the record that raised it, and a line no format fits is kept whole rather than dropped,
 - **AND** `level` and `since` narrow the window, while the same call with no token is rejected even though `/daemon/status` on the same router is open.

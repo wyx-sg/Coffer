@@ -135,7 +135,6 @@ function renderPage(path = `/model-providers/${UID}`) {
         <Routes>
           <Route path="/model-providers" element={<ModelProvidersPage />} />
           <Route path="/model-providers/:uid" element={<ProviderDetailPage />} />
-          <Route path="/model-providers/:uid/:tab" element={<ProviderDetailPage />} />
           <Route path="*" element={null} />
         </Routes>
         <Where />
@@ -228,7 +227,7 @@ describe("ProviderDetailPage", () => {
     async () => {
       serve(makeProvider());
       serves(chat("gpt-5", "gpt-5-codex"));
-      renderPage(`/model-providers/${UID}/models`);
+      renderPage();
       await heading();
 
       // Opening the provider IS the probe — there is no button to press.
@@ -244,7 +243,7 @@ describe("ProviderDetailPage", () => {
     serve(makeProvider({ models: [] }));
     api.update.mockResolvedValue(makeProvider());
     serves(chat("gpt-5", "gpt-5-codex"));
-    renderPage(`/model-providers/${UID}/models`);
+    renderPage();
     await screen.findByText("gpt-5-codex");
 
     expect(switchFor("gpt-5")).toBeChecked();
@@ -264,7 +263,7 @@ describe("ProviderDetailPage", () => {
         { id: "gpt-4o", modality: "text" },
         { id: "text-embedding-3-large", modality: "embedding" },
       ]);
-      renderPage(`/model-providers/${UID}/models`);
+      renderPage();
       await screen.findByText("text-embedding-3-large");
 
       // The probe's guess pre-fills each row's type.
@@ -288,7 +287,7 @@ describe("ProviderDetailPage", () => {
       { id: "gpt-5", modality: "text" },
       { id: "whisper-1", modality: "audio" },
     ]);
-    renderPage(`/model-providers/${UID}/models`);
+    renderPage();
     await screen.findByText("whisper-1");
     fireEvent.click(screen.getByRole("button", { name: "Audio" }));
     expect(screen.queryByText("gpt-5")).toBeNull();
@@ -303,7 +302,7 @@ describe("ProviderDetailPage", () => {
     async () => {
       serve(makeProvider({ models: chat("hand-typed-model") }));
       setEndpoint({ error: new ApiError("INTERNAL_ERROR", "endpoint refused") });
-      renderPage(`/model-providers/${UID}/models`);
+      renderPage();
 
       expect(await screen.findByText("Couldn't list this endpoint's models")).toBeInTheDocument();
       // The curated list survives the failed probe.
@@ -317,7 +316,7 @@ describe("ProviderDetailPage", () => {
   test("an endpoint that lists nothing says what that means", async () => {
     serve(makeProvider({ models: [] }));
     serves([], "the endpoint listed no models");
-    renderPage(`/model-providers/${UID}/models`);
+    renderPage();
     expect(await screen.findByText("This endpoint listed no models")).toBeInTheDocument();
   });
 

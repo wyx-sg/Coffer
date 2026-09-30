@@ -1,9 +1,9 @@
 """``daemon.log`` is not one format, and the reader has to survive all of them.
 
 Every fixture line here is a real shape taken from a live ``~/.coffer/logs/
-daemon.log``: Coffer's own structlog JSON, the stdlib formatter the daemon
-inherits once alembic configures logging, uvicorn's default, rich's panel
-output from an upstream MCP server — all written into the very same file. The
+daemon.log``: Coffer's own structlog JSON, uvicorn's default, a dashed
+stdlib formatter and rich's panel output from an upstream MCP server — all
+written into the very same file. The
 parser used to understand
 only the first of those, so the Activity page's time / level / logger columns
 were empty for almost every row.
@@ -35,29 +35,6 @@ def test_a_structlog_json_line_stays_its_own_dict() -> None:
     assert record["level"] == "warning"
     assert record["event"] == "auto_sync_failed"
     assert record["error"] == "git fetch failed"
-
-
-def test_the_stdlib_formatter_line_gives_up_its_level_and_logger() -> None:
-    """`%(levelname)-5.5s [%(name)s] %(message)s` — the daemon's root format
-    once a migration has run. The level arrives truncated to five characters."""
-    record = parse_log_line(
-        "WARNI [coffer.application.knowledge.skill_delivery] knowledge.skill_delivery.failed"
-    )
-    assert record["level"] == "warning"
-    assert record["logger"] == "coffer.application.knowledge.skill_delivery"
-    assert record["event"] == "knowledge.skill_delivery.failed"
-    # It carries no time of its own — that formatter prints none. Saying so is
-    # the point: the row must not claim a timestamp it never had.
-    assert "timestamp" not in record
-
-
-def test_an_info_line_keeps_its_padding_out_of_the_logger() -> None:
-    record = parse_log_line(
-        "INFO  [alembic.runtime.migration] Running upgrade 0073 -> 0074, name the machine"
-    )
-    assert record["level"] == "info"
-    assert record["logger"] == "alembic.runtime.migration"
-    assert record["event"] == "Running upgrade 0073 -> 0074, name the machine"
 
 
 def test_uvicorns_own_format_is_a_level_and_a_message() -> None:
@@ -103,7 +80,7 @@ def test_a_line_no_writer_claims_is_kept_whole() -> None:
 #: A real line: the Codex app-server colours its stderr even into a pipe, and
 #: the daemon relays it verbatim.
 _ANSI_LINE = (
-    "WARNI [coffer.infrastructure.chat.codex_app_server] codex app-server stderr: "
+    "WARNING - coffer.infrastructure.chat.codex_app_server - codex app-server stderr: "
     "\x1b[2m2026-09-14T06:53:41.166917Z\x1b[0m \x1b[31mERROR\x1b[0m "
     "\x1b[2mcodex_models_manager::cache\x1b[0m\x1b[2m:\x1b[0m failed to load models cache"
 )
@@ -133,7 +110,7 @@ def test_colour_at_the_head_of_a_line_does_not_hide_its_level() -> None:
 
 
 _TRACEBACK = [
-    "ERROR [coffer.memory.consolidate] consolidate.store.failed store=project-61Z8Q9",
+    "ERROR - coffer.memory.consolidate - consolidate.store.failed store=project-61Z8Q9",
     "Traceback (most recent call last):",
     '  File "coffer/application/memory/consolidate.py", line 159, in run',
     "    raw = await self._llm.complete(",
@@ -198,7 +175,7 @@ def test_errors_only_now_judges_every_writer_by_its_own_level() -> None:
     kept the whole file. A uvicorn INFO line is an info line."""
     assert not matches_level(parse_log_line("INFO:     Started server process [42]"), True)
     assert matches_level(parse_log_line("ERROR:    Exception in ASGI application"), True)
-    assert matches_level(parse_log_line("CRITI [coffer.daemon] out of disk"), True)
+    assert matches_level(parse_log_line("CRITICAL - coffer.daemon - out of disk"), True)
 
 
 def test_a_line_with_no_readable_level_survives_errors_only() -> None:

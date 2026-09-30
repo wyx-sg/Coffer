@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 266 operations in 26 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 265 operations in 26 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -123,7 +123,7 @@ The daemon mounts 266 operations in 26 groups. Groups follow the order the daemo
 | [mcp](#mcp) | 15 |
 | [custom-tools](#custom-tools) | 14 |
 | [knowledge](#knowledge) | 18 |
-| [memory](#memory) | 17 |
+| [memory](#memory) | 16 |
 | [agent-providers](#agent-providers) | 2 |
 | [models](#models) | 3 |
 | [chat](#chat) | 16 |
@@ -433,7 +433,6 @@ The daemon mounts 266 operations in 26 groups. Groups follow the order the daemo
 | `GET` | `/api/v1/memory/partitions/{uid}/retired` | ``RETIRED.md``, read back — newest first. |
 | `GET` | `/api/v1/memory/partitions/{uid}/files` | The partition's own directory, as a read-only tree. |
 | `GET` | `/api/v1/memory/partitions/{uid}/files/content` | One file out of the partition's directory. |
-| `POST` | `/api/v1/memory/context` | Compose the session-start payload for one directory. |
 | `POST` | `/api/v1/memory/hook` | Answer one hook fire; every fire that delivers something is audited. |
 | `GET` | `/api/v1/memory/triggers` | List Triggers |
 | `POST` | `/api/v1/memory/triggers` | Add Trigger |

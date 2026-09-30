@@ -177,7 +177,7 @@ async def test_errors_only_reads_every_writers_own_level(monkeypatch, tmp_path) 
         [
             "INFO - mcp_atlassian.utils.toolsets - Starting toolsets",
             "ERROR - mcp_atlassian.server - failed to serve incoming request",
-            "INFO  [alembic.runtime.migration] Context impl SQLiteImpl.",
+            "INFO - alembic.runtime.migration - Context impl SQLiteImpl.",
             "ERROR:    ASGI callable returned without completing response.",
         ],
     )
@@ -201,7 +201,7 @@ async def test_every_format_in_the_file_fills_the_three_columns(monkeypatch, tmp
         tmp_path,
         [
             "[09/10/26 17:53:12] INFO     Starting MCP server 'Atlassian MCP'",
-            "WARNI [coffer.application.knowledge.skill_delivery] knowledge.skill_delivery.failed",
+            "WARNING - coffer.application.knowledge.skill_delivery - skill_delivery.failed",
             "ERROR:    ASGI callable returned without completing response.",
             "WARNING - mcp_atlassian.utils.toolsets - TOOLSETS is not set",
         ],
@@ -231,7 +231,7 @@ async def test_a_colour_escaped_line_arrives_without_escapes(monkeypatch, tmp_pa
         monkeypatch,
         tmp_path,
         [
-            "WARNI [coffer.infrastructure.chat.codex_app_server] codex app-server stderr: "
+            "WARNING - coffer.infrastructure.chat.codex_app_server - codex app-server stderr: "
             "\x1b[31mERROR\x1b[0m \x1b[2mcodex_models_manager::cache\x1b[0m: failed to load"
         ],
     )
@@ -253,7 +253,7 @@ async def test_a_traceback_rides_with_the_record_that_raised(monkeypatch, tmp_pa
         monkeypatch,
         tmp_path,
         [
-            "ERROR [coffer.memory.consolidate] consolidate.store.failed store=project-61Z8Q9",
+            "ERROR - coffer.memory.consolidate - consolidate.store.failed store=project-61Z8Q9",
             "Traceback (most recent call last):",
             '  File "coffer/application/memory/consolidate.py", line 159, in run',
             "openai.RateLimitError: Error code: 429 - rate limit reached",

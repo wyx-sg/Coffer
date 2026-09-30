@@ -1,13 +1,12 @@
 """FastAPI dependency providers for the one ``memory`` kind.
 
 Same ``set_*`` / ``get_*`` singleton shape as ``surfaces.http.dependencies``,
-typed concretely: the derived-tree service and the explicit-install delivery
-half.
+typed concretely: the derived-tree service, the hook service that answers
+every delivery fire, and the trigger and delivery-stats services.
 """
 
 from __future__ import annotations
 
-from coffer.application.memory.delivery import DeliveryService
 from coffer.application.memory.delivery_stats import DeliveryStatsService
 from coffer.application.memory.hook_service import MemoryHookService
 from coffer.application.memory.service import MemoryService
@@ -27,22 +26,6 @@ def get_memory_service() -> MemoryService:
     if _memory_service is None:
         raise RuntimeError("memory service not initialised")
     return _memory_service
-
-
-_memory_delivery_service: DeliveryService | None = None
-
-
-def set_memory_delivery_service(svc: DeliveryService) -> None:
-    """Called by the composition root once on startup."""
-    global _memory_delivery_service
-    _memory_delivery_service = svc
-
-
-def get_memory_delivery_service() -> DeliveryService:
-    """FastAPI Depends() target."""
-    if _memory_delivery_service is None:
-        raise RuntimeError("memory delivery service not initialised")
-    return _memory_delivery_service
 
 
 _memory_hook_service: MemoryHookService | None = None

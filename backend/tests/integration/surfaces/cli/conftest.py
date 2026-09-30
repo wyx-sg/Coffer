@@ -46,6 +46,7 @@ from coffer.surfaces.http.dependencies import (
 )
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
+from tests.support.no_approvals import router as no_approvals_router
 
 # Re-export the MCP daemon fixture so both test_mcp_cmd.py and
 # test_mcp_caps_cmd.py can request it by name (pytest resolves fixtures from
@@ -116,6 +117,7 @@ def _build_app(tmp_path) -> tuple[FastAPI, object]:  # type: ignore[type-ignore]
     err_handlers.register(app)
     app.include_router(daemon_router)
     app.include_router(resource_router)
+    app.include_router(no_approvals_router)
     app.include_router(audit_router)
     app.include_router(retention_router)
 

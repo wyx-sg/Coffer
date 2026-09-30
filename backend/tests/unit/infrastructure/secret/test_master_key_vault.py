@@ -13,7 +13,7 @@ import pathlib
 import pytest
 from cryptography.fernet import Fernet
 
-from coffer.domain.secret_errors import MasterKeyConflict, SecretLocked
+from coffer.domain.secret_errors import SecretLocked
 from coffer.infrastructure.secret.build_identity import keychain_access_group
 from coffer.infrastructure.secret.master_key import KEYCHAIN_REF, MasterKeyManager
 from coffer.infrastructure.secret.master_key_backends import (
@@ -75,49 +75,32 @@ class _FakeSecItem:
 
 
 @pytest.mark.acceptance(
-    spec="secret", scenario="a signed build moves a file key into its access group"
+    spec="secret", scenario="a signed build keeps its key in its access group only"
 )
-def test_a_signed_build_moves_the_file_key_into_the_vault(tmp_path: pathlib.Path) -> None:
+def test_a_signed_build_keeps_the_key_in_the_vault_only(tmp_path: pathlib.Path) -> None:
     key_path = tmp_path / "master.key"
-    key = Fernet.generate_key()
-    key_path.write_bytes(key)
     vault = InMemoryMasterKeyBackend()
     mgr = MasterKeyManager(key_path=key_path, keyring=_Keyring(), vault=vault)
 
-    assert mgr.resolve(allow_create=False) == key
-    assert vault.key == key and not key_path.exists()
+    created = mgr.resolve(allow_create=True)
+    assert created is not None and vault.key == created
+    assert not key_path.exists()
     assert mgr.location == "keychain_access_group" and not mgr.development
-    assert mgr.migrated_from == "file"
     with pytest.raises(SecretLocked):
         mgr.relocate("file")
 
 
-def test_a_legacy_keychain_key_moves_too_and_a_fresh_store_creates_in_the_vault(
+def test_a_signed_build_reads_neither_the_file_nor_the_login_keychain(
     tmp_path: pathlib.Path,
 ) -> None:
-    kr = _Keyring()
-    key = Fernet.generate_key()
-    kr.set(KEYCHAIN_REF, key.decode())
-    vault = InMemoryMasterKeyBackend()
-    assert MasterKeyManager(tmp_path / "m.key", kr, vault=vault).resolve(allow_create=False) == key
-    assert kr.store == {} and vault.key == key
-
-    empty = InMemoryMasterKeyBackend()
-    created = MasterKeyManager(tmp_path / "n.key", _Keyring(), vault=empty).resolve(
-        allow_create=True
-    )
-    assert created is not None and empty.key == created
-    assert not (tmp_path / "n.key").exists()
-
-
-def test_two_different_keys_stop_the_start_naming_both(tmp_path: pathlib.Path) -> None:
     key_path = tmp_path / "master.key"
     key_path.write_bytes(Fernet.generate_key())
+    kr = _Keyring()
+    kr.set(KEYCHAIN_REF, Fernet.generate_key().decode())
     vault = InMemoryMasterKeyBackend()
-    vault.key = Fernet.generate_key()
-    with pytest.raises(MasterKeyConflict, match="two different master keys"):
-        MasterKeyManager(key_path, _Keyring(), vault=vault).resolve(allow_create=False)
-    assert key_path.exists()
+
+    assert MasterKeyManager(key_path, kr, vault=vault).resolve(allow_create=False) is None
+    assert vault.key is None and key_path.exists() and KEYCHAIN_REF in kr.store
 
 
 def test_an_import_keeps_the_replaced_key_in_a_second_item(tmp_path: pathlib.Path) -> None:

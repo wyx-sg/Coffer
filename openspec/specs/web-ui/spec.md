@@ -179,18 +179,6 @@ on the Agents surface. Agents live at `/agents` (list) and `/agents/:uid`
 - **THEN** the app lands on `/agents`
 - **AND** the `/mcp-servers` list asks only for MCP servers, so no agent appears there
 
-### Requirement: Redirect legacy resource paths
-The legacy path `/resources` MUST resolve as a redirect to the MCP server
-surface rather than as a "page not found" view. Name-based detail URLs are not
-translated: every detail route is addressed by the resource's immutable `uid`,
-and translating an old name would need the lookup by name that addressing
-removed.
-
-#### Scenario: legacy resource paths redirect instead of 404ing
-- **GIVEN** a user follows an old bookmark to `/resources`
-- **WHEN** the route resolves
-- **THEN** the app redirects to the MCP server surface and no "page not found" view is shown
-
 ### Requirement: Use one shared table for every list surface
 Every list surface — agents, MCP servers, skills, knowledge, memory, model
 providers, channels, each Activity tab, Sync's Runs tab — MUST use one shared
@@ -490,7 +478,7 @@ capability, duration and outcome; a log record's level, logger and message.
 - **AND** a change reads as a plain-language line, not a raw event code
 
 #### Scenario: the daemon tab reads every writer in the log
-- **GIVEN** `daemon.log` holds lines from several writers at once — Coffer's own JSON, the format the daemon itself wrote before [daemon](../daemon/spec.md) "Write one bounded daemon log in one format" was met, uvicorn and rich — with a colour-escaped line among them and a traceback written under the record that raised it
+- **GIVEN** `daemon.log` holds lines from several writers at once — Coffer's own JSON, an upstream's `LEVEL - logger - message` lines, uvicorn and rich — with a colour-escaped line among them and a traceback written under the record that raised it
 - **WHEN** the user opens the Daemon tab
 - **THEN** each row carries the time, level and logger its own line stated, and nothing carries a time or a level it never stated
 - **AND** no message renders a terminal escape sequence as text
@@ -553,15 +541,6 @@ fails CI rather than showing a reader a raw `resource_enabled`.
 - **WHEN** each is looked up in the English and the 中文 strings
 - **THEN** each has a plain-language line in both locales
 - **AND** a change of that type renders as its line rather than as the raw event code
-
-### Requirement: Redirect the legacy Activity paths
-The legacy `/audit` and `/observability` paths MUST redirect to `/activity`
-rather than resolving to a "page not found" view.
-
-#### Scenario: legacy /audit redirects to activity
-- **GIVEN** a user follows an old bookmark to `/audit`
-- **WHEN** the route resolves
-- **THEN** the app redirects to `/activity` and no "page not found" view is shown
 
 ### Requirement: Organise Settings into five tabs
 Settings MUST carry exactly five tabs, in this order, grouped by what they

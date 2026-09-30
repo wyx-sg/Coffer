@@ -17,16 +17,13 @@ resolves back to "file" with a stale-but-identical keychain copy.
 That pair is the **development** arrangement. A signed release hands the
 manager a ``vault`` — the Keychain access-group backend of
 :mod:`master_key_backends` — and then the key lives there and nowhere else
-(ADR master-key-lives-in-the-macos-keychain): a key found in the file or the
-legacy keychain item is moved into the vault at the first start, written, read
-back and compared before its source is deleted, and relocating back to a file
-is refused. Which arrangement a daemon runs is decided by how it was built
+(ADR master-key-lives-in-the-macos-keychain), and relocating it to a file is
+refused. Which arrangement a daemon runs is decided by how it was built
 (``build_identity``), never by a setting.
 """
 
 from __future__ import annotations
 
-import hashlib
 import os
 import pathlib
 from collections.abc import Callable
@@ -36,7 +33,6 @@ from typing import Literal, Protocol
 from cryptography.fernet import Fernet
 
 from coffer.domain.errors import MasterKeyMissing, SecretLocked
-from coffer.domain.secret_errors import MasterKeyConflict
 from coffer.infrastructure.secret.master_key_backends import MasterKeyBackend
 
 KEYCHAIN_REF = "master-key"
@@ -67,8 +63,6 @@ class MasterKeyManager:
         self._vault_backup = vault_backup
         self._location: StorageLocation | None = None
         self._key: bytes | None = None
-        #: Where a key was moved from into the vault at this start, if it was.
-        self.migrated_from: str | None = None
 
     @property
     def location(self) -> StorageLocation | None:
@@ -122,7 +116,10 @@ class MasterKeyManager:
         vault-sync "Report refs without a key as locked") uses this.
         """
         if self._vault is not None:
-            return self._lookup_vault(self._vault)
+            in_vault = self._vault.read()
+            if in_vault is not None:
+                self._location = "keychain_access_group"
+            return in_vault
         if self._key_path.exists():
             key = self._key_path.read_bytes().strip()
             self._location = "file"
@@ -132,39 +129,6 @@ class MasterKeyManager:
             self._location = "keychain"
             return stored.encode()
         return None
-
-    def _lookup_vault(self, vault: MasterKeyBackend) -> bytes | None:
-        """The vault's key, moving a development-era key into it first.
-
-        A source that agrees with the vault is simply deleted (an earlier move
-        was interrupted after the write); one that disagrees stops the start,
-        naming both fingerprints, rather than choosing between two keys.
-        """
-        in_vault = vault.read()
-        file_key = self._key_path.read_bytes().strip() if self._key_path.exists() else None
-        legacy = self._keyring.get(KEYCHAIN_REF)
-        legacy_key = legacy.encode() if legacy else None
-        for source, key in (("file", file_key), ("keychain", legacy_key)):
-            if key is None:
-                continue
-            if in_vault is None:
-                vault.write(key)
-                if vault.read() != key:
-                    raise SecretLocked("the Keychain write of the master key could not be verified")
-                in_vault = key
-                self.migrated_from = source
-            elif in_vault != key:
-                raise MasterKeyConflict(
-                    f"two different master keys: the Keychain holds {_fp(in_vault)}, the "
-                    f"{source} holds {_fp(key)}; restore the one that opens your secrets"
-                )
-            if source == "file":
-                self._key_path.unlink(missing_ok=True)
-            else:
-                self._keyring.delete(KEYCHAIN_REF)
-        if in_vault is not None:
-            self._location = "keychain_access_group"
-        return in_vault
 
     def _create(self) -> bytes:
         key = Fernet.generate_key()
@@ -257,7 +221,3 @@ class MasterKeyManager:
         fd = os.open(self._key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "wb") as f:
             f.write(key)
-
-
-def _fp(key: bytes) -> str:
-    return hashlib.sha256(key).hexdigest()[:12]

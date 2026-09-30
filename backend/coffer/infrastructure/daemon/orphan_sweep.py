@@ -50,8 +50,7 @@ def record_spawn(server_uid: str, pid: int, command_line: list[str]) -> Path:
     between. The uid is also a safe path segment by construction, where a name is
     only a safe one by a rule this module would otherwise have to trust.
 
-    A file written by an older Coffer carries ``server`` (a name) instead of
-    ``server_uid``; nothing about reaping depends on either field, because
+    Nothing about reaping depends on ``server_uid``, because
     :func:`reap_pidfile` matches on pid + command line. The key is read only to
     say which server was reaped in the log.
     """

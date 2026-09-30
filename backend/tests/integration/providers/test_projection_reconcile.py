@@ -185,9 +185,9 @@ def _edit_settings(path: pathlib.Path, **changes: object) -> None:
     ("edit", "param"),
     [
         ({"env__ANTHROPIC_BASE_URL": "https://elsewhere.example/v1"}, "env.ANTHROPIC_BASE_URL"),
-        # A command an older build wrote, or one a hand-edit changed: still
-        # "present" to a presence test, and still not what Coffer writes now.
-        ({"apiKeyHelper": "coffer provider key --connection-uid 0"}, "apiKeyHelper"),
+        # A command a hand-edit changed: still "present" to a presence test,
+        # and still not what Coffer writes now.
+        ({"apiKeyHelper": "coffer proxy token --agent-uid 0"}, "apiKeyHelper"),
     ],
     ids=["base_url", "api_key_helper"],
 )
@@ -330,22 +330,6 @@ async def test_a_missing_model_catalogue_is_drift_and_is_rewritten(codex: _Env) 
     assert result.change.difference.changed_params == (f"file:{CODEX_MODEL_CATALOG_FILENAME}",)
     assert result.outcome is Outcome.APPLIED
     assert catalog.read_text(encoding="utf-8") == written
-
-
-@pytest.mark.acceptance(
-    spec="provider-switching", scenario="a leftover shell exclude entry is not a Codex projection"
-)
-async def test_a_leftover_codex_shell_exclude_clears_the_flag(codex: _Env) -> None:
-    await codex.providers.activate(codex.connection_uid)
-    leftover = '[shell_environment_policy]\nexclude = ["COFFER_PROVIDER_KEY"]\n'
-    config = codex.agent.path("config")
-    config.write_text(leftover, encoding="utf-8")
-
-    result = _only(await codex.reconciler.run(trigger=Trigger.BOOT))
-
-    assert result.change.decision.reason_code == "flag_contradicted"
-    assert result.outcome is Outcome.APPLIED
-    assert await codex.is_active() is False
 
 
 async def test_a_repair_whose_audit_fails_is_undone(

@@ -113,11 +113,11 @@ function renderPage() {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <MemoryRouter initialEntries={["/settings/engine"]}>
+    <MemoryRouter initialEntries={["/settings/general"]}>
       <QueryClientProvider client={qc}>
         <TooltipProvider>
           <Routes>
-            <Route path="/settings/engine" element={<EngineSettings />} />
+            <Route path="/settings/general" element={<EngineSettings />} />
           </Routes>
         </TooltipProvider>
       </QueryClientProvider>

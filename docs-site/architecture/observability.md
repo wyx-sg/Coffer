@@ -82,8 +82,8 @@ Because `daemon.log` is also the stdio of the daemon's children, it is never gua
 
 - reads only the last 512 KiB of the file, so a 10 MB log is never pulled into memory;
 - strips ANSI colour and cursor sequences;
-- parses Coffer's JSON first, then the other shapes actually seen in the file: uvicorn's `ERROR:    …`, `LEVEL - logger - message`, `LEVEL [logger] message`, and rich-formatted `[mm/dd/yy HH:MM:SS] LEVEL …` panels from FastMCP-based upstreams;
-- normalises every level spelling (`WARN`, `WARNI`, `CRITI`, `FATAL`, …) onto one vocabulary;
+- parses Coffer's JSON first, then the other shapes actually seen in the file: uvicorn's `ERROR:    …`, `LEVEL - logger - message`, and rich-formatted `[mm/dd/yy HH:MM:SS] LEVEL …` panels from FastMCP-based upstreams;
+- normalises every level spelling (`WARN`, `WARNING`, `FATAL`, …) onto one vocabulary;
 - folds traceback lines and panel borders into the record above them (`continuation`), so one failure is one row;
 - keeps any line it cannot parse, verbatim, under `raw` — and treats an unreadable level as passing every level filter, because an unparseable line is most often a traceback.
 

@@ -220,8 +220,7 @@ def wire_agent_and_skill_kinds(
     )
     agent_mcp_svc = AgentMcpService(agent_service=agent_svc, audit=audit, store=config_file_store)
     # Coffer's own MCP entry, judged by its shim path and --agent-uid on every
-    # pass (ADR one-level-triggered-reconciler-compares-parameters); this is
-    # also what moves an entry an older build left in another agent's file.
+    # pass (ADR one-level-triggered-reconciler-compares-parameters).
     reconciler.register(
         McpEntryTarget(
             agents=agent_svc, store=config_file_store, shim_resolver=default_shim_resolver

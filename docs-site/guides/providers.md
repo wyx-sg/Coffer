@@ -143,7 +143,6 @@ Coffer merges only its own keys into the agent's file and leaves everything else
 - **The model** goes in the top-level `model` key, which `/model` also saves to, so choosing another model inside Claude Code sticks. **Effort** goes in `effortLevel`.
 - **Every tier is pinned.** Claude Code asks for models by tier — Opus, Sonnet, Haiku (which also runs its background tasks) and Fable. On an endpoint that serves no Claude ids each tier is the agent's model; on a gateway serving Claude ids each tier is the model whose name carries it. `coffer agent edit <agent> --tier haiku=<model>` sets one yourself.
 - **`modelPicker`** puts the provider's models in `/model`, replacing the built-in rows when the provider serves no Claude ids.
-- Coffer deletes the deprecated `ANTHROPIC_SMALL_FAST_MODEL` and an `ANTHROPIC_MODEL` an earlier version wrote.
 
 The helper names the `coffer` CLI by absolute path (shell-quoted if the path holds a space), because Claude Code started from the Dock or Finder does not get your login shell's `PATH`. For an install under `~/.coffer/bin` the path is the stable `~/.coffer/bin/coffer`, so an upgrade does not break it.
 

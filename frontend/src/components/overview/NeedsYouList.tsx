@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
+import { useAgents } from "@/lib/hooks/useAgents";
 import { useAttention, type AttentionItem } from "@/lib/hooks/useAttention";
 import { useIgnoreAttention, useUnignoreAttention } from "@/lib/hooks/useAttentionIgnore";
 import { sortAttention } from "@/lib/overview/attention";
@@ -32,6 +33,10 @@ const rowKey = (item: AttentionItem, i: number) =>
 export function NeedsYouList() {
   const { t } = useTranslation();
   const attention = useAttention();
+  // An agent's pages are addressed by its type, which an item does not carry.
+  const agents = useAgents();
+  const agentType = (item: AttentionItem) =>
+    item.kind === "agent" ? agents.data?.find((a) => a.uid === item.uid)?.type : undefined;
   const ignore = useIgnoreAttention();
   const restore = useUnignoreAttention();
   const [showIgnored, setShowIgnored] = useState(false);
@@ -93,6 +98,7 @@ export function NeedsYouList() {
                 <NeedsYouRow
                   key={rowKey(item, i)}
                   item={item}
+                  agentType={agentType(item)}
                   onIgnore={() => ignore.mutate(item.key)}
                 />
               ))}
@@ -113,6 +119,7 @@ export function NeedsYouList() {
                 <NeedsYouRow
                   key={rowKey(item, i)}
                   item={item}
+                  agentType={agentType(item)}
                   ignored
                   onRestore={() => restore.mutate(item.key)}
                 />

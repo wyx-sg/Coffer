@@ -149,9 +149,8 @@ A provider connection's key goes through the same check against its base URL: th
 
 Every consumer asks the boundary before it resolves a secret, at the moment of use — spawning a server, starting a channel adapter, pushing a sync round. A secret approved for its current target is injected. Otherwise nothing is injected, the attempt fails with `SECRET_BINDING_PENDING`, and one pending approval is recorded per target; a newer target supersedes the approval for an older one. Because the check happens at use, a change made behind Coffer's back — a vault file edited by hand, a server another machine synced in — is caught where it matters.
 
-Three things approve a binding without a person:
+Two things approve a binding without a person:
 
-- **Adoption at upgrade.** The first start of a daemon with the boundary approves every binding already in use, once, so upgrading breaks nothing that worked.
 - **A value supplied for it.** A ref that has never been sent anywhere, is not a standalone secret, and was stored within the last five minutes is used at once. Every "add" flow stores the pasted secret and cites it seconds later; a secret stored long ago, already sent elsewhere, or kept for `coffer run` is not fresh.
 - **The protection switched off**, which itself waits for an approval.
 
@@ -280,7 +279,7 @@ The one secret outside the database is the Fernet master key, managed by [`Maste
 
 **Presence gates the operations, not the key.** The Keychain item carries no Touch ID flag, so the signed daemon reads the key silently at every start — including a login-service restart after a crash with nobody at the keyboard — and keeps it in memory for its lifetime. What needs a person is letting plaintext out or sending a secret somewhere new.
 
-**Upgrade to a signed release.** At its first start a signed release moves a key found in `master.key` or in the old keychain item into its Keychain item: write, read back, compare, then delete the source, audited as `master_key_relocated`. An interruption leaves the source for the next start; two disagreeing keys stop the start, naming both fingerprints. A signed release refuses to move the key back to a file.
+**A signed release reads only its Keychain item.** It never looks in `master.key` or the login keychain, and refuses to move the key to a file.
 
 **In a development build** you switch between the file and the keychain with **Settings → Security** or `coffer config set secrets.storage keychain`. Switching **moves the key, never re-encrypts the data**; the old copy is deleted last, and resolution is file-first, so an interrupted move always resolves to a working key.
 

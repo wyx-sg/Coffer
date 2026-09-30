@@ -107,11 +107,8 @@ def apply_install(
 ) -> str:
     """Return new config text with the ``coffer`` stdio entry inserted/updated.
 
-    Idempotent: an existing ``coffer`` entry is replaced in place, never
-    duplicated — including an entry written by an older Coffer, which carries
-    either no identity flag at all or the name-shaped ``--agent`` one that
-    preceded the uid; re-installing rewrites the whole entry in place, so there
-    is no separate auto-migration path and no residue of the old spelling.
+    Idempotent: an existing ``coffer`` entry is replaced whole, in place,
+    never duplicated.
     """
     ck = container_key or default_container_key(fmt)
     fields = _entry_fields(shim_path, entry_style, agent_uid)
@@ -231,8 +228,8 @@ def installed_agent_uid(
     fmt: ConfigFileFormat, text: str, *, container_key: str | None = None
 ) -> str | None:
     """The uid the installed coffer entry speaks for (its ``--agent-uid``
-    argument), or ``None`` when there is no entry or it carries no uid (one an
-    older Coffer wrote, or a hand-edit). Raises ``ConfigFileFormatInvalid``
+    argument), or ``None`` when there is no entry or it carries no uid (a
+    hand-edit). Raises ``ConfigFileFormatInvalid``
     for text that does not parse, like the other readers here."""
     ck = container_key or default_container_key(fmt)
     if not is_installed(fmt, text, container_key=ck):

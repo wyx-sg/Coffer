@@ -37,30 +37,53 @@ export function severityTone(severity: Severity): StatusTone {
   return severity === "error" ? "err" : "warn";
 }
 
-/** Each kind's list page, and the detail page an item with a uid opens. */
-const PAGES: Record<string, { list: string; detail?: (uid: string) => string }> = {
-  agent: { list: "/agents", detail: (uid) => `/agents/${uid}` },
-  // The detail route is keyed by name; a uid address redirects to it.
-  mcp_server: { list: "/mcp-servers", detail: (uid) => `/mcp-servers/${uid}` },
-  skill: { list: "/skills", detail: (uid) => `/skills/${uid}` },
-  channel: { list: "/channels", detail: (uid) => `/channels/${uid}` },
-  provider: { list: "/model-providers", detail: (uid) => `/model-providers/${uid}` },
-  knowledge: { list: "/knowledge", detail: (uid) => `/knowledge/${uid}` },
-  memory: { list: "/memory", detail: (uid) => `/memory/${uid}` },
+/** What names an item's detail page: its uid, its title (a skill's or an MCP
+ *  server's fixed name) and — for an agent, whose pages are addressed by its
+ *  type — the type, which the item does not carry: the caller looks it up in
+ *  the agent list (`undefined` while unknown). */
+interface Address {
+  uid: string;
+  title: string;
+  agentType: string | undefined;
+}
+
+const encode = encodeURIComponent;
+
+/** Each kind's list page, and the detail page an item with a uid opens. A
+ *  detail address follows the route table (router.tsx): skills and MCP servers
+ *  by their fixed name, agents by type, every other kind by uid. */
+const PAGES: Record<string, { list: string; detail?: (a: Address) => string | null }> = {
+  agent: {
+    list: "/agents",
+    detail: (a) => (a.agentType ? `/agents/${encode(a.agentType)}` : null),
+  },
+  mcp_server: { list: "/mcp-servers", detail: (a) => `/mcp-servers/${encode(a.title)}` },
+  skill: { list: "/skills", detail: (a) => `/skills/${encode(a.title)}` },
+  channel: { list: "/channels", detail: (a) => `/channels/${encode(a.uid)}` },
+  provider: { list: "/model-providers", detail: (a) => `/model-providers/${encode(a.uid)}` },
+  knowledge: { list: "/knowledge", detail: (a) => `/knowledge/${encode(a.uid)}` },
+  memory: { list: "/memory", detail: (a) => `/memory/${encode(a.uid)}` },
   sync: { list: "/sync" },
   // A target the reconciler could not check is written up in the daemon log.
   reconcile: { list: "/activity?tab=daemon" },
   // A command a skill requires is addressed by the command itself.
-  cli: { list: "/clis", detail: (uid) => `/clis/${uid}` },
+  cli: { list: "/clis", detail: (a) => `/clis/${encode(a.uid)}` },
 };
 
-const encode = encodeURIComponent;
+/** The item's detail page, or null when it has none (no uid, or an agent
+ *  whose type is not known yet). */
+function detailPage(item: AttentionItem, agentType: string | undefined): string | null {
+  const detail = PAGES[item.kind]?.detail;
+  if (!item.uid || !detail) return null;
+  return detail({ uid: item.uid, title: item.title, agentType });
+}
 
-/** The page an item's name opens: its detail page, its kind's list, or Activity. */
-export function itemPage(item: AttentionItem): string {
+/** The page an item's name opens: its detail page, its kind's list, or
+ *  Activity. `agentType` is the type of the agent an agent item is about. */
+export function itemPage(item: AttentionItem, agentType?: string): string {
   const page = PAGES[item.kind];
   if (!page) return "/activity";
-  return item.uid && page.detail ? page.detail(encode(item.uid)) : page.list;
+  return detailPage(item, agentType) ?? page.list;
 }
 
 /** The reasons the reconciler's memory-hook target reports about Coffer's hook
@@ -84,10 +107,11 @@ function isHookItem(item: AttentionItem): boolean {
 
 /** The page an item's one action opens — a missing secret is added on
  *  Secrets, a memory-hook problem is dealt with on the agent's Hooks tab. */
-export function actionPage(item: AttentionItem): string {
+export function actionPage(item: AttentionItem, agentType?: string): string {
   if (item.reason_code === "mcp_missing_secret") return "/secrets";
-  if (isHookItem(item) && item.uid) return `${itemPage(item)}/hooks`;
-  return itemPage(item);
+  const detail = detailPage(item, agentType);
+  if (isHookItem(item) && detail) return `${detail}/hooks`;
+  return itemPage(item, agentType);
 }
 
 const VERBS = new Set(["connect", "test", "set_secret", "check", "run", "review", "repair"]);

@@ -70,13 +70,10 @@ def _adapter(agent_type: AgentType) -> DeliveryAdapter:
     return adapter
 
 
-#: The command a build before SessionStart support installed for Codex: on
-#: UserPromptSubmit, bare `coffer`, behind a `$PPID` guard.
-def _legacy_codex_command(uid: str) -> str:
-    return (
-        f': {MARKER}; f="${{TMPDIR:-/tmp}}/.coffer-memory-fired-$PPID"; '
-        f'[ -e "$f" ] || {{ : > "$f"; coffer memory context --agent-uid {uid} --cwd "$PWD"; }}'
-    )
+#: A marked Codex command other than the one Coffer writes now: bare `coffer`
+#: rather than the CLI's absolute path.
+def _stale_codex_command(uid: str) -> str:
+    return f': {MARKER}; coffer memory hook --agent-uid {uid} --cwd "$PWD"'
 
 
 def _service(bundle: AgentTestBundle, plugins: _Plugins | None = None) -> AgentHooksService:
@@ -146,8 +143,8 @@ async def test_a_marked_hook_with_an_old_command_is_stale_and_fired_time_is_read
 ) -> None:
     codex = fake_agent_dir(isolated_home, AgentType.CODEX)
     agent = await agent_bundle.svc.register(agent_type=AgentType.CODEX, config_dir=None, actor="t")
-    legacy = {"type": "command", "command": _legacy_codex_command(agent.uid), "timeout": 10}
-    codex.write("hooks", json.dumps({"hooks": {"UserPromptSubmit": [{"hooks": [legacy]}]}}))
+    stale = {"type": "command", "command": _stale_codex_command(agent.uid), "timeout": 10}
+    codex.write("hooks", json.dumps({"hooks": {"UserPromptSubmit": [{"hooks": [stale]}]}}))
     await agent_bundle.audit.record(
         AuditEventType.MEMORY_DELIVERY_FIRED.value, resource=agent, actor="cx"
     )

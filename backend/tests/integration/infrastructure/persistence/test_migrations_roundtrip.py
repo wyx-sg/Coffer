@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0135"
+HEAD_REVISION = "0199"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -197,6 +197,8 @@ HEAD_REVISION = "0135"
 # gives the secret store's
 # table a nullable ``last_used_at`` (spec secret "List every stored and cited
 # secret with what uses it") and renames it from ``credentials`` to ``secrets``.
+# 0199 is DATA-only: it strips the retired ``idle_timeout_seconds`` from every
+# ``mcp_server`` config.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",

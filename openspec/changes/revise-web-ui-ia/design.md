@@ -34,7 +34,7 @@ behind the Secrets page (uncited secrets, the migration assistant) are specified
   Agents           /agents                                              智能体
   Model providers  /model-providers                                     模型提供商
  RUN                                                                   运行
-  Conversations    /conversations           (/chat redirects)           对话
+  Conversations    /conversations                                       对话
   Channels         /channels                                            消息渠道
  CAPABILITIES                                                          能力
   MCP servers      /mcp-servers                                         MCP 服务器
@@ -163,7 +163,6 @@ cannot have.
 - **Model providers loses its tabs.** A "who runs on what" view repeated what each agent's Model
   tab shows and offered a second place to switch. It is dropped: a provider's detail page lists
   its users read-only, each linking to where it is changed.
-- The legacy `/settings/engine` opens the Settings modal on General.
 
 ### 5. Daemon visibility
 
@@ -392,11 +391,9 @@ the gateway's registration rules (fixed names, the 24-character limit) are uncha
   list that is not cached is fetched on open.
 - **Attention hook.** Generalise `useSyncAttention` into a per-entry signal map; Sync keeps its
   seen-key behaviour behind it.
-- **Legacy redirects.** Keep `/settings/llm-connections`, `/settings/models`,
-  `/settings/providers` and `/settings/embedding`; point `/settings/engine` and
-  `/settings/embedding` at `/settings/general`. `/settings/embedding` is an existing redirect
-  for old bookmarks only — Coffer has no embedding configuration — and no new Settings route is
-  added for speech to text, which is a picker in General.
+- **No legacy redirects.** Retired addresses (`/settings/engine`, `/settings/embedding`,
+  `/settings/llm-connections`, `/settings/models`, `/settings/providers`) are not kept; no new
+  Settings route is added for speech to text, which is a picker in General.
 
 ## Risks
 
@@ -448,7 +445,7 @@ the gateway's registration rules (fixed names, the 24-character limit) are uncha
   Delivery takes what the old Overview tab held (description, source, version, reach) plus
   where the skill is delivered. Requires links each declared command to the CLIs page; History
   shows the vault history of the folder. Tabs are paths (`/skills/<name>/delivery`, decision 14);
-  `?tab=overview` opens Delivery. There is no SKILL.md tab address in the router to redirect.
+  There is no SKILL.md tab.
 
 ### 14. Tab addresses
 
@@ -457,8 +454,7 @@ bare path: one rule instead of `?tab=` on some pages and paths on others, and an
 can read and type. The `<id>` is the name where a kind's name is fixed and unique — skills, MCP
 servers and custom tool groups (which declare `name_fixed`), agents by type (an agent's fixed
 name is its type), CLIs by command — and the `uid` where a name can be renamed (model providers, channels, knowledge
-collections, memory partitions), because an address must survive a rename. Old `?tab=` and old
-uid addresses of fixed-name kinds redirect. The MCP servers route stays `/mcp-servers`, the
+collections, memory partitions), because an address must survive a rename. The MCP servers route stays `/mcp-servers`, the
 sidebar's route, rather than a shorter `/mcp`.
 
 ### 15. The agent Model tab
@@ -476,8 +472,7 @@ that configure them. The decisions:
   Code resolves `opus` / `sonnet` / `haiku` / `fable` through `ANTHROPIC_DEFAULT_<TIER>_MODEL`, and
   Haiku also runs background tasks; on a non-Claude endpoint an unpinned tier sends a Claude id and
   fails. So Coffer prefills every tier (all = Model on non-Claude and local endpoints, by name on a
-  Claude-id gateway) and lets the user edit or reset them. `ANTHROPIC_SMALL_FAST_MODEL` is
-  deprecated and still read ahead of the Haiku pin, so every write deletes it. `modelPicker` fills
+  Claude-id gateway) and lets the user edit or reset them. `modelPicker` fills
   `/model` with the connection's models, replacing the built-in rows only where they would fail.
 - **Codex needs the catalogue to carry metadata.** Without `supported_reasoning_levels` Codex sends
   no effort, and without a context window it never compacts; so each curated model records its
@@ -535,7 +530,7 @@ spec owns the Skills page.
 ### 18. Conversations, Channels and agent Sessions
 
 - **One list of conversations.** The Run group is Conversations · Channels. Conversations
-  (`/conversations`, `/chat` redirecting) lists every conversation Coffer runs with a source badge
+  (`/conversations`) lists every conversation Coffer runs with a source badge
   — SeaTalk, Telegram, or Coffer for its own UI — and filters by source and agent; a conversation
   opens on its full exchange with a reply box, and New conversation is a secondary action. There is
   no welcome or suggestions page and no web voice input: voice reaches an agent through a channel,

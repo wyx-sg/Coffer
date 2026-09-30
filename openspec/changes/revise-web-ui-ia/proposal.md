@@ -94,7 +94,7 @@ unarchived until that implementation lands.
   moves from General to Daemon; Security holds machine-level items only.
 - **Coffer's model** becomes a section of Settings › General: two pickers (Engine model, Speech
   to text), each choosing a provider and then one of its models, a Test action each, and inline
-  not-set / failing states. `/settings/engine` opens Settings › General.
+  not-set / failing states.
 - **Model providers** is one connection table with no tabs: no Coffer's model tab and no view of
   which agent runs on what. A provider's detail page lists **Used by** read-only (agents with
   their model, linking to each agent's Model tab; Coffer's engine and Speech to text, linking to
@@ -117,16 +117,14 @@ unarchived until that implementation lands.
   Files opens with `SKILL.md` selected and rendered, a Preview / Source toggle and Edit.
 - **Tab addresses** follow one rule on every detail page: `/<kind>/<id>/<tab>`, the default tab
   at the bare path, named by the resource's fixed name for skills, MCP servers and custom tool
-  groups, by type for agents, by command for CLIs, and by `uid` for kinds that can be renamed; old
-  `?tab=` and uid addresses redirect.
+  groups, by type for agents, by command for CLIs, and by `uid` for kinds that can be renamed.
 - Every **split view** (list/detail, file tree/file, conversation list/thread, the sidebar) resizes
   by dragging its divider, within minimum widths, with double-click to reset and ←/→ from the
   keyboard; the width is remembered per page in the browser, safe to lose.
 - The agent **Model tab** carries Provider · Model · Effort, and for Claude Code off its built-in
   login a **Model per tier** section (Opus / Sonnet / Haiku, Fable when listed) that Coffer prefills
   and the user can edit or reset; no other model setting is shown. Claude Code gets the top-level
-  `model` and `effortLevel`, the `ANTHROPIC_DEFAULT_<TIER>_MODEL` pins and a `modelPicker`; the
-  deprecated `ANTHROPIC_SMALL_FAST_MODEL` and `env.ANTHROPIC_MODEL` are deleted on every write.
+  `model` and `effortLevel`, the `ANTHROPIC_DEFAULT_<TIER>_MODEL` pins and a `modelPicker`.
   Codex's catalogue carries each model's context window, a 90% auto-compact limit and its effort
   levels. A local model connection reads its window from the runtime (a required field when it
   cannot, a warning below 64k) and sets Claude Code's compatibility key. Switching back to the
@@ -151,7 +149,7 @@ unarchived until that implementation lands.
 - The **Memory overview** lists each agent's deliveries, memories read and last delivery over seven
   days. The delivery hook's state is shown only on the agent detail page (Hooks tab and Overview
   connection block); the agent's Memory tab shows only its native memory stores.
-- **Conversations** (`/conversations`, `/chat` redirecting) replaces Chat: every conversation Coffer
+- **Conversations** (`/conversations`) replaces Chat: every conversation Coffer
   runs, from channels and from Coffer's own UI (a built-in "Coffer" source), with a source badge
   and filters, each continued from a reply box; New conversation is secondary, and there is no
   welcome page and no web voice input. **Channels** keeps setup, status and settings and links to
@@ -224,7 +222,7 @@ unarchived until that implementation lands.
 
 - Frontend: `components/Layout.tsx`, `components/SidebarNav.tsx` (replaced), a new Secrets page,
   the agent detail page's tab set (`pages/AgentDetailPage.tsx` and `components/agents/*`), a new sidebar footer
-  and command palette, `router.tsx` (index route, `/settings/*` tabs, `/settings/engine` redirect,
+  and command palette, `router.tsx` (index route, `/settings/*` tabs,
   Model providers tabs), `pages/settings/*` (Daemon tab, residency card moved),
   `pages/ModelProvidersPage.tsx`, the attention-dot hook generalised from `useSyncAttention`, i18n
   strings in both locales.

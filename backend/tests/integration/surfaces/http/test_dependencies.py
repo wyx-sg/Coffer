@@ -90,7 +90,6 @@ _PROVIDERS: list[_Provider] = [
     *_pairs(
         memory_deps,
         "_memory_service",
-        "_memory_delivery_service",
         "_memory_hook_service",
         "_memory_trigger_service",
         "_memory_stats_service",

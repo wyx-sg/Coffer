@@ -13,7 +13,7 @@ operation, not a macOS call spread through the code:
   ``errSecMissingEntitlement``.
 * :class:`InMemoryMasterKeyBackend` — tests.
 
-The ``0600`` file and the legacy login-keychain item (through ``keyring``) stay
+The ``0600`` file and the login-keychain item (through ``keyring``) stay
 the development fallback, used only by a build that carries no access group:
 see :func:`coffer.infrastructure.secret.build_identity.keychain_access_group`.
 Which one a build uses is decided by how it was built, never by a setting or

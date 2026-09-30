@@ -116,8 +116,7 @@ text, analogous to `domain/agent/mcp_install.py`'s `apply_install`.
   `proxy_token_args(agent_uid)` (`domain/provider/api_key_helper.py`) — the
   only helper line Coffer writes and the argument list Codex's `auth` command
   runs; both cite the agent's uid, so they survive a rename.
-  `is_managed_api_key_helper(helper)` recognises that line and the
-  `provider key` line earlier builds wrote
+  `is_managed_api_key_helper(helper)` recognises that line
 
 Each agent's provider projection facet (`domain/provider/agent_projection.py`:
 `ClaudeCodeProviderProjection`, `CodexProviderProjection`) composes these into a
@@ -127,12 +126,6 @@ none) and answers `is_present(text)`. The writer is chosen by AGENT, never by
 protocol, and nothing maps a protocol to one agent.
 - Constants: `CODEX_PROVIDER_ID`, `CODEX_MODEL_CATALOG_FILENAME`,
   `CODEX_MODEL_CATALOG_KEY`, `CODEX_CATALOG_TRUNCATION_LIMIT`
-
-`domain/provider/codex_shell_env.py` holds `LEGACY_CODEX_ENV_KEY`
-(`COFFER_PROVIDER_KEY`), the variable earlier builds named as the provider
-block's `env_key` and listed in `shell_environment_policy.exclude`.
-`drop_legacy_shell_env_exclude` removes that entry on every Codex write and
-de-projection; nothing writes it.
 
 ### Managed native-config keys, per agent type
 
@@ -154,14 +147,10 @@ is preserved, and the projection tests assert exactly this set.
 | `modelPicker` | the connection's curated text models, each option described `via Coffer` (the ownership marker); `replaceBuiltInOptions` true when no curated id is a Claude id |
 | `env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` / `env.CLAUDE_CODE_MAX_CONTEXT_TOKENS` | a local runtime only: `"1"` and the chosen model's recorded window |
 
-Every write deletes `env.ANTHROPIC_MODEL` and `env.ANTHROPIC_SMALL_FAST_MODEL`,
-which earlier builds wrote. A `provider key` helper an earlier build wrote is
-still recognised as Coffer's, so de-projection removes it.
-
 `ANTHROPIC_API_KEY` is never written — it would override the helper.
 De-projection removes an `apiKeyHelper` only when `is_managed_api_key_helper`
 recognises it — the `coffer` CLI (bare or by any path) followed by
-`proxy token` or `provider key` — so a helper the user wrote is left alone.
+`proxy token` — so a helper the user wrote is left alone.
 
 **Codex — `~/.codex/config.toml` (TOML, via tomlkit):**
 

@@ -39,7 +39,7 @@ export function AgentMemoryStorePage() {
     label: t("agents.memoryStore.back", { agent: agentName }),
   };
 
-  if (route.isPending || route.redirecting) {
+  if (route.isPending) {
     return <PageHeader back={back} title={t("common.loading")} />;
   }
   if (!dir || route.notAdded || route.error) {

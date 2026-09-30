@@ -4,9 +4,9 @@ ADR one-level-triggered-reconciler-compares-parameters. The hook Coffer puts in
 an agent's settings file (Claude Code's ``settings.json``, Codex's
 ``hooks.json``) is judged by its **whole command** against what an install
 would write now (``adapter.command_for(uid)``), not by its marker alone. That
-is the rule PR #413 taught: when ``coffer memory context`` dropped ``--agent``
-for ``--agent-uid``, every hook on disk kept the dead option and still read as
-installed, because detection matched the marker and never read the arguments.
+is the rule PR #413 taught: when a CLI flag the hook passes changes, every hook
+on disk keeps the dead option and still reads as installed, because detection
+matches the marker and never reads the arguments.
 
 **What is wanted.** A current hook in every agent connected to Coffer — every
 agent carrying the gateway MCP entry (spec agent-registry "Connect an agent to
@@ -18,9 +18,7 @@ may not import that one.
 **Direction policy** (:meth:`DeliveryHookTarget.decide`):
 
 - a hook whose command or events differ is rewritten (``stale_command``, spec
-  memory "Repair stale delivery hooks") — which gives an older build's single
-  ``SessionStart`` entry the other three events, and moves an older Codex
-  entry's ``$PPID`` guard off ``UserPromptSubmit``;
+  memory "Repair stale delivery hooks");
 - a current hook the agent will not run (Codex's ``trust`` is not
   ``trusted``) is only reported (``hook_untrusted``, ``hook_disabled``,
   ``hook_trust_unknown``): approving a hook is the user's act in the agent,
@@ -131,9 +129,8 @@ class DeliveryHookTarget:
                 continue
             if not hooks:
                 continue
-            # The events its entries actually sit on: an older build put one
-            # entry on SessionStart (or, for Codex, on UserPromptSubmit), and a
-            # missing or extra event is a difference to repair.
+            # The events its entries actually sit on: a missing or extra
+            # event is a difference to repair.
             command = commands_label([h.command for h in hooks])
             params: dict[str, str] = {
                 "event": events_label([h.event for h in hooks]),

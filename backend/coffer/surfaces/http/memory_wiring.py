@@ -74,7 +74,6 @@ from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.infrastructure.memory import paths as memory_paths
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
 from coffer.surfaces.http.memory.dependencies import (
-    set_memory_delivery_service,
     set_memory_hook_service,
     set_memory_service,
     set_memory_stats_service,
@@ -180,7 +179,6 @@ def wire_memory_kind(
     delivery_service = DeliveryService(
         agent_service=agent_service, audit=audit, store=ConfigFileStore(), catalog=agent_catalog
     )
-    set_memory_delivery_service(delivery_service)
 
     # Prompt-time retrieval, the once-per-session guard and the delivery views.
     triggers = TriggerService(audit=audit)

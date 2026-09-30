@@ -42,7 +42,7 @@ export function AgentPluginPage() {
   const uninstall = useUninstallPlugin(route.uid);
   const [target, setTarget] = useState<PluginOut | null>(null);
 
-  if (route.redirecting || route.isPending || (route.uid && isPending)) {
+  if (route.isPending || (route.uid && isPending)) {
     return (
       <div className="space-y-4" aria-busy="true" aria-label={t("common.loading")}>
         <Skeleton className="h-10 w-1/3" />

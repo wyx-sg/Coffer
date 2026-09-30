@@ -189,25 +189,6 @@ class AggregationResultOut(BaseModel):
     skipped: list[str]
 
 
-class ComposedContextOut(BaseModel):
-    """The session-start payload, and enough accounting to audit the ceiling.
-
-    There is no ``layers`` field any more. Delivery is not a two-tier digest: it
-    is the whole index of the current repository's partition plus what is known
-    about the developer, so naming a layer would name a structure the payload no
-    longer has ("Deliver the index and the notes path at session start").
-    """
-
-    text: str
-    partition: str
-    notes_included: int
-    #: How many index lines the ceiling left out. The text names the count and
-    #: the directory holding them, which is what makes a trim a small loss:
-    #: every line that did not fit is still a file ("Bound delivery and prefer
-    #: the current repository").
-    notes_omitted: int
-
-
 class FileNodeOut(BaseModel):
     """One entry in a partition's own directory ("Present partitions as a table
     and a file tree").
@@ -253,32 +234,3 @@ class FileContentOut(BaseModel):
     truncated: bool
     binary: bool
     size: int
-
-
-class ContextQuery(BaseModel):
-    """Body for composing a session-start context ("Deliver the index and the
-    notes path at session start").
-
-    A ``POST`` despite being a read, because the query is structured rather than
-    a couple of scalar filters (knowledge's ``search`` is a ``POST`` for the same
-    reason) — nothing here has a side effect on the memory tree itself.
-    """
-
-    cwd: str = Field(default="")
-    #: The calling agent's uid — who fired, for ``record_fired`` below. It does
-    #: not shape the payload: every partition is composed for every
-    #: agent.
-    #:
-    #: A uid rather than a name because of who sends it: the hook command
-    #: Coffer wrote into that agent's settings file at install time and does
-    #: not rewrite. A name baked into that command would attribute fires to
-    #: nobody the first time the agent was relabelled, so there is one spelling
-    #: here and it is the one that cannot change.
-    agent_uid: str | None = None
-    #: Omitted or null uses the server's default ceiling.
-    ceiling_tokens: int | None = None
-    #: Whether serving this payload counts as a real delivery ("Audit every
-    #: delivery fire"). The
-    #: installed hook always sets this; a management-surface preview must not,
-    #: so it never records a fire that did not happen.
-    record_fired: bool = False

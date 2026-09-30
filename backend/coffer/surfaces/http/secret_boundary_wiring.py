@@ -7,8 +7,7 @@ only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.
 Owns the ``SecretBoundary`` and ``PresenceGrants`` singletons, the
 ``boundary_resolver`` every consumer of a secret is built with, the choice of
 master-key storage by build identity, and the enumeration of every destination
-in use — which feeds the one-time adoption at the first start and the refresh
-that runs before approvals are listed.
+in use — which feeds the refresh that runs before approvals are listed.
 
 A new destination type registers itself here with
 :func:`register_resource_destination` (a resource kind) or calls
@@ -52,7 +51,7 @@ _OTHER_SOURCES: list[Callable[[], Awaitable[Current]]] = []
 
 
 def register_resource_destination(kind: str, destination: ResourceDestination) -> None:
-    """Declare where a kind's secrets go, so they are adopted and listed.
+    """Declare where a kind's secrets go, so they are listed.
 
     Called by each kind's own wiring (the MCP and channel kinds today; the
     provider kind next), which is what keeps this module free of any kind.
@@ -116,7 +115,7 @@ def make_master_key_manager(db_path: pathlib.Path) -> MasterKeyManager:
 
     A signed release carries its Team ID access group and keeps the key only
     there; anything else — a build from source — keeps the development
-    arrangement (the ``0600`` file, the legacy keychain item when opted in).
+    arrangement (the ``0600`` file, the login-keychain item when opted in).
     """
     group = keychain_access_group()
     vault = KeychainAccessGroupBackend(group) if group else None
@@ -192,16 +191,13 @@ async def current_destinations(resources: ResourceService, audit: AuditService) 
 _sources: tuple[ResourceService, AuditService] | None = None
 
 
-async def adopt_existing_bindings(resources: ResourceService, audit: AuditService) -> int:
-    """Approve, once, every binding that was in use before the boundary existed.
+def remember_destination_sources(resources: ResourceService, audit: AuditService) -> None:
+    """Remember where destinations are read from, for :func:`refresh_approvals`.
 
-    Also remembers where destinations are read from, for :func:`refresh_approvals`.
+    Called once per start, after every kind has registered its destinations.
     """
     global _sources
     _sources = (resources, audit)
-    boundary = get_secret_boundary()
-    current = await current_destinations(resources, audit)
-    return await asyncio.to_thread(boundary.adopt, current)
 
 
 async def refresh_approvals() -> list[SecretApproval]:
@@ -218,7 +214,6 @@ async def refresh_approvals() -> list[SecretApproval]:
 
 
 __all__ = [
-    "adopt_existing_bindings",
     "approval_applied",
     "approval_out",
     "boundary_resolver",
@@ -232,5 +227,6 @@ __all__ = [
     "refresh_approvals",
     "register_destination_source",
     "register_resource_destination",
+    "remember_destination_sources",
     "set_secret_boundary",
 ]

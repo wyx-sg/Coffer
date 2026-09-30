@@ -327,21 +327,6 @@ MUST NOT carry a secret value, and a new secret event that does MUST NOT be adde
 - **THEN** the `secret_set` and `secret_deleted` entries each carry the ref
 - **AND** none of those entries contains the secret value anywhere in its payload
 
-### Requirement: Migrate legacy keychain secrets once at startup
-At startup the daemon MUST move any pre-0.2 OS-keychain secret into the encrypted store, for cited
-refs only, auditing each move as `secret_migrated`. It MUST NOT enumerate the keychain, MUST be a
-no-op once every cited ref is in the store, and MUST NOT block startup on failure — a locked keychain
-skips that ref and is retried on the next start. This load-time shim is kept deliberately, against
-the rule that a migration leaves no shim behind: its source is the user's OS keychain rather than a
-column, so no data migration can replace it, and it cannot be proven finished on an install nobody
-has started yet. It is retired when the pre-0.2 install base is.
-
-#### Scenario: a legacy keychain secret migrates once and then does nothing
-- **GIVEN** a pre-0.2 vault whose OS keychain still holds a secret for a ref a registered resource cites, and whose store does not,
-- **WHEN** the daemon starts,
-- **THEN** the secret is moved into the encrypted store and audited as `secret_migrated`,
-- **AND** a second start moves nothing, reads no keychain entry for any already-stored ref, and a locked keychain leaves startup unaffected.
-
 ### Requirement: Return no plaintext on any route, command or tool
 No management route, `coffer` command or MCP tool MUST return a secret's
 plaintext or the master key, with two exceptions this spec names: the desktop
@@ -449,17 +434,16 @@ secret from a destination that did not cite it, and changing the target of one
 that did, each record a pending approval, once per target; a later target
 supersedes the approval for the earlier one. A binding already approved for
 its target MUST keep working. A binding is approved without a person only when
-it was in use before this requirement existed (adopted once, at the first start
-of the daemon that has it), when its value was supplied for it — the ref was
-never bound anywhere, is not a standalone `secret/` name, and was stored within
-the last five minutes — or while the protection is switched off. Approving MUST
+its value was supplied for it — the ref was never bound anywhere, is not a
+standalone `secret/` name, and was stored within the last five minutes — or
+while the protection is switched off. Approving MUST
 take a presence grant (`POST /api/v1/secrets/approvals/{id}/approve`);
 refusing (`POST .../reject`) MUST NOT. `GET /api/v1/secrets/approvals`
 lists approvals, having first evaluated every current destination, and marks
 superseded those nothing asks for any more.
 
 #### Scenario: citing an existing secret from a new MCP server waits for approval
-- **GIVEN** a secret an MCP server has used since before the boundary existed
+- **GIVEN** a secret an MCP server is already approved to receive
 - **WHEN** a second MCP server citing the same ref is registered, and a session reaches its tools
 - **THEN** the second server is not spawned with the secret, the attempt answers `SECRET_BINDING_PENDING`, and one pending approval names the ref, the new server and its command line
 - **AND** the first server keeps receiving the secret
@@ -480,11 +464,6 @@ superseded those nothing asks for any more.
 - **GIVEN** a secret stored a moment ago under a ref nothing has ever received
 - **WHEN** a destination citing that ref first uses it
 - **THEN** the secret is injected and the binding is recorded as approved
-
-#### Scenario: bindings in use at upgrade keep working
-- **GIVEN** a vault whose resources and sync remote cite secrets before the boundary existed
-- **WHEN** the daemon that has the boundary starts for the first time
-- **THEN** every binding in use is approved for its current target, and starting again adopts nothing further
 
 ### Requirement: Answer a pending approval on the command line by waiting or exiting
 A command that saves a change which then waits for approval — `coffer mcp add`,
@@ -674,19 +653,17 @@ Where the master key lives MUST be decided by how the build was made, never by
 a setting or an environment variable. A signed release stamped with Coffer's
 Keychain access group MUST keep the key only in one data-protection Keychain
 item in that group (service `coffer`, account `master-key`) with no
-user-presence flag, so the daemon reads it unattended; at its first start it
-MUST move a key found in the key file or the legacy keychain item into that
-item — writing it, reading it back and comparing before deleting the source —
-audited as `master_key_relocated`, MUST stop the start naming both fingerprints
-when the two disagree, and MUST refuse to relocate the key back to a file. A
-build without the stamp is a development build: it keeps the arrangement of
-"Keep the master key in exactly one place", and reports itself as development
-(see "Release plaintext only to a present human in the desktop app").
+user-presence flag, so the daemon reads it unattended; it MUST NOT read a key
+from the key file or the login-keychain item, and MUST refuse to relocate the
+key to a file. A build without the stamp is a development build: it keeps the
+arrangement of "Keep the master key in exactly one place", and reports itself
+as development (see "Release plaintext only to a present human in the desktop
+app").
 
-#### Scenario: a signed build moves a file key into its access group
-- **GIVEN** a signed build's Keychain item that is empty and a master key in the key file
+#### Scenario: a signed build keeps its key in its access group only
+- **GIVEN** a signed build with an empty secret store
 - **WHEN** the key is resolved
-- **THEN** the item holds the key, the file is gone, and the manager reports the access group as the key's location
+- **THEN** the key is created in the access-group item, no key file is written, and the manager reports the access group as the key's location
 - **AND** a later request to relocate the key to the file is refused
 
 #### Scenario: the access-group item carries no presence flag

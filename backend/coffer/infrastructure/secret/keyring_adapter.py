@@ -2,8 +2,7 @@
 
 Secrets themselves live Fernet-encrypted in the coffer DB (see
 encrypted_store.py); the OS keychain is used only for the opt-in
-master-key storage (master_key.py) and as the read-side source when
-migrating legacy pre-0.2 keychain entries into the encrypted store.
+master-key storage of a development build (master_key.py).
 
 Importlinter contracts 3 and 4 forbid every other module from importing
 `keyring`; only `coffer.infrastructure.secret.*` is allowed.

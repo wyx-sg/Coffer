@@ -23,7 +23,6 @@ from typing import Protocol as _Protocol
 from coffer.domain.agent.tiers import is_claude_model_id, suggest_tier_models
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.codex_projection import CodexAuthCommand
-from coffer.domain.provider.codex_shell_env import CODEX_SHELL_ENV_POLICY_KEY
 from coffer.domain.provider.config import Protocol
 from coffer.domain.provider.model_binding import ModelBinding, ProjectedModel, find_model
 from coffer.domain.provider.projection import (
@@ -220,15 +219,9 @@ class CodexProviderProjection:
         )
 
     def is_present(self, text: str) -> bool:
-        """``shell_environment_policy`` is left out of the comparison: its
-        ``exclude`` entry selects no provider."""
         if not text.strip():
             return False
-        before = tomllib.loads(text)
-        after = tomllib.loads(remove_codex_provider(text))
-        before.pop(CODEX_SHELL_ENV_POLICY_KEY, None)
-        after.pop(CODEX_SHELL_ENV_POLICY_KEY, None)
-        return before != after
+        return bool(tomllib.loads(remove_codex_provider(text)) != tomllib.loads(text))
 
 
 PROVIDER_PROJECTIONS: tuple[ClaudeCodeProviderProjection | CodexProviderProjection, ...] = (

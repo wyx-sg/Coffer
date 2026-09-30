@@ -1,7 +1,7 @@
 // src/components/providers/ProvidersSplit.tsx — the Model providers page: the list pane beside the open provider.
 //
 // Both routes render this one layout (`/model-providers` and
-// `/model-providers/<uid>[/<tab>]`), so the list never re-lays out between
+// `/model-providers/<uid>`), so the list never re-lays out between
 // them. With providers but no uid in the address, the first provider opens
 // (a replace-navigation, so Back does not bounce). With none, the page is the
 // welcome panel. The endpoint probe of the open provider runs here, once, and

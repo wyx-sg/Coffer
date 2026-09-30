@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import pathlib
 import shutil
 from collections.abc import Sequence
@@ -65,22 +66,43 @@ def _is_coffers_own(folder: pathlib.Path) -> bool:
     return all((folder / name).is_file() for name in _GENERATED_MARKERS)
 
 
-def _skill_dirs(bind: sa.engine.Connection) -> list[pathlib.Path]:
-    """Every registered agent's effective skill directory.
+#: Each agent type's standard config dir under ``$HOME`` as of this revision,
+#: frozen here so a later change to the live agent model cannot break it.
+_DEFAULT_CONFIG_SUBPATH = {"claude_code": ".claude", "codex": ".codex"}
 
-    Read through the agent kind's own config model rather than by joining
-    strings here: where an agent's skills live is a question that model already
-    answers, including the per-type defaults a raw ``config_dir`` does not.
+#: The folder under the config dir that skills are delivered into.
+_SKILL_SUBPATH = "skills"
+
+
+def _home() -> pathlib.Path:
+    return pathlib.Path(os.environ.get("HOME", os.path.expanduser("~")))
+
+
+def _resolved_skill_dir(config: dict[str, object]) -> pathlib.Path:
+    """An agent's effective skill directory: ``<config_dir>/skills``, where the
+    config dir is the stored override or the type's standard location.
+
+    A frozen copy of what the agent model answered when this revision was
+    written, so the migration keeps running whatever that model becomes.
     """
-    from coffer.domain.agent.config import AgentConfig
+    config_dir = config.get("config_dir")
+    if isinstance(config_dir, str) and config_dir:
+        return pathlib.Path(config_dir) / _SKILL_SUBPATH
+    agent_type = config.get("type")
+    if not isinstance(agent_type, str) or agent_type not in _DEFAULT_CONFIG_SUBPATH:
+        raise ValueError(f"unknown agent type {agent_type!r}")
+    return _home() / _DEFAULT_CONFIG_SUBPATH[agent_type] / _SKILL_SUBPATH
 
+
+def _skill_dirs(bind: sa.engine.Connection) -> list[pathlib.Path]:
+    """Every registered agent's effective skill directory."""
     rows = bind.execute(
         sa.text("SELECT name, config_json FROM resources WHERE kind = 'agent'")
     ).fetchall()
     dirs: list[pathlib.Path] = []
     for name, config_json in rows:
         try:
-            dirs.append(AgentConfig.model_validate(json.loads(config_json)).resolved_skill_dir())
+            dirs.append(_resolved_skill_dir(json.loads(config_json)))
         except Exception:
             logger.warning("0089: could not resolve skill dir for agent %r — skipped", name)
     return dirs

@@ -61,24 +61,6 @@ def test_anthropic_sets_managed_keys_and_preserves_others() -> None:
     assert "ANTHROPIC_API_KEY" not in d["env"]  # never write the raw key
 
 
-@pytest.mark.acceptance(
-    spec="provider-switching", scenario="every write deletes the deprecated background-model key"
-)
-def test_every_write_deletes_the_deprecated_model_keys() -> None:
-    out = apply_anthropic_settings(
-        '{"env": {"ANTHROPIC_SMALL_FAST_MODEL": "stale", "ANTHROPIC_MODEL": "old"}}',
-        base_url="u",
-        model="m",
-        tier_models={"haiku": "h"},
-        api_key_helper=_HELPER,
-    )
-    d = json.loads(out)
-    assert "ANTHROPIC_SMALL_FAST_MODEL" not in d["env"]
-    assert "ANTHROPIC_MODEL" not in d["env"]
-    assert d["model"] == "m"
-    assert d["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "h"
-
-
 def test_anthropic_handles_empty_and_is_idempotent() -> None:
     first = apply_anthropic_settings(
         "", base_url="u", model="m", tier_models={"haiku": "f"}, api_key_helper=_HELPER
@@ -229,12 +211,12 @@ def test_remove_codex_empty_and_idempotent() -> None:
     spec="provider-switching",
     scenario="the projected key is hidden from the agent's shell commands",
 )
-def test_the_proxy_form_names_no_key_and_drops_an_earlier_exclude() -> None:
+def test_the_proxy_form_names_no_key_in_the_environment() -> None:
     """Codex fetches its local proxy token through the ``auth`` command, so no
-    key rides its environment and the exclusion an earlier build added goes."""
-    earlier = '[shell_environment_policy]\nexclude = ["AWS_*", "COFFER_PROVIDER_KEY"]\n'
+    key rides its environment; the user's shell policy is left as it was."""
+    user_policy = '[shell_environment_policy]\nexclude = ["AWS_*"]\n'
     out = apply_codex_provider(
-        earlier,
+        user_policy,
         base_url="http://127.0.0.1:8001/openai/v1",
         model="m",
         wire_api="responses",
@@ -250,15 +232,7 @@ def test_the_proxy_form_names_no_key_and_drops_an_earlier_exclude() -> None:
     }
     assert block["supports_websockets"] is False and block["requires_openai_auth"] is False
     assert doc["shell_environment_policy"] == {"exclude": ["AWS_*"]}
-
-
-def test_remove_codex_drops_only_the_earlier_builds_exclude_entry() -> None:
-    earlier = '[shell_environment_policy]\nexclude = ["AWS_*", "COFFER_PROVIDER_KEY"]\n'
-    doc = tomllib.loads(remove_codex_provider(earlier))
-    assert doc["shell_environment_policy"] == {"exclude": ["AWS_*"]}
-
-    only_ours = '[shell_environment_policy]\nexclude = ["COFFER_PROVIDER_KEY"]\n'
-    assert "shell_environment_policy" not in tomllib.loads(remove_codex_provider(only_ours))
+    assert "COFFER_PROVIDER_KEY" not in out
 
 
 def test_proxy_token_helper_is_written_and_removed() -> None:
@@ -268,18 +242,11 @@ def test_proxy_token_helper_is_written_and_removed() -> None:
     assert helper == f"{_CLI} proxy token --agent-uid {_AGENT_UID}"
     out = apply_anthropic_settings("", base_url="https://agnes", model=None, api_key_helper=helper)
     assert json.loads(out)["apiKeyHelper"] == helper
-    # Removal strips ANY Coffer-managed helper, so use-builtin always reverts
-    # cleanly — including the `provider key` forms earlier builds wrote into
-    # files that are still on this disk.
+    # Removal strips a Coffer-managed helper, bare or by path, so use-builtin
+    # always reverts cleanly.
     assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(out))
-    for superseded in (
-        f"{_CLI} provider key --connection-uid {_AGENT_UID}",
-        f"coffer provider key --connection-uid {_AGENT_UID}",
-        "coffer provider key --wire anthropic",
-        "coffer provider key --connection agnes",
-    ):
-        doc = json.dumps({"apiKeyHelper": superseded})
-        assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(doc))
+    bare = json.dumps({"apiKeyHelper": f"coffer proxy token --agent-uid {_AGENT_UID}"})
+    assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(bare))
 
 
 def test_api_key_helper_names_the_cli_by_absolute_path_and_quotes_spaces() -> None:
@@ -299,7 +266,8 @@ def test_api_key_helper_names_the_cli_by_absolute_path_and_quotes_spaces() -> No
         "my-own-helper --token",
         "/usr/local/bin/op read op://vault/anthropic",
         "coffer-helper provider key",  # program is not the coffer CLI
-        "/opt/coffer/bin/coffer provider list",  # not the key command
+        "/opt/coffer/bin/coffer provider list",  # not the token command
+        f"coffer provider key --connection-uid {_AGENT_UID}",  # not the token command
         "coffer provider",  # too short to be ours
         "'/unbalanced/coffer provider key",  # not a line Coffer could write
         "",

@@ -43,7 +43,7 @@ Coffer validates every folder before it accepts it:
 | Rule | Limit |
 | --- | --- |
 | `SKILL.md` present | required |
-| `name` | lowercase letters, digits, `-` and `_`; starts with a letter or digit; at most 64 characters |
+| `name` | lowercase letters, digits and `-`; starts with a letter or digit; at most 64 characters |
 | `description` | non-empty, at most 1024 characters |
 | Symlinks inside the folder | none may point outside the folder |
 | Total folder size | at most 50 MB |

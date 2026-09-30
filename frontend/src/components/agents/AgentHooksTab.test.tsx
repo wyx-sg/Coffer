@@ -213,13 +213,13 @@ describe("AgentHooksTab", () => {
     const onRepair = vi.fn();
     renderTab(
       {
-        items: [{ ...COFFER_ROW, command: "coffer memory context --agent codex" }],
+        items: [{ ...COFFER_ROW, command: "coffer memory hook --agent-uid agt_stale" }],
         coffer_hook: { ...COFFER, health: "stale", installed_command: "old" },
         parse_errors: [],
       },
       { onRepair },
     );
-    const row = await rowOf("coffer memory context --agent codex");
+    const row = await rowOf("coffer memory hook --agent-uid agt_stale");
     expect(await within(row).findByText("Out of date")).toBeInTheDocument();
     expect(within(row).getByText(/^fired /)).toBeInTheDocument();
     fireEvent.click(within(row).getByRole("button", { name: "Repair Coffer’s memory hook" }));

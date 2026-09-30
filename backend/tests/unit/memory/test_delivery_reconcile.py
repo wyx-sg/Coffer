@@ -37,7 +37,8 @@ from tests.unit.memory.test_delivery_service import (
 
 pytestmark = pytest.mark.asyncio
 
-_STALE = f': {MARKER}; coffer memory context --agent cc --cwd "$PWD"'
+#: An installed hook whose CLI has since moved: marker intact, command stale.
+_STALE = f': {MARKER}; /moved/away/coffer memory hook --agent-uid {_CC_UID} --cwd "$PWD"'
 
 
 class _Rig:
@@ -66,7 +67,7 @@ class _Rig:
         return (await self.delivery.status(uid)).command
 
     def age(self, uid: str = _CC_UID) -> None:
-        """Rewrite an installed hook's command the way the CLI change aged it."""
+        """Rewrite an installed hook's command the way a moved CLI ages it."""
         path = _CC_SETTINGS_PATH if uid == _CC_UID else _CODEX_HOOKS_PATH
         data = json.loads(self.store._files[path])
         for groups in data["hooks"].values():
@@ -98,8 +99,8 @@ def _only(report: PassReport):
     scenario="a hook whose command went stale is repaired without being asked",
 )
 async def test_a_stale_command_is_rewritten_at_boot() -> None:
-    """The one found in the field: ``--agent`` became ``--agent-uid`` and the
-    stale entry still read as installed, because detection reads the marker."""
+    """The stale entry still reads as installed, because detection reads the
+    marker; the pass judges the whole command."""
     rig = _Rig(connected=[_CC_UID])
     await rig.delivery.install(_CC_UID, actor="ui")
     rig.age()
@@ -118,19 +119,20 @@ async def test_a_stale_command_is_rewritten_at_boot() -> None:
     assert [e.actor for e in repairs] == ["ui", "system"]
 
 
-async def test_an_older_builds_single_session_start_entry_gains_the_other_events() -> None:
-    """A build before per-prompt delivery installed one ``SessionStart`` entry
-    running ``memory context``; a period pass gives it all four events."""
+async def test_a_hook_missing_some_events_gains_the_others() -> None:
+    """The event set is judged too: a hook left on ``SessionStart`` alone
+    (the other entries deleted by hand) gets all four events back on a period
+    pass."""
     rig = _Rig(connected=[_CC_UID])
-    old = f': {MARKER}; {TEST_COFFER_CLI} memory context --agent-uid {_CC_UID} --cwd "$PWD"'
+    current = f': {MARKER}; {TEST_COFFER_CLI} memory hook --agent-uid {_CC_UID} --cwd "$PWD"'
     rig.store._files[_CC_SETTINGS_PATH] = json.dumps(
-        {"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": old}]}]}}
+        {"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": current}]}]}}
     )
 
     result = _only(await rig.run(Trigger.PERIOD))
 
     assert result.change.difference.op is Op.MODIFY
-    assert result.change.difference.changed_params == ("command", "event")
+    assert result.change.difference.changed_params == ("event",)
     assert result.change.decision.reason_code == "stale_command"
     assert result.outcome is Outcome.APPLIED
     data = json.loads(rig.store._files[_CC_SETTINGS_PATH])
@@ -264,15 +266,9 @@ async def test_a_failed_audit_removes_a_file_the_install_created() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Codex: the older build's hook, and trust
+# Codex: trust
 # ---------------------------------------------------------------------------
 
-#: What a build before SessionStart support installed for Codex.
-_LEGACY_CODEX = (
-    f': {MARKER}; f="${{TMPDIR:-/tmp}}/.coffer-memory-fired-$PPID"; '
-    f'[ -e "$f" ] || {{ : > "$f"; coffer memory context --agent-uid {_CODEX_UID} '
-    '--cwd "$PWD"; }'
-)
 _CODEX_CONFIG_PATH = _CODEX_HOOKS_PATH.with_name("config.toml")
 
 
@@ -288,39 +284,6 @@ def _approve_codex(rig: _Rig) -> None:
         f'trusted_hash = "{current_hash(hook)}"\n'
         for hook in hooks
     )
-
-
-@pytest.mark.acceptance(
-    spec="memory", scenario="an older build's Codex hook is moved to SessionStart"
-)
-async def test_an_older_builds_codex_hook_is_moved_to_session_start_on_a_period() -> None:
-    """The migration needs no person: the entry an older build left on
-    UserPromptSubmit differs in event and command, so a period pass rewrites
-    it — the foreign hook beside it stays."""
-    rig = _Rig(connected=[_CODEX_UID])
-    foreign = {"hooks": [{"type": "command", "command": "/skynet/beforeSubmitPrompt.sh"}]}
-    legacy = {"hooks": [{"type": "command", "command": _LEGACY_CODEX, "timeout": 10}]}
-    rig.store._files[_CODEX_HOOKS_PATH] = json.dumps(
-        {"hooks": {"UserPromptSubmit": [foreign, legacy]}}
-    )
-
-    result = _only(await rig.run(Trigger.PERIOD))
-
-    assert result.change.difference.op is Op.MODIFY
-    assert result.change.difference.changed_params == ("command", "event", "trust")
-    assert result.change.decision.reason_code == "stale_command"
-    assert result.outcome is Outcome.APPLIED
-    data = json.loads(rig.store._files[_CODEX_HOOKS_PATH])
-    assert set(data["hooks"]) == set(DELIVERY_EVENTS)
-    ups_foreign, ups_coffer = data["hooks"]["UserPromptSubmit"]
-    assert ups_foreign == foreign
-    assert _LEGACY_CODEX not in rig.store._files[_CODEX_HOOKS_PATH]
-    command = await rig.command(_CODEX_UID)
-    assert command.startswith(f": {MARKER}; {TEST_COFFER_CLI} ")
-    assert ups_coffer["hooks"][0]["command"] == command
-    for event in ("SessionStart", "PreToolUse", "PostToolUse"):
-        (entry,) = data["hooks"][event]
-        assert entry["hooks"][0]["command"] == command
 
 
 @pytest.mark.acceptance(

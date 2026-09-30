@@ -1707,7 +1707,6 @@
     "APPROVAL_NOT_PENDING": "That approval has already been answered.",
     "SECRET_NAME_INVALID": "That secret name isn't valid.",
     "SECRET_NOT_FOUND": "No secret is stored under that name.",
-    "MASTER_KEY_CONFLICT": "Two different master keys were found — one in the Keychain and one elsewhere. Coffer will not pick one; keep the key your secrets were stored with and remove the other.",
     "CUSTOM_TOOL_NOT_FOUND": "No custom tool or group by that name",
     "NOT_A_CUSTOM_TOOL_GROUP": "That MCP server isn't a custom-tool group",
     "CUSTOM_TOOL_EXISTS": "A tool with that name already exists in this group",

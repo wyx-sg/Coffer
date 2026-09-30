@@ -9,7 +9,6 @@ the value. A binding is approved when:
 
 * a person approved it in the desktop app (with a presence grant the daemon
   verified before calling :meth:`approve`);
-* it was in use before the boundary existed (adopted once, at the first start);
 * the value was supplied for it moments ago — the ref has never been bound
   anywhere, is not a standalone ``secret/`` name, and was stored within
   ``FRESH_WINDOW`` — because a caller that just typed the value already has it;
@@ -42,7 +41,6 @@ from coffer.domain.secrets import (
 )
 
 REQUIRE_APPROVAL_KEY = "require_approval"
-ADOPTED_KEY = "adopted_existing_bindings"
 #: How recently a never-bound value must have been stored to count as supplied
 #: for the binding that cites it.
 FRESH_WINDOW = timedelta(minutes=5)
@@ -224,19 +222,6 @@ class SecretBoundary:
                 slot,
             ):
                 self._store.decide(approval.id, "superseded", by="system", at=self._stamp())
-
-    def adopt(self, current: Destinations) -> int:
-        """Approve, once, every binding in use before the boundary existed."""
-        if self._store.get_setting(ADOPTED_KEY) == "true":
-            return 0
-        adopted = 0
-        for dest, refs, _actor in current:
-            for slot, ref in refs.items():
-                if self._store.get_binding(ref, dest.kind, dest.uid, slot) is None:
-                    self._approve_binding(ref, dest, slot, None)
-                    adopted += 1
-        self._store.set_setting(ADOPTED_KEY, "true")
-        return adopted
 
     def refresh(self, current: Destinations) -> list[SecretApproval]:
         """Evaluate every current destination and retire approvals nothing wants.

@@ -173,8 +173,8 @@ fixed: once registered it MUST NOT change, and a changed name MUST be refused wi
 carries no title: its fixed name and its description — a note the user keeps for themselves — are all it has
 ([resource-framework](../resource-framework/spec.md) "Carry an optional editable title on the kinds that have one"),
 and `coffer mcp add` and `coffer mcp edit` offer no `--title`.
-At registration the name MUST be at most 24 characters, in addition to the existing name pattern and the ban
-on `__`; a server registered earlier with a longer name MUST keep it and keep working.
+The name MUST be at most 24 characters, in addition to the existing name pattern and the ban on `__`,
+wherever the framework validates it — registration here and a server arriving from another machine alike.
 
 - Registering a server whose upstream is unreachable MUST still succeed (the config is saved); discovery and
   health report the failure, the server is marked unhealthy until reachable, and there MUST be no silent
@@ -214,10 +214,9 @@ on `__`; a server registered earlier with a longer name MUST keep it and keep wo
 - **THEN** the process exits with code 3, and stderr names the daemon-unreachable condition exactly once and carries no traceback.
 
 #### Scenario: a server name longer than 24 characters is refused at registration
-- **GIVEN** the coffer daemon is running, and a server registered before the cap with a 30-character name
+- **GIVEN** the coffer daemon is running
 - **WHEN** the user registers a new server whose name is 25 characters long, and then one whose name is 24 characters long
 - **THEN** the first is refused as a validation error naming the 24-character limit, with nothing persisted, and the second is registered
-- **AND** the earlier server keeps its 30-character name, and its tools are still listed and callable
 
 #### Scenario: test re-queries capabilities before reporting health
 - **GIVEN** a registered server whose upstream has gained a tool since Coffer last discovered it
@@ -393,7 +392,7 @@ the uid rather than the name, because the entry is written once into a file Coff
 goes stale on the first rename. A session's reported identity is carried for the life of that connection and
 used for every subsequent list and call.
 
-- A `_meta` carrying only the older name-based key MUST be treated as reporting no identity rather than
+- A `_meta` carrying only a name-based `coffer/agent` key MUST be treated as reporting no identity rather than
   resolved by name.
 - A session with no reported identity (a hand-configured shim invocation, or any client that omits
   `--agent-uid`) MUST be treated as `agent=None`, matching only servers that carry no scope — never a scoped
@@ -410,7 +409,7 @@ used for every subsequent list and call.
 
 #### Scenario: a name-only handshake is treated as unidentified
 - **GIVEN** one server scoped to a single agent's uid and one unscoped server,
-- **WHEN** a session's handshake `_meta` carries only the older name-based `coffer/agent` key naming that agent,
+- **WHEN** a session's handshake `_meta` carries only a `coffer/agent` key naming that agent, and no `coffer/agent-uid`,
 - **THEN** the session reports no identity,
 - **AND** its `tools/list` shows only the unscoped server's tools.
 

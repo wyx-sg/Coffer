@@ -110,7 +110,7 @@ def test_unknown_extra_fields_tolerated():
 # ----- validate_frontmatter_name -----
 
 
-@pytest.mark.parametrize("name", ["my-skill", "a", "s_1", "0abc", "a" * 64])
+@pytest.mark.parametrize("name", ["my-skill", "a", "s-1", "0abc", "a" * 64])
 def test_frontmatter_name_accepts_the_standard_charset(name):
     validate_frontmatter_name(name)  # does not raise
 
@@ -121,6 +121,7 @@ def test_frontmatter_name_accepts_the_standard_charset(name):
         "My.Skill",  # the exact shape the FRAMEWORK rule lets through
         "MySkill",  # uppercase
         "my.skill",  # dot
+        "my_skill",  # underscore
         "-leading",  # must start alphanumeric
         "",
         "a" * 65,

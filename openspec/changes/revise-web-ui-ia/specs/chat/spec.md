@@ -6,8 +6,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Show every conversation on the Conversations page
-The web UI MUST carry a **Conversations** page (`/conversations`; the old `/chat` and `/chat/:id`
-redirect to it): the conversation list on the left and the selected conversation on the right. It
+The web UI MUST carry a **Conversations** page (`/conversations`): the conversation list on the left and the selected conversation on the right. It
 is the page this spec's other requirements call the Chat page. The list MUST show every
 conversation Coffer runs, whatever opened it — a conversation an IM channel (SeaTalk, Telegram)
 opened, and one opened from Coffer's own UI, which is modelled as a built-in source named
@@ -43,11 +42,11 @@ one owner, and an agent cannot tell which window a turn arrived through.
 
 #### Scenario: the page opens on the list with no welcome page
 - **GIVEN** conversations from two sources
-- **WHEN** the user opens `/conversations`, and then an old `/chat` link
-- **THEN** each opens the Conversations list with New conversation as a secondary action, with no welcome or suggestions page and no voice-input control in the composer
+- **WHEN** the user opens `/conversations`
+- **THEN** it opens the Conversations list with New conversation as a secondary action, with no welcome or suggestions page and no voice-input control in the composer
 
 ### Requirement: Put the open conversation in the URL
-The open conversation MUST be part of the URL (`/conversations/:id`, with the old `/chat/:id` redirecting there), so a refresh, a
+The open conversation MUST be part of the URL (`/conversations/:id`), so a refresh, a
 deep link and a second tab all reopen the same thread. A link to a conversation
 that no longer exists MUST say so explicitly, with a way back to a new draft —
 never drop silently into the draft surface as though the link had been to

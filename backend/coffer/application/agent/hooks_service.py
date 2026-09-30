@@ -214,8 +214,7 @@ class AgentHooksService:
             resource=agent, event_type=AuditEventType.MEMORY_DELIVERY_FIRED.value, limit=1
         )
         return CofferHook(
-            # Where it sits when installed (an older build's may sit on another
-            # event), where it would go otherwise.
+            # Where it sits when installed, where it would go otherwise.
             event=events or hook.event,
             path=str(path),
             health=health,
