@@ -91,9 +91,9 @@ Both put `coffer`, `coffer-daemon` and `coffer-mcp-shim` in `~/.coffer/bin`. The
 
 ```sh
 coffer open                          # start the daemon and open the web UI, signed in
-coffer scan                          # list the agents found on this machine
+coffer scan                          # list agents, skills and MCP entries Coffer does not manage yet
 coffer agent add claude-code         # register Claude Code (Codex: codex)
-coffer agent connect claude-code     # add Coffer's one MCP entry to its config
+coffer agent connect claude-code     # install Coffer's MCP entry and memory hook
 
 coffer mcp add filesystem --stdio "npx -y @modelcontextprotocol/server-filesystem /tmp"
 coffer mcp test filesystem           # check it answers and list its tools

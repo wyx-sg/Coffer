@@ -66,7 +66,7 @@ git clone https://github.com/wyx-sg/Coffer.git
 cd Coffer
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e ./backend
-(cd frontend && npm install && npm run build)   # the web UI the daemon serves
+(cd frontend && npm install && npm run build)   # 守护进程提供的 Web 界面
 ```
 
 **从发布版安装**（Apple 芯片的 macOS，发布后可用）：从 [Releases](https://github.com/wyx-sg/Coffer/releases/latest) 下载桌面应用 `Coffer-unsigned-<triple>.dmg`，它同时带有命令行；或者用一行安装脚本：
@@ -88,13 +88,13 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 ## 快速上手
 
 ```sh
-coffer open                          # start the daemon and open the web UI, signed in
-coffer scan                          # list the agents found on this machine
-coffer agent add claude-code         # register Claude Code (Codex: codex)
-coffer agent connect claude-code     # add Coffer's one MCP entry to its config
+coffer open                          # 启动守护进程，打开已登录的 Web 界面
+coffer scan                          # 列出 Coffer 还没管理的智能体、技能和 MCP 条目
+coffer agent add claude-code         # 登记 Claude Code（Codex 用 codex）
+coffer agent connect claude-code     # 安装 Coffer 的 MCP 条目和记忆 Hook
 
 coffer mcp add filesystem --stdio "npx -y @modelcontextprotocol/server-filesystem /tmp"
-coffer mcp test filesystem           # check it answers and list its tools
+coffer mcp test filesystem           # 确认它能响应，并列出它的工具
 ```
 
 新开一个 Claude Code 会话，就能看到 `filesystem__read_file` 等工具。需要守护进程的命令都会自动启动它。[15 分钟快速上手](https://wyx-sg.github.io/Coffer/zh/start/quickstart)接着介绍如何投递技能；这些事在 Web 界面里也都能做，而且 Coffer 写入之前会让你逐一检查每处文件改动。
