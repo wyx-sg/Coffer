@@ -189,9 +189,11 @@ Use **Node 20**, the version CI uses, when you run the frontend suite locally.
 | `scripts/check_spec_citations.py` | Every `spec <capability> "<Title>"` citation in any tracked file names a real requirement |
 | `scripts/check_architecture_doc.py` | The code-layout tree in `docs-site/architecture/layering.md` names every package, names nothing that is gone, and the architecture pages name every built-in `coffer__*` tool |
 | `scripts/check_pyinstaller_specs.py` | The three PyInstaller specs point at files that exist and keep the `-X utf8` runtime option. No pull request job runs PyInstaller, so this is the only early warning |
-| `scripts/check_cli_reference.py` | This site's generated CLI and REST API reference pages match the code. Fix drift with `make docs-reference` |
+| `scripts/check_cli_reference.py` | This site's generated CLI reference pages (English and Chinese) match the code. Fix drift with `make docs-reference` |
+| `scripts/check_docs_locales.py` | This site's English and Chinese trees are one to one: pages, sidebar entries, heading anchors, and Chinese pages linking Chinese pages |
 | `scripts/check_removed_commands.py` | No page under `docs-site/`, repository guide (`README.md`, `AGENTS.md`, `CONTRIBUTING.md`, `.agents/`), spec, shipped skill body, web UI source file or e2e spec quotes a `coffer` command, option or `coffer__` tool that has been removed. Each hit names the command to use instead; a line that names one on purpose, such as a scenario asserting it is gone, is listed in the script's `ALLOWED` |
 | `scripts/check_platform_calls.py` | No code outside the platform part of the infrastructure layer asks which operating system it runs on. Tests are exempt. See [Platform port](/architecture/platform) |
+| `scripts/check_coffer_paths.py` | Every `~/.coffer` path is built in `infrastructure/vault/home.py`, the one module that knows the layout and honours `HOME`; any other module that builds one fails. Migrations and the real-home test guard are allowed |
 | `scripts/check_agent_type_branches.py` | No code outside the agent descriptor and its facets branches on an agent type. See [Agent facets](/architecture/agent-facets) |
 | `scripts/check_frontend_colors.py` | No colour literal in the frontend outside `src/index.css`; every colour is a theme token |
 | `scripts/check_ignored_sources.py` | No `.gitignore` rule hides a file in a source tree, and no unanchored pattern names a common source-folder word such as `lib/` or `env/`, which would hide that folder at any depth |

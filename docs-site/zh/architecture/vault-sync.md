@@ -1,0 +1,234 @@
+---
+title: 保险库同步
+description: Coffer 如何通过拉取和推送保险库自己的 git 仓库，让你的多台机器共享一个保险库——精简的一轮同步、遇到任何冲突即停止、删除断路器、加入、回滚、机器，以及一轮同步会报告的问题。
+---
+
+# 保险库同步 {#vault-sync}
+
+保险库同步把保险库的 git 仓库拉取和推送到你自己拥有的远端，让多台机器共享一个保险库。本页面向想了解机制的工程师：一轮同步逐步做了什么、为什么任何冲突都会让它停下、如何区分一台新机器和一台回归的机器、哪些防护能阻止无人值守的写入者造成破坏，以及如何撤销一轮同步。配置和日常使用见[保险库同步指南](/zh/guides/vault-sync)。
+
+## 问题 {#the-problem}
+
+你在笔记本和台式机上做同样的项目，两台机器都会改动保险库：知识文档、技能、MCP 服务器注册、提供商配置、密钥。没有同步，每台机器都是一座孤岛。把一台复制到另一台是没有基准的整体覆盖，所以它无法区分「这台机器从来没有那份文档」和「这台机器删掉了它」。
+
+同步必须同时满足四个彼此拉扯的约束：
+
+- **本地优先。** 每台机器的保险库始终完整且权威。远端只是汇合点，从来不是记录系统：你可以删掉它，再从任意一台机器重建。
+- **删除必须能传播**，否则机器之间永远无法一致；而且**缺失绝不能被误认为删除**，否则一台过时的机器会抹掉其他机器持有的东西。
+- **密钥只以密文形式传输，而且只在你要求时**，主密钥永远不进入仓库。
+- **Coffer 自己做的任何事，都不应该事后还要去找出来撤销。** 无人值守的写入者可以应用 git 能干净合并的内容；其余一切都由你决定。
+
+## 以决策呈现的设计 {#the-design-in-decisions}
+
+| 决策 | 理由 |
+| --- | --- |
+| 保险库*就是* git 仓库；同步只是加一个远端，执行 fetch 和 push。 | 没有第二份副本需要序列化进去再翻译回来。你在 `~/.coffer/vault` 里看到的，正是传输的内容。见[持久化](/zh/architecture/persistence)。 |
+| 合并在工作树之外计算（`git merge-tree --write-tree`）。 | 在这一轮确认合并干净、有效且在断路器范围内之前，保险库里的东西一样都不碰。 |
+| **任何**冲突都会让整轮停止，逐个文件等待答复。 | 自动解决器会在没人决定的情况下改动数据。停下的一轮让保险库和远端保持原样。 |
+| 检出是对整棵树的比较并交换。 | 你还没保存进提交的编辑永远不会被覆盖；这一轮会等它。 |
+| 删除断路器在两个方向上都扣住过大的丢失。 | 同步轮次无人值守地运行。断路器限制了缺陷、被抹掉的磁盘或错误恢复所能造成的破坏。 |
+| 每次检出前做安全快照，回滚作为一个新提交。 | 一次让你后悔的干净合并，一条命令就能撤销，而且之后的编辑在撤销后依然保留。 |
+| 加入是显式且可预览的；新机器取并集。 | 绝不能让定时器决定一个陌生的保险库如何与远端汇合。并集不会删除任何东西。 |
+| 本机专属的状态放在保险库之外。 | 生效范围、远端、保留策略和智能体都在 `local/` 中，它从不提交，所以不会意外传出去。 |
+
+## 什么会传输 {#what-travels}
+
+保险库仓库中已提交的一切，除此之外什么都没有：
+
+| 会传输（在 `~/.coffer/vault` 中） | 留在每台机器上 |
+| --- | --- |
+| `mcp_server`、`skill`、`channel`、`provider` 和 `knowledge` 的资源文件 | 智能体（`local/resources/agent/`）：智能体的配置目录是关于这台机器的事实 |
+| 知识文档和 `.inbox/` 材料、技能主文件夹、记忆触发器 | 生效范围（`local/reach.json`）、自定义工具的生效范围、保留策略、同步远端本身 |
+| MCP 能力开关、消息渠道配对、Coffer 的模型和整理设置（`state/`） | 派生树：记忆、缓存、`derived.db`、渲染出来的 `coffer-guide` 技能 |
+| 密钥密文（`secret/`），仅在开启 `include_secret` 时 | 本机专属密文（`local/secret/`）、密钥边界、主密钥 |
+| 每台机器一个描述文件（`machines/<id>.json`） | `runs.db`（对话、审计、调用、同步轮次）、`content/`、日志、`daemon-config.json` |
+
+**生效范围**是关于这台机器的决定。把它发布出去，会让一台机器悄悄重新回答另一台机器已经回答过的问题。见[资源框架](/zh/architecture/resource-framework)。
+
+**消息渠道**传输时带有一个 `runs_on` 字段，指明由哪一台机器的守护进程启动适配器。文档、它的密钥引用和配对都会传输，所以把机器人挪到另一台机器只是一次重新绑定。在消息渠道没有指明的机器上，它的到达不会启动任何东西。见[消息渠道](/zh/guides/channels)。
+
+**密钥。** 在远端的 `include_secret` 开启之前，`secret/` 都列在仓库的 `.git/info/exclude` 中；开启后，密文文件会像其他文件一样被提交。已经进入被推送提交的密文无法撤回：吊销就是轮换。
+
+## 一轮同步 {#the-round}
+
+一轮同步有八步，按下面的顺序执行。顺序本身就是设计。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant W as 同步工作者
+    participant S as 同步服务
+    participant V as 保险库仓库
+    participant O as origin（你的远端）
+    W->>S: 运行一轮
+    S->>S: 获取保险库锁
+    S->>V: 检查：是仓库，且不在云同步文件夹内
+    S->>V: 落定你的有效编辑；L := HEAD
+    S->>O: fetch；R := origin/branch
+    S->>S: 拒绝布局不同的远端
+    S->>V: git merge-tree L R，得到树 T（在工作树之外）
+    S->>S: 有冲突、身份冲突或无效文件？停止
+    S->>S: 删除断路器，入站（L 到 T）与出站（基准到 L）
+    S->>V: 快照 L；M := commit(T; L, R)；read-tree -m -u L M
+    S->>V: 本机的描述文件
+    S->>O: push
+    S->>S: 记录本轮；若有变化则调和一次
+```
+
+1. **检查。** 保险库是一个仓库，并且不在另一个工具同步的文件夹里（Syncthing 文件夹、Dropbox、iCloud Drive 或 File Provider 根目录）。两个工具同步同一个 git 仓库会把它弄坏，所以这样的保险库会以 `paused_cloud_folder` 暂停。
+2. **本地。** 先提交你有效的手工编辑，这样 `L`，即本机的 `HEAD`，就包含了本机接受的一切。没有单独的导出步骤：每次被接受的写入本来就是一个提交。
+3. **Fetch。** `origin/<branch>` 成为 `R`。`manifest.json` 写着另一种布局的远端，会在合并任何东西之前被拒绝：更新的是 `remote_too_new`（升级这台机器），更旧的是 `remote_too_old`（远端必须重建，见[远端布局](#remote-layout)）。
+4. **合并。** `git merge-tree --write-tree L R` 在对象库中计算出合并后的树 `T`。保险库里什么都不变。
+5. **停止？** 内容冲突、同一个资源名对应两个不同的 uid，或者合并后的文件校验失败，都会让整轮停止。什么都不检出，什么都不推送。
+6. **防护。** [删除断路器](#the-deletion-breaker)检查这一轮会在本机移除的内容，以及本机自己的提交会从共享历史中移除的内容。
+7. **检出。** 给 `L` 打上标签 `refs/tags/coffer/pre-apply/<timestamp>`（保留十个）。以 `L` 和 `R` 为父提交提交 `M`，然后在保险库写锁下用 `git read-tree -m -u L M` 把保险库移到它上面。Git 在写任何文件之前，会对照 `L` 核对它要改的每个路径，所以如果某个路径你正在编辑（未提交或无效的编辑），这一轮会以 `waiting_on_edit` 等待并点名该文件。
+8. **发布。** 本机的描述文件在它自己的提交中更新，然后推送结果。推送被拒绝是 `push_failed`：保险库已经持有合并结果，下一轮会再试。
+
+一轮同步改动了保险库之后，[调和器](/zh/architecture/reconciler)会跑一轮，让每种类型重新投射到达的内容：智能体配置、shim、技能交付、提供商投射。同步本身不导入任何类型。
+
+### 一轮同步的结果 {#round-outcomes}
+
+每一轮无论结果如何，都会记录在 `runs.db`（`sync_runs`）中并审计：
+
+| 状态 | 含义 |
+| --- | --- |
+| `nothing_to_do` | 没什么可拉取，也没什么可推送。这是成功，不是跳过。 |
+| `pulled`、`pushed`、`pulled_and_pushed` | 发生了哪些传输。 |
+| `push_failed` | 已在本机应用；远端拒绝了推送。 |
+| `stopped` | 有冲突。什么都没检出，什么都没推送。 |
+| `held` | 删除断路器扣住了这一轮。 |
+| `waiting_on_edit` | 你尚未完成的编辑位于这一轮要改的路径上。 |
+| `join_required`、`joined` | 本机尚未加入远端；现在已加入。 |
+| `unreachable`、`auth_failed` | 远端无法访问，或拒绝登录。 |
+| `paused_cloud_folder` | 保险库位于另一个工具同步的文件夹中。 |
+| `remote_too_new`、`remote_too_old` | 远端处于另一种保险库布局。 |
+| `rolled_back` | 某一轮已被回滚。 |
+| `failed` | 其他任何情况，附带 git 的消息。 |
+
+## 冲突会让这一轮停止 {#conflicts-stop-the-round}
+
+大多数并发编辑都不是冲突：git 会自己合并不同的文件，以及同一文件的不同部分，干净的合并会无人值守地应用。git 解决不了的会让这一轮停下，并一直停着，直到你答复每一个文件。停下的这一轮保存在 `local/sync/round.json` 中。
+
+每个冲突文件有三种答复之一：
+
+- **保留本机的**（`mine`）。
+- **采用另一台的**（`theirs`），会显示本机将发生哪些改动的 diff。
+- **编辑。** Coffer 在 `derived/sync-conflicts/` 下写一份带标记的 git 合并副本，并在你的编辑器里打开它。保险库自己的文件永远不会收到冲突标记。只要还留有标记，标为已解决就会被拒绝，拒绝信息会点名那一行。
+
+还有第四种方式得到“编辑”这个答复：把合并交给智能体，因为合并两个人的修改需要判断，Coffer 不替你做（原则 IV）。对每个两边都改过的文件，停下的这一轮的 `handoff` 提示词会写明保险库、两边的提交、`git -C <vault> diff` 命令，以及 Coffer 已经写好的带标记副本。智能体只编辑这些副本，从不碰保险库或它的 git 历史。之后 **我已合并**（`POST /api/v1/sync/stop/merged`、`coffer sync resolve --merged`）会把每份副本记录为对应文件的“编辑”答复；只要还有任何一份副本留有标记，整个请求都会被拒绝。提示词在 `domain/sync/handoffs.py` 里构建。它从不携带密钥：停下的一轮里的 `secret/*.enc` 文件只提供“保留本机的”和“采用另一台的”两个选项，没有编辑用的副本，在提示词里也只计数。
+
+远端的拒绝也以同样方式交接。推送被拒、登录被拒和远端无法访问，都会在状态的 `problem` 上放一段提示词：不含凭据的 URL、分支、密钥的名字，以及去掉了 token 形态内容的 git 消息。缺少 `git` 则是问题 `git_missing`，附带共用的安装交接提示词。
+
+答复会被记录下来，而不是逐个应用。当每个文件都有答复后，**继续**会让解决后的树经过同样的校验、断路器、快照、检出和推送。一次停止是关于一对提交的问题：如果在你答复之前任一方有变动，这一轮会重新推导并再次询问。停止期间本地写入仍照常提交；只有同步在等待。
+
+有两种情况从不询问：
+
+- **密钥密文。** Fernet 令牌以明文携带它的加密时间，所以同一个引用的两份密文无需密钥就能排序，较新的胜出。在两个不透明的数据块之间让你二选一，根本算不上选择。
+- **机器描述文件。** 每台机器只写它自己的文件，所以描述文件永远不会冲突。
+
+## 删除断路器 {#the-deletion-breaker}
+
+当一轮同步在任何区域、任一方向上的丢失达到 **20 个文件**或超过该区域原有内容的 **20%** 时，这一轮会被**扣住**。区域是路径的第一段，但 `resources/<kind>/` 和 `state/<area>/` 各自单独成为一个区域，这样某一种类型的大规模删除不会被其他类型稀释。阈值是固定的，没有任何东西能绕过断路器。
+
+- **入站**是这一轮会从本保险库移除的内容（`L` 到 `T`）。
+- **出站**是本机自己的提交从共享历史中移除的内容。正是这一点，阻止了一台因重装、恢复失败或一次误操作的 `rm -rf` 而丢了文件的机器，把这份丢失推送给其他所有机器。
+
+它统计的是**丢失，而不是删除**。资源文件只有在它的 uid 从另一边消失时才算丢失，所以重命名或移动的文件天然算作移动。其他文件如果完全相同的字节出现在同一区域的其他位置，或者 git 自己的重命名检测把它与同一区域的某个文件配对，就算作移动。空 blob 从不配对任何东西，跨区域的配对也不算移动。`machines/` 和 manifest 从不计入。
+
+扣住的一轮有两种答复方式，任一种都会让这一轮继续：
+
+- **确认**会应用这些删除（`coffer sync hold --confirm`，**删除 n 个文件**）。
+- **恢复**会保留这些文件（`coffer sync hold --restore`，**恢复 n 个文件**）。入站时，合并后的树采用本机的版本，所以它们留在本机并重新推上去。出站时，被删除的文件会从共享基准写回来，作为你的一个提交，下一轮会把它们推送出去。
+
+## 加入 {#joining}
+
+从未与远端收敛过的机器处于**加入**状态。定时器从不自行加入：在你加入之前，每一轮都以 `join_required` 结束，什么都不传输。加入总是先预览，预览用的就是加入时要用的同一组事实，所以你看到的就是将要发生的：
+
+| 情形 | 如何识别 | 加入做什么 |
+| --- | --- | --- |
+| **空**远端 | 分支没有任何提交。 | 本机是第一台；这一轮推送整个保险库。 |
+| **新**机器 | 远端没有本机的描述文件。 | 取并集：只有远端有的文件拉下来，只有本机有的文件推上去，完全相同的文件什么都不用做。两边都有但内容不同的文件保持本机的原样、不推送，直到你做出选择。两边都不删除任何东西。 |
+| **回归的**机器 | 远端持有本机的描述文件，其中写着本机上次收敛时的提交，而且该提交仍在远端的历史中。 | 从那个提交开始做一次普通的三方合并，所以其他机器在它离开期间删除的东西会在本机被删除，它自己的编辑得以保留，删除过的东西不会回来。它自那以后自己做的删除是真正的删除，受断路器保护。 |
+
+新机器加入时留下不同的文件，可以逐个或一次性处理：**保留我的**或**采用远端的**（`coffer sync choose`）。同名但 uid 不同的资源会让加入停下并询问，和任何冲突一样。
+
+把回归的机器当作新机器看起来很保守，实际上是一个会丢数据的 bug：并集没有可以产生分歧的基准，所以在这台机器离开期间整个机群做过的每一次删除都会回来。这就是描述文件要记录上次收敛提交的原因。
+
+## 回滚 {#rollback}
+
+`coffer sync rollback <round>`（或者该轮所在行上的**回滚**）会根据快照把一轮同步改动的内容放回去，作为本机上一个新的 `user` 提交，由下一轮推送出去。只触及那一轮改动过的路径，该轮之后被编辑过的文件会被保留并列出来。会先显示计划。什么都没应用的一轮，以及回滚本身，都不能再回滚。
+
+回滚从不让 `HEAD` 倒退：历史只增不减，所以其他机器会像跟随任何其他改动一样跟随这次撤销。
+
+## 机器 {#machines}
+
+每台机器只写一个文件 `machines/<machine id>.json`，从不写别的机器的文件。`machines/` 里有什么，注册表就是什么。一个描述文件包含它的格式版本、机器 id、名字、操作系统和主机名、Coffer 版本、上次运行了有实际传输的一轮的时间、上次收敛时的提交、主密钥的指纹（这样另一台机器就能指出它的密钥在这里解不开），以及它的智能体及其插件。插件列表是一份清单：只做记录，从不安装进任何智能体。
+
+- **身份。** 机器 id 从宿主机派生（macOS 上是 `IOPlatformUUID`，Linux 上是 `/etc/machine-id`），发布前先做哈希，所以重装 Coffer 后它依然不变。只有两者都不存在时，才会在 `~/.coffer/machine-id` 中存一个随机 id，删掉 `~/.coffer` 后它就不复存在。
+- **名字。** 一个标签。可以随意改名，没有任何东西以它为键，新名字会立即提交。
+- **退役。** 删除另一台机器的描述文件，是你的一个普通提交，由下一轮推送出去。再次同步的机器会重新出现。
+- **主密钥。** 密文到了但密钥没到的密钥会被报告为已锁定，而不是等到第一次使用时才失败。密钥在机器之间通过带外方式移动：桌面应用在存在性校验之后写出一份受口令保护的密钥备份，`coffer sync key import`（或**设置 › 安全 › 导入主密钥**）在另一台机器上安装它，安装前会把文件里的密钥是谁的与本机的密钥并排显示（`POST /api/v1/sync/key/import/preview`）。被替换的密钥会作为备份保留，运行中的守护进程会用导入的密钥加密此后存储的每一个密钥。
+
+## 一轮同步会报告的问题 {#problems-a-round-reports}
+
+| 问题 | 本轮状态 | 含义 | 怎么做 |
+| --- | --- | --- | --- |
+| 无法访问 | `unreachable` | Git 访问不到仓库。 | 什么都不会丢；改动会等待，并随下一次成功的一轮推上去。 |
+| 登录失败 | `auth_failed` | 远端拒绝了密钥，或者一个指向新 URL 的令牌正在等待批准。 | 检查令牌，或在桌面应用中批准它。 |
+| 推送被拒绝 | `push_failed` | 已在本机应用；远端拒绝了推送。 | 检查分支的保护规则和令牌的权限。 |
+| 云文件夹 | `paused_cloud_folder` | 保险库位于另一个工具同步的文件夹中。 | 把保险库移出那个文件夹。 |
+| 布局 | `remote_too_new`、`remote_too_old` | 远端是用另一种保险库布局写的。 | 更新的：升级这台机器。更旧的：重建远端。 |
+
+每个问题都会在**同步**页面上显示为一条横幅，在侧边栏的**同步**入口上打上标记，并让 `coffer sync status` 以非零状态退出。
+
+### 远端布局 {#remote-layout}
+
+保险库的 `manifest.json` 只携带一个数字 `schema_version`，当前是 `3`。数字相同的远端会与之收敛。数字更新的远端是由更新版本的 Coffer 写的，在本机升级之前会被拒绝。数字更旧的远端，比如由保险库布局出现之前的 Coffer 写的，会被拒绝，而且从不原地转换：在其他机器仍在推送旧布局时，从一台机器上转换共享的远端，正是丢数据的方式。取而代之的是重建。让第一台升级的机器指向一个空分支或空仓库，并把它的保险库发布到那里；其他机器升级后，再作为新机器加入它。见[升级已有的 Coffer](/zh/guides/upgrading)。
+
+## 与整理共用一把锁 {#sharing-the-lock-with-curation}
+
+知识的[一轮整理](/zh/architecture/knowledge)也会无人值守地重写保险库内容。有两条规则让它和同步互不干扰：
+
+- **一把锁。** 一轮同步、一次答复、一次回滚和一轮整理都获取同一把保险库锁，所以一轮同步永远不会在做了一半的重写之上合并。
+- **一台所有者机器。** 两台机器把同一个收件箱条目归并进不同的文档，会合并得很干净，知识却存了两份。所以整理的所有者是同步的引擎设置（`state/settings/internal-engine.json`）中的一个机器 id，在其他每台机器上这一轮整理什么都不做。当一轮同步处于停止、被扣住或等待加入选择时，它也会等待，所以重写永远不会在你即将回答的问题底下挪动文档。
+
+## 安全地与 git 交互 {#talking-to-git-safely}
+
+Coffer 调用真正的 `git`，所以远端始终是一个你可以克隆和查看的普通仓库。
+
+- **推送令牌**为一次调用从密钥存储中解析出来，通过命令行上给出的一个凭据助手到达 git，该助手从环境变量中读取它。它从不出现在 URL、argv、`.git/config` 或任何记录下来的错误里。随它发送的用户名默认为 `coffer`；GitHub 和 GitLab 在使用令牌时会忽略它，而 Bitbucket 和 Azure DevOps 需要真实的用户名。一个指向未经批准 URL 的令牌会等待人的批准，在此之前各轮都报告 `auth_failed`。
+- **你的 git 配置改变不了一轮同步的行为。** 全局和系统配置指向 `/dev/null`，Hook 关闭，签名关闭，提交身份由 Coffer 提供。
+- **任何值都不会被当作选项读取。** 远端 URL 不能以 `-` 开头，分支名必须符合 git 的 ref 命名规则，位置参数都放在 `--` 之后。
+
+## 工作者 {#the-worker}
+
+同步工作者在守护进程启动 30 秒后运行一轮，之后按远端的间隔运行，默认一小时，最短不少于 60 秒。每次等待之前都会重新读取间隔，所以修改无需重启。没有远端或远端已暂停时，什么都不运行；**立即同步**和 `coffer sync now` 仍会按请求运行一轮。
+
+## 权衡与备选方案 {#trade-offs-and-alternatives}
+
+- **完全自动收敛**（之前的设计）：第二棵工作树、一个从数据库到文件再转回来的翻译层、一张指针表、一个重试集合和若干自动冲突解决器，其中一个是智能体。它从不为人停下，而它的每一个部件都是 Coffer 改动了没人决定过的数据的地方。精简同步把这些全部删掉了。
+- **只做备份**（只推送，从不拉取），就放弃了拥有多台机器的意义。
+- **托管同步服务、点对点同步或对象存储。** 托管服务会成为厂商的记录系统；点对点工具和对象存储没有三方合并。Git 适合本来就持有 git 凭据的用户群体。
+- **提交整个 `~/.coffer`。** 那会带上本机专属状态和二进制数据库。五种存储类别只把保险库放在 git 之下。
+
+代价是真实存在的：一个真正的冲突会让本机的同步停下，直到你答复它。这会在你本来就在的地方显示出来：侧边栏标记、`coffer sync status` 和桌面通知。
+
+## 在代码中的位置 {#where-it-lives-in-the-code}
+
+| 路径 | 职责 |
+| --- | --- |
+| [`domain/sync/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/domain/sync) | 本轮状态与记录、停止与答复、加入、删除断路器、机器描述文件、远端 |
+| [`application/sync/round_engine.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_engine.py) | 一轮同步 |
+| [`application/sync/round_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_guard.py)、[`round_trees.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_trees.py) | 合并树中的校验、断路器、身份冲突、描述文件和密文 |
+| [`application/sync/round_answers.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_answers.py)、[`round_resume.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_resume.py) | 对停止、扣住和加入的答复，以及继续这一轮 |
+| [`application/sync/round_join.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_join.py)、[`round_rollback.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/round_rollback.py) | 加入预览与加入；回滚计划与回滚 |
+| [`application/sync/service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/service.py)、[`worker.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/sync/worker.py) | 锁、各轮的记录与审计、远端、机器；间隔循环 |
+| [`infrastructure/sync/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/sync) | 基于保险库的 Git 操作、机器 id 和描述文件、云文件夹检测、本地同步状态 |
+| [`infrastructure/vault/git.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/vault/git.py)、[`merge.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/vault/merge.py) | 一个安全的 `git` 进程；合并与检出 |
+| [`surfaces/http/sync_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/sync_wiring.py)、[`sync_routes.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/sync_routes.py)、[`sync_stop_routes.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/sync_stop_routes.py) | 组装与 `/api/v1/sync` 路由 |
+
+## 相关内容 {#related}
+
+- 规格：[vault-sync](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md)，以及关于 `runs_on` 的 [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)
+- 决策记录：[Sync Only Pulls and Pushes the Vault Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md)、[A Sync Round That Would Lose Too Much Is Held](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-deletion-breaker.md)、[Storage Is Five Classes by Nature](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/storage-is-five-classes-by-nature.md)、[Secrets Cross Machines Only as Ciphertext](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/credentials-across-machines.md)
+- [保险库同步指南](/zh/guides/vault-sync) · [持久化](/zh/architecture/persistence) · [知识架构](/zh/architecture/knowledge) · [安全模型](/zh/architecture/security)

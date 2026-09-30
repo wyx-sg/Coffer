@@ -119,10 +119,10 @@ The [configuration reference](/reference/configuration) lists every variable the
 | `backend/pyproject.toml`, `backend/uv.lock` | Dependencies, ruff, mypy, pytest and import-linter configuration |
 | [`frontend/`](https://github.com/wyx-sg/Coffer/tree/main/frontend) | The React web UI. See [Frontend](/contributing/frontend) |
 | [`desktop/`](https://github.com/wyx-sg/Coffer/tree/main/desktop) | The Tauri 2 desktop shell (Rust) that hosts the same `frontend/dist` |
-| [`e2e/`](https://github.com/wyx-sg/Coffer/tree/main/e2e) | Playwright suites: `web/` (browser) and `mcp/` (MCP client to shim to daemon) |
+| [`e2e/`](https://github.com/wyx-sg/Coffer/tree/main/e2e) | Playwright suites: `web/` (browser), `mcp/` (MCP client to shim to daemon) and `visual/` (screenshot baselines, `make verify-visual`) |
 | [`evals/`](https://github.com/wyx-sg/Coffer/tree/main/evals) | Eval harness for tool search and tool routing, with datasets and baselines |
 | [`openspec/`](https://github.com/wyx-sg/Coffer/tree/main/openspec) | The product contract: `specs/` (current), `changes/` (in flight and archived) |
-| [`docs/`](https://github.com/wyx-sg/Coffer/tree/main/docs) | `principles.md`, `architecture.md`, `decisions/` (ADRs) and `research/` |
+| [`docs/`](https://github.com/wyx-sg/Coffer/tree/main/docs) | `decisions/` (ADRs), `research/` and `skill-library/`. Principles and architecture live in this site, under [Architecture](/architecture/) |
 | `docs-site/` | This VitePress site |
 | [`scripts/`](https://github.com/wyx-sg/Coffer/tree/main/scripts) | Repository gates (`check_*.py`, `audit_acceptance.py`) and build scripts |
 | `.agents/` | Convention files for contributors and agents |
@@ -158,7 +158,7 @@ Run `make help` for the same list.
 | `make lock` | Refresh `backend/uv.lock` from `pyproject.toml` |
 | `make contracts` | Regenerate every capability's wire contract from the backend's models, then the frontend's types from those contracts |
 | `make frontend-codegen` | Regenerate only the frontend's TypeScript API types from the checked-in contracts |
-| `make docs-reference` | Regenerate the CLI and REST API reference pages of this site |
+| `make docs-reference` | Regenerate the CLI reference pages of this site (English and Chinese) |
 | `make bundle-binaries` | Freeze `coffer`, `coffer-daemon` and `coffer-mcp-shim` with PyInstaller into `dist/` |
 | `make desktop` | Build the unsigned `Coffer.app` and `.dmg` (slow: see below) |
 | `make desktop-lint` | `cargo check` and `cargo clippy -D warnings` on the desktop crate |

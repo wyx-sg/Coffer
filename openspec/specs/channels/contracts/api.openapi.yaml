@@ -4,7 +4,7 @@ openapi: 3.1.0
 info:
   title: Coffer — Channels API
   version: 0.1.0
-  description: The Channels routes of Coffer's management API, generated from the daemon's Pydantic models. The behaviour behind them is this capability's spec.md; authentication, the error envelope and tracing are described once in the docs-site REST API reference. Every route except `GET /api/v1/daemon/status` requires the `X-Coffer-Token` header.
+  description: The Channels routes of Coffer's management API, generated from the daemon's Pydantic models. The behaviour behind them is this capability's spec.md; the error envelope is described once in the docs-site error-codes reference. Every route except `GET /api/v1/daemon/status` requires the `X-Coffer-Token` header.
 servers:
 - url: http://127.0.0.1:8000
 paths:

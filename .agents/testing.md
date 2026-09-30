@@ -62,9 +62,7 @@ e2e/
 ├── scripts/start_daemon.sh    # the isolated-HOME daemon both projects share
 ├── web/
 │   └── specs/                 # browser against the daemon-served UI
-│       ├── *.spec.ts          # agent_workspace, shell_activity, shell_agents,
-│       │                      # shell_chat_attachments, shell_cold_start, shell_knowledge,
-│       │                      # shell_mcp_flows, shell_settings, shell_skills
+│       ├── *.spec.ts          # one spec per page or flow
 │       └── _acceptance.ts, _helpers.ts   # support modules, not specs
 └── mcp/
     └── specs/                 # real MCP client → shim → daemon
@@ -254,6 +252,7 @@ make format              # ruff format + ruff --fix (backend, evals); prettier i
 `scripts/check_adr_index.py`, `scripts/check_spec_citations.py`,
 `scripts/check_architecture_doc.py`,
 `scripts/check_pyinstaller_specs.py`, `scripts/check_cli_reference.py`,
+`scripts/check_docs_locales.py`,
 `scripts/check_removed_commands.py`, `scripts/check_platform_calls.py`,
 `scripts/check_coffer_paths.py`, `scripts/check_agent_type_branches.py`, `scripts/check_frontend_colors.py`,
 `scripts/check_ignored_sources.py`,

@@ -93,7 +93,7 @@ Besides upstream tools, the gateway always offers Coffer's own tools, prefixed `
 | Tool | What it does |
 | --- | --- |
 | `coffer__search_tools` | Ranks the full upstream catalogue against a plain-language query and returns real tool schemas the agent can then call. |
-| `coffer__write` | Files new material into a knowledge collection. Available when Knowledge is on. |
+| `coffer__write` | Files new material into a knowledge collection. |
 
 There is no memory or log tool. Memory notes are Markdown files under `~/.coffer/derived/memory/` that an agent searches with its own file tools, and Coffer's records are read with `coffer log audit|mcp|daemon`.
 
@@ -127,7 +127,7 @@ Guide: [Model providers](/guides/providers).
 
 ## Channels
 
-A **channel** is a Telegram or SeaTalk bot bound to your registered agents. You pair your own IM account with it, then chat with Claude Code or Codex from your phone and receive notifications. A channel's scope names the agents it may drive. Channels sync with the vault, but each one is bound to the single machine whose daemon runs it. The web **Chat** page is the other way to drive an agent, and it can watch and continue conversations that started in a channel.
+A **channel** is a Telegram or SeaTalk bot bound to your registered agents. You pair your own IM account with it, then chat with Claude Code or Codex from your phone and receive notifications. A channel's scope names the agents it may drive. Channels sync with the vault, but each one is bound to the single machine whose daemon runs it. The web **Conversations** page is the other way to drive an agent, and it can watch and continue conversations that started in a channel.
 
 Guide: [Channels](/guides/channels), [Conversations](/guides/chat). Architecture: [Chat and turns](/architecture/chat).
 

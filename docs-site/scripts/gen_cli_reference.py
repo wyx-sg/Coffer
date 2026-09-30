@@ -1,10 +1,15 @@
-"""Generate docs-site/reference/cli.md from the Typer app.
+# ruff: noqa: RUF001 — the Chinese page's own words use full-width punctuation.
+"""Generate docs-site/reference/cli.md (and its Chinese twin) from the Typer app.
 
 The page is built by walking the real command tree (``typer.main.get_command``)
 through click's introspection API, so every group, command, argument and
 option on the page is one the CLI actually has. Output is deterministic: the
 same code produces the same bytes, which is what lets
 ``scripts/check_cli_reference.py`` fail CI when the page drifts.
+
+The Chinese page, ``docs-site/zh/reference/cli.md``, is the same walk with the
+page's own prose, headings and table labels in Chinese. Help text comes from
+the CLI, which speaks English, so it stays English on both pages.
 
     .venv/bin/python docs-site/scripts/gen_cli_reference.py          # write the page
     .venv/bin/python docs-site/scripts/gen_cli_reference.py --stdout # print it
@@ -19,6 +24,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = REPO_ROOT / "docs-site" / "reference" / "cli.md"
+OUTPUT_ZH = REPO_ROOT / "docs-site" / "zh" / "reference" / "cli.md"
 
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
@@ -44,6 +50,61 @@ Most commands talk to the local daemon over its management API and start it if i
 not running. For the exit codes every command shares, see
 [Error codes](/reference/error-codes#cli-exit-codes).
 """
+
+HEADER_ZH = """\
+---
+title: CLI 参考
+description: 每一个 coffer 命令、参数和选项，由 CLI 自身生成。
+---
+
+# CLI 参考 {#cli-reference}
+
+本页列出 `coffer` 的每个命令组、命令、参数和选项。它由 CLI 自己的命令树生成，所以和
+`main` 上的版本执行 `coffer <command> --help` 打印的内容一致。命令说明直接取自 CLI，
+因此保持英文。
+
+::: info 生成的页面
+不要手工编辑这个文件。用 `make docs-reference` 重新生成（它会运行
+`docs-site/scripts/gen_cli_reference.py`）；页面和 CLI 不一致时 `make lint` 会失败。
+:::
+
+大多数命令通过管理 API 与本机的守护进程通信，守护进程没在运行时会先把它启动。所有命令
+共用的退出码见[错误码](/zh/reference/error-codes#cli-exit-codes)。
+"""
+
+#: The page's own words, per locale. Everything else on the page comes from the CLI.
+LABELS: dict[str, dict[str, str]] = {
+    "en": {
+        "header": HEADER,
+        "global": "## Global options",
+        "groups": "## Command groups",
+        "groups_table": "| Group | Description |",
+        "params_table": "| Name | Kind | Type | Default | Description |",
+        "argument": "argument",
+        "option": "option",
+        "flag": "flag",
+        "required": "required",
+        "repeatable": " (repeatable)",
+        "variadic": " (variadic)",
+        "deprecated": "::: warning Deprecated\nThis command is deprecated.\n:::",
+        "subcommands": "Subcommands: {names}.",
+    },
+    "zh": {
+        "header": HEADER_ZH,
+        "global": "## 全局选项 {#global-options}",
+        "groups": "## 命令组 {#command-groups}",
+        "groups_table": "| 命令组 | 说明 |",
+        "params_table": "| 名称 | 类别 | 类型 | 默认值 | 说明 |",
+        "argument": "参数",
+        "option": "选项",
+        "flag": "开关",
+        "required": "必填",
+        "repeatable": "（可重复）",
+        "variadic": "（可变个数）",
+        "deprecated": "::: warning 已弃用\n这个命令已弃用。\n:::",
+        "subcommands": "子命令：{names}。",
+    },
+}
 
 _CODE_SPAN = re.compile(r"(``.+?``|`[^`]+`)")
 
@@ -113,9 +174,9 @@ def _param_name(prm: Any) -> str:
     return f"`{label}`"
 
 
-def _param_type(prm: Any) -> str:
+def _param_type(prm: Any, lab: dict[str, str]) -> str:
     if getattr(prm, "is_flag", False) and not prm.secondary_opts:
-        return "flag"
+        return lab["flag"]
     ptype = prm.type
     choices = getattr(ptype, "choices", None)
     if choices:
@@ -128,13 +189,13 @@ def _param_type(prm: Any) -> str:
             name.replace(" range", "") + f" ({'' if lo is None else lo}-{'' if hi is None else hi})"
         )
     if getattr(prm, "multiple", False) or (prm.nargs not in (1, 0) and prm.nargs is not None):
-        name += " (repeatable)" if prm.param_type_name == "option" else " (variadic)"
+        name += lab["repeatable"] if prm.param_type_name == "option" else lab["variadic"]
     return name
 
 
-def _param_default(prm: Any) -> str:
+def _param_default(prm: Any, lab: dict[str, str]) -> str:
     if prm.required:
-        return "required"
+        return lab["required"]
     default = prm.default
     if callable(default) or _is_unset(default):
         return ""
@@ -162,15 +223,21 @@ def _visible_params(cmd: Any) -> list[Any]:
     return [p for p in cmd.params if not getattr(p, "hidden", False)]
 
 
-def _params_table(cmd: Any) -> list[str]:
+def _params_table(cmd: Any, lab: dict[str, str]) -> list[str]:
     params = _visible_params(cmd)
     if not params:
         return []
-    rows = ["| Name | Kind | Type | Default | Description |", "| --- | --- | --- | --- | --- |"]
+    rows = [lab["params_table"], "| --- | --- | --- | --- | --- |"]
     for prm in params:
-        kind = "argument" if prm.param_type_name == "argument" else "option"
+        kind = lab["argument"] if prm.param_type_name == "argument" else lab["option"]
         help_text = getattr(prm, "help", None) or ""
-        cells = (_param_name(prm), kind, _param_type(prm), _param_default(prm), _cell(help_text))
+        cells = (
+            _param_name(prm),
+            kind,
+            _param_type(prm, lab),
+            _param_default(prm, lab),
+            _cell(help_text),
+        )
         rows.append("| " + " | ".join(cells) + " |")
     return [*rows, ""]
 
@@ -182,30 +249,31 @@ def _children(group: Any) -> list[tuple[str, Any]]:
 Chain = list[tuple[str, Any]]
 
 
-def _command_block(chain: Chain) -> list[str]:
+def _command_block(chain: Chain, lab: dict[str, str]) -> list[str]:
     cmd = chain[-1][1]
     lines = [f"### {' '.join(name for name, _ in chain[1:])}", ""]
     lines += ["```sh", _usage(chain), "```", ""]
     if getattr(cmd, "deprecated", False):
-        lines += ["::: warning Deprecated", "This command is deprecated.", ":::", ""]
+        lines += [lab["deprecated"], ""]
     for para in _paragraphs(cmd.help or cmd.short_help or ""):
         lines += [para, ""]
-    lines += _params_table(cmd)
+    lines += _params_table(cmd, lab)
     if hasattr(cmd, "commands"):
         subs = _children(cmd)
         if subs:
-            lines += ["Subcommands: " + ", ".join(f"`{n}`" for n, _ in subs) + ".", ""]
+            names = ", ".join(f"`{n}`" for n, _ in subs)
+            lines += [lab["subcommands"].format(names=names), ""]
     return lines
 
 
-def _walk_group(chain: Chain) -> list[str]:
+def _walk_group(chain: Chain, lab: dict[str, str]) -> list[str]:
     """Every command under a group, depth first, in declaration order."""
     out: list[str] = []
     for name, child in _children(chain[-1][1]):
         child_chain = [*chain, (name, child)]
-        out += _command_block(child_chain)
+        out += _command_block(child_chain, lab)
         if hasattr(child, "commands"):
-            out += _walk_group(child_chain)
+            out += _walk_group(child_chain, lab)
     return out
 
 
@@ -217,19 +285,20 @@ def _first_sentence(text: str) -> str:
     return head.replace("|", "\\|")
 
 
-def render() -> str:
+def render(lang: str = "en") -> str:
     import typer
 
     from coffer.surfaces.cli.main import app
 
     root = typer.main.get_command(app)
     root_chain: Chain = [("coffer", root)]
-    lines = [HEADER]
-    lines += ["## Global options", ""]
+    lab = LABELS[lang]
+    lines = [lab["header"]]
+    lines += [lab["global"], ""]
     lines += ["```sh", _usage(root_chain), "```", ""]
-    lines += _params_table(root)
-    lines += ["## Command groups", ""]
-    lines += ["| Group | Description |", "| --- | --- |"]
+    lines += _params_table(root, lab)
+    lines += [lab["groups"], ""]
+    lines += [lab["groups_table"], "| --- | --- |"]
     for name, group in _children(root):
         summary = _first_sentence(group.help or group.short_help or "")
         lines.append(f"| [`coffer {name}`](#coffer-{name}) | {summary} |")
@@ -240,22 +309,27 @@ def render() -> str:
         lines += ["```sh", _usage(chain), "```", ""]
         for para in _paragraphs(group.help or ""):
             lines += [para, ""]
-        lines += _params_table(group)
+        lines += _params_table(group, lab)
         if hasattr(group, "commands"):
-            lines += _walk_group(chain)
+            lines += _walk_group(chain, lab)
     text = "\n".join(lines)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.rstrip("\n") + "\n"
 
 
+def render_all() -> dict[Path, str]:
+    """Every page this generator owns, keyed by where it is written."""
+    return {OUTPUT: render("en"), OUTPUT_ZH: render("zh")}
+
+
 def main(argv: list[str]) -> int:
-    text = render()
     if "--stdout" in argv:
-        sys.stdout.write(text)
-    else:
-        OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-        OUTPUT.write_text(text, encoding="utf-8")
-        print(f"wrote {OUTPUT.relative_to(REPO_ROOT)}")
+        sys.stdout.write(render())
+        return 0
+    for path, text in render_all().items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        print(f"wrote {path.relative_to(REPO_ROOT)}")
     return 0
 
 

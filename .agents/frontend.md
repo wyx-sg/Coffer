@@ -44,8 +44,8 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
 ```
 
 - **One documented naming exception**: the MCP-server list page is
-  `pages/ResourcesPage.tsx` (with `ResourceDetailPage.tsx`), routed at
-  `mcp-servers` in `router.tsx` — there is no `McpServersPage.tsx`. It kept the
+  `pages/ResourcesPage.tsx`, which serves both the list and a server's detail,
+  routed at `mcp-servers` in `router.tsx` — there is no `McpServersPage.tsx`. It kept the
   generic name from when the page was the resource index; a new feature follows
   the scheme above.
 - **Data fetching lives in a hook file, never inline in a component.** A page or
@@ -92,7 +92,6 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
     counts never become badges.
   - `components/SplitView` / `SplitDivider` + `lib/hooks/useResizableWidth.ts`
     for every resizable split; widths are per-browser conveniences.
-  - `components/PlaceholderPage` — temporary, for sidebar pages not yet built.
   - `lib/events/eventStream.ts` + `lib/hooks/useDaemonEvents.ts` — the one reader of
     the daemon's change feed (`GET /api/v1/events`): reconnects with `Last-Event-ID`,
     backs off while the daemon is down, invalidates the keys each envelope's kind is

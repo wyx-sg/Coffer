@@ -25,7 +25,7 @@ Four rules shape everything below:
   - **HTTPS with a token** stored in Coffer's secret store and named with `--secret-ref`. Coffer hands it to git through a credential helper that reads it from the environment of that one `git` process. It never appears in the URL, the command line, the repository's config or an error message.
   - **SSH** (`git@host:…` or `ssh://…`): a key your SSH setup can use with no passphrase prompt.
   - **`file://`**: no secret.
-- **`git` 2.40 or later on every machine.** A round merges with `git merge-tree`, which older versions lack. On macOS, `xcode-select --install` provides it.
+- **`git` 2.40 or later on every machine.** A round merges with `git merge-tree`, which older versions lack. If it is missing, the Sync page reports `git missing` with a prompt that hands installing it to your agent.
 - **The same Coffer version on every machine.** A remote written by another vault layout is refused (see [Troubleshooting](#troubleshooting)).
 - **The vault outside any cloud-synced folder.** A vault inside Dropbox, iCloud Drive, Syncthing or another File Provider folder pauses sync: two tools syncing one git repository corrupt it.
 
@@ -54,11 +54,11 @@ Four rules shape everything below:
 
    ```sh
    printf '%s' "$GITLAB_TOKEN" | coffer secret set sync/gitlab-token
-   coffer sync remote check https://gitlab.com/<group>/<repo>.git \
-     --secret-ref sync/gitlab-token --username oauth2
    coffer sync remote set https://gitlab.com/<group>/<repo>.git \
      --secret-ref sync/gitlab-token --username oauth2
    ```
+
+   `coffer sync remote check` always sends the default username `coffer`, so it cannot look at a GitLab repository with its token. To look before you save, fill in the set-up form on the **Sync** page and press **Check repository**, which sends the **User name** you enter.
 
    For a self-managed GitLab, use your instance's host in place of `gitlab.com`.
 
@@ -131,7 +131,7 @@ coffer sync choose knowledge/work/oncall.md --mine
 coffer sync choose knowledge/work/oncall.md --theirs
 ```
 
-On the web the **Status** tab lists them under **Differ from this Mac**, each with **Keep this Mac's** and **Take <machine>'s**.
+On the web the **Status** tab lists them under **Differ from this Mac**, each with **Keep this Mac's** and **Take &lt;machine&gt;'s**.
 
 `--yes` skips the join question for scripts. Until a machine has joined, rounds move nothing and end as `join required`.
 
@@ -214,7 +214,7 @@ coffer sync continue                                   # once every file has an 
 
 To merge by hand, `coffer sync edit <path>` prints the path of a marked-up copy under `~/.coffer/derived/sync-conflicts/`. Edit it, remove every conflict marker, then `coffer sync resolve <path> --edited`. A copy that still has a marker is refused, and the message names the line. The vault's own file never receives a marker.
 
-On the web the **Status** tab lists the files under **Changed on both Macs**; **Resolve conflicts** opens them one by one. Each file offers **Keep this Mac's** and **Take <machine>'s**, with the diff the choice makes here, and **Open in editor**, then **Mark resolved**. **Continue round** appears when every file has an answer. **Leave for later** is a real answer too: the vault stays as it is here.
+On the web the **Status** tab lists the files under **Changed on both Macs**; **Resolve conflicts** opens them one by one. Each file offers **Keep this Mac's** and **Take &lt;machine&gt;'s**, with the diff the choice makes here, and **Open in editor**, then **Mark resolved**. **Continue round** appears when every file has an answer. **Leave for later** is a real answer too: the vault stays as it is here.
 
 ### Merge with an agent
 
@@ -287,14 +287,14 @@ On the web the **Machines** tab lists every machine with when it was last seen, 
 | `remote unreachable` | Network, VPN or a wrong URL. | Nothing is lost; the next round that gets through carries the changes. |
 | `push failed` | Applied here, but the remote refused the push (a protected branch, a read-only token). | Fix the branch protection or the token; the next round retries. |
 | `git missing` | No `git` on the PATH the daemon uses. | Install git the way that fits the machine. |
-
-A refused push, a refused sign-in, an unreachable remote and a missing git each come with a prompt for your agent. The prompt names the remote without its credentials, the branch, the secret's name and git's message with tokens scrubbed, and says what to check. It is on the Sync page next to the message, and `coffer sync status --prompt` prints it. It never carries or asks for a token. **Retry** stays Coffer's own button.
 | `paused (cloud folder)` | The vault is inside a folder Dropbox, iCloud Drive, Syncthing or similar also syncs. | Move `~/.coffer` out of that folder. |
 | `remote too new` | Another machine runs a newer Coffer. | Upgrade this machine. |
 | `remote too old` | The remote was written by a Coffer from before the vault layout, or by an older layout. | Rebuild it from an upgraded machine: see [Upgrading an existing Coffer](/guides/upgrading#rebuild-your-sync-remote). |
 | `waiting on an edit` | You have an unsaved or invalid edit on a file the round would change. | Finish or fix the edit (`coffer vault problems` lists invalid ones); the next round continues. |
 | A held round after reinstalling Coffer | The empty vault would push its loss. | `coffer sync hold --restore`. |
 | Secrets cannot be decrypted | This machine lacks the master key they were encrypted with. | `coffer sync key import <file>` with the key from a machine that has it. |
+
+A refused push, a refused sign-in, an unreachable remote and a missing git each come with a prompt for your agent. The prompt names the remote without its credentials, the branch, the secret's name and git's message with tokens scrubbed, and says what to check. It is on the Sync page next to the message, and `coffer sync status --prompt` prints it. It never carries or asks for a token. **Retry** stays Coffer's own button.
 
 For failures that do not fit here, the round's message is in `coffer sync status`, and the daemon log (**Activity → Daemon**) has the detail.
 

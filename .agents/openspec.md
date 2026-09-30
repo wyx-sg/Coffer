@@ -151,13 +151,14 @@ nothing about **whose spec** a mechanism is:
 |---|---|---|
 | Audit log | `domain/audit.py`, `application/audit_service.py` | `resource-framework` |
 | Secrets | `application/secret/`, `infrastructure/secret/` | `secret` |
-| Storage | `infrastructure/persistence/` (SQLAlchemy + Alembic; the only data-access path) | — (the startup migration run is `daemon`'s) |
+| Storage | `infrastructure/persistence/` (SQLAlchemy + Alembic; the only access path to `runs.db`, the history database) and `infrastructure/vault/` (the vault's files, written only through `VaultWriter`) | `vault-storage` (the startup migration run is `daemon`'s) |
 | Resource framework (kinds, scope, delete) | `domain/resource.py`, `domain/scope.py`, `application/resource_service.py` + `resource_scope_ops.py` / `resource_delete_ops.py` | `resource-framework` |
 | Retention | `domain/retention.py`, `application/retention_registry.py` / `retention_service.py` / `retention_worker.py` | `resource-framework` |
 | Structured logging | `infrastructure/logging/` | — (the `daemon.log` file itself is `daemon`'s) |
+| Change feed | `application/events/` (`broker.py`, `attention_watch.py`), behind `GET /api/v1/events` | `resource-framework` |
 | Kind-agnostic adapters and vocabulary two kinds share | `infrastructure/net/`, `infrastructure/agent_files/`, `domain/hook_trust.py`, `domain/channel_turn.py` | — |
 
-Everything else is a kind (`mcp`, `agent`, `skill`, `knowledge`, `channel`, `chat`, `provider`, `memory`, `sync`) with its own subdir per layer. There is no `events`, `jobs` or `session` module — don't import one.
+Everything else is a kind (`mcp`, `agent`, `skill`, `knowledge`, `channel`, `chat`, `provider`, `memory`, `sync`) with its own subdir per layer. There is no `jobs` or `session` module — don't import one.
 
 ## Deciding What Is a Capability
 

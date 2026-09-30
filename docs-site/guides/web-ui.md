@@ -47,7 +47,7 @@ The sidebar is grouped by what you come to Coffer to do. **Overview** sits on to
 | Group | Entry | Route | What it is for |
 | --- | --- | --- | --- |
 | — | **Overview** | `/` | The landing page: what needs you, the health of every area and the last few changes. See [Overview](#overview) below. |
-| Agents | **Agents** | `/agents` | The AI agents installed on this machine that Coffer manages. Each agent's page has **Overview**, **Skills**, **MCP servers**, **Plugins**, **Memory**, **Conversations** and **Config files** tabs. See [Agents](/guides/agents). |
+| Agents | **Agents** | `/agents` | The AI agents installed on this machine that Coffer manages. Each agent's page has **Overview**, **Model**, **Skills**, **MCP servers**, **Plugins**, **Hooks**, **Config files**, **Memory** and **Sessions** tabs. See [Agents](/guides/agents). |
 | Agents | **Model providers** | `/model-providers` | Vendor endpoints and their keys — the models your agents run on. See [Model providers](/guides/providers). |
 | Run | **Conversations** | `/conversations` | Every conversation Coffer runs — started here or from a channel — with its source, filters by source and agent, and a reply box to continue any of them. See [Conversations](/guides/chat). |
 | Run | **Channels** | `/channels` | Telegram and SeaTalk bots that let you talk to agents from IM: setup, connection status and settings; each links to its conversations. See [Channels](/guides/channels). |
@@ -63,9 +63,6 @@ The sidebar is grouped by what you come to Coffer to do. **Overview** sits on to
 | System | **Sync** | `/sync` | Converging this vault with a git remote you own, as **Status**, **Machines** and **Remote** tabs, with **Resolve conflicts** (`/sync/conflicts`) and **Review held deletions** (`/sync/deletions`) views. See [Vault sync](/guides/vault-sync). |
 
 In Chinese the groups read 智能体 · 运行 · 能力 · 上下文 · 系统, and an agent is always called 智能体.
-
-::: info Pages still being built
-:::
 
 An entry that belongs to an [experimental feature](/guides/experimental-features) carries an **Experimental** label while the feature is on. While it is switched off the entry is left out of the sidebar, a group whose entries are all switched off loses its heading too, and following a link to its page shows a notice saying the feature is off. No feature is experimental right now, so no entry carries the label.
 
@@ -114,7 +111,7 @@ Click the daemon's state to open the **version menu**. Its first line names the 
 
 ## Settings
 
-Settings opens as a large window over the page you are on, so closing it puts you back exactly where you were. Open it with the **Settings** row, with **⌘,** (**Ctrl+,**) when you are not typing in a field, or from the palette. Every field saves as you change it; there is no Save button.
+Settings opens as a large window over the page you are on, so closing it puts you back exactly where you were. Open it with the **Settings** row, with **⌘,** (**Ctrl+,**) when you are not typing in a field, or from the palette. Every field saves as you change it, with no Save button, except **Port** on the Daemon tab.
 
 It has five tabs, in this order:
 
@@ -149,7 +146,7 @@ Switch between **English** and **简体中文** in the version menu at the foot 
 
 ## Conventions every page shares
 
-**URLs describe what you are looking at.** A refresh, a bookmark or a shared link reopens the same view. A detail page's tab is part of its path: the default tab is the bare address, any other tab adds its name — `/mcp-servers/github` and `/mcp-servers/github/tools`. Skills and MCP servers are addressed by their name, which is fixed once registered (`/skills/release-notes`), and an agent by its type, since there is one per type (`/agents/claude_code/skills`). Kinds you can rename — model providers, channels, knowledge collections, memory partitions — are addressed by their immutable uid (`/model-providers/<uid>/models`), so a rename does not break a link. Activity and Sync still carry their tab as `?tab=` (`/activity?tab=mcp` — Everything is the bare `/activity` — `/sync?tab=remote`), and an open file in a tree is `?file=`. An open conversation is `/conversations/<id>` and the draft **New conversation** opens is `/conversations/new`; the list's filters are search parameters (`/conversations?source=seatalk&agent=codex`, `?channel=<uid>`).
+**URLs describe what you are looking at.** A refresh, a bookmark or a shared link reopens the same view. A detail page's tab is part of its path: the default tab is the bare address, any other tab adds its name — `/mcp-servers/github` and `/mcp-servers/github/tools`. Skills and MCP servers are addressed by their name, which is fixed once registered (`/skills/release-notes`), and an agent by its type, since there is one per type (`/agents/claude_code/skills`). Kinds you can rename — model providers, channels, knowledge collections, memory partitions — are addressed by their immutable uid (`/channels/<uid>/<tab>`), so a rename does not break a link. Activity and Sync still carry their tab as `?tab=` (`/activity?tab=mcp` — Everything is the bare `/activity` — `/sync?tab=remote`), and an open file in a tree is `?file=`. An open conversation is `/conversations/<id>` and the draft **New conversation** opens is `/conversations/new`; the list's filters are search parameters (`/conversations?source=seatalk&agent=codex`, `?channel=<uid>`).
 
 **Lists look and behave alike.** Every list page uses one table with search, filters, pagination and bulk selection, and clicking a row opens its detail page. Every row action is labelled.
 

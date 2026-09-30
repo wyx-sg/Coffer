@@ -61,7 +61,7 @@ flowchart LR
 | Process | Lifetime | Role |
 | --- | --- | --- |
 | `coffer-daemon` | Long-lived, one per vault | Serves the REST API (`/api/v1/*`), the MCP endpoint (`/mcp`) and the built web UI on `127.0.0.1:<port>`. It owns all state and is the only SQLite writer. From source it runs as `python -m coffer.infrastructure.daemon.entry`. A frozen build runs the `coffer-daemon` binary. |
-| Local model proxy | Long-lived, outlives the daemon | `coffer-daemon proxy`, the daemon's only sibling process, on `127.0.0.1:8001`. Agents on an API-key or local provider send their model requests to it; it relays them upstream with the real key and spools usage records the daemon ingests. The daemon spawns it, re-attaches to it after its own restart through `~/.coffer/proxy.json`, and restarts it after a crash. See [The local model proxy](/architecture/model-proxy). |
+| Local model proxy | Long-lived, outlives the daemon | `coffer-daemon proxy` in a frozen build (`python -m coffer.infrastructure.model_proxy.entry` from source), the daemon's only sibling process, on `127.0.0.1:8001`. Agents on an API-key or local provider send their model requests to it; it relays them upstream with the real key and spools usage records the daemon ingests. The daemon spawns it, re-attaches to it after its own restart through `~/.coffer/proxy.json`, and restarts it after a crash. See [The local model proxy](/architecture/model-proxy). |
 | `coffer` CLI | One command | Calls the daemon over loopback HTTP with the token from `daemon.json` and an `X-Coffer-Actor: cli` header, so its mutations are audited as the CLI. |
 | `coffer-mcp-shim` | One MCP client session | A stdio ↔ HTTP/SSE forwarder. An agent launches it as a stdio MCP server, and it relays each JSON-RPC line to `/mcp`. See [MCP gateway](/architecture/mcp-gateway). |
 | Desktop shell | While the app runs | A Tauri 2 app that hosts the same frontend build as a local asset and hands it the daemon's URL and token over IPC. It detects or spawns the daemon, but the daemon outlives the app: quitting the app does not stop it. See [Desktop app](/guides/desktop-app). |
@@ -77,7 +77,7 @@ The daemon reads one file before it binds and writes another once it has bound. 
 
 | File | Direction | Written by | Contents | Lifetime |
 | --- | --- | --- | --- | --- |
-| `daemon-config.json` | In | CLI, feature switches, sync machine identity | `port` (optional), `machine_name`, cached `machine_id`, `features` switches | Survives restarts |
+| `daemon-config.json` | In | CLI, feature switches, sync machine identity | `port` (optional), `proxy_port` (optional), `machine_name`, cached `machine_id`, `features` switches | Survives restarts |
 | `daemon.json` | Out | The daemon, at start | `version` (schema, currently `1`), `pid`, `port`, `token`, `started_at`, `binary_path` | Unlinked at exit |
 
 `daemon-config.json` cannot live in SQLite, because the port has to be chosen before the database is opened or migrated. It cannot be an environment variable either: whichever caller spawns the daemon passes on its own environment, and a shell profile only reaches your terminal. The file is read with the standard library alone. An unreadable or malformed file logs a warning and reads as "no setting", so a hand-edited typo never keeps the daemon from starting. Writes merge into the existing object and keep keys this build does not know, so a file written by a newer Coffer survives being touched by an older one.
@@ -146,10 +146,10 @@ Step by step:
 6. **Migrations.** The lifespan first refuses a home that still keeps its state in `coffer.db` (`VAULT_MIGRATION_REQUIRED`, naming `coffer migrate`) or that a rolled-back upgrade left on hold (`VAULT_MIGRATION_ON_HOLD`, naming `--resume`). It then runs Alembic on `runs.db` off the event loop (`surfaces/http/migrations_runner.py`). If the database's revision is unknown to this build, startup fails with `DB_SCHEMA_TOO_NEW` rather than an opaque Alembic error. If an upgrade is due, the file and its `-wal`/`-shm` companions are first copied to `runs.db.pre-<revision>`, keeping the three newest copies. A current schema copies nothing. See [Persistence](/architecture/persistence).
 7. **Startup sweep.** `orphan_sweep.startup_sweep()` kills every process tree recorded under `~/.coffer/upstream-pids/` that is still alive with the same command line. A frozen build also terminates other daemon processes provably serving this same vault, meaning the same executable name and the same resolved `~/.coffer`. A process whose vault cannot be read is left alone.
 8. **Wiring.** The lifespan opens the vault repository (a machine without `git` fails here, naming the install step), starts the vault scanner that settles hand edits, and builds the secret store and master key, the audit and resource services, the retention service, and the internal-engine settings. It creates the builtin-tool registry, wires every resource kind in dependency order (`kind_wiring.py`), then chat, curation and channels. Chat also schedules a one-shot sweep that marks any message left `streaming` by a crash as `failed`.
-9. **Boot heals.** Each is best effort: the provider projection sweep, skill drift repair, the Claude MCP home migration, memory delivery matched to the `memory` switch, and a re-render of the builtin `coffer-guide` skill from this build.
+9. **Boot pass.** The reconciler runs one pass over every target it converges (`run_boot_pass`): the agents' MCP entries, skill links, provider projections and memory delivery hooks. What it repairs is audited, and a failing pass is logged and never fails startup. Then the builtin `coffer-guide` skill is re-rendered from this build (`run_builtin_guide_refresh`).
 10. **Identity.** The lifespan reads the token, port and start time back from `daemon.json` into the auth dependency and the status route. A `daemon.json` that exists but cannot be read fails startup. Swallowing that error would leave every authenticated route answering 503 while the status route said ready.
 11. **Binary deployment.** A frozen build copies its siblings into `~/.coffer/bin` (see [Binary deployment](#binary-deployment)). From source this does nothing.
-12. **Workers.** It starts the background workers, the channel runtime reconciler and the MCP session reaper, then sets the phase to `ready`.
+12. **Workers.** It starts the background workers, the channel runtime, the reconciler's periodic loop, the attention watch and the MCP session reaper, then sets the phase to `ready`. The vault scanner, the model proxy supervisor, the usage loops and the price refresh were already started by their kinds' wiring in step 8.
 
 Only after the lifespan returns does uvicorn call `listen()` on the socket, report `started`, and let `entry.py` release the spawn lock. A racing spawn is therefore blocked on the lock for the whole boot, never probing a socket that is bound but not yet answering. When the lock opens, that spawn's probe finds a serving daemon and it exits cleanly. Boot takes several seconds on a real vault (migrations, secret store, upstream warm-up), which is why the probe timeouts are generous.
 
@@ -234,7 +234,7 @@ coffer daemon restart              # a running daemon owns its socket; restart t
 coffer config unset daemon.port    # back to 8000
 ```
 
-The `daemon.port` key works with no daemon running, because you change the port precisely when the daemon cannot start. For that reason it is the one `coffer config` key stored in the pre-bind settings file rather than behind a route, and the setting has no REST route.
+The `daemon.port` key works with no daemon running, because you change the port precisely when the daemon cannot start. For that reason it is the one `coffer config` key the CLI writes straight into the pre-bind settings file rather than through a route. The web UI reaches the same file through the running daemon: `GET /api/v1/daemon/port` returns the saved port, the bound one and whether a restart is pending, and `PUT /api/v1/daemon/port` saves the next start's port, refusing one that cannot be bound.
 
 A daemon that scans for a free port breaks two things without saying so: your bookmark to the web UI, and everything the browser has stored against that origin. Refusing to start and naming the process that holds the port is the better failure. When the holder is itself a Coffer daemon, the message says it is most likely your own daemon still warming up rather than telling you to kill it.
 
@@ -254,7 +254,7 @@ The CLI prints it on stderr before every command. The shim writes it to stderr a
 
 ## Background work
 
-Everything that runs outside a request is started in one place, `surfaces/http/background_workers.py`, plus a few tasks the lifespan and entry point own directly. Each worker runs a catch-up pass or a start delay, then loops on an interval. A failing pass is logged and never kills its loop. A worker that belongs to an experimental feature reads its switch at the top of every round and skips the round while the feature is off; none does right now.
+The periodic workers that belong to no single kind start in one place, `surfaces/http/background_workers.py`. A kind that owns a loop starts it in its own wiring, and the lifespan and entry point own a few tasks directly. Each worker runs a catch-up pass or a start delay, then loops on an interval. A failing pass is logged and never kills its loop. A worker that belongs to an experimental feature reads its switch at the top of every round and skips the round while the feature is off; none does right now.
 
 | Worker | Code | Cadence | What it does |
 | --- | --- | --- | --- |
@@ -269,6 +269,12 @@ Everything that runs outside a request is started in one place, `surfaces/http/b
 | Invocation writer | `infrastructure/mcp/invocation_writer.py` | Continuous | Batches MCP invocation-log rows into SQLite off the request path. |
 | Unpack keep-alive | `infrastructure/daemon/unpack_keepalive.py` | Immediately, then every 6 h | Frozen builds only. Refreshes the timestamps of the files the one-file binary unpacked into `$TMPDIR/_MEI*`, so the OS temp cleaner (macOS removes files unused for about 3 days) cannot delete the CA bundle and libraries from under a long-running daemon. |
 | Supersession check | `infrastructure/daemon/entry.py` | Every 30 s | Stands the daemon down when another live daemon now owns `daemon.json` (see below). |
+| Vault scanner | `infrastructure/vault/scanner.py`, started in `vault_wiring.py` | A boot scan, then on file events and every 60 s | Settles hand edits in the vault into commits. |
+| Reconciler | `application/reconcile/reconciler.py`, started in `reconcile_wiring.py` | Every 60 s, sooner on a hint | Converges agents' MCP entries, skill links, provider projections and delivery hooks, and records open drift. |
+| Attention watch | `application/events/attention_watch.py`, started in `event_wiring.py` | Every 30 s, sooner on a hint | Recomputes the Overview's "needs you" list and publishes changes on `GET /api/v1/events`. |
+| Model proxy supervisor | `infrastructure/model_proxy/supervisor.py`, started in `model_proxy_wiring.py` | Every 5 s | Finds or spawns the [local model proxy](/architecture/model-proxy), pushes it its state and restarts it if it dies. |
+| Usage ingest and quota | `application/usage/`, started in `usage_wiring.py` | Ingest every 2 s; Codex quota every 5 min | Empties the proxy's usage spool into `runs.db`, and pulls Codex's subscription quota while a Codex agent is on its own login. |
+| Price refresh | `infrastructure/usage/price_refresh.py`, started in `provider_wiring.py` | First after 60 s, then daily | Refreshes the model price list used to estimate cost. |
 
 The curation, aggregation and distil intervals come from the internal-engine settings and are re-read while a worker waits, so a change in **Settings** takes effect without a restart.
 
@@ -298,13 +304,16 @@ There is one exit path. `SIGTERM` and `SIGINT` run it. `POST /api/v1/daemon/shut
 
 Uvicorn then shuts down gracefully with a 10 s bound on open connections. Without that bound, a `/mcp` SSE stream, which never ends on its own, would hold the daemon open forever. The lifespan teardown (`surfaces/http/app_shutdown.py`) sets the phase to `draining` and runs in an order that is load-bearing:
 
-1. Stop the workers: retention, sync, curation, distil, aggregation, transcript warm.
-2. Stop the channel runtime, cancelling the reconciler before disposing the adapters so an in-flight tick cannot revive them. Channels go early because they are what starts new turns.
-3. Stop the chat turns still running, while the database is still open, so each writes its partial reply as it unwinds.
-4. Give the retention worker 2 s to finish a prune, then cancel it.
-5. Cancel the session reaper, then drain the buffered invocation writer.
-6. Dispose every MCP session supervisor, including the process-wide one behind the management routes, which terminates their upstream subprocesses, then close the `/mcp` session state.
-7. Dispose the database engine and clear the active token.
+1. Cancel the reconciler's loop first, because a pass writes into agents' config files and must not start while the rest goes down, then the attention watch.
+2. Stop the workers: retention, sync, curation, distil, aggregation, transcript warm, and the skill update check (which also removes staged sources).
+3. Stop the channel runtime, cancelling the reconciler before disposing the adapters so an in-flight tick cannot revive them. Channels go early because they are what starts new turns.
+4. Stop the chat turns still running, while the database is still open, so each writes its partial reply as it unwinds.
+5. Give the retention worker 2 s to finish a prune, then cancel it.
+6. Cancel the session reaper, then drain the buffered invocation writer.
+7. Stop supervising the model proxy (the proxy itself keeps running, so agents' in-flight model streams survive a restart), then stop the price refresh and the usage loops.
+8. Dispose every MCP session supervisor, including the process-wide one behind the management routes, which terminates their upstream subprocesses, then close the `/mcp` session state.
+9. Dispose the database engine and clear the active token.
+10. Stop the vault scanner, then dispose the derived database.
 
 Each step is best effort: a failure is logged with the step's name and does not stop the steps after it. Finally `entry.py` releases `daemon.json` (only if it still names this pid) and closes the socket.
 
@@ -345,7 +354,7 @@ Install and uninstall work with no daemon running, and are also reachable from t
 | --- | --- |
 | [`infrastructure/daemon/entry.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/entry.py) | Process entry: env hygiene, fd limit, serving on the pre-bound fd, supersession check |
 | [`infrastructure/daemon/bootstrap.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/bootstrap.py) | Spawn lock, liveness probe, bind and publish, `release()` |
-| [`infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) | `daemon-config.json`: port, machine name and id, feature switches |
+| [`infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) | `daemon-config.json`: port, proxy port, machine name and id, feature switches |
 | [`infrastructure/daemon/port_alloc.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/port_alloc.py) | Fixed-port bind, holder lookup, conflict message, test-only scan |
 | [`infrastructure/daemon/pid_lock.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/pid_lock.py) | `daemon.json` read and write, `pid_is_coffer_daemon` |
 | [`infrastructure/daemon/spawn.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/spawn.py) | Spawn-command resolution and the detached spawn |

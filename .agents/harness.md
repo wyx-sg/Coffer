@@ -59,7 +59,8 @@ line each:
 | `scripts/check_spec_citations.py`            | `make lint`           | A `spec <capability> "<Title>"` citation names a capability or requirement title that does not exist                        |
 | `scripts/check_architecture_doc.py`          | `make lint`           | The code-layout tree or the built-in tool roster in `docs-site/architecture/` has drifted from the code                    |
 | `scripts/check_pyinstaller_specs.py`         | `make lint`           | A PyInstaller spec names a missing file or has lost the `-X utf8` runtime option                                            |
-| `scripts/check_cli_reference.py`             | `make lint`           | The generated CLI or REST reference page differs from the code (`make docs-reference` fixes it)                            |
+| `scripts/check_cli_reference.py`             | `make lint`           | The generated CLI reference page (en or zh) differs from the code (`make docs-reference` fixes it)                            |
+| `scripts/check_docs_locales.py`              | `make lint`           | A docs-site page, sidebar entry, heading anchor or link exists in English and not in `docs-site/zh/`, or the other way round  |
 | `scripts/check_removed_commands.py`          | `make lint`           | A doc, spec, shipped skill, web UI file or e2e spec quotes a removed `coffer` command, option or tool                      |
 | `scripts/check_platform_calls.py`            | `make lint`           | Code outside `infrastructure/platform/` asks which operating system it runs on                                              |
 | `scripts/check_coffer_paths.py`              | `make lint`           | A `~/.coffer` path is built outside `infrastructure/vault/home.py` (allowed: migrations, the tests' isolated homes and real-home guard) |
@@ -68,6 +69,7 @@ line each:
 | `scripts/check_ignored_sources.py`           | `make lint`           | A `.gitignore` rule hides a path in a source tree, or an unanchored pattern names a source-folder word such as `lib/`      |
 | `scripts/dump_i18n_backend_keys.py --check`  | `make lint`           | A backend error code or audit event type is missing from the frontend's locale-coverage fixture                             |
 | `scripts/check_unit_purity.py`               | `make verify-unit`    | A test under `backend/tests/unit/` imports an I/O module                                                                    |
+| `openspec validate --all --strict`          | `make verify-acceptance` | A spec or change is malformed, or a requirement owns no scenario (runs first, before `audit_acceptance.py`)             |
 | `scripts/audit_acceptance.py`                | `make verify-acceptance` | A spec scenario has no test marker, or a marker names no scenario                                                        |
 | `scripts/ci_change_scope.py`                 | CI `changes` job      | (Not a gate.) Decides whether a pull request is prose-only, so the test jobs can be skipped                                |
 | `scripts/verify_stamp.py`                    | `make verify`         | (Not a gate.) Records the fingerprint the verify-before-commit hook compares against                                        |

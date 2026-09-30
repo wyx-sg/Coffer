@@ -18,7 +18,7 @@ Coffer keeps configuration in five places, and each one exists for a reason:
 | Browser `localStorage` | Web UI preferences | Per browser, never sent to the daemon |
 
 ::: warning Environment variables and a detached daemon
-The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, by the desktop app or by the login service — and inherits the environment of whichever process started it, not your shell profile. An environment variable only reaches the daemon if you set it in the environment of the process that starts it, for example `COFFER_FEATURES=memory=off coffer daemon restart`. Settings you want to keep belong in `daemon-config.json` or in **Settings**.
+The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, by the desktop app or by the login service — and inherits the environment of whichever process started it, not your shell profile. An environment variable only reaches the daemon if you set it in the environment of the process that starts it, for example `COFFER_FEATURES=<key>=off coffer daemon restart`. Settings you want to keep belong in `daemon-config.json` or in **Settings**.
 :::
 
 ## Environment variables
@@ -36,6 +36,7 @@ Links point at the file that reads each variable on GitHub.
 | `COFFER_WEBUI_DIR` | built-in | Directory holding a built web UI (`index.html`). Without it the daemon serves the UI bundled into the frozen binary, or `frontend/dist` in a source checkout. | [`surfaces/http/webui.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/webui.py) |
 | `COFFER_PRICE_REFRESH` | unset | `off` pins the daily model price-list refresh off, whatever `price_refresh` says; prices come from the list shipped in the build. The test suite and the e2e daemon set it. | [`infrastructure/usage/price_refresh.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/usage/price_refresh.py) |
 | `COFFER_MODEL_PROXY` | unset | `off` keeps the daemon from starting or supervising the [local model proxy](/architecture/model-proxy); any other value, or none, leaves it on. The test suite sets it. | [`surfaces/http/model_proxy_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/model_proxy_wiring.py) |
+| `COFFER_QUOTA_POLL` | unset | `off` stops the background pull of Codex's subscription quota, which spawns a short-lived `codex app-server`. The test suite sets it. | [`surfaces/http/usage_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/usage_wiring.py) |
 
 ### MCP gateway
 

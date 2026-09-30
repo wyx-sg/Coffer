@@ -97,7 +97,7 @@ flowchart TD
    git checkout -b feature/<short-name>
    ```
 
-4. **Change code, spec and docs together.** When behaviour changes, update in the same pull request, never as a follow-up: the spec deltas, the OpenAPI contract, the architecture pages under `docs-site/architecture/`, the relevant ADR, `docs-site/` pages and any `.agents/` convention it touches. Add tests in the right tier, and tag each scenario the change covers with an acceptance marker.
+4. **Change code, spec and docs together.** When behaviour changes, update in the same pull request, never as a follow-up: the spec deltas, the OpenAPI contract, the architecture pages under `docs-site/architecture/`, the relevant ADR, `docs-site/` pages with their `docs-site/zh/` twins, and any `.agents/` convention it touches. Add tests in the right tier, and tag each scenario the change covers with an acceptance marker.
 5. **Run `make verify`** until it is green. Run `make verify-all` too when you touched a surface: a web page, an HTTP route, the CLI or the MCP shim.
 6. **Archive the change** with `/opsx:archive` or `npx openspec archive <change-id> --yes`. This merges its deltas into `openspec/specs/`.
 7. **Squash and open the pull request:**
@@ -115,6 +115,21 @@ flowchart TD
 ::: tip Keep pull requests small
 One logical change per pull request reviews fastest. When a feature needs a refactor first, send the refactor as its own `refactor/` pull request.
 :::
+
+## Docs site in two languages
+
+This site and the README ship in English and Simplified Chinese. Every other document in the repository (`AGENTS.md`, `.agents/`, the ADRs under `docs/`, the specs under `openspec/`) is English only.
+
+- **One page, two files.** An English page at `docs-site/<path>.md` has its Chinese twin at `docs-site/zh/<path>.md`. Change both in the same pull request.
+- **Same headings, same anchors.** The Chinese page keeps every heading of the English one, in the same order, and gives each the English anchor as an explicit id, as in `## 纳入托管 {#adopt-an-agent}`, so a link lands in the same place in either language. After translating a page, `.venv/bin/python scripts/check_docs_locales.py --stamp-anchors docs-site/zh/<path>.md` writes those ids for you.
+- **Links stay in their language.** A Chinese page links to `/zh/...` pages.
+- **One sidebar.** Both sidebars are built from `docs-site/.vitepress/sidebar.json`, where each entry carries its English and Chinese label.
+- **The app's words.** Use the Chinese terms the web UI uses (`frontend/src/i18n/locales/zh.json`): 智能体, 技能, 知识, 记忆, 密钥, MCP 服务器, 模型提供商, 消息渠道, 对话, 整理. Code, commands, paths, config keys and error codes stay in English.
+- **Generated pages.** `make docs-reference` writes the CLI reference in both languages. The command help comes from the CLI itself, so it is English on both pages.
+
+`scripts/check_docs_locales.py`, part of `make lint`, fails with the path when a page, a sidebar entry, a heading anchor or a link is in one language and not the other.
+
+The README follows the same rule: `README.md` and `README.zh-CN.md` link each other at the top and change together.
 
 ## Dependencies and the lockfile
 

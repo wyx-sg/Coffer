@@ -184,10 +184,10 @@ The results are real upstream schemas under the names the agent calls directly. 
 
 `BuiltinToolRegistry` (`application/builtin_tools.py`) is an in-process registry that the composition root fills at startup. Each slice declares a `BuiltinTool(name, description, input_schema, handler, feature)` with a bare name. The gateway lists it as `coffer__<name>`. The registry refuses duplicate names and names that already carry the prefix.
 
-| Tool | Declared in | Experimental feature |
-| --- | --- | --- |
-| `coffer__write` | `application/knowledge/builtin_tools.py` | none |
-| `coffer__search_tools` | `application/mcp/gateway_tool_search.py` (gateway-owned) | none |
+| Tool | Declared in |
+| --- | --- |
+| `coffer__write` | `application/knowledge/builtin_tools.py` |
+| `coffer__search_tools` | `application/mcp/gateway_tool_search.py` (gateway-owned) |
 
 No built-in tool belongs to an experimental feature right now. For one that does, the registry checks the feature on every read: while the feature is off, its tool is absent from `tools/list` and from the `initialize` text. A call to it falls through to upstream routing and fails as an unknown tool would. See [Experimental features](/guides/experimental-features).
 
@@ -405,5 +405,5 @@ A group's health is read, not stored: `off` while disabled, `failing` when its l
 ## Related
 
 - Spec: [mcp-gateway](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md), and the scope contract in [resource-framework](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md)
-- Decisions: [One Upstream Subprocess Set Per Session](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/session-subprocess-model.md), [Tool Overload: List a Usage-Ranked Slice, Search the Rest](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md), [Tool Overload: List a Usage-Ranked Slice, Search the Rest](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md), [Capability State Model](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/capability-state-model.md), [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md), [Envelope-Encrypted Secrets](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
+- Decisions: [One Upstream Subprocess Set Per Session](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/session-subprocess-model.md), [Tool Overload: List a Usage-Ranked Slice, Search the Rest](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md), [Capability State Model](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/capability-state-model.md), [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md), [Envelope-Encrypted Secrets](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
 - Pages: [Daemon and processes](/architecture/daemon), [Resource framework](/architecture/resource-framework), [Security model](/architecture/security), [Observability](/architecture/observability), [MCP servers](/guides/mcp-servers), [Connect a client](/guides/connect-a-client), [MCP tools](/reference/mcp-tools)

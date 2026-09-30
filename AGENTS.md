@@ -91,13 +91,22 @@ Until both hit, keep flat. Example: split `stack.md` into a subfolder only when 
 
 ## 7. Docs Language
 
-Every doc in this repo is written in **English only**. There are no translation
-companions: no `.zh.md` files, no per-language mirror under `docs-site/`. A doc
-that needs to change is changed in place, in English.
+Two places are bilingual, English and Simplified Chinese; every other doc is
+English only.
 
-This applies to prose docs (`README.md`, `AGENTS.md`, `CONTRIBUTING.md`,
-`SECURITY.md`, `.agents/**`, `docs/**`, `openspec/**`) and to
-the published site (`docs-site/**`). It does **not** apply to the Coffer web
-UI's own interface copy — the app ships English and 中文 through
+- **The docs site** (`docs-site/**`). English lives at the root and Chinese under
+  `docs-site/zh/`, page for page, with the same headings and anchors. A change to
+  an English page changes its `zh/` twin in the same commit.
+  `scripts/check_docs_locales.py` (in `make lint`) fails when a page, a sidebar
+  entry or a heading anchor exists in one tree and not the other. See
+  [Contributing › Docs site in two languages](./docs-site/contributing/index.md#docs-site-in-two-languages).
+- **The README**: `README.md` (English) and `README.zh-CN.md` (Chinese), each
+  linking the other at the top. Change both together.
+
+Everything else stays English only, with no translation companion: `AGENTS.md`,
+`CONTRIBUTING.md`, `SECURITY.md`, `.agents/**`, `docs/**` (ADRs, research) and
+`openspec/**` (specs and changes). The Coffer web UI's own interface copy is a
+separate matter — the app ships English and 中文 through
 `frontend/src/i18n/locales/`, and that language switcher is a product feature
-(see [`.agents/frontend.md`](./.agents/frontend.md)).
+(see [`.agents/frontend.md`](./.agents/frontend.md)). Use the app's Chinese terms
+(`zh.json`) in the Chinese docs.

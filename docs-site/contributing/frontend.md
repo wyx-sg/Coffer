@@ -111,15 +111,15 @@ Anything a user expects to survive a refresh, a deep link or the back button bel
 
 ## Design system
 
-Build screens from the shadcn primitives in `src/components/ui/`: `Button`, `Dialog`, `Select`, `Tabs`, `Tooltip`, `Skeleton`, `ConfirmDialog` and the rest. Do not hand-roll a control a primitive already covers. Use `Tooltip` rather than a native `title=`, and `Skeleton` rather than a custom pulsing block. There is deliberately no dropdown menu: row actions are explicit buttons.
+Build screens from the shadcn primitives in `src/components/ui/`: `Button`, `Dialog`, `Select`, `Tabs`, `Tooltip`, `Skeleton`, `ConfirmDialog` and the rest. Do not hand-roll a control a primitive already covers. Use `Tooltip` rather than a native `title=`, and `Skeleton` rather than a custom pulsing block. Row actions are explicit buttons. The one menu is `Menu` (`src/components/ui/menu.tsx`), the "⋯" on an agent row and the agent header: a short list of commands over the `Popover` primitive, with arrow-key navigation and destructive items in the danger role.
 
 The tokens come from [`frontend/tailwind.config.js`](https://github.com/wyx-sg/Coffer/blob/main/frontend/tailwind.config.js), and the vocabulary built on them from [`.agents/visual-language.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/visual-language.md):
 
-- **Colour: semantic tokens only.** Use `background`, `foreground`, `card`, `muted`, `accent`, `primary`, `secondary`, `destructive`, `border`, `input`, `ring`, and `highlight` / `highlight-active` for "the one you are looking at". Health colour comes only through `src/lib/statusColors.ts`, which maps a tone onto `status.ok`, `status.warn` and `status.err`. Raw palette classes such as `green-500` do not appear in `src`.
-- **Type: Tailwind's scale.** Use `text-xs` to `text-2xl`, never `text-[11px]`. `font-sans` is for UI, `font-serif` for long-form prose, `font-mono` for code and identifiers.
+- **Colour: semantic roles only.** Use the Foundations roles: `surface` (with `sidebar`, `raised`, `sunken`, `selected`, `hover`, `footer`), `border` / `border-subtle`, `text` / `text-muted` / `text-subtle`, `accent` (with `soft`, `text`, `foreground`), and the status roles `success`, `warning`, `danger` and `neutral`, each with a `-soft` fill. The shadcn names (`background`, `card`, `primary`, `destructive` and the rest) remain as aliases that point at a role. Health colour comes only through `src/lib/statusColors.ts`, which maps a tone (`ok`, `warn`, `error`, `muted`) onto the status roles. Raw palette classes such as `green-500` do not appear in `src`.
+- **Type: the config's scale.** Use `text-2xs` (11 px) to `text-xl`, plus `display` for the brand only, never `text-[11px]`. The app runs on 13 px, and hierarchy comes from weight (`font-book`, `font-label`, `font-bold`, `font-heavy`) and colour. `font-sans` is for UI, `font-mono` for code and identifiers.
 - **Spacing:** Tailwind's default 4 px scale. `max-w-content` (72 rem) caps a workbench page, and `max-w-prose` (60 ch) caps running text.
-- **Radius:** `rounded-lg` for cards, `rounded-md` for controls, `rounded-sm` for chips. All derive from one `--radius` variable.
-- **Light only.** There is no dark token set, so do not add `dark:` variants.
+- **Radius:** fixed steps that grow with the surface: `rounded-xs` (4 px) for the smallest marks, `rounded-md` (7 px) for every control, `rounded-2xl` (12 px) for what floats over the page.
+- **Light and dark.** Every colour token has a light and a dark value in `src/index.css`. `src/lib/theme.ts` resolves the viewer's choice (system, light or dark) onto `<html data-theme>`, and the dark set re-points the variables, so do not add `dark:` variants.
 - Use `cn()` for conditional classes, and `formatDateTime` from `src/lib/utils` for every timestamp.
 
 When a token is missing, add it to the Tailwind config in the same pull request and explain it in the description. Do not inline magic numbers.
@@ -141,7 +141,7 @@ Code style: named exports only, and one component per file. The first line of ea
 
 ## Internationalisation
 
-The UI ships English and Simplified Chinese from `src/i18n/locales/en.json` and `zh.json`. English is the fallback language. This is a product feature. The repository's docs, this site included, are English only.
+The UI ships English and Simplified Chinese from `src/i18n/locales/en.json` and `zh.json`. English is the fallback language. This is a product feature. The docs site and the README are bilingual too; every other repository doc is English only (see [Contributing](/contributing/#docs-site-in-two-languages)).
 
 - Every user-facing string goes through `t(...)`, including `aria-label`s.
 - Keys are nested camelCase paths under the feature's top-level key, for example `chat.composer.placeholder`.
@@ -168,5 +168,5 @@ Browser-level flows belong in the Playwright `web` project under `e2e/web/specs/
 
 - [Web UI guide](/guides/web-ui)
 - [Testing](/contributing/testing)
-- [Development setup](/contributing/development#frontend-api-codegen)
+- [Development setup](/contributing/development#wire-contracts-and-frontend-codegen)
 - [`web-ui` spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/web-ui/spec.md)
