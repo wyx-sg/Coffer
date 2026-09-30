@@ -7,11 +7,8 @@
 // the command's pane and its hand-off (Copy prompt, and Ask an agent opening
 // the draft with the prompt in its composer — never sent: an e2e run installs
 // nothing) and the skill's Requires tab. A stand-in `codex` on the daemon's PATH makes a
-// managed agent available. The skill is removed afterwards.
-//
-// scenario (web-ui, revise-web-ui-ia 7.14d): "the CLIs page lists problems first"
-// scenario (web-ui, revise-web-ui-ia 7.14d): "a CLI that needs the user offers a prompt for an agent"
-// scenario (web-ui, revise-web-ui-ia 7.14d): "a skill's requirement links to its CLI"
+// managed agent available. The skill is removed afterwards. The scenarios'
+// markers are on the unit tests (ClisPage.test.tsx, SkillRequiresTab.test.tsx).
 
 import { expect, test } from "@playwright/test";
 import * as fs from "node:fs";

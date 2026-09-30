@@ -457,8 +457,8 @@ the engine settings"). A CLI MUST show, set and return-to-default the bound —
 `coffer config get | set <seconds> | unset engine.timeout`, where `get` prints the chosen bound
 beside the default and `unset` returns to the built-in one — and show, set and clear the
 speech-to-text model — `coffer config get | set <id> | unset transcribe.model` — with the same
-effects, refusals and audit entries as the routes. Settings → Coffer's model MUST show
-and change both.
+effects, refusals and audit entries as the routes. The Coffer's model section of Settings ›
+General MUST show and change both.
 
 #### Scenario: the bound and the speech-to-text model change one value at a time
 - **GIVEN** a settings row with a chosen engine model and a pass switched off,
@@ -494,9 +494,10 @@ and change it, applying the four-state rule of
   `curate_owner_machine_id`, `state` and `this_machine_id`, and an owner no machine in a
   non-empty registry claims is printed as the fault it is together with how to take the pass
   back.
-- Settings → Coffer's model MUST show the owner on a line under the `curate` row, with
-  an action that takes the pass over for this machine and one that clears the
-  owner after a confirmation.
+- The Knowledge page's Automatic popover MUST show the owner as "Curation runs on" once the
+  vault's registry (`GET /api/v1/sync/machines`) names more than one machine, with a picker of
+  the known machines that names a new owner; an owner no known machine claims MUST be shown
+  even while the registry names one machine or none, and read as the fault it is.
 
 #### Scenario: the route names and clears the curation owner
 - **GIVEN** the internal-engine settings row with a chosen engine model and no
@@ -520,39 +521,6 @@ and change it, applying the four-state rule of
   the JSON carries this machine's id with state `self`, and `unset` prints the
   unowned line again,
 - **AND** the settings route reports the owner that each step left.
-
-### Requirement: Show and change the engine in Settings → Coffer's model
-Settings → Coffer's model MUST show and change both halves: the connection and model the
-engine runs on, and each pass's switch and interval with its default named
-rather than left blank. Edits MUST save on their own — the switch on toggle,
-the interval on selection — with no Save button.
-
-The page is three cards, because all three configure Coffer's own machinery
-rather than anything served to an agent:
-
-- The model card picks the internal-default connection and, from that
-  connection's curated `text` models or its probed catalogue, the engine model,
-  and carries the call bound beside it, named with the default that applies
-  while the operator has chosen none; a bound outside the permitted range is
-  reported where it was typed rather than saved.
-- The speech-to-text card is the same pair for the connection flagged
-  `transcribe_default` and its own model, saying plainly that with either half
-  unset Coffer transcribes nothing and the agent receives the audio file.
-- The upkeep card is one row per pass: a switch, an interval select whose
-  default option names the real number, and — for `curate` alone — a line
-  saying it is Coffer's own model deriving documents from the user's sources,
-  and the curation owner line under that row (see "Report and change the
-  curation owner from every surface").
-
-#### Scenario: Settings → Coffer's model shows and changes both halves
-- **GIVEN** the Settings → Coffer's model page is rendered with an internal-default
-  connection and the three passes,
-- **WHEN** the page renders and the operator toggles one pass and picks an
-  interval,
-- **THEN** the model card shows the chosen connection and model, the upkeep card
-  shows one row per pass with the default named rather than blank, each edit
-  saves on its own without a Save button, and only the toggled pass is written
-  (TypeScript acceptance test).
 
 ### Requirement: Keep every engine setting under one key namespace
 Every setting this capability owns MUST be read and changed on the command line through the
@@ -651,3 +619,43 @@ option MUST name the real number.
 - **THEN** the popover shows "Read memory automatically", the interval and the last/next line,
   switching it off writes `aggregate` off and `distil` off as two requests, and the interval
   writes the `aggregate` interval alone (TypeScript acceptance test)
+
+### Requirement: Show and change Coffer's model in Settings › General
+The Coffer's model section of Settings › General
+([web-ui](../web-ui/spec.md) "Choose Coffer's model in Settings › General") MUST show and change
+what Coffer's own machinery runs on: the connection and model the engine runs on, the
+connection and model speech to text runs on. Edits MUST save on their own — a picker on
+selection — with no Save button. The section MUST NOT carry the unattended passes' switches and
+intervals or the curation owner: those are shown and changed on the Knowledge and Memory pages,
+whose content the passes upkeep.
+
+- **Engine model** — a picker that chooses the connection flagged `internal_default` and then,
+  from that connection's curated `text` models or its probed catalogue, the engine model; the
+  call bound sits beside it, named with the default that applies while the operator has chosen
+  none, and a bound outside the permitted range is reported where it was typed rather than
+  saved.
+- **Speech to text** — the same pair for the connection flagged `transcribe_default` and its
+  own model, saying plainly that with either half unset Coffer transcribes nothing and the agent
+  receives the audio file.
+- **Test** — beside each picker, one probe of the chosen pair: for the engine one
+  `POST /api/v1/models/test-connection` with the chosen connection and model; for speech to
+  text one `POST /api/v1/models/list-models` for the chosen connection, which passes when the
+  listing names the chosen model, because a chat probe fails on a speech model even on a
+  healthy endpoint. A failure MUST show the endpoint's error inline and change nothing. A
+  picker whose last test in this visit failed reads as failing until a test of the same pair
+  passes, and choosing another connection or model drops the result; a picker with either half
+  unset reads as not set, and for the engine says that no internal pass runs (see "Make every
+  internal pass a clean no-op when nothing is configured").
+
+#### Scenario: the general tab's coffer's model section shows and changes both halves
+- **GIVEN** Settings › General rendered with an internal-default connection,
+- **WHEN** the section renders and the operator picks an engine model and a speech-to-text model,
+- **THEN** the Engine model and Speech to text pickers show the chosen connections and models,
+  each edit saves on its own without a Save button, only the edited value is written, and the
+  section shows no upkeep switch, interval or curation owner (TypeScript acceptance test).
+
+#### Scenario: a failed test leaves coffer's model as it was
+- **GIVEN** a speech-to-text model chosen on a connection whose endpoint is unreachable
+- **WHEN** the operator chooses Test beside the Speech to text picker
+- **THEN** the picker reads as failing with the error inline
+- **AND** no write is sent and the chosen pair stays as it was

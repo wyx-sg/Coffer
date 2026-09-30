@@ -1,9 +1,8 @@
 """The MCP server page's reads: status detail, 24 h summary, server log, tiering split.
 
-revise-web-ui-ia: mcp-gateway "Explain a server's state on its page", "Read a
-server's own log from its page", "Record invocations without content" and
-"Forward tools, resources and prompts" — the acceptance markers are added when
-the change is archived.
+Spec mcp-gateway "Explain a server's state on its page", "Read a server's own
+log from its page", "Record invocations without content" and "Forward tools,
+resources and prompts".
 """
 
 from __future__ import annotations
@@ -136,6 +135,9 @@ async def ctx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 # --- status detail ------------------------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a failing server says its last error and since when"
+)
 @pytest.mark.asyncio
 async def test_a_failing_server_says_its_last_error_since_when_and_its_last_success(ctx):
     srv = await ctx.server("sentry", _stdio())
@@ -166,6 +168,7 @@ async def test_a_healthy_server_has_no_failure_detail(ctx):
     assert body["last_error"] is None and body["failing_since"] is None
 
 
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="a secret missing on this machine is named")
 @pytest.mark.asyncio
 async def test_a_secret_missing_on_this_machine_is_named_by_key_and_ref(ctx):
     config = {
@@ -196,6 +199,7 @@ async def test_a_failed_test_with_no_calls_is_failing_since_the_test(ctx):
 # --- 24 h summary -------------------------------------------------------------
 
 
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="a server's page reads its calls counted")
 @pytest.mark.asyncio
 async def test_the_summary_counts_calls_errors_by_agent_and_by_tool(ctx):
     srv = await ctx.server("github", _stdio())
@@ -220,6 +224,9 @@ async def test_the_summary_counts_calls_errors_by_agent_and_by_tool(ctx):
 # --- server log ---------------------------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a server's log tells Coffer's lines from the server's"
+)
 @pytest.mark.asyncio
 async def test_the_server_log_reads_the_newest_lines_and_tells_coffer_from_stderr(ctx):
     srv = await ctx.server("duckdb", _stdio())
@@ -267,6 +274,7 @@ async def test_under_budget_every_tool_is_listed(ctx):
     assert body["catalogue_size"] == body["listed_count"] == 2
 
 
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="a server's page reads its tiering split")
 @pytest.mark.asyncio
 async def test_over_budget_the_least_used_tools_are_behind_search(ctx, monkeypatch):
     monkeypatch.setenv("COFFER_TOOL_TIERING_BUDGET", "3")

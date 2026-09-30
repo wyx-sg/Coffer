@@ -5,8 +5,8 @@ This module owns what "one line per note" looks like, and that one shape
 reaches two readers by two different callers:
 
 * **``MEMORY.md``**, written by the distil pass from :func:`render_index`. Its reader is
-  the **person** who opens a partition as a folder (see "Present partitions as a table
-  and a file tree"), and the agent that reads the file directly — which is exactly what
+  the **person** who opens a partition as a folder (see "Present a partition as its
+  memories"), and the agent that reads the file directly — which is exactly what
   both supported hosts do with their own index.
 * **The delivered payload**, composed by ``context.py`` from :func:`index_line`.
   "Deliver the index and the notes path at session start" makes delivery *the whole

@@ -130,8 +130,7 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("SecretsPage", () => {
-  // Scenario (revise-web-ui-ia): "the secrets page lists each secret with what uses it"
-  test("lists a stored and a missing ref, each naming its citer, which opens that page", async () => {
+  acceptance("web-ui", "the secrets page lists each secret with what uses it", async () => {
     renderPage();
     await screen.findByText(GITHUB.ref);
     const inUse = screen.getByRole("region", { name: /In use/ });
@@ -212,8 +211,7 @@ describe("SecretsPage", () => {
     expect(screen.queryByText(GITHUB.ref)).not.toBeInTheDocument();
   });
 
-  // Scenario (revise-web-ui-ia): "a secret in use cannot be deleted from the secrets page"
-  test("deleting a secret a channel uses names the channel, sends nothing, and keeps the row", async () => {
+  acceptance("web-ui", "a secret in use cannot be deleted from the secrets page", async () => {
     renderPage();
     await screen.findByText("seatalk-app-secret");
     openMenu("seatalk-app-secret");
@@ -260,8 +258,7 @@ describe("SecretsPage", () => {
     expect(api.remove).toHaveBeenCalledWith("secret/old-openai-key");
   });
 
-  // Scenario (revise-web-ui-ia): "revealing a secret is an explicit, audited read"
-  test("no value is on the page until Reveal is chosen in the desktop app", async () => {
+  acceptance("web-ui", "revealing a secret is an explicit, audited read", async () => {
     inShell = true;
     revealSecret.mockResolvedValue("ghp_example_value");
     renderPage();

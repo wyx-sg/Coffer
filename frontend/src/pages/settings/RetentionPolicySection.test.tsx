@@ -1,6 +1,7 @@
 // frontend/src/pages/settings/RetentionPolicySection.test.tsx
 import { describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { acceptance } from "@/test/acceptance";
 import { RetentionPolicySection } from "./RetentionPolicySection";
 import type { components } from "@/lib/api/types";
 
@@ -128,12 +129,13 @@ describe("RetentionPolicySection", () => {
     expect(onUpdate).toHaveBeenCalledWith(7);
   });
 
-  test("the shortening names how many records it deletes, now and after", async () => {
+  acceptance("web-ui", "shortening a retention window counts what it deletes", async () => {
     preview.data = { total_rows: 11210, rows_to_delete: 9400 };
+    const onUpdate = vi.fn();
     render(
       <RetentionPolicySection
         policy={{ ...basePolicy, table_name: "mcp_invocations" }}
-        onUpdate={vi.fn()}
+        onUpdate={onUpdate}
         updating={false}
       />,
     );
@@ -151,6 +153,8 @@ describe("RetentionPolicySection", () => {
     expect(within(dialog).getByTestId("retention-shorten-after")).toHaveTextContent(
       "7 days · about 1,810 calls",
     );
+    // Nothing is saved until the user confirms.
+    expect(onUpdate).not.toHaveBeenCalled();
     preview.data = undefined;
   });
 

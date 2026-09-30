@@ -170,8 +170,7 @@ describe("AgentSkillsTab", () => {
     expect(screen.getByRole("link", { name: "Skills" })).toHaveAttribute("href", "/skills");
   });
 
-  // Scenario (revise-web-ui-ia, agent-registry): "the owner filter narrows an installed-kind tab"
-  test("the owner filter narrows the table and is kept in the URL", async () => {
+  acceptance("agent-registry", "the owner filter narrows an installed-kind tab", async () => {
     stub([GUIDE], [LOOSE, BROKEN]);
     renderTab();
     await screen.findByRole("link", { name: "coffer-guide" });
@@ -210,15 +209,22 @@ describe("AgentSkillsTab", () => {
     );
   });
 
-  test("Adopt adopts the folder by the agent's uid; a foreign link cannot be adopted", async () => {
-    stub([], [LOOSE, LINKED]);
-    renderTab();
-    expect(await screen.findByRole("button", { name: "Adopt: lint-fix" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Adopt: release-notes" }));
-    await waitFor(() =>
-      expect(api.adoptUnmanagedSkill).toHaveBeenCalledWith("u-cc", "release-notes", "skills"),
-    );
-  });
+  // The Skills tab half of the scenario (Adopt adopts the folder by the
+  // agent's uid; a foreign link cannot be adopted); the Skills page half is in
+  // SkillsPage.test.tsx.
+  acceptance(
+    "skill-manager",
+    "unmanaged skills are adopted only from the agent's Skills tab",
+    async () => {
+      stub([], [LOOSE, LINKED]);
+      renderTab();
+      expect(await screen.findByRole("button", { name: "Adopt: lint-fix" })).toBeDisabled();
+      fireEvent.click(screen.getByRole("button", { name: "Adopt: release-notes" }));
+      await waitFor(() =>
+        expect(api.adoptUnmanagedSkill).toHaveBeenCalledWith("u-cc", "release-notes", "skills"),
+      );
+    },
+  );
 
   test("a failed adoption stays on its row and under the table, with the way to the clashing skill", async () => {
     stub([skill("release-notes", { bindings: [] })], [own("release-notes")]);

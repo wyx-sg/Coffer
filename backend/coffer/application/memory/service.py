@@ -257,8 +257,8 @@ class MemoryService:
     # ----------------------------------------------------------------- #
 
     async def list_partitions(self) -> list[PartitionSummary]:
-        """Every partition, counted from ``notes/`` — the management view (see "Present
-        partitions as a table and a file tree")."""
+        """Every partition, counted from ``notes/`` — the management view (see
+        "Present a partition as its memories")."""
         rows = await self._resources.list(kind=KIND_MEMORY)
         return [summary_of(row, placement_of(row)) for row in sorted(rows, key=lambda r: r.name)]
 

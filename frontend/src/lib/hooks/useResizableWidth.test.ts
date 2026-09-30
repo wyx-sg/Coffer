@@ -73,7 +73,6 @@ describe("useResizableWidth", () => {
     expect(window.localStorage.getItem("coffer.split.test.pane")).toBeNull();
   });
 
-  // revise-web-ui-ia: web-ui "no stored width falls back to the default"
   test.each(["methods", "access"] as const)(
     "blocked storage (%s) → default, still settable",
     (mode) => {

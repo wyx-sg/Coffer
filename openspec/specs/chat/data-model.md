@@ -23,7 +23,7 @@ by a message rather than by registration.
 | `archived_at` | TIMESTAMP, NULL | NULL = active. Set by the owner or by the auto-archive stage. |
 | `channel_uid` | TEXT, NULL | Return address: the **uid** of the channel this thread is also reachable on. "Has a binding" iff set. A uid and not a name, because a binding has to keep naming the same channel after the user renames it (ADR resource-identity-is-an-immutable-uid); the label a person or an agent reads is resolved from it at read time. |
 | `peer_chat_id` | TEXT, NULL | The chat id that return address aims at. |
-| `owner` | TEXT, NULL | The surface that owns this conversation, when it is not the developer's own. NULL = the developer's (every conversation chat itself or a channel opens). Written only by a surface that owns its conversations — `ChatService.create_conversation(owner=...)`; no surface currently passes one — and never exposed on the wire. An owned conversation is left out of both listings (see "Show every conversation on the Chat page") and stays readable by id. |
+| `owner` | TEXT, NULL | The surface that owns this conversation, when it is not the developer's own. NULL = the developer's (every conversation chat itself or a channel opens). Written only by a surface that owns its conversations — `ChatService.create_conversation(owner=...)`; no surface currently passes one — and never exposed on the wire. An owned conversation is left out of both listings (see "Show every conversation on the Conversations page") and stays readable by id. |
 
 Indexes: `idx_conversations_updated (updated_at)` — the recency ordering of
 "List conversations by latest activity" — and `idx_conversations_archived
@@ -90,7 +90,7 @@ and discriminated by `type`:
 | `text` | `text` | |
 | `tool_use` | `tool_use_id`, `tool_name`, `tool_input` | Rendered as its own card. |
 | `tool_result` | `tool_use_id`, `tool_name`, `output`, `error` | Pairs with its `tool_use` by id. |
-| `attachment` | `path`, `mime`, `filename` | A **reference**: bytes stay on disk — under `~/.coffer/content/channel-media` for a channel's download, `~/.coffer/content/chat-media` for a Chat page upload. `path` is never emitted to the wire — the API exposes `filename` and `mime` only. |
+| `attachment` | `path`, `mime`, `filename` | A **reference**: bytes stay on disk — under `~/.coffer/content/channel-media` for a channel's download, `~/.coffer/content/chat-media` for a Conversations page upload. `path` is never emitted to the wire — the API exposes `filename` and `mime` only. |
 
 ### The attachment value object
 
@@ -100,9 +100,9 @@ at turn time (see "Re-materialise attachments from persisted history"). Audio is
 transcribed and documents are extracted before the adapter sees them; images and
 anything else survive as attachments for the adapter to materialise natively.
 
-### Chat page uploads — files, not a table
+### Conversations page uploads — files, not a table
 
-A file attached on the Chat page is stored before its message is sent, as two
+A file attached on the Conversations page is stored before its message is sent, as two
 flat files under `~/.coffer/content/chat-media` (see "Upload a file for a web message"), in the
 `content/` class: the user's only copy, not synced:
 

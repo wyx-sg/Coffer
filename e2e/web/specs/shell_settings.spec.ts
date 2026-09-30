@@ -3,8 +3,7 @@
 // Settings as a modal over the current page (change revise-web-ui-ia): five
 // tabs grouped by what they manage (General, Security, Data, Daemon, About),
 // each at /settings/<tab>; the version menu's language switch; and no shutdown
-// control anywhere. The first two markers still name the scenarios of the
-// Settings page the change replaces; they follow its scenario names at archive.
+// control anywhere.
 
 import { expect, test } from "@playwright/test";
 import { acceptance } from "./_acceptance";
@@ -59,7 +58,7 @@ acceptance(
 
 acceptance(
   "web-ui",
-  "settings drops the confusing controls",
+  "settings offers no shutdown control",
   async ({ page }) => {
     // No Settings tab exposes a daemon-shutdown control — stopping the
     // daemon from the page kills the page. Every tab is visited, and each is
@@ -189,10 +188,10 @@ acceptance(
   },
 );
 
-// Settings > Data and > Daemon (change revise-web-ui-ia; the scenario markers
-// are added when the change is archived). The e2e daemon runs under its own
-// throwaway HOME, so clearing its cache or pinning its port touches nothing
-// of the user's.
+// Settings > Data and > Daemon in a real browser; the component tests
+// (DataSettings.test.tsx, DaemonSettings.test.tsx) carry the scenarios'
+// acceptance markers. The e2e daemon runs under its own throwaway HOME, so
+// clearing its cache or pinning its port touches nothing of the user's.
 
 test("the data tab shows four blocks and clears the rebuildable cache after a confirmation", async ({
   page,
@@ -241,10 +240,14 @@ test("the daemon tab refuses a port out of range and leaves a saved one pending 
     await expect(modal.getByTestId("settings-daemon-status")).toContainText(
       `127.0.0.1:${port}`,
     );
-    // A browser offers the restart command, never a restart button.
+    // A browser offers a Restart control (the daemon restarts itself), never
+    // a command to copy.
     await expect(
-      modal.getByText("coffer daemon restart").first(),
+      modal
+        .getByTestId("settings-daemon-status")
+        .getByRole("button", { name: /^restart$/i }),
     ).toBeVisible();
+    await expect(modal.getByText("coffer daemon restart")).toHaveCount(0);
     await expect(modal.getByText(/token/i)).toHaveCount(0);
 
     // The field holds the port of the next start (the suite's daemon binds a

@@ -13,8 +13,10 @@ opened, and one opened from Coffer's own UI, which is modelled as a built-in sou
 **Coffer** — each row carrying a **source badge** naming its channel or Coffer, with filters by
 source and by agent. A channel's badge MUST also name where in the channel the conversation
 lives — a direct chat or a group (by its name when Coffer knows it), a thread or topic rather than
-the chat's main timeline, and a parallel thread's `🧵#N` mark — and every row MUST show the latest
-message's words on one line and whether a turn is running in it. A conversation carrying an `owner` belongs to that surface, is left out of the
+the chat's main timeline, and a parallel thread's `🧵#N` mark — and every row of the list MUST show
+the latest message's words on one line and whether a turn is running in it (the narrower list beside
+an open conversation marks the running ones and leaves the line out). A channel's link to its
+conversations opens the list filtered to that channel, named in a chip that clears the filter. A conversation carrying an `owner` belongs to that surface, is left out of the
 list, and stays readable by id. A conversation's page MUST show the full exchange and a reply box
 that continues it, whichever source opened it; **New conversation** is a secondary action, and the
 page opens on the list rather than on a welcome or suggestions page, which it does not have. The

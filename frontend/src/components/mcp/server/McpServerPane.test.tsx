@@ -1,8 +1,8 @@
 // src/components/mcp/server/McpServerPane.test.tsx — the open MCP server: its state, why, who calls it, its tools, its log, delete.
 //
-// revise-web-ui-ia: mcp-gateway "Explain a server's state on its page" and
-// "Read a server's own log from its page" (the page half) — the acceptance
-// markers are added when the change is archived.
+// The page half of spec mcp-gateway "Explain a server's state on its page" and
+// "Read a server's own log from its page"; the routes' scenarios are marked on
+// backend/tests/integration/surfaces/http/mcp/test_page_routes.py.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

@@ -304,7 +304,7 @@ describe("AgentHooksTab", () => {
     await waitFor(() => expect(openMock).toHaveBeenCalledWith(LOCAL, expect.anything()));
   });
 
-  // Scenario (revise-web-ui-ia, agent-registry): "the owner filter narrows an installed-kind tab"
+  // Spec agent-registry "Filter an agent's installed kinds by owner" (the scenario itself is on the Skills tab).
   test("the owner filter narrows the table to Coffer's hook and keeps it in the URL", async () => {
     renderTab({ items: [COFFER_ROW, ...OWN_ROWS], coffer_hook: COFFER, parse_errors: [] });
     await screen.findByText(COFFER_CMD);

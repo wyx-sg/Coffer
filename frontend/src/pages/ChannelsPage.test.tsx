@@ -295,12 +295,22 @@ describe("tabs live in the path", () => {
   });
 });
 
-test("Conversations from this channel links to Conversations filtered by it", async () => {
+acceptance("channels", "a channel links to its conversations instead of showing them", async () => {
   renderChannelsPage(`/channels/${TEAM.uid}`);
   expect(await screen.findByTestId("channel-conversations-link")).toHaveAttribute(
     "href",
     `/conversations?channel=${TEAM.uid}`,
   );
+  // Setup and connection status on Overview, settings on Settings — and no
+  // tab, table or list of the channel's conversations.
+  expect(screen.getByTestId("channel-state-word")).toBeInTheDocument();
+  expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+    "Overview",
+    "Settings",
+  ]);
+  expect(screen.queryByRole("tab", { name: /conversation|message|history/i })).toBeNull();
+  expect(screen.queryByRole("region", { name: /conversations|messages/i })).toBeNull();
+  expect(screen.queryByRole("table")).toBeNull();
 });
 
 test("reconnect turns the channel off and on again", async () => {

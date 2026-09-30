@@ -190,8 +190,8 @@ class AggregationResultOut(BaseModel):
 
 
 class FileNodeOut(BaseModel):
-    """One entry in a partition's own directory ("Present partitions as a table
-    and a file tree").
+    """One entry in a partition's own directory ("Present a partition as its
+    memories").
 
     Same shape as the skill kind's file tree so the two surfaces render through
     one component on the frontend. ``path`` is POSIX and relative to the

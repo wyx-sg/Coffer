@@ -1,5 +1,5 @@
 // src/lib/detailTabs.test.tsx — the path addressing of a detail page's tabs.
-// revise-web-ui-ia: web-ui "a detail tab lives in the path".
+// The scenario on two real detail pages is pages/detailTabs.test.tsx.
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";

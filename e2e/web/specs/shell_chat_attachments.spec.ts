@@ -1,7 +1,7 @@
 // e2e/web/specs/shell_chat_attachments.spec.ts
 //
-// Attach a file on the Chat page, send it, reload, and find it in the thread
-// (spec chat "Attach files from the Chat page composer", "Show a message's
+// Attach a file on the Conversations page, send it, reload, and find it in the thread
+// (spec chat "Attach files from the Conversations page composer", "Show a message's
 // attachments in the thread").
 //
 // The conversation is provisioned over REST. It names Codex because the e2e

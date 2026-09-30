@@ -1,9 +1,7 @@
 // src/components/shell/SidebarFooter.test.tsx — the footer's daemon state, the version menu, the update card and the Settings row.
 //
-// These cover change revise-web-ui-ia's footer scenarios (spec web-ui "Show
-// the daemon's state in the shell footer"); they carry plain tests until the
-// change is archived, when its task 7.7 gives them their markers.
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+// Spec web-ui "Show the daemon's state in the shell footer".
+import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
@@ -82,8 +80,7 @@ function openDaemonTab(row: HTMLElement) {
 }
 
 describe("SidebarFooter", () => {
-  // revise-web-ui-ia: web-ui "the footer shows a running daemon"
-  test("a running daemon reads as running on its port, and its menu opens Settings → Daemon", async () => {
+  acceptance("web-ui", "the footer shows a running daemon", async () => {
     answer({});
     renderFooter();
     const state = await screen.findByRole("button", {
@@ -99,16 +96,15 @@ describe("SidebarFooter", () => {
     expect(screen.getByTestId("where")).toHaveTextContent("/settings/daemon");
   });
 
-  // revise-web-ui-ia: web-ui "the footer says connecting before the first answer"
-  test("before the first answer it reads as connecting", () => {
+  acceptance("web-ui", "the footer says connecting before the first answer", () => {
     get.mockReturnValue(new Promise(() => {}));
     renderFooter();
     expect(screen.getByTestId("sidebar-daemon")).toHaveTextContent("Connecting to the daemon…");
     expect(screen.getByTestId("sidebar-daemon")).toHaveAttribute("data-daemon", "connecting");
+    expect(screen.getByTestId("sidebar-daemon")).not.toHaveTextContent(/offline|running/i);
   });
 
-  // revise-web-ui-ia: web-ui "the footer shows an offline daemon"
-  test("an unreachable daemon reads as offline and still opens Settings → Daemon", async () => {
+  acceptance("web-ui", "the footer shows an offline daemon", async () => {
     get.mockRejectedValue(new TypeError("Failed to fetch"));
     renderFooter();
     const state = await screen.findByRole("button", { name: "Daemon offline" });
@@ -116,8 +112,7 @@ describe("SidebarFooter", () => {
     expect(screen.getByTestId("where")).toHaveTextContent("/settings/daemon");
   });
 
-  // revise-web-ui-ia: web-ui "the footer shows a stopping daemon"
-  test("a draining daemon reads as stopping", async () => {
+  acceptance("web-ui", "the footer shows a stopping daemon", async () => {
     answer({ status: "draining" });
     renderFooter();
     expect(
@@ -125,25 +120,30 @@ describe("SidebarFooter", () => {
     ).toBeInTheDocument();
   });
 
-  // revise-web-ui-ia: web-ui "the collapsed rail keeps the daemon state"
-  test("the collapsed rail keeps the state as an icon with the same words", async () => {
+  acceptance("web-ui", "the collapsed rail keeps the daemon state", async () => {
     answer({});
     renderFooter(true);
     const state = await screen.findByRole("button", {
       name: "Daemon running on port 8000 · v1.0.0",
     });
     expect(state).not.toHaveTextContent("Daemon running");
-    // revise-web-ui-ia: web-ui "the collapsed rail keeps Settings as a gear with a tooltip"
+    // The gear beside it (its own scenario: SidebarSettingsRow.test.tsx).
     const gear = screen.getByRole("button", { name: "Settings" });
     expect(gear).not.toHaveTextContent("Settings");
     fireEvent.click(gear);
     expect(screen.getByTestId("where")).toHaveTextContent("/settings/general");
   });
 
-  test("the version menu switches the language at once and names each locale in its own language", async () => {
+  acceptance("web-ui", "the version menu switches theme and language at once", async () => {
     answer({});
     renderFooter();
     fireEvent.click(await screen.findByRole("button", { name: /Daemon running/ }));
+    // Dark applies to the whole shell at once.
+    const themes = within(screen.getByTestId("version-menu")).getByRole("group", {
+      name: "Theme",
+    });
+    fireEvent.click(within(themes).getByRole("button", { name: "Dark" }));
+    expect(document.documentElement.dataset.theme).toBe("dark");
     const languages = within(screen.getByTestId("version-menu")).getByRole("radiogroup", {
       name: "Language",
     });
@@ -154,9 +154,12 @@ describe("SidebarFooter", () => {
     });
     expect(i18n.language).toBe("zh");
     expect(zh).toHaveAttribute("aria-checked", "true");
+    localStorage.clear();
+    document.documentElement.dataset.theme = "light";
   });
 
-  test("the version menu links the documentation and sends Check for updates to Settings › About", async () => {
+  // The scenario's AND: Documentation and Check for updates.
+  acceptance("web-ui", "the version menu switches theme and language at once", async () => {
     answer({});
     renderFooter();
     fireEvent.click(await screen.findByRole("button", { name: /Daemon running/ }));

@@ -129,7 +129,10 @@ describe("MemoryDetailPage", () => {
     stub();
   });
 
-  test("opens on Memories with the first memory selected and its meta line", async () => {
+  // Opens on Memories with the first memory selected and its meta line: the
+  // page half of the scenario (the REST note route keeps the native paths —
+  // test_memory_routes.py).
+  acceptance("memory", "provenance paths stay in the data, not on the page", async () => {
     renderAt(`/memory/${COFFER.uid}`);
     expect(
       await screen.findByRole("tab", { name: "Memories", selected: true }),
@@ -207,8 +210,12 @@ describe("MemoryDetailPage", () => {
     expect(screen.queryByTestId("memory-no-model")).toBeNull();
   });
 
-  test("Delivered lives at /memory/<uid>/delivered with an agent switch", async () => {
+  // Delivered lives at /memory/<uid>/delivered with an agent switch.
+  acceptance("memory", "a partition has a memories tab and a delivered tab", async () => {
     renderAt(`/memory/${COFFER.uid}`);
+    expect(
+      await screen.findByRole("tab", { name: "Memories", selected: true }),
+    ).toBeInTheDocument();
     await screen.findByTestId("memory-pane");
     openTab(/delivered/i);
     await waitFor(() =>
@@ -229,6 +236,25 @@ describe("MemoryDetailPage", () => {
     expect(screen.getByTestId("memory-delivered-text").textContent).toBe(DELIVERED.agents[0].text);
     expect(document.body.textContent).not.toMatch(/hook|repair|stale/i);
   });
+
+  acceptance(
+    "web-ui",
+    "a partition's delivered tab shows each agent's session-start text",
+    async () => {
+      renderAt(`/memory/${COFFER.uid}/delivered`);
+      const text = await screen.findByTestId("memory-delivered-text");
+      expect(text.textContent).toBe(DELIVERED.agents[1].text);
+      expect(
+        screen.getByText("What a session in ~/work/coffer starts with · read-only"),
+      ).toBeInTheDocument();
+      // Read-only: no field to edit and no action on the text.
+      expect(screen.queryByRole("textbox")).toBeNull();
+      fireEvent.click(screen.getByRole("radio", { name: /codex/i }));
+      expect(screen.getByTestId("memory-delivered-text").textContent).toBe(
+        DELIVERED.agents[0].text,
+      );
+    },
+  );
 
   test("Delivered with no agent connected says so", async () => {
     vi.mocked(api.getDelivered).mockResolvedValue({ partition: "coffer", agents: [] });
@@ -281,7 +307,7 @@ describe("MemoryDetailPage", () => {
   });
 });
 
-acceptance("memory", "browse a partition as a file tree with a read-only preview", async () => {
+acceptance("memory", "browse a partition's memories with a read-only preview", async () => {
   vi.clearAllMocks();
   // With no partitions: the first-run welcome, no table.
   stub({ partitions: [] });

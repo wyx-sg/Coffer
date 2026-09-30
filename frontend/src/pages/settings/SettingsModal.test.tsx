@@ -79,7 +79,6 @@ async function openFromRow() {
 }
 
 describe("the Settings modal", () => {
-  // revise-web-ui-ia: web-ui "settings layout uses the redesigned tabbed sidebar"
   acceptance("web-ui", "settings layout uses the redesigned tabbed sidebar", async () => {
     renderAt("/settings");
     const modal = await screen.findByTestId("settings-modal", {}, { timeout: 5_000 });
@@ -101,8 +100,7 @@ describe("the Settings modal", () => {
     expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
   });
 
-  // revise-web-ui-ia: web-ui "the Settings row opens Settings over the current page"
-  test("the Settings row opens General over the current page", async () => {
+  acceptance("web-ui", "the Settings row opens Settings over the current page", async () => {
     renderAt("/mcp-servers");
     expect(
       await screen.findByRole("heading", { level: 1, name: "MCP servers" }, { timeout: 5_000 }),
@@ -114,10 +112,16 @@ describe("the Settings modal", () => {
       screen.getByRole("heading", { level: 1, name: "MCP servers", hidden: true }),
     ).toBeInTheDocument();
     expect(screen.getByTestId("sidebar-settings")).toHaveAttribute("aria-pressed", "true");
+    // Settings is the footer row, not one of the navigation entries.
+    const nav = screen.getByRole("navigation", { name: /primary/i, hidden: true });
+    expect(within(nav).queryByText("Settings")).toBeNull();
+
+    fireEvent.keyDown(screen.getByTestId("settings-modal"), { key: "Escape" });
+    await waitFor(() => expect(where.pathname).toBe("/mcp-servers"));
+    expect(screen.getByTestId("sidebar-settings")).toHaveAttribute("aria-pressed", "false");
   });
 
-  // revise-web-ui-ia: web-ui "closing Settings returns to the page underneath"
-  test("Escape and Back both close it onto the page underneath", async () => {
+  acceptance("web-ui", "closing Settings returns to the page underneath", async () => {
     renderAt("/activity");
     await openFromRow();
     fireEvent.click(
@@ -135,8 +139,7 @@ describe("the Settings modal", () => {
     await waitFor(() => expect(screen.queryByTestId("settings-modal")).not.toBeInTheDocument());
   });
 
-  // revise-web-ui-ia: web-ui "a deep link opens a Settings tab"
-  test("a fresh load of a Settings tab opens it over Overview and closes to /", async () => {
+  acceptance("web-ui", "a deep link opens a Settings tab", async () => {
     renderAt("/settings/daemon");
     const modal = await screen.findByTestId("settings-modal", {}, { timeout: 5_000 });
     expect(within(modal).getByRole("link", { name: "Daemon" })).toHaveAttribute(

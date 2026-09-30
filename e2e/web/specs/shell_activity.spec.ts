@@ -93,8 +93,6 @@ test(
   },
 );
 
-// revise-web-ui-ia: web-ui "new records are held while the user reads" — the
-// marker is added when the change is archived.
 test("a record written while one is open waits behind the new pill", async ({
   page,
 }) => {
@@ -129,7 +127,6 @@ test("a record written while one is open waits behind the new pill", async ({
   }
 });
 
-// revise-web-ui-ia: web-ui "export from the menu honours the filters".
 test("export from the menu writes only the filtered records", async ({
   page,
 }) => {

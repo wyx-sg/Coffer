@@ -171,7 +171,9 @@ describe("ResourcesPage", () => {
     expect(screen.queryByRole("listitem")).toBeNull();
   });
 
-  test("the page carries one Add server action", () => {
+  // The dialog half (the Import from agents link, no custom tool) is
+  // AddMcpServerDialog.test.tsx.
+  acceptance("web-ui", "the add dialog links to importing from agents", () => {
     stubQuery({ data: [server("u1", "github")] });
     renderAt();
     const adds = screen.getAllByRole("button", { name: /add server/i });
@@ -242,8 +244,9 @@ describe("ResourcesPage", () => {
     expect(within(bar).getByRole("button", { name: /reach/i })).toBeInTheDocument();
     expect(within(bar).getByRole("button", { name: /delete/i })).toBeInTheDocument();
   });
-  // scenario (web-ui, revise-web-ui-ia 7.14d): "the MCP servers list leaves custom tools out"
-  test("leaves custom-tool groups (http_api servers) out of the MCP servers list", () => {
+  // The scenario's custom-tool AND: a custom-tool group (an http_api server) is
+  // not on the MCP servers page; SidebarNav.test.tsx has the entries half.
+  acceptance("web-ui", "each listed resource kind has one sidebar entry", () => {
     const group = server("u-ct", "billing", {
       config: { transport: { type: "http_api", base_url: "https://billing.example" } },
     } as unknown as Partial<ResourceOut>);

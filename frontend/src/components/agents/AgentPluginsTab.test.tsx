@@ -195,7 +195,7 @@ describe("AgentPluginsTab", () => {
     );
   });
 
-  // Scenario (revise-web-ui-ia, agent-registry): "the owner filter narrows an installed-kind tab"
+  // Spec agent-registry "Filter an agent's installed kinds by owner" (the scenario itself is on the Skills tab).
   test("the Coffer filter shows nothing, since Coffer installs no plugins", async () => {
     renderTab({ items: [SUPERPOWERS, REVIEW] });
     await screen.findByText("superpowers");

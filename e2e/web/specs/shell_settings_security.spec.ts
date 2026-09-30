@@ -9,8 +9,8 @@
 // models fill the model picker, and Test against a dead loopback endpoint
 // reads as failing inline.
 //
-// Scenario names below live in the change's delta spec (not yet archived), so
-// these are plain tests; the component tests carry the same scenarios.
+// These are plain tests: the component tests (SecuritySettings.test.tsx,
+// EngineSettings.test.tsx) carry the scenarios' acceptance markers.
 //
 // The rotation changes the e2e daemon's token for every later spec. Each spec
 // reads the token from daemon.json per request (readDaemonToken), which the
@@ -52,8 +52,6 @@ type Provider = {
   internal_default: boolean;
 };
 
-// Scenario (revise-web-ui-ia): "the token is hidden until shown"
-// Scenario (revise-web-ui-ia): "rotating the token from settings security keeps the page working"
 test("settings security masks, shows, copies and rotates the daemon token", async ({
   page,
   context,
@@ -101,9 +99,6 @@ test("settings security masks, shows, copies and rotates the daemon token", asyn
   ).toBeVisible();
 });
 
-// Scenario (revise-web-ui-ia): "an unset picker says what coffer does without it"
-// Scenario (revise-web-ui-ia): "coffer's model is chosen in settings general"
-// Scenario (revise-web-ui-ia): "testing a picker shows a failing pair inline"
 test("settings general picks coffer's model from a provider's curated list and tests it", async ({
   page,
 }) => {

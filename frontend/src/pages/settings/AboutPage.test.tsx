@@ -55,10 +55,9 @@ describe("AboutPage", () => {
     expect(screen.getByText(/github\.com\/wyx-sg\/Coffer/)).toBeInTheDocument();
   });
 
-  // The requirement behind this marker is removed by change revise-web-ui-ia
-  // (the daemon now shows on Settings → Daemon); the marker goes at archive.
-  // About itself still names no daemon on screen.
-  acceptance("web-ui", "settings shows no daemon tab and no daemon status", async () => {
+  // The About half of the scenario; e2e shell_settings.spec.ts visits every tab
+  // for the shutdown control.
+  acceptance("web-ui", "settings offers no shutdown control", async () => {
     mockStatus();
     const { container } = render(<AboutPage />, { wrapper: wrap });
 
@@ -72,8 +71,12 @@ describe("AboutPage", () => {
     expect(screen.getByText("0.7.42 (3909da95)")).toBeInTheDocument();
     expect(screen.getByText("~/.coffer")).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/stable/);
-    // A user never needs to know Coffer runs a background daemon.
-    expect(container.textContent).not.toMatch(/daemon/i);
+    // Copy diagnostics is the one action beside the version; no shutdown or
+    // stop control, no language picker and no resource-kind list.
+    expect(screen.getByRole("button", { name: /copy diagnostics/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /shut\s*down|stop daemon/i })).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(container.textContent).not.toMatch(/resource kinds/i);
     expect(screen.queryByText("8000")).not.toBeInTheDocument();
   });
 
@@ -88,10 +91,7 @@ describe("AboutPage", () => {
     expect(screen.getByText(/reading the version/i)).toBeInTheDocument();
   });
 
-  // web-ui "copy diagnostics carries no secret" (change revise-web-ui-ia; the
-  // acceptance marker is added when the change is archived and the scenario
-  // reaches openspec/specs).
-  test("copy diagnostics carries no secret", async () => {
+  acceptance("web-ui", "copy diagnostics carries no secret", async () => {
     mockStatus();
     const injected = window as unknown as { __COFFER_TOKEN__?: string };
     injected.__COFFER_TOKEN__ = "tok-must-not-leak";

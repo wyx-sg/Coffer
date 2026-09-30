@@ -343,8 +343,7 @@ describe("SecuritySettings — master key", () => {
 });
 
 describe("SecuritySettings — daemon access token", () => {
-  // Scenario (revise-web-ui-ia): "the token is hidden until shown"
-  test("the token is masked until Show, and Copy puts it on the clipboard", async () => {
+  acceptance("web-ui", "the token is hidden until shown", async () => {
     renderPage();
     await waitFor(() => expect(rotateButton()).toBeEnabled());
     expect(tokenBox()).toHaveTextContent(/^•+abcd$/);
@@ -359,29 +358,31 @@ describe("SecuritySettings — daemon access token", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(OLD));
   });
 
-  // Scenario (revise-web-ui-ia): "rotating the token from settings security keeps the page working"
-  test("rotating installs the new token, closes, and the next request succeeds", async () => {
-    renderPage();
-    await waitFor(() => expect(rotateButton()).toBeEnabled());
-    fireEvent.click(rotateButton());
-    const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent(/other open coffer tabs and any client/i);
-    expect(dialog).toHaveTextContent("~/.coffer/daemon.json");
-    expect(dialog).toHaveTextContent(/token_rotated/);
+  acceptance(
+    "web-ui",
+    "rotating the token from settings security keeps the page working",
+    async () => {
+      renderPage();
+      await waitFor(() => expect(rotateButton()).toBeEnabled());
+      fireEvent.click(rotateButton());
+      const dialog = await screen.findByRole("dialog");
+      expect(dialog).toHaveTextContent(/other open coffer tabs and any client/i);
+      expect(dialog).toHaveTextContent("~/.coffer/daemon.json");
+      expect(dialog).toHaveTextContent(/token_rotated/);
 
-    fireEvent.click(within(dialog).getByRole("button", { name: /rotate token/i }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      fireEvent.click(within(dialog).getByRole("button", { name: /rotate token/i }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
-    expect(seen.filter((r) => r.path === "/daemon/rotate-token")).toHaveLength(1);
-    expect(getCofferToken()).toBe(NEW);
-    expect(tokenBox()).toHaveTextContent(/9f3a$/);
-    // No reload: the page's next request carries the new token and is accepted.
-    await expect(call("/settings/secrets")).resolves.toEqual({ master_key_storage: "file" });
-    expect(seen.at(-1)?.token).toBe(NEW);
-  });
+      expect(seen.filter((r) => r.path === "/daemon/rotate-token")).toHaveLength(1);
+      expect(getCofferToken()).toBe(NEW);
+      expect(tokenBox()).toHaveTextContent(/9f3a$/);
+      // No reload: the page's next request carries the new token and is accepted.
+      await expect(call("/settings/secrets")).resolves.toEqual({ master_key_storage: "file" });
+      expect(seen.at(-1)?.token).toBe(NEW);
+    },
+  );
 
-  // Scenario (revise-web-ui-ia): "a failed rotation from settings security keeps the old token"
-  test("a failed rotation keeps the dialog open with the error and the old token", async () => {
+  acceptance("web-ui", "a failed rotation from settings security keeps the old token", async () => {
     rotateFails = true;
     renderPage();
     await waitFor(() => expect(rotateButton()).toBeEnabled());
@@ -404,11 +405,14 @@ describe("SecuritySettings — daemon access token", () => {
     expect(screen.getByRole("button", { name: /^copy$/i })).toBeDisabled();
   });
 
-  // Scenario (revise-web-ui-ia): "the security tab keeps only machine-level settings"
-  test("the tab lists no stored secret and offers no add, reveal or delete", async () => {
+  acceptance("web-ui", "the security tab keeps only machine-level settings", async () => {
     renderPage();
+    // Where the master key lives, with its move control (the storage switch).
     await screen.findByRole("switch");
     expect(screen.getByText("Daemon access token")).toBeInTheDocument();
+    for (const name of [/^show$/i, /^copy$/i, /^rotate/i]) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByRole("button", { name: /add|reveal|delete/i })).toBeNull();
     // The way to them is a link to the Secrets page.

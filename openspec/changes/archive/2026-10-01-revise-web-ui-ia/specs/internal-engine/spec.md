@@ -57,8 +57,9 @@ and change it, applying the four-state rule of
   non-empty registry claims is printed as the fault it is together with how to take the pass
   back.
 - The Knowledge page's Automatic popover MUST show the owner as "Curation runs on" once the
-  vault's registry names more than one machine, with a picker of the known machines that
-  names a new owner, and an owner no known machine claims read as the fault it is.
+  vault's registry (`GET /api/v1/sync/machines`) names more than one machine, with a picker of
+  the known machines that names a new owner; an owner no known machine claims MUST be shown
+  even while the registry names one machine or none, and read as the fault it is.
 
 #### Scenario: the route names and clears the curation owner
 - **GIVEN** the internal-engine settings row with a chosen engine model and no
@@ -102,11 +103,15 @@ whose content the passes upkeep.
 - **Speech to text** — the same pair for the connection flagged `transcribe_default` and its
   own model, saying plainly that with either half unset Coffer transcribes nothing and the agent
   receives the audio file.
-- **Test** — beside each picker, one `POST /api/v1/models/test-connection` with the chosen
-  connection and model; a failure MUST show the endpoint's error inline and change nothing. A
-  picker whose last test or last call failed reads as failing until a test passes; a picker with
-  either half unset reads as not set, and for the engine says that no internal pass runs (see
-  "Make every internal pass a clean no-op when nothing is configured").
+- **Test** — beside each picker, one probe of the chosen pair: for the engine one
+  `POST /api/v1/models/test-connection` with the chosen connection and model; for speech to
+  text one `POST /api/v1/models/list-models` for the chosen connection, which passes when the
+  listing names the chosen model, because a chat probe fails on a speech model even on a
+  healthy endpoint. A failure MUST show the endpoint's error inline and change nothing. A
+  picker whose last test in this visit failed reads as failing until a test of the same pair
+  passes, and choosing another connection or model drops the result; a picker with either half
+  unset reads as not set, and for the engine says that no internal pass runs (see "Make every
+  internal pass a clean no-op when nothing is configured").
 
 #### Scenario: the general tab's coffer's model section shows and changes both halves
 - **GIVEN** Settings › General rendered with an internal-default connection,

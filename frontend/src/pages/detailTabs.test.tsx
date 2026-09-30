@@ -69,12 +69,31 @@ const SKILL: SkillOut = {
 };
 
 /** The skill's reading pane, its tab addressed the way the Skills page does. */
-function SkillTabs() {
-  const [tab, setTab] = useDetailTab(SKILL_TABS, "files", "/skills/hello");
+function SkillTabs({ name = "hello" }: { name?: string }) {
+  const [tab, setTab] = useDetailTab(SKILL_TABS, "files", `/skills/${name}`);
   return (
     <TooltipProvider>
-      <SkillDetailPane skill={SKILL} tab={tab} onTabChange={setTab} onDeleted={vi.fn()} />
+      <SkillDetailPane
+        skill={{ ...SKILL, name }}
+        tab={tab}
+        onTabChange={setTab}
+        onDeleted={vi.fn()}
+      />
     </TooltipProvider>
+  );
+}
+
+function ServerTabs({ name }: { name: string }) {
+  return (
+    <McpServerDetailTabs
+      basePath={`/mcp-servers/${name}`}
+      counts={{}}
+      overview={<div>server overview</div>}
+      tools={<div>server tools</div>}
+      resources={null}
+      prompts={null}
+      invocations={null}
+    />
   );
 }
 
@@ -150,6 +169,26 @@ acceptance("web-ui", "detail pages share one tab layout", () => {
   expect(where.url).toBe("/skills/hello");
 
   expect(skillStrip.list.className).toBe(mcpClass);
+});
+
+acceptance("web-ui", "a detail tab lives in the path", () => {
+  // The bare address opens each page on its default tab.
+  const skill = renderRoute(
+    "/skills/release-notes",
+    "/skills/:name/:tab?",
+    <SkillTabs name="release-notes" />,
+  );
+  expect(strip().selected).toHaveTextContent("Files");
+  fireEvent.mouseDown(within(strip().list).getByRole("tab", { name: "Delivery" }));
+  expect(where.url).toBe("/skills/release-notes/delivery");
+  expect(strip().selected).toHaveTextContent("Delivery");
+  skill.unmount();
+
+  renderRoute("/mcp-servers/github", "/mcp-servers/:name/:tab?", <ServerTabs name="github" />);
+  expect(strip().selected).toHaveTextContent("Overview");
+  fireEvent.mouseDown(within(strip().list).getByRole("tab", { name: "Tools" }));
+  expect(where.url).toBe("/mcp-servers/github/tools");
+  expect(strip().selected).toHaveTextContent("Tools");
 });
 
 acceptance("web-ui", "a server's detail page opens on its Overview", () => {

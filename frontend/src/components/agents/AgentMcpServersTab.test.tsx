@@ -15,6 +15,7 @@ import { AgentMcpServersTab } from "./AgentMcpServersTab";
 import { ToastProvider } from "@/components/ui/toast";
 import type { AgentOut, McpEntryOut } from "@/lib/api/agents";
 import { getApiClient } from "@/lib/api/client";
+import { acceptance } from "@/test/acceptance";
 import { mockApiClient } from "@/test/mockApiClient";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
@@ -208,8 +209,7 @@ describe("AgentMcpServersTab", () => {
     );
   });
 
-  // Scenario (revise-web-ui-ia, agent-registry): "a duplicate direct MCP entry can be removed"
-  test("Remove duplicate removes the entry from its file, and the server is then listed once, as Coffer's", async () => {
+  acceptance("agent-registry", "a duplicate direct MCP entry can be removed", async () => {
     stub();
     renderTab();
     await screen.findByText("Duplicate of github in Coffer");
