@@ -66,9 +66,9 @@ const FREEZE_CSS = `*, *::before, *::after {
 /* Masked regions whose size follows how many records a run wrote: pin the
    size (a run always writes at least six records) so the layout around them
    is the same in every run. */
-[data-visual-volatile="rows"] > tr:nth-child(n+7) { display: none !important; }
-[data-visual-volatile="rows"] > tr { height: 34px !important; }
-[data-visual-volatile="rows"] > tr > td > * { display: none !important; }
+/* How many records a run writes varies, so the rows area is one fixed block. */
+[data-visual-volatile="rows"] { display: block !important; height: 204px !important; overflow: hidden !important; }
+[data-visual-volatile="rows"] > tr { display: none !important; }
 [data-visual-volatile="count"] { display: inline-block !important; width: 4ch !important; overflow: hidden !important; vertical-align: middle; }`;
 
 function daemonToken(): string {
