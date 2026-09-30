@@ -30,14 +30,34 @@ WAIT_OPTION = typer.Option(
 )
 
 
-def pending_for(c: httpx.Client, uid: str, *, verbose: bool) -> list[dict[str, Any]]:
-    """The approvals a destination waits on right now."""
-    r = c.get("/credentials/approvals", params={"status": "pending", "destination_uid": uid})
+def pending_for(
+    c: httpx.Client, uid: str, *, verbose: bool, refs: list[str] | tuple[str, ...] = ()
+) -> list[dict[str, Any]]:
+    """The approvals a destination waits on right now.
+
+    That is every pending binding of a secret to ``uid``, and — for each of
+    ``refs``, the secrets the destination cites — a pending replacement of the
+    value: a new key for a secret in use is held against the secret, not
+    against any one destination, so it is found by its ref.
+    """
+    if not refs:
+        r = c.get("/credentials/approvals", params={"status": "pending", "destination_uid": uid})
+    else:
+        r = c.get("/credentials/approvals", params={"status": "pending"})
     if r.status_code == 404:
         # A daemon from before the secret boundary has no approvals to wait on.
         return []
     _cli_client.check(r, verbose=verbose)
-    return list(r.json().get("approvals", []))
+    rows = list(r.json().get("approvals", []))
+    if not refs:
+        return rows
+    wanted = set(refs)
+    return [
+        a
+        for a in rows
+        if a.get("destination_uid") == uid
+        or (a.get("op") == "replace_value" and a.get("ref") in wanted)
+    ]
 
 
 def pending_ids(r: httpx.Response) -> list[str]:

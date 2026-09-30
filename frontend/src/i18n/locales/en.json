@@ -1673,6 +1673,8 @@
       },
       "matcher": "matcher {{matcher}}",
       "matcherAny": "Any",
+      "memoryHook_one": "Memory hook · {{count}} event",
+      "memoryHook_other": "Memory hook · {{count}} events",
       "state": {
         "active": "Active",
         "current": "Current",
@@ -1701,7 +1703,7 @@
         "openActivity": "Open Activity"
       },
       "repair": "Repair",
-      "repairAria": "Repair Coffer’s {{event}} hook",
+      "repairAria": "Repair Coffer’s memory hook",
       "openFile": "Open file",
       "openFileAria": "Open {{path}}",
       "search": "Search hooks",
@@ -4248,7 +4250,7 @@
     "refresh": "Refresh",
     "more": "More actions",
     "exportCsv": "Export CSV",
-    "noPrice": "No price",
+    "noPrice": "—",
     "editPrices": "Edit prices in Model providers",
     "quota": {
       "title": "Subscription quota",
@@ -4360,7 +4362,7 @@
       },
       "unknownModel": "Unknown model",
       "unknownAgent": "Unknown agent",
-      "noPriceTip": "No price for this model. Set one in Model providers.",
+      "noPriceTip": "No price for this model: Coffer ships Anthropic’s rates only. Set a price on its connection in Model providers.",
       "partlyPricedTip_one": "{{n}} request has no price and is not in this cost.",
       "partlyPricedTip_other": "{{n}} requests have no price and are not in this cost.",
       "unknownTip_one": "{{n}} request ended before reporting its usage; its tokens are not counted.",

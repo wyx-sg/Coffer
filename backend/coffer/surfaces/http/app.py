@@ -86,9 +86,9 @@ from coffer.surfaces.http.kind_wiring import wire_resource_kinds
 from coffer.surfaces.http.mcp.protocol_routes import (
     start_session_reaper,
 )
+from coffer.surfaces.http.memory_turn_wiring import memory_context_composer, memory_turn_retriever
 from coffer.surfaces.http.memory_wiring import (
     follow_memory_switch,
-    memory_context_composer,
     register_delivery_hook_target,
 )
 from coffer.surfaces.http.migrations_runner import run_migrations
@@ -235,6 +235,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         resource_svc,
         agent_catalog,
         compose_memory_context=memory_context_composer(kinds.memory.service, features),
+        retrieve_memory=memory_turn_retriever(kinds.memory.turn_retrieval, features),
         observe_quota=kinds.usage.quota.observe_agent_event,
     )
     # Kept on app.state: an integration test asserts the registry's contents.

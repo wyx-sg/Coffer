@@ -2196,6 +2196,8 @@ With --local the base URL must be a loopback address; Coffer detects the runtime
 
 For anthropic/openai/unknown supply exactly one of --secret / --credential-ref; an ollama connection needs neither. The new connection starts on the wire's own default reach; route it to specific agents (e.g. an openai gateway to Claude Code) with `coffer provider scope <name> --agents claude-code`. The model is chosen at the point of use, not on the connection.
 
+A --credential-ref key that already goes somewhere else waits for approval in the Coffer app before this connection may send it: the command says so and exits 9, or waits for the answer with --wait.
+
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Connection name |
@@ -2206,6 +2208,7 @@ For anthropic/openai/unknown supply exactly one of --secret / --credential-ref; 
 | `--title` | option | text |  | Display title (≤80 chars) |
 | `--description` | option | text |  |  |
 | `--local` | option | flag |  | A model runtime on this machine (Ollama, LM Studio, vLLM, llama-server): detect it, curate its tool-capable models, no key needed |
+| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
 ### provider edit
 
@@ -2219,6 +2222,8 @@ A rename changes the label and nothing else: the uid, the stored key and any pro
 
 A wire change is refused while the connection is switched on, because the wire decides whether a connection can cover any agent at all. Run `coffer provider builtin <agent_type>` first, edit, then `coffer provider switch <name>` again.
 
+A new --base-url for a connection whose key is already sent somewhere, or a new --secret for a key in use, waits for approval in the Coffer app: the change is saved, the command says what waits and exits 9, or waits for the answer with --wait.
+
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Name or uid |
@@ -2228,6 +2233,7 @@ A wire change is refused while the connection is switched on, because the wire d
 | `--protocol` | option | text |  | Correct the wire format: anthropic \| openai \| ollama \| unknown |
 | `--base-url` | option | text |  |  |
 | `--secret` | option | text |  | Rotate the stored API key |
+| `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
 
 ### provider rm
 

@@ -1673,6 +1673,8 @@
       },
       "matcher": "匹配器 {{matcher}}",
       "matcherAny": "任意",
+      "memoryHook_one": "记忆钩子 · {{count}} 个事件",
+      "memoryHook_other": "记忆钩子 · {{count}} 个事件",
       "state": {
         "active": "生效中",
         "current": "最新",
@@ -1701,7 +1703,7 @@
         "openActivity": "打开活动"
       },
       "repair": "修复",
-      "repairAria": "修复 Coffer 的 {{event}} 钩子",
+      "repairAria": "修复 Coffer 的记忆钩子",
       "openFile": "打开文件",
       "openFileAria": "打开 {{path}}",
       "search": "搜索钩子",
@@ -4248,7 +4250,7 @@
     "refresh": "刷新",
     "more": "更多操作",
     "exportCsv": "导出 CSV",
-    "noPrice": "无价格",
+    "noPrice": "—",
     "editPrices": "在模型提供商中编辑价格",
     "quota": {
       "title": "订阅额度",
@@ -4360,7 +4362,7 @@
       },
       "unknownModel": "未知模型",
       "unknownAgent": "未知智能体",
-      "noPriceTip": "此模型没有价格。可在模型提供商中设置。",
+      "noPriceTip": "此模型没有价格：Coffer 只内置 Anthropic 的价格。可在模型提供商中为它的连接设置价格。",
       "partlyPricedTip_other": "{{n}} 次请求没有价格，未计入此费用。",
       "unknownTip_other": "{{n}} 次请求在上报用量前结束，其 token 未计入。",
       "total": "合计 · {{range}}",

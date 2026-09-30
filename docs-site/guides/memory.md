@@ -190,7 +190,7 @@ Coffer memory: notes recorded for this user that may apply to this request. …
 - (/Users/you/.coffer/memory/payments-api/notes/retry-budget-for-ledger-writes.md) a fact they recorded: Retry budget for ledger writes — ledger writes retry three times, then park in the dead-letter table.
 ```
 
-- A note is given **once per session**. A later prompt that names the same note does not bring it in again.
+- A note is given **once per session**. A later prompt that names the same note does not bring it in again, even after the daemon restarts.
 - A short prompt — under three words — and a nudge such as `continue`, `ok` or `继续` bring in nothing, so a conversation that is just moving along costs nothing.
 - The whole addition stays under 1.5 KB.
 - The ranking is plain word matching over the note files. Nothing is embedded, and nothing leaves your machine.
@@ -208,7 +208,12 @@ Triggers are yours: you write them, or you accept the ones Coffer proposes. Noth
 
 ### In channel turns
 
-A turn that comes from a [channel](/guides/channels) runs no session-start hook, so Coffer puts the session-start payload — the `global` index, the index of the partition for the conversation's working directory, and where the notes are — into that turn's system prompt instead. Nothing needs installing for this. It stops on the next turn after you switch the `memory` feature off, and a turn gets no memory header at all when the index is empty. Prompt-time retrieval and triggers are not part of this append.
+A turn that comes from a [channel](/guides/channels) runs no hook of Coffer's, so Coffer delivers memory itself:
+
+- **The index.** The session-start payload — the `global` index, the index of the partition for the conversation's working directory, and where the notes are — goes into that turn's system prompt. A turn gets no memory header at all when the index is empty.
+- **The notes your message names.** Coffer ranks each message you send against the notes exactly as it does [at each prompt](#at-each-prompt-the-notes-your-prompt-names) — the same three-note limit, relevance bar and size cap — and adds what it finds after your message in what the agent receives. A note is given once per conversation, and each delivery is recorded in the audit log as a `prompt` fire of the agent. Your message is stored in the conversation as you wrote it.
+
+Nothing needs installing for this, and both stop on the next turn after you switch the `memory` feature off. Triggers are not applied to channel turns.
 
 A turn you send from the [Conversations](/guides/chat) page does not get this append: it gets memory the way a terminal session does, through the agent's own hook when the agent is connected to Coffer. No turn gets memory both ways.
 

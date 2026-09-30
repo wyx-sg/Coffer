@@ -140,6 +140,7 @@ class MemoryHookService:
         armed = [t for t in self._triggers.armed() if t.kind == kind]
         if not armed:
             return []
+        await self._ledger.ready()
         _project, reachable = await self._retrieval.partitions_for(ev.cwd)
         return [
             t

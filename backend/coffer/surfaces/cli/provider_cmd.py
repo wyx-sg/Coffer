@@ -24,6 +24,7 @@ from typing import Any
 import typer
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._approvals import WAIT_OPTION, pending_for, settle
 from coffer.surfaces.cli._kind_verbs import (
     Column,
     KindVerbs,
@@ -55,6 +56,7 @@ def add(
         help="A model runtime on this machine (Ollama, LM Studio, vLLM, llama-server): "
         "detect it, curate its tool-capable models, no key needed",
     ),
+    wait: bool = WAIT_OPTION,
 ) -> None:
     """Create an LLM connection.
 
@@ -68,6 +70,10 @@ def add(
     openai gateway to Claude Code) with `coffer provider scope <name> --agents
     claude-code`. The model is chosen at the point of use, not on the
     connection.
+
+    A --credential-ref key that already goes somewhere else waits for approval
+    in the Coffer app before this connection may send it: the command says so
+    and exits 9, or waits for the answer with --wait.
 
     \f
     Spec provider-switching "Take projected model keys from the agent's binding".
@@ -112,7 +118,11 @@ def add(
         if title:
             t = c.patch(f"/resources/{data['uid']}", json={"title": title})
             _cli_client.check(t, verbose=verbose)
-    typer.echo(f"added provider {data['name']} ({data['protocol']})")
+        typer.echo(f"added provider {data['name']} ({data['protocol']})")
+        # An existing key sent to this new base URL waits for the Coffer app
+        # (spec credentials "Hold a secret for a new destination until a person
+        # approves it"): say so, and exit 9 unless --wait.
+        settle(c, pending_for(c, data["uid"], verbose=verbose), wait=wait, verbose=verbose)
 
 
 def detect_local(
@@ -165,6 +175,7 @@ def edit(
     ),
     base_url: str | None = typer.Option(None, "--base-url"),
     secret: str | None = typer.Option(None, "--secret", help="Rotate the stored API key"),
+    wait: bool = WAIT_OPTION,
 ) -> None:
     """Rename a connection, or change its title, description, endpoint, wire or key.
 
@@ -175,6 +186,11 @@ def edit(
     wire decides whether a connection can cover any agent at all. Run
     `coffer provider builtin <agent_type>` first, edit, then
     `coffer provider switch <name>` again.
+
+    A new --base-url for a connection whose key is already sent somewhere, or a
+    new --secret for a key in use, waits for approval in the Coffer app: the
+    change is saved, the command says what waits and exits 9, or waits for the
+    answer with --wait.
 
     \f
     Two routes, applied connection fields first: ``PATCH /providers/{uid}``
@@ -204,7 +220,8 @@ def edit(
 
     c, _info = _cli_client.client_or_exit()
     with c:
-        uid = resolve_ref(c, "provider", ref, verbose=verbose)["uid"]
+        current = resolve_ref(c, "provider", ref, verbose=verbose)
+        uid = current["uid"]
         if patch:
             r = c.patch(f"/providers/{uid}", json=patch)
             if r.status_code == 409:
@@ -222,7 +239,16 @@ def edit(
             r = c.patch(f"/resources/{uid}", json=relabel)
             _cli_client.check(r, verbose=verbose)
             ref = str(r.json()["name"])
-    typer.echo(f"updated provider {ref}")
+        typer.echo(f"updated provider {ref}")
+        if base_url is not None or secret is not None:
+            # The key goes to the new base URL, and a new key replaces one in
+            # use, only once a person approves it in the Coffer app (spec
+            # credentials "Hold a secret for a new destination until a person
+            # approves it", "Hold a replaced value in use until a person
+            # approves it"): say what waits, and exit 9 unless --wait.
+            key_ref = _config(current, "credential_ref")
+            refs = [str(key_ref)] if key_ref else []
+            settle(c, pending_for(c, uid, verbose=verbose, refs=refs), wait=wait, verbose=verbose)
 
 
 def switch(

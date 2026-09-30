@@ -24,6 +24,7 @@ from coffer.infrastructure.chat.claude_sdk_provider import (
     TranscriberFactory,
 )
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
+from coffer.infrastructure.chat.prompt_memory import MemoryRetriever
 
 if TYPE_CHECKING:
     from coffer.application.chat.ports import AgentProvider, QuotaObserver
@@ -44,6 +45,8 @@ class DriverDeps:
     resolve_channel: ChannelNoteResolver | None
     resolve_home_env: Callable[[str], HomeEnvResolver]
     observe_quota: QuotaObserver | None = None
+    #: A channel turn's per-prompt memory retrieval (``None`` ⇒ none).
+    retrieve_memory: MemoryRetriever | None = None
 
 
 class ClaudeSdkDriver:
@@ -58,6 +61,7 @@ class ClaudeSdkDriver:
             list_models=deps.list_models,
             transcriber_factory=deps.transcriber_factory,
             compose_memory_context=deps.compose_memory_context,
+            retrieve_memory=deps.retrieve_memory,
             resolve_channel=deps.resolve_channel,
             resolve_home_env=deps.resolve_home_env(self.agent_key),
             observe_quota=deps.observe_quota,
@@ -76,6 +80,7 @@ class CodexAppServerDriver:
             transcriber_factory=deps.transcriber_factory,
             list_models=deps.list_models,
             compose_memory_context=deps.compose_memory_context,
+            retrieve_memory=deps.retrieve_memory,
             resolve_channel=deps.resolve_channel,
             resolve_home_env=deps.resolve_home_env(self.agent_key),
             observe_quota=deps.observe_quota,
