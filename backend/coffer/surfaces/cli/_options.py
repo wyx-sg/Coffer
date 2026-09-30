@@ -20,7 +20,7 @@ class ExitCode(IntEnum):
     CONFLICT = 5
     INVALID_INPUT = 6
     UPSTREAM_TEST_FAILED = 7
-    CREDENTIAL_ISSUE = 8
+    SECRET_ISSUE = 8
     #: A change is saved but waits for a person to approve it in the Coffer
     #: app (spec secret "Hold a secret for a new destination until a
     #: person approves it").

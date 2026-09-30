@@ -173,7 +173,7 @@ See [Secret store](/guides/secret-store).
 | `coffer sync status` exits 1 and shows `awaiting_confirmation` | The deletion guard held a round. | Read the list, then `coffer sync confirm`, `reject` or `rebuild`. Never confirm after a reinstall. |
 | `conflict: <path>` | Two machines edited the same lines. | Resolve it in `~/.coffer/sync` with git, commit, then `coffer sync now`. |
 | `awaiting_join` | This machine has not joined the remote. | `coffer sync adopt` |
-| `credential locked: <ref>` | This machine lacks the master key. | `coffer sync key import <file>` |
+| `secret locked: <ref>` | This machine lacks the master key. | `coffer sync key import <file>` |
 | Push fails with an authentication error | Coffer does not use your global git config or the macOS keychain helper. | Store a token and pass `--secret-ref`, or use an SSH key that needs no passphrase prompt. |
 
 The full list is in [Vault sync troubleshooting](/guides/vault-sync#troubleshooting).

@@ -119,14 +119,13 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
     from httpx import ASGITransport, AsyncClient
 
     from coffer.application.audit_service import AuditService
-    from coffer.application.credentials.resolver import CredentialResolver
     from coffer.application.mcp.discovery import CapabilityDiscovery
     from coffer.application.mcp.gateway import MCPGatewaySession
     from coffer.application.mcp.supervisor import SubprocessSupervisor
     from coffer.application.resource_service import ResourceService
+    from coffer.application.secret.resolver import SecretResolver
     from coffer.domain.mcp.server_config import MCPServerConfig
     from coffer.domain.resource import Kind
-    from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
     from coffer.infrastructure.mcp.persistence import (
         MCPCapabilityPreferenceRepo,
         MCPInvocationRepo,
@@ -140,6 +139,7 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
         SqlAlchemyAuditRepo,
         SqlAlchemyResourceRepo,
     )
+    from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
     from coffer.surfaces.http import errors as err_handlers
     from coffer.surfaces.http.auth import set_active_token as _set_token
     from coffer.surfaces.http.mcp.dependencies import set_mcp_session_factory
@@ -200,7 +200,7 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
         sup = SubprocessSupervisor(
             upstream_factory=build_upstream,
             resource_service=rsvc,
-            credential_resolver=CredentialResolver(KeyringAdapter()),
+            secret_resolver=SecretResolver(KeyringAdapter()),
         )
         disc = CapabilityDiscovery(
             resource_service=rsvc,
@@ -320,8 +320,8 @@ def _err_app():
         (lambda e: e.ResourceAlreadyExists("mcp_server", "dup"), 409, "RESOURCE_ALREADY_EXISTS"),
         (lambda e: e.UnknownKind("widget"), 400, "UNKNOWN_KIND"),
         (lambda e: e.ConfigValidationError("bad config"), 422, "CONFIG_INVALID"),
-        (lambda e: e.CredentialMissing("kc://ref"), 400, "CREDENTIAL_MISSING"),
-        (lambda e: e.CredentialLocked("locked"), 503, "CREDENTIAL_LOCKED"),
+        (lambda e: e.SecretMissing("kc://ref"), 400, "SECRET_MISSING"),
+        (lambda e: e.SecretLocked("locked"), 503, "SECRET_LOCKED"),
         (lambda e: e.UpstreamUnavailable("down"), 503, "UPSTREAM_UNAVAILABLE"),
         (lambda e: e.UpstreamTimeout("slow"), 504, "UPSTREAM_TIMEOUT"),
         (lambda e: e.ToolDisabled("off"), 403, "TOOL_DISABLED"),
@@ -336,8 +336,8 @@ def _err_app():
         "ResourceAlreadyExists",
         "UnknownKind",
         "ConfigValidationError",
-        "CredentialMissing",
-        "CredentialLocked",
+        "SecretMissing",
+        "SecretLocked",
         "UpstreamUnavailable",
         "UpstreamTimeout",
         "ToolDisabled",
@@ -416,7 +416,7 @@ def test_base_coffer_error_falls_back_to_500():
 
 def test_pydantic_validation_error_is_sanitised(caplog):
     """A raised pydantic ValidationError returns a generic 422 and never echoes
-    the submitted per-field input (which may carry PII/credentials)."""
+    the submitted per-field input (which may carry PII/secrets)."""
     import logging
 
     from pydantic import BaseModel, ValidationError

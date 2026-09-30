@@ -148,7 +148,7 @@ describe("connectToShellDaemon", () => {
     await connectToShellDaemon();
 
     // Read back through the ordinary getters: nothing downstream should be
-    // able to tell which host supplied the credentials.
+    // able to tell which host supplied the secrets.
     expect(getCofferBaseUrl()).toBe("http://127.0.0.1:8000/api/v1");
     expect(getCofferToken()).toBe("fresh-token");
   });
@@ -166,7 +166,7 @@ describe("connectToShellDaemon", () => {
     expect(getApiClient()).not.toBe(staleClient);
   });
 
-  test("propagates the IPC failure and leaves the previous credentials alone", async () => {
+  test("propagates the IPC failure and leaves the previous secrets alone", async () => {
     enterTauri();
     invokeMock.mockRejectedValue(new Error("coffer-daemon did not become ready within 90s"));
 

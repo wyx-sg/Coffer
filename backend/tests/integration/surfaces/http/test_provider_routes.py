@@ -77,11 +77,11 @@ def _ref_of(c, uid: str) -> str:
     Read rather than spelled out: the ref is an ADDRESS the config holds, and
     deriving it from the connection's name is exactly what made the name a key.
     """
-    return c.get(f"/api/v1/providers/{uid}").json()["credential_ref"]
+    return c.get(f"/api/v1/providers/{uid}").json()["secret_ref"]
 
 
 def _key_present(c, ref: str) -> bool:
-    return c.get(f"/api/v1/credentials/{ref}/exists").json()["present"] is True
+    return c.get(f"/api/v1/secrets/{ref}/exists").json()["present"] is True
 
 
 def _app(tmp_path: pathlib.Path, monkeypatch, port_start: int):
@@ -148,10 +148,10 @@ def test_create_with_inline_secret(tmp_path, monkeypatch):
         assert body["uid"] != body["name"] and body["name"] == "acme"
         # The minted ref is opaque — the connection's name must not be
         # recoverable from it, or the name is a key again.
-        ref = body["credential_ref"]
+        ref = body["secret_ref"]
         assert ref.startswith("provider/") and "acme" not in ref
         # the secret landed in the vault under that ref
-        ex = c.get(f"/api/v1/credentials/{ref}/exists")
+        ex = c.get(f"/api/v1/secrets/{ref}/exists")
         assert ex.status_code == 200 and ex.json()["present"] is True
         # ...but never in the API response
         assert "sk-secret-value" not in r.text
@@ -159,23 +159,23 @@ def test_create_with_inline_secret(tmp_path, monkeypatch):
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="create a profile that reuses an existing credential ref",
+    scenario="create a profile that reuses an existing secret ref",
 )
-def test_create_reusing_credential_ref(tmp_path, monkeypatch):
+def test_create_reusing_secret_ref(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59720)
     with _client(app) as c:
-        c.post("/api/v1/credentials", json={"ref": "shared/key", "value": "sk-shared"})
+        c.post("/api/v1/secrets", json={"ref": "shared/key", "value": "sk-shared"})
         r = c.post(
             "/api/v1/providers",
             json={
                 "name": "reuse",
                 "protocol": "openai",
                 "base_url": "https://gw/v1",
-                "credential_ref": "shared/key",
+                "secret_ref": "shared/key",
             },
         )
         assert r.status_code == 201, r.text
-        assert r.json()["credential_ref"] == "shared/key"
+        assert r.json()["secret_ref"] == "shared/key"
 
 
 @pytest.mark.acceptance(
@@ -190,16 +190,16 @@ def test_reject_unknown_wire_format(tmp_path, monkeypatch):
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="reject a profile that supplies neither a secret nor a credential ref",
+    scenario="reject a profile that supplies neither a secret nor a secret ref",
 )
-def test_reject_no_credential_source(tmp_path, monkeypatch):
+def test_reject_no_secret_source(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59740)
     body = _anthropic_body()
     body.pop("secret_value")
     with _client(app) as c:
         r = c.post("/api/v1/providers", json=body)
         assert r.status_code == 422, r.text
-        assert "PROVIDER_CREDENTIAL_SOURCE_INVALID" in r.text
+        assert "PROVIDER_SECRET_SOURCE_INVALID" in r.text
 
 
 @pytest.mark.acceptance(spec="provider-switching", scenario="update a provider profile")
@@ -216,7 +216,7 @@ def test_patch_can_correct_the_wire(tmp_path, monkeypatch):
     """The wire is a property of the endpoint, not the connection's identity.
 
     A probe that guessed wrong is corrected in place rather than by deleting the
-    connection and re-entering its key. ``credential_ref`` stays immutable: that
+    connection and re-entering its key. ``secret_ref`` stays immutable: that
     one IS an address.
 
     This connection was never switched on, which is the only state the edit is
@@ -254,9 +254,9 @@ def test_list_profiles(tmp_path, monkeypatch):
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="delete a provider profile cleans up its owned credential",
+    scenario="delete a provider profile cleans up its owned secret",
 )
-def test_delete_cleans_owned_credential(tmp_path, monkeypatch):
+def test_delete_cleans_owned_secret(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59770)
     with _client(app) as c:
         uid = _new(c, _anthropic_body())
@@ -538,12 +538,12 @@ def test_openai_connection_scoped_to_claude_code(tmp_path, monkeypatch):
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="create an ollama connection without a credential",
+    scenario="create an ollama connection without a secret",
 )
-def test_create_ollama_without_credential(tmp_path, monkeypatch):
+def test_create_ollama_without_secret(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59850)
     with _client(app) as c:
-        # ollama has no API key: supply NEITHER secret_value nor credential_ref.
+        # ollama has no API key: supply NEITHER secret_value nor secret_ref.
         r = c.post(
             "/api/v1/providers",
             json={
@@ -555,9 +555,9 @@ def test_create_ollama_without_credential(tmp_path, monkeypatch):
         assert r.status_code == 201, r.text
         body = r.json()
         assert body["protocol"] == "ollama"
-        assert body["credential_ref"] is None
+        assert body["secret_ref"] is None
         assert body["is_active"] is False  # ollama never projects to an agent
-        # Supplying a credential for ollama is rejected.
+        # Supplying a secret for ollama is rejected.
         r2 = c.post(
             "/api/v1/providers",
             json={
@@ -933,9 +933,9 @@ def test_reject_malformed_curated_models(tmp_path, monkeypatch):
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="rename a connection and keep its credential, audit trail and projection",
+    scenario="rename a connection and keep its secret, audit trail and projection",
 )
-def test_rename_keeps_the_uid_credential_and_projection(tmp_path, monkeypatch):
+def test_rename_keeps_the_uid_secret_and_projection(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59920)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
@@ -1044,7 +1044,7 @@ def test_rename_to_the_same_name_is_a_noop(tmp_path, monkeypatch):
         assert r.status_code == 200, r.text
         # Nothing moved — not the row (updated_at included), not the vault entry.
         assert c.get(f"/api/v1/providers/{uid}").json() == before
-        assert _key_present(c, before["credential_ref"])
+        assert _key_present(c, before["secret_ref"])
         # ...and nothing was recorded either. A client that PATCHes a whole
         # form back sends the label it already has; a trail littered with
         # renames that renamed nothing is worse than no trail.

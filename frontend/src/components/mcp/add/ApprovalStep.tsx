@@ -1,5 +1,5 @@
 // frontend/src/components/mcp/add/ApprovalStep.tsx — shown after an add whose
-// secret the daemon holds for approval (202 from `POST /credentials`, spec
+// secret the daemon holds for approval (202 from `POST /secrets`, spec
 // secret secret boundary): the servers are registered, the secret takes
 // effect once someone approves it in the Coffer app. Neither a success nor a
 // failure, so it is said before the dialog lets go, with the way to approve.

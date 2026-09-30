@@ -28,7 +28,7 @@ from cryptography.fernet import Fernet
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from coffer.domain.errors import CredentialUnreadable
+from coffer.domain.errors import SecretUnreadable
 from coffer.domain.scope import Scope
 from coffer.domain.sync.backup import (
     DEFAULT_BRANCH,
@@ -36,7 +36,7 @@ from coffer.domain.sync.backup import (
     DEFAULT_WORKTREE,
 )
 from coffer.domain.sync.manifest import SCHEMA_VERSION
-from coffer.infrastructure.credentials import key_backup
+from coffer.infrastructure.secret import key_backup
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.sync_routes import (
@@ -126,8 +126,8 @@ async def test_put_remote_with_a_bare_url_fills_in_the_spec_defaults(client, fle
     assert r.json() == {
         "url": a.remote_url,
         "branch": DEFAULT_BRANCH,
-        "credential_ref": None,
-        "include_credentials": False,
+        "secret_ref": None,
+        "include_secrets": False,
         "interval_seconds": DEFAULT_INTERVAL_SECONDS,
         "enabled": True,
         "worktree_path": DEFAULT_WORKTREE,
@@ -889,18 +889,18 @@ async def test_no_sync_route_exports_the_master_key(client, fleet) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="credentials this machine cannot decrypt are reported locked"
+    spec="vault-sync", scenario="secrets this machine cannot decrypt are reported locked"
 )
 async def test_key_import_reports_what_it_still_cannot_read(client, fleet) -> None:
     a, b = fleet
-    a.set_credential("mcp/files/token", "s3cret-value")
-    await a.register("mcp_server", "files", {"value": "f", "credential_ref": "mcp/files/token"})
+    a.set_secret("mcp/files/token", "s3cret-value")
+    await a.register("mcp_server", "files", {"value": "f", "secret_ref": "mcp/files/token"})
     await _configure(client, a)
     assert (await client.post("/api/v1/sync/adopt", json={})).json()["status"] == "ok"
     # B absorbs A's ciphertext without A's key, so the ref is locked there.
     await b.adopt()
     await b.converge()
-    assert b.credentials.locked_refs() == ["mcp/files/token"]
+    assert b.secrets.locked_refs() == ["mcp/files/token"]
 
     other = b.master_key.export_key()
     assert other is not None
@@ -912,10 +912,10 @@ async def test_key_import_reports_what_it_still_cannot_read(client, fleet) -> No
     assert r.json()["replaced"] is True and r.json()["readable"] == 0
     # The running store uses the imported key at once: what A stored under its
     # old key is unreadable now, and a secret saved now is sealed under B's.
-    with pytest.raises(CredentialUnreadable):
-        a.credential_store.get("mcp/files/token")
-    a.set_credential("mcp/new/token", "fresh")
-    assert Fernet(other).decrypt(a.credentials.read_ciphertext("mcp/new/token") or b"") == b"fresh"
+    with pytest.raises(SecretUnreadable):
+        a.secret_store.get("mcp/files/token")
+    a.set_secret("mcp/new/token", "fresh")
+    assert Fernet(other).decrypt(a.secrets.read_ciphertext("mcp/new/token") or b"") == b"fresh"
 
 
 def _backup(key: bytes, passphrase: str = "correct horse") -> str:

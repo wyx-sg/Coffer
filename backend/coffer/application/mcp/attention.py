@@ -8,8 +8,8 @@ Three signals, each one the backend already records or can check cheaply:
   machine (a server synced from another machine, its runner not installed
   here). The failing state it causes is then not reported beside it: both
   point at the same test, and the launcher is the cause;
-- ``mcp_missing_secret`` — a credential ref the server's config cites is not in
-  the credential store. One item per missing ref.
+- ``mcp_missing_secret`` — a secret ref the server's config cites is not in
+  the secret store. One item per missing ref.
 
 Only enabled servers are asked: a disabled one is not expected to work.
 """
@@ -31,7 +31,7 @@ KIND = "mcp_server"
 class McpResourcesPort(Protocol):
     """The kind-agnostic resource service, as far as this source reads it."""
 
-    async def cited_credential_refs(self) -> Mapping[str, Sequence[Resource]]: ...
+    async def cited_secret_refs(self) -> Mapping[str, Sequence[Resource]]: ...
 
     async def list(
         self, kind: str | None = None, enabled: bool | None = None
@@ -44,7 +44,7 @@ class McpHealthPort(Protocol):
     async def get(self, resource_uid: str) -> tuple[str, datetime] | None: ...
 
 
-class CredentialPresencePort(Protocol):
+class SecretPresencePort(Protocol):
     def exists(self, ref: str) -> bool: ...
 
 
@@ -63,12 +63,12 @@ class McpAttentionSource:
         *,
         resources: McpResourcesPort,
         health: McpHealthPort,
-        credentials: CredentialPresencePort,
+        secrets: SecretPresencePort,
         runner_missing: Callable[[dict[str, Any]], str | None] = missing_runner_of,
     ) -> None:
         self._resources = resources
         self._health = health
-        self._credentials = credentials
+        self._secrets = secrets
         self._runner_missing = runner_missing
 
     async def items(self) -> Sequence[AttentionItem]:
@@ -113,10 +113,10 @@ class McpAttentionSource:
 
     async def _secret_items(self, enabled: dict[str, Resource]) -> list[AttentionItem]:
         out: list[AttentionItem] = []
-        cited = await self._resources.cited_credential_refs()
+        cited = await self._resources.cited_secret_refs()
         for ref in sorted(cited):
             citers = [enabled[r.uid] for r in cited[ref] if r.uid in enabled]
-            if not citers or await asyncio.to_thread(self._credentials.exists, ref):
+            if not citers or await asyncio.to_thread(self._secrets.exists, ref):
                 continue
             for server in citers:
                 out.append(
@@ -127,12 +127,12 @@ class McpAttentionSource:
                         reason_code="mcp_missing_secret",
                         reason=f"The secret `{ref}` it uses is not stored on this machine.",
                         severity=Severity.ERROR,
-                        # The credential page's own write, with the ref and no
+                        # The secret page's own write, with the ref and no
                         # value: the person supplies the secret there.
                         action=AttentionAction(
                             verb="set_secret",
                             method="POST",
-                            path="/api/v1/credentials",
+                            path="/api/v1/secrets",
                             body={"ref": ref},
                         ),
                     )
@@ -141,8 +141,8 @@ class McpAttentionSource:
 
 
 __all__ = [
-    "CredentialPresencePort",
     "McpAttentionSource",
     "McpHealthPort",
     "McpResourcesPort",
+    "SecretPresencePort",
 ]

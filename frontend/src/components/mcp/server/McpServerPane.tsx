@@ -88,7 +88,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
       void qc.invalidateQueries({ queryKey: key });
   };
   const copyConfig = async () => {
-    // The config carries credential refs only, never a secret value.
+    // The config carries secret refs only, never a secret value.
     try {
       await navigator.clipboard.writeText(
         JSON.stringify({ [resource.name]: resource.config }, null, 2),

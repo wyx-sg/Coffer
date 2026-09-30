@@ -105,7 +105,7 @@ def test_a_group_carries_one_secret_on_its_auth_header_only():
         HttpApiTransport(
             base_url="https://api.example",
             auth_header="Authorization",
-            credential_refs={"X-Other": "secret/x"},
+            secret_refs={"X-Other": "secret/x"},
         )
 
 

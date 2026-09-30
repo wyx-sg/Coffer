@@ -282,25 +282,25 @@ async def test_a_channel_travels_carrying_the_machine_that_runs_it(pair) -> None
 
 @pytest.mark.acceptance(
     spec="vault-sync",
-    scenario="a synced channel carries a credential reference, never a secret",
+    scenario="a synced channel carries a secret reference, never a secret",
 )
 async def test_a_travelling_channel_publishes_refs_and_not_secrets(pair) -> None:
     """A channel's config was always refs-only. Travelling is what makes that
     load-bearing rather than merely tidy: the document is now committed to a
     repository the user pushes somewhere."""
     a, b = pair
-    a.set_credential("channel/tg/bot-token", "placeholder-not-a-real-bot-token")
-    a.set_credential("channel/st/app-secret", "placeholder-not-a-real-app-secret")
+    a.set_secret("channel/tg/bot-token", "placeholder-not-a-real-bot-token")
+    a.set_secret("channel/st/app-secret", "placeholder-not-a-real-app-secret")
     await a.register(
         "channel",
         "tg",
-        {"value": "telegram", "credential_ref": "channel/tg/bot-token"},
+        {"value": "telegram", "secret_ref": "channel/tg/bot-token"},
     )
     # A SeaTalk channel's one secret is its app secret, cited the same way.
     await a.register(
         "channel",
         "st",
-        {"value": "seatalk", "credential_ref": "channel/st/app-secret"},
+        {"value": "seatalk", "secret_ref": "channel/st/app-secret"},
     )
     await settle(a, b)
 
@@ -311,8 +311,8 @@ async def test_a_travelling_channel_publishes_refs_and_not_secrets(pair) -> None
         assert ref in document
         assert not any(secret in document for secret in secrets)
 
-    # And nowhere else in the tree either — a credential blob, if this remote
-    # carries credentials at all, is Fernet ciphertext.
+    # And nowhere else in the tree either — a secret blob, if this remote
+    # carries secrets at all, is Fernet ciphertext.
     for path in await a.remote_paths():
         text = await a.remote_text(path)
         assert text is None or not any(secret in text for secret in secrets)

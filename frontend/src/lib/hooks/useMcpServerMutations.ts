@@ -18,7 +18,7 @@ import { useToast } from "@/components/ui/toast";
 
 type TestResult = components["schemas"]["McpTestResultOut"];
 
-/** Save the edit dialog: rotate credentials, then PATCH the resource. The
+/** Save the edit dialog: rotate secrets, then PATCH the resource. The
  *  caller closes the dialog via `mutate(args, { onSuccess })`. */
 export function useSaveMcpServerEdit() {
   const qc = useQueryClient();
@@ -32,7 +32,7 @@ export function useSaveMcpServerEdit() {
       // approves in the Coffer app — say so, since the dialog just closes.
       if (awaitingApproval) {
         void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
-        toast.info(t("credentials.savedAwaitingApproval"));
+        toast.info(t("secrets.savedAwaitingApproval"));
       }
     },
   });

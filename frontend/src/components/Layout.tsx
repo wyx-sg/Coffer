@@ -27,7 +27,7 @@ import { CofferLogo } from "./brand/CofferLogo";
 import { DaemonOfflineBanner } from "./DaemonOfflineBanner";
 import { FloatingBanners } from "./FloatingBanners";
 import { SidebarNav } from "./SidebarNav";
-import { PendingApprovalsSheet } from "./credentials/PendingApprovalsSheet";
+import { PendingApprovalsSheet } from "./secret/PendingApprovalsSheet";
 import { SplitDivider } from "./SplitDivider";
 import { CommandPalette } from "./palette/CommandPalette";
 import { SidebarFooter } from "./shell/SidebarFooter";

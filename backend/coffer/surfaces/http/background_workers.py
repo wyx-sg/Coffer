@@ -35,9 +35,9 @@ from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
 from coffer.application.sync.worker import ConvergeWorker
 from coffer.infrastructure.agent.transcript_reader import FileTranscriptReader
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
-from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.logging.files import prune_log_dir
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
+from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.surfaces.http.curation_wiring import start_curation_worker
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
 from coffer.surfaces.http.memory.distil_state import DistilRunner
@@ -76,10 +76,10 @@ def start_background_workers(
     audit: AuditService,
     engine_config: InternalEngineConfigService,
     internal_connection: InternalEngineConnection,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     db_path: pathlib.Path,
     sm: async_sessionmaker[AsyncSession],
-    credential_store: EncryptedCredentialStore,
+    secret_store: EncryptedSecretStore,
     master_key: MasterKeyManager,
     sync_contributions: SyncContributions,
     platform: PlatformPort,
@@ -97,13 +97,13 @@ def start_background_workers(
         db_path,
         master_key,
         sm,
-        credential_store,
+        secret_store,
         sync_contributions,
         # The conflict resolver rides the same internal connection every other
         # internal-LLM consumer uses — Coffer's own engine, not the provider
         # kind's service, is what answers for it.
         models=internal_connection,
-        credential_resolver=credential_resolver,
+        secret_resolver=secret_resolver,
         platform=platform,
     )
     converge_worker = start_converge_worker(sync, sm)

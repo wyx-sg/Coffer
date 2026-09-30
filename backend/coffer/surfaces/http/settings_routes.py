@@ -4,7 +4,7 @@
 Two settings. ``/settings/secret-boundary`` is the approval requirement of the
 secret boundary, which only the desktop app can switch off. The other is not a
 settings table — the state on disk IS the setting. The
-credential master key's actual location wins (file presence; see
+secret master key's actual location wins (file presence; see
 MasterKeyManager), and PUT relocates it and audits the move; the Fernet key
 itself never changes, so stored ciphertext is untouched.
 
@@ -26,14 +26,14 @@ from fastapi.responses import JSONResponse
 from coffer.application.audit_service import AuditService
 from coffer.domain.audit import AuditEventType
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.credential_composition import get_master_key_manager
-from coffer.surfaces.http.credential_schemas import (
+from coffer.surfaces.http.dependencies import get_actor, get_audit_service
+from coffer.surfaces.http.schemas import SecretSettingsIn, SecretSettingsOut
+from coffer.surfaces.http.secret_boundary_wiring import get_secret_boundary
+from coffer.surfaces.http.secret_composition import get_master_key_manager
+from coffer.surfaces.http.secret_schemas import (
     SecretBoundarySettingsIn,
     SecretBoundarySettingsOut,
 )
-from coffer.surfaces.http.dependencies import get_actor, get_audit_service
-from coffer.surfaces.http.schemas import CredentialSettingsIn, CredentialSettingsOut
-from coffer.surfaces.http.secret_boundary_wiring import get_secret_boundary
 
 router = APIRouter(
     prefix="/api/v1/settings",
@@ -42,21 +42,21 @@ router = APIRouter(
 )
 
 
-@router.get("/credentials", response_model=CredentialSettingsOut)
-async def get_credential_settings(
+@router.get("/secrets", response_model=SecretSettingsOut)
+async def get_secret_settings(
     manager: Any = Depends(get_master_key_manager),  # noqa: B008
-) -> CredentialSettingsOut:
+) -> SecretSettingsOut:
     """Report where the master key currently lives."""
-    return CredentialSettingsOut(master_key_storage=manager.location)
+    return SecretSettingsOut(master_key_storage=manager.location)
 
 
-@router.put("/credentials", response_model=CredentialSettingsOut)
-async def put_credential_settings(
-    body: CredentialSettingsIn,
+@router.put("/secrets", response_model=SecretSettingsOut)
+async def put_secret_settings(
+    body: SecretSettingsIn,
     manager: Any = Depends(get_master_key_manager),  # noqa: B008
     audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
-) -> CredentialSettingsOut:
+) -> SecretSettingsOut:
     """Relocate the master key. Idempotent; the move itself is audited.
 
     Moving to "keychain" may trigger one OS authorisation prompt — the
@@ -69,7 +69,7 @@ async def put_credential_settings(
             actor=actor,
             details={"to": body.master_key_storage},
         )
-    return CredentialSettingsOut(master_key_storage=manager.location)
+    return SecretSettingsOut(master_key_storage=manager.location)
 
 
 @router.get("/secret-boundary", response_model=SecretBoundarySettingsOut)

@@ -5,10 +5,10 @@ Revealing or copying a secret, and writing a backup of the master key, MUST
 happen only through the desktop app, each behind its own LocalAuthentication
 check (Touch ID or the login password, `deviceOwnerAuthentication`) with no
 reuse window. The daemon MUST release a value (`POST
-/api/v1/credentials/presence/reveal`), write a key backup
-(`POST /api/v1/credentials/presence/master-key-export`) or apply an approval
+/api/v1/secrets/presence/reveal`), write a key backup
+(`POST /api/v1/secrets/presence/master-key-export`) or apply an approval
 only against a **presence grant**: a one-time challenge
-(`POST /api/v1/credentials/presence/challenge`) bound to one operation and one
+(`POST /api/v1/secrets/presence/challenge`) bound to one operation and one
 target, signed with a key derived from the master key. A challenge MUST expire
 within two minutes, MUST be consumed by its first use whether or not the
 signature verifies, and MUST NOT authorise any other operation or target.
@@ -23,8 +23,8 @@ the person picked, under a name of Coffer's choosing, with mode `0600`, never
 over an existing file (a number is added to the name instead), audited as
 `master_key_exported` with its path and fingerprint; neither the key nor the
 passphrase MAY cross the API in an answer, reach the log or an audit row, or
-be stored. A reveal MUST be audited as `credential_revealed` with the ref only.
-`GET /api/v1/credentials/presence/status` MUST say whether the daemon runs a
+be stored. A reveal MUST be audited as `secret_revealed` with the ref only.
+`GET /api/v1/secrets/presence/status` MUST say whether the daemon runs a
 development build, in which the master key is a file any same-user process can
 read and a grant can therefore be forged; the desktop app MUST say so on every
 presence prompt. The browser UI MUST offer none of these actions and MUST name
@@ -35,7 +35,7 @@ formed is in the change's design.
 #### Scenario: a reveal with a valid grant returns the value once
 - **GIVEN** a stored secret and a challenge issued for revealing exactly that ref
 - **WHEN** the reveal is sent with the challenge signed by the grant key
-- **THEN** the value is returned and a `credential_revealed` entry names the ref and not the value
+- **THEN** the value is returned and a `secret_revealed` entry names the ref and not the value
 - **AND** sending the same grant again is refused with `PRESENCE_GRANT_INVALID`
 
 #### Scenario: a grant for one operation authorises nothing else

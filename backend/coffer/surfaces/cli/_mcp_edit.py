@@ -1,7 +1,7 @@
 """The config flags of ``coffer mcp edit``.
 
 The same settings the web UI's edit dialog changes — the transport (a stdio
-command line or an HTTP URL), its plain env / headers, its credential refs and
+command line or an HTTP URL), its plain env / headers, its secret refs and
 the two timeouts — spelled the way ``coffer mcp add`` spells them. Only the
 flags given change: the rest of the stored config is carried into the whole
 new config the ``PATCH /resources/{uid}`` sends, and the daemon validates the
@@ -10,7 +10,7 @@ result against ``MCPServerConfig`` exactly as it does for the web UI's save.
 Switching transport (``--http`` on a stdio server or the reverse) is allowed,
 as the config schema is a union the daemon re-validates whole; the other
 transport's own fields (``command``/``args``/``env``/``cwd`` or
-``url``/``headers``) are dropped, while the credential refs are carried over.
+``url``/``headers``) are dropped, while the secret refs are carried over.
 """
 
 from __future__ import annotations
@@ -43,10 +43,10 @@ def _fail(message: str) -> NoReturn:
 
 def _retarget(transport: dict[str, Any], kind: str) -> dict[str, Any]:
     """``transport`` as a ``kind`` transport: same type keeps everything, a
-    switch keeps only the credential refs."""
+    switch keeps only the secret refs."""
     if transport.get("type") == kind:
         return transport
-    return {"type": kind, "credential_refs": dict(transport.get("credential_refs") or {})}
+    return {"type": kind, "secret_refs": dict(transport.get("secret_refs") or {})}
 
 
 def _apply_transport(transport: dict[str, Any], v: dict[str, Any]) -> dict[str, Any]:
@@ -87,13 +87,13 @@ def _apply_plain(transport: dict[str, Any], v: dict[str, Any]) -> None:
         transport["cwd"] = v["cwd"] or None
 
 
-def _apply_credentials(transport: dict[str, Any], v: dict[str, Any]) -> None:
-    creds, clear = v.get("credential") or [], bool(v.get("clear_credentials"))
+def _apply_secrets(transport: dict[str, Any], v: dict[str, Any]) -> None:
+    creds, clear = v.get("secret") or [], bool(v.get("clear_secrets"))
     if not creds and not clear:
         return
-    merged = {} if clear else dict(transport.get("credential_refs") or {})
+    merged = {} if clear else dict(transport.get("secret_refs") or {})
     merged.update(parse_pairs("--secret", creds, "SECRET_REF"))
-    transport["credential_refs"] = merged
+    transport["secret_refs"] = merged
 
 
 _TIMEOUTS = ("spawn_timeout_seconds", "request_timeout_seconds")
@@ -105,8 +105,8 @@ _FLAGS = (
     "header",
     "clear_headers",
     "cwd",
-    "credential",
-    "clear_credentials",
+    "secret",
+    "clear_secrets",
     *_TIMEOUTS,
 )
 
@@ -120,7 +120,7 @@ def mcp_config(resource: dict[str, Any], values: dict[str, Any]) -> dict[str, An
         _fail("this is a custom-tool group; change it with `coffer tool edit` or `tool op edit`")
     transport = _apply_transport(dict(config.get("transport") or {}), values)
     _apply_plain(transport, values)
-    _apply_credentials(transport, values)
+    _apply_secrets(transport, values)
     config["transport"] = transport
     for key in _TIMEOUTS:
         if values.get(key) is not None:
@@ -161,8 +161,8 @@ MCP_EDIT_FLAGS = EditFlags(
             str | None,
             typer.Option(None, "--cwd", help="Working directory (stdio); empty clears it"),
         ),
-        _repeat("credential", "--secret", "ENV_OR_HEADER=SECRET_REF (repeatable)"),
-        _flag("clear_credentials", "--clear-secrets", "Drop every secret ref first"),
+        _repeat("secret", "--secret", "ENV_OR_HEADER=SECRET_REF (repeatable)"),
+        _flag("clear_secrets", "--clear-secrets", "Drop every secret ref first"),
         _opt(
             "spawn_timeout_seconds",
             int | None,

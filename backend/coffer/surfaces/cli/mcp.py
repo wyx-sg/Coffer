@@ -42,7 +42,7 @@ from coffer.surfaces.cli._resolve import resolve_uid
 app = typer.Typer(help="Manage MCP servers and their capabilities")
 
 
-def _parse_credentials(creds: list[str]) -> dict[str, str]:
+def _parse_secrets(creds: list[str]) -> dict[str, str]:
     """Parse `--secret KEY=VALUE` repeatable into a dict."""
     return parse_pairs("--secret", creds, "SECRET_REF")
 
@@ -57,7 +57,7 @@ def add(
         help="Command line to launch, quoted as one string, e.g. 'npx -y my-server --flag'",
     ),
     http: str | None = typer.Option(None, "--http", help="HTTP MCP server URL"),
-    credential: list[str] = typer.Option(  # noqa: B008
+    secret: list[str] = typer.Option(  # noqa: B008
         [], "--secret", help="ENV_OR_HEADER=SECRET_REF (repeatable)"
     ),
     description: str | None = typer.Option(None, "--description"),
@@ -83,13 +83,13 @@ def add(
             "type": "stdio",
             "command": parts[0],
             "args": parts[1:],
-            "credential_refs": _parse_credentials(credential),
+            "secret_refs": _parse_secrets(secret),
         }
     else:
         transport = {
             "type": "http",
             "url": http,
-            "credential_refs": _parse_credentials(credential),
+            "secret_refs": _parse_secrets(secret),
         }
 
     payload = {

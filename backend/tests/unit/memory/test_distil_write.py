@@ -150,7 +150,7 @@ async def test_a_failing_completion_returns_none_rather_than_raising() -> None:
         partition="coffer",
         model="m",
         completion=_Broken(),  # type: ignore[arg-type]
-        credential_resolver=lambda ref: ref,
+        secret_resolver=lambda ref: ref,
     )
 
     assert result is None
@@ -168,7 +168,7 @@ async def test_a_rewritten_note_comes_back_from_the_model_it_was_asked_of() -> N
             system: str,
             user: str,
             model: object,
-            credential_resolver: object,
+            secret_resolver: object,
             timeout: float | None = None,
         ) -> str:
             self.user = user
@@ -181,7 +181,7 @@ async def test_a_rewritten_note_comes_back_from_the_model_it_was_asked_of() -> N
         partition="coffer",
         model="m",
         completion=completion,  # type: ignore[arg-type]
-        credential_resolver=lambda ref: ref,
+        secret_resolver=lambda ref: ref,
     )
 
     assert result is not None

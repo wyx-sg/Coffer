@@ -5,7 +5,7 @@ resource model. ORM models follow these names exactly; the OpenAPI schemas in
 [contracts/api.openapi.yaml](contracts/api.openapi.yaml) match the same field
 names. A kind's own tables are modelled by that kind's spec —
 `mcp_capability_preferences` and `mcp_invocations` by spec mcp-gateway, the
-`credentials` table by spec secret, and so on for every other kind.
+`secrets` table by spec secret, and so on for every other kind.
 
 These three tables were created by the first Alembic revision
 (`20260520_0001_initial.py`: `resources`, `audit_log`, `retention_policies`).
@@ -84,7 +84,7 @@ any framework-level adapter.
 | `on_update_config`          | `Callable[[Resource, dict], Awaitable[None] \| None] \| None`               | pre-write hook for `update_config`, handed the resource as it stands and the proposed config             |
 | `on_rename`                 | `Callable[[Resource, str], Awaitable[None] \| None] \| None`                | pre-write hook for `rename`; where a kind whose name is also a directory moves it. Raising aborts the rename with nothing moved. `knowledge` and `memory` supply one; `skill` keeps a directory too but its name is fixed, so it never renames |
 | `validate_scope_for`        | `Callable[[Resource, Scope \| None], Awaitable[None] \| None] \| None`     | pre-write hook for `update_scope`; only `channel` supplies one                                           |
-| `credential_ref_extractor`  | `Callable[[dict], dict[str, str]] \| None`                                 | `{logical_key: keychain_ref}` so the service can probe refs before any DB write                          |
+| `secret_ref_extractor`  | `Callable[[dict], dict[str, str]] \| None`                                 | `{logical_key: keychain_ref}` so the service can probe refs before any DB write                          |
 | `audit_redactor`            | `Callable[[dict], dict] \| None`                                           | audit-safe copy of a config, so the core hardcodes no kind's secret fields                               |
 | `default_scope`             | `Callable[[dict], Scope \| None] \| None`                                  | the scope a new row is created with, consulted once at register (`provider` pre-fills the wire's own default) |
 | `validate_delete`           | `Callable[[Resource], None] \| None`                                       | pre-write guard for `delete`: raising refuses the deletion before anything is torn down, on the kind's own DELETE and the kind-agnostic one alike (spec resource-framework "Let a kind refuse a deletion before anything is torn down"). Only `skill` supplies one, refusing its builtin skill with `RESOURCE_PROTECTED` |
@@ -141,8 +141,8 @@ String-valued enum (`StrEnum`). The rows this spec writes:
 
 The enum is **shared**, which is the point of one audit log: spec mcp-gateway
 contributes `capability_enabled` / `capability_disabled`, spec secret
-contributes `credential_set` / `credential_read` / `credential_deleted` /
-`credential_migrated` / `master_key_relocated`, spec daemon contributes
+contributes `secret_set` / `secret_read` / `secret_deleted` /
+`secret_migrated` / `master_key_relocated`, spec daemon contributes
 `token_rotated`, and every other kind adds its own. A kind adding an event adds
 a value here and a migration for the enum, not a table of its own.
 

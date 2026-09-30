@@ -16,7 +16,7 @@ const getApiClientMock = vi.mocked(getApiClient);
 type ResourceOut = components["schemas"]["ResourceOut"];
 
 // The uid is identity, the name is the label. They are deliberately different
-// strings here: the PATCH is addressed to the uid while the credential refs the
+// strings here: the PATCH is addressed to the uid while the secret refs the
 // save mints still spell the NAME, and only distinct values can tell the two
 // apart.
 const stdioResource: ResourceOut = {
@@ -33,7 +33,7 @@ const stdioResource: ResourceOut = {
       args: ["-y", "@modelcontextprotocol/server-github"],
       env: { LOG_LEVEL: "debug" },
       cwd: "/tmp/gh",
-      credential_refs: { GITHUB_TOKEN: "gh.GITHUB_TOKEN" },
+      secret_refs: { GITHUB_TOKEN: "gh.GITHUB_TOKEN" },
     },
   },
   enabled: true,
@@ -178,7 +178,7 @@ describe("EditMcpServerDialog", () => {
     expect(screen.queryByText("Stored")).not.toBeInTheDocument();
   });
 
-  test("keep-existing path: leaves value='' for unchanged creds, PATCH still has ref in credential_refs", async () => {
+  test("keep-existing path: leaves value='' for unchanged creds, PATCH still has ref in secret_refs", async () => {
     const patchMock = vi.fn().mockResolvedValue({ data: {}, error: undefined });
     const postMock = vi.fn().mockResolvedValue({ data: {}, error: undefined });
     const deleteMock = vi.fn().mockResolvedValue({ data: undefined, error: undefined });
@@ -191,7 +191,7 @@ describe("EditMcpServerDialog", () => {
     render(wrap(<Harness resource={stdioResource} />));
     openDialog();
 
-    // Don't change the credential value — keep the placeholder ("keep existing")
+    // Don't change the secret value — keep the placeholder ("keep existing")
     // Save immediately
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
@@ -199,20 +199,20 @@ describe("EditMcpServerDialog", () => {
       expect(patchMock).toHaveBeenCalled();
     });
 
-    // Credential store POST should NOT be called (value is empty)
-    expect(postMock).not.toHaveBeenCalledWith("/credentials", expect.anything());
+    // Secret store POST should NOT be called (value is empty)
+    expect(postMock).not.toHaveBeenCalledWith("/secrets", expect.anything());
 
     // PATCH body should still contain the original ref for GITHUB_TOKEN
     const patchArgs = patchMock.mock.calls[0];
     const body = patchArgs[1].body as {
-      config: { transport: { credential_refs: Record<string, string> } };
+      config: { transport: { secret_refs: Record<string, string> } };
     };
-    expect(body.config.transport.credential_refs).toEqual({
+    expect(body.config.transport.secret_refs).toEqual({
       GITHUB_TOKEN: "gh.GITHUB_TOKEN",
     });
   });
 
-  test("on save with a NEW credential value, keychain write fires BEFORE the resource PATCH", async () => {
+  test("on save with a NEW secret value, keychain write fires BEFORE the resource PATCH", async () => {
     const callOrder: string[] = [];
     const postMock = vi.fn().mockImplementation((path: string) => {
       callOrder.push(`POST:${path}`);
@@ -231,7 +231,7 @@ describe("EditMcpServerDialog", () => {
     render(wrap(<Harness resource={stdioResource} />));
     openDialog();
 
-    // Set a new value for the existing credential
+    // Set a new value for the existing secret
     fireEvent.click(screen.getByRole("button", { name: "Replace" }));
     const passwordInputs = screen.getAllByPlaceholderText(/Leave blank to keep/i);
     fireEvent.change(passwordInputs[0], { target: { value: "new-secret-token" } });
@@ -242,15 +242,15 @@ describe("EditMcpServerDialog", () => {
       expect(patchMock).toHaveBeenCalled();
     });
 
-    // Credential store write must happen before resource PATCH
-    const keychainIdx = callOrder.indexOf("POST:/credentials");
+    // Secret store write must happen before resource PATCH
+    const keychainIdx = callOrder.indexOf("POST:/secrets");
     const patchIdx = callOrder.findIndex((c) => c.startsWith("PATCH:"));
     expect(keychainIdx).toBeGreaterThanOrEqual(0);
     expect(patchIdx).toBeGreaterThanOrEqual(0);
     expect(keychainIdx).toBeLessThan(patchIdx);
 
-    // Credential store payload has the correct ref and value
-    const keychainCall = postMock.mock.calls.find((c) => c[0] === "/credentials");
+    // Secret store payload has the correct ref and value
+    const keychainCall = postMock.mock.calls.find((c) => c[0] === "/secrets");
     expect(keychainCall?.[1].body).toEqual({
       ref: "gh.GITHUB_TOKEN",
       value: "new-secret-token",
@@ -259,17 +259,17 @@ describe("EditMcpServerDialog", () => {
     // PATCH body includes the ref
     const patchArgs = patchMock.mock.calls[0];
     const body = patchArgs[1].body as {
-      config: { transport: { credential_refs: Record<string, string> } };
+      config: { transport: { secret_refs: Record<string, string> } };
     };
-    expect(body.config.transport.credential_refs).toEqual({
+    expect(body.config.transport.secret_refs).toEqual({
       GITHUB_TOKEN: "gh.GITHUB_TOKEN",
     });
   });
 
-  test("PATCHes /resources/{uid} while the credential refs it mints spell the NAME", async () => {
+  test("PATCHes /resources/{uid} while the secret refs it mints spell the NAME", async () => {
     // The two halves of the identity split meet in this one save: the request
     // is routed by the uid (so it keeps resolving after a rename), and the ref
-    // written into the credential store keeps the `<name>.` spelling every
+    // written into the secret store keeps the `<name>.` spelling every
     // already-stored ref uses — this dialog holds no plaintext to migrate them
     // with, which is also why it offers no rename.
     const patchMock = vi.fn().mockResolvedValue({ data: {}, error: undefined });
@@ -295,7 +295,7 @@ describe("EditMcpServerDialog", () => {
       "/resources/{uid}",
       expect.objectContaining({ params: { path: { uid: "u-github" } } }),
     );
-    expect(postMock.mock.calls.find((c) => c[0] === "/credentials")?.[1].body).toEqual({
+    expect(postMock.mock.calls.find((c) => c[0] === "/secrets")?.[1].body).toEqual({
       ref: "gh.GITHUB_TOKEN",
       value: "rotated",
     });

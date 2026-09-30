@@ -10,7 +10,7 @@ from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, Resource
 
 # Keys inside ``transport`` whose values may carry auth material (custom
-# headers, raw environment overlays). credential_refs (keychain ref strings
+# headers, raw environment overlays). secret_refs (keychain ref strings
 # only) survive audit; the raw maps are stripped.
 _AUDIT_STRIP_TRANSPORT_KEYS: frozenset[str] = frozenset({"env", "headers"})
 
@@ -23,7 +23,7 @@ def _mcp_audit_redactor(config: dict[str, Any]) -> dict[str, Any]:
     at spawn time from the keychain, but a careless user might paste the raw
     secret in instead — and we don't want it landing verbatim in
     audit_log.details_json. Stripping the structural maps keeps audit useful
-    (credential_refs survive; users still see *what* changed) without ever
+    (secret_refs survive; users still see *what* changed) without ever
     persisting the secret material itself.
     """
     transport = config.get("transport")
@@ -33,12 +33,12 @@ def _mcp_audit_redactor(config: dict[str, Any]) -> dict[str, Any]:
     return {**config, "transport": sanitised}
 
 
-def _mcp_credential_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
-    """Pull ``transport.credential_refs`` out of a validated mcp_server config."""
+def _mcp_secret_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
+    """Pull ``transport.secret_refs`` out of a validated mcp_server config."""
     transport = config.get("transport")
     if not isinstance(transport, dict):
         return {}
-    refs = transport.get("credential_refs")
+    refs = transport.get("secret_refs")
     if not isinstance(refs, dict):
         return {}
     return {str(k): str(v) for k, v in refs.items()}
@@ -164,7 +164,7 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
         name_fixed_resets="its capability toggles and its reach (enabled and scope)",
         titled=False,
         audit_redactor=_mcp_audit_redactor,
-        credential_ref_extractor=_mcp_credential_ref_extractor,
+        secret_ref_extractor=_mcp_secret_ref_extractor,
         # Per-agent scope: the gateway filters a scoped server's tools by the
         # session's self-reported agent identity.
         supports_scope=True,

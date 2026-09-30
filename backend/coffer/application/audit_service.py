@@ -69,7 +69,7 @@ class AuditService:
         # Mirror every audited event into the log. Coffer used to log only its
         # failures — a live daemon.log held 4,277 lines of which 62 were
         # Coffer's own, all one error type, and a search for
-        # `credential_read`, `agent_mcp_installed`, `provider_switched`,
+        # `secret_read`, `agent_mcp_installed`, `provider_switched`,
         # `resource_deleted`, `skill_bound`, `token_rotated` and
         # `agent_config_file_written` across two months of logs returned
         # nothing at all. The audit table already decides what is worth

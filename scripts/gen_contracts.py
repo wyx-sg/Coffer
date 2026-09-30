@@ -55,7 +55,7 @@ OWNERS: tuple[tuple[str, str], ...] = (
     ("/api/v1/channels", "channels"),
     ("/api/v1/chat", "chat"),
     ("/api/v1/clis", "skill-manager"),
-    ("/api/v1/credentials", "secret"),
+    ("/api/v1/secrets", "secret"),
     ("/api/v1/custom-tools", "mcp-gateway"),
     ("/api/v1/daemon", "daemon"),
     ("/api/v1/events", "resource-framework"),

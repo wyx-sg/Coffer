@@ -34,13 +34,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from coffer.application.mcp.discovery import CapabilityDiscovery
-from coffer.domain.credential_errors import SecretBindingPending
 from coffer.domain.errors import (
-    CredentialLocked,
-    CredentialMissing,
+    SecretLocked,
+    SecretMissing,
     UpstreamTimeout,
     UpstreamUnavailable,
 )
+from coffer.domain.secret_errors import SecretBindingPending
 
 _logger = logging.getLogger(__name__)
 
@@ -81,11 +81,11 @@ async def _one(
         UpstreamUnavailable,
         UpstreamTimeout,
         TimeoutError,
-        # Unresolvable credentials (locked OS keychain, missing ref) surface
+        # Unresolvable secrets (locked OS keychain, missing ref) surface
         # when the fetch cold-spawns the upstream; they are that server's
         # problem alone and must not take down the whole aggregate.
-        CredentialLocked,
-        CredentialMissing,
+        SecretLocked,
+        SecretMissing,
         # A secret waiting for a person's approval withholds that one server
         # (spec mcp-gateway "Spawn a server with a secret only once its
         # binding is approved"); the rest of the list still answers.

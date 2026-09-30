@@ -44,7 +44,7 @@ interface Props {
 export function ProviderEndpoint({ provider, use, rejectedStatus, onReplaceKey }: Props) {
   const { t } = useTranslation();
   const approvals = usePendingApprovals();
-  const pending = pendingReplaceFor(approvals.data?.approvals, provider.credential_ref);
+  const pending = pendingReplaceFor(approvals.data?.approvals, provider.secret_ref);
   const lockedBy = useLockedBy(provider, use);
   const runtime = provider.local_runtime;
 
@@ -82,12 +82,12 @@ export function ProviderEndpoint({ provider, use, rejectedStatus, onReplaceKey }
           <span className="font-mono text-xs">{provider.base_url}</span>
         </Row>
         <Row label={t("providers.fields.apiKey")}>
-          {provider.credential_ref ? (
+          {provider.secret_ref ? (
             <div className="flex min-w-0 flex-col gap-1">
               <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                 <KeyRound className="size-3.5 text-text-muted" aria-hidden />
                 <span className="text-xs text-text-muted">{t("providers.key.secretPrefix")}</span>
-                <span className="truncate font-mono text-xs">{provider.credential_ref}</span>
+                <span className="truncate font-mono text-xs">{provider.secret_ref}</span>
                 {rejectedStatus !== null ? (
                   <StatusWord tone="err">
                     {rejectedStatus

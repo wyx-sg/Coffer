@@ -27,8 +27,8 @@ _console = Console()
 _FIRST_TIME: dict[str, Any] = {
     "branch": DEFAULT_BRANCH,
     "interval_seconds": DEFAULT_INTERVAL_SECONDS,
-    "include_credentials": False,
-    "credential_ref": None,
+    "include_secrets": False,
+    "secret_ref": None,
     "enabled": True,
 }
 
@@ -42,11 +42,11 @@ def remote_body(current: dict[str, Any] | None, url: str, **given: Any) -> dict[
     defaults), with ``url`` and every option the user passed laid over it.
 
     An option left at ``None`` was not passed and keeps its stored value; an
-    empty ``credential_ref`` is the one way to say "no push credential"."""
+    empty ``secret_ref`` is the one way to say "no push secret"."""
     body = dict(current) if current else dict(_FIRST_TIME)
     body.update({k: v for k, v in given.items() if v is not None})
-    if body.get("credential_ref") == "":
-        body["credential_ref"] = None
+    if body.get("secret_ref") == "":
+        body["secret_ref"] = None
     body["url"] = url
     return body
 
@@ -57,10 +57,10 @@ def print_remote(remote: dict[str, Any]) -> None:
     _console.print(f"remote: {remote['url']}  branch {remote['branch']}")
     _console.print(
         f"  every {remote['interval_seconds']}s · "
-        f"secrets {'included' if remote['include_credentials'] else 'excluded'} · "
+        f"secrets {'included' if remote['include_secrets'] else 'excluded'} · "
         f"{'enabled' if remote['enabled'] else 'disabled'}"
     )
-    _console.print(f"  push secret: {remote.get('credential_ref') or '(none)'}")
+    _console.print(f"  push secret: {remote.get('secret_ref') or '(none)'}")
     _console.print(f"  working tree: {remote['worktree_path']}")
 
 
@@ -74,12 +74,12 @@ def remote_set(
         "--interval",
         help=f"Seconds between automatic rounds (default {DEFAULT_INTERVAL_SECONDS})",
     ),
-    with_credentials: bool | None = typer.Option(
+    with_secrets: bool | None = typer.Option(
         None,
         "--with-secrets/--without-secrets",
         help="Carry secret ciphertext (never the master key); default off",
     ),
-    credential_ref: str | None = typer.Option(
+    secret_ref: str | None = typer.Option(
         None,
         "--secret-ref",
         help="Name of the secret holding the push token ('' removes it)",
@@ -110,8 +110,8 @@ def remote_set(
             url,
             branch=branch,
             interval_seconds=interval,
-            include_credentials=with_credentials,
-            credential_ref=credential_ref,
+            include_secrets=with_secrets,
+            secret_ref=secret_ref,
             worktree_path=worktree,
         )
         r = c.put("/sync/remote", json=body)

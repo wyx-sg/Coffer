@@ -105,7 +105,7 @@ def test_the_projector_writes_the_resolved_cli_into_settings(tmp_path: pathlib.P
     config = {
         "protocol": "anthropic",
         "base_url": "https://gw.example/anthropic",
-        "credential_ref": "gw-key",
+        "secret_ref": "gw-key",
     }
     connection = Resource(
         id=2,

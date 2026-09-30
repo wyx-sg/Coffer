@@ -56,7 +56,7 @@ def _connection(models: list[CuratedModel]) -> tuple[Resource, ProviderConfig]:
     cfg = ProviderConfig(
         protocol=Protocol.OPENAI,
         base_url="https://gw.example/v1",
-        credential_ref="provider/agnes/key",
+        secret_ref="provider/agnes/key",
         models=models,
     )
     resource = Resource(

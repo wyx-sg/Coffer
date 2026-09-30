@@ -64,7 +64,7 @@ describe("importMcpServers", () => {
     const api = mockApiClient({
       POST: vi.fn((path: string) =>
         Promise.resolve(
-          path === "/credentials"
+          path === "/secrets"
             ? { data: undefined, error: { error: { code: "VAULT_LOCKED", message: "locked" } } }
             : { data: { uid: "u-a" }, error: undefined },
         ),
@@ -83,11 +83,11 @@ describe("importMcpServers", () => {
     expect(report.failed[0]).toMatchObject({ name: "a", nameTaken: false });
   });
 
-  test("a 202 from the credential store marks the server as waiting for approval", async () => {
+  test("a 202 from the secret store marks the server as waiting for approval", async () => {
     const api = mockApiClient({
       POST: vi.fn((path: string) =>
         Promise.resolve(
-          path === "/credentials"
+          path === "/secrets"
             ? { data: { approval: { id: "ap" } }, error: undefined }
             : { data: { uid: "u-a" }, error: undefined },
         ),

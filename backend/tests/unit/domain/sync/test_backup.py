@@ -23,7 +23,7 @@ def test_defaults_are_the_spec_defaults() -> None:
     remote = BackupRemote(url="https://example.invalid/vault.git")
     assert remote.branch == DEFAULT_BRANCH == "main"
     assert remote.interval_seconds == DEFAULT_INTERVAL_SECONDS == 3600
-    assert remote.include_credentials is False
+    assert remote.include_secrets is False
     assert remote.enabled is True
     assert remote.worktree_path == "~/.coffer/sync"
 

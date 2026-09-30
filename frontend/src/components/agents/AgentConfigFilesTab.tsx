@@ -3,7 +3,7 @@
 // config-file allowlist (ConfigFileTree — settings and instructions files side
 // by side, grouped by where they live) and the selected file
 // (ConfigEditorPane), or a directory entry's files (ConfigDirectoryPane).
-// Credential and machine-state files are not on the allowlist, so never here.
+// Secret and machine-state files are not on the allowlist, so never here.
 //
 // An unsaved draft is guarded three ways: picking another file asks first
 // (the selection is parked in useConfigEditorState until confirmed), the page

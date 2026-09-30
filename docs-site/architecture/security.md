@@ -130,7 +130,7 @@ Around the three operations:
 
 - **No other path returns plaintext.** There is no plaintext read route and no `coffer secret get --show`; `coffer secret get` checks presence only. There is no key export command or route. The browser UI shows **Open in Coffer app** where these actions would be. The one other place plaintext leaves the daemon is `coffer run`'s resolve of standalone secrets, which is confined to the `secret/` namespace and covered under [What stays exposed](#what-stays-exposed).
 - **The master key never crosses the API.** A key backup is written by the daemon into the folder you chose, as `coffer-master-key.cfk`, mode `0600`, never over an existing file; the response carries only the path and the fingerprint. The file holds the key encrypted under a key scrypt derives from a passphrase you type in the app (at least eight characters), so a copy that lands somewhere shared opens nothing without it. The passphrase goes from the page to the shell to the daemon's request and is never stored, logged or audited; validation failures are logged without the submitted values for the same reason.
-- **Every release is audited:** a reveal as `credential_revealed` with the ref only, a backup as `master_key_exported`, an approval as `secret_approval_approved`.
+- **Every release is audited:** a reveal as `secret_revealed` with the ref only, a backup as `master_key_exported`, an approval as `secret_approval_approved`.
 - **Writing stays open, with two exceptions.** Any surface may store a resource's secret: whoever supplies a value already has it. A new standalone secret (`secret/<name>`) and a new value for a secret already in use are held encrypted until you approve them in the desktop app, because once stored they reach a `coffer run` child or a destination that was approved for the old value.
 
 ## A secret goes somewhere new only with your approval
@@ -257,20 +257,20 @@ CORS grants exactly the cross-origin entries of the [Origin table](#origin-reque
 
 ### Envelope encryption
 
-Secrets live only as **Fernet ciphertext** in the `credentials` table of `~/.coffer/coffer.db`, keyed by a **ref** — a name such as `github-token`. Everything else in Coffer holds refs:
+Secrets live only as **Fernet ciphertext** in the `secrets` table of `~/.coffer/coffer.db`, keyed by a **ref** — a name such as `github-token`. Everything else in Coffer holds refs:
 
-- An MCP server's config maps environment variables or headers to refs in `transport.credential_refs`. Its schema rejects a static `env` or header value that looks like a secret (`Bearer …`, `ghp_…`, `github_pat_…`, `sk-…`, `xox?-…`, a JWT prefix) and tells you to move it into `credential_refs`.
+- An MCP server's config maps environment variables or headers to refs in `transport.secret_refs`. Its schema rejects a static `env` or header value that looks like a secret (`Bearer …`, `ghp_…`, `github_pat_…`, `sk-…`, `xox?-…`, a JWT prefix) and tells you to move it into `secret_refs`.
 - A channel's bot token or app secret, a provider's API key, and the sync remote's push secret are refs.
 - A **standalone secret** — one that belongs to no resource, such as a database password a skill needs — is a ref under `secret/<name>`, cited from files as `coffer://secret/<name>` and handed to a command by `coffer run` ([Secrets](/guides/secrets)).
 - When you switch an agent onto a provider, the agent is pointed at the [local model proxy](/architecture/model-proxy) on loopback and authenticates with its own local proxy token (`coffer proxy token --agent-uid <uid>`, run by Claude Code's `apiKeyHelper` and Codex's provider `auth` command). The provider's key is never written into an agent's file or environment, and no route or command returns it: the daemon decrypts it and hands it to the proxy, which injects it upstream and holds it in memory only.
 
-Plaintext exists in memory only between decrypt and the spawn or header injection that consumes it, and only after the [secret boundary](#a-secret-goes-somewhere-new-only-with-your-approval) has approved that destination. Registration probes every cited ref before writing the resource, so a missing secret fails with `CREDENTIAL_MISSING` and leaves nothing behind; deleting a secret that a resource still cites, or a standalone secret a skill cites, is refused with `409`; and deleting a resource releases any secret no remaining resource cites.
+Plaintext exists in memory only between decrypt and the spawn or header injection that consumes it, and only after the [secret boundary](#a-secret-goes-somewhere-new-only-with-your-approval) has approved that destination. Registration probes every cited ref before writing the resource, so a missing secret fails with `SECRET_MISSING` and leaves nothing behind; deleting a secret that a resource still cites, or a standalone secret a skill cites, is refused with `409`; and deleting a resource releases any secret no remaining resource cites.
 
-**The daemon is the sole secret-store owner.** Every surface — web UI, CLI, shim, desktop app — reaches secrets through the daemon's `/api/v1/credentials` routes; the CLI never touches the store in-process (an import contract forbids the CLI from importing the secret module or reaching the keychain), so each machine has exactly one reader of the key. Those routes store, list and delete; the only ones that release a value are the desktop app's presence-gated reveal and `coffer run`'s resolve of standalone secrets.
+**The daemon is the sole secret-store owner.** Every surface — web UI, CLI, shim, desktop app — reaches secrets through the daemon's `/api/v1/secrets` routes; the CLI never touches the store in-process (an import contract forbids the CLI from importing the secret module or reaching the keychain), so each machine has exactly one reader of the key. Those routes store, list and delete; the only ones that release a value are the desktop app's presence-gated reveal and `coffer run`'s resolve of standalone secrets.
 
 ### The master key
 
-The one secret outside the database is the Fernet master key, managed by [`MasterKeyManager`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/credentials/master_key.py) behind a storage port. Which store it uses is fixed by how the build was made, never by a setting or an environment variable:
+The one secret outside the database is the Fernet master key, managed by [`MasterKeyManager`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/secret/master_key.py) behind a storage port. Which store it uses is fixed by how the build was made, never by a setting or an environment variable:
 
 | Build | Where the key lives | Defends against an offline copy of `~/.coffer/`? | Defends against a same-user process? |
 | --- | --- | --- | --- |
@@ -284,9 +284,9 @@ The one secret outside the database is the Fernet master key, managed by [`Maste
 
 **In a development build** you switch between the file and the keychain with **Settings → Security** or `coffer config set secrets.storage keychain`. Switching **moves the key, never re-encrypts the data**; the old copy is deleted last, and resolution is file-first, so an interrupted move always resolves to a working key.
 
-Startup is fail-closed in every build. The daemon counts `credentials` rows *before* resolving the key, and creates a new key only when the table is empty. Ciphertext with no resolvable key stops the daemon with `MASTER_KEY_MISSING`; a keychain that refuses the read stops it with `CREDENTIAL_LOCKED` rather than creating a second key that would shadow it.
+Startup is fail-closed in every build. The daemon counts `secrets` rows *before* resolving the key, and creates a new key only when the table is empty. Ciphertext with no resolvable key stops the daemon with `MASTER_KEY_MISSING`; a keychain that refuses the read stops it with `SECRET_LOCKED` rather than creating a second key that would shadow it.
 
-`keyring` is imported by exactly one module, [`infrastructure/credentials/keyring_adapter.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/credentials/keyring_adapter.py), and an import contract fails the build if surfaces or application code import it.
+`keyring` is imported by exactly one module, [`infrastructure/secret/keyring_adapter.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/secret/keyring_adapter.py), and an import contract fails the build if surfaces or application code import it.
 
 ::: warning The signed-release Keychain backend is not yet proven on a real build
 The access-group backend is built behind the storage port and tested against a fake Keychain. Whether a Developer-ID-signed `coffer-daemon` running as a bare binary outside an app bundle can claim the access group is still to be shown on a signed build; if it cannot, the daemon will run from inside the signed app bundle. Until the signed build exists, the development arrangement above is what runs.
@@ -345,7 +345,7 @@ Channel secrets are refs, resolved from the secret store when the adapter starts
 ## What goes into logs and audit
 
 - **Logs** (`~/.coffer/logs/`, one JSON object per line) record events, identifiers and errors. No code path logs a secret value, a token or a decrypted secret.
-- **Audit** records every lifecycle change with its actor. Secret events (`credential_set`, `credential_revealed`, `credential_deleted`, `credential_migrated`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events) record the **ref**, the secret's name or the destination only. Resource configs pass through the kind's `audit_redactor` first — the MCP kind strips `transport.env` and `transport.headers` entirely — so a value pasted into the wrong field still does not reach `audit_log`. Master-key events (`master_key_relocated`, `master_key_exported`, `master_key_imported`) record that the event happened, not the key.
+- **Audit** records every lifecycle change with its actor. Secret events (`secret_set`, `secret_revealed`, `secret_deleted`, `secret_migrated`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events) record the **ref**, the secret's name or the destination only. Resource configs pass through the kind's `audit_redactor` first — the MCP kind strips `transport.env` and `transport.headers` entirely — so a value pasted into the wrong field still does not reach `audit_log`. Master-key events (`master_key_relocated`, `master_key_exported`, `master_key_imported`) record that the event happened, not the key.
 - **The sync history** stores the remote's commit and errors after the push secret has been redacted out.
 
 ## Sync carries ciphertext only
@@ -385,9 +385,9 @@ See [Vault sync](/architecture/vault-sync) for the full protocol.
 | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py), [`middleware.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/middleware.py) | CORS allowlist and middleware order. |
 | [`surfaces/http/webui.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/webui.py) | Serving the UI with the injected token. |
 | [`infrastructure/daemon/bootstrap.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/bootstrap.py), [`atomic_write.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/atomic_write.py) | Token minting, `daemon.json`, `0600` writes. |
-| [`infrastructure/credentials/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/credentials) | Encrypted store, master key and its storage backends, keyring adapter, binding and approval store, plaintext scan. |
-| [`application/credentials/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/application/credentials) | The secret boundary (destinations, bindings, approvals), presence grants, the guarded resolver. |
-| [`surfaces/http/credential_boundary_routes.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/credential_boundary_routes.py) | Presence-gated reveal and key backup, approvals, the `coffer run` resolve, scan and import. |
+| [`infrastructure/secret/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/secret) | Encrypted store, master key and its storage backends, keyring adapter, binding and approval store, plaintext scan. |
+| [`application/secret/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/application/secret) | The secret boundary (destinations, bindings, approvals), presence grants, the guarded resolver. |
+| [`surfaces/http/secret_boundary_routes.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/secret_boundary_routes.py) | Presence-gated reveal and key backup, approvals, the `coffer run` resolve, scan and import. |
 | [`surfaces/cli/run_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/run_cmd.py) | `coffer run` and its output masking. |
 | [`desktop/src/`](https://github.com/wyx-sg/Coffer/tree/main/desktop/src) | The desktop app's presence check, grant signing and approval notifications. |
 | [`infrastructure/net/ssrf_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/net/ssrf_guard.py) | SSRF guard. |
@@ -406,4 +406,4 @@ See [Vault sync](/architecture/vault-sync) for the full protocol.
 - [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-auth-and-origin-guard.md)
 - [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md)
 - [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/managed-agents-run-with-full-permissions.md)
-- Specs: [secrets](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/secret/spec.md), [desktop-app](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md), [daemon](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md), [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)
+- Specs: [secret](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/secret/spec.md), [desktop-app](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md), [daemon](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md), [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)

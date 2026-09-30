@@ -24,7 +24,7 @@ shape of one request:
    copy of the bytes fed to a usage reader. A reader that raises is dropped
    for the rest of that attempt; the relay never notices.
 
-Nothing here logs a body, a prompt, a completion or a credential.
+Nothing here logs a body, a prompt, a completion or a secret.
 """
 
 from __future__ import annotations

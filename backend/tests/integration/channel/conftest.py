@@ -39,8 +39,8 @@ from coffer.application.chat.turn_orchestrator import (
     TurnOrchestrator,
     clear_active_turns,
 )
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.audit import AuditEntry
 from coffer.domain.channel.envelopes import (
     InboundAttachment,
@@ -229,12 +229,12 @@ def lifecycle_event(
 
 
 # ---------------------------------------------------------------------------
-# Fakes at the non-local boundaries (IM platform, credential store, child process)
+# Fakes at the non-local boundaries (IM platform, secret store, child process)
 # ---------------------------------------------------------------------------
 
 
 class FakeKeyring:
-    """In-memory credential store satisfying the ResourceService keyring port."""
+    """In-memory secret store satisfying the ResourceService keyring port."""
 
     def __init__(self) -> None:
         self._values: dict[str, str] = {}
@@ -349,7 +349,7 @@ class StubWebSocketController:
 
     The real connector's threading is pinned in ``test_seatalk_ws.py`` against
     the fake SDK; what the runtime needs from it here is only the converge
-    contract — who is wanted, with which materialized credentials.
+    contract — who is wanted, with which materialized secrets.
     """
 
     def __init__(self, *, fail: bool = False) -> None:
@@ -650,7 +650,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     keyring = FakeKeyring()
     kinds: dict[str, Any] = {}
     resources = ResourceService(
-        kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit, credentials=keyring
+        kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit, secrets=keyring
     )
     peers = ChannelPeerRepo(sm)
     threads = ChannelThreadConversationRepo(sm)
@@ -689,10 +689,10 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         created_adapters.append(adapter)
         return adapter
 
-    resolver = CredentialResolver(keyring)
+    resolver = SecretResolver(keyring)
 
     async def materialize(refs: dict[str, str], destination: Any = None) -> dict[str, str]:
-        # The real resolver, so failures raise CredentialMissing exactly as
+        # The real resolver, so failures raise SecretMissing exactly as
         # production wiring does.
         return resolver.materialize(refs, destination)
 

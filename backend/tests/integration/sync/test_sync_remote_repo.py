@@ -57,8 +57,8 @@ async def test_set_then_get_round_trips_every_field(sm: async_sessionmaker) -> N
     remote = BackupRemote(
         url="https://example.invalid/vault.git",
         branch="backup",
-        credential_ref="sync.BACKUP_TOKEN",
-        include_credentials=True,
+        secret_ref="sync.BACKUP_TOKEN",
+        include_secrets=True,
         interval_seconds=900,
         enabled=True,
         worktree_path="~/.coffer/sync",

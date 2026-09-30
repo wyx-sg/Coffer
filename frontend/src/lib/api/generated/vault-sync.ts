@@ -689,23 +689,23 @@ export interface components {
              * @default main
              */
             branch?: string;
-            /** Credential Ref */
-            credential_ref?: string | null;
             /**
              * Enabled
              * @default true
              */
             enabled?: boolean;
             /**
-             * Include Credentials
+             * Include Secrets
              * @default false
              */
-            include_credentials?: boolean;
+            include_secrets?: boolean;
             /**
              * Interval Seconds
              * @default 3600
              */
             interval_seconds?: number;
+            /** Secret Ref */
+            secret_ref?: string | null;
             /** Url */
             url: string;
             /**
@@ -718,14 +718,14 @@ export interface components {
         SyncRemoteOut: {
             /** Branch */
             branch: string;
-            /** Credential Ref */
-            credential_ref: string | null;
             /** Enabled */
             enabled: boolean;
-            /** Include Credentials */
-            include_credentials: boolean;
+            /** Include Secrets */
+            include_secrets: boolean;
             /** Interval Seconds */
             interval_seconds: number;
+            /** Secret Ref */
+            secret_ref: string | null;
             /** Url */
             url: string;
             /** Worktree Path */

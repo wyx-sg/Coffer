@@ -1,7 +1,7 @@
 """A two-machine convergence harness (spec vault-sync "Run the seven round steps in order").
 
 Two independent vaults — each with its own SQLite database, knowledge tree,
-skill store, credential store, master key, working tree, convergence state and
+skill store, secret store, master key, working tree, convergence state and
 **injected** machine id — meet through one real bare git repository on disk.
 Nothing here is faked below the git binary: the mirror shells out to real
 ``git``, the appliers write real files and real rows, and the round is the
@@ -38,14 +38,14 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.provider.internal_default_guard import (
     ProviderInternalDefaultNormaliser,
 )
 from coffer.application.provider.kind import make_provider_kind
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.application.sync.appliers import (
-    CredentialApplier,
+    SecretApplier,
     StateApplier,
     TreeApplier,
 )
@@ -65,8 +65,6 @@ from coffer.domain.sync.convergence import ConvergeRun, PendingConfirmation
 from coffer.domain.sync.diff import DeletionGuard
 from coffer.domain.sync.manifest import MANIFEST_PATH
 from coffer.domain.sync.models import ExportSummary
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
-from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -78,10 +76,12 @@ from coffer.infrastructure.persistence.repos import (
 )
 from coffer.infrastructure.persistence.sync_remote_repo import SqlAlchemySyncRemoteRepo
 from coffer.infrastructure.platform import HostPlatform
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
+from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.infrastructure.sync.bundle import Bundle
-from coffer.infrastructure.sync.credentials import CredentialSyncAdapter, ResolvedMasterKey
 from coffer.infrastructure.sync.git_mirror import GitMirror
 from coffer.infrastructure.sync.paths import non_converging_tree_paths
+from coffer.infrastructure.sync.secret import ResolvedMasterKey, SecretSyncAdapter
 from tests.support.homes import bare_remote as bare_remote
 
 BRANCH = "main"
@@ -99,7 +99,7 @@ class SyncableConfig(BaseModel):
 
     value: str = ""
     config_dir: str = ""
-    credential_ref: str = ""
+    secret_ref: str = ""
 
 
 class AgentDocConfig(BaseModel):
@@ -110,8 +110,8 @@ class AgentDocConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-def _cited_credentials(config: dict[str, Any]) -> dict[str, str]:
-    ref = config.get("credential_ref")
+def _cited_secrets(config: dict[str, Any]) -> dict[str, str]:
+    ref = config.get("secret_ref")
     return {"token": ref} if isinstance(ref, str) and ref else {}
 
 
@@ -119,7 +119,7 @@ def vault_kinds() -> dict[str, Kind]:
     """The kinds a converging vault carries, minimally but genuinely defined.
 
     ``mcp_server`` supports scope — reach is tested through it — and cites a
-    credential, so deleting one exercises the orphaned-credential release that
+    secret, so deleting one exercises the orphaned-secret release that
     seeded the 2026-07-10 incident.
 
     ``channel`` is here because it is the kind whose travel is the interesting
@@ -147,7 +147,7 @@ def vault_kinds() -> dict[str, Kind]:
             display_name="MCP server",
             config_schema=SyncableConfig,
             supports_scope=True,
-            credential_ref_extractor=_cited_credentials,
+            secret_ref_extractor=_cited_secrets,
         ),
         "skill": Kind(
             name="skill",
@@ -161,7 +161,7 @@ def vault_kinds() -> dict[str, Kind]:
             name="channel",
             display_name="Channel",
             config_schema=SyncableConfig,
-            credential_ref_extractor=_cited_credentials,
+            secret_ref_extractor=_cited_secrets,
         ),
         "memory": Kind(
             name="memory",
@@ -404,7 +404,7 @@ class VaultMachine:
         root: pathlib.Path,
         remote_url: str,
         guard: DeletionGuard,
-        with_credentials: bool,
+        with_secrets: bool,
         key_material: bytes | None = None,
     ) -> None:
         self.name = name
@@ -416,7 +416,7 @@ class VaultMachine:
         self.skills_root = root / "skills"
         self.worktree = root / "sync"
         self.db_path = root / "coffer.db"
-        self.with_credentials = with_credentials
+        self.with_secrets = with_secrets
         self._guard = guard
         self._key_material = key_material
         self.state = ConvergenceState()
@@ -449,13 +449,13 @@ class VaultMachine:
             self.master_key.install_key(self._key_material)
         key = self.master_key.resolve(allow_create=True)
         assert key is not None
-        self.credential_store = EncryptedCredentialStore(self.db_path, key)
+        self.secret_store = EncryptedSecretStore(self.db_path, key)
         kinds = vault_kinds()
         self.resources = ResourceService(
             kinds=kinds,
             repo=SqlAlchemyResourceRepo(sessions),
             audit=self.audit,
-            credentials=self.credential_store,
+            secrets=self.secret_store,
         )
         # The production provider kind, guarding its one internal-engine
         # default against this vault's own rows — registered into the dict the
@@ -463,10 +463,8 @@ class VaultMachine:
         kinds["provider"] = make_provider_kind(self.resources)
         # One resolved key shared by the adapter and the service, as the wiring
         # does, so a key imported through the service is what the adapter reads.
-        self.resolved_key = ResolvedMasterKey(
-            self.master_key, on_install=self.credential_store.use_key
-        )
-        self.credentials = CredentialSyncAdapter(self.db_path, self.resolved_key)
+        self.resolved_key = ResolvedMasterKey(self.master_key, on_install=self.secret_store.use_key)
+        self.secrets = SecretSyncAdapter(self.db_path, self.resolved_key)
 
         self.bundle = Bundle(
             self.worktree,
@@ -478,7 +476,7 @@ class VaultMachine:
         )
         self.exporter = SyncExporter(
             self.resources,
-            self.credentials,
+            self.secrets,
             [self.state_provider],
             home=str(self.home),
         )
@@ -514,14 +512,14 @@ class VaultMachine:
                     home=str(self.home),
                 ),
                 StateApplier([self.state_provider], worktree=self.worktree, home=str(self.home)),
-                CredentialApplier(self.credentials, worktree=self.worktree),
+                SecretApplier(self.secrets, worktree=self.worktree),
             ],
             arbiter=ConflictArbiter(self.resolver),
             joining=JoinResolver(machine_id=self.machine_id, branch=BRANCH),
             serialize=self._serialize,
             guard=self._guard,
             branch=BRANCH,
-            credentials=self.credentials,
+            secrets=self.secrets,
             post_import=[self.hook],
         )
 
@@ -563,8 +561,8 @@ class VaultMachine:
             mirror_factory=lambda _worktree: self.mirror,
             bundle_factory=lambda _worktree: self.bundle,
             set_machine_name=self._rename,
-            credentials=CredentialResolver(self.credential_store),
-            credential_store=self.credentials,
+            secrets=SecretResolver(self.secret_store),
+            secret_store=self.secrets,
             master_key=self.resolved_key,
             audit=self.audit,
             lock=lock,
@@ -595,7 +593,7 @@ class VaultMachine:
         remote = BackupRemote(
             url=self.remote_url,
             branch=BRANCH,
-            include_credentials=self.with_credentials,
+            include_secrets=self.with_secrets,
             enabled=enabled,
             worktree_path=str(self.worktree),
         )
@@ -608,7 +606,7 @@ class VaultMachine:
         """Step 1's callable: the vault into the tree, plus this machine's own
         descriptor — the one document a machine writes about itself and about
         no other (spec vault-sync "Derive the registry from the descriptors")."""
-        summary = await self.exporter.export(self.bundle, with_credentials=self.with_credentials)
+        summary = await self.exporter.export(self.bundle, with_secrets=self.with_secrets)
         pointer = await self.state.pointer()
         commit = pointer if pointer and pointer != GitMirror.EMPTY_TREE else None
         await self.registry.publish_self(self.bundle, commit=commit, today=date.today())
@@ -793,11 +791,11 @@ class VaultMachine:
         """
         return f"resources/{kind}/{await self.uid(kind, name)}.yaml"
 
-    def set_credential(self, ref: str, value: str) -> None:
-        self.credential_store.set(ref, value)
+    def set_secret(self, ref: str, value: str) -> None:
+        self.secret_store.set(ref, value)
 
-    def has_credential(self, ref: str) -> bool:
-        return self.credential_store.exists(ref)
+    def has_secret(self, ref: str) -> bool:
+        return self.secret_store.exists(ref)
 
     async def audit_events(self, event_type: str) -> int:
         return len(await self.audit.query(event_type=event_type, limit=500))
@@ -899,7 +897,7 @@ async def build_machine(
     root: pathlib.Path,
     remote_url: str,
     guard: DeletionGuard | None = None,
-    with_credentials: bool = True,
+    with_secrets: bool = True,
     key_material: bytes | None = None,
 ) -> VaultMachine:
     """One machine, fully wired. ``machine_id`` is injected — a test must
@@ -910,7 +908,7 @@ async def build_machine(
         root=root,
         remote_url=remote_url,
         guard=guard or DeletionGuard(),
-        with_credentials=with_credentials,
+        with_secrets=with_secrets,
         key_material=key_material,
     )
     await machine.start()
@@ -928,7 +926,7 @@ async def two_machines(
     tmp_path: pathlib.Path,
     *,
     guard: DeletionGuard | None = None,
-    with_credentials: bool = True,
+    with_secrets: bool = True,
     shared_key: bool = False,
 ) -> tuple[VaultMachine, VaultMachine]:
     """Two whole vaults and one real bare repository between them."""
@@ -939,7 +937,7 @@ async def two_machines(
         root=tmp_path / "machine-a",
         remote_url=url,
         guard=guard,
-        with_credentials=with_credentials,
+        with_secrets=with_secrets,
     )
     b = await build_machine(
         name="desktop",
@@ -947,7 +945,7 @@ async def two_machines(
         root=tmp_path / "machine-b",
         remote_url=url,
         guard=guard,
-        with_credentials=with_credentials,
+        with_secrets=with_secrets,
         # Two machines start with two different master keys, which is the
         # truthful default: a machine holding another's ciphertext without the
         # key reports those refs locked. ``shared_key`` is the bootstrap having

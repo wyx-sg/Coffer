@@ -178,7 +178,7 @@ def _converge_files(
     is in ``protected``, which the export must preserve rather than publish.
 
     An empty ``desired`` never conjures the directory: an export that carries
-    no credentials must leave no ``credentials/`` behind.
+    no secrets must leave no ``credentials/`` behind.
     """
     if not desired and not dst.exists():
         return

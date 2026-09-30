@@ -379,14 +379,14 @@
       "titleLabel": "标题",
       "titleHelp": "在 Coffer 中显示。",
       "urlHelp": "Streamable HTTP。",
-      "credentials": "密钥",
-      "noCredentials": "没有已存储的密钥。",
-      "addCredential": "添加密钥",
-      "removeCredential": "移除密钥",
-      "credentialKey": "密钥名称",
-      "credentialValue": "{{name}} 的新值",
-      "credentialNew": "密钥值",
-      "credentialHint": "密钥值存入钥匙串；配置里只保留它们的名称。移除一个会删除其已存储的值。",
+      "secrets": "密钥",
+      "noSecrets": "没有已存储的密钥。",
+      "addSecret": "添加密钥",
+      "removeSecret": "移除密钥",
+      "secretKey": "密钥名称",
+      "secretValue": "{{name}} 的新值",
+      "secretNew": "密钥值",
+      "secretHint": "密钥值存入钥匙串；配置里只保留它们的名称。移除一个会删除其已存储的值。",
       "stored": "已存储",
       "replace": "替换",
       "errRenameNeedsValue": "要重命名 \"{{name}}\"，请重新输入它的密钥值。",
@@ -627,10 +627,10 @@
       "capability_enabled": "启用了{{capType}} {{key}}（{{resource}}）",
       "channel_paired": "完成了消息渠道 {{resource}} 的配对",
       "channel_pairing_issued": "为 {{resource}} 签发了配对码",
-      "credential_deleted": "已删除密钥",
-      "credential_migrated": "密钥已从系统钥匙串迁移",
-      "credential_read": "已读取密钥",
-      "credential_set": "已存储密钥",
+      "secret_deleted": "已删除密钥",
+      "secret_migrated": "密钥已从系统钥匙串迁移",
+      "secret_read": "已读取密钥",
+      "secret_set": "已存储密钥",
       "internal_engine_model_set": "设置了内部引擎使用的模型",
       "knowledge_deleted": "从 {{resource}} 删除了一篇文档",
       "knowledge_edited": "编辑了 {{resource}} 中的一篇文档",
@@ -679,7 +679,7 @@
       "token_rotated": "已轮换访问令牌",
       "daemon_residency_updated": "守护进程常驻设置已变更",
       "knowledge_curated": "整理了 {{resource}}：把新条目整理进了其中的文档",
-      "credential_revealed": "在 Coffer 应用中查看了密钥",
+      "secret_revealed": "在 Coffer 应用中查看了密钥",
       "secret_resolved": "把密钥交给了一条 coffer run 命令",
       "secret_approval_requested": "请求批准一项密钥改动",
       "secret_approval_approved": "批准了一项密钥改动",
@@ -1458,10 +1458,10 @@
     "CONFIG_FILE_STALE": "配置文件在你加载后已被磁盘上的改动覆盖，请重新加载后重试。",
     "CONFIG_INVALID": "配置无效",
     "CONVERSATION_NOT_FOUND": "未找到对话",
-    "CREDENTIAL_IN_USE": "该密钥仍被其他资源引用，请先解除引用再删除。",
-    "CREDENTIAL_LOCKED": "系统钥匙串已锁定——请解锁后重试",
-    "CREDENTIAL_MISSING": "所需密钥在密钥库中不存在——请在该资源的编辑页重新保存",
-    "CREDENTIAL_UNREADABLE": "存储的密钥无法用当前主密钥解密",
+    "SECRET_IN_USE": "该密钥仍被其他资源引用，请先解除引用再删除。",
+    "SECRET_LOCKED": "系统钥匙串已锁定——请解锁后重试",
+    "SECRET_MISSING": "所需密钥在密钥库中不存在——请在该资源的编辑页重新保存",
+    "SECRET_UNREADABLE": "存储的密钥无法用当前主密钥解密",
     "CURSOR_INVALID": "该分页位置已失效，请从第一页重新加载列表。",
     "DAEMON_NOT_READY": "Coffer 守护进程仍在启动，请稍后重试。",
     "DB_SCHEMA_TOO_NEW": "该数据库由更新版本的 Coffer 写入，请升级后再打开。",
@@ -1517,7 +1517,7 @@
     "PLUGIN_UNINSTALL_FAILED": "卸载失败",
     "PLUGIN_UNINSTALL_UNSUPPORTED": "该插件不支持卸载",
     "PRIVILEGED_PATH": "该路径受保护，无法在此使用",
-    "PROVIDER_CREDENTIAL_SOURCE_INVALID": "已保存的密钥与内联密钥，二者必须且只能提供一个",
+    "PROVIDER_SECRET_SOURCE_INVALID": "已保存的密钥与内联密钥，二者必须且只能提供一个",
     "PROVIDER_INTERNAL_DEFAULT_TAKEN": "已有另一个连接是 Coffer 内部引擎的默认连接——请把默认切换到这个连接，而不是直接改这个字段",
     "PROVIDER_INTERNAL_ONLY": "该连接使用 ollama 协议，仅供 Coffer 内部引擎使用，不能为智能体启用",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "该连接正在启用中，无法更改协议格式——请先让相关智能体切回自带登录，再修改协议，然后重新启用",
@@ -3285,7 +3285,7 @@
         "saved": "已保存",
         "error": "保存失败"
       },
-      "credentials": {
+      "secrets": {
         "title": "密钥",
         "replace": "更换",
         "hint": "保存在 Coffer 的密钥库中；消息渠道配置只保存引用。"
@@ -3657,10 +3657,10 @@
         "url": "请输入 git 远端地址（https://… 或 git@…）",
         "interval": "间隔至少 60 秒"
       },
-      "credentialRef": "推送密钥",
-      "credentialRefHint": "这里填的是 Coffer 密钥库中的条目名称，不是密钥本身。守护进程只在推送那一刻解析它，所以密钥不会出现在本页面、仓库的 git config，或任何错误文本里。",
-      "includeCredentials": "包含密钥",
-      "includeCredentialsHint": "密钥以密文形式随行；无论如何设置，主密钥都不会被推送。持有密文却没有主密钥的机器会把这些引用标记为已锁定，而不是悄悄解密失败。",
+      "secretRef": "推送密钥",
+      "secretRefHint": "这里填的是 Coffer 密钥库中的条目名称，不是密钥本身。守护进程只在推送那一刻解析它，所以密钥不会出现在本页面、仓库的 git config，或任何错误文本里。",
+      "includeSecrets": "包含密钥",
+      "includeSecretsHint": "密钥以密文形式随行；无论如何设置，主密钥都不会被推送。持有密文却没有主密钥的机器会把这些引用标记为已锁定，而不是悄悄解密失败。",
       "worktree": "工作区：{{path}}",
       "convergeNow": "立即收敛",
       "converging": "收敛中…",
@@ -4367,7 +4367,7 @@
       "valueLabel": "{{name}} 的值",
       "hide": "隐藏",
       "copied": "已复制值",
-      "hidesIn": "{{seconds}} 秒后隐藏 · 记录为 credential_revealed"
+      "hidesIn": "{{seconds}} 秒后隐藏 · 记录为 secret_revealed"
     },
     "delete": {
       "title": "删除 {{name}}？",
@@ -4450,6 +4450,62 @@
       "title_other": "{{count}} 个密钥在这台 Mac 上没有值",
       "body": "它们随 vault 而来，但加密的密钥没有同步到这里。使用它们的服务器在有值之前无法启动。",
       "importKey": "导入主密钥…"
+    },
+    "savedAwaitingApproval": "已保存。新密钥在 Coffer 应用中批准后生效。",
+    "approvals": {
+      "title_one": "{{count}} 项改动等待批准",
+      "title_other": "{{count}} 项改动等待批准",
+      "hintShell": "批准时需要 Touch ID 或登录密码。",
+      "hintBrowser": "请在 Coffer 桌面应用中批准；这里可以拒绝。",
+      "requestedBy": "请求方",
+      "secret": "密钥",
+      "destination": "发送到",
+      "target": "目标",
+      "approve": "批准",
+      "reject": "拒绝",
+      "op": {
+        "bind": "新的使用处",
+        "replace_value": "新的值",
+        "disable_protection": "关闭保护",
+        "add_secret": "新密钥"
+      },
+      "review": "查看",
+      "change": "改动",
+      "question": {
+        "add_secret": "批准新密钥 {{name}}？",
+        "replace_value": "批准 {{name}} 的新值？",
+        "bind": "批准把 {{name}} 发送给 {{destination}}？",
+        "disable_protection": "关闭密钥改动的批准要求？"
+      },
+      "body": {
+        "add_secret": "值已密封保存。批准之后才能使用。",
+        "replace_value": "新值已密封保存。批准之前，{{users}} 继续使用当前值。",
+        "replace_value_unused": "新值已密封保存。批准之前，当前值保持不变。",
+        "bind": "批准之前不会发送任何东西。",
+        "disable_protection": "批准之前，每个新密钥、新值和新的使用处都继续等待批准。"
+      },
+      "requestedAt": "{{who}}，{{time}}",
+      "via": {
+        "ui": "你 · 在 Coffer 界面中",
+        "cli": "你 · 在命令行中",
+        "api": "通过 API"
+      },
+      "nothingYet": "暂无",
+      "openApp": "请在这台 Mac 上打开 Coffer 应用来批准——它会要求 Touch ID 或登录密码。",
+      "approveEllipsis": "批准…",
+      "approveInApp": "请在 Coffer 桌面应用中批准",
+      "approved": {
+        "add_secret": "已批准 · 已添加 {{name}}",
+        "replace_value": "已批准 · {{name}} 已使用新值",
+        "bind": "已批准 · {{name}} 会发送给 {{destination}}",
+        "disable_protection": "已批准 · 密钥改动不再需要批准"
+      },
+      "rejected": {
+        "add_secret": "已拒绝 · 未添加 {{name}}",
+        "replace_value": "已拒绝 · {{name}} 保留当前值",
+        "bind": "已拒绝 · {{name}} 不会发送给 {{destination}}",
+        "disable_protection": "已拒绝 · 密钥改动仍需批准"
+      }
     }
   },
   "usage": {
@@ -4639,64 +4695,6 @@
       "memory": "记忆",
       "customTool": "自定义工具",
       "cli": "命令行工具"
-    }
-  },
-  "credentials": {
-    "savedAwaitingApproval": "已保存。新密钥在 Coffer 应用中批准后生效。",
-    "approvals": {
-      "title_one": "{{count}} 项改动等待批准",
-      "title_other": "{{count}} 项改动等待批准",
-      "hintShell": "批准时需要 Touch ID 或登录密码。",
-      "hintBrowser": "请在 Coffer 桌面应用中批准；这里可以拒绝。",
-      "requestedBy": "请求方",
-      "secret": "密钥",
-      "destination": "发送到",
-      "target": "目标",
-      "approve": "批准",
-      "reject": "拒绝",
-      "op": {
-        "bind": "新的使用处",
-        "replace_value": "新的值",
-        "disable_protection": "关闭保护",
-        "add_secret": "新密钥"
-      },
-      "review": "查看",
-      "change": "改动",
-      "question": {
-        "add_secret": "批准新密钥 {{name}}？",
-        "replace_value": "批准 {{name}} 的新值？",
-        "bind": "批准把 {{name}} 发送给 {{destination}}？",
-        "disable_protection": "关闭密钥改动的批准要求？"
-      },
-      "body": {
-        "add_secret": "值已密封保存。批准之后才能使用。",
-        "replace_value": "新值已密封保存。批准之前，{{users}} 继续使用当前值。",
-        "replace_value_unused": "新值已密封保存。批准之前，当前值保持不变。",
-        "bind": "批准之前不会发送任何东西。",
-        "disable_protection": "批准之前，每个新密钥、新值和新的使用处都继续等待批准。"
-      },
-      "requestedAt": "{{who}}，{{time}}",
-      "via": {
-        "ui": "你 · 在 Coffer 界面中",
-        "cli": "你 · 在命令行中",
-        "api": "通过 API"
-      },
-      "nothingYet": "暂无",
-      "openApp": "请在这台 Mac 上打开 Coffer 应用来批准——它会要求 Touch ID 或登录密码。",
-      "approveEllipsis": "批准…",
-      "approveInApp": "请在 Coffer 桌面应用中批准",
-      "approved": {
-        "add_secret": "已批准 · 已添加 {{name}}",
-        "replace_value": "已批准 · {{name}} 已使用新值",
-        "bind": "已批准 · {{name}} 会发送给 {{destination}}",
-        "disable_protection": "已批准 · 密钥改动不再需要批准"
-      },
-      "rejected": {
-        "add_secret": "已拒绝 · 未添加 {{name}}",
-        "replace_value": "已拒绝 · {{name}} 保留当前值",
-        "bind": "已拒绝 · {{name}} 不会发送给 {{destination}}",
-        "disable_protection": "已拒绝 · 密钥改动仍需批准"
-      }
     }
   },
   "providers": {

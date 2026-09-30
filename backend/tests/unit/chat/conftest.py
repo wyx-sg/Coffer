@@ -232,7 +232,7 @@ class FakeAgentProvider:
 
     ``build_error`` makes ``build_adapter`` raise unconditionally — used to
     exercise the turn path's clean failure when a provider can't build its
-    adapter (e.g. a missing credential).
+    adapter (e.g. a missing secret).
     """
 
     def __init__(

@@ -46,7 +46,7 @@ value that looks like a secret — `Bearer …`, `ghp_`, `github_pat_`, `sk-`,
 (`domain/mcp/server_config.py`).
 
 Resolution happens only at the moment of use: `CredentialResolver.materialize`
-(`application/credentials/resolver.py`) turns `{key: ref}` into
+(`application/secret/resolver.py`) turns `{key: ref}` into
 `{key: secret}` for an upstream spawn, header injection or adapter start, and
 the plaintext lives only in that process environment or request
 (spec secret "Hold plaintext only in memory at the moment of use"). A ref
@@ -63,7 +63,7 @@ The lifecycle is kept whole around the ref:
   kind and current name. No foreign key can express this — the ref lives
   inside another kind's JSON config — so `ResourceService.find_credential_citations`
   walks every registered config through its kind's extractor
-  (spec secret "Refuse to delete a credential still in use").
+  (spec secret "Refuse to delete a secret still in use").
 - **No orphans.** Deleting a resource releases the refs nothing else cites,
   on this machine and, through a converged deletion, on every other
   (spec secret "Release unshared references when a resource is deleted").
@@ -78,7 +78,7 @@ The lifecycle is kept whole around the ref:
 
 Refs are **minted opaque**: `provider/<uuid4 hex>/key` in the backend
 (`application/provider/service.py`), `<kind>/<uuid4 hex>/<logical key>` for
-`channel` and `mcp_server` in the frontend (`lib/credentialRef.ts`), one per
+`channel` and `mcp_server` in the frontend (`lib/secretRef.ts`), one per
 secret. A rotation re-encrypts under the same ref, so nothing that cites it
 changes. Refs that earlier builds derived from a resource's name
 (`channel/<name>/<secret>`, `<name>.<ENV>`) were rewritten by migration 0099

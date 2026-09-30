@@ -105,7 +105,7 @@ coffer mcp add filesystem \
 registered: mcp_server filesystem
 ```
 
-`--stdio` takes the whole command line as one string, and Coffer splits it into a command and its arguments. For a server reached over HTTP, use `--http <url>` instead. For a server that needs an API key, add `--secret ENV_NAME=<credential-ref>` (see [Secret store](/guides/secret-store)).
+`--stdio` takes the whole command line as one string, and Coffer splits it into a command and its arguments. For a server reached over HTTP, use `--http <url>` instead. For a server that needs an API key, add `--secret ENV_NAME=<secret-ref>` (see [Secret store](/guides/secret-store)).
 
 Check that Coffer can start the server and see its tools:
 

@@ -54,7 +54,7 @@ keychain (service `coffer`, opt-in) (spec secret "Keep the master key in exactly
   `coffer config get|set credentials.storage` and the Settings →
   Security card, audited as `master_key_relocated`.
 - **One owner of key material.** `MasterKeyManager`
-  (`infrastructure/credentials/master_key.py`) is the only code that reads or
+  (`infrastructure/secret/master_key.py`) is the only code that reads or
   writes the key, and `keyring_adapter.py` the only module that imports
   `keyring`. The CLI goes through the daemon for everything, so each machine
   has one reader of the key.
@@ -140,7 +140,7 @@ Lost: relocating only the key is small and crash-safe.
 
 Secrets are stored only as Fernet ciphertext in the `credentials` table; one
 master key, file by default and keychain on opt-in, lives in exactly one place
-and is managed solely by `coffer.infrastructure.credentials`. The key is
+and is managed solely by `coffer.infrastructure.secret`. The key is
 created only for an empty store, never regenerated over existing ciphertext,
 and relocated rather than rotated. The daemon is the only process that holds
 it.
@@ -154,11 +154,11 @@ it.
   `coffer.surfaces` and `coffer.application` from importing it (the domain
   purity contract covers `coffer.domain`), and the acceptance test
   `test_only_the_keyring_adapter_imports_keyring`
-  (`tests/unit/infrastructure/credentials/test_key_location_and_boundaries.py`)
+  (`tests/unit/infrastructure/secret/test_key_location_and_boundaries.py`)
   pins `keyring_adapter.py` as the only importer in the whole tree
-  (spec secret "Confine key management to the credentials package"). A
+  (spec secret "Confine key management to the secret package"). A
   further contract, "CLI does not access the keychain directly", keeps
-  `coffer.surfaces.cli` away from `coffer.infrastructure.credentials`.
+  `coffer.surfaces.cli` away from `coffer.infrastructure.secret`.
 - Carrying the key to another machine is a separate, out-of-band act — a key
   backup and `coffer sync key import`; the backup has been written only by the
   desktop app, behind a presence check, since 2026-09-30 — owned by

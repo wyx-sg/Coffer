@@ -43,7 +43,7 @@ Sessions come from an `async_sessionmaker` with `expire_on_commit=False`, so obj
 
 ### The one synchronous path
 
-The encrypted secret store ([`infrastructure/credentials/encrypted_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/credentials/encrypted_store.py)) deliberately uses the standard-library `sqlite3` module with a short-lived connection per call, because upstream spawning and register-time secret probing are synchronous code paths with no event loop. Async callers go through its `aget` / `aexists` / `aset` / `adelete` wrappers, which run each call in a worker thread. A synchronous call made on the event loop would deadlock against the aiosqlite connection holding the write lock, so the wrappers are mandatory there.
+The encrypted secret store ([`infrastructure/secret/encrypted_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/secret/encrypted_store.py)) deliberately uses the standard-library `sqlite3` module with a short-lived connection per call, because upstream spawning and register-time secret probing are synchronous code paths with no event loop. Async callers go through its `aget` / `aexists` / `aset` / `adelete` wrappers, which run each call in a worker thread. A synchronous call made on the event loop would deadlock against the aiosqlite connection holding the write lock, so the wrappers are mandatory there.
 
 ## Migrations
 
@@ -98,7 +98,7 @@ The ORM models live in [`infrastructure/persistence/models.py`](https://github.c
 | `resources` | One row per resource of every kind: `id`, `uid`, `kind`, `name` (unique per kind), an optional display `title`, `description`, `config_json`, `enabled`, `scope_json`, `rev` (1 at creation, bumped by every write), timestamps. See [Resource framework](/architecture/resource-framework). |
 | `audit_log` | Every lifecycle change: time, event type, actor, the resource's `id` plus its kind and name at the time, and redacted details. |
 | `retention_policies` | One row per prunable table: retention days, when it was last pruned and how many rows went. |
-| `credentials` | `ref` → Fernet `ciphertext`. The only place a secret exists at rest. |
+| `secrets` | `ref` → Fernet `ciphertext`. The only place a secret exists at rest. |
 | `secret_bindings` | A secret approved for one slot of one destination, with the fingerprint of the target it was approved for; a changed target needs a new approval. |
 | `secret_approvals` | Changes waiting for a present human in the desktop app, with their status. A pending value waits as ciphertext. |
 | `secret_boundary_settings` | Key/value switches of the secret boundary (`require_approval`) and its one-time adoption marker. |
@@ -205,7 +205,7 @@ Their contents, lifetimes and the reasoning behind each are described once, in [
 | [`backend/coffer/infrastructure/persistence/repos.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/persistence/repos.py) | Resource and audit repositories. |
 | [`backend/coffer/infrastructure/persistence/migrations/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/persistence/migrations) | Alembic environment and revisions. |
 | [`backend/coffer/surfaces/http/migrations_runner.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/migrations_runner.py) | Startup migration, backup and too-new guard. |
-| [`backend/coffer/infrastructure/credentials/encrypted_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/credentials/encrypted_store.py) | The synchronous secret store. |
+| [`backend/coffer/infrastructure/secret/encrypted_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/secret/encrypted_store.py) | The synchronous secret store. |
 | [`backend/coffer/infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) | `daemon-config.json`. |
 | [`backend/coffer/infrastructure/daemon/pid_lock.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/pid_lock.py) | `daemon.json`. |
 

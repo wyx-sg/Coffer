@@ -3,7 +3,7 @@
 ``list``, ``show``, ``rm``, ``enable``, ``disable`` and ``scope`` are the
 lifecycle verbs every kind's group shares (``_kind_verbs``). This kind keeps
 its own ``add`` and ``edit``: creating a connection stores its secret through
-the credential store, and editing it can rotate that secret or correct the
+the secret store, and editing it can rotate that secret or correct the
 wire, both of which ``PATCH /providers/{uid}`` owns and the generic route does
 not. ``switch`` and ``builtin`` are the connection-specific commands; the key an
 agent used to fetch through ``key`` stays with the local model proxy, and the
@@ -45,7 +45,7 @@ def add(
     protocol: str = typer.Option(..., "--protocol", help=f"Protocol: {_PROTOCOLS}"),
     base_url: str = typer.Option(..., "--base-url", help="Upstream endpoint base URL"),
     secret: str | None = typer.Option(None, "--secret", help="API key (stored encrypted)"),
-    credential_ref: str | None = typer.Option(
+    secret_ref: str | None = typer.Option(
         None, "--secret-ref", help="Reuse an existing secret ref instead of --secret"
     ),
     title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
@@ -82,8 +82,8 @@ def add(
     body: dict[str, object] = {"name": name, "protocol": protocol, "base_url": base_url}
     if secret is not None:
         body["secret_value"] = secret
-    if credential_ref is not None:
-        body["credential_ref"] = credential_ref
+    if secret_ref is not None:
+        body["secret_ref"] = secret_ref
     if description is not None:
         body["description"] = description
 
@@ -246,7 +246,7 @@ def edit(
             # secret "Hold a secret for a new destination until a person
             # approves it", "Hold a replaced value in use until a person
             # approves it"): say what waits, and exit 9 unless --wait.
-            key_ref = _config(current, "credential_ref")
+            key_ref = _config(current, "secret_ref")
             refs = [str(key_ref)] if key_ref else []
             settle(c, pending_for(c, uid, verbose=verbose, refs=refs), wait=wait, verbose=verbose)
 

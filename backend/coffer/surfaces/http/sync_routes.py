@@ -12,13 +12,13 @@ hand-carried copy is a ``git clone`` of the working tree.
 
 The master key never travels inside the repository — moving it is a separate,
 deliberate act, and no route here returns it: a backup is written only by the
-desktop app's presence-gated export (``/api/v1/credentials/presence/
+desktop app's presence-gated export (``/api/v1/secrets/presence/
 master-key-export``, spec secret "Release plaintext only to a present
 human in the desktop app"). ``/key/import`` takes key material in — a caller
 that supplies a key already has it — and ``/key/import/preview`` says whose key
 a file holds before anything is replaced.
 
-Remote shapes carry ``credential_ref`` and never the push credential itself, so
+Remote shapes carry ``secret_ref`` and never the push secret itself, so
 a remote can be rendered in a browser, logged, or pasted into a bug report with
 nothing to redact.
 """
@@ -99,8 +99,8 @@ def _remote_out(remote: BackupRemote) -> SyncRemoteOut:
     return SyncRemoteOut(
         url=remote.url,
         branch=remote.branch,
-        credential_ref=remote.credential_ref,
-        include_credentials=remote.include_credentials,
+        secret_ref=remote.secret_ref,
+        include_secrets=remote.include_secrets,
         interval_seconds=remote.interval_seconds,
         enabled=remote.enabled,
         worktree_path=remote.worktree_path,
@@ -284,8 +284,8 @@ async def put_remote(body: SyncRemoteIn) -> SyncRemoteOut:
         BackupRemote(
             url=body.url,
             branch=body.branch,
-            credential_ref=body.credential_ref,
-            include_credentials=body.include_credentials,
+            secret_ref=body.secret_ref,
+            include_secrets=body.include_secrets,
             interval_seconds=body.interval_seconds,
             enabled=body.enabled,
             worktree_path=body.worktree_path,

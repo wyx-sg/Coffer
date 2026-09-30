@@ -51,7 +51,7 @@ def _config() -> ProviderConfig:
     return ProviderConfig(
         protocol=Protocol.ANTHROPIC,
         base_url="https://gw.example",
-        credential_ref="provider/x/key",
+        secret_ref="provider/x/key",
     )
 
 

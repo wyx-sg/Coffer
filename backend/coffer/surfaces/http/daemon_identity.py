@@ -6,7 +6,7 @@ to read them back, because the auth dependency and ``/daemon/status`` answer out
 of module-level singletons rather than out of that file.
 
 Split out of the composition root for the file-size guideline, alongside
-``credential_composition`` and ``engine_config_composition``.
+``secret_composition`` and ``engine_config_composition``.
 """
 
 from __future__ import annotations

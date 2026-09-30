@@ -134,7 +134,7 @@ When a key a body needs is absent altogether, the body names the key and the fil
 | `references/` | Method and policy shared by several sub-skills or functions in this domain: a playbook, a schema, safety rules. |
 | `profiles/` | `default.md` and one file per environment (see [Profiles](#profiles)). The only place organisation-specific strings may appear. |
 | `scripts/` | Deterministic checks, each with tests. |
-| `connection.md` | Carriers only: hosts, credential locations, backends. |
+| `connection.md` | Carriers only: hosts, secret locations, backends. |
 
 The test for `sub-skills/` versus `functions/`: would someone ask for this by itself? "Open a review request" and "which service owns this path" are sub-skills. "Run preflight" or "execute case 3" only make sense inside a plan already in hand, so they are functions. A domain can have both; a test-orchestration domain has eight numbered functions and one sub-skill for validating a plan file without running it.
 

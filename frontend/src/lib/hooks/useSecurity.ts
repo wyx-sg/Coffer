@@ -9,8 +9,8 @@ import { resetApiClient } from "@/lib/api/client";
 import { translateApiError } from "@/lib/api/errors";
 import { fsApi } from "@/lib/api/fs";
 import {
-  credentialsKey,
-  credentialSettingsKey,
+  secretsKey,
+  secretSettingsKey,
   syncKey,
   syncKeyFingerprintKey,
 } from "@/lib/api/queryKeys";
@@ -93,8 +93,8 @@ export function useImportKeyFile() {
       securityApi.importKey(material, passphrase),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: syncKey });
-      void qc.invalidateQueries({ queryKey: credentialsKey });
-      void qc.invalidateQueries({ queryKey: credentialSettingsKey });
+      void qc.invalidateQueries({ queryKey: secretsKey });
+      void qc.invalidateQueries({ queryKey: secretSettingsKey });
     },
   });
 }

@@ -128,8 +128,8 @@ class SyncedStatePort(Protocol):
         ...
 
 
-class CredentialSyncPort(Protocol):
-    """Ciphertext-only credential IO + locked-ref detection (never the key)."""
+class SecretSyncPort(Protocol):
+    """Ciphertext-only secret IO + locked-ref detection (never the key)."""
 
     def list_refs(self) -> list[str]: ...
 
@@ -138,7 +138,7 @@ class CredentialSyncPort(Protocol):
     def write_ciphertext(self, ref: str, blob: bytes) -> None: ...
 
     def delete_ciphertext(self, ref: str) -> None:
-        """Drop a credential the vault no longer holds. Never touches the key."""
+        """Drop a secret the vault no longer holds. Never touches the key."""
 
     def locked_refs(self) -> list[str]:
         """Refs whose ciphertext cannot be decrypted on this machine (no/other key)."""
@@ -228,7 +228,7 @@ class BundlePort(Protocol):
         """Converge ``state/<area>/`` on ``docs``, differentially and touching
         no other area."""
 
-    def write_credential_blobs(self, blobs: Mapping[str, bytes]) -> None:
+    def write_secret_blobs(self, blobs: Mapping[str, bytes]) -> None:
         """Converge ``credentials/`` on ``blobs`` — one ``<ref>.enc`` per
         ciphertext blob, differentially."""
 
@@ -388,12 +388,12 @@ __all__ = [
     "BundlePort",
     "ConflictResolverPort",
     "ConvergenceStatePort",
-    "CredentialSyncPort",
     "GitMirrorPort",
     "ImportGate",
     "ImportNormaliser",
     "MasterKeyPort",
     "PostImportHook",
+    "SecretSyncPort",
     "SyncRemoteRepoPort",
     "SyncedStatePort",
     "VaultApplyPort",

@@ -129,12 +129,10 @@ def test_a_resources_secret_cannot_be_resolved_by_coffer_run(cli: BoundaryDaemon
     d.register_stdio("gh", "server", {"TOKEN": "mcp_server/gh/TOKEN"})
 
     minted = d.client.post(
-        "/api/v1/credentials/secrets/resolve",
+        "/api/v1/secrets/resolve",
         json={"names": ["mcp_server/gh/TOKEN"], "argv0": "env"},
     )
-    unknown = d.client.post(
-        "/api/v1/credentials/secrets/resolve", json={"names": ["TOKEN"], "argv0": "env"}
-    )
+    unknown = d.client.post("/api/v1/secrets/resolve", json={"names": ["TOKEN"], "argv0": "env"})
     via_cli = _runner.invoke(cli_app, ["run", "--secret", "mcp_server/gh/TOKEN", "--", "env"])
 
     assert minted.status_code == 422 and unknown.status_code == 404
@@ -230,7 +228,7 @@ def test_bindings_in_use_at_upgrade_keep_working(
     d.sql("DELETE FROM secret_bindings")
     d.sql("DELETE FROM secret_approvals")
     d.sql("DELETE FROM secret_boundary_settings")
-    d.sql("UPDATE credentials SET created_at = ?", old)
+    d.sql("UPDATE secrets SET created_at = ?", old)
 
     with running_daemon(tmp_path, db) as upgraded:
         assert upgraded.resolve_for(first) == {"TOKEN": "ghp_from_before"}

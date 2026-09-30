@@ -133,7 +133,7 @@ def run(
         c, _info = _cli_client.client_or_exit()
         with c:
             r = c.post(
-                "/credentials/secrets/resolve",
+                "/secrets/resolve",
                 json={
                     "names": sorted(set(wanted.values())),
                     "argv0": command[0],

@@ -90,7 +90,7 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => {
     name,
     protocol: "anthropic",
     base_url: "https://gw/anthropic",
-    credential_ref: "provider/acme/key",
+    secret_ref: "provider/acme/key",
     local_runtime: null,
     compatible_agents: ["claude_code"],
     is_active: false,
@@ -347,7 +347,7 @@ describe("EngineSettings", () => {
       expect.objectContaining({
         provider: "anthropic",
         base_url: "https://gw/anthropic",
-        credential_ref: "provider/acme/key",
+        secret_ref: "provider/acme/key",
         model: "llama3.1:8b",
       }),
       expect.anything(),

@@ -1,6 +1,6 @@
-"""Ordering two credential ciphertexts without the key.
+"""Ordering two secret ciphertexts without the key.
 
-Covers `openspec/specs/vault-sync/spec.md` "Credentials" (the fresher ciphertext wins),
+Covers `openspec/specs/vault-sync/spec.md` "Secrets" (the fresher ciphertext wins),
 for the pure domain in `coffer.domain.sync.fernet_time`.
 """
 

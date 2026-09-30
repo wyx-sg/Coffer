@@ -7,7 +7,7 @@ add-http-custom-tools §2, §5, §9.
 
 A group is an ``mcp_server`` resource of the ``http_api`` transport, so every
 write goes through :class:`ResourceService` — the kind's validation, the
-missing-credential probe, audit and the eviction of live connections come with
+missing-secret probe, audit and the eviction of live connections come with
 it. What is not in the resource row is a tool's reach override (machine-local,
 ``ToolReachRepoPort``). OpenAPI import and re-import are in
 ``custom_tool_import``; the page's read model in ``custom_tool_views``.
@@ -22,7 +22,6 @@ from typing import Any
 from pydantic import ValidationError
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.custom_tool_ports import (
     CustomToolRunnerPort,
     ToolReachRepoPort,
@@ -31,6 +30,7 @@ from coffer.application.mcp.custom_tool_ports import (
 from coffer.application.mcp.custom_tool_views import GroupView, GroupViewer
 from coffer.application.mcp.gateway_tool_gate import http_api_transport
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.mcp.custom_tool_errors import (
@@ -59,13 +59,13 @@ def secret_name_of(transport: HttpApiTransport) -> str | None:
 
 
 def _bind(fields: dict[str, Any], auth_header: str | None, secret: str | None) -> None:
-    """Point ``credential_refs`` at the named secret for the auth header."""
+    """Point ``secret_refs`` at the named secret for the auth header."""
     if secret is None or auth_header is None:
-        fields["credential_refs"] = {}
+        fields["secret_refs"] = {}
         return
     if not is_valid_secret_name(secret):
         raise ConfigValidationError(f"{secret!r} is not a secret name")
-    fields["credential_refs"] = {auth_header: secret_ref(secret)}
+    fields["secret_refs"] = {auth_header: secret_ref(secret)}
 
 
 def _validated(fields: dict[str, Any]) -> HttpApiTransport:
@@ -90,7 +90,7 @@ class CustomToolService:
         audit: AuditService,
         reach: ToolReachRepoPort,
         viewer: GroupViewer,
-        resolver: Callable[[], CredentialResolver],
+        resolver: Callable[[], SecretResolver],
         runner: CustomToolRunnerPort,
         clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
     ) -> None:
@@ -261,7 +261,7 @@ class CustomToolService:
         tool = validated_tool(raw_tool)
         config = MCPServerConfig(transport=transport)
         overlay = await self._resolver().materialize_async(
-            dict(transport.credential_refs), mcp_destination(resource.uid, resource.name, config)
+            dict(transport.secret_refs), mcp_destination(resource.uid, resource.name, config)
         )
         return await self._runner.run(transport, tool, arguments, overlay)
 

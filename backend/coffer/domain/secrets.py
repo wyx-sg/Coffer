@@ -1,9 +1,9 @@
 """The secret boundary's vocabulary: destinations, bindings, approvals, names.
 
 A *destination* is a place Coffer sends a secret's plaintext — an MCP server's
-environment variable or HTTP header, a channel adapter's credential, the sync
+environment variable or HTTP header, a channel adapter's secret, the sync
 remote's push token, a provider connection's key. A *binding* is one secret
-(a credential ref) sent to one slot of one destination, and it is approved for
+(a secret ref) sent to one slot of one destination, and it is approved for
 one *target*: the thing that actually receives the value (a stdio server's
 command line, an HTTP server's URL, a provider's base URL). Changing the target
 is sending the secret somewhere new, so an approval is pinned to the target's
@@ -176,6 +176,6 @@ def sync_remote_destination(url: str) -> SecretDestination:
 def channel_destination(
     uid: str, name: str, channel_type: str, app_id: str = ""
 ) -> SecretDestination:
-    """A channel's credential goes to its platform, as the app it names."""
+    """A channel's secret goes to its platform, as the app it names."""
     target = f"{channel_type} app {app_id}" if app_id else f"{channel_type} bot"
     return SecretDestination(kind="channel", uid=uid, target=target, label=name)

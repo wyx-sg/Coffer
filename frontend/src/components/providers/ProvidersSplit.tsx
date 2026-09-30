@@ -32,7 +32,7 @@ import { ProviderList } from "./ProviderList";
 import { ProviderWelcome } from "./ProviderWelcome";
 import { probeOf } from "./probe";
 
-const EMPTY_PROBE = { provider: "", base_url: null, credential_ref: null };
+const EMPTY_PROBE = { provider: "", base_url: null, secret_ref: null };
 
 export function ProvidersSplit({ uid }: { uid?: string }) {
   const { t } = useTranslation();

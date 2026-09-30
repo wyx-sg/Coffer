@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Show a secret this Mac cannot open as missing on this Mac
-`GET /api/v1/credentials` MUST mark a stored ref whose ciphertext this Mac's
+`GET /api/v1/secrets` MUST mark a stored ref whose ciphertext this Mac's
 master key cannot open as `locked`, found by checking each token's signature
 against the key without decrypting any value and without an audit entry. The
 Secrets page MUST show every row this Mac has no value for — cited but not
@@ -30,7 +30,7 @@ other write, and reveal MUST be unavailable for such a row.
 - **AND** Reveal is unavailable for the locked row, and Add value posts the new value for its ref
 
 ### Requirement: Hold a new standalone secret until a person approves it
-`POST /api/v1/credentials` on a standalone `secret/<name>` that has no value on
+`POST /api/v1/secrets` on a standalone `secret/<name>` that has no value on
 this Mac MUST NOT store it while the protection is on: it MUST answer `202` with
 a pending `add_secret` approval ("New secret") holding the value only as
 ciphertext; applying the approval with a presence grant stores the value, and
@@ -64,7 +64,7 @@ password); in a browser Approve MUST be disabled, naming the desktop app, while
 ## MODIFIED Requirements
 
 ### Requirement: Hold a replaced value in use until a person approves it
-`POST /api/v1/credentials` on a ref an approved destination receives, or on a
+`POST /api/v1/secrets` on a ref an approved destination receives, or on a
 standalone `secret/` name that already has a value, MUST NOT replace the value:
 it MUST answer `202` with a pending `replace_value` approval and keep the new
 value only as ciphertext until the approval is applied, and drop it when the
@@ -79,7 +79,7 @@ secret waits as "Hold a new standalone secret until a person approves it" says.
 - **AND** applying the approval with a presence grant replaces the value
 
 ### Requirement: List every stored and cited secret with what uses it
-`coffer secret list` and `GET /api/v1/credentials` MUST list every ref the
+`coffer secret list` and `GET /api/v1/secrets` MUST list every ref the
 store holds and every ref a registered resource cites, each with whether the
 store holds it, whether this Mac's key can open it (`locked`), when it was
 stored (`created_at`) and when a consumer last had it decrypted on this Mac
@@ -90,7 +90,7 @@ nothing references it (`unreferenced`), the destinations it is approved for or
 waits on, and whether another process of this user can read the value where
 Coffer puts it (a standalone secret, or a stdio MCP server's environment). The
 listing decrypts nothing and records no audit entry. A delete MUST also be
-refused with `CREDENTIAL_IN_USE` while a skill in the master store cites a
+refused with `SECRET_IN_USE` while a skill in the master store cites a
 standalone secret's URI, naming that skill, and a delete that removes a ref
 MUST forget its approved destinations.
 
@@ -102,7 +102,7 @@ MUST forget its approved destinations.
 
 #### Scenario: a secret nothing references is listed as unreferenced
 - **GIVEN** a standalone secret no resource and no skill cites, and another that a skill cites by URI
-- **WHEN** the credentials are listed
+- **WHEN** the secrets are listed
 - **THEN** the first is marked unreferenced and readable by local processes
 - **AND** the second names the skill, and deleting it is refused naming that skill
 
@@ -113,13 +113,13 @@ MUST forget its approved destinations.
 - **AND** the second carries a `last_used_at` no later than now
 
 ### Requirement: Move plaintext secret files into the store
-`POST /api/v1/credentials/scan` (`coffer secret scan`) MUST report every
+`POST /api/v1/secrets/scan` (`coffer secret scan`) MUST report every
 plaintext secret in `~/.coffer/secrets/*.env` (`KEY=VALUE` lines) and `*.json`
 (a flat map of strings) and in the skill master store (assignments whose name
 says password, secret, token or key, and well-known token shapes) by file,
 line, key and proposed name, every skill that still mentions
 `~/.coffer/secrets/`, and how many files it read (`files_checked`); it MUST NOT
-return a value. `POST /api/v1/credentials/import` (`coffer secret import
+return a value. `POST /api/v1/secrets/import` (`coffer secret import
 [--id]… [--dry-run]`) MUST store each chosen value as `secret/<proposed name>`,
 confirm the store reads back the same value, and only then replace the value in
 its file with the reference, atomically and keeping the file's mode; a name

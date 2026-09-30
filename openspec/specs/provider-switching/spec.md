@@ -2,7 +2,7 @@
 
 ## Purpose
 An LLM connection is a credentialed endpoint — a name, a base URL, a detected protocol, an encrypted
-credential and a curated set of the models it offers. One connection is used both ways: projected
+secret and a curated set of the models it offers. One connection is used both ways: projected
 into the native config file of each agent it reaches, and borrowed as the endpoint Coffer's own
 internal engine runs on ([internal-engine](../internal-engine/spec.md)). Claude Code and Codex each
 read provider settings from their own native config file (`~/.claude/settings.json`,
@@ -10,8 +10,8 @@ read provider settings from their own native config file (`~/.claude/settings.js
 several files, storing keys in plaintext and losing any record of what changed, and a key configured
 for an agent could not be reused by Coffer's own engine. Coffer centralises the connection: configure
 once, route it at the agents you mean, mark one as the internal engine's default, audit everything.
-Its differentiator over per-tool switching scripts is governance — Fernet-encrypted credentials
-([credentials](../credentials/spec.md)), a full audit trail, and one registry that converges across
+Its differentiator over per-tool switching scripts is governance — Fernet-encrypted secrets
+([secret](../secret/spec.md)), a full audit trail, and one registry that converges across
 the user's machines. From a fresh install a user can add a connection, bind a model, switch an agent
 onto it, and have that agent pick up the new endpoint.
 
@@ -21,7 +21,7 @@ and runs. A connection answers "which gateway account"; which model an agent run
 the use, not of the account, so the model is chosen at the point of use — the per-agent binding, the
 conversation, or the internal engine's own setting.
 
-This capability owns the `provider` resource kind, its credential handling, the projection into
+This capability owns the `provider` resource kind, its secret handling, the projection into
 agents' native config, the switch / activate / use-builtin operations, per-connection key
 resolution, the internal-engine and speech-to-text default flags, and the curated model set with its
 modalities. It relies on [agent-registry](../agent-registry/spec.md) for `AgentType`, `AgentConfig`,
@@ -56,7 +56,7 @@ kind declares `supports_scope`, and its `enabled` switch is the framework's.
 
 ### Requirement: Validate connection config against the provider schema
 The system MUST validate a connection's config against a kind-specific schema over
-`{protocol, base_url, credential_ref, models, is_active, internal_default, transcribe_default}`,
+`{protocol, base_url, secret_ref, models, is_active, internal_default, transcribe_default}`,
 rejecting any other key. The config MUST NOT carry a model the connection runs (no `model`, no
 `fast_model`), nor the agents it reaches — reach is the resource row's per-agent `scope` — nor a
 manually chosen wire format or a `wire_api`: the Codex chat/responses choice belongs to the Codex
@@ -76,7 +76,7 @@ pure").
 - **THEN** the request is rejected with `422 Unprocessable Entity` and no row is created.
 
 ### Requirement: Never return the raw secret in a connection
-`ProviderOut` MUST NEVER include the raw secret. `credential_ref`, `compatible_agents` (the
+`ProviderOut` MUST NEVER include the raw secret. `secret_ref`, `compatible_agents` (the
 configured reach, read-only), `models`, `enabled`, `is_active`, `internal_default` and
 `transcribe_default` MUST be included.
 
@@ -96,40 +96,40 @@ MUST take it.
 ### Requirement: Store an inline secret under a minted opaque ref
 On create with `secret_value`, the system MUST store the raw key under a freshly minted opaque ref
 (`provider/<uuid4>/key`) in the Fernet vault and persist only that ref — deriving the ref from the
-name would make the name a key, which it is not. Supplying `credential_ref` instead reuses an
+name would make the name a key, which it is not. Supplying `secret_ref` instead reuses an
 existing vault entry and creates none. For `anthropic` / `openai` / `unknown`, exactly one of
-`secret_value` or `credential_ref` MUST be supplied; both or neither MUST be rejected `422`.
+`secret_value` or `secret_ref` MUST be supplied; both or neither MUST be rejected `422`.
 
 #### Scenario: create an anthropic provider profile with an inline secret
 - **GIVEN** no connection named `my-provider` exists,
 - **WHEN** the user creates one with `protocol="anthropic"`, a `base_url` and `secret_value` (the raw API key),
-- **THEN** it is persisted with a `credential_ref` of the form `provider/<uuid4>/key`, the raw key is stored in the Fernet vault under that ref, `ProviderOut` is returned with no secret field, and `resource_created` is audited.
-#### Scenario: create a profile that reuses an existing credential ref
-- **GIVEN** a credential already exists under ref `shared/key`,
-- **WHEN** the user creates a connection supplying `credential_ref="shared/key"` (no `secret_value`),
-- **THEN** it is persisted pointing at the existing ref, no new vault entry is created, and `ProviderOut` reflects the supplied `credential_ref`.
-#### Scenario: reject a profile that supplies neither a secret nor a credential ref
+- **THEN** it is persisted with a `secret_ref` of the form `provider/<uuid4>/key`, the raw key is stored in the Fernet vault under that ref, `ProviderOut` is returned with no secret field, and `resource_created` is audited.
+#### Scenario: create a profile that reuses an existing secret ref
+- **GIVEN** a secret already exists under ref `shared/key`,
+- **WHEN** the user creates a connection supplying `secret_ref="shared/key"` (no `secret_value`),
+- **THEN** it is persisted pointing at the existing ref, no new vault entry is created, and `ProviderOut` reflects the supplied `secret_ref`.
+#### Scenario: reject a profile that supplies neither a secret nor a secret ref
 - **GIVEN** the daemon is running,
-- **WHEN** the user attempts to create an **anthropic** connection (the neither-rule applies to anthropic / openai / unknown; ollama legitimately supplies neither) without either `secret_value` or `credential_ref`,
+- **WHEN** the user attempts to create an **anthropic** connection (the neither-rule applies to anthropic / openai / unknown; ollama legitimately supplies neither) without either `secret_value` or `secret_ref`,
 - **THEN** the request is rejected with `422 Unprocessable Entity` and no row and no vault entry are created.
 
 ### Requirement: Rotate a connection's secret in place
 On `PATCH` with `secret_value`, the system MUST rotate the stored secret (overwrite the vault entry)
-without changing the ref. `credential_ref` itself is immutable on `PATCH`.
+without changing the ref. `secret_ref` itself is immutable on `PATCH`.
 
 #### Scenario: rotate a connection's secret without changing its ref
 - **GIVEN** a connection created with an inline secret
 - **WHEN** the user patches it with a new `secret_value`
-- **THEN** its `credential_ref` is unchanged
+- **THEN** its `secret_ref` is unchanged
 - **AND** the vault entry at that ref now holds the new secret, which is what the connection's key resolves to
 
-### Requirement: Delete an owned credential with its connection
-On delete, if the connection owns its credential ref (nothing else cites it), the system MUST delete
-the vault entry, guarded by `find_credential_citations`. Ownership is decided by citation, not by the
+### Requirement: Delete an owned secret with its connection
+On delete, if the connection owns its secret ref (nothing else cites it), the system MUST delete
+the vault entry, guarded by `find_secret_citations`. Ownership is decided by citation, not by the
 ref spelling the name.
 
-#### Scenario: delete a provider profile cleans up its owned credential
-- **GIVEN** a connection whose `credential_ref` is `provider/my-provider/key` (owned; nothing else cites it),
+#### Scenario: delete a provider profile cleans up its owned secret
+- **GIVEN** a connection whose `secret_ref` is `provider/my-provider/key` (owned; nothing else cites it),
 - **WHEN** the user deletes it,
 - **THEN** the vault entry at that ref is deleted and `resource_deleted` is audited.
 
@@ -385,7 +385,7 @@ writes each row to `resources/provider/<uid>.yaml`, git three-way-merges the tre
 and the applier puts the resulting difference back one document at a time. An incoming document MUST
 NOT change the local row's reach (`enabled` / `scope`), which is one decision the user makes per
 machine: a row that already exists keeps the reach it has, and a row that has just arrived takes the
-kind's own default. Credentials travel as Fernet ciphertext at `credentials/<ref>.enc`, only when the
+kind's own default. Secrets travel as Fernet ciphertext at `credentials/<ref>.enc`, only when the
 remote is configured to carry them; the master key never enters the repository, and no raw key MUST
 appear in the sync tree's plaintext.
 
@@ -395,9 +395,9 @@ agent type with a registered agent, the active connection whose scope reaches it
 type with no active connection is de-projected — the import carries the user's switch either way.
 
 #### Scenario: a provider profile round-trips through sync export and import
-- **GIVEN** a connection with a credential ref exists on one machine,
+- **GIVEN** a connection with a secret ref exists on one machine,
 - **WHEN** a converge round runs — the exporter writes the connection into the tree and the resource **applier** puts that document into the second machine's vault,
-- **THEN** the row lands there with identical `config` fields, the credential ciphertext is present at `credentials/<ref>.enc`, and no secret appears anywhere in the tree's plaintext. A later edit converges the same way, so the second machine ends up with the edited config and description.
+- **THEN** the row lands there with identical `config` fields, the secret ciphertext is present at `credentials/<ref>.enc`, and no secret appears anywhere in the tree's plaintext. A later edit converges the same way, so the second machine ends up with the edited config and description.
 
 #### Scenario: an import projects a switch made on another machine
 - **GIVEN** a connection activated on another machine, whose row arrives here with `is_active` set while this machine's agent carries none of Coffer's keys
@@ -497,7 +497,7 @@ The web surfaces:
 #### Scenario: update a provider profile
 - **GIVEN** a connection exists,
 - **WHEN** the user patches `base_url` (no `secret_value`),
-- **THEN** only that field is updated, `credential_ref` is unchanged, and `resource_updated` is audited.
+- **THEN** only that field is updated, `secret_ref` is unchanged, and `resource_updated` is audited.
 #### Scenario: the command line covers create, list, switch and revert
 - **GIVEN** the daemon is running,
 - **WHEN** the user runs `coffer provider add`, `coffer provider list --json`, `coffer provider switch` and `coffer provider builtin <agent_type>` from the CLI,
@@ -528,18 +528,18 @@ config.
 - **THEN** the activation is refused with `409 PROVIDER_INTERNAL_ONLY`, no native config file is written and the connection is not `is_active`
 - **AND** the connection reports no reachable agent
 
-### Requirement: Make the credential optional for ollama and local runtimes
-`credential_ref` MUST be optional — required for `anthropic` / `openai` / `unknown` connections to a
+### Requirement: Make the secret optional for ollama and local runtimes
+`secret_ref` MUST be optional — required for `anthropic` / `openai` / `unknown` connections to a
 remote endpoint, absent for `ollama`, and optional for a local runtime connection (see "Configure a
 local model connection"), because LM Studio, vLLM and llama-server may be started with a key or
-without one. On create, supplying neither `secret_value` nor `credential_ref` is valid for `ollama`
+without one. On create, supplying neither `secret_value` nor `secret_ref` is valid for `ollama`
 and for a local runtime, and an `ollama` connection MUST supply neither; elsewhere the exactly-one
 rule (see "Store an inline secret under a minted opaque ref") stands.
 
-#### Scenario: create an ollama connection without a credential
+#### Scenario: create an ollama connection without a secret
 - **GIVEN** no connection named `local-llm` exists,
-- **WHEN** the user creates one with `protocol="ollama"`, a `base_url`, and neither `secret_value` nor `credential_ref`,
-- **THEN** it persists with `credential_ref` null, no vault entry is created, it reaches no agent, and `ProviderOut` shows `internal_default=false`.
+- **WHEN** the user creates one with `protocol="ollama"`, a `base_url`, and neither `secret_value` nor `secret_ref`,
+- **THEN** it persists with `secret_ref` null, no vault entry is created, it reaches no agent, and `ProviderOut` shows `internal_default=false`.
 
 ### Requirement: Keep at most one internal-engine default
 At most one connection globally MUST have `internal_default=true`. `set_internal_default` MUST clear
@@ -625,17 +625,17 @@ the flagged connection from a setting of its own ([internal-engine](../internal-
 ### Requirement: Introspect an unsaved connection with an inline secret
 The endpoint-introspection routes MUST remain available to callers holding a connection that is not
 saved yet: `POST /api/v1/models/list-models`, `/test-connection` and `/detect-protocol` each accept an
-inline `secret_value` instead of a `credential_ref` and persist nothing. Testing a connection makes a
+inline `secret_value` instead of a `secret_ref` and persist nothing. Testing a connection makes a
 minimal request to the endpoint and reports success or a humanized failure message.
 
 #### Scenario: test a model connection
-- **GIVEN** a connection's protocol, a model id, and (where required) a credential ref,
+- **GIVEN** a connection's protocol, a model id, and (where required) a secret ref,
 - **WHEN** the connection is tested,
 - **THEN** Coffer makes a minimal request to the endpoint and reports success or a humanized failure message, without persisting anything.
 #### Scenario: test or fetch models with an inline unsaved secret
-- **GIVEN** the connection dialog is open and neither the connection nor its credential ref has been saved yet,
-- **WHEN** the user types a raw API key and triggers test-connection or list-models (`POST /models/test-connection` / `POST /models/list-models` carrying `secret_value` and no `credential_ref`),
-- **THEN** the introspection service passes the inline key straight to the endpoint without consulting the credential vault, the probe succeeds, and the fetched models populate the selectable dropdown.
+- **GIVEN** the connection dialog is open and neither the connection nor its secret ref has been saved yet,
+- **WHEN** the user types a raw API key and triggers test-connection or list-models (`POST /models/test-connection` / `POST /models/list-models` carrying `secret_value` and no `secret_ref`),
+- **THEN** the introspection service passes the inline key straight to the endpoint without consulting the secret vault, the probe succeeds, and the fetched models populate the selectable dropdown.
 
 ### Requirement: Curate the models a connection offers
 `ProviderConfig` MUST carry `models` — the set of model ids the connection OFFERS downstream (refined
@@ -669,7 +669,7 @@ the `resource_updated` audit event provider updates already emit.
 A connection MUST be renamable through the framework's own kind-agnostic route — the `name` field on
 `PATCH /api/v1/resources/{uid}` — and from the CLI with `coffer provider edit <name> --name <new>`,
 which calls that route; this kind MUST NOT serve a rename route of its own. The
-operation MUST change the label and NOTHING else: the resource keeps its `uid`, its `credential_ref`
+operation MUST change the label and NOTHING else: the resource keeps its `uid`, its `secret_ref`
 MUST be left where it is (the ref is an opaque address, never derived from the name), the
 `audit_log` rows MUST NOT be repointed — they follow the resource by uid and go on spelling the name
 each event carried when it happened — and an active connection MUST NOT be re-projected, because the
@@ -683,14 +683,14 @@ every resource carries ([resource-framework](../resource-framework/spec.md), edi
 Name field submits this rename ahead of the patch, and the page stays where it is, because its route
 is the uid.
 
-#### Scenario: rename a connection and keep its credential, audit trail and projection
+#### Scenario: rename a connection and keep its secret, audit trail and projection
 - **GIVEN** an active connection `acme` with an inline secret, projected into a registered Claude Code agent,
 - **WHEN** `PATCH /api/v1/resources/<uid> {"name": "acme-eu"}` is called,
-- **THEN** the connection keeps the same `uid` and answers there under the label `acme-eu`, its `credential_ref` is unchanged with the secret still readable at it, the agent's projected `apiKeyHelper` is byte-for-byte what it was (it names the uid), and the whole history — including the rows recorded before the rename, which still spell the old name — comes back when querying the audit log by uid.
+- **THEN** the connection keeps the same `uid` and answers there under the label `acme-eu`, its `secret_ref` is unchanged with the secret still readable at it, the agent's projected `apiKeyHelper` is byte-for-byte what it was (it names the uid), and the whole history — including the rows recorded before the rename, which still spell the old name — comes back when querying the audit log by uid.
 #### Scenario: reject a rename onto a name another connection already uses
 - **GIVEN** two connections `acme` and `taken`,
 - **WHEN** `acme` is renamed to `taken`,
-- **THEN** the response is 409 `RESOURCE_ALREADY_EXISTS` and both connections still carry their original labels, each still reachable at its own uid with its credential intact.
+- **THEN** the response is 409 `RESOURCE_ALREADY_EXISTS` and both connections still carry their original labels, each still reachable at its own uid with its secret intact.
 #### Scenario: rename a connection from the command line
 - **GIVEN** the daemon is running with a connection `acme`,
 - **WHEN** the user runs `coffer provider edit acme --name acme-eu`, and then `coffer provider edit acme-eu --name taken` while another connection is named `taken`,
@@ -761,7 +761,7 @@ to the endpoint's whole catalogue; a connection curating nothing MUST still mean
 (`null` leaves the set alone, `[]` clears the restriction).
 
 #### Scenario: list a provider's models
-- **GIVEN** a connection being added or edited, with a protocol entered (plus base URL and credential where the endpoint needs them),
+- **GIVEN** a connection being added or edited, with a protocol entered (plus base URL and secret where the endpoint needs them),
 - **WHEN** its models are fetched,
 - **THEN** Coffer returns the model ids the endpoint exposes for selection, each with an inferred modality, and if none can be listed it returns an empty list with a message so the surface can say what happened.
 #### Scenario: a non-text curated model never reaches a chat model picker
@@ -946,7 +946,7 @@ injects the connection's key for the upstream (`x-api-key` and `Authorization: B
 Anthropic wire, `Authorization: Bearer` on the Responses wire), and none for a keyless local runtime.
 Status, headers and body chunks go back as received — pings and comments included, error bodies
 verbatim, never buffered and never compressed. What the proxy logs or stores is metadata only: no
-body, prompt, completion or credential. Everything else it is asked for is 404. The decision is
+body, prompt, completion or secret. Everything else it is asked for is 404. The decision is
 [API-Key Providers Are Reached Through a Separate Local Model Proxy](../../../docs/decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md);
 how it works is [The local model proxy](../../../docs-site/architecture/model-proxy.md).
 
@@ -967,7 +967,7 @@ how it works is [The local model proxy](../../../docs-site/architecture/model-pr
 
 ### Requirement: Authenticate each agent to the proxy with its own local token
 Each managed agent MUST have its own random 256-bit local proxy token, minted by Coffer on first
-use, kept as ciphertext in the credential store under a machine-local ref vault sync never
+use, kept as ciphertext in the secret store under a machine-local ref vault sync never
 carries, and printed by `coffer proxy token --agent-uid <uid>` (`GET /api/v1/proxy/tokens/{agent_uid}`)
 — the command both agents' projected config runs. The proxy MUST accept a model request only with
 one of those tokens, as `Authorization: Bearer` or `x-api-key`, compared in constant time, and MUST
@@ -1054,7 +1054,7 @@ pull models.
 #### Scenario: create a keyless local runtime connection
 - **GIVEN** an Ollama runtime answering on a loopback port
 - **WHEN** the user runs `coffer provider add ollama --protocol anthropic --base-url http://127.0.0.1:11434 --local`
-- **THEN** the connection persists with no credential, records the runtime, version and wires it serves, and curates its tool-capable models with their served windows
+- **THEN** the connection persists with no secret, records the runtime, version and wires it serves, and curates its tool-capable models with their served windows
 
 #### Scenario: a local connection sets Claude Code's compatibility key
 - **GIVEN** a Claude Code agent switched to a local model connection whose model records a 131072-token window
@@ -1107,7 +1107,7 @@ never guessed. The proxy opens no database: it spools records to `~/.coffer/prox
 daemon ingests completed files into its database with `source = "proxy"` and a de-duplication key
 (the upstream's request id, else the proxy's attempt id), deleting a file only after its rows are
 committed, so a repeated ingest writes nothing twice. No record carries a body, a prompt, a
-completion or a credential. How the proxy reads the stream is
+completion or a secret. How the proxy reads the stream is
 [The local model proxy](../../../docs-site/architecture/model-proxy.md).
 
 #### Scenario: a streamed request is recorded with its tokens by category
@@ -1257,7 +1257,7 @@ even when the daemon is down. Coffer never installs it: the user opts in by sett
 
 ### Requirement: Push the proxy an approved key without a restart
 The model proxy MUST hold a connection's key only once the key may go to the connection's base
-URL ([credentials](../credentials/spec.md) "Hold a secret for a new destination until a person
+URL ([secret](../secret/spec.md) "Hold a secret for a new destination until a person
 approves it"). While a new key for a key in use waits for approval, the proxy MUST keep sending the
 old key; while a new base URL waits, the proxy MUST NOT hold the key for that connection and MUST
 send nothing to the new URL. When the approval is applied in the desktop app, the daemon MUST push

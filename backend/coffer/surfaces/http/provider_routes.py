@@ -77,7 +77,7 @@ def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
         title=resource.title,
         protocol=cfg.protocol,
         base_url=cfg.base_url,
-        credential_ref=cfg.credential_ref,
+        secret_ref=cfg.secret_ref,
         # Reported, never accepted: the reach comes from the resource's
         # per-agent scope (ADR per-agent-resource-scope). This is the CONFIGURED
         # reach, not the effective projection — ``enabled`` rides the same
@@ -158,13 +158,13 @@ async def create_provider(
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> ProviderOut:
-    """Create a provider profile (422 when the credential source is invalid)."""
+    """Create a provider profile (422 when the secret source is invalid)."""
     resource = await svc.create(
         body.name,
         protocol=body.protocol,
         base_url=body.base_url,
         secret_value=body.secret_value,
-        credential_ref=body.credential_ref,
+        secret_ref=body.secret_ref,
         models=_curated(body.models),
         description=body.description,
         local_runtime=body.local_runtime,

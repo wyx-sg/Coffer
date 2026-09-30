@@ -11,15 +11,15 @@ No command, route or MCP tool prints a stored value. You see a value only in the
 
 ## How secrets are stored
 
-- Each secret is encrypted with [Fernet](https://cryptography.io/en/latest/fernet/) and stored as ciphertext in the `credentials` table of `~/.coffer/coffer.db`. A row holds the ref, the ciphertext and two timestamps — nothing else.
+- Each secret is encrypted with [Fernet](https://cryptography.io/en/latest/fernet/) and stored as ciphertext in the `secrets` table of `~/.coffer/coffer.db`. A row holds the ref, the ciphertext and two timestamps — nothing else.
 - One **master key** decrypts them all. It lives in exactly one place. A signed release keeps it in a Keychain item only Coffer's signed binaries can read. A development build — every build from source, and every build until signed releases exist — keeps it in a file beside the database (`~/.coffer/master.key`, mode `0600`, the default) or your OS keychain (opt-in). See [Where the master key lives](#where-the-master-key-lives).
 - Resource configuration — MCP servers, providers, channels, the sync remote — holds only **refs**. A ref is resolved to plaintext at the moment of use: when an MCP server is started or an HTTP header is sent, when a provider key is fetched.
-- The daemon is the only process that opens the store. The CLI and web UI write and list secrets through the daemon's `/api/v1/credentials` routes; neither touches the key, and no route hands a value back.
+- The daemon is the only process that opens the store. The CLI and web UI write and list secrets through the daemon's `/api/v1/secrets` routes; neither touches the key, and no route hands a value back.
 
 ```mermaid
 flowchart LR
-    CFG["resource config: credential_refs"] -->|ref| D["daemon"]
-    D -->|decrypt with master key| DB[("credentials table: ciphertext")]
+    CFG["resource config: secret_refs"] -->|ref| D["daemon"]
+    D -->|decrypt with master key| DB[("secrets table: ciphertext")]
     D -->|plaintext, in memory only| UP["upstream process env / HTTP header"]
     MK["master key: Keychain access group (signed) or master.key (development)"] --> D
 ```
@@ -195,7 +195,7 @@ Or use **Import a master key** on **Settings › Security**, in the app or a bro
 ## What never gets logged
 
 - Secret values never appear in the database outside the ciphertext column, in log files, in the audit log, or in the MCP invocation log.
-- Secret audit events — `credential_set`, `credential_revealed`, `credential_deleted`, `credential_migrated`, `master_key_relocated`, `master_key_exported`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events — carry the ref, the secret's name or the destination, never a value. `credential_revealed` records a reveal or copy in the desktop app; presence checks (`get`) and listings are not audited.
+- Secret audit events — `secret_set`, `secret_revealed`, `secret_deleted`, `secret_migrated`, `master_key_relocated`, `master_key_exported`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events — carry the ref, the secret's name or the destination, never a value. `secret_revealed` records a reveal or copy in the desktop app; presence checks (`get`) and listings are not audited.
 - Plaintext exists only in the daemon's memory, between decryption and the process spawn or HTTP request that uses it — and in the desktop app's window while you look at a revealed value.
 - A stdio MCP server receives only its own secrets. It does not inherit the daemon's environment, so it cannot read other secrets the daemon was started with. Its own secrets sit in its environment, where other programs running as you can read them; the listing marks such refs "readable by local processes".
 - An HTTP upstream's connection errors are reported by exception type only, so a URL or header carrying a secret is not echoed into a message.
@@ -205,9 +205,9 @@ Or use **Import a master key** on **Settings › Security**, in the app or a bro
 | Error | Meaning | Fix |
 | --- | --- | --- |
 | `MASTER_KEY_MISSING` at startup | Ciphertext exists but no usable key was found | Import your key backup with `coffer sync key import <file>`, or in a development build restore `~/.coffer/master.key` (or the keychain entry). |
-| `CREDENTIAL_LOCKED` at startup | The keychain could not be read — it is locked or the prompt was dismissed | Unlock the keychain and start the daemon again. |
-| `CREDENTIAL_UNREADABLE` naming a ref | The ciphertext does not decrypt with the current key — usually a key from another machine | Import the matching key, or set the ref again with its value. |
-| `CREDENTIAL_IN_USE` | A resource still cites the ref | Detach or delete the resources the message names. |
+| `SECRET_LOCKED` at startup | The keychain could not be read — it is locked or the prompt was dismissed | Unlock the keychain and start the daemon again. |
+| `SECRET_UNREADABLE` naming a ref | The ciphertext does not decrypt with the current key — usually a key from another machine | Import the matching key, or set the ref again with its value. |
+| `SECRET_IN_USE` | A resource still cites the ref | Detach or delete the resources the message names. |
 | `waiting for approval in the Coffer app`, exit `9` | A secret in the change goes somewhere it has not gone before, or replaces a value in use | Approve it in the desktop app; `coffer secret approvals` lists what waits. See [Secrets → Approvals](/guides/secrets#approvals). |
 | `PRESENCE_GRANT_INVALID` | A reveal, key backup or approval was attempted outside the desktop app | Do it in the desktop app. |
 | An MCP server fails to start naming a missing secret | The cited ref is not in the store | `coffer secret set <ref>`. |
@@ -221,4 +221,4 @@ Or use **Import a master key** on **Settings › Security**, in the app or a bro
 - [Security model](/architecture/security) — the threat model behind these choices
 - [Envelope-Encrypted Credential Store](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
 - [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)
-- Spec: [secrets](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/secret/spec.md)
+- Spec: [secret](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/secret/spec.md)

@@ -4,7 +4,7 @@
 // secret "Hold a replaced value in use until a person approves it"): the
 // PATCH seals the new value behind a pending `replace_value` approval on the
 // provider's secret ref. This finds that approval, if any.
-import type { Approval } from "@/lib/api/credentials";
+import type { Approval } from "@/lib/api/secret";
 
 export function pendingReplaceFor(
   approvals: readonly Approval[] | undefined,

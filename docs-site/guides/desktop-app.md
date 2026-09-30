@@ -70,7 +70,7 @@ Coffer's [secret boundary](/guides/secrets) keeps a secret's value, and the deci
 
 | Action | Where | What it does |
 | --- | --- | --- |
-| **Reveal** or **copy** a secret | the secret, in the app | Shows or copies that one value. Audited as `credential_revealed`. |
+| **Reveal** or **copy** a secret | the secret, in the app | Shows or copies that one value. Audited as `secret_revealed`. |
 | **Back up the master key** | the app | Asks for a passphrase, then writes `coffer-master-key.cfk` — the key encrypted under it — (mode `0600`) into a folder you pick. Audited as `master_key_exported`. See [Secret store → Back up the key](/guides/secret-store#back-up-the-key). |
 | **Approve** | the approval sheet | Lets a secret go to a new destination or target, applies a replaced value, or switches the protection off. |
 
@@ -157,7 +157,7 @@ If the app attaches to a daemon whose version differs from its own — typically
 
 The window loads the UI from the app bundle, not from the daemon's address. That is why a slow or absent daemon produces a banner instead of a browser connection error, and why the port never appears anywhere.
 
-Because the daemon did not serve that page, it could not write its token into it as it does for a browser. Instead the app reads the port and token from `~/.coffer/daemon.json` and hands them to the page over an in-process IPC call, as the same two values a browser page receives. The page renders first and applies them when they arrive. The app stores no credential of its own: for a presence-gated action it reads the master key at the moment it signs, and keeps neither the key nor anything derived from it.
+Because the daemon did not serve that page, it could not write its token into it as it does for a browser. Instead the app reads the port and token from `~/.coffer/daemon.json` and hands them to the page over an in-process IPC call, as the same two values a browser page receives. The page renders first and applies them when they arrive. The app stores no secret of its own: for a presence-gated action it reads the master key at the moment it signs, and keeps neither the key nor anything derived from it.
 
 The window's content policy allows network requests only to loopback addresses (any port) and to the app's own IPC channel; scripts and styles come only from the bundle.
 

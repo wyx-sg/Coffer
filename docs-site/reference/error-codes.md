@@ -18,7 +18,7 @@ Every management API error has the same body, and every error response carries a
 ```json
 {
   "error": {
-    "code": "CREDENTIAL_MISSING",
+    "code": "SECRET_MISSING",
     "message": "secret not found in the secret store: mcp/jira/token",
     "details": {}
   }
@@ -67,10 +67,10 @@ give the status each code is actually sent with.
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
-| `CREDENTIAL_MISSING` | 400 | No secret is stored under the referenced secret ref. | Store it: `coffer secret set <ref>`, or re-enter it in the resource's form. |
-| `CREDENTIAL_IN_USE` | 409 | The secret cannot be deleted while a resource still references it. The message names the resources. | Detach or delete those resources first. |
-| `CREDENTIAL_LOCKED` | 503 | The OS keychain is locked or unavailable, or a keychain write could not be verified. | Unlock the keychain (log in to the desktop session) and retry. |
-| `CREDENTIAL_UNREADABLE` | 500 | A stored secret cannot be decrypted with the current master key. | Restore the matching master key, or re-enter the secret. See [Secret store](/guides/secret-store). |
+| `SECRET_MISSING` | 400 | No secret is stored under the referenced secret ref. | Store it: `coffer secret set <ref>`, or re-enter it in the resource's form. |
+| `SECRET_IN_USE` | 409 | The secret cannot be deleted while a resource still references it. The message names the resources. | Detach or delete those resources first. |
+| `SECRET_LOCKED` | 503 | The OS keychain is locked or unavailable, or a keychain write could not be verified. | Unlock the keychain (log in to the desktop session) and retry. |
+| `SECRET_UNREADABLE` | 500 | A stored secret cannot be decrypted with the current master key. | Restore the matching master key, or re-enter the secret. See [Secret store](/guides/secret-store). |
 | `MASTER_KEY_MISSING` | 503 | Encrypted secrets exist but the master key is in neither the key file nor the keychain. Raised while the daemon starts. | Restore `master.key` beside the database (or import it with `coffer sync key import`), or re-enter your secrets. |
 | `MASTER_KEY_FILE_INVALID` | 422 | A master-key file to import is missing or is not a valid key, or a `.cfk` backup's fingerprint is not its key's. | Point the import at the key backup the desktop app wrote. |
 | `MASTER_KEY_PASSPHRASE_WRONG` | 422 | A passphrase-protected key backup (`.cfk`) was imported with a wrong passphrase, or none. | Type the passphrase set when the key was exported on the other Mac. |
@@ -203,7 +203,7 @@ give the status each code is actually sent with.
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
-| `PROVIDER_CREDENTIAL_SOURCE_INVALID` | 422 | A new connection must supply exactly one of a secret value or a secret ref. | Pass `--secret` or `--secret-ref`, not both. |
+| `PROVIDER_SECRET_SOURCE_INVALID` | 422 | A new connection must supply exactly one of a secret value or a secret ref. | Pass `--secret` or `--secret-ref`, not both. |
 | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | A connection's wire format cannot change while it is switched on. | Run `coffer provider builtin <wire>`, edit, then switch again. |
 | `PROVIDER_INTERNAL_ONLY` | 409 | An `ollama` connection is for Coffer's internal engine only and cannot be switched on for an agent. | Use it as the internal-engine default instead. |
 | `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | Another connection is already the internal-engine default. | Move the flag with `coffer config set engine.provider <name>`. |
@@ -284,7 +284,7 @@ mapped by status.
 | `5` | Conflict | The daemon answered `409`. |
 | `6` | Invalid input | The daemon answered `400` or `422`. |
 | `7` | Upstream test failed | `coffer mcp test` could not initialize the upstream server. |
-| `8` | Secret issue | The error code was `CREDENTIAL_MISSING` or `CREDENTIAL_LOCKED`. |
+| `8` | Secret issue | The error code was `SECRET_MISSING` or `SECRET_LOCKED`. |
 | `9` | Waiting for approval | The change was saved but a secret in it waits for approval in the Coffer desktop app (`SECRET_BINDING_PENDING`, or a `202` naming a pending approval). The command printed `waiting for approval in the Coffer app` and the approval's id. Approve it in the app, or rerun with `--wait`. See [Secrets → Approvals](/guides/secrets#approvals). |
 
 Pass `--verbose` (`coffer -v …`) to print the full traceback and HTTP context on error.

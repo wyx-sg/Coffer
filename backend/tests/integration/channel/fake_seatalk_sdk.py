@@ -153,7 +153,7 @@ def build_fake_sdk() -> FakeSeaTalkSdk:
 
     class SopConnError(Exception): ...
 
-    class MissingCredentialError(SopConnError): ...
+    class MissingSecretError(SopConnError): ...
 
     class AlreadyConnectedError(SopConnError): ...
 
@@ -275,7 +275,7 @@ def build_fake_sdk() -> FakeSeaTalkSdk:
     module.Event = FakeEvent  # type: ignore[attr-defined]
     module.Envelope = FakeEnvelope  # type: ignore[attr-defined]
     module.SopConnError = SopConnError  # type: ignore[attr-defined]
-    module.MissingCredentialError = MissingCredentialError  # type: ignore[attr-defined]
+    module.MissingSecretError = MissingSecretError  # type: ignore[attr-defined]
     module.AlreadyConnectedError = AlreadyConnectedError  # type: ignore[attr-defined]
     module.NotConnectedError = NotConnectedError  # type: ignore[attr-defined]
     module.NotRegisteredError = NotRegisteredError  # type: ignore[attr-defined]

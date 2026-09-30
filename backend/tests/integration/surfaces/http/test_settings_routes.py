@@ -15,11 +15,11 @@ from httpx import ASGITransport, AsyncClient
 
 from coffer.application.audit_service import AuditService
 from coffer.domain.audit import AuditEntry
-from coffer.infrastructure.credentials.master_key import MasterKeyManager
+from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.credential_composition import get_master_key_manager
 from coffer.surfaces.http.dependencies import get_audit_service
+from coffer.surfaces.http.secret_composition import get_master_key_manager
 from coffer.surfaces.http.settings_routes import router as settings_router
 
 
@@ -72,7 +72,7 @@ def _client(app: FastAPI) -> AsyncClient:
 async def test_get_reports_file_by_default(tmp_path: pathlib.Path) -> None:
     app, _, _ = _build(tmp_path)
     async with _client(app) as c:
-        r = await c.get("/api/v1/settings/credentials")
+        r = await c.get("/api/v1/settings/secrets")
     assert r.status_code == 200
     assert r.json() == {"master_key_storage": "file"}
 
@@ -80,7 +80,7 @@ async def test_get_reports_file_by_default(tmp_path: pathlib.Path) -> None:
 async def test_put_relocates_and_audits(tmp_path: pathlib.Path) -> None:
     app, mgr, audit_repo = _build(tmp_path)
     async with _client(app) as c:
-        r = await c.put("/api/v1/settings/credentials", json={"master_key_storage": "keychain"})
+        r = await c.put("/api/v1/settings/secrets", json={"master_key_storage": "keychain"})
     assert r.status_code == 200
     assert r.json() == {"master_key_storage": "keychain"}
     assert mgr.location == "keychain"
@@ -90,7 +90,7 @@ async def test_put_relocates_and_audits(tmp_path: pathlib.Path) -> None:
 async def test_put_same_location_is_noop(tmp_path: pathlib.Path) -> None:
     app, _, audit_repo = _build(tmp_path)
     async with _client(app) as c:
-        r = await c.put("/api/v1/settings/credentials", json={"master_key_storage": "file"})
+        r = await c.put("/api/v1/settings/secrets", json={"master_key_storage": "file"})
     assert r.status_code == 200
     assert audit_repo.entries == []
 
@@ -98,5 +98,5 @@ async def test_put_same_location_is_noop(tmp_path: pathlib.Path) -> None:
 async def test_put_rejects_unknown_value(tmp_path: pathlib.Path) -> None:
     app, _, _ = _build(tmp_path)
     async with _client(app) as c:
-        r = await c.put("/api/v1/settings/credentials", json={"master_key_storage": "vault"})
+        r = await c.put("/api/v1/settings/secrets", json={"master_key_storage": "vault"})
     assert r.status_code == 422

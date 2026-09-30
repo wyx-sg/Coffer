@@ -1,7 +1,7 @@
 // frontend/src/components/channel/editChannel.ts
 // Apply plumbing for a channel's settings (the Settings tab's auto-save and
 // the Replace secret dialog): rotated secrets are written to their
-// existing credential refs FIRST (so the channel keeps working off the same
+// existing secret refs FIRST (so the channel keeps working off the same
 // refs), then the resource config is PATCHed (bound agent / SeaTalk app id /
 // group gating / message batching / replies / /dir directories), with the
 // title when it changed.
@@ -22,7 +22,7 @@ import type { ChannelEditPlan } from "./schema";
 /** Write one secret. True when the daemon answered 202: the new value replaces
  *  one in use, so it is stored sealed and waits for approval in the Coffer app. */
 async function writeSecret(ref: string, value: string): Promise<boolean> {
-  const { data, error } = await getApiClient().POST("/credentials", { body: { ref, value } });
+  const { data, error } = await getApiClient().POST("/secrets", { body: { ref, value } });
   if (error) throwApiError(error, "INTERNAL_ERROR", "secret write failed");
   return data?.approval !== undefined;
 }
@@ -62,11 +62,11 @@ export async function applyChannelEdit(
 export interface ChannelEditValues {
   /** The agent every new conversation on this channel binds to. */
   default_agent: string;
-  /** New Telegram bot token; blank leaves the stored credential untouched. */
+  /** New Telegram bot token; blank leaves the stored secret untouched. */
   bot_token?: string;
   /** SeaTalk app id (mutable config — not a secret). */
   app_id?: string;
-  /** New SeaTalk app secret; blank leaves the stored credential untouched. */
+  /** New SeaTalk app secret; blank leaves the stored secret untouched. */
   app_secret?: string;
   /** Answer in a group only when @mentioned / replied to. Undefined leaves the
    *  stored value alone — the form sends it only where the platform honours it
@@ -150,7 +150,7 @@ export interface ChannelEditInput {
  * gating, message batching, replies, /dir directories).
  *
  * Pure (no network), mirroring planChannel: the config is fully assembled
- * before any side effect runs. A blank secret value writes no credential.
+ * before any side effect runs. A blank secret value writes no secret.
  */
 export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
   const { config, values } = input;

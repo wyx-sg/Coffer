@@ -49,14 +49,14 @@ _STATUS: dict[str, int] = {
     "UNKNOWN_KIND": 400,
     "CONFIG_INVALID": 422,
     "SCOPE_INVALID": 422,  # per-agent activation scope (ADR per-agent-resource-scope)
-    "CREDENTIAL_MISSING": 400,
-    "CREDENTIAL_IN_USE": 409,
-    "CREDENTIAL_LOCKED": 503,
+    "SECRET_MISSING": 400,
+    "SECRET_IN_USE": 409,
+    "SECRET_LOCKED": 503,
     # Ciphertext exists but no key opens it (spec secret "Refuse to start
-    # when the master key is missing"). Same class as CREDENTIAL_LOCKED: the
+    # when the master key is missing"). Same class as SECRET_LOCKED: the
     # store is unusable until the key comes back, not a bad request.
     "MASTER_KEY_MISSING": 503,
-    "CREDENTIAL_UNREADABLE": 500,
+    "SECRET_UNREADABLE": 500,
     # The secret boundary (ADR only-a-present-human-sees-a-secret-or-sends-it-
     # somewhere-new): a destination nobody approved yet is a state that waits
     # for a person, not a bad request; a grant that does not verify is refused.
@@ -197,7 +197,7 @@ _STATUS: dict[str, int] = {
     "SYNC_JOIN_AMBIGUOUS": 409,
     "SYNC_CANNOT_RETIRE_SELF": 422,
     # provider switching (spec provider-switching)
-    "PROVIDER_CREDENTIAL_SOURCE_INVALID": 422,
+    "PROVIDER_SECRET_SOURCE_INVALID": 422,
     # Not 422: the patch is well-formed, and the same patch succeeds once the
     # connection is no longer projected — a state conflict, not a bad body.
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": 409,
@@ -342,7 +342,7 @@ def register(app: FastAPI) -> None:
     @app.exception_handler(ValidationError)
     async def _handle_pydantic(request: Request, exc: ValidationError) -> JSONResponse:
         # Don't echo exc.errors() to the client — per-field `input`
-        # values can include PII or credentials the client just submitted.
+        # values can include PII or secrets the client just submitted.
         # Log the structured error server-side and return a generic envelope.
         _logger.warning(
             "http.validation_error",

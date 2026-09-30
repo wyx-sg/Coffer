@@ -1,9 +1,9 @@
 """Integration tests for `coffer secret ...` subcommands.
 
-Every credentials subcommand goes through the daemon HTTP API — the
-CLI never touches credential storage in-process. These tests drive the CLI
+Every secrets subcommand goes through the daemon HTTP API — the
+CLI never touches secret storage in-process. These tests drive the CLI
 against a fake daemon client (an in-memory stand-in for the daemon's
-/api/v1/credentials routes) injected via `client_or_exit`.
+/api/v1/secrets routes) injected via `client_or_exit`.
 """
 
 from __future__ import annotations
@@ -25,11 +25,11 @@ runner = CliRunner()
 
 
 # ---------------------------------------------------------------------------
-# Fake daemon — an in-memory implementation of the /api/v1/credentials routes
+# Fake daemon — an in-memory implementation of the /api/v1/secrets routes
 # so the CLI's HTTP round-trips can be exercised without a real daemon.
 # ---------------------------------------------------------------------------
 
-_CREDENTIALS_PREFIX = "/credentials/"
+_SECRETS_PREFIX = "/secrets/"
 
 
 class _Resp:
@@ -48,7 +48,7 @@ class _Resp:
 
 
 class _FakeDaemon:
-    """In-memory credentials + resource enumeration behind the daemon HTTP shape."""
+    """In-memory secrets + resource enumeration behind the daemon HTTP shape."""
 
     def __init__(
         self,
@@ -57,44 +57,44 @@ class _FakeDaemon:
         master_key_storage: str = "file",
     ) -> None:
         self.store: dict[str, str] = dict(store or {})
-        # ref -> the resources citing it, as the daemon's GET /credentials
-        # computes it from every kind's credential extractor.
+        # ref -> the resources citing it, as the daemon's GET /secrets
+        # computes it from every kind's secret extractor.
         self.cited = cited or {}
         self.master_key_storage = master_key_storage
 
     def post(self, path: str, json: dict | None = None, **_: Any) -> _Resp:
-        assert path == "/credentials"
+        assert path == "/secrets"
         assert json is not None
         self.store[json["ref"]] = json["value"]
         return _Resp(204, None)
 
     def get(self, path: str, **_: Any) -> _Resp:
-        if path == "/credentials":
+        if path == "/secrets":
             refs = [
                 {"ref": ref, "present": ref in self.store, "cited_by": rows}
                 for ref, rows in sorted(self.cited.items())
             ]
             return _Resp(200, {"refs": refs})
-        if path == "/settings/credentials":
+        if path == "/settings/secrets":
             return _Resp(200, {"master_key_storage": self.master_key_storage})
         if path.endswith("/exists"):
-            ref = path[len(_CREDENTIALS_PREFIX) : -len("/exists")]
+            ref = path[len(_SECRETS_PREFIX) : -len("/exists")]
             return _Resp(200, {"present": ref in self.store})
-        if path.startswith(_CREDENTIALS_PREFIX):
-            ref = path[len(_CREDENTIALS_PREFIX) :]
+        if path.startswith(_SECRETS_PREFIX):
+            ref = path[len(_SECRETS_PREFIX) :]
             if ref in self.store:
                 return _Resp(200, {"value": self.store[ref]})
             return _Resp(404, {"error": {"code": "NOT_FOUND", "message": "not found"}})
         raise AssertionError(f"unexpected GET {path}")
 
     def put(self, path: str, json: dict | None = None, **_: Any) -> _Resp:
-        assert path == "/settings/credentials"
+        assert path == "/settings/secrets"
         assert json is not None
         self.master_key_storage = json["master_key_storage"]
         return _Resp(200, {"master_key_storage": self.master_key_storage})
 
     def delete(self, path: str, **_: Any) -> _Resp:
-        ref = path[len(_CREDENTIALS_PREFIX) :]
+        ref = path[len(_SECRETS_PREFIX) :]
         self.store.pop(ref, None)
         return _Resp(204, None)
 
@@ -218,7 +218,7 @@ def test_rm_prompts_for_confirmation(daemon):
 
 
 def test_removed_credentials_commands_are_gone(daemon):
-    """The group is `coffer secret`, with no `credentials` alias; `delete` is
+    """The group is `coffer secret`, with no `secrets` alias; `delete` is
     `rm`; the master key's location is `coffer config`'s `secrets.storage` key."""
     for argv in (
         ["credentials", "--help"],
@@ -320,7 +320,7 @@ class _HttpErrorClient:
         pass
 
 
-def test_credentials_list_5xx_renders_message_exits_nonzero(monkeypatch):
+def test_secrets_list_5xx_renders_message_exits_nonzero(monkeypatch):
     info = DaemonInfo(
         version=1, pid=99, port=9999, token="t", started_at=dt.now(tz=UTC), binary_path="/fake"
     )

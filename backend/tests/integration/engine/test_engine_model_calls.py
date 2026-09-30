@@ -21,7 +21,7 @@ from coffer.infrastructure.llm.transcription import remote_transcriber_factory
 
 def _pair(protocol: Protocol, *, base_url: str, model: str) -> ResolvedConnection:
     return ResolvedConnection(
-        config=ProviderConfig(protocol=protocol, base_url=base_url, credential_ref="provider/ref"),
+        config=ProviderConfig(protocol=protocol, base_url=base_url, secret_ref="provider/ref"),
         model=model,
     )
 
@@ -81,7 +81,7 @@ class _Completion:
         system: str,
         user: str,
         model: Any,
-        credential_resolver: Any,
+        secret_resolver: Any,
         timeout: float | None = None,
     ) -> str:
         self.timeouts.append(timeout)
@@ -105,7 +105,7 @@ async def test_every_internal_call_runs_under_the_bound_read_at_call_time(
         registry=None,  # type: ignore[arg-type]
         models=_Selector(pair),
         completion=completion,
-        credential_resolver=_key,
+        secret_resolver=_key,
         read_timeout=bound.read,
     )
     assert await ingest._describe("# T\n\nbody", title="T") == "a description"
@@ -133,7 +133,7 @@ async def test_every_internal_call_runs_under_the_bound_read_at_call_time(
         tools=[],
         system_prompt="s",
         user_prompt="u",
-        credential_resolver=_key,
+        secret_resolver=_key,
         recursion_limit=3,
         timeout=await resolve_timeout(bound.read),
     )
@@ -151,7 +151,7 @@ async def test_every_internal_call_runs_under_the_bound_read_at_call_time(
         tools=[],
         system_prompt="s",
         user_prompt="u",
-        credential_resolver=_key,
+        secret_resolver=_key,
         recursion_limit=3,
         timeout=await resolve_timeout(bound.read),
     )

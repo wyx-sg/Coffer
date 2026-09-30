@@ -59,7 +59,7 @@ function statusLine(t: TFunction, status: DaemonStatus, now: number): string {
 interface Props {
   state: DaemonFooterState;
   status: DaemonStatus | undefined;
-  /** In the desktop shell (credential-supplier module, `lib/tauri.ts`). */
+  /** In the desktop shell (secret-supplier module, `lib/tauri.ts`). */
   inShell: boolean;
 }
 

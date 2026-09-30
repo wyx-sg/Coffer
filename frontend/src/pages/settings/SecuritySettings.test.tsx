@@ -61,8 +61,8 @@ async function fakeDaemon(input: RequestInfo | URL, init?: RequestInit): Promise
   if (token !== daemonToken) return json(401, { error: { code: "UNAUTHORIZED", message: "bad" } });
   const route = `${req.method} ${path}`;
   if (route === "GET /daemon/status") return json(200, { version: "1.0.0" });
-  if (route === "GET /settings/credentials") return json(200, { master_key_storage: storage });
-  if (route === "PUT /settings/credentials") {
+  if (route === "GET /settings/secrets") return json(200, { master_key_storage: storage });
+  if (route === "PUT /settings/secrets") {
     if (moveFails)
       return json(503, { error: { code: "MASTER_KEY_MISSING", message: "keychain refused" } });
     storage = ((await req.json()) as { master_key_storage: Storage }).master_key_storage;
@@ -376,7 +376,7 @@ describe("SecuritySettings — daemon access token", () => {
     expect(getCofferToken()).toBe(NEW);
     expect(tokenBox()).toHaveTextContent(/9f3a$/);
     // No reload: the page's next request carries the new token and is accepted.
-    await expect(call("/settings/credentials")).resolves.toEqual({ master_key_storage: "file" });
+    await expect(call("/settings/secrets")).resolves.toEqual({ master_key_storage: "file" });
     expect(seen.at(-1)?.token).toBe(NEW);
   });
 
@@ -392,7 +392,7 @@ describe("SecuritySettings — daemon access token", () => {
     expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(getCofferToken()).toBe(OLD);
-    await expect(call("/settings/credentials")).resolves.toEqual({ master_key_storage: "file" });
+    await expect(call("/settings/secrets")).resolves.toEqual({ master_key_storage: "file" });
     expect(seen.at(-1)?.token).toBe(OLD);
   });
 
@@ -413,6 +413,6 @@ describe("SecuritySettings — daemon access token", () => {
     expect(screen.queryByRole("button", { name: /add|reveal|delete/i })).toBeNull();
     // The way to them is a link to the Secrets page.
     expect(screen.getByRole("button", { name: /manage in secrets/i })).toBeInTheDocument();
-    expect(seen.some((r) => r.path.startsWith("/credentials"))).toBe(false);
+    expect(seen.some((r) => r.path.startsWith("/secrets"))).toBe(false);
   });
 });

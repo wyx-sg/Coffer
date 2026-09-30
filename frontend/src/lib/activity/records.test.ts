@@ -163,7 +163,7 @@ describe("matchesFilters", () => {
   });
 
   test("a change kind with no resource is found by its event's area", () => {
-    const secret = fromAudit(audit({ id: 9, event_type: "credential_set" }));
+    const secret = fromAudit(audit({ id: 9, event_type: "secret_set" }));
     const token = fromAudit(audit({ id: 10, event_type: "token_rotated" }));
     const skill = fromAudit(audit({ id: 11, resource_kind: "skill", resource_name: "pdf" }));
     expect(changeCategory(audit({ id: 0, event_type: "master_key_exported" }))).toBe("secret");

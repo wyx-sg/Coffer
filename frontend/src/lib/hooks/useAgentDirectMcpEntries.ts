@@ -54,7 +54,7 @@ export interface AdoptChoice {
   entry: McpEntryOut;
 }
 
-/** The credential refs a secret-looking key's value moves under — the same
+/** The secret refs a secret-looking key's value moves under — the same
  *  readable address the agent's own adopt dialog prefills. */
 function defaultSecretRefs(agentName: string, entry: McpEntryOut): Record<string, string> {
   return Object.fromEntries(

@@ -89,7 +89,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
 | `logs/daemon.log`, `daemon.log.1`…`.3` | The daemon's log, one JSON object per line, rotated at 10 MB with three backups. The desktop app and the login service write their own records into the same file. Shown on the **Activity** page, read by `coffer log daemon`, and located by `coffer path logs`. | daemon, desktop app | No | Rotated files, yes. Leave the live file while the daemon runs. |
-| `logs/proxy.log` | Standard error of the model proxy: metadata-only lines, never a body, prompt or credential. | daemon (supervisor), model proxy | No | Yes. |
+| `logs/proxy.log` | Standard error of the model proxy: metadata-only lines, never a body, prompt or secret. | daemon (supervisor), model proxy | No | Yes. |
 | `logs/shim-<pid>-<epoch>.log` | One file per MCP shim process, created only when the shim has something to log. Pruned after 7 days. | shim | No | Yes. |
 | `logs/upstream/<server>.log`, `.log.1` | Standard error of each stdio upstream MCP server. Rolled aside at 2 MB; the `.1` copy is pruned after 7 days. | daemon | No | Yes. |
 
@@ -119,7 +119,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | `sync/manifest.json` | Layout version of the tree, read before anything is applied. | daemon | Yes | — |
 | `sync/resources/<kind>/<uid>.yaml` | One document per synced resource. | daemon | Yes | — |
 | `sync/state/<area>/…yaml` | Shared state owned by one module, for example the internal engine settings. | daemon | Yes | — |
-| `sync/credentials/<ref>.enc` | Secret ciphertext, only when you opt in. Never the key. | daemon | Yes | — |
+| `sync/secret/<ref>.enc` | Secret ciphertext, only when you opt in. Never the key. | daemon | Yes | — |
 | `sync/machines/<machine-id>.yaml` | One descriptor per machine sharing the vault. | daemon | Yes | — |
 | `sync/knowledge/`, `sync/skills/` | Mirrors of the live trees. | daemon | Yes | — |
 

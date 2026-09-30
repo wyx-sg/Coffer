@@ -3,7 +3,7 @@
 // The registry table. Three of its columns carry a claim that would be wrong
 // if rendered naively, so each has a test: the id's first 8 characters (two
 // machines can share a name), "last converged" as a DAY (an idle machine does
-// not stamp every round), and the key ✓/✗ (✗ means that machine's credentials
+// not stamp every round), and the key ✓/✗ (✗ means that machine's secrets
 // cannot be decrypted here, which is not the same as "no fingerprint yet").
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
@@ -120,7 +120,7 @@ describe("SyncMachinesTab", () => {
     expect(rowFor(LOCAL).getByText(/never/i)).toBeInTheDocument();
   });
 
-  test("a key mismatch says the credentials cannot be decrypted here", () => {
+  test("a key mismatch says the secrets cannot be decrypted here", () => {
     seed([machine({ machine_id: OTHER, is_self: false, key_matches: false })]);
     render(<SyncMachinesTab />);
     expect(rowFor(OTHER).getByText(/cannot be decrypted here/i)).toBeInTheDocument();

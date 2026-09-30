@@ -2,7 +2,7 @@
 //
 // Out-of-band master-key transfer (spec vault-sync "Never write the master key
 // into the repository"). It lives on the Sync page rather than in Settings
-// because its whole purpose is convergence: credentials sync as Fernet
+// because its whole purpose is convergence: secrets sync as Fernet
 // ciphertext only, so another machine can read what this one publishes exactly
 // when it holds this same key.
 //
@@ -13,7 +13,7 @@
 //            a browser.
 //   Import → a hidden `<input type="file">`; its change handler reads
 //            `file.text()`, asks the user to confirm — a different key makes
-//            every credential stored under the current one unreadable — and
+//            every secret stored under the current one unreadable — and
 //            only then POSTs the material. Any host may do this.
 //
 // The key is never written into the synced repository under any setting.

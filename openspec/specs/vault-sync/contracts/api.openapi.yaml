@@ -1347,24 +1347,24 @@ components:
           pattern: ^[^-\s~^:?*\[\\\x00-\x1f\x7f][^\s~^:?*\[\\\x00-\x1f\x7f]*$
           title: Branch
           type: string
-        credential_ref:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Credential Ref
         enabled:
           default: true
           title: Enabled
           type: boolean
-        include_credentials:
+        include_secrets:
           default: false
-          title: Include Credentials
+          title: Include Secrets
           type: boolean
         interval_seconds:
           default: 3600
           minimum: 60.0
           title: Interval Seconds
           type: integer
+        secret_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Secret Ref
         url:
           pattern: ^[^-\s]\S*$
           title: Url
@@ -1383,20 +1383,20 @@ components:
         branch:
           title: Branch
           type: string
-        credential_ref:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Credential Ref
         enabled:
           title: Enabled
           type: boolean
-        include_credentials:
-          title: Include Credentials
+        include_secrets:
+          title: Include Secrets
           type: boolean
         interval_seconds:
           title: Interval Seconds
           type: integer
+        secret_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Secret Ref
         url:
           title: Url
           type: string
@@ -1406,8 +1406,8 @@ components:
       required:
       - url
       - branch
-      - credential_ref
-      - include_credentials
+      - secret_ref
+      - include_secrets
       - interval_seconds
       - enabled
       - worktree_path

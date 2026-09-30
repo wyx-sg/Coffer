@@ -422,7 +422,7 @@ stored token outlives the daemon that minted it, and the daemon mints a new one 
 API token MUST NOT appear in a URL at any point — a URL lands in browser history, which would
 contradict the loopback-plus-token posture of "Bind every endpoint to loopback only" and "Require a
 token on every management call"; the response body is subject to none of that. `coffer open` MUST
-therefore carry no credential of its own: it reads the daemon's real port from `daemon.json` and
+therefore carry no secret of its own: it reads the daemon's real port from `daemon.json` and
 opens the browser at that origin.
 
 #### Scenario: a page served by the daemon is authenticated by the daemon

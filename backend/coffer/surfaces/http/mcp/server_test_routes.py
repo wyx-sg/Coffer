@@ -25,10 +25,10 @@ from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
 from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
 from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.credential_composition import boundary_resolver, get_credential_store
 from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.mcp.dependencies import get_health_repo, require_mcp_server
 from coffer.surfaces.http.schemas import McpTestResultOut
+from coffer.surfaces.http.secret_composition import boundary_resolver, get_secret_store
 
 router = APIRouter(
     prefix="/api/v1/resources/mcp_server",
@@ -42,7 +42,7 @@ async def test_mcp_server(
     uid: str,
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
     health_repo: MCPServerHealthRepo = Depends(get_health_repo),  # noqa: B008
-    credential_store: Any = Depends(get_credential_store),  # noqa: B008
+    secret_store: Any = Depends(get_secret_store),  # noqa: B008
 ) -> McpTestResultOut:
     """Open a transient upstream session, run MCP initialize, return health info.
     Persists the result to mcp_server_health so GET /status reflects it."""
@@ -56,15 +56,15 @@ async def test_mcp_server(
 
     config = MCPServerConfig.model_validate(resource.config)
 
-    resolver = boundary_resolver(credential_store)
+    resolver = boundary_resolver(secret_store)
     destination = mcp_destination(resource.uid, resource.name, config)
 
     start = time.monotonic()
     try:
         if isinstance(config.transport, StdioTransport):
-            # Offload the blocking credential-store read off the event loop.
+            # Offload the blocking secret-store read off the event loop.
             overlay = await asyncio.to_thread(
-                resolver.materialize, config.transport.credential_refs, destination
+                resolver.materialize, config.transport.secret_refs, destination
             )
             conn: StdioUpstreamConnection | HttpUpstreamConnection | HttpApiUpstreamConnection = (
                 StdioUpstreamConnection(
@@ -80,7 +80,7 @@ async def test_mcp_server(
             )
         elif isinstance(config.transport, HttpTransport):
             overlay = await asyncio.to_thread(
-                resolver.materialize, config.transport.credential_refs, destination
+                resolver.materialize, config.transport.secret_refs, destination
             )
             conn = HttpUpstreamConnection(
                 transport=config.transport,
@@ -92,7 +92,7 @@ async def test_mcp_server(
             # A custom-tool group: its "connection" is served in-process, so the
             # test proves the config loads and the secret is released for it.
             overlay = await asyncio.to_thread(
-                resolver.materialize, config.transport.credential_refs, destination
+                resolver.materialize, config.transport.secret_refs, destination
             )
             conn = HttpApiUpstreamConnection(
                 transport=config.transport, header_overlay=overlay, server_name=resource.name

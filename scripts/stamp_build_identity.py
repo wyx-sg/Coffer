@@ -4,7 +4,7 @@
     python scripts/stamp_build_identity.py <TEAM_ID>
 
 Rewrites ``KEYCHAIN_ACCESS_GROUP`` in
-``backend/coffer/infrastructure/credentials/build_identity.py`` to
+``backend/coffer/infrastructure/secret/build_identity.py`` to
 ``<TEAM_ID>.coffer``. The release workflow runs it only when it holds a
 Developer ID (``APPLE_TEAM_ID`` and the certificate secrets are set), before
 PyInstaller freezes the module, and signs the binaries with the
@@ -24,7 +24,7 @@ import sys
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-TARGET = _REPO_ROOT / "backend" / "coffer" / "infrastructure" / "credentials" / "build_identity.py"
+TARGET = _REPO_ROOT / "backend" / "coffer" / "infrastructure" / "secret" / "build_identity.py"
 
 # An Apple Team ID: ten upper-case letters and digits.
 _TEAM_ID = re.compile(r"^[A-Z0-9]{10}$")

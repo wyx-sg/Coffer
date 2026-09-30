@@ -24,7 +24,7 @@ from coffer.application.platform_port import PlatformPort
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.facets import AgentCatalog
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.surfaces.http.agent_skill_wiring import AgentSkillWiring, wire_agent_and_skill_kinds
 from coffer.surfaces.http.app_mcp_composition import McpWiring, wire_mcp_kind
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
@@ -61,8 +61,8 @@ async def wire_resource_kinds(
     audit: AuditService,
     sm: async_sessionmaker[AsyncSession],
     builtin_tools: BuiltinToolRegistry,
-    credential_store: EncryptedCredentialStore,
-    credential_resolver: Callable[[str], str],
+    secret_store: EncryptedSecretStore,
+    secret_resolver: Callable[[str], str],
     sync: SyncContributions,
     platform: PlatformPort,
     agent_catalog: AgentCatalog,
@@ -79,7 +79,7 @@ async def wire_resource_kinds(
         audit,
         sm,
         builtin_tools,
-        credential_store,
+        secret_store,
         sync,
         platform,
         agent_catalog,
@@ -92,7 +92,7 @@ async def wire_resource_kinds(
         app,
         resource_svc,
         audit,
-        credential_store,
+        secret_store,
         agent_skill.agent_service,
         sync,
         agent_catalog,
@@ -121,7 +121,7 @@ async def wire_resource_kinds(
         audit,
         builtin_tools,
         provider.internal_connection,
-        credential_resolver,
+        secret_resolver,
         _catalogue_changed,
     )
 
@@ -132,14 +132,14 @@ async def wire_resource_kinds(
         audit,
         builtin_tools,
         provider.internal_connection,
-        credential_resolver,
+        secret_resolver,
         agent_skill.agent_service,
         agent_catalog,
     )
 
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
     # their built-in tools).
-    mcp = wire_mcp_kind(app, resource_svc, audit, sm, credential_store, builtin_tools, sync)
+    mcp = wire_mcp_kind(app, resource_svc, audit, sm, secret_store, builtin_tools, sync)
 
     # Last, because it needs both ends: the knowledge kind's renderer and the
     # skill kind's seed. The lifespan refreshes it once every kind is up.

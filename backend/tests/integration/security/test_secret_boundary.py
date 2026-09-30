@@ -16,8 +16,8 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from coffer.domain.credential_errors import SecretBindingPending
-from coffer.infrastructure.credentials import key_backup
+from coffer.domain.secret_errors import SecretBindingPending
+from coffer.infrastructure.secret import key_backup
 from coffer.surfaces.cli import _approvals
 from coffer.surfaces.cli.main import app as cli_app
 from tests.support.boundary_daemon import (
@@ -31,7 +31,7 @@ _runner = CliRunner()
 
 
 def _master_key() -> str:
-    from coffer.surfaces.http.credential_composition import get_master_key_manager
+    from coffer.surfaces.http.secret_composition import get_master_key_manager
 
     return (get_master_key_manager().current or b"").decode()
 
@@ -65,7 +65,7 @@ def test_no_route_or_command_hands_out_a_stored_value(cli: BoundaryDaemon) -> No
     d = cli
     d.store("gh/token", "ghp_never_printed_42")
 
-    read = d.client.get("/api/v1/credentials/gh/token")
+    read = d.client.get("/api/v1/secrets/gh/token")
     export = d.client.post("/api/v1/sync/key/export", json={})
     shown = _runner.invoke(cli_app, ["secret", "get", "gh/token", "--show"])
     exported = _runner.invoke(cli_app, ["sync", "key", "export", str(d.home / "k")])
@@ -87,13 +87,13 @@ def test_a_reveal_with_a_valid_grant_returns_the_value_once(daemon: BoundaryDaem
     d.store("gh/token", "ghp_reveal_me_42")
     grant = d.grant("reveal", "gh/token")
 
-    r = d.client.post("/api/v1/credentials/presence/reveal", json={"ref": "gh/token", **grant})
-    again = d.client.post("/api/v1/credentials/presence/reveal", json={"ref": "gh/token", **grant})
+    r = d.client.post("/api/v1/secrets/presence/reveal", json={"ref": "gh/token", **grant})
+    again = d.client.post("/api/v1/secrets/presence/reveal", json={"ref": "gh/token", **grant})
 
     assert r.status_code == 200 and r.json() == {"value": "ghp_reveal_me_42"}
     assert again.status_code == 403
     assert again.json()["error"]["code"] == "PRESENCE_GRANT_INVALID"
-    entries = d.audit("credential_revealed")
+    entries = d.audit("secret_revealed")
     assert len(entries) == 1 and "gh/token" in json.dumps(entries[0]["details"])
     assert "ghp_reveal_me_42" not in json.dumps(entries)
 
@@ -109,14 +109,12 @@ def test_a_grant_for_one_operation_authorises_nothing_else(daemon: BoundaryDaemo
     wrong_ref = d.grant("reveal", "gh/token")
     wrong_op = d.grant("reveal", "gh/token")
 
-    r1 = d.client.post("/api/v1/credentials/presence/reveal", json={"ref": "gh/token", **forged})
-    r2 = d.client.post(
-        "/api/v1/credentials/presence/reveal", json={"ref": "other/token", **wrong_ref}
-    )
+    r1 = d.client.post("/api/v1/secrets/presence/reveal", json={"ref": "gh/token", **forged})
+    r2 = d.client.post("/api/v1/secrets/presence/reveal", json={"ref": "other/token", **wrong_ref})
     d.register_stdio("a", "one", {"T": "other/token"})
     b = d.register_stdio("b", "two", {"T": "other/token"})
     [waiting] = d.pending(destination_uid=b["uid"])
-    r3 = d.client.post(f"/api/v1/credentials/approvals/{waiting['id']}/approve", json=wrong_op)
+    r3 = d.client.post(f"/api/v1/secrets/approvals/{waiting['id']}/approve", json=wrong_op)
 
     for r in (r1, r2, r3):
         assert r.status_code == 403 and r.json()["error"]["code"] == "PRESENCE_GRANT_INVALID"
@@ -135,7 +133,7 @@ def test_the_master_key_backup_is_written_only_against_a_grant(
     target.mkdir()
     passphrase = "correct horse battery"
     refused = d.client.post(
-        "/api/v1/credentials/presence/master-key-export",
+        "/api/v1/secrets/presence/master-key-export",
         json={
             "directory": str(target),
             "passphrase": passphrase,
@@ -146,7 +144,7 @@ def test_the_master_key_backup_is_written_only_against_a_grant(
     assert refused.status_code == 403 and list(target.iterdir()) == []
 
     r = d.client.post(
-        "/api/v1/credentials/presence/master-key-export",
+        "/api/v1/secrets/presence/master-key-export",
         json={
             "directory": str(target),
             "passphrase": passphrase,
@@ -168,7 +166,7 @@ def test_the_master_key_backup_is_written_only_against_a_grant(
     assert len(exported) == 1 and passphrase not in json.dumps(exported)
 
     again = d.client.post(
-        "/api/v1/credentials/presence/master-key-export",
+        "/api/v1/secrets/presence/master-key-export",
         json={
             "directory": str(target),
             "passphrase": passphrase,
@@ -189,7 +187,7 @@ def test_a_short_backup_passphrase_is_refused_before_the_grant_is_spent(
     grant = d.grant("export_master_key", str(target))
 
     short = d.client.post(
-        "/api/v1/credentials/presence/master-key-export",
+        "/api/v1/secrets/presence/master-key-export",
         json={"directory": str(target), "passphrase": "short", **grant},
     )
 
@@ -198,7 +196,7 @@ def test_a_short_backup_passphrase_is_refused_before_the_grant_is_spent(
     assert list(target.iterdir()) == []
     # The grant was not spent on the refusal: the same one still exports.
     r = d.client.post(
-        "/api/v1/credentials/presence/master-key-export",
+        "/api/v1/secrets/presence/master-key-export",
         json={"directory": str(target), "passphrase": "long enough now", **grant},
     )
     assert r.status_code == 200, r.text
@@ -301,7 +299,7 @@ def test_a_stdio_server_with_a_secret_is_marked(daemon: BoundaryDaemon) -> None:
         "transport": {
             "type": "http",
             "url": "https://mcp.example.com/",
-            "credential_refs": {"Authorization": "t/one"},
+            "secret_refs": {"Authorization": "t/one"},
         }
     }
     assert (
@@ -384,9 +382,7 @@ def test_replacing_a_value_in_use_waits(daemon: BoundaryDaemon) -> None:
     d = daemon
     _two_servers(d)
 
-    r = d.client.post(
-        "/api/v1/credentials", json={"ref": "gh/token", "value": "attacker-bot-token"}
-    )
+    r = d.client.post("/api/v1/secrets", json={"ref": "gh/token", "value": "attacker-bot-token"})
 
     assert r.status_code == 202, r.text
     approval = r.json()["approval"]
@@ -433,14 +429,14 @@ def test_a_secret_nothing_references_is_listed_as_unreferenced(daemon: BoundaryD
     d.store("secret/lonely", "lonely-value-1")
     d.store("secret/used-one", "used-value-12")
 
-    rows = {r["ref"]: r for r in d.client.get("/api/v1/credentials").json()["refs"]}
+    rows = {r["ref"]: r for r in d.client.get("/api/v1/secrets").json()["refs"]}
 
     assert rows["secret/lonely"]["unreferenced"] is True
     assert rows["secret/lonely"]["readable_by_local_processes"] is True
     assert rows["secret/lonely"]["uri"] == "coffer://secret/lonely"
     assert rows["secret/used-one"]["mentioned_by_skills"] == ["db-tools"]
     assert rows["secret/used-one"]["unreferenced"] is False
-    refused = d.client.delete("/api/v1/credentials/secret/used-one")
+    refused = d.client.delete("/api/v1/secrets/secret/used-one")
     assert refused.status_code == 409
     assert "skill 'db-tools'" in refused.json()["error"]["details"]["references"]
     assert d.value("secret/used-one") == "used-value-12"
@@ -454,12 +450,12 @@ def test_a_secret_nothing_references_is_listed_as_unreferenced(daemon: BoundaryD
 )
 def test_a_push_token_pointed_at_a_new_url_waits(daemon: BoundaryDaemon) -> None:
     from coffer.domain.secrets import sync_remote_destination
-    from coffer.surfaces.http.credential_composition import get_credential_store
     from coffer.surfaces.http.secret_boundary_wiring import boundary_resolver
+    from coffer.surfaces.http.secret_composition import get_secret_store
 
     d = daemon
     d.store("sync/push-token", "push-token-value")
-    resolver = boundary_resolver(get_credential_store())
+    resolver = boundary_resolver(get_secret_store())
     first = sync_remote_destination("https://git.example.com/me/vault.git")
     assert resolver.materialize({"token": "sync/push-token"}, first) == {
         "token": "push-token-value"
@@ -521,7 +517,7 @@ def test_moving_a_provider_base_url_asks_again(daemon: BoundaryDaemon) -> None:
     d.approve(waiting["id"])
     assert key_now() == "sk-provider-key-1"
 
-    ref = d.client.get(f"/api/v1/providers/{uid}").json()["credential_ref"]
+    ref = d.client.get(f"/api/v1/providers/{uid}").json()["secret_ref"]
     rotated = d.client.patch(f"/api/v1/providers/{uid}", json={"secret_value": "sk-replaced-2"})
     assert rotated.status_code == 200, rotated.text
     assert d.value(ref) == "sk-provider-key-1"
@@ -546,7 +542,7 @@ def test_the_command_line_reports_a_pending_provider_key(cli: BoundaryDaemon) ->
     d = cli
     gw = _provider(d, "gw", "https://gw.example.com/anthropic", secret_value="sk-cli-key-1")
     d.pending()  # the first key, just typed for this connection, is approved on sight
-    ref = d.client.get(f"/api/v1/providers/{gw['uid']}").json()["credential_ref"]
+    ref = d.client.get(f"/api/v1/providers/{gw['uid']}").json()["secret_ref"]
 
     rotated = _runner.invoke(cli_app, ["provider", "edit", "gw", "--secret", "sk-cli-key-2"])
     assert rotated.exit_code == 9, rotated.output

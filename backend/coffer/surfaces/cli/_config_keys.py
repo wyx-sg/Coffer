@@ -10,7 +10,7 @@ resource-framework "Change every setting through one key-value command"):
   (``_config_engine``);
 - ``engine.provider`` and ``transcribe.provider`` as the connection flags;
 - ``secrets.storage`` through the daemon, the sole owner of the master key
-  — this module imports no credential code (spec secret "Route every credential
+  — this module imports no secret code (spec secret "Route every secret
   command through the daemon");
 - ``feature.<key>`` and ``retention.<table>``, whose members only the daemon
   knows, as families expanded on demand.
@@ -144,17 +144,17 @@ TRANSCRIBE_PROVIDER = _flag_key(
 
 
 def _storage_write(s: Session, where: str) -> list[str]:
-    now = s.send("PUT", "/settings/credentials", {"master_key_storage": where})
+    now = s.send("PUT", "/settings/secrets", {"master_key_storage": where})
     return [f"master key storage: {now['master_key_storage']}"]
 
 
-CREDENTIALS_STORAGE = Setting(
+SECRETS_STORAGE = Setting(
     "secrets.storage",
     "file|keychain",
     "Where the secrets' master key is kept (moved and verified by the daemon)",
-    "PUT /settings/credentials",
+    "PUT /settings/secrets",
     choice("secrets.storage", ("file", "keychain")),
-    lambda s: Reading(s.get("/settings/credentials")["master_key_storage"], "file"),
+    lambda s: Reading(s.get("/settings/secrets")["master_key_storage"], "file"),
     _storage_write,
     lambda s: _storage_write(s, "file"),
 )
@@ -277,7 +277,7 @@ def static_settings() -> list[Setting]:
         *engine_settings(),
         TRANSCRIBE_PROVIDER,
         TRANSCRIBE_MODEL,
-        CREDENTIALS_STORAGE,
+        SECRETS_STORAGE,
         SECRETS_REQUIRE_APPROVAL,
     ]
 

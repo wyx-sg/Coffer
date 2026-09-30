@@ -610,7 +610,7 @@ def workspace_cli(tmp_path, monkeypatch):
     test (CLI verbs use ``with c:`` which must not tear the app down), and the
     OS keychain is faked class-wide so adopt never touches the real keyring.
     """
-    from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+    from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
     from coffer.surfaces.http.app import create_app
 
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -730,15 +730,15 @@ def test_adopt_mcp_entry_with_secret(workspace_cli):
     ref = "mcp.fetcher.API_TOKEN"
     r = _runner.invoke(cli_app, ["adopt", "mcp", "codex:fetcher", "--secret", f"API_TOKEN={ref}"])
     assert r.exit_code == 0, r.output
-    # The secret value landed in the encrypted credential store, keyed by the
+    # The secret value landed in the encrypted secret store, keyed by the
     # ref. The CLI only confirms presence (no command prints a value), so the
     # value itself is read from the daemon's own store.
     r = _runner.invoke(cli_app, ["secret", "get", ref])
     assert r.exit_code == 0, r.output
     assert _SECRET_VALUE not in r.output
-    from coffer.surfaces.http.credential_composition import get_credential_store
+    from coffer.surfaces.http.secret_composition import get_secret_store
 
-    assert get_credential_store().get(ref) == _SECRET_VALUE
+    assert get_secret_store().get(ref) == _SECRET_VALUE
 
 
 def test_plugin_list_enable_disable(workspace_cli):

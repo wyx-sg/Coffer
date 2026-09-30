@@ -43,7 +43,7 @@ interface Props {
   /** Its label, for the picker's accessible name and the toast. */
   name: string;
   /** Its current config — carried through the PATCH untouched beside the new
-   *  binding, so a rebind never drops a credential ref. */
+   *  binding, so a rebind never drops a secret ref. */
   config: Record<string, unknown>;
   /** The stored binding; null is unbound. */
   runsOn: string | null;

@@ -20,16 +20,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
+from coffer.application.secret.resolver import SecretResolver
 from coffer.application.sync.convergence import ConvergeRound
 from coffer.application.sync.convergence_ops import refuse_newer_layout
 from coffer.application.sync.joining import JoinPreview
 from coffer.application.sync.ports import (
     BundlePort,
     ConvergenceStatePort,
-    CredentialSyncPort,
     GitMirrorPort,
     MasterKeyPort,
+    SecretSyncPort,
     SyncRemoteRepoPort,
 )
 from coffer.application.sync.service_history import HistoryMixin
@@ -58,8 +58,8 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin, KeyMixin):
         mirror_factory: Callable[[Path], GitMirrorPort],
         bundle_factory: Callable[[Path], BundlePort],
         set_machine_name: Callable[[str], None],
-        credentials: CredentialResolver,
-        credential_store: CredentialSyncPort,
+        secrets: SecretResolver,
+        secret_store: SecretSyncPort,
         master_key: MasterKeyPort,
         audit: AuditService,
         lock: asyncio.Lock | None = None,
@@ -74,8 +74,8 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin, KeyMixin):
         self._mirror_factory = mirror_factory
         self._bundle_factory = bundle_factory
         self._set_machine_name = set_machine_name
-        self._credentials = credentials
-        self._credential_store = credential_store
+        self._secrets = secrets
+        self._secret_store = secret_store
         self._master_key = master_key
         self._audit = audit
         # Shared with the curation worker, which is why it is injectable.
@@ -301,23 +301,23 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin, KeyMixin):
         )
         return run
 
-    # --- credentials --------------------------------------------------------
+    # --- secrets --------------------------------------------------------
 
     async def _token(self, remote: BackupRemote) -> str | None:
-        """Resolve the push credential, for the one call that needs it.
+        """Resolve the push secret, for the one call that needs it.
 
         Never stored on this service, never audited, and the caller re-redacts
         any error text even though the adapter already did.
         """
-        if not remote.credential_ref:
+        if not remote.secret_ref:
             return None
         # The remote's URL is the target the token is approved for: pointing an
         # existing token at a new URL waits for the desktop app (spec
         # secret "Hold a secret for a new destination until a person
         # approves it").
         resolved = await asyncio.to_thread(
-            self._credentials.materialize,
-            {_TOKEN_KEY: remote.credential_ref},
+            self._secrets.materialize,
+            {_TOKEN_KEY: remote.secret_ref},
             sync_remote_destination(remote.url),
         )
         token = resolved.get(_TOKEN_KEY)

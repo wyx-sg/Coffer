@@ -7,7 +7,7 @@ opened every secret of the vault. Importing lived on the Sync page as a bare
 confirm with no way to tell whether the file held this Mac's own key or a
 different one, and afterwards said only how many references stayed locked.
 
-Two defects sat underneath. The running credential store kept the key it was
+Two defects sat underneath. The running secret store kept the key it was
 started with after an import, so a secret saved right after importing was
 sealed under a key the machine no longer kept, and became unreadable at the
 next start. And a request that failed validation logged the submitted body —
@@ -34,7 +34,7 @@ for the import route, the key material itself.
   "Open in Coffer app to export" with the reason beside it.
 - `coffer sync key import <file>` reads a `.cfk` and asks for its passphrase
   without echoing it.
-- An imported key is used by the running credential store at once.
+- An imported key is used by the running secret store at once.
 - Validation failures are logged without the submitted values.
 
 ## Capabilities
@@ -52,11 +52,11 @@ for the import route, the key material itself.
 
 ## Impact
 
-- Backend: `infrastructure/credentials/key_backup.py` (new),
-  `surfaces/http/credential_boundary_routes.py` (export),
+- Backend: `infrastructure/secret/key_backup.py` (new),
+  `surfaces/http/secret_boundary_routes.py` (export),
   `surfaces/http/sync_routes.py` / `sync_schemas.py` (key section),
-  `application/sync/service.py` (key functions), `infrastructure/sync/credentials.py`,
-  `infrastructure/credentials/encrypted_store.py` (`use_key`),
+  `application/sync/service.py` (key functions), `infrastructure/sync/secret.py`,
+  `infrastructure/secret/encrypted_store.py` (`use_key`),
   `surfaces/http/sync_wiring.py`, `surfaces/http/errors.py`,
   `surfaces/cli/sync_machine_cmd.py`; two error codes
   `MASTER_KEY_PASSPHRASE_WRONG` and `MASTER_KEY_PASSPHRASE_TOO_SHORT` (422).

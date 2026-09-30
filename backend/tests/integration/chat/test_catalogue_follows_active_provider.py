@@ -151,7 +151,7 @@ async def env(tmp_path: pathlib.Path) -> AsyncIterator[_Env]:
         kinds={"provider": make_provider_kind(), "agent": make_agent_kind()},
         repo=SqlAlchemyResourceRepo(sm),
         audit=audit,
-        credentials=store,
+        secrets=store,
     )
     # One agent per type, registered through the service (the agent kind
     # refuses the generic create path) so each has a real uid to be scoped by.
@@ -172,7 +172,7 @@ async def env(tmp_path: pathlib.Path) -> AsyncIterator[_Env]:
     providers = ProviderService(
         agent_catalog=agent_catalog(),
         resources=resources,
-        credentials=store,
+        secrets=store,
         config_store=ConfigFileStore(),
         # Nothing to project into: this test reads, not writes. The registry
         # handed here decides only which agents' native config files a switch

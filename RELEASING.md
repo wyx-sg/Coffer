@@ -1,7 +1,7 @@
 # Releasing Coffer
 
 A release is a pushed `v*` tag; `.github/workflows/release.yml` builds and
-publishes it. Without any of the credentials below it publishes an **unsigned**
+publishes it. Without any of the secrets below it publishes an **unsigned**
 release (`Coffer-unsigned-<triple>.dmg`, the quarantine step in the notes), and
 the run page says which secret each skipped step was missing. This file is what
 the owner does, once, to turn on Developer ID signing, notarisation and the

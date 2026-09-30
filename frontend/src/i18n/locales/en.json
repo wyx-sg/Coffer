@@ -379,14 +379,14 @@
       "titleLabel": "Title",
       "titleHelp": "Shown in Coffer.",
       "urlHelp": "Streamable HTTP.",
-      "credentials": "Secrets",
-      "noCredentials": "No stored secrets.",
-      "addCredential": "Add secret",
-      "removeCredential": "Remove secret",
-      "credentialKey": "Secret name",
-      "credentialValue": "New value of {{name}}",
-      "credentialNew": "Secret value",
-      "credentialHint": "Secret values are stored in the keychain; the config keeps only their names. Removing one deletes its stored value.",
+      "secrets": "Secrets",
+      "noSecrets": "No stored secrets.",
+      "addSecret": "Add secret",
+      "removeSecret": "Remove secret",
+      "secretKey": "Secret name",
+      "secretValue": "New value of {{name}}",
+      "secretNew": "Secret value",
+      "secretHint": "Secret values are stored in the keychain; the config keeps only their names. Removing one deletes its stored value.",
       "stored": "Stored",
       "replace": "Replace",
       "errRenameNeedsValue": "Re-enter the secret value for \"{{name}}\" to rename it.",
@@ -627,10 +627,10 @@
       "capability_enabled": "Enabled {{capType}} {{key}} on {{resource}}",
       "channel_paired": "Paired the {{resource}} channel",
       "channel_pairing_issued": "Issued a pairing code for {{resource}}",
-      "credential_deleted": "Removed a secret",
-      "credential_migrated": "Secret migrated from OS keychain",
-      "credential_read": "Read a secret",
-      "credential_set": "Stored a secret",
+      "secret_deleted": "Removed a secret",
+      "secret_migrated": "Secret migrated from OS keychain",
+      "secret_read": "Read a secret",
+      "secret_set": "Stored a secret",
       "internal_engine_model_set": "Set the internal engine's model",
       "knowledge_deleted": "Deleted a document from {{resource}}",
       "knowledge_edited": "Edited a document in {{resource}}",
@@ -679,7 +679,7 @@
       "token_rotated": "Access token rotated",
       "daemon_residency_updated": "Daemon residency changed",
       "knowledge_curated": "Curated {{resource}}: folded new items into its documents",
-      "credential_revealed": "Revealed a secret in the Coffer app",
+      "secret_revealed": "Revealed a secret in the Coffer app",
       "secret_resolved": "Handed a secret to a coffer run command",
       "secret_approval_requested": "Asked for approval of a secret change",
       "secret_approval_approved": "Approved a secret change",
@@ -1458,10 +1458,10 @@
     "CONFIG_FILE_STALE": "The config file changed on disk since you loaded it. Reload and retry.",
     "CONFIG_INVALID": "Configuration is invalid",
     "CONVERSATION_NOT_FOUND": "Conversation not found",
-    "CREDENTIAL_IN_USE": "This secret is still referenced by other resources. Detach them before deleting it.",
-    "CREDENTIAL_LOCKED": "The OS keychain is locked — unlock it and retry",
-    "CREDENTIAL_MISSING": "Required secret is missing from the secret store — store it again on the resource's edit page",
-    "CREDENTIAL_UNREADABLE": "Stored secret could not be decrypted with the current master key",
+    "SECRET_IN_USE": "This secret is still referenced by other resources. Detach them before deleting it.",
+    "SECRET_LOCKED": "The OS keychain is locked — unlock it and retry",
+    "SECRET_MISSING": "Required secret is missing from the secret store — store it again on the resource's edit page",
+    "SECRET_UNREADABLE": "Stored secret could not be decrypted with the current master key",
     "CURSOR_INVALID": "The list's page position is no longer valid — reload the list from the start.",
     "DAEMON_NOT_READY": "Coffer daemon is still starting up. Try again in a moment.",
     "DB_SCHEMA_TOO_NEW": "This database was written by a newer version of Coffer. Upgrade to open it.",
@@ -1517,7 +1517,7 @@
     "PLUGIN_UNINSTALL_FAILED": "Uninstall failed",
     "PLUGIN_UNINSTALL_UNSUPPORTED": "This plugin can't be uninstalled",
     "PRIVILEGED_PATH": "That path is privileged and can't be used here",
-    "PROVIDER_CREDENTIAL_SOURCE_INVALID": "Supply exactly one of a saved secret or an inline key",
+    "PROVIDER_SECRET_SOURCE_INVALID": "Supply exactly one of a saved secret or an inline key",
     "PROVIDER_INTERNAL_DEFAULT_TAKEN": "Another connection is already Coffer's internal-engine default — move the default to this connection instead of setting the flag directly",
     "PROVIDER_INTERNAL_ONLY": "This connection uses the ollama protocol, which only Coffer's internal engine uses — it can't be switched on for an agent",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "This connection is switched on, so its wire format can't change — put its agents back on their built-in login first, then edit the wire, then switch it on again",
@@ -3285,7 +3285,7 @@
         "saved": "Saved",
         "error": "Couldn't save"
       },
-      "credentials": {
+      "secrets": {
         "title": "Secrets",
         "replace": "Replace",
         "hint": "Stored in Coffer's secret store; the channel's config only carries a reference."
@@ -3657,10 +3657,10 @@
         "url": "Enter a git remote URL (https://… or git@…)",
         "interval": "Interval must be at least 60 seconds"
       },
-      "credentialRef": "Push secret",
-      "credentialRefHint": "The name of an entry in Coffer's secret store — not the secret itself. The daemon resolves it when it pushes, so the secret never reaches this page, the repository's git config, or any error text.",
-      "includeCredentials": "Include secrets",
-      "includeCredentialsHint": "Secrets travel as encrypted ciphertext; the master key is never pushed under any setting. A machine holding ciphertext without the key reports those references locked instead of failing quietly.",
+      "secretRef": "Push secret",
+      "secretRefHint": "The name of an entry in Coffer's secret store — not the secret itself. The daemon resolves it when it pushes, so the secret never reaches this page, the repository's git config, or any error text.",
+      "includeSecrets": "Include secrets",
+      "includeSecretsHint": "Secrets travel as encrypted ciphertext; the master key is never pushed under any setting. A machine holding ciphertext without the key reports those references locked instead of failing quietly.",
       "worktree": "Working tree: {{path}}",
       "convergeNow": "Converge now",
       "converging": "Converging…",
@@ -4367,7 +4367,7 @@
       "valueLabel": "Value of {{name}}",
       "hide": "Hide",
       "copied": "Value copied",
-      "hidesIn": "Hides in {{seconds}} s · recorded as credential_revealed"
+      "hidesIn": "Hides in {{seconds}} s · recorded as secret_revealed"
     },
     "delete": {
       "title": "Delete {{name}}?",
@@ -4450,6 +4450,62 @@
       "title_other": "{{count}} secrets have no value on this Mac",
       "body": "They came with the vault, but encrypted secrets aren't synced here. Servers that use them can't start until they have a value.",
       "importKey": "Import master key…"
+    },
+    "savedAwaitingApproval": "Saved. The new secret takes effect once it is approved in the Coffer app.",
+    "approvals": {
+      "title_one": "{{count}} change waiting for approval",
+      "title_other": "{{count}} changes waiting for approval",
+      "hintShell": "Approving asks for Touch ID or your login password.",
+      "hintBrowser": "Approve in the Coffer desktop app. You can reject here.",
+      "requestedBy": "Requested by",
+      "secret": "Secret",
+      "destination": "Sent to",
+      "target": "Target",
+      "approve": "Approve",
+      "reject": "Reject",
+      "op": {
+        "bind": "New use",
+        "replace_value": "New value",
+        "disable_protection": "Turn off protection",
+        "add_secret": "New secret"
+      },
+      "review": "Review",
+      "change": "Change",
+      "question": {
+        "add_secret": "Approve the new secret {{name}}?",
+        "replace_value": "Approve a new value for {{name}}?",
+        "bind": "Approve sending {{name}} to {{destination}}?",
+        "disable_protection": "Turn off approval for secret changes?"
+      },
+      "body": {
+        "add_secret": "The value is stored sealed. It can be used only after you approve it.",
+        "replace_value": "The new value is stored sealed. Until you approve it, {{users}} keep using the current value.",
+        "replace_value_unused": "The new value is stored sealed. Until you approve it, the current value stays.",
+        "bind": "Nothing is sent until you approve it.",
+        "disable_protection": "Until you approve it, every new secret, new value and new use keeps waiting for approval."
+      },
+      "requestedAt": "{{who}}, {{time}}",
+      "via": {
+        "ui": "You · in the Coffer UI",
+        "cli": "You · on the command line",
+        "api": "Through the API"
+      },
+      "nothingYet": "Nothing yet",
+      "openApp": "Open the Coffer app on this Mac to approve — it asks for Touch ID or your login password.",
+      "approveEllipsis": "Approve…",
+      "approveInApp": "Approve in the Coffer desktop app",
+      "approved": {
+        "add_secret": "Approved · {{name}} added",
+        "replace_value": "Approved · {{name}} has its new value",
+        "bind": "Approved · {{name}} goes to {{destination}}",
+        "disable_protection": "Approved · secret changes no longer wait for approval"
+      },
+      "rejected": {
+        "add_secret": "Rejected · {{name}} was not added",
+        "replace_value": "Rejected · {{name}} keeps its current value",
+        "bind": "Rejected · {{name}} is not sent to {{destination}}",
+        "disable_protection": "Rejected · secret changes still wait for approval"
+      }
     }
   },
   "usage": {
@@ -4639,64 +4695,6 @@
       "memory": "Memory",
       "customTool": "Custom tool",
       "cli": "CLI"
-    }
-  },
-  "credentials": {
-    "savedAwaitingApproval": "Saved. The new secret takes effect once it is approved in the Coffer app.",
-    "approvals": {
-      "title_one": "{{count}} change waiting for approval",
-      "title_other": "{{count}} changes waiting for approval",
-      "hintShell": "Approving asks for Touch ID or your login password.",
-      "hintBrowser": "Approve in the Coffer desktop app. You can reject here.",
-      "requestedBy": "Requested by",
-      "secret": "Secret",
-      "destination": "Sent to",
-      "target": "Target",
-      "approve": "Approve",
-      "reject": "Reject",
-      "op": {
-        "bind": "New use",
-        "replace_value": "New value",
-        "disable_protection": "Turn off protection",
-        "add_secret": "New secret"
-      },
-      "review": "Review",
-      "change": "Change",
-      "question": {
-        "add_secret": "Approve the new secret {{name}}?",
-        "replace_value": "Approve a new value for {{name}}?",
-        "bind": "Approve sending {{name}} to {{destination}}?",
-        "disable_protection": "Turn off approval for secret changes?"
-      },
-      "body": {
-        "add_secret": "The value is stored sealed. It can be used only after you approve it.",
-        "replace_value": "The new value is stored sealed. Until you approve it, {{users}} keep using the current value.",
-        "replace_value_unused": "The new value is stored sealed. Until you approve it, the current value stays.",
-        "bind": "Nothing is sent until you approve it.",
-        "disable_protection": "Until you approve it, every new secret, new value and new use keeps waiting for approval."
-      },
-      "requestedAt": "{{who}}, {{time}}",
-      "via": {
-        "ui": "You · in the Coffer UI",
-        "cli": "You · on the command line",
-        "api": "Through the API"
-      },
-      "nothingYet": "Nothing yet",
-      "openApp": "Open the Coffer app on this Mac to approve — it asks for Touch ID or your login password.",
-      "approveEllipsis": "Approve…",
-      "approveInApp": "Approve in the Coffer desktop app",
-      "approved": {
-        "add_secret": "Approved · {{name}} added",
-        "replace_value": "Approved · {{name}} has its new value",
-        "bind": "Approved · {{name}} goes to {{destination}}",
-        "disable_protection": "Approved · secret changes no longer wait for approval"
-      },
-      "rejected": {
-        "add_secret": "Rejected · {{name}} was not added",
-        "replace_value": "Rejected · {{name}} keeps its current value",
-        "bind": "Rejected · {{name}} is not sent to {{destination}}",
-        "disable_protection": "Rejected · secret changes still wait for approval"
-      }
     }
   },
   "providers": {

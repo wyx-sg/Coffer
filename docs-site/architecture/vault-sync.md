@@ -54,7 +54,7 @@ config:
   transport:
     args: []
     command: ${HOME}/.local/bin/jira-mcp
-    credential_refs:
+    secret_refs:
       JIRA_TOKEN: jira-token
     type: stdio
 description: Company Jira
@@ -200,7 +200,7 @@ flowchart LR
     D --> MT["memory-triggers/ → TreeApplier"]
     D --> RS["resources/ → ResourceApplier"]
     D --> ST["state/ → StateApplier"]
-    D --> CR["credentials/ → CredentialApplier"]
+    D --> CR["credentials/ → SecretApplier"]
     RS --> SVC["ResourceService + ImportGate"]
     ST --> SP["SyncedStatePort of the area"]
     K --> FS["~/.coffer/knowledge"]
@@ -211,7 +211,7 @@ flowchart LR
 - **Knowledge and skill files** (`TreeApplier`) are copied in or unlinked; an emptied collection directory is removed too. Symlinks in the working tree are refused. There is no index to rebuild, because [knowledge is plain files](/architecture/knowledge).
 - **Resource documents** (`ResourceApplier`) go through the resource service, keyed by uid. A new uid is registered at that same uid, so both machines hold the same resource. An existing uid with a different name is applied as a rename through `ResourceService.rename`, which runs the kind's `on_rename` hook (a kind whose name is fixed refuses it, and the path is held). Config and description are updated, and, on a kind that carries a title, the title is set from the document's `title` key, or cleared when the document carries none (a document from an older build that still carries a title for an agent, MCP server or skill is accepted and its title ignored); the local `enabled` and `scope` are never touched, and a newly arrived resource takes this machine's default reach. Before any write the kind's `ImportGate` validates the config, and a kind may register an `ImportNormaliser` (the provider kind uses one to keep a single internal-engine default). A removal runs the real `ResourceService.delete`, whose cascade releases secrets no remaining resource cites. A document whose uid disagrees with its path is refused rather than guessed at.
 - **State documents** (`StateApplier`) are handed to the `SyncedStatePort` that claims the area, with `${HOME}` expanded. Each area defines what deleting its document means: an un-pairing, capabilities re-enabled, engine settings back to defaults, or nothing at all for the plugin inventory. An area this build does not know is skipped rather than failed.
-- **Secret blobs** (`CredentialApplier`) are written as ciphertext only, and only if the incoming blob was encrypted later than the one already held. A stale blob pushed cleanly by another machine is ignored rather than allowed to orphan a working secret.
+- **Secret blobs** (`SecretApplier`) are written as ciphertext only, and only if the incoming blob was encrypted later than the one already held. A stale blob pushed cleanly by another machine is ignored rather than allowed to orphan a working secret.
 
 After the apply, the round lists secret refs this machine holds ciphertext for but cannot decrypt and reports them as `locked_refs`, rather than letting them fail at first use. Keys move between machines out of band: the desktop app writes a passphrase-protected key backup behind a presence check, and `coffer sync key import` (or Settings › Security) installs it on the other machine, after showing whose key the file holds beside this machine's.
 
@@ -301,7 +301,7 @@ An owner that names a machine the registry does not hold is reported as a fault,
 
 `GitMirror` (`infrastructure/sync/git_mirror.py`) shells out to the real `git` binary so the remote stays an ordinary repository. `git_invoke.py` makes each invocation safe:
 
-- The push credential is resolved from the credential store for one call and reaches git through a credential helper given with `-c` that reads `$COFFER_GIT_TOKEN` from the environment. It is never in the remote URL, argv, `.git/config` or any recorded error; failure text is redacted in the adapter and again in the service. A helper is used rather than `GIT_ASKPASS` because macOS's own git ignores the latter.
+- The push secret is resolved from the secret store for one call and reaches git through a credential helper given with `-c` that reads `$COFFER_GIT_TOKEN` from the environment. It is never in the remote URL, argv, `.git/config` or any recorded error; failure text is redacted in the adapter and again in the service. A helper is used rather than `GIT_ASKPASS` because macOS's own git ignores the latter.
 - `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` point at `/dev/null`, and the commit identity is supplied as `Coffer <coffer@localhost>`, so your own git configuration cannot change what a round does. `core.quotepath=false` keeps non-ASCII paths parseable.
 - The remote URL may not start with `-`, the branch must pass `git check-ref-format --branch` rules, and positional arguments sit behind `--`, so no configured value can be read as an option.
 - The working tree may not overlap the knowledge or skills roots, contain `~/.coffer`, or sit elsewhere inside `~/.coffer` than the default. A repository Coffer creates or adopts is marked `coffer.managed` in its local config.
@@ -315,7 +315,7 @@ An owner that names a machine the registry does not hold is reported as a fault,
 - **Leave the file trees to your own git and sync only structured state.** If Coffer runs the pull it is convergence anyway; if you run it, the drift stays. It also splits `skill`, whose files and registry row are one thing.
 - **Tombstones, timestamp arbitration and quarantine.** These are what a database projected into files needs. With knowledge and skills as plain files and the rest a few dozen deterministic documents, git's commit graph already records deletions, `git merge` already arbitrates, and a set of held paths replaces quarantine.
 - **Commit `~/.coffer` in place.** It mixes machine-local state with vault truth, and `coffer.db` is binary and unmergeable.
-- **A hosted sync service, peer-to-peer sync or an object store.** A hosted service would be a vendor system of record. Peer-to-peer and object stores have no history or three-way merge. Git suits an audience that already holds git credentials.
+- **A hosted sync service, peer-to-peer sync or an object store.** A hosted service would be a vendor system of record. Peer-to-peer and object stores have no history or three-way merge. Git suits an audience that already holds git secrets.
 - **Manual convergence by default.** A vault that converges only when someone remembers is the island problem with an extra step. The interval is the knob, pausing the remote is the off switch, and `coffer sync now` avoids waiting.
 - **Local export and import.** A bundle written to a directory and read back is a wholesale overwrite with no base. A new machine runs `coffer sync adopt`, an offline medium is a `file://` remote, and handing someone a copy is `git clone ~/.coffer/sync`.
 

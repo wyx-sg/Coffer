@@ -26,7 +26,7 @@ import pathlib
 from collections.abc import Collection, Sequence
 
 from coffer.application.sync.appliers_read import read_yaml
-from coffer.application.sync.ports import CredentialSyncPort, SyncedStatePort
+from coffer.application.sync.ports import SecretSyncPort, SyncedStatePort
 from coffer.domain.sync.errors import SyncSerializationError
 from coffer.domain.sync.fernet_time import is_fresher
 from coffer.domain.sync.portability import expand_home
@@ -161,7 +161,7 @@ class StateApplier:
         return self._providers.get(area), rel.removesuffix(".yaml")
 
 
-class CredentialApplier:
+class SecretApplier:
     """``credentials/<ref>.enc`` — Fernet ciphertext, never the key.
 
     Guarded by encryption time even outside a merge conflict. A blob can reach
@@ -172,26 +172,26 @@ class CredentialApplier:
 
     prefix = "credentials/"
 
-    def __init__(self, credentials: CredentialSyncPort, *, worktree: pathlib.Path) -> None:
-        self._credentials = credentials
+    def __init__(self, secrets: SecretSyncPort, *, worktree: pathlib.Path) -> None:
+        self._secrets = secrets
         self._worktree = worktree
 
     async def upsert(self, path: str) -> None:
         ref = self._ref(path)
         blob = await asyncio.to_thread((self._worktree / path).read_bytes)
-        current = await asyncio.to_thread(self._credentials.read_ciphertext, ref)
+        current = await asyncio.to_thread(self._secrets.read_ciphertext, ref)
         if current is not None and current != blob and not is_fresher(blob, current):
             return
-        await asyncio.to_thread(self._credentials.write_ciphertext, ref, blob)
+        await asyncio.to_thread(self._secrets.write_ciphertext, ref, blob)
 
     async def remove(self, path: str) -> None:
-        await asyncio.to_thread(self._credentials.delete_ciphertext, self._ref(path))
+        await asyncio.to_thread(self._secrets.delete_ciphertext, self._ref(path))
 
     def _ref(self, path: str) -> str:
         return path[len(self.prefix) :].removesuffix(".enc")
 
 
-async def locked_refs(credentials: CredentialSyncPort) -> tuple[str, ...]:
+async def locked_refs(secrets: SecretSyncPort) -> tuple[str, ...]:
     """The refs this machine holds ciphertext for but cannot open, or none.
 
     Asked after a round's apply, so it must not be able to take the round down:
@@ -201,7 +201,7 @@ async def locked_refs(credentials: CredentialSyncPort) -> tuple[str, ...]:
     a key as locked").
     """
     try:
-        return tuple(await asyncio.to_thread(credentials.locked_refs))
+        return tuple(await asyncio.to_thread(secrets.locked_refs))
     except Exception:
         _logger.warning("sync.locked_refs_failed", exc_info=True)
         return ()

@@ -51,4 +51,4 @@ def mcp_destination(uid: str, name: str, config: MCPServerConfig) -> SecretDesti
 
 def secrets_readable_by_local_processes(config: MCPServerConfig) -> bool:
     """A stdio server whose environment carries a secret."""
-    return isinstance(config.transport, StdioTransport) and bool(config.transport.credential_refs)
+    return isinstance(config.transport, StdioTransport) and bool(config.transport.secret_refs)

@@ -2,8 +2,8 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { credentialsApi } from "@/lib/api/credentials";
-import { credentialsListKey } from "@/lib/api/queryKeys";
+import { secretsApi } from "@/lib/api/secret";
+import { secretsListKey } from "@/lib/api/queryKeys";
 
 /** A standalone secret's ref: `secret/<name>`. */
 const SECRET_PREFIX = "secret/";
@@ -11,7 +11,7 @@ const SECRET_PREFIX = "secret/";
 /** Every stored standalone secret, by its Secrets-page name, sorted. Presence
  *  only — no value is read. */
 export function useSecretNames() {
-  const query = useQuery({ queryKey: credentialsListKey, queryFn: credentialsApi.list });
+  const query = useQuery({ queryKey: secretsListKey, queryFn: secretsApi.list });
   const names = useMemo(
     () =>
       (query.data?.refs ?? [])

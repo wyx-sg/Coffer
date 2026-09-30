@@ -21,7 +21,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.invocation_outcome import is_upstream_answered
 from coffer.application.mcp.runner_detect import missing_runner_of
-from coffer.application.mcp.server_status import credential_refs_of, failure_run, missing_secret
+from coffer.application.mcp.server_status import failure_run, missing_secret, secret_refs_of
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
@@ -32,7 +32,6 @@ from coffer.infrastructure.mcp.persistence import (
     MCPServerHealthRepo,
 )
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.credential_composition import get_credential_store
 from coffer.surfaces.http.dependencies import (
     get_actor,
     get_audit_service,
@@ -51,6 +50,7 @@ from coffer.surfaces.http.mcp.dependencies import (
 )
 from coffer.surfaces.http.mcp.page_schemas import McpServerStatusOut
 from coffer.surfaces.http.schemas import CapabilityKeyBody, CapabilityListOut
+from coffer.surfaces.http.secret_composition import get_secret_store
 
 router = APIRouter(
     prefix="/api/v1/resources/mcp_server",
@@ -160,7 +160,7 @@ async def get_server_status(
     prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
     invocations: MCPInvocationRepo = Depends(get_invocation_repo),  # noqa: B008
     health_repo: MCPServerHealthRepo = Depends(get_health_repo),  # noqa: B008
-    store: Any = Depends(get_credential_store),  # noqa: B008
+    store: Any = Depends(get_secret_store),  # noqa: B008
 ) -> McpServerStatusOut:
     """Per-server status from persisted state — health record (from /test),
     discovered capabilities, or last invocation — and what the page says about
@@ -175,7 +175,7 @@ async def get_server_status(
     failure = failure_run(recent)
     secret = (
         await asyncio.to_thread(missing_secret, resource.config, store.exists)
-        if credential_refs_of(resource.config)
+        if secret_refs_of(resource.config)
         else None
     )
     detail: dict[str, Any] = {

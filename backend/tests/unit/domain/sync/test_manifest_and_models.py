@@ -114,7 +114,7 @@ def test_a_hand_written_version_is_still_a_version() -> None:
 def test_export_summary_starts_empty() -> None:
     exported = ExportSummary(path="/tmp/b")
     assert exported.areas == [] and exported.failures == []
-    assert exported.credentials_included is False
+    assert exported.secrets_included is False
 
 
 def test_area_count_is_a_value_object() -> None:

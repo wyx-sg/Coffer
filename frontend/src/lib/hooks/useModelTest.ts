@@ -52,7 +52,7 @@ export function useModelPairTest(
     const probe = {
       provider: connection.protocol,
       base_url: connection.base_url,
-      credential_ref: connection.credential_ref,
+      secret_ref: connection.secret_ref,
     };
     if (mode === "chat") {
       chat.mutate(

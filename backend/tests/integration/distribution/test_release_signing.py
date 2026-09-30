@@ -4,7 +4,7 @@ desktop-app "Sign and notarise a release when its credentials are present",
 
 None of it can run here — it needs a macOS runner, a Developer ID and the
 updater key — so what is gated is what regresses silently: that every step
-holding a credential is behind the plan step, that the plan says what it
+holding a secret is behind the plan step, that the plan says what it
 skipped, that the access group stamped into the daemon is the one the
 entitlements grant, and that the manifest the shell reads has the shape the
 updater plugin expects.
@@ -23,7 +23,7 @@ from typing import Any
 import pytest
 import yaml
 
-from coffer.infrastructure.credentials import build_identity
+from coffer.infrastructure.secret import build_identity
 
 _REPO = Path(__file__).resolve().parents[4]
 _RELEASE = _REPO / ".github" / "workflows" / "release.yml"
@@ -75,7 +75,7 @@ def test_without_credentials_every_signing_step_is_skipped_with_a_reason(
     assert "::warning::Notarization: SKIPPED" in log
     assert "::warning::Updater: SKIPPED — missing TAURI_SIGNING_PRIVATE_KEY" in log
 
-    # …and every step that would use a credential is behind that answer.
+    # …and every step that would use a secret is behind that answer.
     for step in _steps():
         body = json.dumps(step)
         if "secrets." not in body or step.get("name") in {

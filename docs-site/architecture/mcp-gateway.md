@@ -131,7 +131,7 @@ flowchart TD
   R -->|recovered| N["notifications/tools/list_changed"]
 ```
 
-**Fan-out.** `gateway_aggregate_lists.py` queries every visible server concurrently with `asyncio.gather`, and gives each one a hard budget of `PER_SERVER_LIST_TIMEOUT = 5.0` seconds. A server that times out or is unavailable is left out and logged by name. So is a server whose secret cannot be resolved (`CredentialMissing`, `CredentialLocked`). The rest of the list is unaffected. Without this budget, one dead upstream could hold the whole response for the supervisor's full retry ladder.
+**Fan-out.** `gateway_aggregate_lists.py` queries every visible server concurrently with `asyncio.gather`, and gives each one a hard budget of `PER_SERVER_LIST_TIMEOUT = 5.0` seconds. A server that times out or is unavailable is left out and logged by name. So is a server whose secret cannot be resolved (`SecretMissing`, `SecretLocked`). The rest of the list is unaffected. Without this budget, one dead upstream could hold the whole response for the supervisor's full retry ladder.
 
 **Degraded recovery.** Clients cache `tools/list`, and a server that never connected cannot send `list_changed`. So `DegradedTracker` (`gateway_recovery.py`) keeps the names of the servers that failed. It retries them in the background after 2, 8 and 30 seconds. On the first recovery, it invalidates that server's cached tool list and sends `notifications/tools/list_changed` downstream, and the client re-lists.
 
@@ -221,7 +221,7 @@ sequenceDiagram
   end
   G->>V: get_or_spawn("jira")
   opt no healthy connection
-    V->>C: materialize(credential_refs) in a thread
+    V->>C: materialize(secret_refs) in a thread
     C-->>V: env or header overlay
     V->>U: spawn + initialize (retry ladder)
   end
@@ -246,14 +246,14 @@ The pipeline is `_invoke` in `application/mcp/gateway_handlers.py`, which `resou
 
 ### Secret materialisation
 
-Server config never holds a secret. `StdioTransport.env` and `HttpTransport.headers` reject values that look like tokens (`Bearer …`, `ghp_…`, `sk-…`, JWT prefixes, and similar). Secrets are named in `credential_refs`, a map from an env var or header name to a secret ref.
+Server config never holds a secret. `StdioTransport.env` and `HttpTransport.headers` reject values that look like tokens (`Bearer …`, `ghp_…`, `sk-…`, JWT prefixes, and similar). Secrets are named in `secret_refs`, a map from an env var or header name to a secret ref.
 
-At spawn time, `CredentialResolver.materialize` runs in a worker thread and turns the refs into plaintext from the encrypted store:
+At spawn time, `SecretResolver.materialize` runs in a worker thread and turns the refs into plaintext from the encrypted store:
 
 - **stdio.** The child's environment is the MCP SDK's minimal default allowlist (`PATH`, `HOME`, `SHELL` and similar), plus the server's static `env`, plus the materialised secrets. The daemon's own `os.environ` is not inherited, so an upstream cannot read tokens the daemon was started with.
 - **HTTP.** The static headers are merged with the materialised headers on the client.
 
-The plaintext lives only in the child's environment or the in-memory HTTP client. It is never persisted or logged. A missing ref raises `CredentialMissing`, which is not retried. See [Secret store](/guides/secret-store) and [Security model](/architecture/security).
+The plaintext lives only in the child's environment or the in-memory HTTP client. It is never persisted or logged. A missing ref raises `SecretMissing`, which is not retried. See [Secret store](/guides/secret-store) and [Security model](/architecture/security).
 
 ## Supervision
 
@@ -308,7 +308,7 @@ The row's columns, the exact meaning of each status, the buffered writer and ret
 | Raised | JSON-RPC error |
 | --- | --- |
 | `ToolDisabled` (disabled server or capability, out of scope, malformed name) | `-32000`, Coffer's message |
-| Any other `CofferError` (`UpstreamUnavailable`, `UpstreamTimeout`, `CredentialMissing`, `ResourceNotFound`, …) | `-32603`, Coffer's message |
+| Any other `CofferError` (`UpstreamUnavailable`, `UpstreamTimeout`, `SecretMissing`, `ResourceNotFound`, …) | `-32603`, Coffer's message |
 | Anything else, including an upstream `MCPError` | `-32603`, `internal error: <ClassName>` |
 
 An upstream's in-band `isError` result is not an error at this layer. It passes through unchanged as a successful JSON-RPC response. Transport failures between the shim and the daemon become `-32603` errors that the shim synthesizes, so the client never hangs on a dead socket.
@@ -332,7 +332,7 @@ A **custom-tool group** is an `mcp_server` whose transport is `http_api` (`domai
 | Reach override | `mcp_tool_reach` (migration 0115) | Reach is machine-local; an override narrows the group's scope for one tool. |
 | The per-tool gate | `application/mcp/gateway_tool_gate.py` | Computes, per session, the switched-off and out-of-reach tools; `tools/list` and `coffer__search_tools` drop them and `tools/call` refuses them as `denied` — the same shape as a disabled capability. |
 | Annotations | `DiscoveredTool.annotations` → the listing entry | A tool that changes data is listed `readOnlyHint: false, destructiveHint: true`, any other `readOnlyHint: true`; every upstream's own annotations are passed through too. |
-| Management | `application/mcp/custom_tools.py`, `custom_tool_views.py`, `custom_tool_import.py`; `surfaces/http/mcp/custom_tool_routes.py`; `surfaces/cli/tool_cmd.py` | Every write goes through `ResourceService`, so validation, the missing-credential probe, audit and the eviction of live connections come with it. |
+| Management | `application/mcp/custom_tools.py`, `custom_tool_views.py`, `custom_tool_import.py`; `surfaces/http/mcp/custom_tool_routes.py`; `surfaces/cli/tool_cmd.py` | Every write goes through `ResourceService`, so validation, the missing-secret probe, audit and the eviction of live connections come with it. |
 | OpenAPI | `domain/mcp/openapi_import.py` (pure), `infrastructure/mcp/openapi_fetch.py` | The document is read into draft tools; a URL is fetched through the SSRF guard (5 MiB, 20 s, redirects re-checked). |
 
 ### The secret boundary
@@ -375,7 +375,7 @@ A group's health is read, not stored: `off` while disabled, `failing` when its l
 | [`application/mcp/gateway_notifications.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_notifications.py), [`gateway_server_requests.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_server_requests.py) | Upstream notifications, sampling and roots relay |
 | [`application/mcp/supervisor.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/supervisor.py), [`discovery.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/discovery.py) | Spawn, retry, cooldown, eviction; live lists, cache, preference reconcile |
 | [`application/builtin_tools.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/builtin_tools.py) | `BuiltinTool` and `BuiltinToolRegistry` |
-| [`application/credentials/resolver.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/credentials/resolver.py) | Secret ref materialisation |
+| [`application/secret/resolver.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/secret/resolver.py) | Secret ref materialisation |
 | [`domain/mcp/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/domain/mcp) | Namespacing, server config, the HTTP API transport and its request rendering, OpenAPI reading, BM25-lite ranker, tiering policy |
 | [`application/mcp/custom_tools.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/custom_tools.py), [`gateway_tool_gate.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/mcp/gateway_tool_gate.py) | Custom-tool groups and the per-tool gate |
 | [`infrastructure/mcp/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/mcp) | stdio, HTTP and HTTP API upstream connections, dispatch table, OpenAPI fetch, persistence, buffered invocation writer |

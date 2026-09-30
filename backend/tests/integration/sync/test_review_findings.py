@@ -51,7 +51,7 @@ async def _pair(tmp_path: pathlib.Path):
         machine_id=MACHINE_A,
         root=tmp_path / "machine-a",
         remote_url=url,
-        with_credentials=False,
+        with_secrets=False,
     )
     b = await build_machine(
         name="desktop",
@@ -59,7 +59,7 @@ async def _pair(tmp_path: pathlib.Path):
         root=tmp_path / "machine-b",
         remote_url=url,
         guard=UNGUARDED,
-        with_credentials=False,
+        with_secrets=False,
     )
     return a, b
 

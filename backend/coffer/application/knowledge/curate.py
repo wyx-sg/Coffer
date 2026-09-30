@@ -98,7 +98,7 @@ class AgenticCurationPort(Protocol):
         tools: Sequence[CurationTool],
         system_prompt: str,
         user_prompt: str,
-        credential_resolver: Callable[[str], str],
+        secret_resolver: Callable[[str], str],
         recursion_limit: int,
         timeout: float | None = None,
     ) -> dict[str, Any]: ...
@@ -112,7 +112,7 @@ async def run_curation(
     actor: str = "system",
     agent: AgenticCurationPort,
     models: ModelSelectorPort,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     recursion_limit: int = DEFAULT_CURATION_RECURSION_LIMIT,
     read_timeout: TimeoutReader | None = None,
     truncations: TruncationLedger | None = None,
@@ -149,7 +149,7 @@ async def run_curation(
             actor=actor,
             agent=agent,
             models=models,
-            credential_resolver=credential_resolver,
+            secret_resolver=secret_resolver,
             recursion_limit=recursion_limit,
             read_timeout=read_timeout,
             truncations=truncations,
@@ -168,7 +168,7 @@ async def _pass(
     actor: str,
     agent: AgenticCurationPort,
     models: ModelSelectorPort,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     recursion_limit: int,
     read_timeout: TimeoutReader | None,
     truncations: TruncationLedger | None,
@@ -259,7 +259,7 @@ async def _pass(
                 candidate_bodies=candidate_bodies,
                 every_document=every_document,
             ),
-            credential_resolver=credential_resolver,
+            secret_resolver=secret_resolver,
             recursion_limit=recursion_limit,
             # Per TURN, not per pass: a bound wrapped around this one ``await``
             # could only stop the whole pass, and a wedged endpoint held it
@@ -340,7 +340,7 @@ class CurationPass:
         *,
         agent: AgenticCurationPort,
         models: ModelSelectorPort,
-        credential_resolver: Callable[[str], str],
+        secret_resolver: Callable[[str], str],
         recursion_limit: int = DEFAULT_CURATION_RECURSION_LIMIT,
         on_corpus_changed: Callable[[], Awaitable[None]] | None = None,
         read_timeout: TimeoutReader | None = None,
@@ -348,7 +348,7 @@ class CurationPass:
         self._read_timeout = read_timeout
         self._agent = agent
         self._models = models
-        self._credential_resolver = credential_resolver
+        self._secret_resolver = secret_resolver
         self._recursion_limit = recursion_limit
         # Re-rendering every agent's skill is how a new document becomes reachable
         # (see "Deliver the guide as the shared-master link"), so it hangs off the
@@ -372,7 +372,7 @@ class CurationPass:
             actor=actor,
             agent=self._agent,
             models=self._models,
-            credential_resolver=self._credential_resolver,
+            secret_resolver=self._secret_resolver,
             recursion_limit=self._recursion_limit,
             read_timeout=self._read_timeout,
             truncations=self._truncations,

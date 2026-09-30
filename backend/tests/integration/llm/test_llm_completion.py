@@ -33,12 +33,12 @@ async def test_complete_returns_text(monkeypatch: pytest.MonkeyPatch) -> None:
         config=ProviderConfig(
             protocol=Protocol.OLLAMA,
             base_url="http://localhost:11434",
-            credential_ref=None,
+            secret_ref=None,
         ),
         model="llama3",
     )
     out = await port.complete(
-        system="s", user="u", model=cfg, credential_resolver=lambda r: "", timeout=90.0
+        system="s", user="u", model=cfg, secret_resolver=lambda r: "", timeout=90.0
     )
     assert out == "completed"
     assert seen["timeout"] == 90.0

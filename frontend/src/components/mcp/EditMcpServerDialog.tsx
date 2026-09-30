@@ -29,10 +29,10 @@ import { useSaveMcpServerEdit } from "@/lib/hooks/useMcpServerMutations";
 import type { ParsedEnvVar } from "@/lib/mcp/pasteParse";
 import { shellSplit } from "@/lib/mcp/shellTokens";
 import { KeyValueRows } from "./add/KeyValueRows";
-import { CredentialRowEditor, type CredRow } from "./CredentialRowEditor";
+import { SecretRowEditor, type CredRow } from "./SecretRowEditor";
 import { ServerTimeoutFields } from "./ServerTimeoutFields";
 import { timeoutsOf, type Timeouts } from "./serverTimeouts";
-import { configTextFrom, credentialRefsOf, transportFieldsOf } from "./editMcpServerSave";
+import { configTextFrom, secretRefsOf, transportFieldsOf } from "./editMcpServerSave";
 
 type ResourceOut = components["schemas"]["ResourceOut"];
 
@@ -45,7 +45,7 @@ interface Props {
 }
 
 function credRowsOf(config: unknown): CredRow[] {
-  return Object.entries(credentialRefsOf(config)).map(([name, ref], i) => ({
+  return Object.entries(secretRefsOf(config)).map(([name, ref], i) => ({
     id: i,
     name,
     value: "",
@@ -173,7 +173,7 @@ export function EditMcpServerDialog({ resource, open, onOpenChange, focus }: Pro
             secretToggle={false}
           />
           {open ? (
-            <CredentialRowEditor
+            <SecretRowEditor
               creds={creds}
               focusFirst={focus === "secret"}
               onUpdate={(idx, patch) =>

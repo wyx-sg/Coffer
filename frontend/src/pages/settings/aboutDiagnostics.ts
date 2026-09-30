@@ -3,7 +3,7 @@
 // Spec web-ui "Keep daemon shutdown on the command line": version, release
 // channel, host, daemon state and port, and the enabled experimental features —
 // never a token or a secret. Built only from the status probe's public fields
-// and the host, so nothing credential-shaped can reach it.
+// and the host, so nothing secret-shaped can reach it.
 import type { components } from "@/lib/api/types";
 import type { DaemonFooterState } from "@/components/shell/useDaemonFooterState";
 

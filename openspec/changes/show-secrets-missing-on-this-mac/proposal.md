@@ -13,7 +13,7 @@ stored that file's value.
 
 ## What Changes
 
-- The secrets list (`GET /api/v1/credentials`, `coffer secret list --json`)
+- The secrets list (`GET /api/v1/secrets`, `coffer secret list --json`)
   carries `locked` — stored, but this Mac's key cannot open it, found by each
   token's signature without decrypting anything — plus `created_at` and
   `last_used_at`. The store stamps `last_used_at` when it decrypts a value for a
@@ -54,11 +54,11 @@ stored that file's value.
 
 ## Impact
 
-- Backend: `EncryptedCredentialStore` (`peek`, `last_used`, `unreadable_refs`),
-  `SecretBoundary.write` / `approve`, the credentials list and scan/import
+- Backend: `EncryptedSecretStore` (`peek`, `last_used`, `unreadable_refs`),
+  `SecretBoundary.write` / `approve`, the secrets list and scan/import
   routes and schemas, `plaintext_scan.move`; migration 0134.
-- Frontend: `components/credentials/*`, `pages/SecretsPage.tsx`, en/zh strings.
-- Wire: `CredentialRefOut`, `ApprovalOut.op`, `SecretScanOut`,
+- Frontend: `components/secret/*`, `pages/SecretsPage.tsx`, en/zh strings.
+- Wire: `SecretRefOut`, `ApprovalOut.op`, `SecretScanOut`,
   `SecretImportSkippedOut` (regenerated contract and types).
 - The CLI needs no change: `coffer secret set` already reports a 202 as
   waiting for approval and exits `9`, and `coffer secret list --json` passes

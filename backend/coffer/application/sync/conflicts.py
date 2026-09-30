@@ -3,7 +3,7 @@ conflicts with an agent only in the working tree").
 
 Four layers, narrowest first, and the narrowness is the design:
 
-1. **Credential blobs never reach a text merge.** A Fernet token carries its
+1. **Secret blobs never reach a text merge.** A Fernet token carries its
    encryption time in cleartext, so two ciphertexts for one ref can be ordered
    without the key. The fresher encryption wins. This applies to
    ``credentials/*.enc`` and to nothing else — a general "newest wins" resolver
@@ -36,7 +36,7 @@ from coffer.domain.sync.fernet_time import is_fresher
 
 _logger = logging.getLogger(__name__)
 
-_CREDENTIALS = "credentials/"
+_SECRETS = "credentials/"
 _RESOURCES = "resources/"
 _STATE = "state/"
 #: The file trees, where a deletion is housekeeping and an edit is a decision.
@@ -61,14 +61,14 @@ class ConflictArbiter:
     ) -> tuple[list[str], list[str]]:
         """Returns ``(resolved_by_agent, unresolved)``.
 
-        Credential blobs settled by encryption time are deliberately absent
+        Secret blobs settled by encryption time are deliberately absent
         from the first list: they were decided by a rule, not by a model, and
         the user is told about agent resolutions specifically because those are
         the ones worth reviewing.
         """
         remaining: list[str] = []
         for path in paths:
-            if path.startswith(_CREDENTIALS) and await self._settle_credential(mirror, path):
+            if path.startswith(_SECRETS) and await self._settle_secret(mirror, path):
                 continue
             if path.startswith(_TREES) and await self._settle_delete_vs_edit(mirror, path):
                 continue
@@ -92,7 +92,7 @@ class ConflictArbiter:
         unresolved = [p for p in remaining if p not in resolved]
         return resolved, unresolved
 
-    async def _settle_credential(self, mirror: GitMirrorPort, path: str) -> bool:
+    async def _settle_secret(self, mirror: GitMirrorPort, path: str) -> bool:
         """Take whichever side was encrypted later.
 
         A blob whose header will not parse leaves the path unsettled rather
@@ -102,7 +102,7 @@ class ConflictArbiter:
         ours = await mirror.read_file(_OURS, path)
         theirs = await mirror.read_file(_THEIRS, path)
         if ours is None or theirs is None:
-            # One side deleted the credential. That is a real decision about
+            # One side deleted the secret. That is a real decision about
             # the vault, not an encryption race; let it reach the next layer.
             return False
         side = "theirs" if is_fresher(theirs, ours) else "ours"

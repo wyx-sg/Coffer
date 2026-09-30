@@ -83,7 +83,7 @@ async def _carry_out(plan: Plan, answers: list[str], *, retired: list[RetiredNot
         retired=retired or [],
         model="a-model",
         completion=completion,  # type: ignore[arg-type]
-        credential_resolver=lambda ref: ref,
+        secret_resolver=lambda ref: ref,
     )
     return counts, completion
 

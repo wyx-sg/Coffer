@@ -304,7 +304,7 @@ def to_transport_config(entry: McpEntry, secret_refs: dict[str, str]) -> dict[st
 
     ``secret_refs`` maps secret env/header key names to their keychain
     reference paths. Secret keys are moved out of the plain ``env``/``headers``
-    map and into ``credential_refs``; non-secret keys remain in place.
+    map and into ``secret_refs``; non-secret keys remain in place.
     """
     if entry.transport == "stdio":
         plain_env = {k: v for k, v in entry.env.items() if k not in secret_refs}
@@ -313,7 +313,7 @@ def to_transport_config(entry: McpEntry, secret_refs: dict[str, str]) -> dict[st
             "command": entry.command,
             "args": list(entry.args),
             "env": plain_env,
-            "credential_refs": dict(secret_refs),
+            "secret_refs": dict(secret_refs),
         }
 
     # http transport
@@ -322,5 +322,5 @@ def to_transport_config(entry: McpEntry, secret_refs: dict[str, str]) -> dict[st
         "type": "http",
         "url": entry.url,
         "headers": plain_headers,
-        "credential_refs": dict(secret_refs),
+        "secret_refs": dict(secret_refs),
     }

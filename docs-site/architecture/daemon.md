@@ -124,7 +124,7 @@ sequenceDiagram
   U->>A: lifespan startup
   A->>A: schema guard, backup, alembic upgrade head
   A->>A: startup sweep of orphans and stale daemons
-  A->>A: credentials, services, kinds, chat, channels
+  A->>A: secrets, services, kinds, chat, channels
   A->>A: boot reconcile pass and guide refresh
   A->>J: read token and port back
   A->>A: deploy frozen sibling binaries

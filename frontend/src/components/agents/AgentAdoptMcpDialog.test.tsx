@@ -2,7 +2,7 @@
 //
 // Covered: what the dialog says will happen (file, agent), the name field
 // prefilled with the entry's name, every env key with how it is stored, the
-// credential reference of a secret key (prefilled from the agent's NAME,
+// secret reference of a secret key (prefilled from the agent's NAME,
 // while the request is addressed by its UID), the pending label, a name
 // conflict said under the name field and retried with `new_name`, and any
 // other failure shown inline.
@@ -75,7 +75,7 @@ describe("AgentAdoptMcpDialog", () => {
     expect(screen.getByText(/so Claude Code never gets the server twice/)).toBeInTheDocument();
   });
 
-  test("submits the secret's credential reference, spelled with the agent's name", async () => {
+  test("submits the secret's secret reference, spelled with the agent's name", async () => {
     const onAdopted = vi.fn();
     adoptMock.mockResolvedValue({ uid: "r-pg", kind: "mcp_server", name: "postgres-local" });
     renderDialog(ENTRY, onAdopted);

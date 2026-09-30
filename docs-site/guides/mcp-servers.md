@@ -101,7 +101,7 @@ The stored config holds only the reference:
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-brave-search"],
     "env": {},
-    "credential_refs": { "BRAVE_API_KEY": "brave/api-key" },
+    "secret_refs": { "BRAVE_API_KEY": "brave/api-key" },
     "cwd": null
   },
   "spawn_timeout_seconds": 30,
@@ -111,7 +111,7 @@ The stored config holds only the reference:
 
 When Coffer starts the server, it decrypts `brave/api-key` in memory and puts it in the child's environment as `BRAVE_API_KEY`. The child does **not** inherit the daemon's own environment: it gets a minimal safe set (such as `PATH` and `HOME`), the server's static `env`, and its materialised secrets — nothing else.
 
-In the web UI's Add server dialog, environment variables whose name or value looks like a secret are pre-marked **Secret**. Values marked Secret are stored in the secret store under a generated ref and cited from `credential_refs`; the rest stay in `env`.
+In the web UI's Add server dialog, environment variables whose name or value looks like a secret are pre-marked **Secret**. Values marked Secret are stored in the secret store under a generated ref and cited from `secret_refs`; the rest stay in `env`.
 
 ## Register an HTTP server
 
@@ -141,7 +141,7 @@ The config Coffer stores:
     "type": "http",
     "url": "https://api.githubcopilot.com/mcp/",
     "headers": {},
-    "credential_refs": { "Authorization": "github/authorization" }
+    "secret_refs": { "Authorization": "github/authorization" }
   },
   "spawn_timeout_seconds": 30,
   "request_timeout_seconds": 120
@@ -149,11 +149,11 @@ The config Coffer stores:
 ```
 
 ::: warning Secrets cannot sit in `env` or `headers`
-A static `env` or `headers` value that looks like a secret — starting with `Bearer `, `ghp_`, `gho_`, `github_pat_`, `sk-`, `xoxb-`/`xoxa-`/`xoxp-`, or a JWT — is rejected at registration with a message telling you to move it into `credential_refs`. A `credential_refs` entry citing a ref the store does not hold is also rejected, naming the missing secret.
+A static `env` or `headers` value that looks like a secret — starting with `Bearer `, `ghp_`, `gho_`, `github_pat_`, `sk-`, `xoxb-`/`xoxa-`/`xoxp-`, or a JWT — is rejected at registration with a message telling you to move it into `secret_refs`. A `secret_refs` entry citing a ref the store does not hold is also rejected, naming the missing secret.
 :::
 
 ::: info Pasting an HTTP server with `headers`
-The **Add server** paste box reads an HTTP server's (`"url": …`) `headers` object and reviews each value for secrets exactly as it does `env`: a value whose name or content looks like a secret (an `Authorization` header, for example) is pre-marked **Secret**, stored in the secret store and cited from `credential_refs`; the rest stay in the transport's `headers`. An `env` object on an HTTP server is sent as headers too; when both name the same key, the `headers` value wins.
+The **Add server** paste box reads an HTTP server's (`"url": …`) `headers` object and reviews each value for secrets exactly as it does `env`: a value whose name or content looks like a secret (an `Authorization` header, for example) is pre-marked **Secret**, stored in the secret store and cited from `secret_refs`; the rest stay in the transport's `headers`. An `env` object on an HTTP server is sent as headers too; when both name the same key, the `headers` value wins.
 :::
 
 ## Server names and descriptions

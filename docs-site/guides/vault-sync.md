@@ -23,7 +23,7 @@ Three rules shape everything below:
 - **Credentials git can use without prompting.** Coffer runs `git` with your global and system git configuration switched off and terminal prompts disabled, so a credential helper configured in `~/.gitconfig` or macOS's keychain helper is not consulted. Pick one:
   - **HTTPS:** a personal access token with push rights, stored in Coffer's secret store and named with `--secret-ref`. Coffer hands it to git through a credential helper that reads it from the environment of that one `git` process; it never appears in the URL, the command line, the repository's git config or an error message.
   - **SSH** (`git@host:…` or `ssh://…`): a key your SSH setup can use with no passphrase prompt, since no askpass program is available to the daemon.
-  - **`file://`**: no credential.
+  - **`file://`**: no secret.
 - **The same Coffer on every machine.**
 
 ## Set up the first machine
@@ -101,7 +101,7 @@ rm ~/coffer-master-key.cfk
 
 Importing is open to every surface — the file and its passphrase already hold the key — and **Import a master key** on **Settings › Security** does it with the two keys' fingerprints side by side before anything is replaced. Importing a different key keeps the previous one as a backup beside it.
 
-Without the key, sync still works, but secrets that arrived are reported as locked on each round (`credential locked: <ref>`), and the resources that need them cannot start until you import the key. The machine table flags a machine whose key differs from this one's.
+Without the key, sync still works, but secrets that arrived are reported as locked on each round (`secret locked: <ref>`), and the resources that need them cannot start until you import the key. The machine table flags a machine whose key differs from this one's.
 
 ## What travels and what stays
 
@@ -241,7 +241,7 @@ A machine's id is derived from the host (`IOPlatformUUID` on macOS, `/etc/machin
 | Status `awaiting_join`, nothing applied | This machine has not joined the remote. | `coffer sync adopt` |
 | Push fails with an authentication error | No usable credential: your git config and keychain helper are not consulted. | Store a token and set `--secret-ref`, or use an SSH key that needs no prompt. |
 | `remote set` refused for the working tree | The path is relative, or at, inside or above the vault or `~/.coffer`. | Use the default or an absolute path outside `~/.coffer`. |
-| `credential locked: <ref>` on every round | This machine lacks the master key those secrets were encrypted with. | `coffer sync key import <file>` with the key from a machine that has it. |
+| `secret locked: <ref>` on every round | This machine lacks the master key those secrets were encrypted with. | `coffer sync key import <file>` with the key from a machine that has it. |
 | A held round after reinstalling Coffer | The empty vault would publish its loss. | Do not confirm. `coffer sync rebuild` takes the remote's state; `coffer sync reject` discards just this round. |
 | Status `push_failed` | The round applied here but could not reach the remote. | Check the network and the token; the next round retries. |
 | A machine appears twice in the table | Its id was stored locally and `~/.coffer` was deleted. | `coffer sync machine rm <old id>` |

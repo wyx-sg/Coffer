@@ -3,7 +3,7 @@
 - [x] 1.1 `key_backup.py`: wrap / peek / unwrap the `.cfk` format (scrypt N=2^17, r=8, p=1; bounded parameters on read; header fingerprint checked against the key); bare Fernet keys still read
 - [x] 1.2 Export route: passphrase checked before the grant is redeemed, `.cfk` written `0600` under a numbered name that never overwrites, passphrase in no answer, log or audit row
 - [x] 1.3 `POST /sync/key/import/preview`; `POST /sync/key/import` with `passphrase` and `fingerprint` / `replaced` / `readable` / `locked_refs`
-- [x] 1.4 The running credential store switches to an imported key (`EncryptedCredentialStore.use_key`, wired through `ResolvedMasterKey(on_install=…)`)
+- [x] 1.4 The running secret store switches to an imported key (`EncryptedSecretStore.use_key`, wired through `ResolvedMasterKey(on_install=…)`)
 - [x] 1.5 Validation failures logged without `input`
 - [x] 1.6 `coffer sync key import` prompts for a `.cfk` passphrase without echo
 - [x] 1.7 `make contracts`

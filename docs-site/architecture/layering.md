@@ -57,7 +57,7 @@ The rules are [import-linter](https://github.com/seddonym/import-linter) contrac
 | Application does not import infrastructure | Application code depends on ports it defines. Exceptions: `application.knowledge` may import `infrastructure.knowledge`, and `application.memory` may import `infrastructure.memory`, because both substrates are thin file-I/O helpers with no engine behind them, where a port would be ceremony. |
 | Domain is pure | Domain imports no other project layer and none of `fastapi`, `sqlalchemy`, `sqlite3`, `httpx`, `keyring` or `anyio`. |
 | keyring confined to infrastructure | Surfaces and application never import `keyring` directly. |
-| CLI does not access the keychain directly | `surfaces.cli` may not import `infrastructure.credentials` at all. The CLI reaches secrets only through the daemon's HTTP API, so the daemon is the only reader of the master key on each machine. |
+| CLI does not access the keychain directly | `surfaces.cli` may not import `infrastructure.secret` at all. The CLI reaches secrets only through the daemon's HTTP API, so the daemon is the only reader of the master key on each machine. |
 | Cross-kind imports forbidden (one per kind) | Nine symmetric contracts — `mcp`, `agent`, `skill`, `knowledge`, `channel`, `chat`, `provider`, `memory`, `sync` — each forbidding that area's modules from importing any other area's modules. Named exceptions cover pure domain vocabulary only: `provider` and `memory` may read `domain.agent`, and `channel` may read `domain.chat`. `domain.knowledge` and `infrastructure.knowledge` are shared substrate. |
 | Kind-agnostic core does not import kind-specific code | `resource_service`, `resource_scope_ops` and `resource_delete_ops`, `AuditService`, the retention service and worker, the builtin tool registry, Coffer's own engine modules, `domain.resource`, `domain.scope`, `domain.audit`, the shared infrastructure packages, the generic dependency providers and the generic routes may import no kind. The one sanctioned exception is Alembic's `migrations/env.py`, which imports every kind's ORM models into one metadata. |
 | Engine confinement: markitdown | Only the channel attachment extractor and the knowledge upload converter may import `markitdown` (or `docling`). |
@@ -145,7 +145,7 @@ backend/coffer/
 │   ├── attention.py        # the cross-kind "needs you" list and its source port
 │   ├── reconcile/          # the unified reconciler: target port, loop, hints, drift source
 │   ├── events/             # the change feed: numbered hints, replay buffer, attention watch
-│   ├── credentials/        # ref-to-secret resolver
+│   ├── secret/             # ref-to-secret resolver
 │   ├── engine/             # which model Coffer's own passes run on
 │   ├── fs/                 # browse, pick, open, editor
 │   ├── mcp/                # gateway, supervisor, discovery, search_tools
@@ -160,7 +160,7 @@ backend/coffer/
 │   └── sync/               # converge round, exporter, appliers, worker, ports
 ├── infrastructure/
 │   ├── persistence/        # SQLAlchemy engine, ORM models, repos, Alembic
-│   ├── credentials/        # encrypted store, master key; the only keyring user
+│   ├── secret/             # encrypted store, master key; the only keyring user
 │   ├── daemon/             # bootstrap, port, spawn, pid lock, daemon-config.json
 │   ├── net/                # SSRF guard
 │   ├── platform/           # the only code that knows the host OS

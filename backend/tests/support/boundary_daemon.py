@@ -19,16 +19,16 @@ import pytest
 from starlette.testclient import TestClient
 
 import coffer.surfaces.cli._client as _cli_client
-from coffer.application.credentials.presence import derive_grant_key, sign_grant
+from coffer.application.secret.presence import derive_grant_key, sign_grant
 from coffer.domain.mcp.secret_target import mcp_destination
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.credential_composition import (
-    get_credential_store,
-    get_master_key_manager,
-)
 from coffer.surfaces.http.secret_boundary_wiring import boundary_resolver, get_secret_boundary
+from coffer.surfaces.http.secret_composition import (
+    get_master_key_manager,
+    get_secret_store,
+)
 from tests.fixtures.keyring import install_in_memory_keyring
 
 TOKEN = "test-token-secret-boundary"
@@ -44,7 +44,7 @@ class BoundaryDaemon:
 
     def grant(self, op: str, target: str) -> dict[str, str]:
         r = self.client.post(
-            "/api/v1/credentials/presence/challenge", json={"op": op, "target": target}
+            "/api/v1/secrets/presence/challenge", json={"op": op, "target": target}
         )
         assert r.status_code == 200, r.text
         nonce = r.json()["nonce"]
@@ -53,7 +53,7 @@ class BoundaryDaemon:
 
     def approve(self, approval_id: str) -> Any:
         r = self.client.post(
-            f"/api/v1/credentials/approvals/{approval_id}/approve",
+            f"/api/v1/secrets/approvals/{approval_id}/approve",
             json=self.grant("approve", approval_id),
         )
         assert r.status_code == 200, r.text
@@ -63,17 +63,17 @@ class BoundaryDaemon:
 
     def store(self, ref: str, value: str) -> None:
         """Store a value; a new standalone secret is approved as the app would."""
-        r = self.client.post("/api/v1/credentials", json={"ref": ref, "value": value})
+        r = self.client.post("/api/v1/secrets", json={"ref": ref, "value": value})
         if r.status_code == 202 and r.json()["approval"]["op"] == "add_secret":
             self.approve(r.json()["approval"]["id"])
             return
         assert r.status_code == 204, r.text
 
     def value(self, ref: str) -> str | None:
-        return get_credential_store().get(ref)
+        return get_secret_store().get(ref)
 
     def register_stdio(self, name: str, command: str, refs: dict[str, str]) -> dict[str, Any]:
-        config = {"transport": {"type": "stdio", "command": command, "credential_refs": refs}}
+        config = {"transport": {"type": "stdio", "command": command, "secret_refs": refs}}
         r = self.client.post(
             "/api/v1/resources", json={"kind": "mcp_server", "name": name, "config": config}
         )
@@ -84,12 +84,12 @@ class BoundaryDaemon:
         """What the MCP spawn path would inject, through the guarded resolver."""
         config = MCPServerConfig.model_validate(resource["config"])
         dest = mcp_destination(resource["uid"], resource["name"], config)
-        return boundary_resolver(get_credential_store()).materialize(
-            dict(config.transport.credential_refs), dest
+        return boundary_resolver(get_secret_store()).materialize(
+            dict(config.transport.secret_refs), dest
         )
 
     def pending(self, **params: str) -> list[dict[str, Any]]:
-        r = self.client.get("/api/v1/credentials/approvals", params={"status": "pending", **params})
+        r = self.client.get("/api/v1/secrets/approvals", params={"status": "pending", **params})
         assert r.status_code == 200, r.text
         return list(r.json()["approvals"])
 

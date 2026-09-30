@@ -11,27 +11,27 @@ import { useState } from "react";
 import { KeyRound, Plus, RotateCcw, ScanSearch } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { AddSecretDialog } from "@/components/credentials/AddSecretDialog";
-import { DeleteSecretDialog } from "@/components/credentials/DeleteSecretDialog";
-import { PendingApprovalsEntry } from "@/components/credentials/PendingApprovalsEntry";
-import { ReplaceSecretDialog } from "@/components/credentials/ReplaceSecretDialog";
-import { RevealSecretDialog } from "@/components/credentials/RevealSecretDialog";
-import { ScanSecretsDialog } from "@/components/credentials/ScanSecretsDialog";
-import type { SecretRowAction } from "@/components/credentials/SecretRowMenu";
-import { SecretsGroups } from "@/components/credentials/SecretsGroups";
-import { SecretsMissingBanner } from "@/components/credentials/SecretsMissingBanner";
-import { isMissingHere, refsWaiting } from "@/components/credentials/secretRows";
+import { AddSecretDialog } from "@/components/secret/AddSecretDialog";
+import { DeleteSecretDialog } from "@/components/secret/DeleteSecretDialog";
+import { PendingApprovalsEntry } from "@/components/secret/PendingApprovalsEntry";
+import { ReplaceSecretDialog } from "@/components/secret/ReplaceSecretDialog";
+import { RevealSecretDialog } from "@/components/secret/RevealSecretDialog";
+import { ScanSecretsDialog } from "@/components/secret/ScanSecretsDialog";
+import type { SecretRowAction } from "@/components/secret/SecretRowMenu";
+import { SecretsGroups } from "@/components/secret/SecretsGroups";
+import { SecretsMissingBanner } from "@/components/secret/SecretsMissingBanner";
+import { isMissingHere, refsWaiting } from "@/components/secret/secretRows";
 import { EmptyState } from "@/components/EmptyState";
 import { HelpTip } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
 import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
-import type { CredentialRef } from "@/lib/api/credentials";
+import type { SecretRef } from "@/lib/api/secret";
 import { translateApiError } from "@/lib/api/errors";
 import { usePendingApprovals } from "@/lib/hooks/useApprovals";
 import { useSecrets } from "@/lib/hooks/useSecrets";
 
-type Open = { dialog: "add" | "scan" } | { dialog: SecretRowAction; row: CredentialRef } | null;
+type Open = { dialog: "add" | "scan" } | { dialog: SecretRowAction; row: SecretRef } | null;
 
 export function SecretsPage() {
   const { t } = useTranslation();

@@ -132,7 +132,7 @@ class ConvergeRun:
     #: whose config dir does not exist here. Recorded as not applicable here
     #: and held, never retried and never counted as a failure.
     not_applicable: tuple[str, ...] = ()
-    #: Credential refs whose ciphertext will not decrypt on this machine.
+    #: Secret refs whose ciphertext will not decrypt on this machine.
     locked_refs: tuple[str, ...] = ()
     pending: PendingConfirmation | None = None
     #: On an ``awaiting_join`` round: the join this machine would make, as the

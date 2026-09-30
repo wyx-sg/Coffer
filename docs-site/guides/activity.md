@@ -51,11 +51,11 @@ Each entry holds:
 | Field | Meaning |
 | --- | --- |
 | `timestamp` | When it happened, in UTC. |
-| `event_type` | What happened, for example `resource_created`, `resource_scope_updated`, `credential_revealed`, `skill_bound`, `provider_switched`, `sync_run`, `token_rotated`. |
+| `event_type` | What happened, for example `resource_created`, `resource_scope_updated`, `secret_revealed`, `skill_bound`, `provider_switched`, `sync_run`, `token_rotated`. |
 | `resource_kind`, `resource_name` | The resource it happened to, as it was named at that moment. |
 | `resource_id` | The resource's stable row id, so its history survives a rename. |
 | `actor` | Who did it (below). |
-| `details` | A structured payload, redacted per kind before it is stored. A `credential_set` records that a secret was written, never the secret. |
+| `details` | A structured payload, redacted per kind before it is stored. A `secret_set` records that a secret was written, never the secret. |
 
 The **actor** is one of:
 

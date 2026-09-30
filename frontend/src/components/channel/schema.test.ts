@@ -1,7 +1,7 @@
 // frontend/src/components/channel/schema.test.ts
 //
 // The create-side planning contract: validated form values become the resource
-// config plus the credential-store writes, with secrets reaching the store by
+// config plus the secret-store writes, with secrets reaching the store by
 // ref only. A channel binds an agent and nothing more — every model that agent
 // offers stays available, and the model is switched in chat with /model.
 //
@@ -27,12 +27,12 @@ const HERE = "machine-here";
 const AGENT_UID = "u-8f31c0a2";
 
 /**
- * A credential ref, asserted as a SHAPE and never as a literal.
+ * A secret ref, asserted as a SHAPE and never as a literal.
  *
  * A ref no longer says anything about the channel — it is
  * `channel/<uuid4 hex>/<secret>`, minted fresh — so a test cannot name the
  * value it expects, and should not want to: what the planner owes its caller
- * is that the config and the credential write agree on one opaque address whose
+ * is that the config and the secret write agree on one opaque address whose
  * readable tail says which secret it holds. The fixture channels are still
  * called `tg` and `st`, and every assertion below goes on to check the name is
  * nowhere in the ref, which is the regression this shape exists to prevent.

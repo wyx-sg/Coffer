@@ -6,8 +6,8 @@ import { isDirty, isGitRemoteUrl, validateRemote, type FormState } from "./syncR
 const base: FormState = {
   url: "https://git.example.com/me/vault.git",
   branch: "main",
-  credentialRef: "",
-  includeCredentials: false,
+  secretRef: "",
+  includeSecrets: false,
   intervalSeconds: 3600,
 };
 
@@ -54,7 +54,7 @@ describe("isDirty", () => {
   });
 
   test("any real difference counts", () => {
-    expect(isDirty({ ...base, includeCredentials: true }, base)).toBe(true);
+    expect(isDirty({ ...base, includeSecrets: true }, base)).toBe(true);
     expect(isDirty({ ...base, intervalSeconds: 120 }, base)).toBe(true);
     expect(isDirty({ ...base, branch: "vault" }, base)).toBe(true);
   });

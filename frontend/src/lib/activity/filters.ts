@@ -43,7 +43,7 @@ export const CHANGE_CATEGORIES = [
 export type ChangeCategory = (typeof CHANGE_CATEGORIES)[number];
 
 const EVENT_AREAS: [RegExp, ChangeCategory][] = [
-  [/^(credential_|secret_|master_key_)/, "secret"],
+  [/^(secret_|master_key_)/, "secret"],
   [/^sync_/, "sync"],
   [/^memory_/, "memory"],
   [/^knowledge_/, "knowledge"],

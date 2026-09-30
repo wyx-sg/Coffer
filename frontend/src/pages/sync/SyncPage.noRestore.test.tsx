@@ -42,8 +42,8 @@ const STATUS: SyncStatus = {
   remote: {
     url: "https://git.example.com/me/vault.git",
     branch: "main",
-    credential_ref: "sync.PUSH_TOKEN",
-    include_credentials: false,
+    secret_ref: "sync.PUSH_TOKEN",
+    include_secrets: false,
     interval_seconds: 3600,
     enabled: true,
     worktree_path: "/home/me/.coffer/sync",

@@ -36,7 +36,7 @@ describe("isQuiet", () => {
   test.each([
     ["a join", { join: "new" as const }],
     ["a failure", { failures: [{ path: "resources/a.yaml", reason: "boom" }] }],
-    ["a locked credential ref", { locked_refs: ["github.TOKEN"] }],
+    ["a locked secret ref", { locked_refs: ["github.TOKEN"] }],
     ["an agent-resolved conflict", { agent_resolved: ["knowledge/a.md"] }],
     ["an error", { error: "remote unreachable" }],
   ])("a no_change round with %s is not quiet", (_label, over) => {
@@ -60,7 +60,7 @@ describe("collapseRepeats", () => {
   });
 
   test("a stretch of identical failures folds — the news is the same news", () => {
-    // The shape this was written for: an expired credential is ten rows of
+    // The shape this was written for: an expired secret is ten rows of
     // "failed" by morning, burying every round that said anything else.
     const rows = collapseRepeats([
       run({ id: 9, status: "failed", error: "git fetch failed" }),

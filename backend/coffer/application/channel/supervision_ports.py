@@ -18,7 +18,7 @@ class WebSocketControllerPort(Protocol):
     "Receive every event over one outbound websocket connection").
 
     One supervised connection per enabled SeaTalk channel, held in-process
-    rather than in a child. The credentials are the app's own
+    rather than in a child. The secrets are the app's own
     (``app_id`` + materialized secret): the register handshake authenticates with
     them, which is why this transport needs no signing secret and no public URL.
 

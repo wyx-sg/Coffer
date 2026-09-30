@@ -19,7 +19,7 @@ from coffer.domain.sync.errors import MasterKeyFileInvalid
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from coffer.application.audit_service import AuditService
-    from coffer.application.sync.ports import CredentialSyncPort, MasterKeyPort
+    from coffer.application.sync.ports import MasterKeyPort, SecretSyncPort
 
 
 def _fingerprint(key: bytes) -> str:
@@ -58,7 +58,7 @@ class KeyMixin:
     """
 
     _master_key: MasterKeyPort
-    _credential_store: CredentialSyncPort
+    _secret_store: SecretSyncPort
     _audit: AuditService
 
     def key_fingerprint(self) -> str | None:
@@ -66,7 +66,7 @@ class KeyMixin:
 
         Two machines showing the same fingerprint hold the same key. It rides
         in each machine's descriptor, so the machines table can say outright
-        that another machine's credentials will not decrypt here.
+        that another machine's secrets will not decrypt here.
         """
         key = self._master_key.export_key()
         return _fingerprint(key) if key else None
@@ -102,8 +102,8 @@ class KeyMixin:
             actor="sync",
             details={"fingerprint": fingerprint, "replaced": previous if replaced else None},
         )
-        locked = await asyncio.to_thread(self._credential_store.locked_refs)
-        stored = await asyncio.to_thread(self._credential_store.list_refs)
+        locked = await asyncio.to_thread(self._secret_store.locked_refs)
+        stored = await asyncio.to_thread(self._secret_store.list_refs)
         return KeyImport(
             fingerprint=fingerprint,
             replaced=replaced,

@@ -60,7 +60,7 @@ async function createConversation(title: string): Promise<string> {
 
 async function createElsewhereChannel(name: string): Promise<string> {
   const ref = `channel/${name}/app-secret`;
-  const secret = await api("POST", "/credentials", { ref, value: "e2e-not-a-secret" });
+  const secret = await api("POST", "/secrets", { ref, value: "e2e-not-a-secret" });
   if (!secret.ok) throw new Error(`secret write failed: ${secret.status} ${await secret.text()}`);
   const res = await api("POST", "/resources", {
     kind: "channel",

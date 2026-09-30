@@ -68,7 +68,7 @@ unarchived until that implementation lands.
   an agent is 智能体 everywhere in the zh UI.
 - A **Secrets** page (`/secrets`) lists every stored secret with its presence and what uses it,
   and carries add, replace, reveal (audited), delete (refused while cited) and the entry to the
-  migration assistant. Its behaviour beyond today's credential routes is specified by a separate
+  migration assistant. Its behaviour beyond today's secret routes is specified by a separate
   secrets change.
 - The agent detail page has nine tabs, each at its own path (`/agents/<type>/<tab>`):
   **Overview, Model, Skills, MCP servers, Plugins, Hooks, Config files, Memory, Conversations**.
@@ -108,7 +108,7 @@ unarchived until that implementation lands.
   recognises an `mcpServers` JSON block or server object, Codex TOML `[mcp_servers.<name>]`
   tables, a command line (`claude mcp add …`, `codex mcp add …` included) as stdio, or a URL as
   Streamable HTTP; one server opens the prefilled form, several open the review step (secrets to
-  the credential store, names normalised and correctable, reach), and unreadable input says so
+  the secret store, names normalised and correctable, reach), and unreadable input says so
   and offers a manual type choice. Import from agents is a link in the same dialog.
 - The **Skills page** lists only the skills Coffer manages; an agent's own skills and adopting
   them live on that agent's Skills tab, and the empty state only links there. A skill's detail
@@ -228,13 +228,13 @@ unarchived until that implementation lands.
   `pages/ModelProvidersPage.tsx`, the attention-dot hook generalised from `useSyncAttention`, i18n
   strings in both locales.
 - Desktop: the Tauri updater plugin with its public key in the bundle configuration, a
-  six-hour timer, and IPC commands for check and install; the frontend's credential-supplier
+  six-hour timer, and IPC commands for check and install; the frontend's secret-supplier
   module exposes the restart and skew check to the Daemon tab and footer, and the update check to
   the About tab. Release: the workflow signs the updater archive with the updater key held as a
   repository secret and publishes it with its manifest beside the `.dmg`.
 - Backend and contracts: none; every screen reads routes that already exist
   (`/daemon/status`, `/daemon/residency`, `/daemon/rotate-token`, `/daemon/features`,
-  `/credentials`, the kind list routes, `/agents/{uid}/hooks`). Listing uncited secrets and the
+  `/secrets`, the kind list routes, `/agents/{uid}/hooks`). Listing uncited secrets and the
   migration assistant arrive with their own changes.
 - Tests: web-ui, internal-engine, desktop-app, agent-registry,
   skill-manager and provider-switching acceptance markers for the new and renamed scenarios; e2e shell specs (`shell_cold_start`, `shell_settings`) and new ones
@@ -244,10 +244,10 @@ unarchived until that implementation lands.
   [The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md)
   (Proposed; on acceptance it supersedes
   [Sidebar Grouped by Role](../../../docs/decisions/sidebar-grouped-by-role.md)), docs-site guides
-  (`web-ui`, `agents`, `credentials`, `desktop-app`, `daemon`, `experimental-features`,
+  (`web-ui`, `agents`, `secrets`, `desktop-app`, `daemon`, `experimental-features`,
   `providers`, and the pages naming Settings → General or Settings → Coffer's model, which now name Settings › General), the ADR
   [Experimental Features Instead of a Release Branch](../../../docs/decisions/experimental-features-instead-of-a-release-branch.md)
   that cites a renamed requirement, the Proposed ADR
   [Standalone Secrets Are Named `coffer://secret/` References](../../../docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md)
   where it names the Security page as the place secrets are listed, and the Purpose sections of
-  `web-ui`, `desktop-app`, `internal-engine` and `credentials`.
+  `web-ui`, `desktop-app`, `internal-engine` and `secrets`.

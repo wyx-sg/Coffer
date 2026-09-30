@@ -11,7 +11,7 @@ const provider = (uid: string, over: Partial<Provider> = {}): Provider => ({
   title: null,
   protocol: "openai",
   base_url: "https://gw/v1",
-  credential_ref: `provider/${uid}`,
+  secret_ref: `provider/${uid}`,
   local_runtime: null,
   compatible_agents: ["codex"],
   is_active: false,

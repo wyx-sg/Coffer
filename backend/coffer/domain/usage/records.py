@@ -17,7 +17,7 @@ buckets, ``cache_read_tokens``, and ``output_tokens`` — of which
 terminal usage event has ``usage_known = False`` and every count ``None``:
 recorded, never dropped, never guessed.
 
-Nothing here is ever a body, a prompt, a completion or a credential.
+Nothing here is ever a body, a prompt, a completion or a secret.
 """
 
 from __future__ import annotations

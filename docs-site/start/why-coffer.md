@@ -59,7 +59,7 @@ See [MCP gateway](/architecture/mcp-gateway) for how sessions, namespacing and t
 
 ## Secrets are encrypted with a key you hold
 
-**The decision.** Secrets are stored only as Fernet ciphertext in the `credentials` table. Configuration never holds a secret; it holds a *secret ref*, a name such as `github.token`. The daemon decrypts the secret only at the moment it starts an upstream server or sends a request header. By default the master key is a `0600` file beside the database. You can move it into the macOS keychain instead.
+**The decision.** Secrets are stored only as Fernet ciphertext in the `secrets` table. Configuration never holds a secret; it holds a *secret ref*, a name such as `github.token`. The daemon decrypts the secret only at the moment it starts an upstream server or sends a request header. By default the master key is a `0600` file beside the database. You can move it into the macOS keychain instead.
 
 **Why.** MCP server configs and provider profiles need API keys. If keys were stored as plain text, every export, log line and sync commit would put them at risk. With refs, the rest of the system never handles the plaintext.
 

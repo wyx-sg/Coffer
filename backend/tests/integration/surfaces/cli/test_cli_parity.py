@@ -274,7 +274,7 @@ _CONFIG_KEYS: dict[str, str] = {
     },
     "transcribe.provider": "POST /providers/{uid}/transcribe-default",
     "transcribe.model": "PUT /internal-engine-config/transcribe-model",
-    "secrets.storage": "PUT /settings/credentials",
+    "secrets.storage": "PUT /settings/secrets",
     # Turning it off waits for the Coffer app (spec secret "Turn the
     # protection off only through the desktop app").
     "secrets.require_approval": "PUT /settings/secret-boundary",
@@ -617,8 +617,8 @@ def _fake_client_returning_500(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_cli_client, "daemon_is_running", lambda: True)
 
 
-def _fake_client_returning_credential_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Wire CLI to a server that returns 400 CREDENTIAL_MISSING."""
+def _fake_client_returning_secret_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Wire CLI to a server that returns 400 SECRET_MISSING."""
     from datetime import UTC
     from datetime import datetime as dt
 
@@ -630,8 +630,8 @@ def _fake_client_returning_credential_missing(monkeypatch: pytest.MonkeyPatch) -
             status_code=400,
             content={
                 "error": {
-                    "code": "CREDENTIAL_MISSING",
-                    "message": "credential not found: MY_TOKEN",
+                    "code": "SECRET_MISSING",
+                    "message": "secret not found: MY_TOKEN",
                     "details": {},
                 }
             },
@@ -678,10 +678,10 @@ def test_cli_verbose_shows_trace(monkeypatch):
     )
 
 
-def test_cli_credential_missing_maps_to_exit_8(monkeypatch):
-    """CREDENTIAL_MISSING error code must map to exit code 8."""
-    _fake_client_returning_credential_missing(monkeypatch)
+def test_cli_secret_missing_maps_to_exit_8(monkeypatch):
+    """SECRET_MISSING error code must map to exit code 8."""
+    _fake_client_returning_secret_missing(monkeypatch)
     result = runner.invoke(app, ["daemon", "status"])
     assert result.exit_code == 8, (
-        f"expected exit code 8 (CREDENTIAL_ISSUE), got {result.exit_code}:\n{result.output}"
+        f"expected exit code 8 (SECRET_ISSUE), got {result.exit_code}:\n{result.output}"
     )

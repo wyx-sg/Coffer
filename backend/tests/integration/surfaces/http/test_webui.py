@@ -184,7 +184,7 @@ def test_every_route_that_serves_index_carries_the_live_token(
 
 
 def test_the_served_index_is_never_cached(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """It holds a per-daemon secret, so a cached copy is a stale credential.
+    """It holds a per-daemon secret, so a cached copy is a stale secret.
 
     No validators either: an ETag or Last-Modified would let the browser
     revalidate its way back to the previous daemon's token, which is the exact

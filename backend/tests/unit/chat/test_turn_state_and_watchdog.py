@@ -328,7 +328,7 @@ async def test_a_channel_message_that_cannot_start_hears_the_failure() -> None:
 
     await orchestrator.enqueue_message(conv.id, "running")
     await orchestrator.enqueue_message(conv.id, "phone", on_start=handed.append)
-    provider._build_error = AgentConfigRejected("missing_credential", "no credential")
+    provider._build_error = AgentConfigRejected("missing_secret", "no secret")
     release.set()
     await _settle()
 

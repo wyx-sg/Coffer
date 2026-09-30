@@ -17,12 +17,12 @@ import asyncio
 
 import pytest
 
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.supervisor import (
     SubprocessSupervisor,
     UpstreamHealth,
 )
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+from coffer.application.secret.resolver import SecretResolver
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from tests.integration.application.mcp.test_supervisor import (
     _basic_stdio_config,
     _make_services,
@@ -78,7 +78,7 @@ async def test_concurrent_cold_starts_are_capped_at_max_concurrent_spawns(
 
     sup = SubprocessSupervisor(
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
         upstream_factory=_factory,  # type: ignore[arg-type]
         max_concurrent_spawns=2,
     )
@@ -102,7 +102,7 @@ async def test_max_concurrent_spawns_env_knob(tmp_path, monkeypatch) -> None:
     value is honoured; an explicit constructor value wins over env."""
     _with_in_memory(monkeypatch)
     resource_svc, engine = await _make_services(tmp_path, register_servers=[])
-    resolver = CredentialResolver(KeyringAdapter())
+    resolver = SecretResolver(KeyringAdapter())
 
     def _factory(transport, overlay, spawn_to, req_to, name):  # type: ignore[no-untyped-def]
         return _FakeUpstream()
@@ -110,7 +110,7 @@ async def test_max_concurrent_spawns_env_knob(tmp_path, monkeypatch) -> None:
     def _build(**kwargs: int) -> SubprocessSupervisor:
         return SubprocessSupervisor(
             resource_service=resource_svc,
-            credential_resolver=resolver,
+            secret_resolver=resolver,
             upstream_factory=_factory,  # type: ignore[arg-type]
             **kwargs,
         )
@@ -153,7 +153,7 @@ async def test_cancelled_error_leaves_retry_ladder_immediately(tmp_path, monkeyp
 
     sup = SubprocessSupervisor(
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
         upstream_factory=_factory,  # type: ignore[arg-type]
         retry_delays=(30.0, 30.0),  # a retry would be unmistakable in wall-clock
     )

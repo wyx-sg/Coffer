@@ -105,7 +105,7 @@ class ChannelPeerSyncState:
                 # The channel itself has not landed here yet — the resource
                 # documents and this area are applied path by path in one
                 # round, in no guaranteed order. Held and retried, exactly as a
-                # resource document that arrives before its credential is.
+                # resource document that arrives before its secret is.
                 errors.append((path, f"channel '{channel_uid}' is not registered here yet"))
                 continue
             try:

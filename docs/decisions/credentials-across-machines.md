@@ -39,12 +39,12 @@ Coffer deliberately pins away (PR #415).
 (`include_credentials` on the remote, default off, fixed per remote rather than
 per round), each ref travels as its raw Fernet ciphertext at
 `credentials/<ref>.enc` — read and written without the master key, so neither
-direction of a round touches plaintext (`infrastructure/sync/credentials.py`;
-spec vault-sync "Carry credentials as ciphertext only"). Two ciphertexts for one
+direction of a round touches plaintext (`infrastructure/sync/secret.py`;
+spec vault-sync "Carry secrets as ciphertext only"). Two ciphertexts for one
 ref never reach a text merge: a Fernet token carries its encryption time in
 cleartext, so they are ordered without the key and **the fresher encryption
 wins**, whichever commit is newer (`domain/sync/fernet_time.py`;
-spec vault-sync "Let the fresher credential ciphertext win"). A header that will
+spec vault-sync "Let the fresher secret ciphertext win"). A header that will
 not parse leaves the conflict unsettled rather than guessed.
 
 **The master key.** It is never written into the repository
@@ -72,7 +72,7 @@ most once per daemon start (spec vault-sync "Report refs without a key as locked
 as a **credential helper** passed with `-c` — a shell snippet that answers
 `get` from the `COFFER_GIT_TOKEN` environment variable of that one git process
 (`infrastructure/sync/git_invoke.py`;
-spec vault-sync "Hand the push credential to git as a helper"). Every git
+spec vault-sync "Hand the push secret to git as a helper"). Every git
 invocation runs with `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` pointed at
 `/dev/null`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_TERMINAL_PROMPT=0`, inherited
 `GIT_ASKPASS`/`SSH_ASKPASS` removed, and an empty `credential.helper` first so

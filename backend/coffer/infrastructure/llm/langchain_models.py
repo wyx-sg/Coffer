@@ -8,7 +8,7 @@ while the chat page was their only consumer — is explicitly forbidden one now
 
 Lazy per-provider imports prevent an ``ImportError`` when an optional
 integration package is absent. Cloud connections (anthropic/openai) need an API
-key resolved at call time via the injected ``credential_resolver``; ``ollama``
+key resolved at call time via the injected ``secret_resolver``; ``ollama``
 needs only its ``base_url``. Every connection carries a ``base_url`` (its
 endpoint), which is passed to the client so a custom/proxy endpoint is honoured.
 The model id lives apart from the connection (spec provider-switching "Take
@@ -26,18 +26,18 @@ from coffer.domain.provider.config import Protocol, ResolvedConnection
 
 def build_chat_model(
     resolved: ResolvedConnection,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     *,
     timeout: float | None = None,
 ) -> Any:  # returns langchain_core.language_models.chat_models.BaseChatModel
     """Construct a LangChain ``BaseChatModel`` for *resolved*.
 
     Args:
-        resolved: The connection (protocol / base_url / credential_ref) paired
+        resolved: The connection (protocol / base_url / secret_ref) paired
             with the ``model`` id to run — the model lives apart from the
             connection (spec internal-engine "Resolve the engine's connection
             and model together"), so both are supplied together here.
-        credential_resolver: Callable that accepts a credential reference and
+        secret_resolver: Callable that accepts a secret reference and
             returns the resolved secret (e.g. the raw API key). The composition
             root injects this so this module stays infrastructure-pure (no
             keyring import here).
@@ -52,16 +52,16 @@ def build_chat_model(
 
     Raises:
         ValueError: When the protocol is unsupported or a required parameter
-            (credential for a cloud wire) is missing.
+            (secret for a cloud wire) is missing.
         ImportError: When the required LangChain integration package is not
             installed.
     """
     protocol = resolved.config.protocol
 
     if protocol is Protocol.ANTHROPIC:
-        return _build_anthropic(resolved, credential_resolver, timeout)
+        return _build_anthropic(resolved, secret_resolver, timeout)
     if protocol is Protocol.OPENAI:
-        return _build_openai(resolved, credential_resolver, timeout)
+        return _build_openai(resolved, secret_resolver, timeout)
     if protocol is Protocol.OLLAMA:
         return _build_ollama(resolved, timeout)
 
@@ -75,7 +75,7 @@ def build_chat_model(
 
 def _build_anthropic(
     resolved: ResolvedConnection,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     timeout: float | None = None,
 ) -> Any:
     try:
@@ -87,10 +87,10 @@ def _build_anthropic(
         ) from exc
 
     config = resolved.config
-    if not config.credential_ref:
-        raise ValueError("anthropic connection is missing credential_ref")
+    if not config.secret_ref:
+        raise ValueError("anthropic connection is missing secret_ref")
 
-    api_key = credential_resolver(config.credential_ref)
+    api_key = secret_resolver(config.secret_ref)
     # base_url is the connection's endpoint (honoured for proxies / relays like
     # Kimi or DeepSeek); ``base_url`` is ChatAnthropic's populate-by-alias name.
     return ChatAnthropic(  # type: ignore[call-arg]
@@ -103,7 +103,7 @@ def _build_anthropic(
 
 def _build_openai(
     resolved: ResolvedConnection,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     timeout: float | None = None,
 ) -> Any:
     try:
@@ -115,10 +115,10 @@ def _build_openai(
         ) from exc
 
     config = resolved.config
-    if not config.credential_ref:
-        raise ValueError("openai connection is missing credential_ref")
+    if not config.secret_ref:
+        raise ValueError("openai connection is missing secret_ref")
 
-    api_key = credential_resolver(config.credential_ref)
+    api_key = secret_resolver(config.secret_ref)
     # ``base_url`` lets an OpenAI-COMPATIBLE endpoint (Azure/OpenRouter/aggregators)
     # be used; ``None`` falls back to the official OpenAI API. Without this an
     # openai-compatible provider's calls silently hit api.openai.com and 401.

@@ -23,14 +23,13 @@ import uvicorn
 from fastapi import FastAPI
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.infrastructure.daemon.pid_lock import write as write_daemon_json
 from coffer.infrastructure.mcp.factory import build_upstream
@@ -47,6 +46,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.daemon_routes import router as daemon_router
@@ -121,7 +121,7 @@ def _build_app_sync(tmp_path: Path, token: str, port: int) -> FastAPI:
         supervisor = SubprocessSupervisor(
             upstream_factory=build_upstream,
             resource_service=rsvc2,
-            credential_resolver=CredentialResolver(KeyringAdapter()),
+            secret_resolver=SecretResolver(KeyringAdapter()),
         )
         prefs = MCPCapabilityPreferenceRepo(sm2)
         invs = MCPInvocationRepo(sm2)

@@ -15,7 +15,7 @@ import pytest
 
 from coffer.application.channel.ports import AdapterCallbacks
 from coffer.application.chat.turn_orchestrator import active_turns
-from coffer.domain.errors import CredentialMissing
+from coffer.domain.errors import SecretMissing
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 from tests.integration.infrastructure.channel.conftest import (
     FakeTelegram,
@@ -226,10 +226,10 @@ async def test_a_telegram_channel_stores_the_token_reference_only(env: ChannelEn
     [listed] = await env.resources.list(kind="channel")
     assert listed.id == created.id
     assert listed.config["bot_token_ref"] == "channel/tg/bot-token"
-    # The token itself lives in the credential store, never in the config.
+    # The token itself lives in the secret store, never in the config.
     assert token not in repr(listed.config)
 
-    with pytest.raises(CredentialMissing):
+    with pytest.raises(SecretMissing):
         await env.resources.register(
             kind="channel",
             name="tg2",

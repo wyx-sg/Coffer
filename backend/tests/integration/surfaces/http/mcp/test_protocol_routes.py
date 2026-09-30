@@ -12,14 +12,13 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
@@ -34,6 +33,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.mcp.dependencies import set_mcp_session_factory
@@ -104,7 +104,7 @@ async def _build_app(
         supervisor = SubprocessSupervisor(
             upstream_factory=build_upstream,
             resource_service=rsvc,
-            credential_resolver=CredentialResolver(KeyringAdapter()),
+            secret_resolver=SecretResolver(KeyringAdapter()),
         )
         discovery = CapabilityDiscovery(
             resource_service=rsvc,
@@ -227,7 +227,7 @@ async def test_post_unexpected_exception_does_not_leak_message_to_wire(
     """An unexpected (non-Coffer) exception raised while handling a
     request must NOT have its ``str(e)`` echoed onto the JSON-RPC wire.
 
-    Upstream errors can embed credentials (an auth failure echoing the API
+    Upstream errors can embed secrets (an auth failure echoing the API
     key). The catch-all branch previously sent ``str(e)`` verbatim to the
     downstream client, defeating the same secret-hygiene rule (spec secret
     "Hold plaintext only in memory at the moment of use") the invocation-log

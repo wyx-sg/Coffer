@@ -1,21 +1,21 @@
 // src/pages/SecretsPage.test.tsx — the Secrets page: the list with what uses each secret, add, delete refused while in use, reveal only in the desktop app, secrets missing on this Mac, and changes waiting for approval.
 //
-// Only the network boundary (`credentialsApi`) and the desktop shell's seam
+// Only the network boundary (`secretsApi`) and the desktop shell's seam
 // (`@/lib/tauri`) are mocked; the query client, router and i18n are real.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
-import type { CredentialRef } from "@/lib/api/credentials";
+import type { SecretRef } from "@/lib/api/secret";
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { acceptance } from "@/test/acceptance";
 import { ApiError } from "@/lib/api/errors";
 import { SecretsPage } from "./SecretsPage";
 
-vi.mock("@/lib/api/credentials", () => ({
-  credentialsApi: {
+vi.mock("@/lib/api/secret", () => ({
+  secretsApi: {
     list: vi.fn(),
     set: vi.fn(),
     remove: vi.fn(),
@@ -35,10 +35,10 @@ vi.mock("@/lib/tauri", () => ({
   onApprovalsEvent: () => () => {},
 }));
 
-const { credentialsApi } = await import("@/lib/api/credentials");
-const api = vi.mocked(credentialsApi);
+const { secretsApi } = await import("@/lib/api/secret");
+const api = vi.mocked(secretsApi);
 
-function ref(over: Partial<CredentialRef> & { ref: string }): CredentialRef {
+function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
   return {
     bindings: [],
     cited_by: [],
@@ -234,7 +234,7 @@ describe("SecretsPage", () => {
 
   test("a refusal the daemon answers names what started using it since", async () => {
     api.remove.mockRejectedValueOnce(
-      new ApiError("CREDENTIAL_IN_USE", "in use", {
+      new ApiError("SECRET_IN_USE", "in use", {
         resources: [{ kind: "skill", name: "release-notes", uid: "s-1" }],
       }),
     );
@@ -276,7 +276,7 @@ describe("SecretsPage", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Reveal for 30 s" }));
     expect(await screen.findByText("ghp_example_value")).toBeInTheDocument();
     expect(revealSecret).toHaveBeenCalledWith("secret/seatalk-app-secret");
-    expect(screen.getByText(/recorded as credential_revealed/)).toBeInTheDocument();
+    expect(screen.getByText(/recorded as secret_revealed/)).toBeInTheDocument();
   });
 
   test("a browser offers no reveal and names the desktop app instead", async () => {

@@ -5,7 +5,7 @@ See spec channels/seatalk "Receive every event over one outbound websocket conne
 Drives the reconcile step directly with the recording stub controller and a fake
 materialize — no SDK, no socket, no DB. The real connector's threading lives in
 test_seatalk_ws.py; what is under test here is which channels are wanted and
-which credentials reach them.
+which secrets reach them.
 """
 
 from __future__ import annotations
@@ -84,7 +84,7 @@ async def test_stops_the_connection_when_the_channel_is_disabled_or_deleted():
     assert ws.running(_ST) is False
 
 
-async def test_a_steady_state_does_not_touch_the_credential_store_again():
+async def test_a_steady_state_does_not_touch_the_secret_store_again():
     calls: list[dict[str, str]] = []
 
     async def counting(refs: dict[str, str], destination: Any = None) -> dict[str, str]:

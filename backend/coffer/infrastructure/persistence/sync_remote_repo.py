@@ -11,7 +11,7 @@ single transaction, so the newest history row and the remote's columns can
 never describe different rounds.
 
 The remote row carries two different things. The remote's **configuration** — URL,
-branch, credential reference, interval, working tree — is what the user typed,
+branch, secret reference, interval, working tree — is what the user typed,
 and it means the same under bidirectional convergence as it did under one-way
 backup. The **last round** is what Coffer did with it, and that changed shape
 entirely: a run is now a ``ConvergeRun`` with a status, a join kind, a diff in
@@ -196,8 +196,8 @@ class SqlAlchemySyncRemoteRepo:
             return BackupRemote(
                 url=row.url,
                 branch=row.branch,
-                credential_ref=row.credential_ref,
-                include_credentials=row.include_credentials,
+                secret_ref=row.secret_ref,
+                include_secrets=row.include_secrets,
                 interval_seconds=row.interval_seconds,
                 enabled=row.enabled,
                 worktree_path=row.worktree_path,
@@ -211,8 +211,8 @@ class SqlAlchemySyncRemoteRepo:
                 session.add(row)
             row.url = remote.url
             row.branch = remote.branch
-            row.credential_ref = remote.credential_ref
-            row.include_credentials = remote.include_credentials
+            row.secret_ref = remote.secret_ref
+            row.include_secrets = remote.include_secrets
             row.interval_seconds = remote.interval_seconds
             row.enabled = remote.enabled
             row.worktree_path = remote.worktree_path

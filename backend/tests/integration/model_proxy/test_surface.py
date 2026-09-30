@@ -1,4 +1,4 @@
-"""What the proxy refuses: foreign Host, any Origin, foreign credentials,
+"""What the proxy refuses: foreign Host, any Origin, foreign secrets,
 unknown routes — and its control routes."""
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ def test_any_origin_is_refused(live) -> None:
         {"authorization": "Bearer sk-ant-oat01-" + "x" * 60},
         {"x-api-key": "sk-ant-api03-real-provider-key"},
         {"authorization": f"Basic {CLAUDE_TOKEN}"},
-        # A valid token beside a foreign credential is still a foreign credential.
+        # A valid token beside a foreign secret is still a foreign secret.
         {"x-api-key": CLAUDE_TOKEN, "authorization": "Bearer sk-ant-oat01-abc"},
     ],
     ids=["none", "oauth", "provider-key", "basic", "mixed"],

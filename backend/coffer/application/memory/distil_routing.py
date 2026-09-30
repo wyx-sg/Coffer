@@ -316,7 +316,7 @@ async def route_chunk(
     partition: str,
     model: Any,
     completion: LlmCompletionPort,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     timeout: float = _TIMEOUT_SECONDS,
 ) -> tuple[RouteAction, ...]:
     """Route one batch of entries. Returns ``()`` for any failure at all.
@@ -335,7 +335,7 @@ async def route_chunk(
                     entries, index=index, retired_titles=retired_titles, partition=partition
                 ),
                 model=model,
-                credential_resolver=credential_resolver,
+                secret_resolver=secret_resolver,
                 timeout=timeout,
             ),
             timeout=timeout,

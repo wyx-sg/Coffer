@@ -248,10 +248,10 @@ The review step covers every server's environment values and, for an HTTP
 server, the values of its `headers` too, read with the same secret detection as
 the environment rather than ignored (a header and an environment entry of the
 same name are one header, the `headers` value winning). The user confirms which
-values are secrets; secrets MUST be lifted into the encrypted credential store
+values are secrets; secrets MUST be lifted into the encrypted secret store
 with only their refs kept in the resource config, and each server MUST be
 registered before its secrets are written, so a failed registration leaves no
-orphan credential entry. The user also chooses the servers' reach there.
+orphan secret entry. The user also chooses the servers' reach there.
 
 The review step MUST show each server's name as the name it will keep: it
 cannot be changed after registration
@@ -265,7 +265,7 @@ the dialog MUST NOT send that server's registration until the name is shortened.
 #### Scenario: MCP server registration round-trip via JSON import
 - **GIVEN** the user opens the Add server dialog from the MCP servers page
 - **WHEN** they paste the standard `mcpServers` JSON holding one server and add it from the prefilled form
-- **THEN** the app posts the server to `/api/v1/resources`, then writes any secret env values to `/api/v1/credentials` (register-first ordering avoids orphan credential entries when registration fails)
+- **THEN** the app posts the server to `/api/v1/resources`, then writes any secret env values to `/api/v1/secrets` (register-first ordering avoids orphan secret entries when registration fails)
 - **AND** on success the dialog closes and the app navigates to the server's detail page `/mcp-servers/<name>` showing the Overview tab
 - **AND** the new server appears on the MCP servers list with health "unknown" then "healthy" within 10 seconds
 
@@ -277,7 +277,7 @@ the dialog MUST NOT send that server's registration until the name is shortened.
 #### Scenario: a pasted HTTP server's headers are reviewed for secrets
 - **GIVEN** the user pastes an `mcpServers` block holding an HTTP server with a `headers` object that carries an `Authorization` value
 - **WHEN** the review step is shown and confirmed
-- **THEN** the header is offered as a secret, its value is written to the credential store, and the registered server keeps only its ref (`credential_refs`), never the value in `headers`
+- **THEN** the header is offered as a secret, its value is written to the secret store, and the registered server keeps only its ref (`secret_refs`), never the value in `headers`
 
 #### Scenario: the import review shows each server's fixed name
 - **GIVEN** the user pastes an `mcpServers` block holding one server keyed `My Server` and one keyed with a 30-character name
@@ -325,7 +325,7 @@ request.
 - **GIVEN** the user opens the Add server dialog
 - **WHEN** they paste a payload that is not valid JSON (or a valid JSON document that does not match the `mcpServers` shape)
 - **THEN** the dialog stays open and renders a readable error explaining what is wrong (parse error location for malformed JSON, or the failing field for shape-mismatch)
-- **AND** no request is sent to `/api/v1/resources` or `/api/v1/credentials`
+- **AND** no request is sent to `/api/v1/resources` or `/api/v1/secrets`
 - **AND** the dialog never shows the literal text "unexpected error" or `INTERNAL_ERROR`
 
 #### Scenario: unreadable input offers a manual type choice
@@ -735,7 +735,7 @@ Resources heading, because "resource" is the framework's storage word, not a
 word a user navigates by:
 
 - **Model providers** is filed under Agents, not Capabilities or Settings: a
-  `provider` is `{protocol, base_url, credential_ref}`, the endpoint and key an
+  `provider` is `{protocol, base_url, secret_ref}`, the endpoint and key an
   agent's model is served from, and the connection and model are chosen per
   agent on that agent's page (spec
   [provider-switching](../provider-switching/spec.md) "Offer every connection operation on REST, CLI and web").
@@ -761,7 +761,7 @@ CLIs page"), and sits under Capabilities beside Skills.
 Agents are stored as resources of kind `agent` but are the consumers of the
 others, so the Agents entry heads the Agents group and no agent is listed on a
 Capabilities or Context page. **Secrets** is not a resource kind — it is the
-credential store every kind cites into — and sits under System (see "Manage
+secret store every kind cites into — and sits under System (see "Manage
 stored secrets on the Secrets page").
 
 #### Scenario: each listed resource kind has one sidebar entry
@@ -1057,7 +1057,7 @@ The Secrets page (`/secrets`, under the sidebar's System group) MUST be the one
 page in the web UI that lists and manages stored secrets. A secret is shared
 infrastructure data — one reference can be cited by MCP servers, model
 providers, channels and skills at once (spec
-[credentials](../credentials/spec.md) "Address a secret by an opaque reference") —
+[secret](../secret/spec.md) "Address a secret by an opaque reference") —
 so it gets a page of its own rather than a section of any one kind's page, and
 it is not a Settings tab, because it holds data the user manages rather than a
 preference. A secret field inside a resource's own dialog stays there: a secret
@@ -1067,16 +1067,16 @@ The page MUST carry:
 
 - **List** — every secret the store reports, by its reference, with whether the
   store holds it, so a reference cited but missing reads as missing (spec
-  [credentials](../credentials/spec.md) "List every cited reference with its presence").
+  [secret](../secret/spec.md) "List every cited reference with its presence").
 - **Used by** — for each secret, what cites it, by kind and current name, each
   opening that thing's page; a secret nothing cites is marked unused.
 - **Add and replace** — store a new secret, or replace the value of one that
   exists, without the value ever being shown back.
 - **Reveal** — show one value behind an explicit action, which is an audited
-  read (spec [credentials](../credentials/spec.md) "Audit every read of a secret value").
+  read (spec [secret](../secret/spec.md) "Audit every read of a secret value").
 - **Delete** — refused while the secret is cited: the control MUST say what still
   uses it, naming each citer as the delete refusal does (spec
-  [credentials](../credentials/spec.md) "Refuse to delete a credential still in use"), and
+  [secret](../secret/spec.md) "Refuse to delete a secret still in use"), and
   the row MUST stay.
 - **Migration assistant** — the entry point that moves plaintext secret files into
   the store, shown once that assistant ships.
@@ -1101,7 +1101,7 @@ assistant's steps are the secret capability's, specified with it.
 - **GIVEN** a stored secret listed on the Secrets page
 - **WHEN** the page renders, and then the user chooses Reveal on that row
 - **THEN** no value is shown until Reveal is chosen
-- **AND** the reveal records a `credential_read` audit entry carrying the reference only
+- **AND** the reveal records a `secret_read` audit entry carrying the reference only
 
 ### Requirement: Mark a sidebar entry whose kind needs attention
 A sidebar entry MUST carry a dot while the attention signal of the kind or tool

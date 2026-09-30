@@ -46,7 +46,7 @@ async def list_provider_models(
     result = await svc.list_models(
         provider=body.provider,
         base_url=body.base_url,
-        credential_ref=body.credential_ref,
+        secret_ref=body.secret_ref,
         secret_value=body.secret_value,
     )
     return ProviderModelsOut(
@@ -66,7 +66,7 @@ async def test_connection(
         provider=body.provider,
         model=body.model,
         base_url=body.base_url,
-        credential_ref=body.credential_ref,
+        secret_ref=body.secret_ref,
         secret_value=body.secret_value,
     )
     return TestResultOut(ok=result.ok, message=result.message, detail=result.detail)
@@ -80,7 +80,7 @@ async def detect_protocol(
     """Classify the endpoint's wire so the dialog needs no manual type selector."""
     protocol = await svc.detect_protocol(
         base_url=body.base_url,
-        credential_ref=body.credential_ref,
+        secret_ref=body.secret_ref,
         secret_value=body.secret_value,
     )
     return DetectProtocolOut(protocol=protocol)

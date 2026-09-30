@@ -71,7 +71,7 @@ pub async fn reveal_secret(app: AppHandle, secret_ref: String) -> Result<String,
         )?;
         let (nonce, signature) = daemon.grant(GrantOp::Reveal, &secret_ref)?;
         let answer = daemon.post(
-            "/api/v1/credentials/presence/reveal",
+            "/api/v1/secrets/presence/reveal",
             &json!({"ref": secret_ref, "nonce": nonce, "signature": signature}),
             DEFAULT_READ_TIMEOUT,
         )?;
@@ -112,7 +112,7 @@ pub async fn export_master_key_backup(
         let directory = picked_folder(&picked)?;
         let (nonce, signature) = daemon.grant(GrantOp::ExportMasterKey, &directory)?;
         let written = daemon.post(
-            "/api/v1/credentials/presence/master-key-export",
+            "/api/v1/secrets/presence/master-key-export",
             &json!({
                 "directory": directory,
                 "passphrase": passphrase,
@@ -145,7 +145,7 @@ pub async fn approve_pending(app: AppHandle, approval_id: String) -> Result<Valu
         let daemon = Daemon::find()?;
         let development = daemon.development()?;
         let path = format!(
-            "/api/v1/credentials/approvals/{}",
+            "/api/v1/secrets/approvals/{}",
             path_segment(&approval_id)?
         );
         let approval = daemon.get(&path)?;
@@ -212,7 +212,7 @@ impl Daemon {
 
     /// The daemon's own report of whether its key is in the development file.
     fn development(&self) -> Result<bool, String> {
-        let status = self.get("/api/v1/credentials/presence/status")?;
+        let status = self.get("/api/v1/secrets/presence/status")?;
         Ok(status
             .get("development")
             .and_then(Value::as_bool)
@@ -223,7 +223,7 @@ impl Daemon {
     /// after the presence check, and dropped before this returns.
     fn grant(&self, op: GrantOp, target: &str) -> Result<(String, String), String> {
         let challenge = self.post(
-            "/api/v1/credentials/presence/challenge",
+            "/api/v1/secrets/presence/challenge",
             &json!({"op": op.as_str(), "target": target}),
             DEFAULT_READ_TIMEOUT,
         )?;

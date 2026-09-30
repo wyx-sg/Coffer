@@ -8,7 +8,7 @@ which the agent's Coffer connection installs.
 **The three internal-engine arguments on ``MemoryService`` are the point of
 this module.** The distil pass reaches a model through the same injected ports
 every other internal-LLM consumer here uses — a completion port, a
-``ModelSelectorPort`` over Coffer's own engine, and a **credential resolver**.
+``ModelSelectorPort`` over Coffer's own engine, and a **secret resolver**.
 All three default to ``None`` on the service, and that default is the
 mechanical pass of "Distil mechanically with no internal connection": each raw
 entry becomes a note of its own and the index is still written. Which means a
@@ -141,7 +141,7 @@ def wire_memory_kind(
     audit: AuditService,
     builtin_tools: BuiltinToolRegistry,
     models: ModelSelectorPort,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     agent_service: AgentService,
     agent_catalog: AgentCatalog,
 ) -> MemoryWiring:
@@ -153,14 +153,14 @@ def wire_memory_kind(
         # The agents' memory-reader facets.
         readers=agent_catalog.memory_readers(),
         # The distil pass's model half. All three travel together or not at
-        # all: a completion port with no credential resolver behind it reaches
+        # all: a completion port with no secret resolver behind it reaches
         # the provider and is refused the key, which "Distil mechanically with no
         # internal connection" then reads as "no internal connection" and
         # answers with the mechanical pass. See the module docstring — this is
         # the silent degradation the trio prevents.
         completion=LangchainLlmCompletion(),
         model_selector=models,
-        credential_resolver=credential_resolver,
+        secret_resolver=secret_resolver,
         read_timeout=read_internal_engine_timeout,
     )
     set_memory_service(service)

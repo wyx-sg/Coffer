@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/api/v1/credentials": {
+    "/api/v1/secrets": {
         parameters: {
             query?: never;
             header?: never;
@@ -15,7 +15,7 @@ export interface paths {
          * List Refs
          * @description Every stored ref and every ref a resource cites, with who references it.
          *
-         *     Refs come from the store's own enumeration and from every kind's credential
+         *     Refs come from the store's own enumeration and from every kind's secret
          *     extractor (MCP server headers, channel bot tokens, provider API keys, ...),
          *     so a vault restored without its secrets can say which ones are missing and
          *     a secret nothing references any more shows up as ``unreferenced``. A
@@ -24,11 +24,11 @@ export interface paths {
          *     cannot open is ``locked``. Presence only — no value is decrypted, so
          *     nothing is audited.
          */
-        get: operations["list_refs_api_v1_credentials_get"];
+        get: operations["list_refs_api_v1_secrets_get"];
         put?: never;
         /**
          * Set Secret
-         * @description Store `value` under `ref` in the encrypted credential store.
+         * @description Store `value` under `ref` in the encrypted secret store.
          *
          *     A new ref — or one nothing was ever sent to — is written at once (204).
          *     Replacing the value of a secret an approved destination receives, or of a
@@ -36,14 +36,14 @@ export interface paths {
          *     ciphertext): the new value changes what that destination gets (spec
          *     secret "Hold a replaced value in use until a person approves it").
          */
-        post: operations["set_secret_api_v1_credentials_post"];
+        post: operations["set_secret_api_v1_secrets_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/credentials/approvals": {
+    "/api/v1/secrets/approvals": {
         parameters: {
             query?: never;
             header?: never;
@@ -55,7 +55,7 @@ export interface paths {
          * @description Approvals, newest first — brought up to the configuration first, so a
          *     change saved a moment ago is already on the list.
          */
-        get: operations["list_approvals_api_v1_credentials_approvals_get"];
+        get: operations["list_approvals_api_v1_secrets_approvals_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -64,7 +64,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/credentials/approvals/{approval_id}": {
+    "/api/v1/secrets/approvals/{approval_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -72,7 +72,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Approval */
-        get: operations["get_approval_api_v1_credentials_approvals__approval_id__get"];
+        get: operations["get_approval_api_v1_secrets_approvals__approval_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -81,7 +81,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/credentials/approvals/{approval_id}/approve": {
+    "/api/v1/secrets/approvals/{approval_id}/approve": {
         parameters: {
             query?: never;
             header?: never;
@@ -94,14 +94,14 @@ export interface paths {
          * Approve
          * @description Apply a pending approval, against a presence grant for exactly this id.
          */
-        post: operations["approve_api_v1_credentials_approvals__approval_id__approve_post"];
+        post: operations["approve_api_v1_secrets_approvals__approval_id__approve_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/credentials/approvals/{approval_id}/reject": {
+    "/api/v1/secrets/approvals/{approval_id}/reject": {
         parameters: {
             query?: never;
             header?: never;
@@ -114,14 +114,14 @@ export interface paths {
          * Reject
          * @description Refuse a pending approval. Needs no presence: refusing only narrows.
          */
-        post: operations["reject_api_v1_credentials_approvals__approval_id__reject_post"];
+        post: operations["reject_api_v1_secrets_approvals__approval_id__reject_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/credentials/import": {
+    "/api/v1/secrets/import": {
         parameters: {
             query?: never;
             header?: never;
@@ -134,14 +134,14 @@ export interface paths {
          * Import Plaintext
          * @description Move plaintext findings into the store, replacing each with its reference.
          */
-        post: operations["import_plaintext_api_v1_credentials_import_post"];
+        post: operations["import_plaintext_api_v1_secrets_import_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/credentials/presence/challenge": {
+    "/api/v1/secrets/presence/challenge": {
         parameters: {
             query?: never;
             header?: never;
@@ -154,14 +154,14 @@ export interface paths {
          * Presence Challenge
          * @description A one-time nonce for one operation on one target; the shell signs it.
          */
-        post: operations["presence_challenge_api_v1_credentials_presence_challenge_post"];
+        post: operations["presence_challenge_api_v1_secrets_presence_challenge_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/credentials/presence/master-key-export": {
+    "/api/v1/secrets/presence/master-key-export": {
         parameters: {
             query?: never;
             header?: never;
@@ -180,14 +180,14 @@ export interface paths {
          *     itself never crosses the API. The passphrase is checked before the grant
          *     is spent, so a short one costs no second presence check.
          */
-        post: operations["export_master_key_api_v1_credentials_presence_master_key_export_post"];
+        post: operations["export_master_key_api_v1_secrets_presence_master_key_export_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/credentials/presence/reveal": {
+    "/api/v1/secrets/presence/reveal": {
         parameters: {
             query?: never;
             header?: never;
@@ -200,14 +200,14 @@ export interface paths {
          * Reveal
          * @description A secret's value, for the present human the desktop app just checked.
          */
-        post: operations["reveal_api_v1_credentials_presence_reveal_post"];
+        post: operations["reveal_api_v1_secrets_presence_reveal_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/credentials/presence/status": {
+    "/api/v1/secrets/presence/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -215,7 +215,7 @@ export interface paths {
             cookie?: never;
         };
         /** Presence Status */
-        get: operations["presence_status_api_v1_credentials_presence_status_get"];
+        get: operations["presence_status_api_v1_secrets_presence_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -224,27 +224,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/credentials/scan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Scan Plaintext
-         * @description Plaintext secrets in ``~/.coffer/secrets/`` and the skill master store.
-         */
-        post: operations["scan_plaintext_api_v1_credentials_scan_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/credentials/secrets/resolve": {
+    "/api/v1/secrets/resolve": {
         parameters: {
             query?: never;
             header?: never;
@@ -261,14 +241,34 @@ export interface paths {
          *     a ``secret/`` name and so is not answerable here: it goes only to the
          *     destination it was approved for.
          */
-        post: operations["resolve_for_run_api_v1_credentials_secrets_resolve_post"];
+        post: operations["resolve_for_run_api_v1_secrets_resolve_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/credentials/{ref}": {
+    "/api/v1/secrets/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan Plaintext
+         * @description Plaintext secrets in ``~/.coffer/secrets/`` and the skill master store.
+         */
+        post: operations["scan_plaintext_api_v1_secrets_scan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/{ref}": {
         parameters: {
             query?: never;
             header?: never;
@@ -280,21 +280,21 @@ export interface paths {
         post?: never;
         /**
          * Delete Secret
-         * @description Remove `ref` from the credential store. Idempotent — absent is fine,
+         * @description Remove `ref` from the secret store. Idempotent — absent is fine,
          *     and audited only when a row was actually removed.
          *
-         *     Refuses with 409 CREDENTIAL_IN_USE when a resource config still references
-         *     this credential: deleting it would silently break that channel / model /
-         *     mcp_server, whose config only keeps the credential ref. The 409 names the
+         *     Refuses with 409 SECRET_IN_USE when a resource config still references
+         *     this secret: deleting it would silently break that channel / model /
+         *     mcp_server, whose config only keeps the secret ref. The 409 names the
          *     citing resources so the user knows what to detach first.
          */
-        delete: operations["delete_secret_api_v1_credentials__ref__delete"];
+        delete: operations["delete_secret_api_v1_secrets__ref__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/credentials/{ref}/exists": {
+    "/api/v1/secrets/{ref}/exists": {
         parameters: {
             query?: never;
             header?: never;
@@ -309,35 +309,8 @@ export interface paths {
          *     so no audit event is recorded and a corrupt (undecryptable) row can't
          *     500 the probe; it still reports present.
          */
-        get: operations["secret_exists_api_v1_credentials__ref__exists_get"];
+        get: operations["secret_exists_api_v1_secrets__ref__exists_get"];
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/settings/credentials": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Credential Settings
-         * @description Report where the master key currently lives.
-         */
-        get: operations["get_credential_settings_api_v1_settings_credentials_get"];
-        /**
-         * Put Credential Settings
-         * @description Relocate the master key. Idempotent; the move itself is audited.
-         *
-         *     Moving to "keychain" may trigger one OS authorisation prompt — the
-         *     keychain write runs off the event loop.
-         */
-        put: operations["put_credential_settings_api_v1_settings_credentials_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -366,6 +339,33 @@ export interface paths {
          *     only through the desktop app"): the answer is 202 with the approval id.
          */
         put: operations["put_secret_boundary_settings_api_v1_settings_secret_boundary_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Secret Settings
+         * @description Report where the master key currently lives.
+         */
+        get: operations["get_secret_settings_api_v1_settings_secrets_get"];
+        /**
+         * Put Secret Settings
+         * @description Relocate the master key. Idempotent; the move itself is audited.
+         *
+         *     Moving to "keychain" may trigger one OS authorisation prompt — the
+         *     keychain write runs off the event loop.
+         */
+        put: operations["put_secret_settings_api_v1_settings_secrets_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -421,145 +421,6 @@ export interface components {
             status: "pending" | "approved" | "rejected" | "superseded";
             /** Target */
             target: string | null;
-        };
-        /**
-         * CredentialBindingOut
-         * @description One destination a secret is sent to (or waits to be sent to).
-         */
-        CredentialBindingOut: {
-            /** Approval Id */
-            approval_id: string | null;
-            /** Destination Kind */
-            destination_kind: string;
-            /** Destination Uid */
-            destination_uid: string;
-            /** Slot */
-            slot: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "approved" | "pending";
-        };
-        /**
-         * CredentialCiterOut
-         * @description A resource citing a credential ref — identity and label, never config.
-         */
-        CredentialCiterOut: {
-            /** Kind */
-            kind: string;
-            /** Name */
-            name: string;
-            /** Uid */
-            uid: string;
-        };
-        /**
-         * CredentialExistsOut
-         * @description Presence-only response — never carries the secret value.
-         */
-        CredentialExistsOut: {
-            /**
-             * Present
-             * @description Whether a secret is stored under the ref.
-             */
-            present: boolean;
-        };
-        /**
-         * CredentialListOut
-         * @description Every stored ref and every ref a registered resource cites, sorted by ref.
-         */
-        CredentialListOut: {
-            /** Refs */
-            refs: components["schemas"]["CredentialRefOut"][];
-        };
-        /**
-         * CredentialRefOut
-         * @description One stored or cited credential ref: presence and references, never a value.
-         */
-        CredentialRefOut: {
-            /** Bindings */
-            bindings: components["schemas"]["CredentialBindingOut"][];
-            /** Cited By */
-            cited_by: components["schemas"]["CredentialCiterOut"][];
-            /** Created At */
-            created_at: string | null;
-            /** Last Used At */
-            last_used_at: string | null;
-            /**
-             * Locked
-             * @default false
-             */
-            locked: boolean;
-            /** Mentioned By Skills */
-            mentioned_by_skills: string[];
-            /**
-             * Present
-             * @description Whether a secret is stored under the ref.
-             */
-            present: boolean;
-            /**
-             * Readable By Local Processes
-             * @default false
-             */
-            readable_by_local_processes: boolean;
-            /** Ref */
-            ref: string;
-            /**
-             * Unreferenced
-             * @default false
-             */
-            unreferenced: boolean;
-            /** Uri */
-            uri: string | null;
-        };
-        /**
-         * CredentialSetIn
-         * @description Request body for storing a secret in the credential store.
-         *
-         *     Secrets are Fernet-encrypted into the coffer DB; only ciphertext is
-         *     persisted; audit rows carry the ref only.
-         */
-        CredentialSetIn: {
-            /**
-             * Ref
-             * @description Reference key the secret is stored under. Slash-separated segments are allowed (e.g. channel/tg/bot-token).
-             */
-            ref: string;
-            /**
-             * Value
-             * @description The secret value.
-             */
-            value: string;
-        };
-        /**
-         * CredentialSettingsIn
-         * @description Request body to relocate the master key.
-         */
-        CredentialSettingsIn: {
-            /**
-             * Master Key Storage
-             * @enum {string}
-             */
-            master_key_storage: "file" | "keychain";
-        };
-        /**
-         * CredentialSettingsOut
-         * @description Where the credential-store master key currently lives.
-         */
-        CredentialSettingsOut: {
-            /**
-             * Master Key Storage
-             * @description file = ~/.coffer/master.key (development default); keychain = OS keychain entry (development opt-in); keychain_access_group = the signed release's Keychain access group, the only place a release keeps it.
-             * @enum {string}
-             */
-            master_key_storage: "file" | "keychain" | "keychain_access_group";
-        };
-        /**
-         * CredentialWriteOut
-         * @description 202 answer to a write that replaces a value in use: it waits, sealed.
-         */
-        CredentialWriteOut: {
-            approval: components["schemas"]["ApprovalOut"];
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -683,6 +544,25 @@ export interface components {
              */
             value: string;
         };
+        /**
+         * SecretBindingOut
+         * @description One destination a secret is sent to (or waits to be sent to).
+         */
+        SecretBindingOut: {
+            /** Approval Id */
+            approval_id: string | null;
+            /** Destination Kind */
+            destination_kind: string;
+            /** Destination Uid */
+            destination_uid: string;
+            /** Slot */
+            slot: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "approved" | "pending";
+        };
         /** SecretBoundarySettingsIn */
         SecretBoundarySettingsIn: {
             /** Require Approval */
@@ -694,6 +574,29 @@ export interface components {
             pending_approval_id: string | null;
             /** Require Approval */
             require_approval: boolean;
+        };
+        /**
+         * SecretCiterOut
+         * @description A resource citing a secret ref — identity and label, never config.
+         */
+        SecretCiterOut: {
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Uid */
+            uid: string;
+        };
+        /**
+         * SecretExistsOut
+         * @description Presence-only response — never carries the secret value.
+         */
+        SecretExistsOut: {
+            /**
+             * Present
+             * @description Whether a secret is stored under the ref.
+             */
+            present: boolean;
         };
         /** SecretImportIn */
         SecretImportIn: {
@@ -741,6 +644,54 @@ export interface components {
              */
             stored: boolean;
         };
+        /**
+         * SecretListOut
+         * @description Every stored ref and every ref a registered resource cites, sorted by ref.
+         */
+        SecretListOut: {
+            /** Refs */
+            refs: components["schemas"]["SecretRefOut"][];
+        };
+        /**
+         * SecretRefOut
+         * @description One stored or cited secret ref: presence and references, never a value.
+         */
+        SecretRefOut: {
+            /** Bindings */
+            bindings: components["schemas"]["SecretBindingOut"][];
+            /** Cited By */
+            cited_by: components["schemas"]["SecretCiterOut"][];
+            /** Created At */
+            created_at: string | null;
+            /** Last Used At */
+            last_used_at: string | null;
+            /**
+             * Locked
+             * @default false
+             */
+            locked: boolean;
+            /** Mentioned By Skills */
+            mentioned_by_skills: string[];
+            /**
+             * Present
+             * @description Whether a secret is stored under the ref.
+             */
+            present: boolean;
+            /**
+             * Readable By Local Processes
+             * @default false
+             */
+            readable_by_local_processes: boolean;
+            /** Ref */
+            ref: string;
+            /**
+             * Unreferenced
+             * @default false
+             */
+            unreferenced: boolean;
+            /** Uri */
+            uri: string | null;
+        };
         /** SecretScanFindingOut */
         SecretScanFindingOut: {
             /** Id */
@@ -785,6 +736,55 @@ export interface components {
             /** Mentions */
             mentions: components["schemas"]["SecretScanMentionOut"][];
         };
+        /**
+         * SecretSetIn
+         * @description Request body for storing a secret in the secret store.
+         *
+         *     Secrets are Fernet-encrypted into the coffer DB; only ciphertext is
+         *     persisted; audit rows carry the ref only.
+         */
+        SecretSetIn: {
+            /**
+             * Ref
+             * @description Reference key the secret is stored under. Slash-separated segments are allowed (e.g. channel/tg/bot-token).
+             */
+            ref: string;
+            /**
+             * Value
+             * @description The secret value.
+             */
+            value: string;
+        };
+        /**
+         * SecretSettingsIn
+         * @description Request body to relocate the master key.
+         */
+        SecretSettingsIn: {
+            /**
+             * Master Key Storage
+             * @enum {string}
+             */
+            master_key_storage: "file" | "keychain";
+        };
+        /**
+         * SecretSettingsOut
+         * @description Where the secret-store master key currently lives.
+         */
+        SecretSettingsOut: {
+            /**
+             * Master Key Storage
+             * @description file = ~/.coffer/master.key (development default); keychain = OS keychain entry (development opt-in); keychain_access_group = the signed release's Keychain access group, the only place a release keeps it.
+             * @enum {string}
+             */
+            master_key_storage: "file" | "keychain" | "keychain_access_group";
+        };
+        /**
+         * SecretWriteOut
+         * @description 202 answer to a write that replaces a value in use: it waits, sealed.
+         */
+        SecretWriteOut: {
+            approval: components["schemas"]["ApprovalOut"];
+        };
     };
     responses: never;
     parameters: never;
@@ -794,7 +794,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    list_refs_api_v1_credentials_get: {
+    list_refs_api_v1_secrets_get: {
         parameters: {
             query?: never;
             header?: {
@@ -811,7 +811,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CredentialListOut"];
+                    "application/json": components["schemas"]["SecretListOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -834,7 +834,7 @@ export interface operations {
             };
         };
     };
-    set_secret_api_v1_credentials_post: {
+    set_secret_api_v1_secrets_post: {
         parameters: {
             query?: never;
             header?: {
@@ -846,7 +846,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CredentialSetIn"];
+                "application/json": components["schemas"]["SecretSetIn"];
             };
         };
         responses: {
@@ -856,7 +856,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CredentialWriteOut"];
+                    "application/json": components["schemas"]["SecretWriteOut"];
                 };
             };
             /** @description Successful Response */
@@ -886,7 +886,7 @@ export interface operations {
             };
         };
     };
-    list_approvals_api_v1_credentials_approvals_get: {
+    list_approvals_api_v1_secrets_approvals_get: {
         parameters: {
             query?: {
                 status?: string | null;
@@ -929,7 +929,7 @@ export interface operations {
             };
         };
     };
-    get_approval_api_v1_credentials_approvals__approval_id__get: {
+    get_approval_api_v1_secrets_approvals__approval_id__get: {
         parameters: {
             query?: never;
             header?: {
@@ -971,7 +971,7 @@ export interface operations {
             };
         };
     };
-    approve_api_v1_credentials_approvals__approval_id__approve_post: {
+    approve_api_v1_secrets_approvals__approval_id__approve_post: {
         parameters: {
             query?: never;
             header?: {
@@ -1017,7 +1017,7 @@ export interface operations {
             };
         };
     };
-    reject_api_v1_credentials_approvals__approval_id__reject_post: {
+    reject_api_v1_secrets_approvals__approval_id__reject_post: {
         parameters: {
             query?: never;
             header?: {
@@ -1060,7 +1060,7 @@ export interface operations {
             };
         };
     };
-    import_plaintext_api_v1_credentials_import_post: {
+    import_plaintext_api_v1_secrets_import_post: {
         parameters: {
             query?: never;
             header?: {
@@ -1105,7 +1105,7 @@ export interface operations {
             };
         };
     };
-    presence_challenge_api_v1_credentials_presence_challenge_post: {
+    presence_challenge_api_v1_secrets_presence_challenge_post: {
         parameters: {
             query?: never;
             header?: {
@@ -1149,7 +1149,7 @@ export interface operations {
             };
         };
     };
-    export_master_key_api_v1_credentials_presence_master_key_export_post: {
+    export_master_key_api_v1_secrets_presence_master_key_export_post: {
         parameters: {
             query?: never;
             header?: {
@@ -1193,7 +1193,7 @@ export interface operations {
             };
         };
     };
-    reveal_api_v1_credentials_presence_reveal_post: {
+    reveal_api_v1_secrets_presence_reveal_post: {
         parameters: {
             query?: never;
             header?: {
@@ -1237,7 +1237,7 @@ export interface operations {
             };
         };
     };
-    presence_status_api_v1_credentials_presence_status_get: {
+    presence_status_api_v1_secrets_presence_status_get: {
         parameters: {
             query?: never;
             header?: {
@@ -1277,47 +1277,7 @@ export interface operations {
             };
         };
     };
-    scan_plaintext_api_v1_credentials_scan_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SecretScanOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    resolve_for_run_api_v1_credentials_secrets_resolve_post: {
+    resolve_for_run_api_v1_secrets_resolve_post: {
         parameters: {
             query?: never;
             header?: {
@@ -1362,7 +1322,47 @@ export interface operations {
             };
         };
     };
-    delete_secret_api_v1_credentials__ref__delete: {
+    scan_plaintext_api_v1_secrets_scan_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretScanOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_secret_api_v1_secrets__ref__delete: {
         parameters: {
             query?: never;
             header?: {
@@ -1403,7 +1403,7 @@ export interface operations {
             };
         };
     };
-    secret_exists_api_v1_credentials__ref__exists_get: {
+    secret_exists_api_v1_secrets__ref__exists_get: {
         parameters: {
             query?: never;
             header?: {
@@ -1422,92 +1422,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CredentialExistsOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_credential_settings_api_v1_settings_credentials_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CredentialSettingsOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    put_credential_settings_api_v1_settings_credentials_put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CredentialSettingsIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CredentialSettingsOut"];
+                    "application/json": components["schemas"]["SecretExistsOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -1602,6 +1517,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretBoundarySettingsOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_secret_settings_api_v1_settings_secrets_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSettingsOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_secret_settings_api_v1_settings_secrets_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretSettingsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSettingsOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

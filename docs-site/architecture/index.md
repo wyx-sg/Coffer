@@ -89,7 +89,7 @@ Coffer runs as a small set of cooperating processes. Only one of them holds stat
 | `coffer-daemon` | Long-lived. Serves until you stop it or another daemon supersedes it; never stands down on its own. | Owns all state and is the single SQLite writer. Binds `127.0.0.1` on the port you pinned in `~/.coffer/daemon-config.json`, else `8000`, and refuses to start (naming the holder) if it cannot bind that port. |
 | `coffer-mcp-shim` | One per MCP client session. | Forwards stdio to the daemon's `/mcp` endpoint; detect-or-spawns the daemon; recovers when the daemon restarts. |
 | `coffer` | One per command. | Calls the daemon over loopback; detect-or-spawns it; warns on stderr when the daemon's version differs from its own. |
-| Desktop shell | While the app runs. | Hosts the frontend, supplies credentials over IPC, detect-or-spawns and restarts the daemon. Quitting it does not stop the daemon. |
+| Desktop shell | While the app runs. | Hosts the frontend, supplies secrets over IPC, detect-or-spawns and restarts the daemon. Quitting it does not stop the daemon. |
 | Upstream MCP servers | Per client session, per server. | Spawned by the gateway's per-session supervisor and reaped when the session closes. |
 | Agent runtimes | Per chat turn or conversation. | The Claude Agent SDK and the Codex app-server, started by the chat platform to run a turn. |
 

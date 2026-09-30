@@ -7,7 +7,7 @@
 // app's presence check, so the section only reports it and names the command.
 import { useTranslation } from "react-i18next";
 
-import { PendingApprovalsEntry } from "@/components/credentials/PendingApprovalsEntry";
+import { PendingApprovalsEntry } from "@/components/secret/PendingApprovalsEntry";
 import { SettingRow, SettingsSection } from "@/components/settings/SettingsLayout";
 import { StatusWord } from "@/components/status/StatusWord";
 import { useSecretBoundarySettings } from "@/lib/hooks/useApprovals";

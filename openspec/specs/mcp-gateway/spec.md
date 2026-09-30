@@ -14,8 +14,8 @@ This spec owns the gateway, capability curation, the invocation record and the `
 over them. The kind-agnostic lifecycle an `mcp_server` is managed through (immutable `uid`, fixed name, per-agent
 reach, audit log, retention) is [resource-framework](../resource-framework/spec.md)'s, and this spec
 contributes one `Kind` descriptor to it; the daemon that hosts the gateway — port, discovery file, token,
-loopback posture — is [daemon](../daemon/spec.md)'s; the encrypted store behind an upstream's credential
-refs, and what the user is told when its key is unavailable, are [credentials](../credentials/spec.md)'
+loopback posture — is [daemon](../daemon/spec.md)'s; the encrypted store behind an upstream's secret
+refs, and what the user is told when its key is unavailable, are [secret](../secret/spec.md)'
 (this spec persists refs and never holds a key).
 
 Coffer runs as a single-user tool on the user's own machine with a small number of concurrent MCP clients
@@ -179,8 +179,8 @@ on `__`; a server registered earlier with a longer name MUST keep it and keep wo
 - Registering a server whose upstream is unreachable MUST still succeed (the config is saved); discovery and
   health report the failure, the server is marked unhealthy until reachable, and there MUST be no silent
   retry storm.
-- Registering a server whose credential is missing MUST fail with a message naming the missing credential and
-  pointing the user at the credential setup path, persisting no partial state.
+- Registering a server whose secret is missing MUST fail with a message naming the missing secret and
+  pointing the user at the secret setup path, persisting no partial state.
 - Registering a server with a name that already exists within the kind MUST be rejected with a clear error;
   a partial write is impossible.
 - The `coffer mcp` group MUST offer the lifecycle verbs `list`, `show`, `add`, `edit`, `rm`, `enable`,
@@ -233,13 +233,13 @@ on `__`; a server registered earlier with a longer name MUST keep it and keep wo
 
 ### Requirement: Support stdio and HTTP upstreams
 The system MUST support both stdio and HTTP MCP transports for upstream servers. An HTTP upstream MAY cite a
-credential reference for its authorization header, and the credential MUST NOT leak into any log or stored
+secret reference for its authorization header, and the secret MUST NOT leak into any log or stored
 field.
 
 #### Scenario: register an HTTP MCP server
 - **GIVEN** the coffer daemon is running,
-- **WHEN** the user registers an HTTP MCP server with a URL and (optionally) a credential reference for an authorization header,
-- **THEN** the server is persisted and its capabilities are discovered without leaking the credential into any log or stored field.
+- **WHEN** the user registers an HTTP MCP server with a URL and (optionally) a secret reference for an authorization header,
+- **THEN** the server is persisted and its capabilities are discovered without leaking the secret into any log or stored field.
 
 #### Scenario: HTTP-transport MCP server round trip
 - **GIVEN** an HTTP MCP server is running and registered with coffer,
@@ -428,12 +428,12 @@ MUST carry the length on every tool row. Flagging MUST NOT disable, rename or hi
 - **AND** both tools stay enabled and are still listed to clients under their usual names
 
 ### Requirement: Spawn a server with a secret only once its binding is approved
-Before it spawns a stdio server or connects to an HTTP server with credential
+Before it spawns a stdio server or connects to an HTTP server with secret
 refs, the gateway MUST ask the secret boundary whether each ref may go to that
 server's target — the stdio command line with its working directory and
 non-secret environment, or the HTTP URL — and MUST NOT start the server with
 any secret a person has not approved for that target
-([credentials](../credentials/spec.md) "Hold a secret for a new destination
+([secret](../secret/spec.md) "Hold a secret for a new destination
 until a person approves it"). The refused attempt surfaces as
 `SECRET_BINDING_PENDING` with "waiting for approval in the Coffer app", and the
 server is reachable as soon as the approval is applied, with no restart.
@@ -447,14 +447,14 @@ server is reachable as soon as the approval is applied, with no restart.
 ### Requirement: Mark a stdio server whose environment carries a secret
 The resource representation of every MCP server MUST carry
 `secrets_readable_by_local_processes`, true for a stdio server whose
-environment carries at least one credential ref: the secret sits in the
+environment carries at least one secret ref: the secret sits in the
 server's initial environment, which any process of the same user can read, so
 the UI labels such a server "readable by other processes on this Mac" and
 nothing describes Coffer as protecting it. An HTTP server, whose headers the
 gateway injects itself, and a stdio server with no secret, carry false.
 
 #### Scenario: a stdio server with a secret is marked readable by local processes
-- **GIVEN** a stdio server citing a credential ref, a stdio server citing none, and an HTTP server citing one
+- **GIVEN** a stdio server citing a secret ref, a stdio server citing none, and an HTTP server citing one
 - **WHEN** the resources are read through the API
 - **THEN** only the first carries `secrets_readable_by_local_processes: true`
 
@@ -592,7 +592,7 @@ never removed by a re-import.
 ### Requirement: Wait for approval before a custom tool sends its secret
 Binding a stored secret to a group's auth header MUST be treated as a new
 destination whose target is the group's base URL and whose slot is the header
-name ([credentials](../credentials/spec.md) "Hold a secret for a new
+name ([secret](../secret/spec.md) "Hold a secret for a new
 destination until a person approves it"): no call and no Test carries the
 secret until a person approves it for that base URL, a call before then fails
 with `SECRET_BINDING_PENDING`, and changing the base URL or the header asks
@@ -620,7 +620,7 @@ and preview and apply a re-import — and through `coffer tool` (`list`, `show`,
 `add` with `--openapi` to import, `edit`, `rm`, `enable`, `disable`, `scope`,
 `reimport`) and `coffer tool op` (`add`, `edit`, `rm`, `enable`, `disable`,
 `scope`, `test`), with `--json` on every read. A change that waits for a secret
-approval MUST report it as every other command does ([credentials](../credentials/spec.md)
+approval MUST report it as every other command does ([secret](../secret/spec.md)
 "Answer a pending approval on the command line by waiting or exiting").
 A group's health MUST be `off` while disabled, `failing` when its last call
 in 24 hours failed, `attention` while its secret is missing or waits for

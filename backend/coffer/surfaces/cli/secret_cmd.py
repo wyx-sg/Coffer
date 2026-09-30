@@ -13,7 +13,7 @@ already has it — except that replacing a value something already receives
 waits for approval in the app.
 
 The daemon is the sole secret owner (creator = reader → silent
-reads within an app version). The CLI here imports no credential/keyring code.
+reads within an app version). The CLI here imports no secret/keyring code.
 Where the master key lives is a setting: ``coffer config get|set
 secrets.storage``.
 """
@@ -81,7 +81,7 @@ def set_secret(
         raise typer.Exit(int(ExitCode.INVALID_INPUT))
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post("/credentials", json={"ref": ref, "value": secret})
+        r = c.post("/secrets", json={"ref": ref, "value": secret})
         _cli_client.check(r, verbose=verbose)
         if r.status_code == 202:
             # The value replaces one an approved destination receives: it waits,
@@ -109,7 +109,7 @@ def get_secret(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/credentials/{ref}/exists")
+        r = c.get(f"/secrets/{ref}/exists")
         _cli_client.check(r, verbose=verbose)
         if not r.json()["present"]:
             typer.echo(f"not found: {ref}", err=True)
@@ -142,7 +142,7 @@ def list_refs(
             typer.echo("(no known refs — daemon not reachable to enumerate)")
         return
     with c:
-        r = c.get("/credentials")
+        r = c.get("/secrets")
         _cli_client.check(r, verbose=verbose)
         refs: list[dict[str, Any]] = r.json().get("refs", [])
     if output_json:
@@ -190,7 +190,7 @@ def delete_secret(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.delete(f"/credentials/{ref}")
+        r = c.delete(f"/secrets/{ref}")
         _cli_client.check(r, verbose=verbose)
     typer.echo(f"deleted: {ref}")
 
@@ -210,7 +210,7 @@ def list_approvals(
     c, _info = _cli_client.client_or_exit()
     with c:
         params = {} if all_ else {"status": "pending"}
-        r = c.get("/credentials/approvals", params=params)
+        r = c.get("/secrets/approvals", params=params)
         _cli_client.check(r, verbose=verbose)
         rows: list[dict[str, Any]] = r.json().get("approvals", [])
     if output_json:
@@ -236,7 +236,7 @@ def reject_approval(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(f"/credentials/approvals/{approval_id}/reject")
+        r = c.post(f"/secrets/approvals/{approval_id}/reject")
         _cli_client.check(r, verbose=verbose)
     typer.echo(f"rejected: {approval_id}")
 
@@ -254,7 +254,7 @@ def scan_plaintext(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post("/credentials/scan")
+        r = c.post("/secrets/scan")
         _cli_client.check(r, verbose=verbose)
         body = r.json()
     if output_json:
@@ -298,7 +298,7 @@ def import_plaintext(
         raise typer.Exit(int(ExitCode.GENERIC))
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post("/credentials/import", json={"ids": ids or None, "dry_run": dry_run})
+        r = c.post("/secrets/import", json={"ids": ids or None, "dry_run": dry_run})
         _cli_client.check(r, verbose=verbose)
         body = r.json()
     verb = "would move" if dry_run else "moved"

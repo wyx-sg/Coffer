@@ -30,7 +30,7 @@ SENTINEL = "COFFER_LEAK_SENTINEL_abc123xyz"
 
 def test_arbitrary_exception_message_is_not_persisted() -> None:
     """A non-CofferError exception (e.g., bubbled up from the MCP SDK) might
-    carry upstream-controlled text — including credentials echoed back by a
+    carry upstream-controlled text — including secrets echoed back by a
     misbehaving server. _safe_error_summary must drop the message and keep
     only the class name so the invocation log stays clean.
     """

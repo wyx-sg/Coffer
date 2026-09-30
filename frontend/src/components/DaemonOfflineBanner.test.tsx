@@ -195,7 +195,7 @@ describe("DaemonOfflineBanner (desktop restart branch)", () => {
       // EVERY cached query carries responses fetched with the revoked token,
       // not just daemon/status — the whole cache refetches.
       await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith());
-      // Order matters: refetching before the new credentials are installed would
+      // Order matters: refetching before the new secrets are installed would
       // 401 the whole cache and leave the app looking broken after a good restart.
       expect(applyMock.mock.invocationCallOrder[0]).toBeLessThan(
         invalidateSpy.mock.invocationCallOrder[0],

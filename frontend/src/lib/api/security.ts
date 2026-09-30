@@ -3,7 +3,7 @@
 // The daemon's access token (spec daemon "Rotate the token from REST or the
 // command line") and the master key's import and fingerprint (spec vault-sync
 // "Import a master key after showing whose key it is"). Where the master key
-// lives is read through `useCredentialSettings`; the export goes through the
+// lives is read through `useSecretSettings`; the export goes through the
 // desktop shell (`@/lib/tauri`), because no route returns the key. Wire types
 // alias the generated contracts; transport is the shared `call`
 // (.agents/frontend.md §4).

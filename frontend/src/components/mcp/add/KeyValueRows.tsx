@@ -1,7 +1,7 @@
 // frontend/src/components/mcp/add/KeyValueRows.tsx — editable KEY / value rows
 // with an optional Secret toggle: a stdio server's environment, an HTTP
 // server's headers. Used by the Add server form and by the edit dialog (which
-// keeps stored secrets in CredentialRowEditor and so turns the toggle off).
+// keeps stored secrets in SecretRowEditor and so turns the toggle off).
 import { useTranslation } from "react-i18next";
 import { Plus, Trash2 } from "lucide-react";
 

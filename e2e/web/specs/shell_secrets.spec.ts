@@ -13,7 +13,7 @@
 // Reveal and Approve need the desktop app's presence check, so a browser only
 // shows them disabled; the reveal itself, the missing-on-this-Mac state and the
 // plaintext-key migration are covered in frontend/src/pages/SecretsPage.test.tsx
-// and frontend/src/components/credentials/ScanSecretsDialog.test.tsx, where the
+// and frontend/src/components/secret/ScanSecretsDialog.test.tsx, where the
 // daemon's answers can be fixed.
 
 import { expect, test } from "@playwright/test";
@@ -54,7 +54,7 @@ function api(pathname: string, init: RequestInit = {}): Promise<Response> {
 const refOf = (name: string) => `e2e/${name}`;
 
 async function storeSecret(name: string, value: string): Promise<void> {
-  const r = await api("/credentials", {
+  const r = await api("/secrets", {
     method: "POST",
     body: JSON.stringify({ ref: refOf(name), value }),
   });
@@ -63,7 +63,7 @@ async function storeSecret(name: string, value: string): Promise<void> {
 
 /** Best-effort cleanup: a secret already gone is fine. */
 async function deleteSecret(name: string): Promise<void> {
-  await api(`/credentials/e2e/${encodeURIComponent(name)}`, {
+  await api(`/secrets/e2e/${encodeURIComponent(name)}`, {
     method: "DELETE",
   });
 }
@@ -82,7 +82,7 @@ async function registerCitingServer(
           type: "stdio",
           command: PYTHON,
           args: [FAKE_SERVER, "--scenario", "basic", "--tools", "read_file"],
-          credential_refs: { E2E_TOKEN: refOf(secret) },
+          secret_refs: { E2E_TOKEN: refOf(secret) },
         },
       },
     }),
@@ -96,12 +96,12 @@ async function registerCitingServer(
  *  Rejecting withholds the value; the citation, which is what this spec reads,
  *  stays. */
 async function rejectApprovalsFor(ref: string): Promise<void> {
-  const r = await api("/credentials/approvals?status=pending");
+  const r = await api("/secrets/approvals?status=pending");
   const { approvals } = (await r.json()) as {
     approvals: { id: string; ref: string | null }[];
   };
   for (const a of approvals.filter((x) => x.ref === ref)) {
-    await api(`/credentials/approvals/${a.id}/reject`, { method: "POST" });
+    await api(`/secrets/approvals/${a.id}/reject`, { method: "POST" });
   }
 }
 
@@ -139,7 +139,7 @@ test("adding a secret waits for approval, and a browser can only reject it", asy
     await expect(page.getByText(name, { exact: true })).toHaveCount(0);
   } finally {
     await rejectApprovalsFor(`secret/${name}`);
-    await api(`/credentials/secret/${encodeURIComponent(name)}`, {
+    await api(`/secrets/secret/${encodeURIComponent(name)}`, {
       method: "DELETE",
     });
   }

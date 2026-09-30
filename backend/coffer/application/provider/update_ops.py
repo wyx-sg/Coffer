@@ -1,6 +1,6 @@
 """Partial-update path for ``ProviderService`` (spec provider-switching).
 
-``credential_ref`` is immutable — it is the vault address the connection owns,
+``secret_ref`` is immutable — it is the vault address the connection owns,
 and nothing about the connection moves it. ``protocol`` is NOT immutable:
 an endpoint that turns out to speak a different wire than the probe guessed is
 corrected in place rather than deleted and re-entered, key and all.
@@ -39,8 +39,8 @@ from typing import TYPE_CHECKING
 from coffer.application.provider.secret_gate import write_key
 from coffer.domain.provider.config import Protocol, ProviderConfig
 from coffer.domain.provider.errors import (
-    ProviderCredentialSourceInvalid,
     ProviderProtocolLockedWhileActive,
+    ProviderSecretSourceInvalid,
 )
 from coffer.domain.resource import Resource
 
@@ -83,9 +83,9 @@ async def update(
     # Re-validate so a bad edit is rejected before the rotation / DB write.
     validated = ProviderConfig.model_validate(config).model_dump(mode="json")
     if secret_value is not None:
-        ref = config.get("credential_ref")
+        ref = config.get("secret_ref")
         if not ref:
-            raise ProviderCredentialSourceInvalid()
+            raise ProviderSecretSourceInvalid()
         # A key some approved destination receives is replaced only after a
         # person approves it in the desktop app (``secret_gate``).
         await write_key(service, str(ref), secret_value, actor=actor)

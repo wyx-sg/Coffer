@@ -24,9 +24,9 @@ import { translateApiError } from "@/lib/api/errors";
 import { toneTextClass } from "@/lib/statusColors";
 import { cn } from "@/lib/utils";
 import {
-  useCredentialSettings,
-  useUpdateCredentialSettings,
-} from "@/lib/hooks/useCredentialSettings";
+  useSecretSettings,
+  useUpdateSecretSettings,
+} from "@/lib/hooks/useSecretSettings";
 
 import { useMasterKeyFingerprint } from "@/lib/hooks/useSecurity";
 
@@ -39,7 +39,7 @@ type Storage = "file" | "keychain";
 
 export function EncryptionSection() {
   const { t } = useTranslation();
-  const { data, isPending, error } = useCredentialSettings();
+  const { data, isPending, error } = useSecretSettings();
 
   return (
     <SettingsSection title={t("settings.security.encryption.title")}>
@@ -122,7 +122,7 @@ function KeyRows({ storage }: { storage: string | null }) {
 
 function MoveKeyRow({ isKeychain }: { isKeychain: boolean }) {
   const { t } = useTranslation();
-  const update = useUpdateCredentialSettings();
+  const update = useUpdateSecretSettings();
   // The storage the user asked to move to, while the confirmation is open.
   const [target, setTarget] = useState<Storage | null>(null);
   const confirmKey = target === "keychain" ? "confirmKeychain" : "confirmFile";

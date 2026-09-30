@@ -24,7 +24,7 @@ spec web-ui "Open Settings as a modal from the sidebar footer",
 spec chat "Show every conversation on the Conversations page",
 research note `conversations-ia-research.md` (rearchitecture working notes, 2026-09-30),
 spec provider-switching "Offer every connection operation on REST, CLI and web",
-spec secret "Refuse to delete a credential still in use",
+spec secret "Refuse to delete a secret still in use",
 the change `openspec/changes/revise-web-ui-ia/`
 
 ## Context
@@ -235,7 +235,7 @@ can be cited by an MCP server, a model provider, a channel and a skill at once
 ([Resources Cite Secrets by Opaque Reference](credential-references.md)), so filing it under any
 one of those pages leaves the other three blind to it. The page's job is cross-cutting — list
 every secret, show what uses it, find the unused ones, refuse to delete one still cited (spec
-secret "Refuse to delete a credential still in use"), and move plaintext secret files into
+secret "Refuse to delete a secret still in use"), and move plaintext secret files into
 the store — which is what System is for. It is an entry rather than a Settings tab because it
 holds data the user manages, not a preference; Settings › Security keeps only what is about this
 machine (where the master key lives), so a user never looks for a token among display

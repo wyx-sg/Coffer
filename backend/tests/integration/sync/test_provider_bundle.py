@@ -28,16 +28,16 @@ from coffer.application.sync.appliers_resource import ResourceApplier
 from coffer.application.sync.exporter import SyncExporter
 from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
-from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
+from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.infrastructure.sync.bundle import Bundle
-from coffer.infrastructure.sync.credentials import CredentialSyncAdapter, ResolvedMasterKey
+from coffer.infrastructure.sync.secret import ResolvedMasterKey, SecretSyncAdapter
 from tests.integration.sync.harness import NoKeyring
 
 pytestmark = pytest.mark.timeout(60)
@@ -52,7 +52,7 @@ def _doc(resource: Resource) -> str:
 CONFIG = {
     "protocol": "openai",
     "base_url": "https://gw/v1",
-    "credential_ref": "provider/acme/key",
+    "secret_ref": "provider/acme/key",
     # The curated set the connection offers downstream rides along with it,
     # each entry keeping the modality that says which picker may offer it.
     "models": [
@@ -71,7 +71,7 @@ CONFIG = {
 @dataclasses.dataclass
 class Vault:
     resources: ResourceService
-    credentials: CredentialSyncAdapter
+    secrets: SecretSyncAdapter
     home: pathlib.Path
     engine: object
     #: The vault's own master key, so a test can put a real secret in the
@@ -97,7 +97,7 @@ async def _vault(root: pathlib.Path) -> Vault:
     assert key is not None
     return Vault(
         resources=resources,
-        credentials=CredentialSyncAdapter(db, ResolvedMasterKey(master_key)),
+        secrets=SecretSyncAdapter(db, ResolvedMasterKey(master_key)),
         home=root,
         engine=engine,
         key=key,
@@ -115,7 +115,7 @@ async def machines(tmp_path: pathlib.Path):
 
 
 def _exporter(vault: Vault) -> SyncExporter:
-    return SyncExporter(vault.resources, vault.credentials, home=str(vault.home))
+    return SyncExporter(vault.resources, vault.secrets, home=str(vault.home))
 
 
 def _applier(vault: Vault, bundle_dir: pathlib.Path) -> ResourceApplier:
@@ -214,16 +214,16 @@ async def test_a_provider_key_crosses_as_ciphertext_and_never_as_plaintext(
     """
     a, b, bundle_dir = machines
     secret = "sk-acme-do-not-leak"
-    EncryptedCredentialStore(a.home / "coffer.db", a.key).set(CONFIG["credential_ref"], secret)
+    EncryptedSecretStore(a.home / "coffer.db", a.key).set(CONFIG["secret_ref"], secret)
     acme = await a.resources.register(
         "provider", "acme", dict(CONFIG), "test", description="Acme gateway"
     )
 
     bundle = Bundle(bundle_dir, trees=[])
-    summary = await _exporter(a).export(bundle, with_credentials=True)
+    summary = await _exporter(a).export(bundle, with_secrets=True)
 
     assert summary.failures == []
-    assert summary.credentials_included is True
+    assert summary.secrets_included is True
     blob = bundle_dir / "credentials" / "provider" / "acme" / "key.enc"
     assert blob.is_file()
     assert blob.read_text(encoding="utf-8").startswith("gAAAAA")
@@ -237,5 +237,5 @@ async def test_a_provider_key_crosses_as_ciphertext_and_never_as_plaintext(
     # The profile itself still lands on the other vault intact.
     await _applier(b, bundle_dir).upsert(_doc(acme))
     got = await b.resources.get(acme.uid)
-    assert got.config["credential_ref"] == CONFIG["credential_ref"]
+    assert got.config["secret_ref"] == CONFIG["secret_ref"]
     assert got.config == CONFIG

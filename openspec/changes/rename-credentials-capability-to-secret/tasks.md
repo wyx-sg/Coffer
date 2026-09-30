@@ -16,3 +16,13 @@
 - [x] 3.1 Web UI strings (en, zh): "secret" wherever a user reads "credential"
 - [x] 3.2 docs-site, README, `.agents/`, the coffer-guide skill; regenerate the CLI reference (`make docs-reference`)
 - [x] 3.3 e2e specs that run or quote the command
+
+## 4. Internal names
+
+- [x] 4.1 `git mv` the Python packages and modules named credential* (`application/secret/`, `infrastructure/secret/`, `infrastructure/sync/secret.py`, `application/secret_migration.py`, `domain/secret_errors.py`, `surfaces/http/secret_*.py`) and their tests; rename classes, functions and variables; update the import-linter contracts, `scripts/stamp_build_identity.py` and every doc that names a module path
+- [x] 4.2 Frontend: `components/secret/`, `lib/api/secret.ts`, `lib/secretRef.ts`, `useSecretSettings`, `SecretRowEditor`; merge the `credentials.*` i18n namespace into `secrets.*`
+- [x] 4.3 REST: `/api/v1/credentials…` → `/api/v1/secrets…`, `/api/v1/settings/credentials` → `/api/v1/settings/secrets`; the desktop shell, CLI, web UI and e2e callers follow; `make contracts` and `make docs-reference`
+- [x] 4.4 Error codes `CREDENTIAL_*` → `SECRET_*` (with the i18n `errors.*` keys, the backend-keys fixture and the error-codes reference) and the CLI exit code `SECRET_ISSUE`
+- [x] 4.5 Audit event types `credential_*` → `secret_*`, with their Activity labels
+- [x] 4.6 Migration 0134 renames the table, the sync remote's columns, the stored audit event types and the config keys (`transport.secret_refs`, a provider's `secret_ref`), with a downgrade and a migration test
+- [x] 4.7 Requirement titles, scenario names and their citations and markers say *secret* where they meant a stored secret

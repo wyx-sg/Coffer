@@ -310,7 +310,7 @@ def test_distils_proposal_lands_unarmed_and_holds_only_once_a_person_arms_it(
     completion = _ProposingCompletion()
     service._completion = completion  # type: ignore[assignment]
     service._models = _Selector()  # type: ignore[assignment]
-    service._credential_resolver = lambda _ref: "key"
+    service._secret_resolver = lambda _ref: "key"
     repo = seed_repository(app)
     sync(app.client)
     assert completion.calls, "the distil pass must have used the scripted model"

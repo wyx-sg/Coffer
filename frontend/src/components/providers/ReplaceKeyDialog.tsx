@@ -60,7 +60,7 @@ export function ReplaceKeyDialog({ open, provider, use, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const pending = pendingReplaceFor(approvals.data?.approvals, provider.credential_ref);
+  const pending = pendingReplaceFor(approvals.data?.approvals, provider.secret_ref);
   const waiting = written && pending !== null;
 
   const submit = async () => {
@@ -70,7 +70,7 @@ export function ReplaceKeyDialog({ open, provider, use, onClose }: Props) {
       return; // rendered inline below
     }
     const fresh = await approvals.refetch();
-    if (pendingReplaceFor(fresh.data?.approvals, provider.credential_ref)) setWritten(true);
+    if (pendingReplaceFor(fresh.data?.approvals, provider.secret_ref)) setWritten(true);
     else onClose();
   };
 
@@ -86,7 +86,7 @@ export function ReplaceKeyDialog({ open, provider, use, onClose }: Props) {
             <span className="inline-flex items-center gap-1.5">
               <KeyRound className="size-3.5 text-text-muted" aria-hidden />
               <span className="text-xs text-text-muted">{t("providers.key.secretPrefix")}</span>
-              <span className="font-mono text-xs">{provider.credential_ref}</span>
+              <span className="font-mono text-xs">{provider.secret_ref}</span>
             </span>
           </div>
           {waiting ? (

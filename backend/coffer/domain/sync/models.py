@@ -29,5 +29,5 @@ class ExportSummary:
     areas: list[AreaCount] = field(default_factory=list)
     #: ``<kind>:<name>`` refs that could not be serialized, with the reason.
     failures: list[tuple[str, str]] = field(default_factory=list)
-    #: Whether credential ciphertext was included (never the master key).
-    credentials_included: bool = False
+    #: Whether secret ciphertext was included (never the master key).
+    secrets_included: bool = False

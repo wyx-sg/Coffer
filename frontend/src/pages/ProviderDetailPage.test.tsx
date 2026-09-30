@@ -35,8 +35,8 @@ vi.mock("@/lib/api/resources", () => ({
   resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn(), rename: vi.fn() },
 }));
 vi.mock("@/lib/api/scope", () => ({ scopeApi: { get: vi.fn(), put: vi.fn() } }));
-vi.mock("@/lib/api/credentials", () => ({
-  credentialsApi: { pendingApprovals: vi.fn(), secretBoundary: vi.fn(), rejectApproval: vi.fn() },
+vi.mock("@/lib/api/secret", () => ({
+  secretsApi: { pendingApprovals: vi.fn(), secretBoundary: vi.fn(), rejectApproval: vi.fn() },
 }));
 
 type EndpointState = {
@@ -74,10 +74,10 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
 const { providersApi } = await import("@/lib/api/providers");
 const { resourcesApi } = await import("@/lib/api/resources");
 const { scopeApi } = await import("@/lib/api/scope");
-const { credentialsApi } = await import("@/lib/api/credentials");
+const { secretsApi } = await import("@/lib/api/secret");
 const api = providersApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 const resources = resourcesApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
-const pendingApprovals = credentialsApi.pendingApprovals as ReturnType<typeof vi.fn>;
+const pendingApprovals = secretsApi.pendingApprovals as ReturnType<typeof vi.fn>;
 
 const UID = "cn-31f0";
 const makeProvider = (over: Partial<Provider> = {}): Provider => ({
@@ -86,7 +86,7 @@ const makeProvider = (over: Partial<Provider> = {}): Provider => ({
   title: null,
   protocol: "openai",
   base_url: "https://gw/v1",
-  credential_ref: "provider/acme",
+  secret_ref: "provider/acme",
   local_runtime: null,
   compatible_agents: ["codex"],
   is_active: false,
@@ -216,7 +216,7 @@ describe("ProviderDetailPage", () => {
   });
 
   test("a keyless provider says no key is needed", async () => {
-    serve(makeProvider({ protocol: "ollama", credential_ref: null, compatible_agents: [] }));
+    serve(makeProvider({ protocol: "ollama", secret_ref: null, compatible_agents: [] }));
     renderPage();
     await heading();
     expect(screen.getByText("No key needed — this provider takes none.")).toBeInTheDocument();

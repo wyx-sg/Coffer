@@ -2,7 +2,7 @@
 
 One key registry (``_config_keys``) replaces the per-setting subcommands that
 grew under ``daemon``, ``engine``, ``provider``, ``retention`` and
-``credentials`` (spec resource-framework "Change every setting through one
+``secrets`` (spec resource-framework "Change every setting through one
 key-value command"). A value is checked against its key's type before anything
 is written; ``unset`` returns a key to its default, and a key with no default
 refuses it and says how the key is changed instead.

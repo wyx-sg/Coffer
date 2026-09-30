@@ -131,7 +131,7 @@ def test_create_a_keyless_local_runtime_connection(tmp_path, monkeypatch):
             )
             assert r.status_code == 201, r.text
             body = r.json()
-            assert body["credential_ref"] is None
+            assert body["secret_ref"] is None
             assert body["local_runtime"]["runtime"] == "ollama"
             assert [m["id"] for m in body["models"]] == ["qwen3-coder"]
             assert body["models"][0]["context_window"] == 65536

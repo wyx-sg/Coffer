@@ -259,11 +259,11 @@ class McpTestResultOut(BaseModel):
     error_message: str | None = None
 
 
-# --- Credentials ---
+# --- Secrets ---
 
 
-class CredentialSetIn(BaseModel):
-    """Request body for storing a secret in the credential store.
+class SecretSetIn(BaseModel):
+    """Request body for storing a secret in the secret store.
 
     Secrets are Fernet-encrypted into the coffer DB; only ciphertext is
     persisted; audit rows carry the ref only.
@@ -284,21 +284,21 @@ class CredentialSetIn(BaseModel):
     )
 
 
-class CredentialExistsOut(BaseModel):
+class SecretExistsOut(BaseModel):
     """Presence-only response — never carries the secret value."""
 
     present: bool = Field(description="Whether a secret is stored under the ref.")
 
 
-class CredentialCiterOut(BaseModel):
-    """A resource citing a credential ref — identity and label, never config."""
+class SecretCiterOut(BaseModel):
+    """A resource citing a secret ref — identity and label, never config."""
 
     uid: str
     kind: str
     name: str
 
 
-class CredentialBindingOut(BaseModel):
+class SecretBindingOut(BaseModel):
     """One destination a secret is sent to (or waits to be sent to)."""
 
     destination_kind: str
@@ -308,8 +308,8 @@ class CredentialBindingOut(BaseModel):
     approval_id: str | None = None
 
 
-class CredentialRefOut(BaseModel):
-    """One stored or cited credential ref: presence and references, never a value."""
+class SecretRefOut(BaseModel):
+    """One stored or cited secret ref: presence and references, never a value."""
 
     ref: str
     present: bool = Field(description="Whether a secret is stored under the ref.")
@@ -320,7 +320,7 @@ class CredentialRefOut(BaseModel):
     created_at: str | None = None
     #: When a consumer last had the value decrypted on this Mac.
     last_used_at: str | None = None
-    cited_by: list[CredentialCiterOut]
+    cited_by: list[SecretCiterOut]
     #: The ``coffer://secret/<name>`` a file cites, for a standalone secret.
     uri: str | None = None
     #: Skills in the master store whose files mention the standalone secret.
@@ -328,16 +328,16 @@ class CredentialRefOut(BaseModel):
     #: Nothing cites it — no resource, no skill: the cleanup candidate.
     unreferenced: bool = False
     #: Where its value is approved to go, and where it waits for approval.
-    bindings: list[CredentialBindingOut] = Field(default_factory=list)
+    bindings: list[SecretBindingOut] = Field(default_factory=list)
     #: Whether another process of this user can read the value where Coffer
     #: puts it: a stdio MCP server's environment, or a ``coffer run`` child.
     readable_by_local_processes: bool = False
 
 
-class CredentialListOut(BaseModel):
+class SecretListOut(BaseModel):
     """Every stored ref and every ref a registered resource cites, sorted by ref."""
 
-    refs: list[CredentialRefOut]
+    refs: list[SecretRefOut]
 
 
 # --- MCP capability enable/disable body ---
@@ -357,8 +357,8 @@ class CapabilityKeyBody(BaseModel):
 # --- Settings ---
 
 
-class CredentialSettingsOut(BaseModel):
-    """Where the credential-store master key currently lives."""
+class SecretSettingsOut(BaseModel):
+    """Where the secret-store master key currently lives."""
 
     master_key_storage: Literal["file", "keychain", "keychain_access_group"] = Field(
         description=(
@@ -369,7 +369,7 @@ class CredentialSettingsOut(BaseModel):
     )
 
 
-class CredentialSettingsIn(BaseModel):
+class SecretSettingsIn(BaseModel):
     """Request body to relocate the master key."""
 
     master_key_storage: Literal["file", "keychain"]

@@ -39,7 +39,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.appliers import (
-    CredentialApplier,
+    SecretApplier,
     StateApplier,
     TreeApplier,
 )
@@ -62,20 +62,19 @@ from coffer.domain.secrets import SecretDestination, sync_remote_destination
 from coffer.domain.sync.backup import DEFAULT_WORKTREE
 from coffer.domain.sync.diff import DeletionGuard
 from coffer.domain.sync.models import ExportSummary
-from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
-from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.daemon.config import write_machine_name
 from coffer.infrastructure.knowledge.history import KNOWLEDGE_HISTORY
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.infrastructure.memory.paths import memory_root
 from coffer.infrastructure.persistence.convergence_state_repo import SqlAlchemyConvergenceStateRepo
 from coffer.infrastructure.persistence.sync_remote_repo import SqlAlchemySyncRemoteRepo
+from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
+from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.infrastructure.sync.bundle import Bundle
 from coffer.infrastructure.sync.conflict_resolver import (
     AgenticConflictResolver,
     InternalModelPort,
 )
-from coffer.infrastructure.sync.credentials import CredentialSyncAdapter, ResolvedMasterKey
 from coffer.infrastructure.sync.git_mirror import GitMirror
 from coffer.infrastructure.sync.identity import coffer_dir, machine_name, resolve_identity
 from coffer.infrastructure.sync.paths import (
@@ -84,8 +83,9 @@ from coffer.infrastructure.sync.paths import (
     non_converging_tree_paths,
     skills_root,
 )
-from coffer.surfaces.http.credential_composition import boundary_resolver
+from coffer.infrastructure.sync.secret import ResolvedMasterKey, SecretSyncAdapter
 from coffer.surfaces.http.knowledge.curation_state import set_vault_write_lock
+from coffer.surfaces.http.secret_composition import boundary_resolver
 from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.sync_routes import set_machine_registry, set_sync_service
 
@@ -124,7 +124,7 @@ def _key_fingerprint(master_key: ResolvedMasterKey) -> str | None:
     """The short hash that rides in this machine's descriptor, never the key.
 
     Read once at wiring: a key imported later reaches the descriptor at the
-    next daemon start, which is when the credentials it unlocks become usable
+    next daemon start, which is when the secrets it unlocks become usable
     anyway.
     """
     key = master_key.export_key()
@@ -137,10 +137,10 @@ def wire_sync(
     db_path: pathlib.Path,
     master_key: MasterKeyManager,
     sm: async_sessionmaker[AsyncSession],
-    credential_store: EncryptedCredentialStore,
+    secret_store: EncryptedSecretStore,
     *,
     models: InternalModelPort,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     platform: PlatformPort,
     state_providers: Sequence[SyncedStatePort] = (),
     import_gates: Sequence[ImportGate] = (),
@@ -151,8 +151,8 @@ def wire_sync(
     # Resolved once and shared — the fingerprint, every round's locked-ref check
     # and the key export/import all read this one — so a key kept in the
     # keychain costs one prompt per daemon start, not one per round.
-    resolved_key = ResolvedMasterKey(master_key, on_install=credential_store.use_key)
-    cred_sync = CredentialSyncAdapter(db_path, resolved_key)
+    resolved_key = ResolvedMasterKey(master_key, on_install=secret_store.use_key)
+    cred_sync = SecretSyncAdapter(db_path, resolved_key)
     home = str(pathlib.Path.home())
     remotes = SqlAlchemySyncRemoteRepo(sm)
     state = SqlAlchemyConvergenceStateRepo(sm)
@@ -186,7 +186,7 @@ def wire_sync(
         bundle = Bundle(worktree, held_paths=lambda: held)
         remote = await remotes.get()
         summary = await exporter.export(
-            bundle, with_credentials=bool(remote and remote.include_credentials)
+            bundle, with_secrets=bool(remote and remote.include_secrets)
         )
         # The empty tree is the base a machine joining as new diffs against,
         # not a commit it absorbed. Publishing it as ``last_converged_commit``
@@ -203,7 +203,7 @@ def wire_sync(
             worktree=worktree,
             completion=LangchainLlmCompletion(),
             models=models,
-            credential_resolver=credential_resolver,
+            secret_resolver=secret_resolver,
         )
         return ConvergeRound(
             mirror=mirror,
@@ -235,7 +235,7 @@ def wire_sync(
                     home=home,
                 ),
                 StateApplier(providers, worktree=worktree, home=home),
-                CredentialApplier(cred_sync, worktree=worktree),
+                SecretApplier(cred_sync, worktree=worktree),
             ],
             arbiter=ConflictArbiter(resolver),
             joining=JoinResolver(machine_id=identity.machine_id, branch=branch),
@@ -243,7 +243,7 @@ def wire_sync(
             guard=DeletionGuard(),
             branch=branch,
             # Asked after the apply which refs it now holds without a key.
-            credentials=cred_sync,
+            secrets=cred_sync,
             # A kind owns more than its row: a native config file, a shim, a
             # delivered skill. The applier writes the row; these put this
             # machine's side of it back in step (spec vault-sync
@@ -263,8 +263,8 @@ def wire_sync(
         # tree, so it needs a bundle over it without running a round.
         bundle_factory=lambda worktree: Bundle(worktree),
         set_machine_name=write_machine_name,
-        credentials=boundary_resolver(credential_store),
-        credential_store=cred_sync,
+        secrets=boundary_resolver(secret_store),
+        secret_store=cred_sync,
         master_key=resolved_key,
         audit=audit,
         # A working tree may not sit at, inside or above any of these: the
@@ -296,11 +296,11 @@ def start_sync(
     db_path: pathlib.Path,
     master_key: MasterKeyManager,
     sm: async_sessionmaker[AsyncSession],
-    credential_store: EncryptedCredentialStore,
+    secret_store: EncryptedSecretStore,
     contributions: SyncContributions,
     *,
     models: InternalModelPort,
-    credential_resolver: Callable[[str], str],
+    secret_resolver: Callable[[str], str],
     platform: PlatformPort,
 ) -> SyncWiring:
     """Wire convergence over what the kinds contributed during composition
@@ -316,9 +316,9 @@ def start_sync(
         db_path,
         master_key,
         sm,
-        credential_store,
+        secret_store,
         models=models,
-        credential_resolver=credential_resolver,
+        secret_resolver=secret_resolver,
         platform=platform,
         state_providers=tuple(contributions.state_providers),
         import_gates=tuple(contributions.import_gates),
@@ -368,8 +368,8 @@ def sync_remote_secret_source(
 
     async def current() -> list[tuple[SecretDestination, Mapping[str, str], str]]:
         remote = await SqlAlchemySyncRemoteRepo(sm).get()
-        if remote is None or not remote.credential_ref:
+        if remote is None or not remote.secret_ref:
             return []
-        return [(sync_remote_destination(remote.url), {"token": remote.credential_ref}, "user")]
+        return [(sync_remote_destination(remote.url), {"token": remote.secret_ref}, "user")]
 
     return current

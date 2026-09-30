@@ -94,7 +94,7 @@ export function EditProviderDialog({ open, provider, use, onClose, onSaved }: Pr
     void test.run({
       provider: v.protocol,
       base_url: v.baseUrl.trim(),
-      credential_ref: provider.credential_ref,
+      secret_ref: provider.secret_ref,
     });
   };
 
@@ -155,7 +155,7 @@ export function EditProviderDialog({ open, provider, use, onClose, onSaved }: Pr
             />
             <FieldError id="pe-base-error" message={formState.errors.baseUrl?.message} />
           </div>
-          <KeyRefField credentialRef={provider.credential_ref} />
+          <KeyRefField secretRef={provider.secret_ref} />
           <ProbeResult
             result={test.result}
             pending={test.isPending}

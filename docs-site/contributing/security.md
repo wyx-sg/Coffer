@@ -55,11 +55,11 @@ When you contribute:
 
 ### Secrets exist only as ciphertext
 
-Secrets live only as Fernet ciphertext in the `credentials` table. Plaintext exists in memory only between decryption and the spawn or header injection that consumes it.
+Secrets live only as Fernet ciphertext in the `secrets` table. Plaintext exists in memory only between decryption and the spawn or header injection that consumes it.
 
 - Store a **secret reference**, never a secret, in any other table, config file, resource spec or API response.
 - Never let plaintext reach the database, a log line, the audit log or any structured event. Watch exception messages and `repr`s that might include a request header or an environment block.
-- The Fernet master key is managed only by `coffer.infrastructure.credentials`, behind a storage port the build chooses: a signed release keeps it in a Keychain access group only Coffer's signed binaries can read; a development build keeps it in a `0600` file beside the database, or in the OS keychain when the user opts in. It never goes into anything the vault publishes, such as a sync remote. It reaches another machine only through a key backup the desktop app writes behind a presence check, and `coffer sync key import`.
+- The Fernet master key is managed only by `coffer.infrastructure.secret`, behind a storage port the build chooses: a signed release keeps it in a Keychain access group only Coffer's signed binaries can read; a development build keeps it in a `0600` file beside the database, or in the OS keychain when the user opts in. It never goes into anything the vault publishes, such as a sync remote. It reaches another machine only through a key backup the desktop app writes behind a presence check, and `coffer sync key import`.
 - No route, command or MCP tool returns a secret's plaintext or the master key. The only exceptions are the desktop app's presence-gated reveal and key backup, and `coffer run`'s resolve of standalone `secret/` names. A new path that returns a value is a defect however it is audited ([Security model](/architecture/security)).
 - Secret material leaves the machine only as ciphertext, and only when the user explicitly asks.
 
@@ -67,7 +67,7 @@ The `secrets-scan` CI job runs gitleaks over the full git history. A committed s
 
 ### `keyring` stays confined
 
-Only `backend/coffer/infrastructure/credentials/keyring_adapter.py` imports `keyring`. Every other module passes secret references. Import-linter contracts in `backend/pyproject.toml` enforce this ("keyring confined to infrastructure", "CLI does not access the keychain directly"), and `make lint` runs them. Do not add an `ignore_imports` waiver to get around them. Route the need through the secrets module instead.
+Only `backend/coffer/infrastructure/secret/keyring_adapter.py` imports `keyring`. Every other module passes secret references. Import-linter contracts in `backend/pyproject.toml` enforce this ("keyring confined to infrastructure", "CLI does not access the keychain directly"), and `make lint` runs them. Do not add an `ignore_imports` waiver to get around them. Route the need through the secrets module instead.
 
 ### Outbound requests to user-supplied URLs go through the SSRF guard
 
@@ -84,7 +84,7 @@ Knowledge paths go through one traversal guard, `infrastructure/knowledge/paths.
 ## Checklist for a security-relevant change
 
 - [ ] No new listener, bind address or route that bypasses the token and host checks.
-- [ ] No secret in a table other than `credentials`, in a log, in the audit log or in an API response.
+- [ ] No secret in a table other than `secrets`, in a log, in the audit log or in an API response.
 - [ ] No new `keyring` import outside the secrets module, and no new import-linter waiver.
 - [ ] User-supplied outbound URLs are validated with the SSRF guard.
 - [ ] User- or agent-supplied paths go through a traversal guard.

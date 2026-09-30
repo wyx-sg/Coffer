@@ -175,7 +175,7 @@ async def test_query_since(tmp_path):
 async def test_every_audited_event_is_also_logged(tmp_path, caplog) -> None:
     """Coffer used to log only its failures. A live daemon.log held 4,277 lines
     of which 62 were Coffer's own — all one error type — and a search across two
-    months for `credential_read`, `provider_switched`, `resource_deleted` and
+    months for `secret_read`, `provider_switched`, `resource_deleted` and
     four other key operations returned nothing at all.
 
     The audit table already decides what is worth recording, so mirroring it is
@@ -185,14 +185,14 @@ async def test_every_audited_event_is_also_logged(tmp_path, caplog) -> None:
     jira = _resource(7, "jira", uid="9f2c1a7b4e8d4c1fa0b3d5e6f7081920")
     with caplog.at_level(logging.INFO, logger="coffer.application.audit_service"):
         await svc.record(
-            AuditEventType.CREDENTIAL_READ.value,
+            AuditEventType.SECRET_READ.value,
             resource=jira,
             actor="cli",
             details={"ref": "jira.TOKEN"},
         )
 
     [record] = [r for r in caplog.records if r.name == "coffer.application.audit_service"]
-    assert record.event == "credential_read"
+    assert record.event == "secret_read"
     # Was the single `mcp_server:jira` identifier. The line carries three
     # separate fields now, because there is no identifier that is the two
     # halves glued together: the label for a human reading the log, the kind,

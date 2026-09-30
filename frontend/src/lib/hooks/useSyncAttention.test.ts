@@ -48,7 +48,7 @@ describe("attentionMarker", () => {
   });
 
   test("the same problem an hour later is the same marker", () => {
-    // The point of the whole thing. A timer re-raises one broken credential
+    // The point of the whole thing. A timer re-raises one broken secret
     // every hour; a marker that called each repeat news would put the dot
     // back over a problem the user read at nine.
     const first = attentionMarker(round({ status: "failed", error: "git fetch failed: no auth" }));
@@ -117,8 +117,8 @@ function status(enabled: boolean | null, last: Partial<ConvergeRound> | null): S
         : {
             url: "https://example.invalid/vault.git",
             branch: "main",
-            credential_ref: null,
-            include_credentials: false,
+            secret_ref: null,
+            include_secrets: false,
             interval_seconds: 3600,
             enabled,
             worktree_path: "/tmp/sync",

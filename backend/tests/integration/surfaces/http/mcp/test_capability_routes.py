@@ -13,14 +13,13 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from coffer.application.audit_service import AuditService
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
 from coffer.domain.scope import Scope
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
@@ -36,9 +35,9 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
+from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.credential_composition import get_credential_store
 from coffer.surfaces.http.dependencies import (
     get_audit_service,
     get_resource_service,
@@ -51,6 +50,7 @@ from coffer.surfaces.http.mcp.dependencies import (
     get_preferences_repo,
 )
 from coffer.surfaces.http.mcp.server_test_routes import router as server_test_router
+from coffer.surfaces.http.secret_composition import get_secret_store
 from tests.fixtures.keyring import install_in_memory_keyring
 
 _FAKE = Path(__file__).resolve().parents[4] / "fixtures" / "fake_mcp_server.py"
@@ -83,8 +83,8 @@ def _stdio_config_with_resources_prompts(
     return {"transport": {"type": "stdio", "command": sys.executable, "args": args}}
 
 
-class _InMemoryCredentialStore:
-    """Empty credential store — capability tests register servers without credential_refs."""
+class _InMemorySecretStore:
+    """Empty secret store — capability tests register servers without secret_refs."""
 
     def get(self, ref: str) -> str | None:
         return None
@@ -144,7 +144,7 @@ async def _build_app(
     supervisor = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=rsvc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
     discovery = CapabilityDiscovery(
         resource_service=rsvc,
@@ -166,7 +166,7 @@ async def _build_app(
     app.dependency_overrides[get_preferences_repo] = lambda: prefs_repo
     app.dependency_overrides[get_invocation_repo] = lambda: MCPInvocationRepo(sm)
     app.dependency_overrides[get_health_repo] = lambda: health_repo
-    app.dependency_overrides[get_credential_store] = lambda: _InMemoryCredentialStore()
+    app.dependency_overrides[get_secret_store] = lambda: _InMemorySecretStore()
 
     return app, engine, rsvc, prefs_repo, supervisor, server.uid
 
@@ -291,7 +291,7 @@ async def test_list_capabilities_tools_only_upstream_method_not_found(
     supervisor = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=rsvc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
     discovery = CapabilityDiscovery(
         resource_service=rsvc,
@@ -309,7 +309,7 @@ async def test_list_capabilities_tools_only_upstream_method_not_found(
     app.dependency_overrides[get_preferences_repo] = lambda: prefs_repo
     app.dependency_overrides[get_invocation_repo] = lambda: MCPInvocationRepo(sm)
     app.dependency_overrides[get_health_repo] = lambda: MCPServerHealthRepo(sm)
-    app.dependency_overrides[get_credential_store] = lambda: _InMemoryCredentialStore()
+    app.dependency_overrides[get_secret_store] = lambda: _InMemorySecretStore()
 
     transport = ASGITransport(app=app)
     try:
@@ -736,7 +736,7 @@ async def test_test_endpoint_unreachable_server_returns_ok_false(
     supervisor = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=rsvc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
     discovery = CapabilityDiscovery(
         resource_service=rsvc,
@@ -755,7 +755,7 @@ async def test_test_endpoint_unreachable_server_returns_ok_false(
     app.dependency_overrides[get_preferences_repo] = lambda: prefs_repo
     app.dependency_overrides[get_invocation_repo] = lambda: MCPInvocationRepo(sm)
     app.dependency_overrides[get_health_repo] = lambda: MCPServerHealthRepo(sm)
-    app.dependency_overrides[get_credential_store] = lambda: _InMemoryCredentialStore()
+    app.dependency_overrides[get_secret_store] = lambda: _InMemorySecretStore()
 
     transport_transport = ASGITransport(app=app)
     try:
@@ -819,7 +819,7 @@ async def test_enable_capability_creates_audit_event(
     supervisor = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=rsvc,
-        credential_resolver=CredentialResolver(KeyringAdapter()),
+        secret_resolver=SecretResolver(KeyringAdapter()),
     )
     discovery = CapabilityDiscovery(
         resource_service=rsvc,
@@ -837,7 +837,7 @@ async def test_enable_capability_creates_audit_event(
     app.dependency_overrides[get_preferences_repo] = lambda: prefs_repo
     app.dependency_overrides[get_invocation_repo] = lambda: MCPInvocationRepo(sm)
     app.dependency_overrides[get_health_repo] = lambda: MCPServerHealthRepo(sm)
-    app.dependency_overrides[get_credential_store] = lambda: _InMemoryCredentialStore()
+    app.dependency_overrides[get_secret_store] = lambda: _InMemorySecretStore()
 
     transport = ASGITransport(app=app)
     try:
@@ -1216,7 +1216,7 @@ async def test_test_endpoint_http_transport(
         supervisor = SubprocessSupervisor(
             upstream_factory=build_upstream,
             resource_service=rsvc,
-            credential_resolver=CredentialResolver(KeyringAdapter()),
+            secret_resolver=SecretResolver(KeyringAdapter()),
         )
         discovery = CapabilityDiscovery(
             resource_service=rsvc,
@@ -1236,7 +1236,7 @@ async def test_test_endpoint_http_transport(
         app.dependency_overrides[get_preferences_repo] = lambda: prefs_repo
         app.dependency_overrides[get_invocation_repo] = lambda: MCPInvocationRepo(sm)
         app.dependency_overrides[get_health_repo] = lambda: health_repo
-        app.dependency_overrides[get_credential_store] = lambda: _InMemoryCredentialStore()
+        app.dependency_overrides[get_secret_store] = lambda: _InMemorySecretStore()
 
         transport_obj = ASGITransport(app=app)
         try:

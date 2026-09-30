@@ -22,7 +22,7 @@ def d(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Bound
 
 
 def _listed(d: BoundaryDaemon) -> dict[str, dict[str, object]]:
-    r = d.client.get("/api/v1/credentials")
+    r = d.client.get("/api/v1/secrets")
     assert r.status_code == 200, r.text
     return {row["ref"]: row for row in r.json()["refs"]}
 
@@ -32,7 +32,7 @@ def _plant_foreign_ciphertext(d: BoundaryDaemon, ref: str) -> None:
     now = datetime.now(tz=UTC).isoformat()
     blob = Fernet(Fernet.generate_key()).encrypt(b"from-the-other-mac")
     d.sql(
-        "INSERT INTO credentials (ref, ciphertext, created_at, updated_at) VALUES (?, ?, ?, ?)",
+        "INSERT INTO secrets (ref, ciphertext, created_at, updated_at) VALUES (?, ?, ?, ?)",
         ref,
         blob,
         now,
@@ -46,7 +46,7 @@ def _plant_foreign_ciphertext(d: BoundaryDaemon, ref: str) -> None:
 def test_a_ciphertext_from_another_key_is_listed_as_locked(d: BoundaryDaemon) -> None:
     _plant_foreign_ciphertext(d, "secret/sentry-token")
     d.store("secret/github-token", "ghp_this_mac")
-    before = len(d.audit("credential_read")) + len(d.audit("credential_revealed"))
+    before = len(d.audit("secret_read")) + len(d.audit("secret_revealed"))
 
     rows = _listed(d)
 
@@ -54,7 +54,7 @@ def test_a_ciphertext_from_another_key_is_listed_as_locked(d: BoundaryDaemon) ->
     assert rows["secret/sentry-token"]["locked"] is True
     assert rows["secret/github-token"]["locked"] is False
     # Listing decrypts nothing and audits nothing.
-    assert len(d.audit("credential_read")) + len(d.audit("credential_revealed")) == before
+    assert len(d.audit("secret_read")) + len(d.audit("secret_revealed")) == before
 
 
 @pytest.mark.acceptance(
@@ -63,9 +63,7 @@ def test_a_ciphertext_from_another_key_is_listed_as_locked(d: BoundaryDaemon) ->
 def test_a_value_added_for_a_locked_secret_replaces_it_once_approved(d: BoundaryDaemon) -> None:
     _plant_foreign_ciphertext(d, "secret/sentry-token")
 
-    r = d.client.post(
-        "/api/v1/credentials", json={"ref": "secret/sentry-token", "value": "sntrys_new"}
-    )
+    r = d.client.post("/api/v1/secrets", json={"ref": "secret/sentry-token", "value": "sntrys_new"})
 
     assert r.status_code == 202, r.text
     approval = r.json()["approval"]
@@ -85,7 +83,7 @@ def test_the_list_says_when_each_secret_was_created_and_last_used(d: BoundaryDae
     assert row["created_at"] and row["last_used_at"] is None
 
     r = d.client.post(
-        "/api/v1/credentials/secrets/resolve",
+        "/api/v1/secrets/resolve",
         json={"names": ["db-password"], "argv0": "psql", "cwd": "/tmp"},
     )
     assert r.status_code == 200, r.text
@@ -106,7 +104,7 @@ def test_a_file_that_cannot_be_rewritten_keeps_its_key_and_says_so(d: BoundaryDa
     before = env.read_text()
     secrets.chmod(0o500)
     try:
-        r = d.client.post("/api/v1/credentials/import", json={})
+        r = d.client.post("/api/v1/secrets/import", json={})
         assert r.status_code == 200, r.text
         out = r.json()
         assert out["moved"] == []
@@ -121,7 +119,7 @@ def test_a_file_that_cannot_be_rewritten_keeps_its_key_and_says_so(d: BoundaryDa
     finally:
         secrets.chmod(0o700)
 
-    again = d.client.post("/api/v1/credentials/import", json={"ids": [skipped["id"]]})
+    again = d.client.post("/api/v1/secrets/import", json={"ids": [skipped["id"]]})
     assert again.status_code == 200, again.text
     assert [m["name"] for m in again.json()["moved"]] == ["aws.AWS_SECRET_ACCESS_KEY"]
     assert "coffer://secret/aws.AWS_SECRET_ACCESS_KEY" in env.read_text()
@@ -135,7 +133,7 @@ def test_a_scan_that_finds_nothing_says_how_many_files_it_read(d: BoundaryDaemon
     secrets.mkdir(parents=True, exist_ok=True)
     (secrets / "empty.env").write_text("# nothing here\n")
 
-    r = d.client.post("/api/v1/credentials/scan")
+    r = d.client.post("/api/v1/secrets/scan")
 
     assert r.status_code == 200, r.text
     assert r.json()["findings"] == []

@@ -144,7 +144,7 @@ whole subtree:
   `eslint.config.js`); hooks import the builder.
 - **Do NOT use flat hyphenated keys** (`["knowledge-documents", path]`) — they
   cannot be invalidated as a group. A key that spans two features
-  (`["settings", "credentials"]`) nests under the feature that owns the page.
+  (`["settings", "secrets"]`) nests under the feature that owns the page.
 - A hook file may re-export the builders it uses for its tests; new code
   imports from `queryKeys.ts` directly.
 

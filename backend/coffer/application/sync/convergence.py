@@ -58,9 +58,9 @@ from coffer.application.sync.convergence_preview import PreviewMixin
 from coffer.application.sync.joining import JoinResolver
 from coffer.application.sync.ports import (
     ConvergenceStatePort,
-    CredentialSyncPort,
     GitMirrorPort,
     PostImportHook,
+    SecretSyncPort,
     VaultApplyPort,
 )
 from coffer.domain.error_base import CofferError
@@ -97,7 +97,7 @@ class ConvergeRound(BackwardsMixin, PreviewMixin):
         serialize: Callable[[], Awaitable[ExportSummary]],
         guard: DeletionGuard,
         branch: str,
-        credentials: CredentialSyncPort,
+        secrets: SecretSyncPort,
         post_import: Sequence[PostImportHook] = (),
         apply_guard: Callable[[], AbstractAsyncContextManager[object]] | None = None,
     ) -> None:
@@ -112,7 +112,7 @@ class ConvergeRound(BackwardsMixin, PreviewMixin):
         self._post_import = list(post_import)
         # Held over apply + post-import: no pass judges half-imported rows.
         self._apply_guard = apply_guard or contextlib.nullcontext
-        self._credentials = credentials
+        self._secrets = secrets
 
     async def run(
         self,
@@ -232,7 +232,7 @@ class ConvergeRound(BackwardsMixin, PreviewMixin):
         # Ciphertext travels whatever the keys; a ref this machine now holds
         # but cannot open is named, never left to fail at first use (spec
         # vault-sync "Report refs without a key as locked"); never fatal.
-        locked = await locked_refs(self._credentials)
+        locked = await locked_refs(self._secrets)
 
         # --- 6 publish ------------------------------------------------------
         status = ConvergeStatus.OK if (published or applied) else ConvergeStatus.NO_CHANGE

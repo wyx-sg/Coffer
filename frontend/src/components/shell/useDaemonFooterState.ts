@@ -17,7 +17,7 @@ export type DaemonFooterState =
 export function useDaemonFooterState(): DaemonFooterState {
   const status = useDaemonStatus();
   // Desktop only: a daemon an earlier app version left running still answers,
-  // so it reads as running, with a version warning (credential-supplier
+  // so it reads as running, with a version warning (secret-supplier
   // module, `lib/tauri.ts`; a browser answers "matches").
   const outOfDate = useDaemonOutOfDate(status.data?.version).data === true;
   if (status.isError) return { kind: "offline" };

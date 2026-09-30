@@ -22,7 +22,7 @@ Routes, everything else 404:
   control routes, behind :data:`CONTROL_TOKEN_HEADER`.
 
 Model routes authenticate with a per-agent local token (``Authorization:
-Bearer`` or ``x-api-key``). Every credential the request presents must be the
+Bearer`` or ``x-api-key``). Every secret the request presents must be the
 SAME agent's token; anything else — no token, a claude.ai OAuth bearer
 (``sk-ant-oat…``), a real provider key — is a 401 in the wire's own error
 shape and nothing is forwarded.
@@ -176,7 +176,7 @@ class ModelProxyApp:
     # --- model routes ----------------------------------------------------------------
 
     def authenticate(self, raw: w.RawHeaders) -> ProxyAgent | None:
-        """The agent whose token every presented credential is, else None."""
+        """The agent whose token every presented secret is, else None."""
         presented: list[str] = []
         for name, value in raw:
             lowered = name.lower()

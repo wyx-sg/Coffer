@@ -135,7 +135,7 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 ## Secrets are never plaintext at rest
 
-**Statement.** Secrets live only as Fernet ciphertext in the `credentials` table. Plaintext exists in memory solely between decrypt and the spawn or header injection that consumes it, and never reaches the database, logs, audit or any structured event. All other code holds secret **refs**. The master key is managed only by `coffer.infrastructure.credentials` — a `0600` file beside the database by default, the OS keychain when you opt in — and that module is the only importer of `keyring`.
+**Statement.** Secrets live only as Fernet ciphertext in the `secrets` table. Plaintext exists in memory solely between decrypt and the spawn or header injection that consumes it, and never reaches the database, logs, audit or any structured event. All other code holds secret **refs**. The master key is managed only by `coffer.infrastructure.secret` — a `0600` file beside the database by default, the OS keychain when you opt in — and that module is the only importer of `keyring`.
 
 **Rationale.** Envelope encryption gives zero keychain prompts under an unsigned, frequently rebuilt binary, while the keychain opt-in still defends against offline copying of `~/.coffer/`. Refs make every config document safe to audit, sync and display.
 
