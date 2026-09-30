@@ -215,5 +215,4 @@ def help_text() -> str:
     arguments on one line, then what anything else is. The one-line
     descriptions live in the platform's own command menu (Telegram)."""
     heads = [f"/{c.name} {c.args}".rstrip() for c in COMMAND_ROSTER]
-    return " · ".join(heads) + "
-Anything else is a message to the agent."
+    return " · ".join(heads) + "\nAnything else is a message to the agent."
