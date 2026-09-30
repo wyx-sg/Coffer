@@ -1,15 +1,14 @@
-"""Fakes for the required-command check: the machine's commands and its
-Homebrew. Nothing here runs a process — a test drives ``CliRequirementService``
-against these, never against a real ``brew``."""
+"""A fake machine for the required-command check. Nothing here runs a
+process — a test drives ``CliRequirementService`` against it."""
 
 from __future__ import annotations
 
-import threading
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 FAKE_BIN = "/fake/bin"
-FAKE_BREW = "/fake/homebrew/bin/brew"
+#: What a test daemon reports as this machine's OS and architecture.
+FAKE_MACHINE = "macOS 15.6, arm64"
 
 
 @dataclass
@@ -41,28 +40,3 @@ class FakeCommandProbe:
         command = self.commands[argv[0].rsplit("/", 1)[-1]]
         _discarded = command.printed  # printed by the check, never read by Coffer
         return command.logged_in
-
-
-@dataclass
-class FakeInstaller:
-    brew: str | None = FAKE_BREW
-    lines: tuple[str, ...] = ("==> Downloading", "==> Pouring", "==> Done")
-    exit_code: int = 0
-    #: Run while "installing" — typically puts the command on the fake PATH.
-    on_run: Callable[[], None] | None = None
-    #: When set, the run waits for it, so a test can look at a running job.
-    gate: threading.Event | None = None
-    runs: list[tuple[str, ...]] = field(default_factory=list)
-
-    def locate(self) -> str | None:
-        return self.brew
-
-    def run(self, argv: Sequence[str], on_line: Callable[[str], None]) -> int:
-        self.runs.append(tuple(argv))
-        for line in self.lines:
-            on_line(line)
-        if self.gate is not None:
-            self.gate.wait(10)
-        if self.on_run is not None:
-            self.on_run()
-        return self.exit_code

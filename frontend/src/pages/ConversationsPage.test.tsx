@@ -106,7 +106,7 @@ const channelConv = makeConv({
 });
 
 function renderPage(
-  initialPath = "/conversations",
+  initialPath: string | { pathname: string; state: unknown } = "/conversations",
   agents?: { agent_key: string; display_name: string; available: boolean }[],
 ) {
   const qc = new QueryClient({
@@ -423,5 +423,44 @@ describe("ConversationsPage open conversation", () => {
     fireEvent.click(screen.getByRole("button", { name: /start a new conversation/i }));
     fireEvent.click(await screen.findByRole("button", { name: /^start$/i }));
     expect(await screen.findByRole("textbox", { name: /message input/i })).toBeInTheDocument();
+  });
+});
+
+describe("ConversationsPage hand-off", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  test("the draft opens with the prompt in the composer and nothing is sent until Send", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    chatApiMock.createConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
+    chatApiMock.getConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
+    renderPage({
+      pathname: "/conversations/new",
+      state: {
+        handoff: { agentKey: "claude_code", cwd: "/Users/me/work", prompt: "Install jq 1.6." },
+      },
+    });
+
+    const box = await screen.findByRole("textbox", { name: /message input/i });
+    await waitFor(() => expect(box).toHaveValue("Install jq 1.6."));
+    expect(screen.getByText("/Users/me/work")).toBeInTheDocument();
+    // Pre-filled, not sent: no conversation exists and no turn has run.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(chatApiMock.createConversation).not.toHaveBeenCalled();
+    expect(chatApiMock.sendMessage).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(box, { key: "Enter", shiftKey: false });
+    await waitFor(() =>
+      expect(chatApiMock.createConversation).toHaveBeenCalledWith({
+        agent_key: "claude_code",
+        agent_config: { cwd: "/Users/me/work" },
+      }),
+    );
+    await waitFor(() =>
+      expect(chatApiMock.sendMessage).toHaveBeenCalledWith("new-conv", "Install jq 1.6.", []),
+    );
   });
 });

@@ -58,8 +58,9 @@ unarchived until that implementation lands.
   new group. Script tools are deferred past 1.0. The MCP servers Add dialog offers no custom
   tools.
 - A **CLIs** page (`/clis`) lists every command a skill requires with its version against the
-  minimum, login state and the skills that need it, problems first; its detail page installs
-  through Homebrew after a confirmation, shows the login command and checks again. A skill's
+  minimum, login state and the skills that need it, problems first; its detail page hands the
+  install to an agent through a prompt to copy or send to a managed agent, shows the login
+  command and checks again. A skill's
   requirements link there, and Overview flags a required CLI that is missing, outdated or not
   logged in. Experimental switches hide entries exactly as before, and a group left with no entry
   hides its heading. Routes do not move.

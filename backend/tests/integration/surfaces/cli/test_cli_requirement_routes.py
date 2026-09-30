@@ -1,12 +1,11 @@
 """``/api/v1/clis`` over the real app: what skills declare, how each command
-is checked, the Homebrew install and the attention items (spec skill-manager,
+is checked, the hand-off prompt and the attention items (spec skill-manager,
 the required-command requirements; spec resource-framework "Report what needs
 a person across every kind").
 
-The probe and Homebrew are fakes injected at the composition root's seam
-(``cli_wiring``) — nothing here runs a real ``brew``. The two tests about the
-real ``PATH`` lookup and the discarded login output run the real
-``CommandProbe`` against scripts this test writes into ``tmp_path``.
+The probe is a fake injected at the composition root's seam (``cli_wiring``).
+The two tests about the real ``PATH`` lookup and the discarded login output run
+the real ``CommandProbe`` against scripts this test writes into ``tmp_path``.
 """
 
 from __future__ import annotations
@@ -15,24 +14,17 @@ import json
 import logging
 import os
 import pathlib
-import threading
 from collections.abc import Iterator
 
 import pytest
 
 from coffer.infrastructure.platform.user_path import UserPath
 from coffer.infrastructure.skill.command_probe import CommandProbe
-from tests.support.cli_requirements import (
-    FAKE_BREW,
-    FakeCommand,
-    FakeCommandProbe,
-    FakeInstaller,
-)
+from tests.support.cli_requirements import FAKE_MACHINE, FakeCommand, FakeCommandProbe
 
 from ._cli_requirements_app import CliDaemon, boot_cli_daemon
-from ._real_app import audit
 
-_GH = '  - command: gh\n    min_version: "{min}"\n    brew: gh\n'
+_GH = '  - command: gh\n    min_version: "{min}"\n'
 
 
 @pytest.fixture
@@ -41,18 +33,12 @@ def probe() -> FakeCommandProbe:
 
 
 @pytest.fixture
-def installer() -> FakeInstaller:
-    return FakeInstaller()
-
-
-@pytest.fixture
 def daemon(
     tmp_path: pathlib.Path,
     monkeypatch: pytest.MonkeyPatch,
     probe: FakeCommandProbe,
-    installer: FakeInstaller,
 ) -> Iterator[CliDaemon]:
-    yield from boot_cli_daemon(tmp_path, monkeypatch, probe=probe, installer=installer)
+    yield from boot_cli_daemon(tmp_path, monkeypatch, probe=probe)
 
 
 @pytest.mark.acceptance(
@@ -64,7 +50,7 @@ def test_requires_list_is_read(daemon: CliDaemon, probe: FakeCommandProbe) -> No
     uid = daemon.add_skill(
         "issues",
         '  - command: gh\n    min_version: "2.40"\n    login_check: gh auth status\n'
-        "    login: gh auth login\n    brew: gh\n    why: Opens issues.\n  - jq\n",
+        "    login: gh auth login\n    why: Opens issues.\n  - jq\n",
     )
     r = daemon.client.get("/clis")
     assert r.status_code == 200, r.text
@@ -74,7 +60,7 @@ def test_requires_list_is_read(daemon: CliDaemon, probe: FakeCommandProbe) -> No
     assert set(by) == {"gh", "jq"}
     gh = by["gh"]
     assert gh["min_version"] == "2.40"
-    assert gh["brew"] == "gh"
+    assert gh["handoff"] is None
     assert gh["login"] == {
         "state": "logged_in",
         "check": ["gh", "auth", "status"],
@@ -122,7 +108,9 @@ def test_highest_minimum_wins(daemon: CliDaemon, probe: FakeCommandProbe) -> Non
     assert gh["status"] == "outdated"
     assert gh["version"] == "2.30.0" and gh["min_version"] == "2.40"
     assert [n["skill_name"] for n in gh["needed_by"]] == ["high", "low"]
-    assert gh["install_command"] == "brew upgrade gh"
+    prompt = gh["handoff"]["prompt"]
+    assert prompt.startswith("Please update the command-line tool `gh`")
+    assert "Installed: 2.30.0 at /fake/bin/gh; version 2.40 or newer is needed." in prompt
 
 
 @pytest.mark.acceptance(spec="skill-manager", scenario="checking again probes afresh")
@@ -141,59 +129,65 @@ def test_check_again(daemon: CliDaemon, probe: FakeCommandProbe) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="skill-manager",
-    scenario="installing runs the confirmed Homebrew command and keeps its output",
+    spec="skill-manager", scenario="a missing command carries an install prompt for an agent"
 )
-def test_install_runs_brew(
-    daemon: CliDaemon, probe: FakeCommandProbe, installer: FakeInstaller
-) -> None:
-    gate = threading.Event()
-    installer.gate = gate
-    installer.on_run = lambda: probe.commands.__setitem__("jq", FakeCommand("1.7.1"))
-    daemon.add_skill("s", "  - command: jq\n    brew: jq\n")
-    assert daemon.client.get("/clis/jq").json()["install_command"] == "brew install jq"
-    r = daemon.client.post("/clis/jq/install", json={"formula": "jq"})
-    assert r.status_code == 202, r.text
-    assert r.json()["argv"] == [FAKE_BREW, "install", "jq"]
-    assert "sudo" not in r.json()["argv"]
-    # Served while it runs.
-    running = daemon.client.get("/clis/jq/install").json()
-    assert running["state"] == "running"
-    again = daemon.client.post("/clis/jq/install", json={"formula": "jq"})
-    assert again.status_code == 409 and again.json()["error"]["code"] == "CLI_INSTALL_RUNNING"
-    gate.set()
-    done = daemon.wait_install("jq")
-    assert done["state"] == "succeeded" and done["exit_code"] == 0
-    assert done["lines"] == list(installer.lines)
-    assert installer.runs == [(FAKE_BREW, "install", "jq")]
-    started = audit(daemon.client, "cli_install_started")
-    finished = audit(daemon.client, "cli_install_finished")
-    assert started[0]["details"]["argv"] == [FAKE_BREW, "install", "jq"]
-    assert finished[0]["details"]["exit_code"] == 0
-    assert finished[0]["details"]["output_tail"] == list(installer.lines)
-    # Checked again when it ended.
-    jq = daemon.client.get("/clis/jq").json()
-    assert jq["status"] == "ready" and jq["version"] == "1.7.1"
-    assert jq["install_state"] == "succeeded"
+def test_a_missing_command_carries_an_install_prompt(daemon: CliDaemon) -> None:
+    daemon.add_skill("issues", _GH.format(min="2.40"))
+    daemon.add_skill("triage", "  - command: gh\n    title: GitHub CLI\n")
+    gh = daemon.client.get("/clis/gh").json()
+    assert gh["status"] == "missing"
+    assert gh["handoff"]["prompt"] == (
+        "Please install the command-line tool `gh` (GitHub CLI) on this machine.\n"
+        "\n"
+        "- Needed by the Coffer skills: issues (version 2.40 or newer), triage.\n"
+        f"- This machine: {FAKE_MACHINE}.\n"
+        "\n"
+        "Choose the right install method for this machine.\n"
+        "When you are done, run `gh --version` to confirm it works.\n"
+        "Check with me before running anything that needs sudo or changes system settings.\n"
+        "If a login is needed, tell me how and I will log in myself; do not handle my credentials."
+    )
+    # The list carries the same prompt, and there is nothing that installs.
+    listed = daemon.client.get("/clis").json()["items"][0]
+    assert listed["handoff"] == gh["handoff"]
+    assert daemon.client.post("/clis/gh/install", json={"formula": "gh"}).status_code in (404, 405)
 
 
 @pytest.mark.acceptance(
-    spec="skill-manager", scenario="an install naming another formula is refused"
+    spec="skill-manager",
+    scenario="a command that is not logged in carries a prompt that asks only for help logging in",
 )
-def test_install_refusals(daemon: CliDaemon, installer: FakeInstaller) -> None:
-    daemon.add_skill("s", "  - command: jq\n    brew: jq\n  - fd\n")
-    r = daemon.client.post("/clis/jq/install", json={"formula": "wget"})
-    assert r.status_code == 422 and r.json()["error"]["code"] == "CLI_FORMULA_MISMATCH"
-    r = daemon.client.post("/clis/fd/install", json={"formula": "fd"})
-    assert r.status_code == 409 and r.json()["error"]["code"] == "CLI_NOT_INSTALLABLE"
-    assert r.json()["error"]["details"]["reason"] == "no_formula"
-    installer.brew = None
-    r = daemon.client.post("/clis/jq/install", json={"formula": "jq"})
-    assert r.status_code == 409 and r.json()["error"]["code"] == "HOMEBREW_NOT_FOUND"
-    assert installer.runs == []
-    assert audit(daemon.client, "cli_install_started") == []
-    r = daemon.client.get("/clis/jq/install")
-    assert r.status_code == 404 and r.json()["error"]["code"] == "CLI_INSTALL_NOT_FOUND"
+def test_a_logged_out_command_asks_only_for_login_help(
+    daemon: CliDaemon, probe: FakeCommandProbe
+) -> None:
+    probe.commands["gh"] = FakeCommand("2.45.0", logged_in=False)
+    daemon.add_skill(
+        "issues", "  - command: gh\n    login_check: gh auth status\n    login: gh auth login\n"
+    )
+    prompt = daemon.client.get("/clis/gh").json()["handoff"]["prompt"]
+    assert prompt.startswith("Please help me log in to the command-line tool `gh`.")
+    assert "`gh auth status` says I am not logged in" in prompt
+    assert "The skills suggest logging in with `gh auth login`." in prompt
+    assert "I will run it and enter anything it asks for myself." in prompt
+    assert "do not handle my credentials" in prompt
+    assert "Please install" not in prompt and "install method" not in prompt
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="a ready command carries no prompt")
+def test_a_ready_command_carries_no_prompt(daemon: CliDaemon, probe: FakeCommandProbe) -> None:
+    probe.commands["jq"] = FakeCommand("1.7.1")
+    daemon.add_skill("data", "  - jq\n")
+    jq = daemon.client.get("/clis/jq").json()
+    assert (jq["status"], jq["handoff"]) == ("ready", None)
+
+
+def test_a_legacy_brew_field_is_ignored_with_a_warning(daemon: CliDaemon) -> None:
+    daemon.add_skill("old", "  - command: jq\n    brew: jq\n")
+    body = daemon.client.get("/clis").json()
+    assert [i["command"] for i in body["items"]] == ["jq"]
+    assert [w["message"] for w in body["warnings"]] == [
+        "requires jq: unknown field(s) brew ignored"
+    ]
 
 
 @pytest.mark.acceptance(

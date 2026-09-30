@@ -1765,18 +1765,18 @@ Probe the required commands again (or one of them).
 | `[COMMAND]` | argument | text |  | One command only |
 | `--json` | option | flag |  | JSON output for scripts |
 
-### cli install
+### cli prompt
 
 ```sh
-coffer cli install [OPTIONS] COMMAND
+coffer cli prompt [OPTIONS] COMMAND
 ```
 
-Install or upgrade a required command through Homebrew, after asking.
+Print the prompt to give your agent for a command that needs you.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `COMMAND` | argument | text | required | The command, e.g. jq |
-| `--yes, -y` | option | flag |  | Run without asking |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ## coffer knowledge
 

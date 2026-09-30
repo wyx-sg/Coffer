@@ -358,9 +358,10 @@ the gateway's registration rules (fixed names, the 24-character limit) are uncha
   one, guards a tool that writes. **Script tools are deferred past 1.0**: running a
   user's script is a process-sandbox question the HTTP type does not raise.
 - **CLIs get their own entry** because they have data nothing else shows — installed or not,
-  version against the skills' minimum, login state — and actions nothing else offers: install
-  through Homebrew after a confirmation (no other installer, so Coffer never guesses a package
-  manager), the login command to copy, check again. One row per command, however many skills
+  version against the skills' minimum, login state — and actions nothing else offers: a
+  hand-off prompt to copy or to open in a new conversation with a managed agent (Coffer runs no
+  installer, so the agent picks the install method for this machine), the login command to
+  copy, check again. One row per command, however many skills
   need it, problems first. A skill's requirements link to the CLI, and Overview carries an
   attention item while one needs the user. *Rejected:* a requirements section on each skill
   only, which repeats one command's problem on every skill that needs it.

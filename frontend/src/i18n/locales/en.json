@@ -668,8 +668,6 @@
       "skill_relinked": "Re-linked skill {{resource}}",
       "skill_unbound": "Unbound skill {{resource}} from {{key}}",
       "skill_unmanaged_deleted": "Deleted unmanaged skill {{resource}}",
-      "cli_install_started": "Started installing {{command}} with Homebrew",
-      "cli_install_finished": "Homebrew install of {{command}} finished",
       "skill_updated": "Updated skill {{resource}}",
       "sync_confirmed": "Confirmed a held converge round",
       "sync_machine_removed": "Retired a machine from the sync registry",
@@ -1277,10 +1275,6 @@
     "CHANNEL_NOT_PAIRED": "This channel has no paired peer yet — generate a pairing code and send it to the bot",
     "CHANNEL_NOT_RUNNING": "The channel adapter is not running — enable the channel to start it",
     "CHANNEL_SEND_FAILED": "Delivery to the IM platform failed",
-    "CLI_FORMULA_MISMATCH": "That Homebrew formula is not the one the skills declare for this command. Nothing was run.",
-    "CLI_INSTALL_NOT_FOUND": "No install has run for this command since Coffer started",
-    "CLI_INSTALL_RUNNING": "An install of this command is already running",
-    "CLI_NOT_INSTALLABLE": "There is nothing to install: no Homebrew formula is declared, or the command is already current",
     "CLI_NOT_REQUIRED": "No skill requires this command",
     "CONFIG_FILE_FORMAT_INVALID": "The content isn't valid for this file's format. The file was left unchanged.",
     "CONFIG_FILE_NOT_ALLOWED": "That config file isn't allowed for this agent",
@@ -1304,7 +1298,6 @@
     "GENERIC_CREATE_NOT_ALLOWED": "This kind can't be created directly",
     "GIT_MIRROR_FAILED": "Git couldn't push. Your changes are committed locally; check the remote URL, branch and push credential.",
     "GREP_PATTERN_INVALID": "Invalid grep pattern",
-    "HOMEBREW_NOT_FOUND": "Homebrew (brew) is not on the agent's PATH. Nothing was run.",
     "HOST_NOT_ALLOWED": "Coffer only answers requests addressed to its own loopback address and port.",
     "INGEST_REJECTED": "The document was rejected during ingestion",
     "INGEST_REJECTED_scanned_pdf": "This PDF appears to be scanned or image-only — no text could be extracted. Run OCR (or convert it to a text-based PDF) and re-upload.",
@@ -2409,10 +2402,11 @@
       "outdatedLine": "{{version}} found, needs ≥ {{min}}.",
       "loggedOutBefore": "Installed, but not logged in. Run",
       "loggedOutAfter": "in a terminal.",
-      "footnote": "The skill is still delivered. An agent that follows it will fail at the step that needs {{commands}} until it is installed.",
+      "footnote": "The skill is still delivered, but fails at the step that needs {{commands}}. Hand it to your agent, then Check again.",
       "empty": "This skill declares no required commands.",
       "emptyHint": "List the commands it calls under requires: in its SKILL.md and they show here.",
-      "loadFailed": "Couldn't check the commands this skill requires"
+      "loadFailed": "Couldn't check the commands this skill requires",
+      "openInClis": "Open in CLIs"
     },
     "history": {
       "title": "Versions are not recorded yet",
@@ -3965,33 +3959,16 @@
   },
   "clis": {
     "title": "CLIs",
-    "count_one": "{{count}} command",
-    "count_other": "{{count}} commands",
-    "subtitle": "Command-line tools your skills say they need.",
-    "help": "A skill lists the commands it calls under requires: in its SKILL.md. Coffer checks each one on the agent's PATH — its version against the minimum the skills ask for, and its login where one is declared. A missing command never stops a skill from being delivered; the agent fails at the step that calls it.",
+    "help": "Every command a skill lists under requires: in its SKILL.md, problems first. Coffer never installs or logs in for you: it hands the fix to your agent as a prompt, and Check again looks again.",
     "checkAgain": "Check again",
     "checking": "Checking…",
     "checkedAgo": "Checked {{when}}",
     "loadFailed": "Couldn't load the CLIs",
-    "summary": {
-      "missing": "{{count}} not found",
-      "outdated": "{{count}} too old",
-      "logged_out": "{{count}} not logged in",
-      "ready": "{{count}} ready"
-    },
     "status": {
       "missing": "Not found",
       "outdated": "Too old",
       "logged_out": "Not logged in",
       "ready": "Ready"
-    },
-    "cols": {
-      "command": "Command",
-      "version": "Version · needs",
-      "login": "Login",
-      "neededBy": "Needed by",
-      "status": "Status",
-      "actions": "Actions"
     },
     "search": "Filter commands",
     "notOnPath": "Not on PATH",
@@ -4005,10 +3982,6 @@
     "skillCount_one": "{{count}} skill",
     "skillCount_other": "{{count}} skills",
     "actions": {
-      "install": "Install…",
-      "update": "Update…",
-      "copyLogin": "Copy login command",
-      "copyCommand": "Copy command",
       "copy": "Copy",
       "copied": "Copied",
       "open": "Open"
@@ -4019,16 +3992,14 @@
     },
     "empty": {
       "title": "No skill requires a command yet",
-      "description": "A skill lists the command-line tools it calls under requires: in its SKILL.md. Once one does, each command shows here with its version, its login state and the skills that need it.",
-      "docs": "How to declare requires:",
+      "description": "When a skill lists commands under requires: in its SKILL.md, they show up here with their version and login state.",
+      "docs": "How requires: works",
       "docsUrl": "https://wyx-sg.github.io/Coffer/guides/clis#declare-what-a-skill-needs"
     },
     "detail": {
-      "back": "CLIs",
       "subtitle_one": "{{title}} · needed by {{count}} skill",
       "subtitle_other": "{{title}} · needed by {{count}} skills",
       "notFound": "Couldn't open this command",
-      "help": "Coffer looks the command up on the agent's PATH and runs its --version and declared login check (output discarded). It installs only through Homebrew, only the formula the skill declares, and only after you confirm.",
       "sections": {
         "command": "Command",
         "login": "Login",
@@ -4036,8 +4007,6 @@
       },
       "foundAt": "Found at",
       "version": "Version",
-      "installWith": "Install with",
-      "updateWith": "Update with",
       "state": "State",
       "loginWith": "Log in with",
       "loginHint": "Run it in a terminal, then press Check again.",
@@ -4046,39 +4015,22 @@
     "banner": {
       "missing_one": "{{command}} isn't installed — {{count}} skill affected",
       "missing_other": "{{command}} isn't installed — {{count}} skills affected",
-      "outdated_one": "{{command}} is older than {{version}} — {{count}} skill affected",
-      "outdated_other": "{{command}} is older than {{version}} — {{count}} skills affected",
+      "outdated_one": "{{command}} {{found}} is older than {{skills}} needs",
+      "outdated_other": "{{command}} {{found}} is older than {{skills}} need",
       "logged_out_one": "{{command}} isn't logged in — {{count}} skill affected",
       "logged_out_other": "{{command}} isn't logged in — {{count}} skills affected",
       "body": "{{skills}} will fail at the step that calls {{command}}.",
       "loginBefore": "Run",
-      "loginAfter": "in a terminal, then check again."
+      "loginAfter": "in a terminal, then check again.",
+      "outdatedBody_one": "It needs {{command}} ≥ {{version}}.",
+      "outdatedBody_other": "They need {{command}} ≥ {{version}}."
     },
-    "install": {
-      "titleInstall": "Install {{command}}?",
-      "titleUpdate": "Update {{command}}?",
-      "intro": "Coffer will run this command on this Mac, as you:",
-      "installer": "Installer",
-      "homebrew": "Homebrew",
-      "why": "Why",
-      "whyWithMin_one": "{{count}} skill needs {{command}} ≥ {{version}}: {{skills}}",
-      "whyWithMin_other": "{{count}} skills need {{command}} ≥ {{version}}: {{skills}}",
-      "whyPlain_one": "{{count}} skill needs {{command}}: {{skills}}",
-      "whyPlain_other": "{{count}} skills need {{command}}: {{skills}}",
-      "output": "Output",
-      "outputWhere": "Shown here and kept in Activity",
-      "never": "Coffer never installs without asking, and never with sudo.",
-      "run": "Run {{command}}",
-      "titleRunning": "Running {{command}}…",
-      "titleSucceeded": "{{command}} finished",
-      "titleFailed": "{{command}} failed",
-      "running": "Running. You can close this window; the install carries on and its output stays in Activity.",
-      "succeeded": "Done (exit code {{code}}). Coffer checked the command again.",
-      "failed": "Failed with exit code {{code}}. The output above says why.",
-      "failedNoCode": "Stopped before it finished. The output above says why.",
-      "noOutput": "No output yet.",
-      "outputLabel": "Install output",
-      "close": "Close"
+    "list": {
+      "needsYou": "Needs you",
+      "ready": "Ready",
+      "noMatch": "No command matches",
+      "outdatedLine": "{{version}} · needs ≥ {{min}}",
+      "loggedInLine": "{{version}} · logged in"
     }
   },
   "secrets": {
@@ -4840,5 +4792,11 @@
       "missing": "Not in this version",
       "truncated": "cut short"
     }
+  },
+  "handoff": {
+    "copyPrompt": "Copy prompt",
+    "copied": "Copied",
+    "askAgent": "Ask an agent",
+    "help": "Coffer doesn't run this itself: hand it to your agent, which picks the right way for this machine."
   }
 }
