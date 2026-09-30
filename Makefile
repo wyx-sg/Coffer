@@ -19,7 +19,7 @@ PYTEST_XDIST := -n $(PYTEST_WORKERS) --dist loadgroup
 
 .PHONY: help install install-e2e-browsers hooks \
 	verify verify-all \
-	verify-unit verify-integration verify-contract verify-e2e verify-visual visual-update verify-acceptance openspec-validate verify-benchmark \
+	verify-unit verify-integration verify-contract verify-e2e verify-visual visual-update verify-acceptance openspec-validate verify-benchmark verify-secrets \
 	test-durations \
 	coverage lock \
 	eval eval-routing eval-curate \
@@ -35,7 +35,8 @@ help:
 	@echo "  make hooks                 install pre-commit + commit-msg git hooks"
 	@echo ""
 	@echo "  Verification (4 test tiers + lint, see .agents/testing.md):"
-	@echo "  make verify                fast path: lint + unit + integration + contract + acceptance audit"
+	@echo "  make verify                fast path: lint + unit + integration + contract + acceptance audit,"
+	@echo "                            timing each stage into .coffer-verify.timings"
 	@echo "  make verify-all            verify + e2e (full suite)"
 	@echo "  make verify-unit           unit tier only (includes purity guardrail)"
 	@echo "  make verify-integration    integration tier only"
@@ -45,6 +46,7 @@ help:
 	@echo "  make visual-update         re-record this platform's screenshot baseline after a deliberate visual change"
 	@echo "  make verify-acceptance     openspec validate + audit scenarios vs test markers"
 	@echo "  make verify-benchmark      gateway-overhead budget benchmark (COFFER_RUN_BENCHMARKS=1)"
+	@echo "  make verify-secrets        gitleaks over the full git history (skips when gitleaks is not installed)"
 	@echo "  make test-durations        re-measure backend/.test_durations (CI's integration shard balance)"
 	@echo "  PYTEST_WORKERS=0 make ...  run a backend tier serially (default: auto = one xdist worker per core)"
 	@echo "  make lint                  every static gate: repo checks (scripts/check_*.py, contract freshness),"
@@ -117,7 +119,25 @@ hooks:
 		echo "hooks: .venv/bin/pre-commit missing — run 'make install' first"; exit 1; \
 	fi
 
-verify: lint verify-unit verify-integration verify-contract verify-acceptance
+# Each stage runs in order and its wall time lands in .coffer-verify.timings
+# (`<stage> <seconds>s <ok|FAILED>`, one line per stage run), printed at the
+# end whether the run passed or stopped at a failing stage.
+VERIFY_STAGES := lint verify-unit verify-integration verify-contract verify-acceptance
+VERIFY_TIMINGS := .coffer-verify.timings
+
+verify:
+	@: > $(VERIFY_TIMINGS); \
+	for stage in $(VERIFY_STAGES); do \
+		start=$$(date +%s); \
+		$(MAKE) --no-print-directory $$stage; status=$$?; \
+		if [ $$status -eq 0 ]; then result=ok; else result=FAILED; fi; \
+		printf '%-20s %5ss  %s\n' "$$stage" "$$(( $$(date +%s) - start ))" "$$result" >> $(VERIFY_TIMINGS); \
+		if [ $$status -ne 0 ]; then \
+			echo ""; echo "verify: stage timings ($(VERIFY_TIMINGS))"; cat $(VERIFY_TIMINGS); \
+			exit $$status; \
+		fi; \
+	done; \
+	echo ""; echo "verify: stage timings ($(VERIFY_TIMINGS))"; cat $(VERIFY_TIMINGS)
 	@$(PY) scripts/verify_stamp.py write && echo "verify: OK — recorded .coffer-verify.stamp"
 verify-all: verify verify-e2e
 
@@ -141,7 +161,7 @@ lint:
 # models produce, or a served route has no owning spec. Fix: `make contracts`.
 	$(PY) scripts/gen_contracts.py --check
 	$(PY) scripts/check_response_models.py
-	$(PY) scripts/check_doc_numbering.py
+	$(PY) scripts/check_adr_index.py
 	$(PY) scripts/check_spec_citations.py
 	$(PY) scripts/check_architecture_doc.py
 	$(PY) scripts/check_pyinstaller_specs.py
@@ -150,6 +170,7 @@ lint:
 	$(PY) scripts/check_platform_calls.py
 	$(PY) scripts/check_agent_type_branches.py
 	$(PY) scripts/check_frontend_colors.py
+	$(PY) scripts/check_ignored_sources.py
 # Both trees are checked under the project's rules. `backend/**` gets them
 # from backend/pyproject.toml; `evals/**` used to get ruff's built-in defaults
 # (line-length 88, the starter rule set) because nothing above it carried a
@@ -216,6 +237,16 @@ test-durations:
 
 verify-benchmark:
 	COFFER_RUN_BENCHMARKS=1 $(PY) -m pytest $(BACKEND)/tests -m benchmark
+
+# The same scan CI's `secrets-scan` job runs (gitleaks over the full history,
+# honouring .gitleaksignore). CI runs it through gitleaks-action; locally it
+# needs a gitleaks binary on PATH and skips without one.
+verify-secrets:
+	@if command -v gitleaks >/dev/null 2>&1; then \
+		gitleaks detect --source . --redact --no-banner; \
+	else \
+		echo "verify-secrets: gitleaks is not installed — skipping (CI's secrets-scan job runs it)"; \
+	fi
 
 # Backend-only, as .agents/testing.md documents. The one frontend contract test
 # (`frontend/src/bootstrap.contract.test.ts`) is co-located and runs in

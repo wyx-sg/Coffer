@@ -176,7 +176,7 @@ Use **Node 20**, the version CI uses, when you run the frontend suite locally.
 
 ## What `make verify` runs
 
-`make verify` runs `lint`, then `verify-unit`, `verify-integration`, `verify-contract` and `verify-acceptance`. When everything passes, it writes `.coffer-verify.stamp`, a content fingerprint of the source files. The Claude Code harness hook reads that stamp and warns when a commit happens while it is stale. `make verify-all` adds `verify-e2e`.
+`make verify` runs `lint`, then `verify-unit`, `verify-integration`, `verify-contract` and `verify-acceptance`, one after another. At the end, pass or fail, it prints how long each stage took and keeps the list in `.coffer-verify.timings`. When everything passes, it writes `.coffer-verify.stamp`, a content fingerprint of the source files. The Claude Code harness hook reads that stamp and warns when a commit happens while it is stale. `make verify-all` adds `verify-e2e`.
 
 `make lint` is the whole static gate, not only a formatter pass. It runs these steps in order:
 
@@ -185,8 +185,8 @@ Use **Node 20**, the version CI uses, when you run the frontend suite locally.
 | `scripts/check_file_sizes.py` | File-size limits: backend Python and desktop Rust ≤ 400 lines, frontend page ≤ 200, component ≤ 250, hook and utility ≤ 300. Generated files are excluded |
 | Contract freshness | Each capability's `api.openapi.yaml` is regenerated from the Pydantic models and must equal the checked-in file, and every served route must belong to a capability. Fix with `make contracts` |
 | `scripts/check_response_models.py` | Every FastAPI route declares `response_model=` (or `response_class=` for streaming and file responses), so no route returns an untyped `dict` |
-| `scripts/check_doc_numbering.py` | Specs, ADRs and requirements stay named, not numbered. Links inside `docs/decisions/` resolve, and the ADR index lists exactly the ADRs that exist |
-| `scripts/check_spec_citations.py` | Every `spec <capability> "<Title>"` citation in any tracked file names a real requirement, and retired id forms stay out |
+| `scripts/check_adr_index.py` | Links inside `docs/decisions/` resolve, and the ADR index lists exactly the ADRs that exist |
+| `scripts/check_spec_citations.py` | Every `spec <capability> "<Title>"` citation in any tracked file names a real requirement |
 | `scripts/check_architecture_doc.py` | The code-layout tree in `docs-site/architecture/layering.md` names every package, names nothing that is gone, and the architecture pages name every built-in `coffer__*` tool |
 | `scripts/check_pyinstaller_specs.py` | The three PyInstaller specs point at files that exist and keep the `-X utf8` runtime option. No pull request job runs PyInstaller, so this is the only early warning |
 | `scripts/check_cli_reference.py` | This site's generated CLI and REST API reference pages match the code. Fix drift with `make docs-reference` |
@@ -194,6 +194,7 @@ Use **Node 20**, the version CI uses, when you run the frontend suite locally.
 | `scripts/check_platform_calls.py` | No code outside the platform part of the infrastructure layer asks which operating system it runs on. Tests are exempt. See [Platform port](/architecture/platform) |
 | `scripts/check_agent_type_branches.py` | No code outside the agent descriptor and its facets branches on an agent type. See [Agent facets](/architecture/agent-facets) |
 | `scripts/check_frontend_colors.py` | No colour literal in the frontend outside `src/index.css`; every colour is a theme token |
+| `scripts/check_ignored_sources.py` | No `.gitignore` rule hides a file in a source tree, and no unanchored pattern names a common source-folder word such as `lib/` or `env/`, which would hide that folder at any depth |
 | `ruff check`, `ruff format --check` | Lint and formatting over `backend/` and `evals/`, under the rules in `backend/pyproject.toml` |
 | `mypy` | Type-checks the whole `coffer` package under `backend/pyproject.toml`, which sets `strict = true` |
 | `lint-imports` | Import-linter contracts: the layer direction (`surfaces` → `application` → `domain`), a pure `domain`, `keyring` confined to the secrets code, no cross-kind imports between kinds, and specific libraries confined to their adapters |
@@ -205,7 +206,7 @@ Use **Node 20**, the version CI uses, when you run the frontend suite locally.
 The four frontend steps are skipped when `frontend/node_modules` is missing. CI always installs it. `lint-imports` runs with `PYTHONPATH=backend` so that in a git worktree it analyses this checkout rather than the one the editable install points at.
 
 ::: tip Docs-only changes can fail `make lint`
-The citation, numbering, architecture-doc and reference gates all read Markdown. Run `make lint` after editing docs too.
+The citation, ADR-index, architecture-doc, removed-command and reference gates all read Markdown. Run `make lint` after editing docs too.
 :::
 
 The pre-commit hooks from `make hooks` add fast checks at commit time: trailing whitespace, end-of-file, YAML, TOML and JSON syntax, merge-conflict markers, large files, ruff, prettier and commitlint on the message.
@@ -214,7 +215,7 @@ The pre-commit hooks from `make hooks` add fast checks at commit time: trailing 
 
 | Workflow | Trigger | What it runs |
 | --- | --- | --- |
-| `verify.yml` | Pull requests to `main`, pushes to `main` | Parallel jobs: `lint`, `test-unit`, `test-integration`, `test-benchmark`, `audit-acceptance`, `secrets-scan` (gitleaks over the full history), `test-contract`, `test-e2e`. The integration tier is split into four shards that run side by side, balanced by how long each test took last time it was measured, with one final check that passes only when every shard passed. A pull request that changes only documentation no test reads skips the test jobs; the gates that check documentation still run, and the skipped checks count as passed |
+| `verify.yml` | Pull requests to `main`, pushes to `main` | Parallel jobs, each running one Makefile target: `lint` (`make lint`), `test-unit`, `test-integration`, `test-contract`, `test-benchmark`, `test-e2e`, `test-visual` (`make verify-<tier>`), `audit-acceptance` (`make verify-acceptance`) and `secrets-scan` (gitleaks over the full history, as `make verify-secrets` runs it locally). The integration tier is split into four shards that run side by side, balanced by how long each test took last time it was measured, with one final check that passes only when every shard passed. A pull request that changes only documentation no test reads skips the test jobs; the gates that check documentation still run, and the skipped checks count as passed |
 | `ci.yml` | Pushes to `main` and `feature/**`, weekly schedule | One `make verify` job. The scheduled run is the **latest-deps canary**: it installs with `uv sync --upgrade` instead of the lockfile, so an upstream release that breaks Coffer shows up on a schedule |
 | `pr-title.yml` | Pull request opened or edited | The title against `.commitlintrc.yaml` |
 | `desktop.yml` | Changes to `desktop/**` or the `Makefile` | `make desktop-lint` and `make desktop-test` |

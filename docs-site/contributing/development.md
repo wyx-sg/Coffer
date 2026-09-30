@@ -139,7 +139,7 @@ Run `make help` for the same list.
 | `make install-e2e-browsers` | Download Playwright's Chromium build |
 | `make hooks` | Install the pre-commit and commit-msg git hooks (trailing whitespace, YAML/TOML/JSON checks, ruff, prettier, commitlint) |
 | `make dev` | Run the daemon and Vite together (see above) |
-| `make verify` | `lint`, `verify-unit`, `verify-integration`, `verify-contract` and `verify-acceptance`, then record a freshness stamp. The pre-PR gate |
+| `make verify` | `lint`, `verify-unit`, `verify-integration`, `verify-contract` and `verify-acceptance` in order, printing each stage's time, then record a freshness stamp. The pre-PR gate |
 | `make verify-all` | `verify` plus `verify-e2e` |
 | `make verify-unit` | The unit-purity check, backend unit tests, then the frontend Vitest suite |
 | `make verify-integration` | Backend integration tests |
@@ -148,6 +148,7 @@ Run `make help` for the same list.
 | `make verify-acceptance` | `openspec validate --all --strict`, then `scripts/audit_acceptance.py` |
 | `make openspec-validate` | Only the OpenSpec strict validation |
 | `make verify-benchmark` | The perf-budget tests marked `benchmark`, which `verify` excludes |
+| `make verify-secrets` | gitleaks over the full git history, as CI's `secrets-scan` job runs it. Skips when gitleaks is not installed |
 | `make lint` | Every static gate: see [Testing](/contributing/testing#what-make-verify-runs) |
 | `make format` | `ruff format` and `ruff check --fix` over `backend` and `evals`, then prettier over `frontend/` |
 | `make coverage` | pytest and Vitest coverage reports, with no thresholds |

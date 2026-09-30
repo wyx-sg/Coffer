@@ -206,7 +206,7 @@ def wire_memory_kind(
         service=service,
         delivery_service=delivery_service,
         distil=service.distil,
-        turn_retrieval=TurnRetrieval(retrieval, delivery_service, agent_service),
+        turn_retrieval=TurnRetrieval(retrieval, delivery_service, agent_service, service),
     )
 
 

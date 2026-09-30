@@ -1,13 +1,21 @@
-"""Prompt-time retrieval for a turn Coffer drives itself (spec memory "Retrieve
-the notes a prompt names for a channel turn").
+"""Memory for a turn Coffer drives itself (spec memory "Deliver to channel turns
+through the system prompt", "Retrieve the notes a prompt names for a channel
+turn").
 
-A channel-driven turn runs no hook of Coffer's: Coffer spawns the agent and
-owns its context (spec memory "Deliver to channel turns through the system
-prompt"). So the per-prompt half of delivery is done here, by the same
-``RetrievalService`` the ``UserPromptSubmit`` hook answers through — the same
-ranking, floor, top three, 1.5 KB ceiling and per-session ledger — keyed on
-the conversation, and audited as a ``prompt`` fire of the answering agent just
-as a hook fire is (spec memory "Audit every delivery fire").
+Coffer spawns a channel-driven turn's agent and owns its context, so the two
+moments a hook would answer at the start of a turn are answered here instead,
+and the memory hook firing inside that process leaves both to the turn
+(``coffer.domain.channel_turn``) — one owner for each, so nothing arrives, or
+is counted, twice:
+
+* the **index**, by the same ``compose_context`` the ``SessionStart`` hook
+  answers through, for the turn's system prompt;
+* the **notes the prompt names**, by the same ``RetrievalService`` the
+  ``UserPromptSubmit`` hook answers through — the same ranking, floor, top
+  three, 1.5 KB ceiling and per-session ledger — keyed on the conversation.
+
+Each is audited as a fire of the answering agent, ``session_start`` and
+``prompt``, just as a hook fire is (spec memory "Audit every delivery fire").
 """
 
 from __future__ import annotations
@@ -16,7 +24,8 @@ import logging
 from collections.abc import Sequence
 from typing import Protocol
 
-from coffer.application.memory.hook_service import MOMENT_PROMPT
+from coffer.application.memory.context import MemoryPort, compose_context
+from coffer.application.memory.hook_service import MOMENT_PROMPT, MOMENT_SESSION_START
 from coffer.application.memory.retrieval import RetrievalService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.resource import Resource
@@ -44,14 +53,19 @@ class FiredRecorder(Protocol):
 
 
 class TurnRetrieval:
-    """Ranks one channel turn's prompt and audits what it brought in."""
+    """Composes one channel turn's memory and audits what it brought in."""
 
     def __init__(
-        self, retrieval: RetrievalService, delivery: FiredRecorder, agents: AgentRows
+        self,
+        retrieval: RetrievalService,
+        delivery: FiredRecorder,
+        agents: AgentRows,
+        memory: MemoryPort,
     ) -> None:
         self._retrieval = retrieval
         self._delivery = delivery
         self._agents = agents
+        self._memory = memory
 
     async def _agent_uid(self, agent_key: str) -> str | None:
         for row in await self._agents.list():
@@ -63,6 +77,28 @@ class TurnRetrieval:
                 return row.uid
         return None
 
+    async def _record(self, agent_key: str, details: dict[str, object]) -> None:
+        agent_uid = await self._agent_uid(agent_key)
+        if agent_uid is None:
+            logger.warning("memory.turn_retrieval.no_agent; agent_key=%s", agent_key)
+            return
+        await self._delivery.record_fired(agent_uid, {**details, "event": CHANNEL_TURN_EVENT})
+
+    async def index_for_turn(self, *, agent_key: str, cwd: str, conversation_id: str) -> str | None:
+        """The index for this turn's system prompt, or ``None`` for nothing —
+        an empty memory header is worse than none."""
+        composed = await compose_context(self._memory, cwd=cwd)
+        if not composed.text:
+            return None
+        await self._record(
+            agent_key,
+            {
+                "moment": MOMENT_SESSION_START,
+                "session_id": conversation_session(conversation_id),
+            },
+        )
+        return composed.text
+
     async def for_turn(
         self, *, agent_key: str, cwd: str, prompt: str, conversation_id: str
     ) -> str | None:
@@ -72,19 +108,10 @@ class TurnRetrieval:
         got = await self._retrieval.retrieve(cwd=cwd, prompt=prompt, session_id=session_id)
         if not got.text:
             return None
-        agent_uid = await self._agent_uid(agent_key)
-        if agent_uid is None:
-            logger.warning("memory.turn_retrieval.no_agent; agent_key=%s", agent_key)
-        else:
-            await self._delivery.record_fired(
-                agent_uid,
-                {
-                    "moment": MOMENT_PROMPT,
-                    "session_id": session_id,
-                    "event": CHANNEL_TURN_EVENT,
-                    "notes": list(got.notes),
-                },
-            )
+        await self._record(
+            agent_key,
+            {"moment": MOMENT_PROMPT, "session_id": session_id, "notes": list(got.notes)},
+        )
         return got.text
 
 

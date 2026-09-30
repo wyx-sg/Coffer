@@ -223,7 +223,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         kinds.agent_skill.agent_service,
         resource_svc,
         agent_catalog,
-        compose_memory_context=memory_context_composer(kinds.memory.service),
+        compose_memory_context=memory_context_composer(kinds.memory.turn_retrieval),
         retrieve_memory=memory_turn_retriever(kinds.memory.turn_retrieval),
         observe_quota=kinds.usage.quota.observe_agent_event,
     )

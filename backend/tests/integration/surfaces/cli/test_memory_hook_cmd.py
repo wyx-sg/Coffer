@@ -24,6 +24,7 @@ import pytest
 from typer.testing import CliRunner
 
 import coffer.surfaces.cli.memory_hook_cmd as memory_hook_cmd
+from coffer.domain.channel_turn import CHANNEL_TURN_ENV
 from coffer.domain.memory.delivery import MARKER
 from coffer.domain.memory.trigger import KIND_BLOCK, Trigger
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
@@ -185,6 +186,38 @@ def test_a_fire_that_can_deliver_nothing_never_contacts_the_daemon(
     monkeypatch.setattr(httpx, "post", _never)
     result = _hook({"session_id": "s1", "cwd": "/tmp", **event})
     assert result.exit_code == 0 and result.output == ""
+
+
+@pytest.mark.acceptance(
+    spec="memory", scenario="a channel turn's own hook leaves the index and the notes to the turn"
+)
+def test_a_channel_turn_hook_leaves_the_index_and_the_notes_to_the_turn(
+    armed_trigger: Trigger, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """In a process Coffer spawned for a channel turn, the turn already carries
+    the index and the notes its prompt names; the hook firing there answers
+    neither, and records neither, so each arrives and is counted once. The
+    guard is the hook's alone, so it still reaches the daemon."""
+    posted: list[str] = []
+
+    def _post(_url: str, **kw: Any) -> Any:
+        posted.append(kw["json"]["event"])
+        return httpx.Response(200, json={"output": None})
+
+    monkeypatch.setenv(CHANNEL_TURN_ENV, "1")
+    monkeypatch.setattr(memory_hook_cmd, "live_daemon", _info)
+    monkeypatch.setattr(httpx, "post", _post)
+    for ev in _events(str(tmp_path)):
+        result = _hook(ev)
+        assert result.exit_code == 0 and result.output == ""
+    assert posted == ["PreToolUse"]
+
+    # Unmarked — a session the developer drives — every one reaches the daemon.
+    monkeypatch.delenv(CHANNEL_TURN_ENV)
+    posted.clear()
+    for ev in _events(str(tmp_path)):
+        _hook(ev)
+    assert posted == ["SessionStart", "UserPromptSubmit", "PreToolUse"]
 
 
 def test_an_unarmed_trigger_does_not_send_its_command(

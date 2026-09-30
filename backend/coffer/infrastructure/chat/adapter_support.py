@@ -150,9 +150,9 @@ __all__ = [
 
 #: Resolves the models an agent could be switched to, for the per-turn note.
 ModelLister = Callable[[str], Awaitable[Sequence[str]]]
-#: (agent_key, cwd) -> the memory digest for this turn, or None (spec memory
-#: "Deliver to channel turns through the system prompt").
-MemoryContextComposer = Callable[[str, str], Awaitable[str | None]]
+#: (agent_key, cwd, conversation_id) -> the memory digest for this turn, or
+#: None (spec memory "Deliver to channel turns through the system prompt").
+MemoryContextComposer = Callable[[str, str, str], Awaitable[str | None]]
 #: (channel uid, conversation id) -> the facts the channel note is written from,
 #: or None when no channel carries that uid any more. A conversation stores the
 #: uid of the channel it is bridged to (ADR resource-identity-is-an-immutable-uid);
@@ -190,7 +190,9 @@ async def compose_system_context(
     * a channel-driven turn also carries the memory digest (spec memory "Deliver to
       channel turns through the system prompt"): Coffer composes this turn's
       context itself, so memory reaches the agent with no session-start hook and
-      no install. **Only** a channel turn gets it — an agent the developer
+      no install, and the provider marks the turn's process so an installed
+      hook leaves that moment to the turn (``coffer.domain.channel_turn``).
+      **Only** a channel turn gets it — an agent the developer
       drives themselves receives memory through its own hook (spec memory
       "Install delivery hooks explicitly and removably"), never both;
     * every conversation gets the model note, because the agent cannot see
@@ -220,7 +222,7 @@ async def compose_system_context(
         )
         parts.append(channel_system_context(note))
         if compose_memory is not None:
-            memory = await compose_memory(agent_key, cwd)
+            memory = await compose_memory(agent_key, cwd, conversation_id)
             if memory:
                 parts.append(memory)
     available = await list_models(agent_key) if list_models else []

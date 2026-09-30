@@ -1,9 +1,11 @@
 """The notes a channel turn's prompt names, added to that prompt (spec memory
 "Retrieve the notes a prompt names for a channel turn").
 
-A turn Coffer drives from a channel runs no hook of Coffer's, so the provider
-hands its adapter a :data:`PromptMemory` bound to the conversation, and the
-adapter adds what it returns after the user's text in the prompt it sends —
+Coffer composes a channel turn's memory itself, and the memory hook in the
+process it spawns leaves ``UserPromptSubmit`` to the turn
+(``coffer.domain.channel_turn``). So the provider hands its adapter a
+:data:`PromptMemory` bound to the conversation, and the adapter adds what it
+returns after the user's text in the prompt it sends —
 where a ``UserPromptSubmit`` hook's context would land, so the notes stay in
 the agent's own session for the turns after it. Only a channel turn gets one;
 a turn the developer drives receives these notes through its own hook.

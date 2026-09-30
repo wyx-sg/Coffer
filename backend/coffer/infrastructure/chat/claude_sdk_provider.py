@@ -15,6 +15,7 @@ from typing import Any
 
 from coffer.application.chat.ports import AgentAdapter, QuotaObserver
 from coffer.application.chat.service import ConversationRepo
+from coffer.domain.channel_turn import channel_turn_env
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.adapter_support import (
@@ -164,7 +165,11 @@ class ClaudeSdkProvider:
 
         # Overrides only: the SDK merges ``options.env`` over the daemon's own
         # environment itself. Empty for the default config dir.
-        home_env = await self._resolve_home_env() if self._resolve_home_env else {}
+        home_env = dict(await self._resolve_home_env()) if self._resolve_home_env else {}
+        # A channel turn's process is marked, so the memory hook Claude Code runs
+        # inside it leaves to this turn the index and notes it already carries
+        # (spec memory "Deliver to channel turns through the system prompt").
+        home_env.update(channel_turn_env(conv.channel_uid or ""))
 
         return ClaudeSdkAgentAdapter(
             cwd=config.cwd,

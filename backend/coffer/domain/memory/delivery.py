@@ -103,6 +103,13 @@ USER_PROMPT_SUBMIT = "UserPromptSubmit"
 PRE_TOOL_USE = "PreToolUse"
 POST_TOOL_USE = "PostToolUse"
 DELIVERY_EVENTS = (SESSION_START, USER_PROMPT_SUBMIT, PRE_TOOL_USE, POST_TOOL_USE)
+#: The moments a channel turn carries itself: Coffer puts the index in its
+#: system prompt and the notes its prompt names after the prompt (spec memory
+#: "Deliver to channel turns through the system prompt"). The hook answers
+#: nothing on these in a process Coffer spawned for a channel turn
+#: (``coffer.domain.channel_turn``), so each moment has one owner; the guard
+#: and the error context stay the hook's, since the turn does neither.
+CHANNEL_TURN_EVENTS = (SESSION_START, USER_PROMPT_SUBMIT)
 
 #: Every source that starts a session, in both agents' vocabulary.
 SESSION_MATCHER = "startup|resume|clear|compact"
@@ -282,6 +289,7 @@ class DeliveryAdapter(Protocol):
 
 
 __all__ = [
+    "CHANNEL_TURN_EVENTS",
     "DELIVERY_CEILING_BYTES",
     "DELIVERY_EVENTS",
     "HOOKS_KEY",
