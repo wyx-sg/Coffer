@@ -32,7 +32,7 @@ from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon import login_service
 from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
-from coffer.infrastructure.vault.home import coffer_home
+from coffer.infrastructure.vault.home import coffer_home, daemon_json_path
 from coffer.surfaces.http import daemon_port
 from coffer.surfaces.http.agent_dependencies import get_agent_connection_service_optional
 from coffer.surfaces.http.auth import require_token, set_active_token
@@ -189,7 +189,7 @@ async def _connected_agents(connection: AgentConnectionService | None) -> int | 
 
 
 def _daemon_json_path() -> Path:
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "daemon.json"
+    return daemon_json_path()
 
 
 def _schedule_shutdown() -> None:

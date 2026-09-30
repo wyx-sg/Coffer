@@ -62,6 +62,7 @@ line each:
 | `scripts/check_cli_reference.py`             | `make lint`           | The generated CLI or REST reference page differs from the code (`make docs-reference` fixes it)                            |
 | `scripts/check_removed_commands.py`          | `make lint`           | A doc, spec, shipped skill, web UI file or e2e spec quotes a removed `coffer` command, option or tool                      |
 | `scripts/check_platform_calls.py`            | `make lint`           | Code outside `infrastructure/platform/` asks which operating system it runs on                                              |
+| `scripts/check_coffer_paths.py`              | `make lint`           | A `~/.coffer` path is built outside `infrastructure/vault/home.py` (allowed: migrations, the tests' isolated homes and real-home guard) |
 | `scripts/check_agent_type_branches.py`       | `make lint`           | Code outside the agent descriptor and its facets branches on an agent type (tests: `test_agent_type_gate.py`)              |
 | `scripts/check_frontend_colors.py`           | `make lint`           | A colour literal appears in `frontend/src/` outside `index.css` (tests: `test_frontend_colors_gate.py`)                     |
 | `scripts/check_ignored_sources.py`           | `make lint`           | A `.gitignore` rule hides a path in a source tree, or an unanchored pattern names a source-folder word such as `lib/`      |

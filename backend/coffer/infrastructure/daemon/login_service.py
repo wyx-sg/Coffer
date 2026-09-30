@@ -53,6 +53,7 @@ from pathlib import Path
 from coffer.infrastructure.daemon.spawn import daemon_spawn_command
 from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.platform.process import has_launchd, login_shell_path
+from coffer.infrastructure.vault.home import bin_dir
 
 _logger = logging.getLogger(__name__)
 
@@ -121,7 +122,7 @@ def agent_program() -> list[str]:
     A source install has no such symlink, and falls back to the resolved
     command (`python -m …`), which does not move either.
     """
-    deployed = Path.home() / ".coffer" / "bin" / "coffer-daemon"
+    deployed = bin_dir() / "coffer-daemon"
     if deployed.is_symlink() or deployed.is_file():
         return [str(deployed)]
     return daemon_spawn_command()

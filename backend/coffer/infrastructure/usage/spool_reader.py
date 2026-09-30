@@ -20,10 +20,10 @@ from pydantic import ValidationError
 from coffer.application.usage.ports import SpoolBatch
 from coffer.domain.usage.records import (
     SPOOL_DIR_ENV,
-    SPOOL_DIRNAME,
     SPOOL_SUFFIX,
     UsageRecord,
 )
+from coffer.infrastructure.vault.home import proxy_usage_dir
 
 
 def default_spool_dir() -> Path:
@@ -31,7 +31,7 @@ def default_spool_dir() -> Path:
     override = os.environ.get(SPOOL_DIR_ENV)
     if override:
         return Path(override).expanduser()
-    return Path.home() / ".coffer" / SPOOL_DIRNAME
+    return proxy_usage_dir()
 
 
 class FileSpoolReader:

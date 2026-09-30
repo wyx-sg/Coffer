@@ -41,6 +41,7 @@ from coffer.infrastructure.daemon.pid_lock import (
     write,
 )
 from coffer.infrastructure.daemon.port_alloc import bind_fixed_socket, bind_free_socket
+from coffer.infrastructure.vault.home import daemon_json_path, daemon_lock_path
 
 _DAEMON_JSON_VERSION = 1
 
@@ -69,16 +70,12 @@ def _noop_release() -> None:
 _LIVENESS_PROBE_TIMEOUT: float = 15.0
 
 
-def _coffer_dir() -> Path:
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer"
-
-
 def _daemon_json_path() -> Path:
-    return _coffer_dir() / "daemon.json"
+    return daemon_json_path()
 
 
 def _spawn_lock_path() -> Path:
-    return _coffer_dir() / "daemon.lock"
+    return daemon_lock_path()
 
 
 def _acquire_spawn_lock() -> int:

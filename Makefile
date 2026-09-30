@@ -168,6 +168,7 @@ lint:
 	$(PY) scripts/check_cli_reference.py
 	$(PY) scripts/check_removed_commands.py
 	$(PY) scripts/check_platform_calls.py
+	$(PY) scripts/check_coffer_paths.py
 	$(PY) scripts/check_agent_type_branches.py
 	$(PY) scripts/check_frontend_colors.py
 	$(PY) scripts/check_ignored_sources.py

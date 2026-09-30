@@ -36,6 +36,7 @@ from pathlib import Path
 from types import ModuleType
 
 from coffer.application.channel.sdk_handoff import SdkLocation
+from coffer.infrastructure.vault.home import vendor_dir
 
 _logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ def sdk_dir() -> Path:
     override = os.environ.get("COFFER_SEATALK_SDK_DIR")
     if override:
         return Path(override).expanduser()
-    return Path.home() / ".coffer" / "vendor"
+    return vendor_dir()
 
 
 def load_sdk() -> ModuleType:

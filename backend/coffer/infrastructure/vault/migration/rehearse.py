@@ -18,7 +18,7 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from coffer.infrastructure.vault.home import coffer_home
+from coffer.infrastructure.vault.home import coffer_home, vault_root
 from coffer.infrastructure.vault.instance import forget
 from coffer.infrastructure.vault.migration.classes import storage_of as default_storage
 from coffer.infrastructure.vault.migration.export_vault import StorageOf
@@ -82,7 +82,7 @@ def rehearse(
             result.not_restored = restored(before, home)
         return result
     finally:
-        forget(coffer_home(work / "home") / "vault")
+        forget(vault_root(work / "home"))
         shutil.rmtree(work, ignore_errors=True)
 
 

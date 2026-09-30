@@ -27,8 +27,6 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
-#: Directory under ``~/.coffer`` the proxy spools usage into.
-SPOOL_DIRNAME = "proxy-usage"
 #: A completed spool file — safe to ingest and then delete.
 SPOOL_SUFFIX = ".jsonl"
 #: A spool file still being appended to; never read.
@@ -119,7 +117,6 @@ __all__ = [
     "PART_SUFFIX",
     "PROXY_SOURCE",
     "RECORD_SCHEMA",
-    "SPOOL_DIRNAME",
     "SPOOL_DIR_ENV",
     "SPOOL_SUFFIX",
     "Outcome",

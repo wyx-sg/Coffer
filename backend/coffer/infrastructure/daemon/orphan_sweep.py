@@ -14,6 +14,8 @@ from typing import Any
 
 import psutil
 
+from coffer.infrastructure.vault.home import coffer_home, upstream_pids_dir
+
 _logger = logging.getLogger(__name__)
 
 
@@ -27,7 +29,7 @@ def _coffer_dir_for(home: str | None) -> Path | None:
     if not home:
         return None
     try:
-        return (Path(home).expanduser() / ".coffer").resolve()
+        return coffer_home(Path(home).expanduser()).resolve()
     except (OSError, RuntimeError):
         return None
 
@@ -37,7 +39,7 @@ def _own_coffer_dir() -> Path | None:
 
 
 def _pid_dir() -> Path:
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "upstream-pids"
+    return upstream_pids_dir()
 
 
 def record_spawn(server_uid: str, pid: int, command_line: list[str]) -> Path:
