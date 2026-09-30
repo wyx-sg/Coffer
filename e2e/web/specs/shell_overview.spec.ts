@@ -97,7 +97,7 @@ test("overview lists an MCP server whose launcher is missing, with its reason an
     const row = needsYou.getByRole("listitem").filter({ hasText: name });
     await expect(row).toBeVisible({ timeout: 15_000 });
     await expect(row).toContainText(
-      `Its launcher \`${MISSING_LAUNCHER}\` is not installed`,
+      `Its launcher ${MISSING_LAUNCHER} isn't found on this machine`,
     );
     await expect(row.getByRole("img", { name: "Failing" })).toBeVisible();
 

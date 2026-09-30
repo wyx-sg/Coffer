@@ -1,4 +1,4 @@
-"""``coffer cli …`` — the command-line tools managed skills require (spec
+"""``coffer cli …`` — the command-line tools managed skills and MCP servers require (spec
 skill-manager "Serve required commands on REST, the command line and the
 web").
 
@@ -21,7 +21,7 @@ from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._kind_verbs import verbose_of
 from coffer.surfaces.cli._options import ExitCode
 
-app = typer.Typer(help="Check the command-line tools skills require")
+app = typer.Typer(help="Check the command-line tools skills and MCP servers require")
 _console = Console()
 
 
@@ -37,9 +37,16 @@ def _login_label(item: dict[str, Any]) -> str:
     )
 
 
+def _needed_by_label(item: dict[str, Any]) -> str:
+    return ", ".join(
+        [n["skill_name"] for n in item["needed_by"]]
+        + [f"{s['server_name']} (MCP)" for s in item["needed_by_servers"]]
+    )
+
+
 def _print_table(items: list[dict[str, Any]]) -> None:
     if not items:
-        typer.echo("No skill requires a command-line tool.")
+        typer.echo("No skill or MCP server requires a command-line tool.")
         return
     table = Table(title="CLIs")
     for col in ("Command", "Status", "Version", "Login", "Needed by"):
@@ -50,7 +57,7 @@ def _print_table(items: list[dict[str, Any]]) -> None:
             it["status"],
             _version_label(it),
             _login_label(it),
-            ", ".join(n["skill_name"] for n in it["needed_by"]),
+            _needed_by_label(it),
         )
     _console.print(table)
 
@@ -69,7 +76,7 @@ def list_cmd(
     ctx: typer.Context,
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """List every command a skill requires, problems first."""
+    """List every command a skill or MCP server requires, problems first."""
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get("/clis")
@@ -97,8 +104,6 @@ def show(
     typer.echo(f"path:        {data['path'] or '—'}")
     typer.echo(f"version:     {_version_label(data)}")
     typer.echo(f"login:       {_login_label(data)}")
-    if data["login"]["command"]:
-        typer.echo(f"log in with: {data['login']['command']}")
     if data["handoff"]:
         typer.echo(f"hand off:    coffer cli prompt {command}  (a prompt for your agent)")
     typer.echo("needed by:")
@@ -106,6 +111,8 @@ def show(
         extra = f" (min {n['min_version']})" if n["min_version"] else ""
         why = f" — {n['why']}" if n["why"] else ""
         typer.echo(f"  - {n['skill_name']}{extra}{why}")
+    for s in data["needed_by_servers"]:
+        typer.echo(f"  - {s['server_name']} (MCP server, starts with {s['launcher']})")
 
 
 @app.command("check")

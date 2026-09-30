@@ -672,7 +672,7 @@
       "reason": {
         "failing": "失败",
         "failingSince": "{{error}} · 自 {{since}} 起",
-        "launcher": "没有安装 {{runner}}",
+        "launcher": "这台机器上找不到 {{runner}}",
         "secret": "缺少密钥 · {{secret}}"
       },
       "replaceSecret": "替换密钥",
@@ -1596,7 +1596,7 @@
     "CHANNEL_NOT_PAIRED": "该消息渠道还没有配对的账号——请生成配对码并发给机器人",
     "CHANNEL_NOT_RUNNING": "消息渠道适配器未在运行——请启用该消息渠道以启动它",
     "CHANNEL_SEND_FAILED": "向 IM 平台发送失败",
-    "CLI_NOT_REQUIRED": "没有技能需要此命令",
+    "CLI_NOT_REQUIRED": "没有技能或 MCP 服务器需要此命令",
     "CONFIG_FILE_FORMAT_INVALID": "内容不符合该文件的格式，文件未做更改。",
     "CONFIG_FILE_NOT_ALLOWED": "该配置文件不适用于此智能体",
     "CONFIG_FILE_STALE": "配置文件在你加载后已被磁盘上的改动覆盖，请重新加载后重试。",
@@ -4849,7 +4849,7 @@
   },
   "clis": {
     "title": "命令行工具",
-    "help": "这里列出技能在 SKILL.md 的 requires: 里声明的每个命令，有问题的排在前面。Coffer 从不替你安装或登录：它把修复写成提示词交给你的智能体，点「重新检查」即重新查看。",
+    "help": "这里列出你的技能和 MCP 服务器需要的每个命令，有问题的排在前面。Coffer 从不替你安装、更新或登录：它把修复写成提示词交给你的智能体，点「重新检查」即重新查看。",
     "checkAgain": "重新检查",
     "checking": "检查中…",
     "checkedAgo": "检查于 {{when}}",
@@ -4893,35 +4893,46 @@
       "sections": {
         "command": "命令",
         "login": "登录",
-        "neededBy": "需要它的技能"
+        "neededBy": "依赖方"
       },
       "foundAt": "位置",
       "version": "版本",
       "state": "状态",
-      "loginWith": "登录命令",
-      "loginHint": "在终端中运行，然后点「重新检查」。",
-      "whyNone": "未说明原因"
+      "whyNone": "未说明原因",
+      "subtitleNeeded": "{{title}} · {{needed}}需要",
+      "kind": {
+        "server": "MCP 服务器",
+        "skill": "技能"
+      },
+      "startsWith": "用 {{launcher}} 启动"
     },
     "banner": {
-      "missing_one": "{{command}} 未安装 — 影响 {{count}} 个技能",
-      "missing_other": "{{command}} 未安装 — 影响 {{count}} 个技能",
       "outdated_one": "{{command}} {{found}} 低于 {{skills}} 的要求",
       "outdated_other": "{{command}} {{found}} 低于 {{skills}} 的要求",
-      "logged_out_one": "{{command}} 未登录 — 影响 {{count}} 个技能",
-      "logged_out_other": "{{command}} 未登录 — 影响 {{count}} 个技能",
       "body": "{{skills}} 会在调用 {{command}} 的那一步失败。",
-      "loginBefore": "在终端运行",
-      "loginAfter": "，然后重新检查。",
       "outdatedBody_one": "需要 {{command}} ≥ {{version}}。",
-      "outdatedBody_other": "需要 {{command}} ≥ {{version}}。"
+      "outdatedBody_other": "需要 {{command}} ≥ {{version}}。",
+      "missing": "{{command}} 未安装 — 影响 {{needed}}",
+      "logged_out": "{{command}} 未登录 — 影响 {{needed}}",
+      "serversBody": "{{servers}} 无法启动。",
+      "bothBody_one": "{{servers}} 无法启动，{{skills}} 会在调用 {{command}} 的那一步失败。",
+      "bothBody_other": "{{servers}} 无法启动，{{skills}} 会在调用 {{command}} 的那一步失败。"
     },
     "list": {
       "needsYou": "需要你处理",
       "ready": "就绪",
       "noMatch": "没有匹配的命令",
       "outdatedLine": "{{version}} · 要求 ≥ {{min}}",
-      "loggedInLine": "{{version}} · 已登录"
-    }
+      "loggedInLine": "{{version}} · 已登录",
+      "missingServersLine_one": "未找到 · {{servers}} 需要它",
+      "missingServersLine_other": "未找到 · {{servers}} 需要它"
+    },
+    "serverCount_one": "{{count}} 个服务器",
+    "serverCount_other": "{{count}} 个服务器",
+    "mcpServerCount_one": "{{count}} 个 MCP 服务器",
+    "mcpServerCount_other": "{{count}} 个 MCP 服务器",
+    "countPair": "{{servers}} · {{skills}}",
+    "neededPair": "{{servers}}和{{skills}}"
   },
   "secrets": {
     "title": "密钥",

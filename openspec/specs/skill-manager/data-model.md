@@ -105,7 +105,7 @@ it never fails a skill.
 | `title`       | `str \| None`            | display name, one line, ≤ 200 chars                                        |
 | `min_version` | `str \| None`            | dotted numbers (`"2.40"`); an unquoted YAML float is refused, since `2.40` reads as `2.4` |
 | `login_check` | `tuple[str, ...] \| None` | argv (a string is split shell-style, never run in a shell); first word MUST equal `command` |
-| `login`       | `str \| None`            | the login command to show; never run                                       |
+| `login`       | `str \| None`            | the login command the login hand-off names; never run, never shown on the page |
 | `why`         | `str \| None`            | one line, ≤ 200 chars                                                      |
 
 A bare string entry is a command with no conditions. An entry that breaks a
@@ -119,7 +119,12 @@ entry kept; a command named twice in one skill keeps its first entry.
 `RequiredCommand` per command: `min_version` is the highest any skill asks
 for; `title`, `login_check` and `login` come from the first skill (by
 name) that declares each; `needed_by` lists every declaring skill with its own
-minimum and `why`.
+minimum and `why`. Every enabled stdio MCP server adds a `ServerLauncher`
+(`server_uid`, `server_name`, `launcher`) to `needed_by_servers` of the command
+`launcher_cli()` maps its launcher to — `uv` for `uvx`, `node` for `npx`, `bun`
+for `bunx`, the launcher itself otherwise, nothing for a path — creating the row
+when no skill declares it (no minimum, no login check). On the wire it is
+`CliOut.needed_by_servers` (`CliServerOut`).
 
 `ProbeResult` is the in-memory check result, one per command, kept by
 `CliRequirementService` until **Check again** or a daemon restart (no
