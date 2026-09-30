@@ -24,7 +24,7 @@ export type VaultRestoreIn = Schemas["VaultRestoreIn"];
 export type VaultRestoreOut = Schemas["VaultRestoreOut"];
 
 /** How many versions a History tab reads: the API's ceiling. */
-export const HISTORY_LIMIT = 200;
+const HISTORY_LIMIT = 200;
 
 function must<T>(data: T | undefined, what: string): T {
   if (data === undefined) throw new ApiError("INTERNAL_ERROR", `empty ${what} response`);

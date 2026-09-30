@@ -136,7 +136,7 @@ def stopped_out(s: StoppedRound) -> StoppedRoundOut:
     stop = s.stop
     hold = stop.hold
     return StoppedRoundOut(
-        kind=cast(Literal["conflicts", "hold"], stop.kind.value),
+        kind=stop.kind.value,
         raised_at=stop.raised_at,
         local=stop.local,
         remote=stop.remote,
@@ -144,7 +144,7 @@ def stopped_out(s: StoppedRound) -> StoppedRoundOut:
         files=[conflict_out(f.file, f.editor_path) for f in s.files],
         unanswered=len(stop.unanswered),
         hold=HoldOut(
-            direction=cast(Literal["incoming", "outgoing"], hold.direction.value),
+            direction=hold.direction.value,
             breaches=[BreachOut(area=b.area, lost=b.lost, total=b.total) for b in hold.breaches],
             paths=list(hold.paths),
             groups=[
@@ -160,7 +160,7 @@ def stopped_out(s: StoppedRound) -> StoppedRoundOut:
 
 def preview_out(p: JoinPreview) -> JoinPreviewOut:
     return JoinPreviewOut(
-        kind=cast(Literal["empty", "new", "returning"], p.kind.value),
+        kind=p.kind.value,
         remote_tip=p.remote_tip,
         pushed_by=p.pushed_by,
         pushed_at=p.pushed_at,

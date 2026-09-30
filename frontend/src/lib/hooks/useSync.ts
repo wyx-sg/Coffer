@@ -58,7 +58,7 @@ export function useSyncRuns(enabled = true) {
  * tree out into the vault — resources, skills, agents, knowledge — so the
  * page's own caches are not the only stale ones afterwards.
  */
-export function useRoundInvalidation() {
+function useRoundInvalidation() {
   const qc = useQueryClient();
   return () => {
     void qc.invalidateQueries({ queryKey: syncKey });

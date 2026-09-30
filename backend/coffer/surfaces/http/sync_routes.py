@@ -176,3 +176,6 @@ async def import_key(body: KeyImportIn) -> KeyImportOut:
         readable=result.readable,
         locked_refs=result.locked_refs,
     )
+
+
+__all__ = ["router"]
