@@ -208,10 +208,8 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install the OpenSpec CLI
         run: npm ci
-      - name: openspec validate
-        run: npx --no-install openspec validate --all --strict --no-interactive
-      - name: audit_acceptance
-        run: python3 scripts/audit_acceptance.py
+      - name: make verify-acceptance
+        run: make verify-acceptance
 
   secrets:
     name: secrets-scan
