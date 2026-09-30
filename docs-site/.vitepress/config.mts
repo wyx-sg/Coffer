@@ -1,3 +1,4 @@
+import { readdirSync } from 'node:fs'
 import { defineConfig, type DefaultTheme } from 'vitepress'
 import { withMermaid } from 'vitepress-plugin-mermaid'
 import sidebarSource from './sidebar.json' with { type: 'json' }
@@ -21,15 +22,33 @@ function prefix(lang: Lang): string {
   return lang === 'en' ? '' : `/${lang}`
 }
 
+// The CLI reference is an index page plus one generated page per command
+// group (docs-site/scripts/gen_cli_reference.py). The group pages are listed
+// under the index's sidebar entry straight from the directory, so a group the
+// generator adds or removes needs no sidebar edit.
+const CLI_INDEX = '/reference/cli'
+const cliGroups: string[] = readdirSync(new URL('../reference/cli/', import.meta.url))
+  .filter((file) => file.endsWith('.md'))
+  .map((file) => file.slice(0, -'.md'.length))
+  .sort()
+
+function sidebarItem(lang: Lang, item: SourceItem): DefaultTheme.SidebarItem {
+  const link = `${prefix(lang)}${item.link}`
+  if (item.link !== CLI_INDEX) return { text: item.text[lang], link }
+  return {
+    text: item.text[lang],
+    link,
+    collapsed: true,
+    items: cliGroups.map((name) => ({ text: `coffer ${name}`, link: `${link}/${name}` })),
+  }
+}
+
 function sidebar(lang: Lang): DefaultTheme.SidebarMulti {
   const out: DefaultTheme.SidebarMulti = {}
   for (const [section, groups] of Object.entries(sections)) {
     out[`${prefix(lang)}/${section}/`] = groups.map((group) => ({
       text: group.text[lang],
-      items: group.items.map((item) => ({
-        text: item.text[lang],
-        link: `${prefix(lang)}${item.link}`,
-      })),
+      items: group.items.map((item) => sidebarItem(lang, item)),
     }))
   }
   return out

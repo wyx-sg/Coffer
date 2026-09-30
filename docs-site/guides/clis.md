@@ -101,7 +101,7 @@ coffer cli prompt gh            # the prompt to give your agent
 coffer cli prompt gh | pbcopy   # straight to the clipboard on macOS
 ```
 
-`coffer cli prompt` prints the same text the page copies, and exits non-zero for a command that is ready. Every option is in the [CLI reference](/reference/cli#coffer-cli).
+`coffer cli prompt` prints the same text the page copies, and exits non-zero for a command that is ready. Every option is in the [CLI reference](/reference/cli/cli).
 
 ## Related
 

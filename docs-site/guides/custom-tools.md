@@ -134,7 +134,7 @@ When an agent calls a tool, the gateway renders the request from the arguments, 
 | `coffer tool op scope <group> <tool>` | Show, narrow or clear one tool's reach |
 | `coffer tool op test <group> <tool>` | Call a tool once with sample arguments |
 
-Every option is in the [CLI reference](/reference/cli#coffer-tool).
+Every option is in the [CLI reference](/reference/cli/tool).
 
 ## Related
 
