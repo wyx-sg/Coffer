@@ -91,7 +91,10 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
       value={selectValue}
       onValueChange={(v) => commit(v === INHERIT ? null : v)}
     >
-      <SelectTrigger className="h-7 w-44 text-sm" aria-label={t("conversations.modelPicker.label")}>
+      <SelectTrigger
+        className="h-7 w-auto max-w-48 gap-1.5 border-transparent bg-transparent px-2 text-xs font-medium text-text-muted shadow-none hover:bg-surface-hover"
+        aria-label={t("conversations.modelPicker.label")}
+      >
         <SelectValue placeholder={t("conversations.modelPicker.placeholder")} />
       </SelectTrigger>
       <SelectContent>

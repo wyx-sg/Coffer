@@ -81,7 +81,7 @@ export function ConversationHeader({
   return (
     <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border-subtle px-5">
       <h1 className="min-w-0 truncate text-md font-semibold text-text">{conversation.title}</h1>
-      <SourceBadge conversation={conversation} className="min-w-0 shrink" />
+      <SourceBadge conversation={conversation} className="min-w-0 max-w-[16rem] shrink-0" />
       <span className="ml-auto" />
       <AgentModelBar
         conversationId={conversation.id}

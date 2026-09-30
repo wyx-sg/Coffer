@@ -4,12 +4,13 @@
 // link, and the channel's status is polled until someone pairs — then the
 // step says who, and that nobody else will be answered. "Pair later" leaves
 // the code outstanding; the channel's Overview can issue another any time.
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CheckCircle2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
+import type { PairingCode } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useChannelStatus, useIssuePairingCode } from "@/lib/hooks/useChannels";
 import { displayName } from "@/lib/resourceTitle";
@@ -28,12 +29,26 @@ export function AddChannelPairStep({ channel, onDone }: Props) {
   const issued = useRef(false);
   const platform = channelPlatform(channel.config);
   const peer = status?.peer ?? null;
+  // The code is kept in this step's own state, not read off the mutation: the
+  // step issues it as it opens, and under StrictMode's mount-unmount-mount the
+  // mutation's observer is dropped before the answer lands — its `data` would
+  // never arrive and the step would read "Generating…" for good.
+  const [code, setCode] = useState<PairingCode | undefined>(undefined);
+  const [issuing, setIssuing] = useState(false);
+  const { mutateAsync } = pairing;
+  const issue = useCallback(() => {
+    setIssuing(true);
+    // A refusal is toasted by the hook; the step then offers Generate again.
+    mutateAsync()
+      .then(setCode, () => undefined)
+      .finally(() => setIssuing(false));
+  }, [mutateAsync]);
 
   useEffect(() => {
     if (issued.current) return;
     issued.current = true;
-    pairing.mutate();
-  }, [pairing]);
+    issue();
+  }, [issue]);
 
   if (peer) {
     return (
@@ -58,12 +73,7 @@ export function AddChannelPairStep({ channel, onDone }: Props) {
 
   return (
     <div className="space-y-4">
-      <ChannelPairingCode
-        platform={platform}
-        code={pairing.data}
-        isPending={pairing.isPending}
-        onGenerate={() => pairing.mutate()}
-      />
+      <ChannelPairingCode platform={platform} code={code} isPending={issuing} onGenerate={issue} />
       <DialogFooter>
         <Button variant="ghost" onClick={onDone}>
           {t("channels.add.pairLater")}

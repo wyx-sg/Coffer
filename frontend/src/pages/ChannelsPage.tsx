@@ -74,7 +74,14 @@ export function ChannelsPage() {
     const first =
       CHANNEL_GROUPS.flatMap((g) => channels.filter((c) => views.get(c.uid)?.group === g))[0] ??
       channels[0];
-    return <Navigate replace to={channelPath(first.uid)} />;
+    // The dialog stays mounted beside the redirect: the first channel an Add
+    // creates lands here, and its dialog must keep its step (Pair) across it.
+    return (
+      <>
+        <Navigate replace to={channelPath(first.uid)} />
+        {dialog}
+      </>
+    );
   }
 
   if (!list.isPending && !list.error && channels.length === 0) {

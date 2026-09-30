@@ -5,14 +5,17 @@ A turn a channel drove opens with its context blocks — ``[Message origin]``
 and the like, each a paragraph whose first line is a bracketed title — ahead of
 what the person wrote. The preview is the person's words, so those leading
 blocks are dropped; the last paragraph always stays, so a message that is
-nothing but such a block still previews as itself.
+nothing but such a block still previews as itself. An agent's reply that
+works through tool calls between its words previews by its LAST words — the
+conclusion, not the first "let me look" — while a person's message, written in
+one go, previews whole.
 """
 
 from __future__ import annotations
 
 import re
 
-from coffer.domain.chat.message import Message, TextBlock
+from coffer.domain.chat.message import Message, Role, TextBlock
 
 __all__ = ["PREVIEW_MAX_CHARS", "message_preview"]
 
@@ -32,7 +35,10 @@ def _drop_context_blocks(text: str) -> str:
 def message_preview(message: Message) -> str | None:
     """The message's text on one line, clipped with an ellipsis; ``None`` when
     it carries no text (a tool-only turn)."""
-    text = "\n\n".join(b.text for b in message.content if isinstance(b, TextBlock))
+    texts = [b.text for b in message.content if isinstance(b, TextBlock) and b.text.strip()]
+    if message.role == Role.ASSISTANT:
+        texts = texts[-1:]
+    text = "\n\n".join(texts)
     line = " ".join(_drop_context_blocks(text).split())
     if not line:
         return None

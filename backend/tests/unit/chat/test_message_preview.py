@@ -9,12 +9,12 @@ from coffer.application.chat.preview import PREVIEW_MAX_CHARS, message_preview
 from coffer.domain.chat.message import ContentBlock, Message, Role, TextBlock, ToolUseBlock
 
 
-def _msg(*content: ContentBlock) -> Message:
+def _msg(*content: ContentBlock, role: Role = Role.USER) -> Message:
     return Message(
         id="m",
         conversation_id="c",
         seq=0,
-        role=Role.USER,
+        role=role,
         content=list(content),
         status="complete",
         model_id=None,
@@ -29,6 +29,16 @@ def test_text_blocks_are_joined_on_one_line() -> None:
         TextBlock(text="first\nline"), ToolUseBlock("t", "Bash", {}), TextBlock(text="  second ")
     )
     assert message_preview(msg) == "first line second"
+
+
+def test_an_agent_reply_previews_by_its_last_words() -> None:
+    msg = _msg(
+        TextBlock(text="Let me look."),
+        ToolUseBlock("t", "Grep", {}),
+        TextBlock(text="Fixed: it reconnects now."),
+        role=Role.ASSISTANT,
+    )
+    assert message_preview(msg) == "Fixed: it reconnects now."
 
 
 def test_a_message_without_words_has_no_preview() -> None:
