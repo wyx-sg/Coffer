@@ -37,7 +37,7 @@ from coffer.infrastructure.secret.master_key_backends import (
     ACCOUNT,
     KeychainAccessGroupBackend,
 )
-from coffer.infrastructure.vault.home import coffer_home
+from coffer.infrastructure.vault import home as vault_home
 from coffer.surfaces.http.secret_schemas import ApprovalOut
 
 #: One resource's secrets as the boundary sees them: where they go, and which
@@ -115,7 +115,7 @@ def master_key_path(home: pathlib.Path | None = None) -> pathlib.Path:
     """The development key file: ``~/.coffer/master.key``, wherever the
     history database is — the key opens the vault's ciphertext, so it follows
     the home the vault is in, not ``COFFER_DB_URL``."""
-    return coffer_home(home) / "master.key"
+    return vault_home.master_key_path(home)
 
 
 def make_master_key_manager(home: pathlib.Path | None = None) -> MasterKeyManager:

@@ -256,7 +256,7 @@ make format              # ruff format + ruff --fix (backend, evals); prettier i
 `scripts/check_pyinstaller_specs.py`, `scripts/check_cli_reference.py`,
 `scripts/check_docs_locales.py`,
 `scripts/check_removed_commands.py`, `scripts/check_platform_calls.py`,
-`scripts/check_agent_type_branches.py`, `scripts/check_frontend_colors.py`,
+`scripts/check_coffer_paths.py`, `scripts/check_agent_type_branches.py`, `scripts/check_frontend_colors.py`,
 `scripts/check_ignored_sources.py`,
 `ruff check` and `ruff format --check` (over `backend/` and `evals/`), `mypy`
 (configured in `backend/pyproject.toml` with `strict = true`), `lint-imports`

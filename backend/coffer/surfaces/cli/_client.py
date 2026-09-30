@@ -8,7 +8,6 @@ run ``coffer daemon start``.
 from __future__ import annotations
 
 import contextlib
-import os
 import subprocess
 import sys
 import time
@@ -22,6 +21,7 @@ from coffer.infrastructure.daemon.bootstrap import live_daemon, probe_status
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo, read
 from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
 from coffer.infrastructure.daemon.version_skew import skew_warning
+from coffer.infrastructure.vault.home import daemon_json_path
 from coffer.surfaces.cli._options import ExitCode
 
 # How long (seconds) to wait for daemon.json to appear after spawning.
@@ -55,7 +55,7 @@ class DaemonNotRunning(SystemExit):
 
 
 def _daemon_json_path() -> Path:
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "daemon.json"
+    return daemon_json_path()
 
 
 def discover() -> DaemonInfo | None:

@@ -42,6 +42,8 @@ import stat
 import sys
 from pathlib import Path
 
+from coffer.infrastructure.vault.home import bin_dir
+
 log = logging.getLogger(__name__)
 
 # The binaries a frozen daemon deploys beside itself. `coffer-daemon` is
@@ -61,7 +63,7 @@ KEEP_VERSIONS = 2
 
 def user_bin_dir() -> Path:
     """Where deployed binaries land — ``~/.coffer/bin``."""
-    return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "bin"
+    return bin_dir()
 
 
 def versioned_target(link: Path, version: str) -> Path:

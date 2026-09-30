@@ -195,6 +195,13 @@ forbidden_modules = ["coffer.surfaces"]
 # is the whole layer's one consumer of them. The memory layer holds no table
 # at all now that the developer's overrides are gone, so there is no
 # persistence exception beside it.
+#
+# Third exception: ``coffer.application.binary_deploy`` asks
+# ``coffer.infrastructure.vault.home`` — the one module that names every path
+# under ``~/.coffer`` (``scripts/check_coffer_paths.py``) — where the binaries
+# are deployed. That module is a table of paths read from ``HOME`` with no I/O,
+# and a second copy of the layout on the application side is exactly what the
+# gate forbids.
 [[tool.importlinter.contracts]]
 name = "Application does not import infrastructure"
 type = "forbidden"
@@ -203,6 +210,7 @@ forbidden_modules = ["coffer.infrastructure"]
 ignore_imports = [
     "coffer.application.knowledge.* -> coffer.infrastructure.knowledge.*",
     "coffer.application.memory.* -> coffer.infrastructure.memory.*",
+    "coffer.application.binary_deploy -> coffer.infrastructure.vault.home",
 ]
 
 # Contract 3: domain is pure — no imports from any other project layer, no

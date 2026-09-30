@@ -3678,7 +3678,7 @@
       "agent": "智能体",
       "unavailable": "本机不可用",
       "workingDir": "工作目录",
-      "workingDirPlaceholder": "Coffer 的工作区（~/.coffer/workspace）",
+      "workingDirPlaceholder": "Coffer 的工作区（~/.coffer/content/workspace）",
       "start": "开始"
     },
     "header": {

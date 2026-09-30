@@ -8,9 +8,10 @@
 //! Split out of `daemon.rs` to keep every file under the project's 400-line
 //! cap (see `.agents/stack.md`).
 
-use std::env;
 use std::fs;
 use std::path::PathBuf;
+
+use crate::coffer_home;
 
 /// Extract the `"port"` value from the daemon discovery JSON. Returns `None`
 /// for malformed JSON, a missing key, a non-numeric value, or a port outside
@@ -29,10 +30,7 @@ fn parse_daemon_token(raw: &str) -> Option<String> {
 
 /// `~/.coffer/daemon.json` — the file every Coffer client reads.
 fn discovery_file() -> Option<PathBuf> {
-    let home = env::var("HOME")
-        .ok()
-        .or_else(|| env::var("USERPROFILE").ok())?;
-    Some(PathBuf::from(home).join(".coffer").join("daemon.json"))
+    Some(coffer_home::daemon_json(coffer_home::home_dir()?))
 }
 
 /// Read both the port and token from `~/.coffer/daemon.json`. Returns `None`

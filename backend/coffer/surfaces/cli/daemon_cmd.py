@@ -19,6 +19,7 @@ import typer
 from coffer.infrastructure.daemon import bootstrap, port_alloc
 from coffer.infrastructure.daemon.pid_lock import pid_is_coffer_daemon
 from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
+from coffer.infrastructure.vault.home import daemon_json_path
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli import daemon_service_cmd
 from coffer.surfaces.cli._options import ExitCode
@@ -89,8 +90,7 @@ def _refuse_if_the_port_is_taken() -> None:
 
 def _start_daemon() -> None:
     """Body of ``start``, shared with ``restart``."""
-    home = Path(os.environ.get("HOME", "~")).expanduser()
-    daemon_json = home / ".coffer" / "daemon.json"
+    daemon_json = daemon_json_path()
 
     # Spec daemon "Manage the daemon from the command line": key off
     # live_daemon() (a real status probe), NOT mere file presence. A stale
@@ -135,14 +135,12 @@ def _stop_daemon() -> bool:
     if info is None:
         return False
 
-    home = Path(os.environ.get("HOME", "~")).expanduser()
-
     # Verify the recorded pid IS a coffer daemon before signalling it.
     # A crashed daemon's pid can be recycled onto an unrelated process; we must
     # not SIGTERM a stranger. If it isn't ours, the daemon.json is stale —
     # clean it up instead of killing whoever now holds that pid.
     if not pid_is_coffer_daemon(info.pid):
-        (home / ".coffer" / "daemon.json").unlink(missing_ok=True)
+        daemon_json_path().unlink(missing_ok=True)
         typer.echo("daemon pid is not a coffer daemon; cleaned up stale daemon.json")
         return True
 
@@ -150,11 +148,11 @@ def _stop_daemon() -> bool:
         os.kill(info.pid, signal.SIGTERM)
     except ProcessLookupError:
         # already gone; just clean up daemon.json
-        (home / ".coffer" / "daemon.json").unlink(missing_ok=True)
+        daemon_json_path().unlink(missing_ok=True)
         typer.echo("daemon already exited; cleaned up stale daemon.json")
         return True
 
-    if _wait_for_daemon_json_gone(home / ".coffer" / "daemon.json", timeout=5.0):
+    if _wait_for_daemon_json_gone(daemon_json_path(), timeout=5.0):
         typer.echo("daemon stopped")
         return True
     typer.echo("daemon did not clean up daemon.json in 5s", err=True)
