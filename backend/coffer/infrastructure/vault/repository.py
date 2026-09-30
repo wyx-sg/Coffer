@@ -250,7 +250,7 @@ class VaultRepository:
         other machines' copies on their next round)."""
         root = self.root
         wanted = list(dict.fromkeys(paths))
-        ignored = self.ignored(wanted)
+        ignored = self.ignored(wanted) | self.unsupported(wanted)
         wanted = [p for p in wanted if p not in ignored]
         present = [p for p in wanted if (root / p).exists() or (root / p).is_symlink()]
         missing = [p for p in wanted if p not in present]
@@ -260,6 +260,26 @@ class VaultRepository:
             git.run(
                 root, "rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *chunk, literal=True
             )
+
+    def unsupported(self, paths: Iterable[str]) -> set[str]:
+        """Paths the vault never records: a symbolic link (its target is a
+        fact about this machine's disk) and anything inside a nested git
+        repository (a history of its own, which git would record as an opaque
+        pointer). Spec vault-sync "Skip symlinks and nested repositories"."""
+        root = self.root
+        out: set[str] = set()
+        for path in paths:
+            target = root / path
+            if target.is_symlink():
+                out.add(path)
+                continue
+            parent = target.parent
+            while parent != root and root in parent.parents:
+                if (parent / ".git").exists():
+                    out.add(path)
+                    break
+                parent = parent.parent
+        return out
 
     def ignored(self, paths: Sequence[str]) -> set[str]:
         """The subset of paths the exclude file keeps out of every commit

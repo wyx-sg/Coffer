@@ -204,3 +204,21 @@ def test_writers_in_parallel_threads_each_land_whole(
         t.join()
     assert sorted(repo.tree("HEAD", "knowledge")) == sorted(f"knowledge/{i}.md" for i in range(8))
     assert writer.pending() == {}
+
+
+def test_symlinks_and_nested_repositories_are_never_recorded(
+    writer: VaultWriter, repo: VaultRepository
+) -> None:
+    import os
+    import subprocess
+
+    (repo.root / "skills/pdf").mkdir(parents=True)
+    (repo.root / "skills/pdf/SKILL.md").write_bytes(b"---\nname: pdf\n---\n")
+    os.symlink("/etc/hosts", repo.root / "skills/pdf/hosts")
+    nested = repo.root / "skills/vendored"
+    nested.mkdir()
+    subprocess.run(["git", "init", "-q", str(nested)], check=True)
+    (nested / "x.txt").write_bytes(b"x\n")
+    writer.settle()
+    assert set(repo.tree("HEAD", "skills")) == {"skills/pdf/SKILL.md"}
+    assert writer.pending() == {}

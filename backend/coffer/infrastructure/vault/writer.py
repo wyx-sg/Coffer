@@ -299,7 +299,7 @@ class VaultWriter:
         with self.lock:
             out: dict[str, str | None] = {}
             changed = [p for _code, p in self.repo.status() if not p.endswith("/")]
-            ignored = self.repo.ignored(changed)
+            ignored = self.repo.ignored(changed) | self.repo.unsupported(changed)
             held = self.held()
             for path in changed:
                 if self._owned[path] or path in ignored or path in held:
