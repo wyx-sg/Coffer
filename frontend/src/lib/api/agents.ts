@@ -164,6 +164,11 @@ export const agentsApi = {
       `/agents/${enc(uid)}/config-files/${enc(key)}/files/${childPath(relpath)}`,
       { method: "PUT", body },
     ),
+  // Deletes one file inside a directory entry (the daemon keeps a .bak).
+  deleteConfigChild: (uid: string, key: string, relpath: string) =>
+    call<void>(`/agents/${enc(uid)}/config-files/${enc(key)}/files/${childPath(relpath)}`, {
+      method: "DELETE",
+    }),
 
   // Unmanaged skills (specs agent-registry/005 workspace amendment)
   unmanagedSkills: (uid: string) =>

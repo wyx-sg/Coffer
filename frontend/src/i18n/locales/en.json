@@ -1430,7 +1430,10 @@
       "leftBehind": {
         "title": "{{name}}’s config is left behind",
         "body": "{{dir}} is still here but the program isn’t on PATH. Reinstall with {{command}} and it comes back on its own."
-      }
+      },
+      "checkAgain": "Check again",
+      "repair": "Repair",
+      "repairHook": "Repair Coffer’s memory hook"
     },
     "workspace": {
       "overview": "Overview",
@@ -1571,7 +1574,15 @@
       "adoptFailedOpen": "Open it",
       "emptyTitle": "{{agent}} has no skills",
       "emptyDescription": "Skills {{agent}} installs show up here, read-only.",
-      "noMatch": "No skills match."
+      "noMatch": "No skills match.",
+      "menu": {
+        "adopt": "Adopt into Coffer…",
+        "delete": "Delete…"
+      },
+      "deleteTitle": "Delete {{name}}?",
+      "deleteBody_one": "This deletes {{path}} and its {{count}} file from disk. It isn’t in Coffer, so there is no copy to restore from.",
+      "deleteBody_other": "This deletes {{path}} and its {{count}} files from disk. It isn’t in Coffer, so there is no copy to restore from.",
+      "deleteBodyNoCount": "This deletes {{path}} from disk. It isn’t in Coffer, so there is no copy to restore from."
     },
     "mcpTab": {
       "summary_one": "{{count}} server · {{coffer}} through the Coffer gateway · {{own}} directly in {{file}}",
@@ -1634,7 +1645,14 @@
         "pending": "Adopting…",
         "success": "Adopted {{name}} — Coffer now serves it through the gateway"
       },
-      "noMatch": "No servers match."
+      "noMatch": "No servers match.",
+      "menu": {
+        "adopt": "Adopt into Coffer…",
+        "open": "Open {{file}}",
+        "copyCommand": "Copy command",
+        "remove": "Remove from {{file}}…"
+      },
+      "openFileFailed": "Couldn’t open the file."
     },
     "detection": {
       "notInstalled": "Not installed"
@@ -1671,7 +1689,7 @@
         "stale": "Out of date",
         "missing": "Missing",
         "neverFired": "Never fired",
-        "untrusted": "Not trusted",
+        "untrusted": "Untrusted",
         "modified": "Changed since trusted",
         "disabled": "Turned off in Codex"
       },
@@ -1692,13 +1710,18 @@
         "checkAgain": "Check again",
         "openActivity": "Open Activity"
       },
-      "repair": "Repair",
+      "repair": "Repair Coffer’s memory hook",
       "repairAria": "Repair Coffer’s memory hook",
       "openFile": "Open file",
       "openFileAria": "Open {{path}}",
       "search": "Search hooks",
       "footnote": "Every hook in {{agent}}’s own config, read-only. Change one in its file; only Coffer’s own hook is looked after here.",
-      "noMatches": "No hooks match"
+      "noMatches": "No hooks match",
+      "untrustedSub": "not approved in Codex",
+      "untrusted": {
+        "title": "{{agent}} hasn’t approved this hook",
+        "body": "{{agent}} only runs hooks you approve. Until you approve Coffer’s, {{agent}} skips it and starts every session without memory. Run /hooks in {{agent}} and approve coffer memory index, then check again."
+      }
     },
     "removeConfirmTitle": "Remove {{name}}?",
     "memoryStore": {
@@ -1741,7 +1764,8 @@
         "own": "The agent’s own"
       },
       "loadFailed": "Couldn’t read this list",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "moreFor": "More for {{name}}"
     },
     "state": {
       "not_installed": "Not installed",
@@ -1757,7 +1781,8 @@
     },
     "stateHeader": {
       "connected": "Connected to Coffer",
-      "config_left_behind": "Program not found"
+      "config_left_behind": "Program not found",
+      "hook_untrusted": "Hook not approved"
     },
     "tabs": {
       "overview": "Overview",
@@ -2010,7 +2035,25 @@
       "create": "Create {{name}}",
       "directoryCount_one": "Directory · {{count}} file",
       "directoryCount_other": "Directory · {{count}} files",
-      "directoryHint": "Select a file to open it."
+      "directoryHint": "Select a file to open it.",
+      "deleteTitle": "Delete {{name}}?",
+      "deleteBody": "This deletes {{path}} from disk, so {{agent}} loses it. There is no copy to restore from.",
+      "deleteFile": "Delete {{name}}",
+      "newFile": "New file",
+      "newFileTitle": "New file in {{dir}}",
+      "newFileBody": "One Markdown file per subagent. Coffer starts it from a short template you can edit.",
+      "newFileName": "File name",
+      "newFileSavedAs": "Saved as {{path}}",
+      "newFileInvalid": "Use a plain file name ending in .md, without slashes.",
+      "newFileExists": "A file with this name is already there.",
+      "newFileCreate": "Create",
+      "unsaved": {
+        "title": "Discard your changes to {{file}}?",
+        "body": "You have an unsaved change. Opening {{target}} discards it; the file on disk stays as it was.",
+        "leaveBody": "You have an unsaved change. Leaving discards it; the file on disk stays as it was.",
+        "keep": "Keep editing",
+        "discard": "Discard changes"
+      }
     },
     "sessionsTab": {
       "searchPlaceholder": "Search title or project",
@@ -2280,6 +2323,9 @@
       "title": "Remove {{name}} from Coffer?",
       "body": "Coffer takes its entry and hook out of {{dir}} and stops serving it. {{name}} stays installed with the rest of its config, its sessions and its own memory. It stays in the list as Detected, not added; Add brings it back.",
       "confirm": "Remove"
+    },
+    "hookApproval": {
+      "copy": "Copy /hooks"
     }
   },
   "skills": {

@@ -1430,7 +1430,10 @@
       "leftBehind": {
         "title": "{{name}} 的配置残留",
         "body": "{{dir}} 还在，但 PATH 上没有这个程序。用 {{command}} 重新安装后它会自动回来。"
-      }
+      },
+      "checkAgain": "再检查一次",
+      "repair": "修复",
+      "repairHook": "修复 Coffer 的记忆 hook"
     },
     "workspace": {
       "overview": "概览",
@@ -1571,7 +1574,15 @@
       "adoptFailedOpen": "打开它",
       "emptyTitle": "{{agent}} 没有技能",
       "emptyDescription": "{{agent}} 安装的技能会显示在这里，只读。",
-      "noMatch": "没有匹配的技能。"
+      "noMatch": "没有匹配的技能。",
+      "menu": {
+        "adopt": "收编进 Coffer…",
+        "delete": "删除…"
+      },
+      "deleteTitle": "删除 {{name}}？",
+      "deleteBody_one": "这会从磁盘删除 {{path}} 及其 {{count}} 个文件。它不在 Coffer 里，没有副本可以恢复。",
+      "deleteBody_other": "这会从磁盘删除 {{path}} 及其 {{count}} 个文件。它不在 Coffer 里，没有副本可以恢复。",
+      "deleteBodyNoCount": "这会从磁盘删除 {{path}}。它不在 Coffer 里，没有副本可以恢复。"
     },
     "mcpTab": {
       "summary_one": "{{count}} 个服务器 · {{coffer}} 个经 Coffer 网关 · {{own}} 个直接写在 {{file}}",
@@ -1634,7 +1645,14 @@
         "pending": "正在纳入托管…",
         "success": "已纳入托管 {{name}}——Coffer 现在通过网关提供它"
       },
-      "noMatch": "没有匹配的服务器。"
+      "noMatch": "没有匹配的服务器。",
+      "menu": {
+        "adopt": "收编进 Coffer…",
+        "open": "打开 {{file}}",
+        "copyCommand": "复制命令",
+        "remove": "从 {{file}} 移除…"
+      },
+      "openFileFailed": "无法打开文件。"
     },
     "detection": {
       "notInstalled": "未安装"
@@ -1671,7 +1689,7 @@
         "stale": "已过期",
         "missing": "缺失",
         "neverFired": "从未触发",
-        "untrusted": "未信任",
+        "untrusted": "未批准",
         "modified": "信任后已变更",
         "disabled": "已在 Codex 中关闭"
       },
@@ -1692,13 +1710,18 @@
         "checkAgain": "再次检查",
         "openActivity": "打开活动"
       },
-      "repair": "修复",
+      "repair": "修复 Coffer 的记忆 hook",
       "repairAria": "修复 Coffer 的记忆钩子",
       "openFile": "打开文件",
       "openFileAria": "打开 {{path}}",
       "search": "搜索钩子",
       "footnote": "{{agent}} 自己配置中的所有钩子，只读。要改就去它所在的文件改；这里只照看 Coffer 自己的钩子。",
-      "noMatches": "没有匹配的钩子"
+      "noMatches": "没有匹配的钩子",
+      "untrustedSub": "未在 Codex 中批准",
+      "untrusted": {
+        "title": "{{agent}} 还没有批准这个 hook",
+        "body": "{{agent}} 只运行你批准过的 hook。在你批准 Coffer 的 hook 之前，{{agent}} 会跳过它，每个会话都不带记忆启动。在 {{agent}} 中运行 /hooks 并批准 coffer memory index，然后再检查一次。"
+      }
     },
     "removeConfirmTitle": "移除 {{name}}？",
     "memoryStore": {
@@ -1741,7 +1764,8 @@
         "own": "智能体自己的"
       },
       "loadFailed": "无法读取此列表",
-      "moreActions": "更多操作"
+      "moreActions": "更多操作",
+      "moreFor": "{{name}} 的更多操作"
     },
     "state": {
       "not_installed": "未安装",
@@ -1757,7 +1781,8 @@
     },
     "stateHeader": {
       "connected": "已连接到 Coffer",
-      "config_left_behind": "找不到程序"
+      "config_left_behind": "找不到程序",
+      "hook_untrusted": "Hook 未获批准"
     },
     "tabs": {
       "overview": "总览",
@@ -2010,7 +2035,25 @@
       "create": "创建 {{name}}",
       "directoryCount_one": "目录 · {{count}} 个文件",
       "directoryCount_other": "目录 · {{count}} 个文件",
-      "directoryHint": "选择一个文件以打开。"
+      "directoryHint": "选择一个文件以打开。",
+      "deleteTitle": "删除 {{name}}？",
+      "deleteBody": "这会从磁盘删除 {{path}}，{{agent}} 将失去它。没有副本可以恢复。",
+      "deleteFile": "删除 {{name}}",
+      "newFile": "新建文件",
+      "newFileTitle": "在 {{dir}} 中新建文件",
+      "newFileBody": "每个子智能体一个 Markdown 文件。Coffer 会用一个简短的模板创建它，你可以再编辑。",
+      "newFileName": "文件名",
+      "newFileSavedAs": "保存为 {{path}}",
+      "newFileInvalid": "请使用以 .md 结尾、不含斜杠的文件名。",
+      "newFileExists": "已经有同名文件。",
+      "newFileCreate": "创建",
+      "unsaved": {
+        "title": "放弃对 {{file}} 的修改？",
+        "body": "你有未保存的修改。打开 {{target}} 会放弃它；磁盘上的文件保持原样。",
+        "leaveBody": "你有未保存的修改。离开会放弃它；磁盘上的文件保持原样。",
+        "keep": "继续编辑",
+        "discard": "放弃修改"
+      }
     },
     "sessionsTab": {
       "searchPlaceholder": "搜索标题或项目",
@@ -2280,6 +2323,9 @@
       "title": "从 Coffer 移除 {{name}}？",
       "body": "Coffer 会把它的条目和钩子从 {{dir}} 中取出，并停止为它服务。{{name}} 仍然安装着，其余配置、会话和它自己的记忆都保留。它会以“已检测到，未添加”留在列表中；点击添加即可恢复。",
       "confirm": "移除"
+    },
+    "hookApproval": {
+      "copy": "复制 /hooks"
     }
   },
   "skills": {

@@ -293,9 +293,9 @@ describe("AgentOverviewTab — summary, model, details, sessions", () => {
     );
   });
 
-  test("Codex says Reasoning effort, and a null effort reads Model default", async () => {
+  test("Codex says Effort too, and a null effort reads Model default", async () => {
     renderTab({ agent: { type: "codex", effort: null }, typeRow: { type: "codex" } });
-    expect(await screen.findByText("Reasoning effort")).toBeInTheDocument();
+    expect(await screen.findByText("Effort")).toBeInTheDocument();
     expect(screen.getByText("Model default")).toBeInTheDocument();
   });
 
@@ -329,7 +329,7 @@ describe("AgentOverviewTab — summary, model, details, sessions", () => {
 describe("AgentOverviewTab — problem states replace the tab", () => {
   const CODEX = { type: "codex" as const, config_dir: `${HOME}/.codex` };
 
-  test("config left behind: what is still there, install command, reveal and remove", async () => {
+  test("config left behind: what is still there and the install command", async () => {
     const acts = renderTab({
       agent: CODEX,
       typeRow: { ...CODEX, state: "config_only", standard_config_dir: `${HOME}/.codex` },
@@ -340,13 +340,9 @@ describe("AgentOverviewTab — problem states replace the tab", () => {
     expect(screen.getByText("npm install -g @openai/codex")).toBeInTheDocument();
     expect(screen.queryByText("Connection")).not.toBeInTheDocument();
     expect(screen.getByText("Left in ~/.codex")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Remove from list" }));
-    expect(acts.onRemove).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Reveal folder" }));
-    expect(callMock).toHaveBeenCalledWith("/fs/reveal", {
-      method: "POST",
-      body: { path: `${HOME}/.codex` },
-    });
+    // Revealing the folder and removing the agent stay in the ⋯ menu.
+    expect(screen.queryByRole("button", { name: "Remove from list" })).not.toBeInTheDocument();
+    expect(acts.onRemove).not.toHaveBeenCalled();
   });
 
   test("not found: reinstall, change config directory, remove from Coffer; check again re-reads", async () => {

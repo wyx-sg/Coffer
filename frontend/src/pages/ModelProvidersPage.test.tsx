@@ -82,6 +82,7 @@ const makeProvider = (over: Partial<Provider> = {}): Provider => {
     is_active: false,
     internal_default: false,
     transcribe_default: false,
+    fallback: true,
     models: [],
     enabled: true,
     description: null,

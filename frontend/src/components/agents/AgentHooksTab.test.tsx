@@ -262,8 +262,10 @@ describe("AgentHooksTab", () => {
       { type: "codex" },
     );
     const row = await rowOf(COFFER_CMD);
-    expect(await within(row).findByText("Not trusted")).toBeInTheDocument();
-    expect(within(row).getByText(en.agents.hooksTab.trustNote)).toBeInTheDocument();
+    expect(await within(row).findByText("Untrusted")).toBeInTheDocument();
+    expect(within(row).getByText("not approved in Codex")).toBeInTheDocument();
+    expect(within(row).getByText("Codex hasn’t approved this hook")).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Copy /hooks" })).toBeInTheDocument();
   });
 
   test.each([

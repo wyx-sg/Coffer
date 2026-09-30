@@ -9,20 +9,23 @@
 // (the selection is parked in useConfigEditorState until confirmed), the page
 // asks before switching tabs (`onDirtyChange`), and the browser asks before
 // unload. The selected file is in the URL (`?file=`).
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ConfigDirectoryPane } from "@/components/agents/ConfigDirectoryPane";
 import { ConfigEditorPane } from "@/components/agents/ConfigEditorPane";
 import { ConfigFileTree } from "@/components/agents/ConfigFileTree";
+import { NewConfigFileDialog } from "@/components/agents/NewConfigFileDialog";
+import { UnsavedChangesDialog } from "@/components/agents/UnsavedChangesDialog";
 import { FILE_PANE_COLUMN, useFillToBottom } from "@/components/filePane";
 import { SplitView } from "@/components/SplitView";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { baseName } from "@/lib/agents/configFiles";
-import { agentTypeLabel } from "@/lib/agents/display";
+import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
 import { useBeforeUnload } from "@/lib/hooks/useBeforeUnload";
+import { useCreateConfigChild, useDeleteConfigChild } from "@/lib/hooks/useConfigDirFiles";
 import { useConfigEditorState } from "@/lib/hooks/useConfigEditorState";
 
 // Keys with a description under `agents.config.desc.<key>`. Listing them keeps
@@ -53,6 +56,14 @@ export function AgentConfigFilesTab({ agent, onDirtyChange }: Props) {
   const fill = useFillToBottom();
   const dirty = s.draft.dirty;
   const agentName = agentTypeLabel(agent.type);
+  const createChild = useCreateConfigChild(agent.uid);
+  const deleteChild = useDeleteConfigChild(agent.uid);
+  const [newFileOpen, setNewFileOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    key: string;
+    relpath: string;
+    path: string;
+  } | null>(null);
 
   useBeforeUnload(dirty);
   useEffect(() => {
@@ -66,6 +77,8 @@ export function AgentConfigFilesTab({ agent, onDirtyChange }: Props) {
       : null;
   // The content response resolves the actual file on disk; the listing covers
   // a top-level file before its content has loaded.
+  // The file with the edits on screen, for the discard confirmation.
+  const editingName = s.selectedChild ?? (s.selectedInfo ? baseName(s.selectedInfo.path) : "");
   const filePath = s.activeContent?.path ?? (s.selectedChild ? undefined : s.selectedInfo?.path);
 
   const list = s.files.isPending ? (
@@ -92,6 +105,13 @@ export function AgentConfigFilesTab({ agent, onDirtyChange }: Props) {
         entry={s.selectedInfo}
         description={description}
         onSelectChild={(relpath) => s.selectChild(s.selectedInfo?.key ?? "", relpath)}
+        onNewFile={() => setNewFileOpen(true)}
+        onDeleteChild={(relpath) => {
+          const entry = s.selectedInfo;
+          if (!entry) return;
+          deleteChild.reset();
+          setDeleteTarget({ key: entry.key, relpath, path: `${entry.path}/${relpath}` });
+        }}
       />
     ) : s.selectedInfo ? (
       <ConfigEditorPane
@@ -120,15 +140,43 @@ export function AgentConfigFilesTab({ agent, onDirtyChange }: Props) {
         list={list}
         detail={detail}
       />
-      <ConfirmDialog
+      <UnsavedChangesDialog
         open={s.hasPendingSelection}
+        file={editingName}
+        target={s.pendingTarget}
+        onKeepEditing={s.cancelPendingSelection}
+        onDiscard={s.confirmPendingSelection}
+      />
+      {s.selectedInfo && s.isDirSelected ? (
+        <NewConfigFileDialog
+          open={newFileOpen}
+          onOpenChange={setNewFileOpen}
+          entry={s.selectedInfo}
+          onCreate={async (relpath, content) => {
+            const key = s.selectedInfo?.key ?? "";
+            await createChild.mutateAsync({ key, relpath, content });
+            s.selectChild(key, relpath);
+          }}
+        />
+      ) : null}
+      <ConfirmDialog
+        open={deleteTarget !== null}
         onOpenChange={(open) => {
-          if (!open) s.cancelPendingSelection();
+          if (!open) setDeleteTarget(null);
         }}
-        title={t("common.discardChanges.title")}
-        description={t("common.discardChanges.body")}
-        confirmLabel={t("common.discardChanges.confirm")}
-        onConfirm={s.confirmPendingSelection}
+        title={t("agents.configTab.deleteTitle", { name: deleteTarget?.relpath ?? "" })}
+        description={t("agents.configTab.deleteBody", {
+          path: deleteTarget ? abbreviateHomePath(deleteTarget.path) : "",
+          agent: agentName,
+        })}
+        confirmLabel={t("common.delete")}
+        pending={deleteChild.isPending}
+        error={deleteChild.error}
+        onConfirm={() =>
+          deleteTarget
+            ? deleteChild.mutateAsync({ key: deleteTarget.key, relpath: deleteTarget.relpath })
+            : undefined
+        }
       />
     </div>
   );
