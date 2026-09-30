@@ -37,7 +37,7 @@ When an AI agent contributes substantively to a commit, the commit carries a `Co
 
 ### One line of development
 
-Everything lands on `main`, and a release is a tagged `main`. Work that is not ready for users still lands there, gated behind an entry in the experimental-feature registry (`backend/coffer/domain/features.py`). Such work is off in a `stable` build and on in every `dev` build, including yours. Gate every surface the work adds through that one entry. When the feature is ready, remove it from the registry and delete its gates in the same pull request. Do not keep a long-lived side branch. See [Experimental features](/guides/experimental-features) for how the gate behaves.
+Everything lands on `main`, and a release is a tagged `main`. Work that is not ready for users still lands there, gated behind an entry in the experimental-feature registry (`backend/coffer/domain/features.py`). Such work is off in a `stable` build and on in every `dev` build, including yours. Gate every surface the work adds through that one entry. When the feature is ready, graduate it in one pull request: remove it from the registry, delete every gate that names it, and add a migration that strips its stored switch from `daemon-config.json`. Do not keep a long-lived side branch. See [Experimental features](/guides/experimental-features) for how the gate behaves.
 
 ### Conventional Commits, one commit per pull request
 

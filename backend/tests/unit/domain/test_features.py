@@ -7,6 +7,7 @@ import pytest
 from coffer import build_channel
 from coffer.domain.features import (
     EXPERIMENTAL_FEATURES,
+    ExperimentalFeature,
     FeatureDisabled,
     FeaturePinned,
     FeatureUnknown,
@@ -17,36 +18,41 @@ from coffer.domain.features import (
     get_feature,
     is_registered,
 )
+from tests.support.features import FAKE_FEATURE, register_fake_feature, register_fake_features
 
 
-def test_the_registry_holds_exactly_the_three_features_in_order() -> None:
-    assert feature_keys() == ("vault_sync", "knowledge", "memory")
+def test_the_registry_is_empty_while_no_capability_is_experimental() -> None:
+    """Sync, knowledge and memory graduated; nothing has joined since."""
+    assert EXPERIMENTAL_FEATURES == ()
+    assert feature_keys() == ()
+    assert feature_for_kind("knowledge") is None
+    assert feature_for_path("/api/v1/sync/status") is None
 
 
-def test_each_feature_names_its_own_route_prefix_and_kinds() -> None:
-    by_key = {f.key: f for f in EXPERIMENTAL_FEATURES}
-    assert by_key["vault_sync"].route_prefixes == ("/api/v1/sync",)
-    assert by_key["knowledge"].route_prefixes == ("/api/v1/knowledge",)
-    assert by_key["memory"].route_prefixes == ("/api/v1/memory",)
-    assert by_key["vault_sync"].kinds == ()
-    assert by_key["knowledge"].kinds == ("knowledge",)
-    assert by_key["memory"].kinds == ("memory",)
-
-
-def test_a_kind_maps_to_the_feature_that_owns_it() -> None:
-    assert feature_for_kind("knowledge") == "knowledge"
-    assert feature_for_kind("memory") == "memory"
+def test_a_registered_feature_is_found_by_key_kind_and_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feature = register_fake_feature(
+        monkeypatch, route_prefixes=("/api/v1/fake", "/api/v1/other"), kinds=("fake_kind",)
+    )
+    assert feature_keys() == (FAKE_FEATURE,)
+    assert is_registered(FAKE_FEATURE)
+    assert get_feature(FAKE_FEATURE) is feature
+    assert feature_for_kind("fake_kind") == FAKE_FEATURE
     assert feature_for_kind("skill") is None
-    assert feature_for_kind("mcp_server") is None
-
-
-def test_a_path_maps_to_the_feature_whose_prefix_it_sits_under() -> None:
-    assert feature_for_path("/api/v1/sync/status") == "vault_sync"
-    assert feature_for_path("/api/v1/knowledge") == "knowledge"
-    assert feature_for_path("/api/v1/memory/partitions/{uid}") == "memory"
+    assert feature_for_path("/api/v1/fake") == FAKE_FEATURE
+    assert feature_for_path("/api/v1/other/{uid}") == FAKE_FEATURE
     # A prefix is a path segment, not a string prefix.
-    assert feature_for_path("/api/v1/synchronise") is None
-    assert feature_for_path("/api/v1/agents/{uid}/native-memory") is None
+    assert feature_for_path("/api/v1/fakery") is None
+
+
+def test_features_are_listed_in_registry_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    register_fake_features(
+        monkeypatch,
+        ExperimentalFeature(key="b_feature", route_prefixes=()),
+        ExperimentalFeature(key="a_feature", route_prefixes=()),
+    )
+    assert feature_keys() == ("b_feature", "a_feature")
 
 
 def test_an_unregistered_key_is_refused() -> None:
@@ -68,13 +74,13 @@ def test_the_repository_carries_the_dev_channel() -> None:
 
 
 def test_the_disabled_error_names_the_command_that_switches_it_on() -> None:
-    err = FeatureDisabled("knowledge")
+    err = FeatureDisabled(FAKE_FEATURE)
     assert err.code == "FEATURE_DISABLED"
-    assert err.feature == "knowledge"
-    assert "coffer config set feature.knowledge on" in str(err)
+    assert err.feature == FAKE_FEATURE
+    assert f"coffer config set feature.{FAKE_FEATURE} on" in str(err)
 
 
 def test_the_pinned_error_names_its_key() -> None:
-    err = FeaturePinned("memory")
+    err = FeaturePinned(FAKE_FEATURE)
     assert err.code == "FEATURE_PINNED"
-    assert err.feature == "memory"
+    assert err.feature == FAKE_FEATURE

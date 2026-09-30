@@ -4,6 +4,7 @@ covered with `coffer config` in test_config_features_credentials.py.
 
 The CLI talks to an in-process app through a ``TestClient`` under a throwaway
 HOME, so the switches land in ``tmp_path`` and nothing reaches ``~/.coffer``.
+The feature is a test-only one, since nothing is experimental right now.
 """
 
 from __future__ import annotations
@@ -34,13 +35,14 @@ from coffer.surfaces.http.feature_dependencies import (
     set_feature_service,
 )
 from coffer.surfaces.http.feature_routes import router as feature_router
+from tests.support.features import FAKE_FEATURE, register_fake_feature
 
 runner = CliRunner()
 _TOKEN = "cli-token"
 
 
 def _gated() -> APIRouter:
-    r = APIRouter(prefix="/api/v1/sync", dependencies=[Depends(require_feature("vault_sync"))])
+    r = APIRouter(prefix="/api/v1/sync", dependencies=[Depends(require_feature(FAKE_FEATURE))])
 
     @r.post("/run")
     async def sync_run() -> dict[str, str]:
@@ -55,6 +57,7 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     (h / ".coffer").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(h))
     monkeypatch.delenv(daemon_config.FEATURES_ENV, raising=False)
+    register_fake_feature(monkeypatch, route_prefixes=("/api/v1/sync",))
     prior = feature_dependencies._feature_service
     set_active_token(_TOKEN)
 
@@ -97,21 +100,21 @@ def test_setting_a_pinned_feature_exits_conflict(
 ) -> None:
     """A feature pinned by ``COFFER_FEATURES`` cannot be switched from the
     CLI; the refusal names the variable rather than pretending to write."""
-    monkeypatch.setenv(daemon_config.FEATURES_ENV, "knowledge=off")
+    monkeypatch.setenv(daemon_config.FEATURES_ENV, f"{FAKE_FEATURE}=off")
     set_feature_service(build_feature_service())
-    res = runner.invoke(cli_app, ["config", "set", "feature.knowledge", "on"])
+    res = runner.invoke(cli_app, ["config", "set", f"feature.{FAKE_FEATURE}", "on"])
     assert res.exit_code == int(ExitCode.CONFLICT), res.output
     assert "COFFER_FEATURES" in res.stderr
     assert not (home / ".coffer" / "daemon-config.json").exists()
 
 
 def test_a_switched_off_features_command_prints_one_line_and_exits_1(home: Path) -> None:
-    off = runner.invoke(cli_app, ["config", "set", "feature.vault_sync", "off"])
+    off = runner.invoke(cli_app, ["config", "set", f"feature.{FAKE_FEATURE}", "off"])
     assert off.exit_code == 0, off.output
     res = runner.invoke(cli_app, ["sync", "now"])
     assert res.exit_code == 1
     [line] = res.stderr.splitlines()
-    assert line.startswith("vault_sync is switched off on this machine — run: coffer ")
+    assert line.startswith(f"{FAKE_FEATURE} is switched off on this machine — run: coffer ")
 
 
 def test_render_http_error_maps_feature_disabled_to_one_line(
@@ -123,8 +126,8 @@ def test_render_http_error_maps_feature_disabled_to_one_line(
         json={
             "error": {
                 "code": "FEATURE_DISABLED",
-                "message": "vault_sync is switched off",
-                "details": {"feature": "vault_sync"},
+                "message": f"{FAKE_FEATURE} is switched off",
+                "details": {"feature": FAKE_FEATURE},
             }
         },
         request=request,
@@ -133,4 +136,4 @@ def test_render_http_error_maps_feature_disabled_to_one_line(
     code = cli_client.render_http_error(err, verbose=False)
     assert code == ExitCode.GENERIC
     [line] = capsys.readouterr().err.splitlines()
-    assert line.startswith("vault_sync is switched off on this machine — run: coffer ")
+    assert line.startswith(f"{FAKE_FEATURE} is switched off on this machine — run: coffer ")

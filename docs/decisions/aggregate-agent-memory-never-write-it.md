@@ -182,10 +182,9 @@ path to read the bodies as files.**
    [Agent Hook Installation](agent-hook-installation.md). A channel-driven turn
    receives the same payload through the system-prompt append the turn platform
    already composes, with no hook.
-7. **Behind the `memory` experimental feature.** Off by default on the stable
-   channel. While it is off, aggregation and distil skip their rounds, the
-   `coffer-guide` skill does not document the memory layer, and every delivery
-   hook is withdrawn.
+7. **Always on.** Memory was an experimental feature, off by default on the
+   stable channel, until it graduated at 1.0; aggregation, distil and delivery
+   now run on every build.
 
 ## Consequences
 

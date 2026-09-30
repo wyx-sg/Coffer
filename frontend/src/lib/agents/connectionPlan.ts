@@ -24,8 +24,6 @@ export interface PlanAgent {
 }
 
 export interface PlanOptions {
-  /** Whether the memory feature is on (the hook part applies only then). */
-  memoryOn: boolean;
   /** Words written where a value is not known yet. */
   placeholders: { uid: string; shim: string };
 }
@@ -56,11 +54,11 @@ export function connectionFiles(row: PlanAgent["row"]): Record<ConnectionPartKey
 }
 
 /** The parts a connect would install: every applicable part not yet installed. */
-export function partsToInstall(agent: PlanAgent, memoryOn: boolean): ConnectionPartKey[] {
+export function partsToInstall(agent: PlanAgent): ConnectionPartKey[] {
   if (agent.parts) {
     return agent.parts.filter((p) => !p.installed).map((p) => p.key as ConnectionPartKey);
   }
-  return memoryOn ? ["mcp", "memory_hook"] : ["mcp"];
+  return ["mcp", "memory_hook"];
 }
 
 /** The parts a disconnect would remove: every installed part. */
@@ -132,7 +130,7 @@ export function planConnect(agents: readonly PlanAgent[], opts: PlanOptions): Ch
         op: "add",
       });
     }
-    for (const key of partsToInstall(agent, opts.memoryOn)) {
+    for (const key of partsToInstall(agent)) {
       items.push(partItem(agent, key, "add", opts));
     }
     return items;

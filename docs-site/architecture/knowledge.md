@@ -7,10 +7,6 @@ description: How Coffer's knowledge layer works — a directory of Markdown file
 
 This page explains how Coffer's knowledge layer is built: why it is plain files with no index, how new material becomes documents through curation, how every write is kept as a version you can restore or undo, how the catalogue reaches agents through the `coffer-guide` skill, and how it coexists with vault sync. It is for engineers who want the mechanism and the reasoning. For day-to-day use, see the [Knowledge guide](/guides/knowledge).
 
-::: info Experimental feature
-Knowledge is an [experimental feature](/guides/experimental-features) (`knowledge`). It is off by default on the stable channel and on for development builds. Switching it off hides its routes, its builtin tool and its section of the guide skill. It keeps every file.
-:::
-
 ## The problem
 
 Knowledge is what a developer has learned about their working environment: which team owns a service, the conventions of a repository, a trap and how to avoid it. Several agents need to read it, and people and agents both need to add to it. Three failure modes shaped the design:
@@ -35,7 +31,7 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 | No document may name another knowledge file. This is enforced at the write. | Paths move as the corpus is reorganised. The catalogue resolves subjects to paths, and the catalogue is generated. |
 | No retrieval tool. The catalogue rides in Coffer's own skill. | Agents read files with the tools they already use. The layer's job is to put the right absolute paths in front of the model. |
 | One agent-facing tool, `coffer__write`. | Writing is where an agent needs Coffer: the collection, the inbox, the frontmatter and the audit entry are Coffer's to decide. |
-| No gate per collection: no per-agent reach and no enabled switch. Every collection is served to every agent; the `knowledge` feature switches the whole layer. | The skill hands every agent the whole knowledge root. A per-agent filter or a switched-off collection would narrow a list while still disclosing the root. |
+| No gate per collection: no per-agent reach and no enabled switch. Every collection is served to every agent. | The skill hands every agent the whole knowledge root. A per-agent filter or a switched-off collection would narrow a list while still disclosing the root. |
 
 ## The collection tree
 
@@ -286,7 +282,7 @@ On each tick the worker does the following:
 
 1. **Re-renders the guide skill**, before and regardless of the gate. Creating or deleting a collection changes what every agent is told, even on a machine where curation is off or that is not the owner. A render that produces the same bytes writes nothing.
 2. **Records edits on disk.** Anything changed in the tree since Coffer's last commit, such as a person's editor or an agent's file tools, is committed as an edit on disk, whether or not the gate lets curation run, so the history stays current.
-3. **Checks the gate** (`curation_may_run`). The `knowledge` feature must be on, `auto_curate_enabled` must be on (the default), and `curate_owner_machine_id` must name this machine or be unset. With the `vault_sync` feature on, the pass also does not run while a converge round is waiting on the user for a held deletion or an unresolved conflict. With `vault_sync` off, only the pass's own switch is read, because a single-machine vault has nobody to duplicate its work.
+3. **Checks the gate** (`curation_may_run`). `auto_curate_enabled` must be on (the default), and `curate_owner_machine_id` must name this machine or be unset. The pass also does not run while a converge round is waiting on the user for a held deletion or an unresolved conflict.
 4. **Takes the vault-write lock**, the same `asyncio.Lock` a converge round holds. See [Locking with sync](#locking-with-sync).
 5. **Works through each collection**, identified by uid; every collection is listed. Pending items are all inbox material, oldest first, then edited documents, oldest first. The worker claims the collection in the in-process upkeep-run registry and skips it if a manual run holds it. It re-reads the pending list inside the claim, pushes items cut off last time behind the rest, and runs at most five passes (`MAX_PASSES_PER_SWEEP`). `no_model` or `failed` ends that collection's sweep. `truncated` does not, so one stubborn item cannot starve the rest.
 6. **Waits for the next tick.** The interval defaults to one hour; a manual run drains a collection at once when something is wanted sooner. It is re-read while the wait runs, so a change made with `coffer config set engine.upkeep.curate.interval` or in Settings applies within a slice rather than after a wait committed at boot.
@@ -382,8 +378,6 @@ The catalogue reaches agents through `coffer-guide`, Coffer's own skill. It is a
 - **The frontmatter description.** This is the only part that is always in a model's context. It names Coffer and its builtin tools, and the subjects the collections cover, each taken from the first sentence of the collection's README. It is capped at 1024 characters, the tightest limit among skill importers, by dropping whole subjects from the tail rather than cutting a sentence. It is emitted through a YAML dumper with unlimited width, so a README containing `: ` or ` #` cannot break or silently truncate the block.
 - **The body.** First comes the hand-written manual shipped as package data (`application/knowledge/skill_assets/coffer-guide.md`). It covers the builtin tools, the tool-tiering contract, that Coffer never writes an agent's memory, and that no Coffer tool waits on an approval. The generated catalogue follows: the knowledge root, and for each collection every document's collection-relative path, title and description. The manual tells the agent to read files with its own tools, to use `coffer__write` for durable facts, and that it may edit a document directly.
 
-The manual marks spans with `<!-- when:knowledge -->` and `<!-- when:memory -->`. A span is dropped whole while its experimental feature is off, so the guide never documents a tool the gateway would answer as unknown.
-
 A body is paid for only when a model opens it; a description is resident in every session. That is why Coffer ships one skill rather than a set. A catalogue entry costs roughly 40 tokens; one measured catalogue of 58 documents came to about 5.2K tokens.
 
 ### Deterministic, byte-identical output
@@ -394,7 +388,7 @@ Determinism pays off locally. `BuiltinSkillSeed.seed` compares the rendered text
 
 ### Why it is withheld from sync
 
-The guide depends on this machine's own switches: which of the `knowledge` and `memory` features are on, and where the knowledge root sits. Two machines with identical knowledge but different switches render different bytes, each correct where it is. If either published its copy, the other would overwrite it, re-render on its next tick and publish back, producing a commit and an audit event per tick on both machines indefinitely. So the skill kind declares this one row derived (`Kind.converges_row` in `application/skill/kind.py`), and vault sync leaves both the row and its master folder alone in both directions. Each machine renders its own. See [Vault sync](/architecture/vault-sync).
+The guide depends on this machine's own inputs: where its knowledge root and memory root sit. Two machines with identical knowledge but different roots render different bytes, each correct where it is. If either published its copy, the other would overwrite it, re-render on its next tick and publish back, producing a commit and an audit event per tick on both machines indefinitely. So the skill kind declares this one row derived (`Kind.converges_row` in `application/skill/kind.py`), and vault sync leaves both the row and its master folder alone in both directions. Each machine renders its own. See [Vault sync](/architecture/vault-sync).
 
 ### The join and its triggers
 
@@ -403,8 +397,7 @@ The knowledge and skill kinds may not import each other. `surfaces/http/guide_wi
 - at boot, after the skill drift heal and before the background workers start;
 - after any curation pass that changed the corpus;
 - when a collection is created or deleted;
-- on every sweep tick, so a document someone added by hand is catalogued;
-- when the `knowledge` or `memory` feature is switched.
+- on every sweep tick, so a document someone added by hand is catalogued.
 
 ## Why no retrieval tool and no embeddings
 
@@ -418,7 +411,7 @@ Coffer embeds nothing. It has no vector store, no embedding model and no FTS ind
 - **Material waits until a pass runs.** An agent cannot read the inbox. The hourly sweep, manual runs, and promotion when no model is configured keep the wait short.
 - **The history grows with every write.** Nothing prunes it. It sits beside the documents and holds text that curation has since folded away or that was deleted.
 - **User content can leave the machine.** The internal model connection is the one place it does. Curation and an upload's generated description are the only things this layer sends there.
-- **Nothing here is access control.** An agent with shell tools can read any file under the knowledge root. Every collection is named to every agent; the only way to keep a collection from agents is to delete it or switch the `knowledge` feature off.
+- **Nothing here is access control.** An agent with shell tools can read any file under the knowledge root. Every collection is named to every agent; the only way to keep a collection from agents is to delete it.
 - **Losing read tools loses read telemetry.** `mcp_invocations` records writes only. The agents' own transcripts are the retroactive measure of reads.
 
 ## Where it lives in the code

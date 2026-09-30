@@ -10,7 +10,7 @@ import { useAgents } from "@/lib/hooks/useAgents";
 import { useChannels } from "@/lib/hooks/useChannels";
 import { useCustomToolGroups } from "@/lib/hooks/useCustomTools";
 import { useClis } from "@/lib/hooks/useClis";
-import { useFeatureEnabled, type FeatureKey } from "@/lib/hooks/useFeatures";
+import { isFeatureOn, type FeatureKey } from "@/lib/hooks/useFeatures";
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
 import { useMemoryPartitions } from "@/lib/hooks/useMemory";
 import { useProviders } from "@/lib/hooks/useProviders";
@@ -81,30 +81,13 @@ export const OBJECT_KINDS: readonly ObjectKind[] = [
   "cli",
 ];
 
-/** The experimental feature a kind belongs to; while it is not switched on the
- *  kind is not fetched and not listed. */
-export const KIND_FEATURE: Partial<Record<ObjectKind, FeatureKey>> = {
-  knowledge: "knowledge",
-  memory: "memory",
-};
-
-export function useFeatureMap(): Record<FeatureKey, boolean> {
-  const knowledge = useFeatureEnabled("knowledge") === true;
-  const memory = useFeatureEnabled("memory") === true;
-  const vaultSync = useFeatureEnabled("vault_sync") === true;
-  return useMemo(
-    () => ({ knowledge, memory, vault_sync: vaultSync }),
-    [knowledge, memory, vaultSync],
-  );
-}
-
 /** Every sidebar entry of a switched-on feature and every Settings tab, by the
  *  names the sidebar and the tabs use. */
-export function usePageItems(features: Record<FeatureKey, boolean>): PaletteItem[] {
+export function usePageItems(features: Record<FeatureKey, boolean> | null): PaletteItem[] {
   const { t } = useTranslation();
   return useMemo<PaletteItem[]>(() => {
-    const entries: PaletteItem[] = NAV_ENTRIES.filter(
-      (entry) => entry.feature === undefined || features[entry.feature],
+    const entries: PaletteItem[] = NAV_ENTRIES.filter((entry) =>
+      isFeatureOn(features, entry.feature),
     ).map((entry) => {
       const label = t(entry.labelKey);
       return {

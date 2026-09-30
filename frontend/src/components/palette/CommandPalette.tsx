@@ -18,18 +18,13 @@ import { useNavigate } from "react-router-dom";
 
 import { DialogOverlay } from "@/components/ui/dialog";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
+import { useFeatureMap } from "@/lib/hooks/useFeatures";
 import { useOpenSettings } from "@/lib/settingsModal";
 import { cn } from "@/lib/utils";
 import { Hint, PaletteRow, StatusLine } from "./PaletteParts";
 import { filterItems, objectItem, type ObjectKind, type PaletteItem } from "./paletteItems";
 import { KindSource } from "./KindSource";
-import {
-  KIND_FEATURE,
-  OBJECT_KINDS,
-  useFeatureMap,
-  usePageItems,
-  type KindState,
-} from "./paletteSources";
+import { OBJECT_KINDS, usePageItems, type KindState } from "./paletteSources";
 
 export interface CommandPaletteProps {
   open: boolean;
@@ -74,14 +69,15 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   );
 }
 
+const NO_KINDS: readonly ObjectKind[] = [];
+
 function PaletteBody({ close }: { close: () => void }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const openSettings = useOpenSettings();
   const features = useFeatureMap();
   // Objects are asked for once the daemon has answered: while it cannot be
-  // reached the palette lists Pages only, and until it answers the feature
-  // gates are not known, so neither is which kinds may be listed.
+  // reached the palette lists Pages only.
   const daemon = useDaemonStatus();
   const offline = daemon.isError;
   const reachable = !offline && daemon.data !== undefined;
@@ -95,16 +91,7 @@ function PaletteBody({ close }: { close: () => void }) {
     setKinds((prev) => ({ ...prev, [kind]: state }));
   }, []);
 
-  const liveKinds = useMemo(
-    () =>
-      !reachable
-        ? []
-        : OBJECT_KINDS.filter((kind) => {
-            const feature = KIND_FEATURE[kind];
-            return feature === undefined || features[feature];
-          }),
-    [reachable, features],
-  );
+  const liveKinds = reachable ? OBJECT_KINDS : NO_KINDS;
 
   const pageItems = usePageItems(features);
 

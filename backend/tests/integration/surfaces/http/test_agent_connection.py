@@ -98,7 +98,6 @@ def _parts(body: dict[str, Any]) -> dict[str, bool]:
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="connect installs every part that applies")
 def test_connect_installs_the_gateway_entry_and_the_memory_hook(home: pathlib.Path) -> None:
-    daemon_config.write_feature_setting("memory", True)
     with _client() as c:
         uid = _register(c)
         before = c.get(f"/api/v1/agents/{uid}/coffer-connection").json()
@@ -132,33 +131,17 @@ def test_connect_installs_the_gateway_entry_and_the_memory_hook(home: pathlib.Pa
         assert actors == {"user"}
 
 
-@pytest.mark.acceptance(
-    spec="agent-registry", scenario="connect leaves out a part whose feature is off"
-)
-def test_connect_with_memory_off_installs_only_the_gateway_entry(home: pathlib.Path) -> None:
-    daemon_config.write_feature_setting("memory", False)
-    with _client() as c:
-        uid = _register(c)
-        body = c.post(f"/api/v1/agents/{uid}/coffer-connection").json()
-        assert body["state"] == "connected"
-        assert [p["key"] for p in body["parts"]] == ["mcp"]
-        assert "coffer" in _claude_json(home)["mcpServers"]
-        assert not _hook_installed(home)
-        assert "memory_delivery_installed" not in _audit_types(c, uid)
-
-
 @pytest.mark.acceptance(spec="agent-registry", scenario="report a partly installed connection")
 def test_a_connection_missing_the_hook_reads_partial_and_connect_repairs_it(
     home: pathlib.Path,
 ) -> None:
-    # Connected while memory was off: the gateway entry only.
-    daemon_config.write_feature_setting("memory", False)
+    # Connected, then the hook taken out by hand: the gateway entry only.
     with _client() as c:
         uid = _register(c)
         c.post(f"/api/v1/agents/{uid}/coffer-connection")
-    # A later boot with memory on does not install the hook by itself — the
-    # page reports the gap, and connecting is the act that closes it.
-    daemon_config.write_feature_setting("memory", True)
+    (home / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
+    # A later boot does not install the hook by itself — the page reports the
+    # gap, and connecting is the act that closes it.
     with _client() as c:
         audit_before = _connection_events(c, uid)
         status = c.get(f"/api/v1/agents/{uid}/coffer-connection").json()
@@ -177,7 +160,6 @@ def test_a_connection_missing_the_hook_reads_partial_and_connect_repairs_it(
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="disconnect removes only Coffer's entries")
 def test_disconnect_removes_only_coffers_entries(home: pathlib.Path) -> None:
-    daemon_config.write_feature_setting("memory", True)
     (home / ".claude.json").write_text(
         json.dumps({"mcpServers": {"other": {"command": "other-server"}}}), encoding="utf-8"
     )
@@ -211,36 +193,6 @@ def test_disconnect_removes_only_coffers_entries(home: pathlib.Path) -> None:
         assert _connection_events(c, uid) == events
 
 
-def test_disconnect_takes_out_a_hook_left_while_memory_is_off(home: pathlib.Path) -> None:
-    """A part that does not apply now is still Coffer's to remove."""
-    daemon_config.write_feature_setting("memory", True)
-    with _client() as c:
-        uid = _register(c)
-        c.post(f"/api/v1/agents/{uid}/coffer-connection")
-    daemon_config.write_feature_setting("memory", False)
-    # Put a hook back by hand, as a stale one would be.
-    with _client() as c:
-        assert not _hook_installed(home)  # the boot withdrew it
-    (home / ".claude" / "settings.json").write_text(
-        json.dumps(
-            {
-                "hooks": {
-                    "SessionStart": [{"hooks": [{"type": "command", "command": f": {MARKER}; x"}]}]
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    with _client() as c:
-        # Not applicable, so not listed…
-        status = c.get(f"/api/v1/agents/{uid}/coffer-connection").json()
-        assert [p["key"] for p in status["parts"]] == ["mcp"]
-        # …but a disconnect removes it all the same.
-        c.delete(f"/api/v1/agents/{uid}/coffer-connection")
-    assert not _hook_installed(home)
-    assert "coffer" not in _claude_json(home).get("mcpServers", {})
-
-
 def test_connection_routes_404_for_an_unknown_agent(home: pathlib.Path) -> None:
     with _client() as c:
         for method in ("GET", "POST", "DELETE"):
@@ -257,7 +209,6 @@ def test_connect_without_a_shim_is_refused_and_writes_nothing(
         "coffer.application.agent.mcp_service.sysconfig.get_path", lambda _name: None
     )
     monkeypatch.setattr("coffer.application.agent.mcp_service.sys.executable", "/nonexistent/py")
-    daemon_config.write_feature_setting("memory", True)
     with _client() as c:
         uid = _register(c)
         r = c.post(f"/api/v1/agents/{uid}/coffer-connection")
@@ -307,7 +258,6 @@ def _patch_cli(monkeypatch: pytest.MonkeyPatch, c: TestClient) -> None:
 def test_cli_connect_show_and_disconnect(
     home: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    daemon_config.write_feature_setting("memory", True)
     with _client() as c:
         uid = _register(c)
         _patch_cli(monkeypatch, c)
@@ -340,7 +290,6 @@ def test_cli_connect_show_and_disconnect(
 def test_cli_show_reads_needs_repair_for_a_partial_connection(
     home: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    daemon_config.write_feature_setting("memory", True)
     with _client() as c:
         _register(c)
         _patch_cli(monkeypatch, c)

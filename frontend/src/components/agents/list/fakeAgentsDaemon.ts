@@ -18,7 +18,6 @@ export interface FakeDaemon {
   types: AgentTypeOut[];
   connections: Record<string, CofferConnection>;
   models: Record<string, string>;
-  memoryOn: boolean;
   calls: FakeCall[];
   /** Subfolder names per absolute path, for the folder browse. */
   folders: Record<string, string[]>;
@@ -54,7 +53,6 @@ export function fakeDaemon(init: Partial<FakeDaemon> = {}): FakeDaemon {
     types: [],
     connections: {},
     models: {},
-    memoryOn: true,
     calls: [],
     folders: {},
     pick: { available: true, path: null },
@@ -64,15 +62,18 @@ export function fakeDaemon(init: Partial<FakeDaemon> = {}): FakeDaemon {
   };
 }
 
-function parts(d: FakeDaemon, installed: boolean) {
-  const keys = d.memoryOn ? ["mcp", "memory_hook"] : ["mcp"];
-  return keys.map((key) => ({ key, installed, detail: installed ? `/bin/${key}` : null }));
+function parts(installed: boolean) {
+  return ["mcp", "memory_hook"].map((key) => ({
+    key,
+    installed,
+    detail: installed ? `/bin/${key}` : null,
+  }));
 }
 
 function connected(d: FakeDaemon, uid: string, on: boolean): CofferConnection {
   const next: CofferConnection = {
     state: on ? "connected" : "disconnected",
-    parts: parts(d, on),
+    parts: parts(on),
   };
   d.connections[uid] = next;
   return next;
@@ -102,7 +103,7 @@ export function fakeCallFor(d: FakeDaemon) {
       const uid = decodeURIComponent(conn[1]);
       if (method === "POST") return connected(d, uid, true);
       if (method === "DELETE") return connected(d, uid, false);
-      return d.connections[uid] ?? { state: "disconnected", parts: parts(d, false) };
+      return d.connections[uid] ?? { state: "disconnected", parts: parts(false) };
     }
     if (path === "/agents/types") return { types: d.types };
     if (path === "/agents" && method === "POST") {
@@ -131,7 +132,7 @@ export function fakeClientFor(d: FakeDaemon) {
   const ok = (data: unknown) => Promise.resolve({ data, error: undefined });
   return {
     GET: vi.fn((path: string, init?: { params?: { path?: { uid?: string } } }) => {
-      if (path === "/daemon/status") return ok({ features: { memory: d.memoryOn } });
+      if (path === "/daemon/status") return ok({ features: {} });
       if (path === "/resources/{uid}") {
         const uid = init?.params?.path?.uid ?? "";
         return ok({ uid, enabled: !d.disabled.includes(uid) });

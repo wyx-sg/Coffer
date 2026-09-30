@@ -462,37 +462,6 @@ remembered for the chat (see "Keep a chat's settings across its conversations").
 - **THEN** the model is set and the same card now offers that model's levels
 - **AND** tapping a level sets the effort for the next turn
 
-### Requirement: Save a sent document into a collection
-A document sent to a Coffer channel MUST be ingestible into a collection through
-the same conversion path the Knowledge page uses, so the phone and that page are
-two ends of one entrance (spec `knowledge`). `/kb` is the command that does it.
-The channel MUST confirm the collection with the owner before storing, and MUST
-NOT store anything from a non-owner. `/kb` is offered — in `/help` and in every
-registered menu — only while the knowledge feature is on; while it is off the
-word is still Coffer's and answers that knowledge is off.
-
-#### Scenario: a document sent to a channel is saved into a collection
-- **GIVEN** a paired owner who has sent a document to the channel,
-- **WHEN** the owner follows it with `/kb <collection>` naming a collection
-  that exists,
-- **THEN** the document is ingested into that collection through the same
-  conversion path the Knowledge page uses,
-- **AND** a `/kb` from anyone but the paired owner stores nothing.
-
-#### Scenario: a save that names no collection asks which one
-- **GIVEN** a paired owner who has sent a document but named no collection,
-- **WHEN** they send `/kb`,
-- **THEN** the channel offers the collections it may save into and stores
-  nothing until one is chosen — on a transport without buttons it lists them as
-  text,
-- **AND** a `/kb` with no document pending is refused in one line.
-
-#### Scenario: /kb is offered only while knowledge is on
-- **GIVEN** a paired channel
-- **WHEN** the knowledge feature is switched off and the owner sends `/help`
-- **THEN** the help lists every command but `/kb`, and `/kb` answers that
-  knowledge is off without saving anything
-
 ### Requirement: Tell a channel-driven agent it is on a chat channel
 A channel-originated turn MUST tell the agent it is bridged to a chat channel,
 not a terminal. The agent receives a short system-prompt note naming **where**
@@ -1475,14 +1444,13 @@ the help text, the typo guard (see "Pass unreserved slash text to the agent")
 and the per-command privacy flag (see "Keep non-answer chatter private in a
 group") are all rendered from one roster, so adding a command is one entry plus
 its handler, with no second list to forget. Each entry carries its description
-in English and Chinese, whether it belongs in a group's menu, and whether it
-needs the knowledge feature. A platform with no menu API (SeaTalk) introduces
+in English and Chinese, and whether it belongs in a group's menu. A platform with no menu API (SeaTalk) introduces
 the commands through the help card instead (see "Offer the commands as a help
 card"). Copy the owner already wrote, and the bot's name, are their branding
 decision and MUST NOT be overwritten.
 
 #### Scenario: the command menu matches the commands that exist
-- **GIVEN** the channel command roster, with knowledge on,
+- **GIVEN** the channel command roster,
 - **WHEN** the transport registers its private-chat command menu,
 - **THEN** every command the channel handles is registered.
 
@@ -2230,3 +2198,27 @@ lost. A transport that collapses details (Telegram) sends no such card.
   section
 - **THEN** the reply carries the head only, and a card titled `Deploy is green on
   live.` reads `2 more lines of details.` with the buttons Details and As file
+
+### Requirement: Save a sent document into a collection
+A document sent to a Coffer channel MUST be ingestible into a collection through
+the same conversion path the Knowledge page uses, so the phone and that page are
+two ends of one entrance (spec `knowledge`). `/kb` is the command that does it.
+The channel MUST confirm the collection with the owner before storing, and MUST
+NOT store anything from a non-owner. `/kb` is offered in `/help` and in every
+registered menu.
+
+#### Scenario: a document sent to a channel is saved into a collection
+- **GIVEN** a paired owner who has sent a document to the channel,
+- **WHEN** the owner follows it with `/kb <collection>` naming a collection
+  that exists,
+- **THEN** the document is ingested into that collection through the same
+  conversion path the Knowledge page uses,
+- **AND** a `/kb` from anyone but the paired owner stores nothing.
+
+#### Scenario: a save that names no collection asks which one
+- **GIVEN** a paired owner who has sent a document but named no collection,
+- **WHEN** they send `/kb`,
+- **THEN** the channel offers the collections it may save into and stores
+  nothing until one is chosen — on a transport without buttons it lists them as
+  text,
+- **AND** a `/kb` with no document pending is refused in one line.

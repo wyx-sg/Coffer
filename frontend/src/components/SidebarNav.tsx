@@ -8,7 +8,7 @@ import { Link, matchPath } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { AttentionDot } from "@/components/shell/AttentionDot";
 import { useAttentionSignals } from "@/lib/hooks/useAttentionSignals";
-import { useFeatureEnabled, type FeatureKey } from "@/lib/hooks/useFeatures";
+import { isFeatureOn, useFeatureMap } from "@/lib/hooks/useFeatures";
 import { NAV_GROUPS, type NavEntry } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
@@ -79,13 +79,9 @@ export function SidebarNav({ collapsed, pathname }: Props) {
   const { t } = useTranslation();
   const signals = useAttentionSignals();
   // An entry whose feature is off — or not known yet — is left out rather
-  // than flashed in and taken away again: on a stable build the three are off.
-  const on: Record<FeatureKey, boolean> = {
-    vault_sync: useFeatureEnabled("vault_sync") === true,
-    knowledge: useFeatureEnabled("knowledge") === true,
-    memory: useFeatureEnabled("memory") === true,
-  };
-  const shown = (entry: NavEntry) => entry.feature === undefined || on[entry.feature];
+  // than flashed in and taken away again.
+  const features = useFeatureMap();
+  const shown = (entry: NavEntry) => isFeatureOn(features, entry.feature);
   // Every entry matches by path prefix (segment-aware), so a detail page keeps
   // its list's entry marked: /agents/codex marks Agents. Overview is the index
   // and matches only itself.

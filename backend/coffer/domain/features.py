@@ -50,16 +50,18 @@ class ExperimentalFeature:
     kinds: tuple[str, ...] = ()
 
 
-EXPERIMENTAL_FEATURES: tuple[ExperimentalFeature, ...] = (
-    ExperimentalFeature(key="vault_sync", route_prefixes=("/api/v1/sync",)),
-    ExperimentalFeature(
-        key="knowledge", route_prefixes=("/api/v1/knowledge",), kinds=("knowledge",)
-    ),
-    ExperimentalFeature(key="memory", route_prefixes=("/api/v1/memory",), kinds=("memory",)),
-)
+#: Empty: no capability is experimental right now. Sync, knowledge and memory
+#: graduated at 1.0 — their entries and every gate that named them were
+#: deleted, and migration 0116 stripped their stored settings. A feature joins
+#: by adding one entry here; it leaves by deleting that entry, every gate that
+#: names it, and its stored settings (spec experimental-features "Declare the
+#: experimental features in one registry").
+EXPERIMENTAL_FEATURES: tuple[ExperimentalFeature, ...] = ()
 
-_BY_KEY: dict[str, ExperimentalFeature] = {f.key: f for f in EXPERIMENTAL_FEATURES}
-_BY_KIND: dict[str, str] = {kind: f.key for f in EXPERIMENTAL_FEATURES for kind in f.kinds}
+
+# The lookups read the registry on every call rather than from an index built
+# at import: it holds a handful of entries at most, and a test registers a fake
+# feature by replacing ``EXPERIMENTAL_FEATURES`` alone.
 
 
 def feature_keys() -> tuple[str, ...]:
@@ -68,21 +70,24 @@ def feature_keys() -> tuple[str, ...]:
 
 
 def is_registered(key: str) -> bool:
-    return key in _BY_KEY
+    return key in feature_keys()
 
 
 def get_feature(key: str) -> ExperimentalFeature:
     """The registered feature named ``key``; raise :class:`FeatureUnknown` otherwise."""
-    try:
-        return _BY_KEY[key]
-    except KeyError:
-        raise FeatureUnknown(key) from None
+    for feature in EXPERIMENTAL_FEATURES:
+        if feature.key == key:
+            return feature
+    raise FeatureUnknown(key)
 
 
 def feature_for_kind(kind: str) -> str | None:
     """The feature that owns resource kind ``kind``, or ``None`` for a kind
     that is always there."""
-    return _BY_KIND.get(kind)
+    for feature in EXPERIMENTAL_FEATURES:
+        if kind in feature.kinds:
+            return feature.key
+    return None
 
 
 def feature_for_path(path: str) -> str | None:

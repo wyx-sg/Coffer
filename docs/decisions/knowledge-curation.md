@@ -201,9 +201,6 @@ reverted.**
   on a single-machine vault — two machines folding the same material would
   write it into two different documents that git merges cleanly
   ([One Owner Machine for Unattended Rewrites](single-owner-machine-for-unattended-rewrites.md)).
-  While the `vault_sync` feature is off, the vault is treated as single-machine
-  and only the pass's own switch is read. While the `knowledge` feature is off,
-  the sweep skips its rounds (`surfaces/http/curation_wiring.py`).
 
 ## Consequences
 

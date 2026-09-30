@@ -45,8 +45,7 @@ like the others: an agent *uses* the vault rather than living in it.
 Agents are stored as resources of kind `agent` and get the framework's CRUD,
 validation and audit, but the UI surfaces them on their own axis and never in
 Resources. The sidebar lists only surfaces that ship: no "coming soon" rows,
-and an entry belonging to a switched-off experimental feature (Knowledge,
-Memory, Sync) is left out rather than shown disabled, and its routes are
+and an entry belonging to a switched-off experimental feature is left out rather than shown disabled, and its routes are
 gated the same way (`gated(...)` in `frontend/src/router.tsx`).
 
 Each kind has its own bespoke list and detail pages under `pages/`, its

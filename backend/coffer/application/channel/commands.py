@@ -65,7 +65,6 @@ class ChannelCommands:
         model_suggestions: ModelSuggestionPort,
         collections: CollectionCatalogPort,
         ingest: IngestPort,
-        knowledge_enabled: Callable[[], bool] = lambda: True,
         running_in: Callable[[str, str, str], str | None] = lambda *_: None,
         running_in_chat: Callable[[str, str], list[str]] = lambda *_: [],
     ) -> None:
@@ -82,8 +81,6 @@ class ChannelCommands:
         self._model_suggestions = model_suggestions
         self._collections = collections
         self._ingest = ingest
-        #: Whether the knowledge feature is on right now; `/kb` and `/help` read it.
-        self._knowledge_enabled = knowledge_enabled
 
     async def handle(
         self,

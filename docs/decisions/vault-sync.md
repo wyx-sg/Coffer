@@ -280,10 +280,10 @@ Rules a future change must respect:
   output never travels ([Sync Withholds Derived Output](sync-withholds-derived-output.md));
   conversations, the audit log and MCP invocation records stay machine-local
   (spec vault-sync "Keep machine-local state out of the repository").
-- The whole capability is the `vault_sync` experimental feature
-  (`domain/features.py`), off by default on the stable channel: while off, the
-  `/api/v1/sync` routes answer `FEATURE_DISABLED` and the worker skips its
-  rounds ([Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md)).
+- The capability was the `vault_sync` experimental feature, off by default on
+  the stable channel, until it graduated at 1.0
+  ([Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md)).
+  It is now always on, and a vault converges only once a remote is configured.
 
 ## Consequences
 
