@@ -114,6 +114,7 @@ function renderAt(path = "/mcp-servers") {
                   }
                 />
               ))}
+              <Route path="*" element={<Probe />} />
             </Routes>
           </MemoryRouter>
         </ToastProvider>
@@ -238,5 +239,24 @@ describe("ResourcesPage", () => {
     const bar = screen.getByRole("region", { name: /selected mcp servers/i });
     expect(within(bar).getByRole("button", { name: /reach/i })).toBeInTheDocument();
     expect(within(bar).getByRole("button", { name: /delete/i })).toBeInTheDocument();
+  });
+  // scenario (web-ui, revise-web-ui-ia 7.14d): "the MCP servers list leaves custom tools out"
+  test("leaves custom-tool groups (http_api servers) out of the MCP servers list", () => {
+    const group = server("u-ct", "billing", {
+      config: { transport: { type: "http_api", base_url: "https://billing.example" } },
+    } as unknown as Partial<ResourceOut>);
+    stubQuery({ data: [group, server("u-gh", "github")] });
+    renderAt();
+    expect(screen.getByText("github")).toBeInTheDocument();
+    expect(screen.queryByText("billing")).toBeNull();
+  });
+
+  test("a custom-tool group's MCP server address opens its Custom tools page", async () => {
+    const group = server("u-ct", "billing", {
+      config: { transport: { type: "http_api", base_url: "https://billing.example" } },
+    } as unknown as Partial<ResourceOut>);
+    stubQuery({ data: [group] });
+    renderAt("/mcp-servers/billing/tools");
+    await waitFor(() => expect(where.url).toBe("/custom-tools/billing"));
   });
 });

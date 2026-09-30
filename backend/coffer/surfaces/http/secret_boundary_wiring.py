@@ -89,6 +89,11 @@ def get_secret_boundary() -> SecretBoundary:
     return _boundary
 
 
+def optional_secret_boundary() -> SecretBoundary | None:
+    """The boundary once the daemon has built it; None in a bare test app."""
+    return _boundary
+
+
 def get_presence_grants() -> PresenceGrants:
     if _grants is None:
         raise RuntimeError("presence grants not initialised")
@@ -223,6 +228,7 @@ __all__ = [
     "init_secret_boundary",
     "make_master_key_manager",
     "on_approval_applied",
+    "optional_secret_boundary",
     "refresh_approvals",
     "register_destination_source",
     "register_resource_destination",

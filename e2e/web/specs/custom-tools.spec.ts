@@ -1,0 +1,189 @@
+// e2e/web/specs/custom-tools.spec.ts
+//
+// The Custom tools page in a real browser against the isolated daemon (change
+// revise-web-ui-ia, spec web-ui "Manage custom tools on their own page"): an
+// OpenAPI file imported into a new group, the group page with its tools, the
+// tool drawer's Test calling a real upstream (a tiny HTTP server this spec
+// starts on 127.0.0.1), and a group created over REST staying off the MCP
+// servers page. Plain tests until the change is archived (its task 7.14d).
+
+import { expect, test } from "@playwright/test";
+import * as http from "node:http";
+import type { AddressInfo } from "node:net";
+import { beforeEachInjectToken, readDaemonToken } from "./_helpers";
+
+beforeEachInjectToken();
+
+let upstream: http.Server;
+let upstreamUrl = "";
+
+test.beforeAll(async () => {
+  upstream = http.createServer((req, res) => {
+    const match = /^\/items\/([^/?]+)/.exec(req.url ?? "");
+    res.setHeader("Content-Type", "application/json");
+    if (req.method === "GET" && match) {
+      res.end(JSON.stringify({ id: decodeURIComponent(match[1]), ok: true }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+  await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+  upstreamUrl = `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`;
+});
+
+test.afterAll(async () => {
+  await new Promise<void>((resolve) => upstream.close(() => resolve()));
+});
+
+/** A throwaway group name: lowercase, digits, up to 24 characters. */
+function groupName(prefix: string): string {
+  return `${prefix}${Date.now().toString(36)}`;
+}
+
+async function api(method: string, route: string, body?: unknown): Promise<Response> {
+  const { token, port } = readDaemonToken();
+  return fetch(`http://127.0.0.1:${port}/api/v1${route}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Coffer-Token": token,
+      "X-Coffer-Actor": "e2e",
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+async function deleteGroup(name: string): Promise<void> {
+  await api("DELETE", `/custom-tools/${encodeURIComponent(name)}`).catch(() => undefined);
+}
+
+function spec(): string {
+  return JSON.stringify({
+    openapi: "3.0.3",
+    info: { title: "Items API", version: "1.0.0" },
+    servers: [{ url: upstreamUrl }],
+    paths: {
+      "/items/{id}": {
+        get: {
+          operationId: "getItem",
+          summary: "Read one item",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          responses: { "200": { description: "The item" } },
+        },
+      },
+      "/items": {
+        post: {
+          operationId: "createItem",
+          summary: "Create an item",
+          requestBody: {
+            content: {
+              "application/json": {
+                schema: { type: "object", properties: { name: { type: "string" } } },
+              },
+            },
+          },
+          responses: { "201": { description: "Created" } },
+        },
+      },
+    },
+  });
+}
+
+test("an OpenAPI file becomes a group, and a tool's Test calls the API from the drawer", async ({
+  page,
+}) => {
+  const name = groupName("cte2e");
+  try {
+    await page.goto("/custom-tools");
+    await page.getByRole("button", { name: "Add custom tool" }).first().click();
+    const choose = page.getByRole("dialog");
+    await choose.getByLabel("Group name").fill(name);
+    await choose.getByRole("radio", { name: /Import an OpenAPI spec/ }).click();
+    await choose.getByRole("button", { name: "Continue" }).click();
+
+    const importDialog = page.getByRole("dialog", { name: "Import an OpenAPI spec" });
+    await importDialog.getByRole("radio", { name: "File" }).click();
+    await importDialog.locator('input[type="file"]').setInputFiles({
+      name: "items.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(spec()),
+    });
+    await expect(importDialog.getByText("Loaded · 2 operations")).toBeVisible();
+    await expect(importDialog.getByLabel("Base URL")).toHaveValue(upstreamUrl);
+    await importDialog.getByRole("button", { name: "Review tools" }).click();
+    // GET operations start picked; the POST one waits to be turned on.
+    await expect(importDialog.getByRole("checkbox", { name: "get_item" })).toBeChecked();
+    await expect(importDialog.getByRole("checkbox", { name: "create_item" })).not.toBeChecked();
+    await importDialog.getByRole("button", { name: "Create group with 1 tool" }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}$`));
+    await expect(page.getByText(`${name} · Imported from OpenAPI`)).toBeVisible();
+    await expect(page.getByRole("tablist")).toHaveCount(0);
+    const tools = page.getByRole("region", { name: /Tools · 1 of 1 on/ });
+    await expect(tools.getByText("GET /items/{id}")).toBeVisible();
+
+    await tools.getByText("get_item", { exact: true }).click();
+    const drawer = page.getByRole("dialog");
+    await drawer.getByLabel("Value for id").fill("7");
+    await drawer.getByRole("button", { name: "Run" }).click();
+    const result = drawer.getByTestId("custom-tool-test-result");
+    await expect(result).toContainText("200 OK");
+    await expect(result).toContainText('"id":"7"');
+    await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}$`));
+  } finally {
+    await deleteGroup(name);
+  }
+});
+
+test("a group made over REST is listed on Custom tools and left off MCP servers", async ({
+  page,
+}) => {
+  const name = groupName("ctrest");
+  const created = await api("POST", "/custom-tools", {
+    name,
+    base_url: upstreamUrl,
+    tools: [
+      {
+        name: "get_item",
+        description: "Read one item",
+        method: "GET",
+        path: "/items/{id}",
+        input_schema: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+    ],
+  });
+  expect(created.status).toBe(201);
+  try {
+    await page.goto("/custom-tools");
+    const healthy = page.getByRole("region", { name: "Healthy" });
+    await expect(healthy.getByText(name, { exact: true })).toBeVisible();
+
+    await page.goto("/mcp-servers");
+    await expect(page.getByRole("heading", { level: 1, name: "MCP servers" })).toBeVisible();
+    await expect(page.getByText(name, { exact: true })).toHaveCount(0);
+
+    // Its MCP-server address opens its Custom tools page.
+    await page.goto(`/mcp-servers/${name}`);
+    await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}$`));
+
+    // A tool's switch saves at once.
+    await page
+      .getByRole("switch", { name: "Turn get_item on or off" })
+      .click();
+    await expect
+      .poll(async () => {
+        const group = (await (await api("GET", `/custom-tools/${name}`)).json()) as {
+          tools: { name: string; enabled: boolean }[];
+        };
+        return group.tools[0].enabled;
+      })
+      .toBe(false);
+  } finally {
+    await deleteGroup(name);
+  }
+});

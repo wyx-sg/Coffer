@@ -55,6 +55,8 @@ describe("objectItem", () => {
   test("every kind has a detail route: an agent by type, by name where it is fixed, by uid where it is not", () => {
     const o = (uid: string) => ({ uid, name: `${uid}-name` });
     expect(objectPath("mcpServer", o("m1"))).toBe("/mcp-servers/m1-name");
+    // scenario (web-ui, revise-web-ui-ia 7.14d): "palette Objects include custom-tool groups"
+    expect(objectPath("customTool", o("g1"))).toBe("/custom-tools/g1-name");
     expect(objectPath("skill", o("s1"))).toBe("/skills/s1-name");
     expect(objectPath("provider", o("p"))).toBe("/model-providers/p");
     expect(objectPath("knowledge", o("k"))).toBe("/knowledge/k");
@@ -62,5 +64,11 @@ describe("objectItem", () => {
     expect(objectPath("channel", o("c"))).toBe("/channels/c");
     expect(objectPath("agent", o("a"))).toBe("/agents/a");
     expect(objectPath("agent", { ...o("a"), type: "claude_code" })).toBe("/agents/claude_code");
+  });
+
+  test("a CLI opens its page by its command, and is found by its title too", () => {
+    const item = objectItem("cli", { uid: "gh", name: "gh", title: "GitHub CLI" }, "CLI");
+    expect(item.target).toEqual({ type: "route", to: "/clis/gh" });
+    expect(item.haystack).toEqual(["GitHub CLI", "gh"]);
   });
 });

@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from coffer.application.mcp.discovery import CapabilityDiscovery
+from coffer.domain.credential_errors import SecretBindingPending
 from coffer.domain.errors import (
     CredentialLocked,
     CredentialMissing,
@@ -85,6 +86,10 @@ async def _one(
         # problem alone and must not take down the whole aggregate.
         CredentialLocked,
         CredentialMissing,
+        # A secret waiting for a person's approval withholds that one server
+        # (spec mcp-gateway "Spawn a server with a secret only once its
+        # binding is approved"); the rest of the list still answers.
+        SecretBindingPending,
     ) as e:
         # Rendered into the message, not extra=: the configured log format does
         # not emit extra fields, so the previous call site produced warnings
@@ -101,11 +106,18 @@ async def _one(
 
 
 def _tool_entry(t: Any) -> dict[str, Any]:
-    return {
+    entry: dict[str, Any] = {
         "name": t.prefixed_name,
         "description": t.description,
         "inputSchema": t.input_schema,
     }
+    # The upstream's MCP annotations reach the agent as they were declared, so
+    # its own approval prompt can tell a read from a write (spec mcp-gateway
+    # "Annotate every tool with whether it changes data").
+    annotations = getattr(t, "annotations", None)
+    if annotations:
+        entry["annotations"] = annotations
+    return entry
 
 
 def _resource_entry(r: Any) -> dict[str, Any]:
@@ -156,17 +168,24 @@ async def list_tools_across(
     discovery: CapabilityDiscovery,
     ensure_subscribed: EnsureSubscribed,
     servers: list[str],
+    hidden: frozenset[str] = frozenset(),
 ) -> AggregateOutcome:
     """Returns the outcome, not a bare list: the tools path is the one that
     needs to know which servers failed so it can retry them
-    (ADR tool-overload-tier-the-list-search-the-rest)."""
-    return await _aggregate(
+    (ADR tool-overload-tier-the-list-search-the-rest). ``hidden`` names the
+    custom tools the per-tool gate leaves out for this agent
+    (``gateway_tool_gate``)."""
+    outcome = await _aggregate(
         discovery.list_tools,
         ensure_subscribed,
         servers,
         failure_event="mcp.gateway.list_tools.upstream_failed",
         project=_tool_entry,
     )
+    if not hidden:
+        return outcome
+    kept = [t for t in outcome.items if t["name"] not in hidden]
+    return AggregateOutcome(items=kept, failed_servers=outcome.failed_servers)
 
 
 async def list_resources_across(

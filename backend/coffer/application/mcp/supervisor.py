@@ -25,11 +25,7 @@ from coffer.domain.errors import (
     UpstreamUnavailable,
 )
 from coffer.domain.mcp.secret_target import mcp_destination
-from coffer.domain.mcp.server_config import (
-    HttpTransport,
-    MCPServerConfig,
-    StdioTransport,
-)
+from coffer.domain.mcp.server_config import AnyTransport, MCPServerConfig
 from coffer.domain.resource import Resource
 
 # A factory the composition root injects to build connections without
@@ -45,7 +41,7 @@ from coffer.domain.resource import Resource
 # rename (ADR resource-identity-is-an-immutable-uid).
 UpstreamFactory = Callable[
     [
-        HttpTransport | StdioTransport,
+        AnyTransport,
         dict[str, str],
         int,
         int,
@@ -272,27 +268,25 @@ class SubprocessSupervisor:
     async def _build_connection(
         self, resource: Resource, config: MCPServerConfig
     ) -> UpstreamConnectionPort:
-        if isinstance(config.transport, StdioTransport | HttpTransport):
-            # materialize() is a synchronous, potentially-blocking
-            # store read (sqlite, or the OS keychain in legacy setups).
-            # Offload to a thread so a slow read can't freeze the whole
-            # event loop and stall every other concurrent session.
-            # Named destination: the boundary injects nothing into a target
-            # nobody approved (spec credentials "Hold a secret for a new
-            # destination until a person approves it").
-            overlay = await asyncio.to_thread(
-                self._credentials.materialize,
-                config.transport.credential_refs,
-                mcp_destination(resource.uid, resource.name, config),
-            )
-            return self._upstream_factory(
-                config.transport,
-                overlay,
-                config.spawn_timeout_seconds,
-                config.request_timeout_seconds,
-                resource,
-            )
-        raise UpstreamUnavailable(f"unsupported transport type: {type(config.transport).__name__}")
+        # materialize() is a synchronous, potentially-blocking store read
+        # (sqlite, or the OS keychain in legacy setups). Offload to a thread
+        # so a slow read can't freeze the whole event loop and stall every
+        # other concurrent session. Named destination: the boundary injects
+        # nothing into a target nobody approved (spec credentials "Hold a
+        # secret for a new destination until a person approves it") — for a
+        # custom-tool group the target is its base URL.
+        overlay = await asyncio.to_thread(
+            self._credentials.materialize,
+            config.transport.credential_refs,
+            mcp_destination(resource.uid, resource.name, config),
+        )
+        return self._upstream_factory(
+            config.transport,
+            overlay,
+            config.spawn_timeout_seconds,
+            config.request_timeout_seconds,
+            resource,
+        )
 
     async def evict(self, server_name: str) -> None:
         """Drop this server's connection — after a crash, a delete, or a rename.

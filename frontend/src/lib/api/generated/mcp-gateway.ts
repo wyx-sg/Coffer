@@ -4,6 +4,169 @@
  */
 
 export interface paths {
+    "/api/v1/custom-tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Groups */
+        get: operations["list_groups_api_v1_custom_tools_get"];
+        put?: never;
+        /** Create Group */
+        post: operations["create_group_api_v1_custom_tools_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-tools/openapi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read Openapi
+         * @description Read a document into draft tools; saves nothing.
+         */
+        post: operations["read_openapi_api_v1_custom_tools_openapi_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-tools/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Group */
+        get: operations["get_group_api_v1_custom_tools__name__get"];
+        put?: never;
+        post?: never;
+        /** Delete Group */
+        delete: operations["delete_group_api_v1_custom_tools__name__delete"];
+        options?: never;
+        head?: never;
+        /** Update Group */
+        patch: operations["update_group_api_v1_custom_tools__name__patch"];
+        trace?: never;
+    };
+    "/api/v1/custom-tools/{name}/reimport": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Reimport */
+        post: operations["apply_reimport_api_v1_custom_tools__name__reimport_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-tools/{name}/reimport/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Reimport */
+        post: operations["preview_reimport_api_v1_custom_tools__name__reimport_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-tools/{name}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Tool
+         * @description Run a draft tool once; saves nothing and records no invocation.
+         */
+        post: operations["test_tool_api_v1_custom_tools__name__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-tools/{name}/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Tool */
+        post: operations["add_tool_api_v1_custom_tools__name__tools_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-tools/{name}/tools/{tool}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Tool */
+        delete: operations["delete_tool_api_v1_custom_tools__name__tools__tool__delete"];
+        options?: never;
+        head?: never;
+        /** Update Tool */
+        patch: operations["update_tool_api_v1_custom_tools__name__tools__tool__patch"];
+        trace?: never;
+    };
+    "/api/v1/custom-tools/{name}/tools/{tool}/reach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Tool Reach */
+        put: operations["set_tool_reach_api_v1_custom_tools__name__tools__tool__reach_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mcp/invocations": {
         parameters: {
             query?: never;
@@ -301,6 +464,300 @@ export interface components {
             /** Tools */
             tools: components["schemas"]["MCPToolView"][];
         };
+        /** CustomToolAuthIn */
+        CustomToolAuthIn: {
+            /**
+             * Header
+             * @default Authorization
+             */
+            header?: string;
+            /**
+             * Prefix
+             * @default
+             */
+            prefix?: string;
+            /** Secret */
+            secret?: string | null;
+        };
+        /** CustomToolAuthOut */
+        CustomToolAuthOut: {
+            /** Header */
+            header: string;
+            /** Prefix */
+            prefix: string;
+            /** Secret */
+            secret: string | null;
+            /**
+             * Secret State
+             * @enum {string}
+             */
+            secret_state: "none" | "present" | "missing" | "pending_approval";
+        };
+        /** CustomToolGroupIn */
+        CustomToolGroupIn: {
+            /** Agents */
+            agents?: string[] | null;
+            auth?: components["schemas"]["CustomToolAuthIn"] | null;
+            /** Base Url */
+            base_url: string;
+            /** Description */
+            description?: string | null;
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            };
+            /** Name */
+            name: string;
+            source?: components["schemas"]["OpenApiSourceIn"] | null;
+            /**
+             * Timeout Seconds
+             * @default 30
+             */
+            timeout_seconds?: number;
+            /** Tools */
+            tools?: components["schemas"]["CustomToolIn"][];
+        };
+        /** CustomToolGroupListOut */
+        CustomToolGroupListOut: {
+            /** Groups */
+            groups: components["schemas"]["CustomToolGroupOut"][];
+        };
+        /** CustomToolGroupOut */
+        CustomToolGroupOut: {
+            auth: components["schemas"]["CustomToolAuthOut"] | null;
+            /** Base Url */
+            base_url: string;
+            /** Calls 24H */
+            calls_24h: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Failures 24H */
+            failures_24h: number;
+            /** Headers */
+            headers: {
+                [key: string]: string;
+            };
+            /**
+             * Health
+             * @enum {string}
+             */
+            health: "failing" | "attention" | "healthy" | "idle" | "off";
+            /** Health Reason */
+            health_reason: string | null;
+            /** Last Call At */
+            last_call_at: string | null;
+            /** Name */
+            name: string;
+            /** Pending Approvals */
+            pending_approvals: string[];
+            /** Scope */
+            scope: string[] | null;
+            /**
+             * Secret State
+             * @enum {string}
+             */
+            secret_state: "none" | "present" | "missing" | "pending_approval";
+            source: components["schemas"]["OpenApiSourceOut"] | null;
+            /** Timeout Seconds */
+            timeout_seconds: number;
+            /** Tools */
+            tools: components["schemas"]["CustomToolOut"][];
+            /** Uid */
+            uid: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * CustomToolGroupPatch
+         * @description A partial change to a group; ``auth: null`` removes the auth header.
+         */
+        CustomToolGroupPatch: {
+            auth?: components["schemas"]["CustomToolAuthIn"] | null;
+            /** Base Url */
+            base_url?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            } | null;
+            /** Timeout Seconds */
+            timeout_seconds?: number | null;
+        };
+        /**
+         * CustomToolIn
+         * @description One tool as a request writes it — and as an OpenAPI reading drafts it.
+         */
+        CustomToolIn: {
+            /** Body Template */
+            body_template?: string | null;
+            /** Changes Data */
+            changes_data?: boolean | null;
+            /**
+             * Description
+             * @default
+             */
+            description?: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled?: boolean;
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            };
+            /** Input Schema */
+            input_schema?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Method
+             * @default GET
+             * @enum {string}
+             */
+            method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+            /** Name */
+            name: string;
+            /** Operation */
+            operation?: string | null;
+            /** Path */
+            path: string;
+        };
+        /** CustomToolOut */
+        CustomToolOut: {
+            /** Agent Name */
+            agent_name: string;
+            /** Body Template */
+            body_template: string | null;
+            /** Calls 24H */
+            calls_24h: number;
+            /** Changes Data */
+            changes_data: boolean;
+            /** Changes Data Set */
+            changes_data_set: boolean;
+            /** Description */
+            description: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Failures 24H */
+            failures_24h: number;
+            /** Headers */
+            headers: {
+                [key: string]: string;
+            };
+            /** Input Schema */
+            input_schema: {
+                [key: string]: unknown;
+            };
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+            /** Name */
+            name: string;
+            /** Operation */
+            operation: string | null;
+            /** Path */
+            path: string;
+            /** Reach Override */
+            reach_override: string[] | null;
+        };
+        /**
+         * CustomToolPatch
+         * @description A partial change to one tool: only the fields sent change.
+         */
+        CustomToolPatch: {
+            /** Body Template */
+            body_template?: string | null;
+            /** Changes Data */
+            changes_data?: boolean | null;
+            /** Description */
+            description?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            } | null;
+            /** Input Schema */
+            input_schema?: {
+                [key: string]: unknown;
+            } | null;
+            /** Method */
+            method?: ("GET" | "POST" | "PUT" | "PATCH" | "DELETE") | null;
+            /** Name */
+            name?: string | null;
+            /** Path */
+            path?: string | null;
+        };
+        /** CustomToolReachIn */
+        CustomToolReachIn: {
+            /** Agents */
+            agents?: string[] | null;
+        };
+        /** CustomToolReimportIn */
+        CustomToolReimportIn: {
+            /** Add */
+            add?: string[];
+            /** Document */
+            document?: string | null;
+        };
+        /** CustomToolReimportPreviewOut */
+        CustomToolReimportPreviewOut: {
+            /** Added */
+            added: components["schemas"]["OpenApiOperationOut"][];
+            /** Kept */
+            kept: string[];
+            /** Removed */
+            removed: string[];
+            /** Title */
+            title: string | null;
+            /** Version */
+            version: string | null;
+            /** Warnings */
+            warnings: string[];
+        };
+        /** CustomToolTestIn */
+        CustomToolTestIn: {
+            /** Arguments */
+            arguments?: {
+                [key: string]: unknown;
+            };
+            tool: components["schemas"]["CustomToolIn"];
+        };
+        /** CustomToolTestOut */
+        CustomToolTestOut: {
+            /** Body */
+            body: string;
+            /** Content Type */
+            content_type: string | null;
+            /** Duration Ms */
+            duration_ms: number;
+            /** Error */
+            error: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Status */
+            status: number | null;
+            /** Status Line */
+            status_line: string | null;
+            /** Truncated */
+            truncated: boolean;
+            /** Url */
+            url: string | null;
+        };
         /** ErrorDetail */
         ErrorDetail: {
             /**
@@ -522,6 +979,87 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** OpenApiOperationOut */
+        OpenApiOperationOut: {
+            /** Key */
+            key: string;
+            /** Summary */
+            summary: string | null;
+            tool: components["schemas"]["CustomToolIn"];
+        };
+        /**
+         * OpenApiReadIn
+         * @description A document to read: its URL (fetched through the SSRF guard) or its text.
+         */
+        OpenApiReadIn: {
+            /** Document */
+            document?: string | null;
+            /** Filename */
+            filename?: string | null;
+            /** Url */
+            url?: string | null;
+        };
+        /** OpenApiReadOut */
+        OpenApiReadOut: {
+            /** Auth Header */
+            auth_header: string | null;
+            /** Auth Prefix */
+            auth_prefix: string;
+            /** Base Url */
+            base_url: string | null;
+            /** Location */
+            location: string;
+            /** Operations */
+            operations: components["schemas"]["OpenApiOperationOut"][];
+            /**
+             * Source Kind
+             * @enum {string}
+             */
+            source_kind: "url" | "file";
+            /** Title */
+            title: string | null;
+            /** Version */
+            version: string | null;
+            /** Warnings */
+            warnings: string[];
+        };
+        /** OpenApiSourceIn */
+        OpenApiSourceIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "url" | "file";
+            /** Location */
+            location: string;
+            /** Skipped */
+            skipped?: string[];
+            /** Title */
+            title?: string | null;
+            /** Version */
+            version?: string | null;
+        };
+        /** OpenApiSourceOut */
+        OpenApiSourceOut: {
+            /**
+             * Fetched At
+             * Format: date-time
+             */
+            fetched_at: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "url" | "file";
+            /** Location */
+            location: string;
+            /** Skipped */
+            skipped: string[];
+            /** Title */
+            title: string | null;
+            /** Version */
+            version: string | null;
+        };
         /** ToolCallCountOut */
         ToolCallCountOut: {
             /** Calls */
@@ -577,6 +1115,591 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_groups_api_v1_custom_tools_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolGroupListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_group_api_v1_custom_tools_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomToolGroupIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolGroupOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_openapi_api_v1_custom_tools_openapi_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenApiReadIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenApiReadOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_group_api_v1_custom_tools__name__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolGroupOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_group_api_v1_custom_tools__name__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_group_api_v1_custom_tools__name__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomToolGroupPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolGroupOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    apply_reimport_api_v1_custom_tools__name__reimport_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomToolReimportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolGroupOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_reimport_api_v1_custom_tools__name__reimport_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomToolReimportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolReimportPreviewOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    test_tool_api_v1_custom_tools__name__test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomToolTestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolTestOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    add_tool_api_v1_custom_tools__name__tools_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomToolIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolGroupOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_tool_api_v1_custom_tools__name__tools__tool__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                name: string;
+                tool: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolGroupOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_tool_api_v1_custom_tools__name__tools__tool__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                name: string;
+                tool: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomToolPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolGroupOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_tool_reach_api_v1_custom_tools__name__tools__tool__reach_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                name: string;
+                tool: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomToolReachIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolGroupOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_all_invocations_api_v1_mcp_invocations_get: {
         parameters: {
             query?: {

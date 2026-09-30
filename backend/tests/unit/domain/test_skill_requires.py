@@ -5,7 +5,20 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.domain.skill.requires import SkillRequirement, parse_requires, requires_from_skill_md
+from coffer.domain.skill.requirements import CommandRequirement, requirements_from_skill_md
+from coffer.domain.skill.requirements import parse_requires as _parse
+
+
+def SkillRequirement(command: str, min_version: str | None = None) -> CommandRequirement:  # noqa: N802
+    return CommandRequirement(command=command, min_version=min_version)
+
+
+def parse_requires(value: object) -> list[CommandRequirement]:
+    return list(_parse(value).requirements)
+
+
+def requires_from_skill_md(text: str) -> list[CommandRequirement]:
+    return list(requirements_from_skill_md(text).requirements)
 
 
 def test_a_list_of_names_and_versioned_names_is_read_in_order() -> None:

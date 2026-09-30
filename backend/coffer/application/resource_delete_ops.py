@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 from coffer.application.resource_kind_ops import credential_refs
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Kind, Resource
+from coffer.domain.secrets import is_standalone_ref
 
 if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
@@ -34,11 +35,17 @@ async def release_orphaned_credentials(
     longer counts as a citation of its own refs. A failure must not turn the
     already-completed deletion into a caller-facing error — the credential
     then merely lingers, which was the status quo.
+
+    A standalone secret (``secret/<name>``, the Secrets page's own) is never
+    released: it was stored for itself, is cited from files Coffer cannot see,
+    and a custom-tool group that bound it by name does not own it.
     """
     if service._credentials is None:
         return []
     released: list[str] = []
     for cred_ref in dict.fromkeys(credential_refs(kind_def, config).values()):
+        if is_standalone_ref(cred_ref):
+            continue
         try:
             # Off the loop thread: the store is a blocking SQLite writer, and
             # calling it inline competes with the connection this coroutine is

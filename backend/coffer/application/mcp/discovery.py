@@ -69,6 +69,18 @@ class DiscoveredTool:
     description: str | None
     input_schema: dict[str, Any]
     enabled: bool
+    annotations: dict[str, Any] | None = None
+
+
+def _annotations_of(tool: Any) -> dict[str, Any] | None:
+    """An upstream tool's MCP annotations in their wire spelling, or None."""
+    raw = getattr(tool, "annotations", None)
+    if raw is None:
+        return None
+    if hasattr(raw, "model_dump"):
+        dumped: dict[str, Any] = raw.model_dump(exclude_none=True, by_alias=True, mode="json")
+        return dumped or None
+    return dict(raw) if isinstance(raw, dict) and raw else None
 
 
 @dataclass(frozen=True)
@@ -159,6 +171,7 @@ class CapabilityDiscovery:
                         name=t.name,
                         description=getattr(t, "description", None),
                         input_schema=getattr(t, "input_schema", None) or {},
+                        annotations=_annotations_of(t),
                     )
                     for t in getattr(result, "tools", [])
                 ]
@@ -174,6 +187,7 @@ class CapabilityDiscovery:
                 description=t.description,
                 input_schema=t.input_schema,
                 enabled=prefs.get(t.name, True),
+                annotations=t.annotations,
             )
             for t in cache.tools
             if include_disabled or prefs.get(t.name, True)

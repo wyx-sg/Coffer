@@ -1,7 +1,9 @@
 """MCP server configuration value objects.
 
 `MCPServerConfig` is what `Resource.config` holds when `kind == "mcp_server"`.
-Stdio + HTTP transports as a Pydantic discriminated union.
+Stdio, HTTP and HTTP API transports as a Pydantic discriminated union. The
+third, ``http_api``, is a custom-tool group whose tools are HTTP requests the
+gateway makes itself (``coffer.domain.mcp.http_api``).
 """
 
 from __future__ import annotations
@@ -10,6 +12,8 @@ import re
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
+
+from coffer.domain.mcp.http_api import HttpApiTransport
 
 # Patterns that look like secrets — if a static env/header value matches,
 # reject it; secrets must go through `credential_refs` so they live in
@@ -63,9 +67,13 @@ class HttpTransport(BaseModel):
 
 
 Transport = Annotated[
-    StdioTransport | HttpTransport,
+    StdioTransport | HttpTransport | HttpApiTransport,
     Field(discriminator="type"),
 ]
+
+
+#: Every transport the gateway can open a connection for.
+AnyTransport = StdioTransport | HttpTransport | HttpApiTransport
 
 
 class MCPServerConfig(BaseModel):

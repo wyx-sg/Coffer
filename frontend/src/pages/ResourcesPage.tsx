@@ -27,6 +27,7 @@ import { McpServerList } from "@/components/mcp/server/McpServerList";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
+import { isCustomToolGroup } from "@/lib/customTools/groups";
 import { canonicalDetailPath, resolveByName } from "@/lib/detailTabs";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 import { useResources } from "@/lib/hooks/useResources";
@@ -55,9 +56,19 @@ export function ResourcesPage() {
   const [add, setAdd] = useState<"paste" | "importAgents" | null>(null);
   useDaemonEvents();
 
-  const servers = list.data ?? [];
-  const match = resolveByName(list.data, nameParam);
+  // Custom-tool groups are `mcp_server`s too, but they live on the Custom
+  // tools page (spec web-ui "Manage custom tools on their own page"); an
+  // address naming one goes there.
+  const all = list.data ?? [];
+  const servers = all.filter((r) => !isCustomToolGroup(r));
+  const match = resolveByName(list.data ? servers : undefined, nameParam);
   const basePath = `/mcp-servers/${encodeURIComponent(nameParam)}`;
+  const group = nameParam
+    ? all.find((r) => isCustomToolGroup(r) && (r.name === nameParam || r.uid === nameParam))
+    : undefined;
+  if (group) {
+    return <Navigate replace to={`/custom-tools/${encodeURIComponent(group.name)}`} />;
+  }
 
   if (match?.byUid) {
     return (

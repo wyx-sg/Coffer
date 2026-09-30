@@ -86,10 +86,17 @@ const pageRoutes: RouteObject[] = [
     path: "custom-tools",
     element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
   },
+  // One custom-tool group, by its fixed name — one page with no tabs.
+  {
+    path: "custom-tools/:group",
+    element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
+  },
   { path: "clis", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
-  // A skill's Requires tab links each command here; the CLIs page item gives
-  // it its own detail page.
-  { path: "clis/:command", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
+  // One required command, by the command itself — one page with no tabs.
+  {
+    path: "clis/:command",
+    element: lazyPage(() => import("./pages/CliDetailPage"), "CliDetailPage"),
+  },
   { path: "agents", element: <AgentsPage /> },
   // An agent's pages are addressed by its TYPE (one agent per type), the
   // detail page's tab by the path (`/agents/<type>/<tab>`, Overview bare),
