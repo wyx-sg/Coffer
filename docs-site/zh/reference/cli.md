@@ -26,6 +26,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `--verbose, -v` | 选项 | 开关 |  | Show full tracebacks and HTTP request/response context on error. |
+| `--version` | 选项 | 开关 |  | Print Coffer's version and exit. |
 | `--install-completion` | 选项 | 开关 |  | Install completion for the current shell. |
 | `--show-completion` | 选项 | 开关 |  | Show completion for the current shell, to copy it or customize the installation. |
 

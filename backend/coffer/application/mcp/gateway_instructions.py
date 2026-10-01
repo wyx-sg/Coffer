@@ -36,6 +36,8 @@ from __future__ import annotations
 from collections.abc import Collection
 from typing import Any
 
+from coffer import __version__
+
 MAX_INSTRUCTIONS_CHARS = 800
 
 # MCP server capabilities coffer declares to clients.
@@ -150,7 +152,7 @@ def build_initialize_result(
     return {
         "protocolVersion": PROTOCOL_VERSION,
         "capabilities": SERVER_CAPABILITIES,
-        "serverInfo": {"name": "coffer", "version": "0.1.0"},
+        "serverInfo": {"name": "coffer", "version": __version__},
         "instructions": build_instructions(
             hidden_count=hidden_count, tools=tools, memory_root=memory_root
         ),

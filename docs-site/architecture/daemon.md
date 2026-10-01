@@ -136,7 +136,7 @@ sequenceDiagram
   E->>E: start supersession check every 30 s
 ```
 
-Step by step:
+Step by step (two arguments skip all of it: `--version` prints the package version, the same line `coffer --version` prints, and exits; `proxy` runs the [local model proxy](/architecture/model-proxy) instead):
 
 1. **Environment hygiene.** The daemon removes every agent-home variable it inherited (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, taken from the agent descriptors). Otherwise a daemon started from a shell that exports one would run agents against that directory while Coffer delivers skills and config into the registered one. It also raises its `RLIMIT_NOFILE` soft limit toward the hard limit, capped at 8192, because a daemon launched by a GUI app inherits a limit of about 256.
 2. **Spawn lock.** It takes an exclusive `flock` on `~/.coffer/daemon.lock`. The lock lives on the open descriptor, so the file stays on disk between runs.

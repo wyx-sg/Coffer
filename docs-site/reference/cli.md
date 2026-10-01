@@ -29,6 +29,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `--verbose, -v` | option | flag |  | Show full tracebacks and HTTP request/response context on error. |
+| `--version` | option | flag |  | Print Coffer's version and exit. |
 | `--install-completion` | option | flag |  | Install completion for the current shell. |
 | `--show-completion` | option | flag |  | Show completion for the current shell, to copy it or customize the installation. |
 

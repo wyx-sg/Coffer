@@ -7,6 +7,7 @@ import sys
 import httpx
 import typer
 
+from coffer import __version__
 from coffer.surfaces.cli import (
     _client,
     agent_cmd,
@@ -37,6 +38,14 @@ from coffer.surfaces.cli import mcp as mcp_cmd
 app = typer.Typer(help="Coffer CLI", no_args_is_help=True)
 
 
+def _print_version(value: bool) -> None:
+    """``--version``: the package version, the same line ``coffer-daemon
+    --version`` prints, and exit without reaching any daemon."""
+    if value:
+        typer.echo(__version__)
+        raise typer.Exit()
+
+
 @app.callback()
 def root(
     ctx: typer.Context,
@@ -45,6 +54,13 @@ def root(
         "--verbose",
         "-v",
         help="Show full tracebacks and HTTP request/response context on error.",
+    ),
+    _version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_print_version,
+        is_eager=True,
+        help="Print Coffer's version and exit.",
     ),
 ) -> None:
     """Coffer — local-first AI agent vault."""
