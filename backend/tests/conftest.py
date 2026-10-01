@@ -38,6 +38,10 @@ _GUARD = real_home_guard.install(_RUN_ROOT / "home")
 
 import pytest  # noqa: E402
 
+from tests.support import hypothesis_profiles  # noqa: E402
+
+hypothesis_profiles.register()
+
 #: The isolated-HOME builders as fixtures (``isolated_home``, ``two_homes``,
 #: ``claude_code_dir``, ``codex_dir``, ``fake_channel_adapter``).
 pytest_plugins = ["tests.support.fixtures"]

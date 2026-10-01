@@ -2,13 +2,15 @@
 
 Spec mcp-gateway "Present Coffer as one MCP server" (the gateway-overhead budget).
 
-Marked ``benchmark`` so it is excluded from default ``make verify`` runs.
-Enable with ``pytest -m benchmark`` or set ``COFFER_RUN_BENCHMARKS=1``.
+Runs in ``make verify`` with the rest of the integration tier: it takes about
+4 s, and the overhead it measures (2-5 ms median on an Apple-silicon laptop
+under a shared load average of 6-18, 2026-10-01) sits an order of magnitude
+under the budget, so load does not reach it. Also marked ``benchmark``, so
+``make verify-benchmark`` runs it beside the benchmarks too slow for verify.
 """
 
 from __future__ import annotations
 
-import os
 import statistics
 import sys
 import time
@@ -45,18 +47,10 @@ _N_RUNS = 30
 _MAX_OVERHEAD_MS = 50
 
 
-def _should_run() -> bool:
-    return os.environ.get("COFFER_RUN_BENCHMARKS") == "1"
-
-
 pytestmark = pytest.mark.benchmark
 
 
 @pytest.mark.acceptance(spec="mcp-gateway", scenario="gateway overhead stays under budget")
-@pytest.mark.skipif(
-    not _should_run(),
-    reason="benchmark suite disabled by default; set COFFER_RUN_BENCHMARKS=1",
-)
 @pytest.mark.asyncio
 async def test_gateway_overhead_under_50ms_median(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

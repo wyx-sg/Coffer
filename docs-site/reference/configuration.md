@@ -93,7 +93,7 @@ These are for contributors. Do not set them on a daemon you use day to day.
 | --- | --- | --- | --- |
 | `COFFER_PORT_RANGE_START`, `COFFER_PORT_RANGE_END` | unset | Bind the first free port in this range instead of the single configured port. Outranks `daemon-config.json`. If only one end is set, the other falls back to `8000` or `8009`. | [`infrastructure/daemon/bootstrap.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/bootstrap.py) |
 | `COFFER_EVAL_CAPTURE` | unset | Records each `coffer__search_tools` query and its results as JSON lines for the eval harness. `1`, `true` or `yes` writes to `~/.coffer/eval-capture.jsonl`; any other non-falsy value is taken as the output path. | [`application/eval_capture.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/eval_capture.py), [`infrastructure/logging/eval_capture.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/eval_capture.py) |
-| `COFFER_RUN_BENCHMARKS` | unset | `1` runs the gateway-overhead benchmark (`make verify-benchmark`). | [`backend/tests/integration/perf/test_gateway_overhead.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/tests/integration/perf/test_gateway_overhead.py) |
+| `COFFER_RUN_BENCHMARKS` | unset | `1` runs the perf-budget tests too slow for `make verify`, such as the reconcile pass cost (`make verify-benchmark`). | [`backend/tests/integration/perf/test_reconcile_pass_cost.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/tests/integration/perf/test_reconcile_pass_cost.py) |
 
 ### Variables Coffer sets for processes it starts
 

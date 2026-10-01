@@ -200,6 +200,7 @@ Coffer shells out to the real `git`, so the remote stays an ordinary repository 
 
 - **The push token** is resolved from the secret store for one call and reaches git through a credential helper given on the command line that reads it from the environment. It is never in the URL, argv, `.git/config` or any recorded error. The username sent with it defaults to `coffer`; GitHub and GitLab ignore it for a token, while Bitbucket and Azure DevOps need a real one. A token pointed at a URL it has not been approved for waits for a person's approval, and rounds report `auth_failed` until then.
 - **Your git configuration cannot change what a round does.** Global and system config point at `/dev/null`, hooks are off, signing is off, and the commit identity is supplied by Coffer.
+- **Git is looked up once.** The `git` on your `PATH` may be a launcher rather than git itself: the one macOS puts in `/usr/bin` looks up the developer tools on every call, which can take most of a second on a busy machine. A round makes hundreds of calls, so Coffer asks that `git` once where its own binary lives and runs that binary from then on.
 - **No value can be read as an option.** The remote URL may not start with `-`, the branch must pass git's ref-name rules, and positional arguments sit behind `--`.
 
 ## The worker

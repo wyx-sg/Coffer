@@ -37,7 +37,7 @@ cd frontend && npx vitest run src/components/PageHeader.test.tsx
 cd e2e && npx playwright test --project=web shell_skills
 ```
 
-`make verify-benchmark` runs the perf-budget tests marked `benchmark` with `COFFER_RUN_BENCHMARKS=1`. `make verify` excludes them, and a separate CI job runs them. `make coverage` produces pytest and Vitest coverage reports. Use it to find untested branches, not as a target.
+`make verify-benchmark` runs every perf-budget test marked `benchmark`. It sets `COFFER_RUN_BENCHMARKS=1` so that the ones too slow for `make verify` run too, and a separate CI job runs it. See [Performance budgets](#performance-budgets) for which budget runs where. `make coverage` produces pytest and Vitest coverage reports. Use it to find untested branches, not as a target.
 
 ## What a good test looks like
 
@@ -59,6 +59,15 @@ Prefer the real thing whenever it is fast enough:
 - the `keyring` test backend, an alternate real implementation rather than a mock
 
 Mock only what is **non-local** (an external HTTP service, an LLM API), **non-deterministic** in a way the test cares about (the clock, randomness), or, as a last resort, **slow**. A test that needs to mock something slow is often in the wrong tier.
+
+### Property-based tests
+
+Some rules must hold for every input, not only for a few chosen ones. For those, the test states the rule and lets [Hypothesis](https://hypothesis.readthedocs.io/) generate the inputs. The sync deletion breaker and a sync round's merge decision are tested this way:
+
+- **The breaker.** Generated areas are checked against the threshold written in whole numbers (twenty files, or more than a fifth of the area). A move is checked never to count as a loss.
+- **A round.** Generated forks of a vault run through the real round engine over an in-memory git. Any conflict must stop the round, and a merge that loses too much must be held. Neither may check anything out or push. Every other clean merge must be applied and pushed, and the next round must find nothing to do.
+
+These tests live in the unit tier and run in `make verify`. The default profile draws 100 examples per test, the same 100 on every run. It sets no time limit per example and writes no example database into the checkout. After you change the code under test, run `HYPOTHESIS_PROFILE=thorough make verify-unit` for a deeper search: it draws 2,000 random examples per test. When a property fails, Hypothesis shrinks the input to the smallest failing case and prints it. Turn that case into an ordinary example test beside the property.
 
 ### Tests run in parallel
 
@@ -140,6 +149,20 @@ The pytest marker is registered in `backend/pyproject.toml` and runs under `--st
 ## Unit purity
 
 `scripts/check_unit_purity.py` runs first in `make verify-unit`. It parses every file under `backend/tests/unit/` and fails on an import of an I/O module: `subprocess`, `sqlite3`, `httpx`, `fastapi.testclient`, `socket`, `requests`, `urllib.request`, `aiohttp` or `keyring`. The failure message names the file and line and points you to the integration tier. To ban another module, add it to the `BANNED` dict in the script.
+
+## Performance budgets
+
+A few costs have a budget that a test enforces. Each ceiling sits a few times above what was measured. It fails when the code starts doing work it should not, not when the machine is busy.
+
+| Budget | Measured | Ceiling | Test | Runs in |
+| --- | --- | --- | --- | --- |
+| Daemon startup: the CPU time the daemon and its child processes spend from spawn to the first `ready` status, on a fake home with an empty vault | 2.4–2.7 s CPU (2.4–22 s wall-clock) | 8 s CPU, plus 60 s wall-clock as a hang guard | `backend/tests/integration/perf/test_startup_time.py` | `make verify` |
+| Gateway overhead: the median extra time an MCP tool call takes through the gateway, compared with a direct connection | 2–5 ms | 50 ms | `backend/tests/integration/perf/test_gateway_overhead.py` | `make verify` |
+| One steady-state reconcile pass, with two connected agents, twenty skills and an active provider connection | 27–40 ms | 2 s (`PASS_BUDGET_SECONDS`) | `backend/tests/integration/perf/test_reconcile_pass_cost.py` | `make verify-benchmark` only |
+
+The measurements were taken on an Apple Silicon laptop while other work was running. Startup is budgeted in CPU time because its wall-clock time depends on the machine: on that laptop, starting a process took seconds under load, and the same boot took anywhere from 2.4 to 22 seconds. Its CPU time stayed between 2.4 and 2.7 seconds. The startup and gateway tests take a few seconds each, so they run with the rest of the integration tier. The reconcile test needs close to a minute to set up its machine, so only `make verify-benchmark` and its CI job run it. All three tests are marked `benchmark`, so `make verify-benchmark` runs every budget.
+
+No test retries itself. A test that fails only on a loaded machine has a bug, in the test or in the code: find the assumption about wall-clock time and remove it.
 
 ## End-to-end tests with Playwright
 

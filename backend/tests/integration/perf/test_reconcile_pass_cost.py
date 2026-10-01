@@ -107,7 +107,10 @@ def test_a_steady_state_pass_stays_inside_the_budget(machine: TestClient) -> Non
     rec = get_reconciler()
     first = machine.portal.call(lambda: rec.run(trigger=Trigger.PERIOD))  # type: ignore[union-attr]
     # Steady state: nothing left to repair, so the timing is the reading cost.
-    assert [r for r in first.results if r.change.decision.reason_code != "hook_missing"] == []
+    # What stays open is the person's to settle: a hook no trigger here
+    # installs, and Codex's approval of Coffer's hook, which Coffer never gives.
+    persons = {"hook_missing", "hook_untrusted"}
+    assert [r for r in first.results if r.change.decision.reason_code not in persons] == []
     period = _median_seconds(machine, lambda: rec.run(trigger=Trigger.PERIOD))
     plan = _median_seconds(machine, lambda: rec.plan())
     print(f"\nreconcile pass median {period * 1000:.1f} ms, dry-run plan {plan * 1000:.1f} ms")

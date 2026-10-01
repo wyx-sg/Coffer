@@ -49,7 +49,7 @@ help:
 	@echo "  make verify-visual         screenshot baseline: every route, light + dark (not in verify / verify-e2e)"
 	@echo "  make visual-update         re-record this platform's screenshot baseline after a deliberate visual change"
 	@echo "  make verify-acceptance     openspec validate + audit scenarios vs test markers"
-	@echo "  make verify-benchmark      gateway-overhead budget benchmark (COFFER_RUN_BENCHMARKS=1)"
+	@echo "  make verify-benchmark      every perf-budget test, the slow ones too (COFFER_RUN_BENCHMARKS=1)"
 	@echo "  make verify-secrets        gitleaks over the full git history (skips when gitleaks is not installed)"
 	@echo "  make test-durations        re-measure backend/.test_durations (CI's integration shard balance)"
 	@echo "  PYTEST_WORKERS=0 make ...  run a backend tier serially (default: auto = one xdist worker per core)"
