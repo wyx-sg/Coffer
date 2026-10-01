@@ -177,7 +177,9 @@ flowchart LR
   C -- "否" --> D{"丢失太多？"}
   D -- "是" --> H["扣住并问你"]
   D -- "否" --> E["先快照，再检出"]
-  E --> F["推送"]
+  E --> P{"有明文密钥？"}
+  P -- "是" --> N["什么也不推送，问你"]
+  P -- "否" --> F["推送"]
 ```
 
 只有当某台机器相对于共同的基准真的删除了那个文件，删除才会被应用；一台机器只是缺少某个文件，不会删除任何东西。你正在编辑的文件永远不会被覆盖：这一轮会等它（`waiting on an edit`），并写明是哪个文件。没什么可做的一轮会记录为 `nothing to do`。
@@ -248,6 +250,21 @@ coffer sync hold --restore    # keep the files
 
 两种答案都会让这一轮继续。在 Web 上，**状态**标签页会按文件夹分组，说明是谁删了多少文件；**查看删除**会列出它们，并提供**删除 n 个文件…**（会先询问；会先拍一个安全快照）和**恢复 n 个文件**。如果这台机器刚刚重装或恢复过，选恢复，不要确认。
 
+## 某一轮发现明文密钥时 {#when-a-round-finds-a-plaintext-secret}
+
+一轮在推送之前，会读一遍这次推送会发布的每个文件版本：远端还没有的每个提交里改过的每个文件。它用的检测和密钥页面上的**查找明文密钥**以及 `coffer secret scan` 相同：赋给一个名字表明是密钥的变量的值（`DB_PASSWORD=…`、`api_key: …`），或者常见的令牌格式。加密的密钥文件（`secret/*.enc`）是密文，不会被读取。
+
+推送到远端的值会留在它的历史里、每一份克隆里，以及这两者的每一份备份里，所以发现明文密钥的一轮**什么也不推送**，并记为 `plaintext found`。从其他机器拉取照常进行，只有这台机器的推送在等待。同步页面、概览的列表和 `coffer sync status` 会按文件、行号和键名指出每一处，从不显示值：
+
+```sh
+coffer sync status             # each file:line and key the round found
+coffer sync status --prompt    # the prompt that hands the move to your agent
+coffer sync push-anyway        # lists the places, asks, then pushes them as they are
+```
+
+- **移入密钥。****交给智能体**（或 `coffer sync status --prompt`）会把这些位置交给你的智能体，请它用 `coffer secret set` 把每个值移入 Coffer 的密钥（过程中不打印值），并在原处写上 `coffer://secret/<name>` 引用。需要这个值的技能命令改为通过 `coffer run --secret` 运行。然后点**重试**。旧的值仍在尚未推送的提交里，所以这一轮会把它们合并成一个提交，内容是文件现在的样子，再推送它。磁盘上的文件不变；只是那些尚未推送的编辑在历史里的多条记录会合成一条。
+- **仍然推送。**如果某一处只是示例或测试值，不是真的密钥，**仍然推送…**（或 `coffer sync push-anyway`）会先询问，在审计日志里记下是谁推送了哪些文件，并且只推送它给你看过的那些版本。之后再改过的文件会被重新读取。
+
 ## 回滚一轮 {#roll-back-a-round}
 
 每一轮在检出任何东西之前都会给保险库拍一个快照，最近的十个快照会被保留：
@@ -286,6 +303,7 @@ coffer sync machine rm <machine_id>         # retire a machine you no longer use
 | `sign-in refused` | 没有可用的密钥（你的 git 配置和钥匙串助手不会被用到），令牌没有推送权限，主机需要另一个用户名（GitLab：`--username oauth2`），或者一个用于新 URL 的令牌在等待批准。 | 存储一个范围正确的令牌并设置 `--secret-ref`，在桌面应用里批准它，或者使用一把不需要提示的 SSH 密钥。 |
 | `remote unreachable` | 网络、VPN 或者 URL 错了。 | 不会丢任何东西；下一次能连上的一轮会把改动带过去。 |
 | `push failed` | 已经在这里应用，但远端拒绝了推送（受保护的分支、只读令牌）。 | 修好分支保护或令牌；下一轮会重试。 |
+| `plaintext found` | 这一轮要推送的某个文件里有看起来像明文密钥的内容；什么也没推送。 | 把值移入密钥（**交给智能体**，或 `coffer sync status --prompt`）后重试；如果它不是密钥，用 `coffer sync push-anyway`。 |
 | `git missing` | 守护进程使用的 PATH 上没有 `git`。 | 按适合这台机器的方式安装 git。 |
 | `paused (cloud folder)` | 保险库在一个 Dropbox、iCloud Drive、Syncthing 或类似工具也在同步的文件夹里。 | 把 `~/.coffer` 移出那个文件夹。 |
 | `remote too new` | 另一台机器运行着更新版本的 Coffer。 | 升级这台机器。 |
@@ -294,7 +312,7 @@ coffer sync machine rm <machine_id>         # retire a machine you no longer use
 | 重装 Coffer 后有一轮被扣住 | 空的保险库会把它的丢失推送出去。 | `coffer sync hold --restore`。 |
 | 密钥无法解密 | 这台机器没有加密它们时用的主密钥。 | 用从有主密钥的机器上拿到的密钥运行 `coffer sync key import <file>`。 |
 
-被拒绝的推送、被拒绝的登录、无法连接的远端和缺失的 git，都会附带一段给你的智能体的提示词。提示词会写明远端（不含凭据）、分支、密钥的名字，以及去掉了令牌的 git 消息，并说明该检查什么。它在同步页面上的消息旁边，`coffer sync status --prompt` 也会把它打印出来。它从不携带、也从不索要令牌。**重试**仍然是 Coffer 自己的按钮。
+被拒绝的推送、被拒绝的登录、无法连接的远端和缺失的 git，都会附带一段给你的智能体的提示词（明文密钥有它自己的提示词，见上文）。提示词会写明远端（不含凭据）、分支、密钥的名字，以及去掉了令牌的 git 消息，并说明该检查什么。它在同步页面上的消息旁边，`coffer sync status --prompt` 也会把它打印出来。它从不携带、也从不索要令牌。**重试**仍然是 Coffer 自己的按钮。
 
 对于这里没列出的失败，这一轮的消息在 `coffer sync status` 里，守护进程日志（**活动 → 守护进程日志**）里有细节。
 

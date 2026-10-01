@@ -23,6 +23,7 @@ const STATUS_TONE: Record<RoundStatus, Tone> = {
   joined: "ok",
   rolled_back: "ok",
   push_failed: "warn",
+  plaintext_found: "error",
   stopped: "warn",
   held: "warn",
   waiting_on_edit: "warn",

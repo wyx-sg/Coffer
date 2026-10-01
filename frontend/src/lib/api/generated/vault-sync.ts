@@ -241,6 +241,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/plaintext/push-anyway": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Push Anyway
+         * @description "I checked it, push anyway": allow exactly what the last round found
+         *     (recorded in the audit log) and run a round. Refused with
+         *     ``SYNC_NO_PLAINTEXT_FOUND`` unless the last round is ``plaintext_found``.
+         */
+        post: operations["push_anyway_api_v1_sync_plaintext_push_anyway_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sync/remote": {
         parameters: {
             query?: never;
@@ -813,6 +835,22 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * PlaintextFindingOut
+         * @description Where a round found a plaintext secret: the file, the line and the name
+         *     the value was assigned to (``token`` for one recognised by its shape).
+         *     Never the value.
+         */
+        PlaintextFindingOut: {
+            /** Current */
+            current: boolean;
+            /** Key */
+            key: string;
+            /** Line */
+            line: number;
+            /** Path */
+            path: string;
+        };
         /** ProblemOut */
         ProblemOut: {
             handoff: components["schemas"]["HandoffOut"] | null;
@@ -820,9 +858,14 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "unreachable" | "auth_failed" | "push_failed" | "cloud_folder" | "layout" | "git_missing" | "failed";
+            kind: "unreachable" | "auth_failed" | "push_failed" | "plaintext_found" | "cloud_folder" | "layout" | "git_missing" | "failed";
             /** Message */
             message: string;
+            /**
+             * Plaintext
+             * @default []
+             */
+            plaintext: components["schemas"]["PlaintextFindingOut"][];
             /** Secret Ref */
             secret_ref: string | null;
             /** Since */
@@ -903,6 +946,11 @@ export interface components {
             detail: string | null;
             /** Finished At */
             finished_at: string;
+            /**
+             * Folded
+             * @default 0
+             */
+            folded: number;
             /** From Commit */
             from_commit: string | null;
             /** Held */
@@ -913,6 +961,11 @@ export interface components {
             join: string | null;
             /** Path */
             path: string | null;
+            /**
+             * Plaintext
+             * @default []
+             */
+            plaintext: components["schemas"]["PlaintextFindingOut"][];
             /** Pulled */
             pulled: components["schemas"]["PulledCommitOut"][];
             /** Pulled Files */
@@ -937,7 +990,7 @@ export interface components {
          * RoundStatus
          * @enum {string}
          */
-        RoundStatus: "nothing_to_do" | "pulled" | "pushed" | "pulled_and_pushed" | "push_failed" | "stopped" | "held" | "waiting_on_edit" | "join_required" | "joined" | "unreachable" | "auth_failed" | "paused_cloud_folder" | "remote_too_new" | "remote_too_old" | "rolled_back" | "failed";
+        RoundStatus: "nothing_to_do" | "pulled" | "pushed" | "pulled_and_pushed" | "push_failed" | "stopped" | "held" | "waiting_on_edit" | "join_required" | "joined" | "unreachable" | "auth_failed" | "paused_cloud_folder" | "remote_too_new" | "remote_too_old" | "plaintext_found" | "rolled_back" | "failed";
         /** StopStateOut */
         StopStateOut: {
             round: components["schemas"]["StoppedRoundOut"] | null;
@@ -1636,6 +1689,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MachineRemovedOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    push_anyway_api_v1_sync_plaintext_push_anyway_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

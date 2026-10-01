@@ -19,7 +19,13 @@ from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli import sync_stop_cmd
 from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli.sync_machine_cmd import key_app, machine_app
-from coffer.surfaces.cli.sync_print import NEEDS_PERSON, changes, print_round, verbose_of
+from coffer.surfaces.cli.sync_print import (
+    NEEDS_PERSON,
+    changes,
+    print_plaintext,
+    print_round,
+    verbose_of,
+)
 from coffer.surfaces.cli.sync_remote_cmd import print_remote, remote_app
 
 app = typer.Typer(help="Keep this vault in step with a git remote you own")
@@ -49,7 +55,8 @@ def status(
         False,
         "--prompt",
         help="Print the prompt that hands the current problem (a refused push or sign-in, an "
-        "unreachable remote, git missing) to your agent",
+        "unreachable remote, git missing, a plaintext secret in what a push would publish) to "
+        "your agent",
     ),
 ) -> None:
     """The remote, the last round, and anything waiting for you.
@@ -61,7 +68,7 @@ def status(
 
     \f
     Spec vault-sync "Say a vault needs a human where the user already is",
-    "Hand a remote's failure to an agent".
+    "Hand a remote's failure to an agent", "Refuse to push a plaintext secret".
     """
     verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
@@ -123,6 +130,8 @@ def _print_status(payload: dict[str, Any]) -> None:
     if problem:
         ref = f" (secret {problem['secret_ref']})" if problem.get("secret_ref") else ""
         _console.print(f"  [red]{problem['kind']}[/red]{ref}: {problem['message']}")
+        if problem.get("plaintext"):
+            print_plaintext(problem["plaintext"])
         if problem.get("handoff"):
             _console.print("  a prompt for your agent: coffer sync status --prompt")
     if payload.get("next_round_at"):
@@ -133,6 +142,35 @@ def _print_status(payload: dict[str, Any]) -> None:
         print_round(last, detail=False)
     else:
         _console.print("no round yet")
+
+
+@app.command("push-anyway")
+def push_anyway(
+    ctx: typer.Context,
+    yes: bool = typer.Option(False, "--yes", "-y", help="Do not ask before pushing"),
+) -> None:
+    """Push what the last round refused as a plaintext secret, once you checked it is not one.
+
+    Allows exactly the file versions that round found (a file changed since is
+    read again), records it in the audit log, and runs a round.
+
+    \f
+    Spec vault-sync "Refuse to push a plaintext secret".
+    """
+    verbose = verbose_of(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get("/sync/status")
+        _cli_client.check(r, verbose=verbose)
+        found = (r.json().get("problem") or {}).get("plaintext") or []
+        if found:
+            _console.print("the last round refused to push:")
+            print_plaintext(found)
+        if found and not yes and not typer.confirm("Push these anyway?", default=False):
+            raise typer.Exit(code=1)
+        r = c.post("/sync/plaintext/push-anyway", json={})
+        _cli_client.check(r, verbose=verbose)
+        print_round(r.json())
 
 
 @app.command("history")

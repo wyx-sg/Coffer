@@ -40,6 +40,15 @@ class SyncRoundNotFound(CofferError):  # noqa: N818
         self.round_id = round_id
 
 
+class SyncNoPlaintextFound(CofferError):  # noqa: N818
+    """ "Push anyway" when the last round found no plaintext secret. Maps to 409."""
+
+    code = "SYNC_NO_PLAINTEXT_FOUND"
+
+    def __init__(self) -> None:
+        super().__init__("the last round found no plaintext secret to push anyway")
+
+
 class SyncMachineNotFound(CofferError):  # noqa: N818
     """No descriptor in the vault names this machine. Maps to 404."""
 
@@ -98,6 +107,7 @@ __all__ = [
     "MasterKeyPassphraseWrong",
     "SyncMachineNameInvalid",
     "SyncMachineNotFound",
+    "SyncNoPlaintextFound",
     "SyncNoRemote",
     "SyncRoundNotFound",
 ]

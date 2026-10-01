@@ -32,12 +32,14 @@ from coffer.surfaces.http.reconcile_dependencies import get_reconciler
 from coffer.surfaces.http.schemas import ScopeOut
 from coffer.surfaces.http.skill_dependencies import (
     get_optional_skill_source_service,
+    get_skill_secret_presence,
     get_skill_service,
 )
 from coffer.surfaces.http.skill_source_schemas import (
     ArchiveImportSourceOut,
     GitImportSourceOut,
     SkillRequirementOut,
+    SkillSecretRequirementOut,
     SkillSourceStatusOut,
     archive_source_out,
     git_source_out,
@@ -148,6 +150,10 @@ class SkillOut(BaseModel):
     #: on each request (spec skill-manager "Show the commands a skill declares
     #: it needs").
     requires: list[SkillRequirementOut]
+    #: The Coffer secrets it declares it needs (``requires: {secrets: [...]}``),
+    #: each with whether the secret store holds it (spec skill-manager "Declare
+    #: the secrets a skill requires").
+    requires_secrets: list[SkillSecretRequirementOut]
     #: A Git-imported skill's last update check on this machine; null for
     #: every other source.
     source_status: SkillSourceStatusOut | None
@@ -231,12 +237,19 @@ def _drift_out(e: DriftEntry) -> DriftEntryOut:
     )
 
 
-def _requires(svc: SkillService, name: str) -> list[SkillRequirementOut]:
+def _requires(
+    svc: SkillService, name: str
+) -> tuple[list[SkillRequirementOut], list[SkillSecretRequirementOut]]:
     try:
         text = (pathlib.Path(svc.master_path(name)) / "SKILL.md").read_text("utf-8")
     except (OSError, UnicodeDecodeError, ValueError):
-        return []
-    return [requirement_out(q) for q in requirements_from_skill_md(text).requirements]
+        return [], []
+    parsed = requirements_from_skill_md(text)
+    is_set = get_skill_secret_presence()
+    secrets = [
+        SkillSecretRequirementOut(name=n, is_set=bool(is_set and is_set(n))) for n in parsed.secrets
+    ]
+    return [requirement_out(q) for q in parsed.requirements], secrets
 
 
 async def _to_skill_out(
@@ -263,6 +276,7 @@ async def _to_skill_out(
         bindings = bindings_by_skill.get(r.uid, [])
     else:
         bindings = await svc.bindings_for(r.uid)
+    requires, requires_secrets = _requires(svc, r.name)
     return SkillOut(
         uid=r.uid,
         name=r.name,
@@ -280,7 +294,8 @@ async def _to_skill_out(
         # Only live deliveries: a spent binding row (reclaimed copy) is
         # bookkeeping, not something the agent holds.
         bindings=[_binding_out(b, agents_by_uid) for b in bindings if b.enabled],
-        requires=_requires(svc, r.name),
+        requires=requires,
+        requires_secrets=requires_secrets,
         source_status=source_status,
     )
 

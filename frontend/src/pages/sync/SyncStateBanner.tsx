@@ -157,6 +157,7 @@ export function SyncStateBanner({ status, state, runs, startedAt, onRun }: Props
     case "held":
       return <SyncStopBanner kind={state.kind} count={state.count} />;
     case "push_failed":
+    case "plaintext_found":
     case "unreachable":
     case "auth_failed":
     case "cloud_folder":

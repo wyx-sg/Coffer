@@ -108,7 +108,9 @@ function isHookItem(item: AttentionItem): boolean {
 /** The page an item's one action opens — a missing secret is added on
  *  Secrets, a memory-hook problem is dealt with on the agent's Hooks tab. */
 export function actionPage(item: AttentionItem, agentType?: string): string {
-  if (item.reason_code === "mcp_missing_secret") return "/secrets";
+  if (item.reason_code === "mcp_missing_secret" || item.reason_code === "skill_missing_secret") {
+    return "/secrets";
+  }
   const detail = detailPage(item, agentType);
   if (isHookItem(item) && detail) return `${detail}/hooks`;
   return itemPage(item, agentType);

@@ -10,7 +10,7 @@
     5 Guard     — the deletion breaker, incoming (L->T) and outgoing (base->L)
     6 Check out — snapshot L; M := commit(T; L, R); read-tree -m -u L M under
                   the vault's write lock, refusing if an edit is in the way
-    7 Publish   — this machine's descriptor, then push
+    7 Publish   — this machine's descriptor; refuse a plaintext secret; push
 
 Nothing Coffer did on its own ever needs to be found and undone: a clean merge
 is applied unattended, and everything else waits for the person with the vault
@@ -22,6 +22,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Any
 
+from coffer.application.sync import round_plaintext
 from coffer.application.sync.round_deps import RoundDeps
 from coffer.application.sync.round_guard import hold_for, invalid_files
 from coffer.application.sync.round_trees import (
@@ -254,8 +255,7 @@ class RoundEngine:
         if d.scratch is not None:
             d.scratch.clear()
         final = self._publish_descriptor(merged)
-        pushed = d.changes(tip, final) if final != tip else ()
-        common = {
+        common: dict[str, Any] = {
             "from_commit": local,
             "to_commit": final,
             "snapshot": snapshot,
@@ -264,6 +264,13 @@ class RoundEngine:
             "with_machines": machines,
             "join": join,
         }
+        if final != tip:
+            checked = round_plaintext.check(d, tip, final)
+            if checked.findings or checked.moved:
+                return round_plaintext.refused(rec, checked, **common)
+            final = common["to_commit"] = checked.commit
+            common["folded"] = checked.folded
+        pushed = d.changes(tip, final) if final != tip else ()
         if final != tip:
             try:
                 d.git.push(final, remote.branch, token)
@@ -311,6 +318,10 @@ class RoundEngine:
                 )
                 return rec(RoundStatus.HELD, held=len(hold.paths), from_commit=local, to_commit=tip)
         final = self._publish_descriptor(local)
+        checked = round_plaintext.check(d, tip, final)
+        if checked.findings or checked.moved:
+            return round_plaintext.refused(rec, checked, from_commit=tip, to_commit=final)
+        final = checked.commit
         pushed = d.changes(tip, final)
         try:
             d.git.push(final, remote.branch, token)
@@ -321,9 +332,16 @@ class RoundEngine:
                 from_commit=tip,
                 to_commit=final,
                 pushed=pushed,
+                folded=checked.folded,
             )
         d.state.set_confirmed(None)
-        return rec(RoundStatus.PUSHED, from_commit=tip, to_commit=final, pushed=pushed)
+        return rec(
+            RoundStatus.PUSHED,
+            from_commit=tip,
+            to_commit=final,
+            pushed=pushed,
+            folded=checked.folded,
+        )
 
     def _publish_descriptor(self, commit: str) -> str:
         """Write this machine's descriptor when it changed; answer the commit

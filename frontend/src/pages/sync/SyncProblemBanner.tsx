@@ -2,7 +2,8 @@
 //
 // Why sync is not working right now, as a card that says what to do about it
 // (6.5.12 push rejected, 6.5.13 remote unreachable, 6.5.14 sign-in failed,
-// 6.5.15 cloud folder, and git missing from this Mac).
+// 6.5.15 cloud folder, git missing from this Mac, and a plaintext secret in
+// what a round would push).
 //
 // Each card is a plain sentence first. Git's own words matter for a rejected
 // push — the branch rule it names is the fix — so they are shown in full; for
@@ -23,6 +24,7 @@ import { SyncBannerCard } from "./SyncBanner";
 import { Body, GitMessage, GitMessageDisclosure, Handoff } from "./SyncProblemParts";
 import { lastGoodRound } from "./syncProblemRounds";
 import { SyncCloudFolderCard } from "./SyncCloudFolderCard";
+import { SyncPlaintextCard } from "./SyncPlaintextCard";
 import { waitingCount } from "./syncPageState";
 import { clock, remoteHost } from "./syncTime";
 
@@ -75,6 +77,8 @@ export function SyncProblemBanner({ status, runs, onRun, running }: Props) {
         </SyncBannerCard>
       );
     }
+    case "plaintext_found":
+      return <SyncPlaintextCard problem={problem} onRun={onRun} running={running} />;
     case "unreachable": {
       const good = lastGoodRound(runs);
       const parts = [

@@ -822,6 +822,7 @@
       "skill_update_merged": "记录了已合并进技能 {{resource}} 的更新",
       "sync_confirmed": "确认了一轮被暂停的收敛",
       "sync_machine_removed": "从同步注册表中下线了一台机器",
+      "sync_plaintext_pushed": "推送了一轮曾因明文密钥拒绝推送的文件：{{files}}",
       "sync_rejected": "拒绝了一轮被暂停的收敛",
       "sync_rolled_back": "回滚了一轮收敛",
       "sync_run": "执行了一轮收敛",
@@ -1715,6 +1716,7 @@
     "SYNC_MACHINE_NOT_FOUND": "没有使用该 id 与此远端同步的机器。",
     "SYNC_NOTHING_STOPPED": "没有等待这个回答的同步轮次。",
     "SYNC_NO_REMOTE": "这台机器尚未设置同步远端。",
+    "SYNC_NO_PLAINTEXT_FOUND": "上一轮没有发现明文密钥，没有可以「仍然推送」的内容。",
     "SYNC_REMOTE_FAILED": "远端无法连接、拒绝了凭据，或拒绝了推送。",
     "SYNC_REMOTE_INVALID": "无法使用这个仓库地址或分支。",
     "SYNC_ROUND_NOT_FOUND": "这台机器的历史中没有该轮次。",
@@ -2807,9 +2809,15 @@
     "requires": {
       "declared": "声明于 SKILL.md",
       "openClis": "打开命令行工具",
-      "emptyTitle": "不需要命令",
-      "emptyBody": "这个技能的 SKILL.md 没有声明 requires: 列表。",
+      "emptyTitle": "没有依赖",
+      "emptyBody": "这个技能的 SKILL.md 没有在 requires: 下声明命令或密钥。",
       "title": "依赖",
+      "commandsTitle": "命令",
+      "secretsTitle": "密钥",
+      "secretSet": "已设置",
+      "secretMissing": "密钥 {{name}} 未设置",
+      "openSecrets": "打开密钥",
+      "secretsFootnote": "技能照常投递。密钥由你在密钥页面设置；Coffer 不会在这里显示它的值。",
       "footnote": "技能照常投递。把需要处理的命令交给你的智能体，然后点“再次检查”。",
       "loadFailed": "无法检查这个技能需要的命令",
       "found": "已找到",
@@ -2881,7 +2889,8 @@
       "folderInWay": "{{agent}} 中有文件夹挡住",
       "needsMissing": "需要 {{command}} · 未安装",
       "needsLogin": "需要 {{command}} · 未登录",
-      "needsNewer": "需要更新版本的 {{command}}"
+      "needsNewer": "需要更新版本的 {{command}}",
+      "needsSecret": "需要密钥 {{name}} · 未设置"
     },
     "selection": {
       "title_one": "已选 {{count}} 个技能",
@@ -2928,6 +2937,8 @@
       "requiresLoginPart_other": "{{commands}} 未登录",
       "requiresOldPart_one": "{{commands}} 版本低于技能要求",
       "requiresOldPart_other": "{{commands}} 版本低于技能要求",
+      "secretsTitle_one": "这个技能需要的 {{count}} 个密钥未设置",
+      "secretsTitle_other": "这个技能需要的 {{count}} 个密钥未设置",
       "unreachableTitle": "无法访问 {{repo}}",
       "unreachableBody": "上次检查于 {{time}}：{{error}} 技能仍按固定的副本工作，只是暂停更新。",
       "updateTitle": "{{repo}} 有可用更新",
@@ -4124,6 +4135,17 @@
         "keepsWorkingWaiting_other": "这台 Mac 上一切照常；{{count}} 项改动等待推送。",
         "retry": "Coffer 会在下一轮重试，也可以现在点「重试」。"
       },
+      "plaintext_found": {
+        "title": "没有推送任何内容：有文件含明文密钥",
+        "body": "密钥一旦推送到远端，就会永久留在它的历史里，所以这一轮什么也没推送。把每个值移入密钥，并让文件引用它，然后重试。如果它只是示例而不是真的密钥，可以仍然推送。",
+        "where": "{{path}}，第 {{line}} 行",
+        "key": "{{key}} 的值",
+        "token": "一个形似令牌的值",
+        "pushAnyway": "仍然推送",
+        "confirmTitle": "仍然推送这些文件？",
+        "confirmBody": "Coffer 会按文件现在的样子推送，并在审计日志中记下是你操作的。只有在确认每一处都不是真实密钥时才这样做：一旦推送，这个值就在远端的历史里了。",
+        "confirmLabel": "我已确认，仍然推送"
+      },
       "push_failed": {
         "title": "推送被拒绝",
         "titlePulled": "已拉取并应用，但推送被拒绝",
@@ -4164,6 +4186,7 @@
         "pushed": "已推送",
         "pulled_and_pushed": "已拉取并推送",
         "push_failed": "推送失败",
+        "plaintext_found": "发现明文密钥",
         "stopped": "因冲突停下",
         "held": "删除被拦下",
         "waiting_on_edit": "等待编辑完成",
@@ -4184,7 +4207,8 @@
         "stopped": "同步因两台机器都改过的文件而停下——请到同步页面逐个回答。",
         "held": "同步拦下了一次大量删除——请到同步页面查看。",
         "waiting_on_edit": "同步在等待：本轮要改的文件正在被编辑。",
-        "join_required": "本机尚未加入这个远端——请到同步页面加入。"
+        "join_required": "本机尚未加入这个远端——请到同步页面加入。",
+        "plaintext_found": "同步没有推送任何内容：有文件含明文密钥——请到同步页面查看。"
       },
       "rolledBack_one": "已把 {{count}} 个文件回滚到 {{snapshot}}",
       "rolledBack_other": "已把 {{count}} 个文件回滚到 {{snapshot}}"
@@ -4565,6 +4589,7 @@
       "held_one": "已停止：暂扣 {{count}} 项删除",
       "held_other": "已停止：暂扣 {{count}} 项删除",
       "push_failed": "推送失败",
+      "plaintext_found": "未推送：明文密钥",
       "unreachable": "远端无法连接",
       "auth_failed": "登录失败",
       "cloud_folder": "已暂停",
@@ -4658,6 +4683,7 @@
         "pushed": "已推送",
         "pulled_and_pushed": "已拉取并推送",
         "push_failed": "推送失败",
+        "plaintext_found": "未推送：明文密钥",
         "stopped": "因冲突停止",
         "held": "删除已暂扣",
         "waiting_on_edit": "等待编辑完成",
@@ -4684,6 +4710,7 @@
         "nothingMoved": "没有检出或推送任何内容",
         "retriesAt": "{{time}} 重试",
         "nothingPulledOrPushed": "没有拉取或推送任何内容",
+        "plaintextKept": "没有推送任何内容",
         "byYou": "由你操作"
       }
     },
@@ -4855,6 +4882,7 @@
           "joined": "已同步",
           "rolled_back": "已同步",
           "push_failed": "推送失败",
+          "plaintext_found": "发现明文密钥",
           "stopped": "有冲突",
           "held": "已拦下",
           "waiting_on_edit": "等待编辑完成",

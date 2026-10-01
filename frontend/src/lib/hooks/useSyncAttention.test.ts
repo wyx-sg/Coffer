@@ -85,6 +85,7 @@ describe("syncStatusMarker", () => {
             secret_ref: null,
             since: null,
             handoff: null,
+            plaintext: [],
           },
         }),
       ),

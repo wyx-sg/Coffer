@@ -14,9 +14,11 @@ from collections.abc import Iterator
 import pytest
 from starlette.testclient import TestClient
 
+from coffer.domain.secrets import secret_ref
 from coffer.infrastructure.skill.master_store import default_master_root
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.secret_composition import get_secret_store
 from coffer.surfaces.http.skill_dependencies import get_skill_source_service
 from tests.support.skill_sources import Upstream, make_upstream, skill_md, stage_dirs
 
@@ -104,6 +106,34 @@ def test_requires_reaches_the_skill_read_model(c: TestClient, up: Upstream) -> N
     listed = {i["name"]: i for i in c.get("/api/v1/skills").json()["items"]}
     assert listed["review"]["requires"] == expected
     assert listed["coffer-guide"]["source_status"] is None
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="the read model says whether each declared secret is set"
+)
+def test_requires_secrets_reach_the_read_model_with_their_state(
+    c: TestClient, tmp_path: pathlib.Path
+) -> None:
+    up = make_upstream(
+        tmp_path / "upstream-secrets",
+        {
+            "skills/review/SKILL.md": skill_md(
+                "review", "v1", requires="{commands: [jq], secrets: [GH_TOKEN, NPM_TOKEN]}"
+            )
+        },
+    )
+    get_secret_store().set(secret_ref("NPM_TOKEN"), "npm-value-never-served")
+    item = _add(c, up, path="skills/review")
+    expected = [{"name": "GH_TOKEN", "is_set": False}, {"name": "NPM_TOKEN", "is_set": True}]
+    assert item["requires"] == [{"command": "jq", "min_version": None}]
+    assert item["requires_secrets"] == expected
+    r = c.get(f"/api/v1/skills/{item['uid']}")
+    assert r.json()["requires_secrets"] == expected
+    assert "npm-value-never-served" not in r.text
+    get_secret_store().set(secret_ref("GH_TOKEN"), "gh-value")
+    listed = {i["name"]: i for i in c.get("/api/v1/skills").json()["items"]}
+    assert [s["is_set"] for s in listed["review"]["requires_secrets"]] == [True, True]
+    assert listed["coffer-guide"]["requires_secrets"] == []
 
 
 @pytest.mark.acceptance(spec="skill-manager", scenario="an unreachable repository writes nothing")

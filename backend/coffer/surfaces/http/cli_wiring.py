@@ -8,6 +8,7 @@ description.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import cache
 
 from coffer.application.skill.cli_documents import MasterSkillDocuments
@@ -28,12 +29,18 @@ def build_command_probe() -> CommandProbePort:
 
 
 def wire_cli_requirements(
-    skill_svc: SkillService, servers: McpLaunchersPort | None = None
+    skill_svc: SkillService,
+    servers: McpLaunchersPort | None = None,
+    secret_set: Callable[[str], bool] | None = None,
 ) -> CliRequirementService:
-    """Build the service and publish it for the routes and the attention list."""
+    """Build the service and publish it for the routes and the attention list.
+
+    ``secret_set`` answers whether a secret name is in Coffer's secret store,
+    for the secrets skills declare they require."""
     service = CliRequirementService(
         skills=MasterSkillDocuments(skill_svc),
         servers=servers,
+        secret_set=secret_set,
         probe=build_command_probe(),
         # The OS and architecture do not change while the daemon runs.
         machine=cache(machine_label),

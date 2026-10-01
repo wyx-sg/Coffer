@@ -145,6 +145,17 @@ async def restore_hold() -> RoundOut:
     return round_out(await svc.continue_round())
 
 
+# --- a plaintext secret in what a round would push ---------------------------------------
+
+
+@router.post("/plaintext/push-anyway", response_model=RoundOut)
+async def push_anyway() -> RoundOut:
+    """ "I checked it, push anyway": allow exactly what the last round found
+    (recorded in the audit log) and run a round. Refused with
+    ``SYNC_NO_PLAINTEXT_FOUND`` unless the last round is ``plaintext_found``."""
+    return round_out(await get_sync_service().push_anyway(actor=_ACTOR))
+
+
 # --- rolling a round back ------------------------------------------------------------------
 
 

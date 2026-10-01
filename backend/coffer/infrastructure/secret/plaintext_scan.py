@@ -184,6 +184,41 @@ def _json_hits(path: pathlib.Path) -> list[_Hit]:
     return hits
 
 
+def _line_hits(raw: str) -> list[tuple[str, str, int, int]]:
+    """``(key, value, start, end)`` for each plaintext value on one line: an
+    assignment whose name says secret, or a well-known token shape."""
+    if "coffer run" in raw:
+        # `--secret ENV=NAME` names a secret; it is not one.
+        return []
+    out: list[tuple[str, str, int, int]] = []
+    seen: list[tuple[int, int]] = []
+    for m in _ASSIGNMENT.finditer(raw):
+        key, value = m.group("key"), m.group("value")
+        if not _SECRET_KEY.search(key) or not _usable(value):
+            continue
+        span = (m.start("value"), m.end("value"))
+        seen.append(span)
+        out.append((key, value, *span))
+    for m in _TOKEN_SHAPES.finditer(raw):
+        span = (m.start("value"), m.end("value"))
+        if any(s <= span[0] < e for s, e in seen):
+            continue
+        out.append(("", m.group("value"), *span))
+    return out
+
+
+def find_in_text(text: str) -> list[tuple[int, str]]:
+    """``(line, key)`` for each plaintext value in ``text`` — the same
+    detection a skill file gets, never the value. A token found by its shape
+    alone is keyed ``token``. For vault sync's check before a push (spec
+    vault-sync "Refuse to push a plaintext secret")."""
+    return [
+        (n, key or "token")
+        for n, raw in enumerate(text.splitlines(), start=1)
+        for key, _value, _s, _e in _line_hits(raw)
+    ]
+
+
 def _skill_hits(path: pathlib.Path, skill: str) -> tuple[list[_Hit], list[SkillMention]]:
     hits: list[_Hit] = []
     mentions: list[SkillMention] = []
@@ -194,39 +229,21 @@ def _skill_hits(path: pathlib.Path, skill: str) -> tuple[list[_Hit], list[SkillM
     for n, raw in enumerate(text.splitlines(), start=1):
         for m in _SECRETS_MENTION.finditer(raw):
             mentions.append(SkillMention(skill, str(path), n, m.group(0)))
-        if "coffer run" in raw:
-            # `--secret ENV=NAME` names a secret; it is not one.
-            continue
-        seen: set[tuple[int, int]] = set()
-        for m in _ASSIGNMENT.finditer(raw):
-            key, value = m.group("key"), m.group("value")
-            if not _SECRET_KEY.search(key) or not _usable(value):
-                continue
-            span = (m.start("value"), m.end("value"))
-            seen.add(span)
+        for key, value, start, end in _line_hits(raw):
+            if not key:
+                key = f"token-{n}"
+                name = _name(skill, key)
+            else:
+                name = _name(skill, key.lower())
             finding = Finding(
                 id=_finding_id(path, n, key),
                 path=str(path),
                 source="skill",
                 key=key,
                 line=n,
-                proposed_name=_name(skill, key.lower()),
+                proposed_name=name,
             )
-            hits.append(_Hit(finding, value, *span))
-        for m in _TOKEN_SHAPES.finditer(raw):
-            span = (m.start("value"), m.end("value"))
-            if any(s <= span[0] < e for s, e in seen):
-                continue
-            key = f"token-{n}"
-            finding = Finding(
-                id=_finding_id(path, n, key),
-                path=str(path),
-                source="skill",
-                key=key,
-                line=n,
-                proposed_name=_name(skill, key),
-            )
-            hits.append(_Hit(finding, m.group("value"), *span))
+            hits.append(_Hit(finding, value, start, end))
     return hits, mentions
 
 

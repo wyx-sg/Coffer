@@ -18,6 +18,7 @@ const problem = (kind: "unreachable" | "push_failed" | "cloud_folder") => ({
   secret_ref: null,
   since: null,
   handoff: null,
+  plaintext: [],
 });
 const waiting = [
   {

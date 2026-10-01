@@ -2462,6 +2462,11 @@ components:
             $ref: '#/components/schemas/SkillRequirementOut'
           title: Requires
           type: array
+        requires_secrets:
+          items:
+            $ref: '#/components/schemas/SkillSecretRequirementOut'
+          title: Requires Secrets
+          type: array
         scope:
           anyOf:
           - $ref: '#/components/schemas/ScopeOut'
@@ -2510,6 +2515,7 @@ components:
       - updated_at
       - bindings
       - requires
+      - requires_secrets
       - source_status
       title: SkillOut
       type: object
@@ -2548,6 +2554,22 @@ components:
       - command
       - min_version
       title: SkillRequirementOut
+      type: object
+    SkillSecretRequirementOut:
+      description: |-
+        One Coffer secret the skill's SKILL.md says it needs, and whether it is
+        set in the secret store on this machine. Never a value.
+      properties:
+        is_set:
+          title: Is Set
+          type: boolean
+        name:
+          title: Name
+          type: string
+      required:
+      - name
+      - is_set
+      title: SkillSecretRequirementOut
       type: object
     SkillSourceStatusOut:
       description: What this machine last learned about a Git-imported skill's source.

@@ -288,6 +288,7 @@ describe("SyncStatusTab — problems", () => {
     secret_ref: null,
     since: null,
     handoff: null,
+    plaintext: [],
     ...over,
   });
 

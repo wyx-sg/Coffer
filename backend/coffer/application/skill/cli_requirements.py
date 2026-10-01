@@ -14,6 +14,13 @@ needs it.
 Coffer installs nothing. A command that needs the person carries a hand-off
 prompt for their agent (``cli_handoff.py``; spec skill-manager "Hand a
 required command to an agent with a prompt").
+
+The same documents name the Coffer secrets a skill requires
+(``requires: {secrets: [...]}``); :meth:`CliRequirementService.missing_secrets`
+answers which of them are not set, asking only whether each name is in the
+secret store (never a value). Setting one is the person's task on the Secrets
+page, so it carries no hand-off (spec skill-manager "Report a secret a skill
+requires that is not set").
 """
 
 from __future__ import annotations
@@ -82,6 +89,15 @@ class SkillWarning:
 
 
 @dataclass(frozen=True)
+class MissingSecret:
+    """A secret a managed skill declares that is not in the secret store."""
+
+    skill_uid: str
+    skill_name: str
+    secret: str
+
+
+@dataclass(frozen=True)
 class CliView:
     required: RequiredCommand
     probe: ProbeResult
@@ -108,9 +124,12 @@ class CliRequirementService:
         probe: CommandProbePort,
         machine: Callable[[], str],
         servers: McpLaunchersPort | None = None,
+        secret_set: Callable[[str], bool] | None = None,
         clock: Callable[[], datetime] = _now,
     ) -> None:
         self._skills = skills
+        #: Whether a secret NAME is in the store; ``None`` when not wired.
+        self._secret_set = secret_set
         self._servers = servers
         self._probe = probe
         self._machine = machine
@@ -133,6 +152,22 @@ class CliRequirementService:
 
     async def check(self, command: str) -> CliView:
         return await self._one(command, force=True)
+
+    async def missing_secrets(self) -> tuple[MissingSecret, ...]:
+        """Every (skill, secret) whose declared secret is not set, by skill
+        then in declared order. Read afresh on each call: a presence check is
+        one file lookup, and a secret the person just added must clear."""
+        if self._secret_set is None:
+            return ()
+        is_set = self._secret_set
+        out: list[MissingSecret] = []
+        for doc in await self._skills.skill_documents():
+            if doc.text is None:
+                continue
+            for name in requirements_from_skill_md(doc.text).secrets:
+                if not await asyncio.to_thread(is_set, name):
+                    out.append(MissingSecret(doc.uid, doc.name, name))
+        return tuple(out)
 
     # ---------- internals ----------
 
@@ -206,6 +241,7 @@ __all__ = [
     "CliView",
     "CommandProbePort",
     "McpLaunchersPort",
+    "MissingSecret",
     "SkillDocument",
     "SkillDocumentsPort",
     "SkillWarning",

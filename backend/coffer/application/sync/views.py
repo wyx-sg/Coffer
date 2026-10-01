@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from coffer.domain.sync.machine import MachineDescriptor
+from coffer.domain.sync.plaintext import PlaintextFinding
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import AppliedChange, RoundRecord
 from coffer.domain.sync.stops import ConflictFile, Stop
@@ -43,15 +44,18 @@ class Problem:
     """Why sync is not working right now, in terms of what a person can do.
 
     ``kind``: ``unreachable`` / ``auth_failed`` / ``push_failed`` /
-    ``cloud_folder`` / ``layout`` / ``git_missing`` / ``failed``. ``handoff``
-    is the prompt for the person's agent when the fix is outside Coffer
-    (spec vault-sync "Hand a remote's failure to an agent")."""
+    ``plaintext_found`` / ``cloud_folder`` / ``layout`` / ``git_missing`` /
+    ``failed``. ``handoff`` is the prompt for the person's agent when the fix
+    is outside Coffer (spec vault-sync "Hand a remote's failure to an agent",
+    "Refuse to push a plaintext secret"); ``plaintext`` is what a
+    ``plaintext_found`` round found, never a value."""
 
     kind: str
     message: str
     secret_ref: str | None = None
     since: str | None = None
     handoff: str | None = None
+    plaintext: tuple[PlaintextFinding, ...] = ()
 
 
 @dataclass(frozen=True)

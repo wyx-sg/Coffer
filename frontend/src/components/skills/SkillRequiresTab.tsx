@@ -5,7 +5,9 @@
 // disagree) and Open in CLIs. A command that needs the person also offers the
 // same hand-off to an agent (AgentHandoff) its CLI page does — Coffer never
 // installs or logs in itself (Principle IV). A missing command
-// never stops delivery — the footnote says so.
+// never stops delivery — the footnote says so. Below them, the Coffer secrets
+// it declares, each set or not set in the secret store; a missing one opens
+// the Secrets page, where the person sets it.
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, RefreshCw, Terminal } from "lucide-react";
@@ -47,8 +49,11 @@ export function SkillRequiresTab({ skill }: Props) {
   const byCommand = new Map((data?.items ?? []).map((cli) => [cli.command, cli]));
   const rows = skill.requires.map((req) => ({ req, cli: byCommand.get(req.command) }));
   const checked = oldestCheck(rows.flatMap((r) => (r.cli ? [r.cli] : [])));
+  // The Coffer secrets it declares (spec skill-manager "Declare the secrets a
+  // skill requires"), each already answered set / not set by the read model.
+  const secrets = skill.requires_secrets ?? [];
 
-  if (rows.length === 0) {
+  if (rows.length === 0 && secrets.length === 0) {
     return (
       <EmptyState
         icon={Terminal}
@@ -90,6 +95,11 @@ export function SkillRequiresTab({ skill }: Props) {
         </p>
       ) : null}
 
+      {rows.length > 0 && secrets.length > 0 ? (
+        <h4 className="pt-3 text-xs font-semibold text-text-muted">
+          {t("skills.requires.commandsTitle")}
+        </h4>
+      ) : null}
       <ul className="divide-y divide-border-subtle">
         {rows.map(({ req, cli }) => {
           const href = `/clis/${encodeURIComponent(req.command)}`;
@@ -118,7 +128,49 @@ export function SkillRequiresTab({ skill }: Props) {
         })}
       </ul>
 
-      <p className="pt-3 text-xs text-text-muted">{t("skills.requires.footnote")}</p>
+      {rows.length > 0 ? (
+        <p className="pt-3 text-xs text-text-muted">{t("skills.requires.footnote")}</p>
+      ) : null}
+      {secrets.length > 0 ? <SecretRows secrets={secrets} /> : null}
     </section>
+  );
+}
+
+/** One row per declared secret: its name and whether it is set. A secret that
+ *  is not set says so and opens the Secrets page, where the person sets it —
+ *  no hand-off, and never a value (Principle IV: a person's task). */
+function SecretRows({ secrets }: { secrets: SkillOut["requires_secrets"] }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col pt-4" data-testid="skill-requires-secrets">
+      <h4 className="text-xs font-semibold text-text-muted">{t("skills.requires.secretsTitle")}</h4>
+      <ul className="divide-y divide-border-subtle">
+        {secrets.map((secret) => (
+          <li
+            key={secret.name}
+            className="grid grid-cols-[8.5rem_minmax(0,1fr)_auto] items-center gap-4 py-3"
+          >
+            <span className="truncate font-mono text-sm font-label">{secret.name}</span>
+            <StatusWord tone={secret.is_set ? "ok" : "warn"}>
+              {secret.is_set
+                ? t("skills.requires.secretSet")
+                : t("skills.requires.secretMissing", { name: secret.name })}
+            </StatusWord>
+            {secret.is_set ? (
+              <span />
+            ) : (
+              <Link
+                to="/secrets"
+                className="inline-flex items-center gap-1 text-xs font-label text-accent-text hover:underline"
+              >
+                {t("skills.requires.openSecrets")}
+                <ArrowRight className="size-3" aria-hidden />
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p className="pt-3 text-xs text-text-muted">{t("skills.requires.secretsFootnote")}</p>
+    </div>
   );
 }

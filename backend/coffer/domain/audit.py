@@ -107,6 +107,7 @@ class AuditEventType(StrEnum):
     SYNC_REJECTED = "sync_rejected"
     SYNC_ROLLED_BACK = "sync_rolled_back"
     SYNC_MACHINE_REMOVED = "sync_machine_removed"
+    SYNC_PLAINTEXT_PUSHED = "sync_plaintext_pushed"
     # spec provider-switching
     PROVIDER_SWITCHED = "provider_switched"
     PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"

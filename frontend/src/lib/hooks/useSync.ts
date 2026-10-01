@@ -100,6 +100,11 @@ export function useRunSync() {
   return useRoundMutation<void>(() => syncApi.run());
 }
 
+/** "Push anyway": push what the last round refused as a plaintext secret. */
+export function usePushAnyway() {
+  return useRoundMutation<void>(() => syncApi.pushAnyway());
+}
+
 /** Store the remote, replacing any previous one. Pause and resume are this
  *  same call with `enabled` flipped. */
 export function useSaveSyncRemote() {

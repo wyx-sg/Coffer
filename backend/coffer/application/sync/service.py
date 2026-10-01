@@ -33,6 +33,7 @@ from coffer.application.sync.round_engine import RoundEngine
 from coffer.application.sync.round_ports import RemoteStorePort, RoundHistoryPort, TokenPort
 from coffer.application.sync.service_key import KeyMixin
 from coffer.application.sync.service_machines import MachinesMixin
+from coffer.application.sync.service_plaintext import PlaintextMixin
 from coffer.application.sync.service_ports import (
     AgentInventoryPort,
     HostMachinePort,
@@ -69,7 +70,7 @@ _QUIET = frozenset(
 )
 
 
-class SyncService(RemoteMixin, MachinesMixin, StatusMixin, KeyMixin):
+class SyncService(PlaintextMixin, RemoteMixin, MachinesMixin, StatusMixin, KeyMixin):
     def __init__(
         self,
         *,

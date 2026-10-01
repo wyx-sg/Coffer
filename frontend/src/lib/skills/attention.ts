@@ -5,7 +5,9 @@
 // its SKILL.md declares) and the last Check copies report.
 //
 // Order, most urgent first: its master folder is gone, an agent's copy is a
-// folder Coffer did not put there, a command it needs is missing, its Git
+// folder Coffer did not put there, a command it needs is missing, a secret it
+// needs is not set (the skill read model answers that from Coffer's secret
+// store, by name only), its Git
 // source cannot be reached, an update is waiting.
 import type { Cli } from "@/lib/api/clis";
 import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
@@ -14,6 +16,7 @@ export type SkillAttention =
   | { kind: "masterMissing" }
   | { kind: "folderInWay"; agentName: string; entry: SkillDriftEntry }
   | { kind: "requires"; missing: string[]; loggedOut: string[]; outdated: string[] }
+  | { kind: "secrets"; missing: string[] }
   | { kind: "sourceUnreachable" }
   | { kind: "updateAvailable" };
 
@@ -60,6 +63,8 @@ export function skillAttention(
   if (problems.missing.length + problems.loggedOut.length + problems.outdated.length > 0) {
     out.push({ kind: "requires", ...problems });
   }
+  const unset = (skill.requires_secrets ?? []).filter((s) => !s.is_set).map((s) => s.name);
+  if (unset.length > 0) out.push({ kind: "secrets", missing: unset });
   if (skill.source_status?.error) out.push({ kind: "sourceUnreachable" });
   else if (skill.source_status?.update_available) out.push({ kind: "updateAvailable" });
   return out;

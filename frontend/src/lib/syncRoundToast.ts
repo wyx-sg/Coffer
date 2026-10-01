@@ -18,6 +18,7 @@ const NEEDS_ANSWER: ReadonlySet<RoundStatus> = new Set([
   "held",
   "waiting_on_edit",
   "join_required",
+  "plaintext_found",
 ]);
 
 /** Rounds that could not do their job; `detail` carries git's own words. */

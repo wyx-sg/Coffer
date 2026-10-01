@@ -11,6 +11,7 @@ round's, classified by what a person can do about it.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import difflib
 import posixpath
 from collections import Counter
@@ -55,6 +56,7 @@ _PROBLEMS = {
     RoundStatus.UNREACHABLE: "unreachable",
     RoundStatus.AUTH_FAILED: "auth_failed",
     RoundStatus.PUSH_FAILED: "push_failed",
+    RoundStatus.PLAINTEXT_FOUND: "plaintext_found",
     RoundStatus.PAUSED_CLOUD_FOLDER: "cloud_folder",
     RoundStatus.REMOTE_TOO_NEW: "layout",
     RoundStatus.REMOTE_TOO_OLD: "layout",
@@ -79,6 +81,8 @@ class StatusMixin:
     _next_round_at: str | None
     _git_available: Callable[[], bool]
     _host_label: Callable[[], str]
+
+    def plaintext_handoff(self, last: RoundRecord) -> str | None: ...
 
     # --- the status ---------------------------------------------------------------
 
@@ -132,7 +136,14 @@ class StatusMixin:
                     self._host_label(), needed_for="keeping the vault's history and syncing it"
                 ),
             )
-        return _problem(last, remote) if last else None
+        if last is None:
+            return None
+        found = _problem(last, remote)
+        if found is not None and found.kind == "plaintext_found":
+            return dataclasses.replace(
+                found, handoff=self.plaintext_handoff(last), plaintext=last.plaintext
+            )
+        return found
 
     def _waiting(self, remote: SyncRemote, head: str) -> tuple[WaitingCommit, ...]:
         """The commits ``origin/<branch>..HEAD``: what the next push carries."""

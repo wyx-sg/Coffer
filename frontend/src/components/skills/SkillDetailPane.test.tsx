@@ -328,7 +328,7 @@ describe("SkillDetailPane", () => {
 
   test("a skill that declares no commands says so on Requires", async () => {
     renderSkillsPage("/skills/hello/requires");
-    expect(await screen.findByText("No commands required")).toBeInTheDocument();
+    expect(await screen.findByText("Nothing required")).toBeInTheDocument();
   });
 
   test("an unknown name says there is no such skill", async () => {

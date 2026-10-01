@@ -153,7 +153,7 @@ describe("SyncPage — header", () => {
   ] as const)("a %s problem reads %s, with %s", (kind, word, action) => {
     seed(
       makeStatus({
-        problem: { kind, message: "", secret_ref: null, since: null, handoff: null },
+        problem: { kind, message: "", secret_ref: null, since: null, handoff: null, plaintext: [] },
       }),
     );
     renderAt();

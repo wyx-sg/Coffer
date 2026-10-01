@@ -34,7 +34,21 @@ Exits 1 while a round waits for a person — stopped on conflicts, held, unable 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `--json` | 选项 | 开关 |  | JSON output for scripts |
-| `--prompt` | 选项 | 开关 |  | Print the prompt that hands the current problem (a refused push or sign-in, an unreachable remote, git missing) to your agent |
+| `--prompt` | 选项 | 开关 |  | Print the prompt that hands the current problem (a refused push or sign-in, an unreachable remote, git missing, a plaintext secret in what a push would publish) to your agent |
+
+## sync push-anyway
+
+```sh
+coffer sync push-anyway [OPTIONS]
+```
+
+Push what the last round refused as a plaintext secret, once you checked it is not one.
+
+Allows exactly the file versions that round found (a file changed since is read again), records it in the audit log, and runs a round.
+
+| 名称 | 类别 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `--yes, -y` | 选项 | 开关 |  | Do not ask before pushing |
 
 ## sync history
 

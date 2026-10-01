@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any, Literal, cast
 
 from coffer.application.sync.views import MachineView, StoppedRound, SyncStatus
 from coffer.domain.sync.handoffs import is_secret_file
 from coffer.domain.sync.joins import JoinPreview
+from coffer.domain.sync.plaintext import PlaintextFinding
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import AppliedChange, RoundRecord
 from coffer.domain.sync.stops import ConflictFile
@@ -15,6 +17,7 @@ from coffer.surfaces.http.sync_schemas import (
     AgentInventoryOut,
     AreaCountsOut,
     MachineOut,
+    PlaintextFindingOut,
     ProblemOut,
     PulledCommitOut,
     RoundOut,
@@ -66,7 +69,15 @@ def round_out(r: RoundRecord) -> RoundOut:
         join=r.join,
         pulled_files=r.pulled_files,
         pushed_files=r.pushed_files,
+        plaintext=plaintext_out(r.plaintext),
+        folded=r.folded,
     )
+
+
+def plaintext_out(found: Sequence[PlaintextFinding]) -> list[PlaintextFindingOut]:
+    return [
+        PlaintextFindingOut(path=f.path, line=f.line, key=f.key, current=f.current) for f in found
+    ]
 
 
 def remote_out(remote: SyncRemote) -> SyncRemoteOut:
@@ -112,6 +123,7 @@ def status_out(s: SyncStatus) -> SyncStatusOut:
             secret_ref=problem.secret_ref,
             since=problem.since,
             handoff=handoff_out(problem.handoff),
+            plaintext=plaintext_out(problem.plaintext),
         )
         if problem
         else None,

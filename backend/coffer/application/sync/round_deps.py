@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -51,6 +51,10 @@ class RoundDeps:
     scratch: ScratchPort | None = None
     validate: Validator | None = None
     cloud_folder: Callable[[], str | None] = lambda: None
+    #: ``(line, key)`` for each plaintext secret in a file's text — the
+    #: detection ``coffer secret scan`` uses. ``None`` reads nothing before a
+    #: push (spec vault-sync "Refuse to push a plaintext secret").
+    find_plaintext: Callable[[str], Sequence[tuple[int, str]]] | None = None
     clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC)
     #: The one layout a remote may carry. Above it is a newer Coffer's; below
     #: it is a remote no migrated machine has rebuilt yet. Both are refused:

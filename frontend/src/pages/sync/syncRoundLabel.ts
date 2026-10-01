@@ -77,6 +77,8 @@ export function roundLabel(t: TFunction, round: SyncRound, ctx: Context): RoundL
         main: round.pulled_files > 0 ? t("sync.rounds.label.pulledPushFailed") : main,
         detail: t("sync.rounds.detail.rejected"),
       };
+    case "plaintext_found":
+      return { main, detail: t("sync.rounds.detail.plaintextKept") };
     case "stopped":
       return {
         main: t("sync.rounds.label.stoppedOn", { count: round.conflicts }),
@@ -114,7 +116,8 @@ export function roundLabel(t: TFunction, round: SyncRound, ctx: Context): RoundL
 /** A round's Pulled and Pushed cells: counts, or "—" where the round moved nothing that way. */
 export function movedCells(round: SyncRound): { pulled: string; pushed: string } {
   if (MOVED_NOTHING.has(round.status)) return { pulled: "—", pushed: "—" };
-  if (round.status === "push_failed") return { pulled: String(round.pulled_files), pushed: "—" };
+  if (round.status === "push_failed" || round.status === "plaintext_found")
+    return { pulled: String(round.pulled_files), pushed: "—" };
   return { pulled: String(round.pulled_files), pushed: String(round.pushed_files) };
 }
 

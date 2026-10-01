@@ -19,6 +19,7 @@ NEEDS_PERSON = frozenset(
         "auth_failed",
         "unreachable",
         "push_failed",
+        "plaintext_found",
         "paused_cloud_folder",
         "remote_too_new",
         "remote_too_old",
@@ -35,7 +36,18 @@ _NEXT = {
     "join_required": "run 'coffer sync join' to see what joining would do, and join",
     "auth_failed": "check the push token ('coffer sync remote set --secret-ref ...')",
     "paused_cloud_folder": "move the vault out of the synchronised folder",
+    "plaintext_found": "move each value into a secret ('coffer sync status --prompt' hands it to "
+    "your agent) and run 'coffer sync now', or 'coffer sync push-anyway' if it is not a secret",
 }
+
+
+def print_plaintext(found: list[dict[str, Any]]) -> None:
+    """Where each plaintext secret is: file, line and key, never the value."""
+    for f in found[:20]:
+        where = "" if f.get("current", True) else "  (only in an unpushed commit)"
+        _console.print(f"    [red]{f['path']}:{f['line']}[/red]  {f['key']}{where}")
+    if len(found) > 20:
+        _console.print(f"    and {len(found) - 20} more")
 
 
 def verbose_of(ctx: typer.Context) -> bool:
@@ -75,6 +87,13 @@ def print_round(run: dict[str, Any], *, detail: bool = True) -> None:
         _console.print(f"  file: {run['path']}")
     if run.get("detail"):
         _console.print(f"  {run['detail']}")
+    if run.get("plaintext"):
+        print_plaintext(run["plaintext"])
+    if run.get("folded"):
+        _console.print(
+            f"  folded {run['folded']} unpushed commit(s) into one: a value removed since "
+            "was not pushed"
+        )
     if detail:
         for c in (run.get("applied") or [])[:20]:
             _console.print(f"    {c['status']:<8} {c['path']}")
@@ -83,4 +102,4 @@ def print_round(run: dict[str, Any], *, detail: bool = True) -> None:
         _console.print(f"  next: {step}")
 
 
-__all__ = ["NEEDS_PERSON", "changes", "print_round", "verbose_of"]
+__all__ = ["NEEDS_PERSON", "changes", "print_plaintext", "print_round", "verbose_of"]

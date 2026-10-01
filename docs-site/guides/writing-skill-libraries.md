@@ -150,7 +150,7 @@ metadata:
 ---
 ```
 
-`metadata.profiles` indexes the profile files the domain ships. `metadata.requires` is covered under [Declared dependencies](#declared-dependencies). A top-level `requires:` is something else: the command-line tools the skill drives (`gh`, `jq`), with a minimum version and a login check, which Coffer checks and hands to your agent to install when one is missing — see [CLIs](/guides/clis). A carrier skill that wraps a CLI should declare it there. Quote a description that contains `: ` (colon and space); unquoted, it is invalid YAML and the skill fails to parse. Keep the description to 1024 characters at most; Coffer refuses to import a longer one.
+`metadata.profiles` indexes the profile files the domain ships. `metadata.requires` is covered under [Declared dependencies](#declared-dependencies). A top-level `requires:` is something else: the command-line tools the skill drives (`gh`, `jq`), with a minimum version and a login check, which Coffer checks and hands to your agent to install when one is missing — see [CLIs](/guides/clis). A carrier skill that wraps a CLI should declare it there. The mapping form of that same key also names the Coffer secrets the skill's commands need, as `requires: {commands: [psql], secrets: [orders-db]}`, so the skill's **Requires** tab and the Overview tell the person when one is not set — see [Secrets a skill needs](/guides/skills#secrets-a-skill-needs). Any other key under the mapping is refused with a warning. Quote a description that contains `: ` (colon and space); unquoted, it is invalid YAML and the skill fails to parse. Keep the description to 1024 characters at most; Coffer refuses to import a longer one.
 
 ### Folder hygiene
 
@@ -163,7 +163,7 @@ metadata:
   coffer run --env-file connection.env -- ./query.sh
   ```
 
-  Do not keep plaintext files such as `~/.coffer/secrets/<name>.env`; `coffer secret scan` finds them and `coffer secret import` moves them into the store. See [Secrets](/guides/secrets).
+  Do not keep plaintext files such as `~/.coffer/secrets/<name>.env`; `coffer secret scan` finds them and `coffer secret import` moves them into the store. See [Secrets](/guides/secrets). Name each secret the skill uses under `requires: {secrets: [...]}` so Coffer can say when it is not set.
 
 ## Descriptions
 

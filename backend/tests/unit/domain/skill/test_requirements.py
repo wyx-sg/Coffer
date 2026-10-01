@@ -3,6 +3,8 @@ rest is skipped with a warning naming why."""
 
 from __future__ import annotations
 
+import pytest
+
 from coffer.domain.skill.requirements import (
     CommandRequirement,
     parse_requires,
@@ -97,3 +99,54 @@ def test_a_command_named_twice_keeps_the_first() -> None:
     parsed = parse_requires([{"command": "gh", "title": "GitHub CLI"}, "gh"])
     assert parsed.requirements == (CommandRequirement(command="gh", title="GitHub CLI"),)
     assert "declared twice" in parsed.warnings[0]
+
+
+_SECRETS_DOC = """---
+name: issues
+description: Files issues.
+requires:
+  commands: [gh]
+  secrets: [GITHUB_TOKEN, "bad name", GITHUB_TOKEN, npm.token]
+---
+"""
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="a skill's secrets are read from the mapping form"
+)
+def test_the_mapping_form_names_secrets_and_skips_what_is_not_a_name() -> None:
+    parsed = requirements_from_skill_md(_SECRETS_DOC)
+    assert parsed.requirements == (CommandRequirement(command="gh"),)
+    assert parsed.secrets == ("GITHUB_TOKEN", "npm.token")
+    assert parsed.warnings == (
+        "requires secret 2: 'bad name' is not a secret name; skipped",
+        "requires secret GITHUB_TOKEN: declared twice; later entry skipped",
+    )
+
+
+def test_the_list_form_carries_commands_only() -> None:
+    parsed = parse_requires(["gh", {"secrets": ["GITHUB_TOKEN"]}])
+    assert parsed.requirements == (CommandRequirement(command="gh"),)
+    assert parsed.secrets == ()
+    assert parsed.warnings == ("requires entry 2: no command; skipped",)
+
+
+@pytest.mark.parametrize("junk", [7, {"a": 1}, [3], ["x/y"], [""]])
+def test_a_secrets_value_that_is_not_names_declares_none(junk: object) -> None:
+    parsed = parse_requires({"secrets": junk})
+    assert parsed.secrets == ()
+    assert len(parsed.warnings) == 1
+
+
+def test_a_single_secret_name_is_one_secret() -> None:
+    assert parse_requires({"secrets": "API_KEY"}).secrets == ("API_KEY",)
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="an unknown key under requires is refused")
+def test_an_unknown_key_under_the_mapping_is_refused_with_a_warning() -> None:
+    parsed = parse_requires({"commands": ["jq"], "tools": ["rg"], "env": {"A": "b"}})
+    assert parsed.requirements == (CommandRequirement(command="jq"),)
+    assert parsed.secrets == ()
+    assert parsed.warnings == (
+        "requires: unknown key(s) env, tools refused; only commands and secrets are read",
+    )
