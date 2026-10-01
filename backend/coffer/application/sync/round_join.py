@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from typing import Any
 
+from coffer.application.sync import round_plaintext
 from coffer.application.sync.round_engine import (
     PROBLEM_STATUS,
     Recorder,
@@ -186,9 +188,8 @@ def _union(
     if applied:
         d.writer.notify(CommitResult(merged, d.sync_meta("Joined"), tuple(a.path for a in applied)))
     final = engine._publish_descriptor(merged)
-    pushed = d.changes(tip, final)
     pulled, machines = d.pulled(local, tip)
-    common = {
+    common: dict[str, Any] = {
         "from_commit": local,
         "to_commit": final,
         "snapshot": snapshot,
@@ -198,6 +199,12 @@ def _union(
         "join": JoinKind.NEW.value,
         "held": len(differ),
     }
+    checked = round_plaintext.check(d, tip, final)
+    if checked.findings or checked.moved:
+        return round_plaintext.refused(rec, checked, **common)
+    final = common["to_commit"] = checked.commit
+    common["folded"] = checked.folded
+    pushed = d.changes(tip, final)
     try:
         d.git.push(final, remote.branch, token)
     except RemoteFailed as exc:

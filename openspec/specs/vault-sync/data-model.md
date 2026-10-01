@@ -68,6 +68,7 @@ when it has nothing to say.
 | `join_choices` | `[ConflictFile]` | files a join left as they are here because both sides hold them with no common base, until the person chooses (keep mine / take theirs); while listed, the vault writer *holds* those paths and their effective version is the one on disk |
 | `confirmed` | `[local tip, remote tip]` | a hold the person confirmed, for exactly that pair of tips |
 | `joined` | `true` | this machine has joined the current remote |
+| `plaintext_allowed` | `[blob]` | the file versions a person pushed anyway although a round found a plaintext secret in them ("Refuse to push a plaintext secret"); a file changed since is a new blob and is read again |
 
 `Stop` (`domain/sync/stops.py`):
 
@@ -193,6 +194,8 @@ and is what a row is read back from, so no column can disagree with it:
 | `detail` | git's redacted message for a failure |
 | `path` | the file a `waiting_on_edit` round names |
 | `join` | `new` \| `returning` |
+| `plaintext` | `[{path, line, key, blob, current}]` — where a `plaintext_found` round found a plaintext secret; never the value |
+| `folded` | how many unpushed commits the round folded into one so a value removed since was not pushed |
 
 `status`:
 
@@ -201,6 +204,7 @@ and is what a row is read back from, so no column can disagree with it:
 | `nothing_to_do` | nothing to pull and nothing to push |
 | `pulled` / `pushed` / `pulled_and_pushed` | what the round moved |
 | `push_failed` | pulled and applied, but the remote refused the push |
+| `plaintext_found` | a file the push would publish holds a plaintext secret: nothing pushed |
 | `stopped` | any conflict: nothing checked out, nothing pushed |
 | `held` | the deletion breaker held the round (20% of an area or 20 files, in either direction; resource files counted by uid, so a moved file is not a loss) |
 | `waiting_on_edit` | a person's uncommitted edit is on a path the round would change; it is never overwritten |
@@ -213,7 +217,7 @@ and is what a row is read back from, so no column can disagree with it:
 | `failed` | anything else, with `detail` |
 
 `stopped`, `held`, `waiting_on_edit`, `join_required`, `auth_failed`,
-`paused_cloud_folder`, `remote_too_new` and `remote_too_old` leave the vault in
+`paused_cloud_folder`, `remote_too_new`, `remote_too_old` and `plaintext_found` leave the vault in
 a state a person must look at, and each raises an attention item. Swept by the
 retention worker as `sync_runs` (default 90 days).
 

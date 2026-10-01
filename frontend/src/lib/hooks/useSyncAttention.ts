@@ -41,6 +41,7 @@ const NEEDS_ATTENTION: readonly RoundStatus[] = [
   "remote_too_new",
   "remote_too_old",
   "push_failed",
+  "plaintext_found",
   "unreachable",
   "failed",
 ];

@@ -14,6 +14,8 @@ import dataclasses
 from enum import StrEnum
 from typing import Any
 
+from coffer.domain.sync.plaintext import PlaintextFinding
+
 
 class RoundStatus(StrEnum):
     #: Nothing to pull and nothing to push.
@@ -40,6 +42,8 @@ class RoundStatus(StrEnum):
     REMOTE_TOO_NEW = "remote_too_new"
     #: The remote is at an older layout: rebuild it from a migrated machine.
     REMOTE_TOO_OLD = "remote_too_old"
+    #: A file the push would publish holds a plaintext secret: nothing pushed.
+    PLAINTEXT_FOUND = "plaintext_found"
     ROLLED_BACK = "rolled_back"
     FAILED = "failed"
 
@@ -55,6 +59,7 @@ NEEDS_PERSON = frozenset(
         RoundStatus.PAUSED_CLOUD_FOLDER,
         RoundStatus.REMOTE_TOO_NEW,
         RoundStatus.REMOTE_TOO_OLD,
+        RoundStatus.PLAINTEXT_FOUND,
     }
 )
 
@@ -95,6 +100,11 @@ class RoundRecord:
     detail: str | None = None
     path: str | None = None
     join: str | None = None
+    #: What a ``plaintext_found`` round found (never the values).
+    plaintext: tuple[PlaintextFinding, ...] = ()
+    #: How many unpushed commits the round folded into one, so a value removed
+    #: from a file since is not published in the history (0: none).
+    folded: int = 0
     #: The id the history store gave this record (``None`` until stored).
     id: int | None = None
 
@@ -140,6 +150,8 @@ class RoundRecord:
             detail=raw.get("detail"),
             path=raw.get("path"),
             join=raw.get("join"),
+            plaintext=tuple(PlaintextFinding(**f) for f in raw.get("plaintext") or ()),
+            folded=int(raw.get("folded") or 0),
             id=id if id is not None else raw.get("id"),
         )
 

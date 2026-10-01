@@ -151,6 +151,20 @@ class VaultSyncGit:
     def commits_between(self, since: str | None, until: str) -> list[Commit]:
         return self._repo.log(start=f"{since}..{until}" if since else until)
 
+    def new_blobs(self, since: str | None, until: str) -> list[tuple[str, str]]:
+        """``(path, blob)`` for every file blob reachable from ``until`` and
+        not from ``since``: each file version a push of ``until`` publishes
+        to a remote at ``since``, from every commit in between."""
+        args = ["rev-list", "--objects", "--filter=object:type=blob", "--filter-provided-objects"]
+        args += [until] + ([f"^{since}"] if since else [])
+        done = git.run(self._repo.root, *args)
+        out: list[tuple[str, str]] = []
+        for line in git.text(done).splitlines():
+            blob, _, path = line.partition(" ")
+            if path:
+                out.append((path, blob))
+        return out
+
     def snapshot(self, commit: str) -> str:
         """Tag ``commit`` as a pre-apply snapshot; keep the ten newest."""
         stamp = self._clock().astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")

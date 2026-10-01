@@ -159,7 +159,7 @@ The vocabulary is a closed enumeration, `AuditEventType` in `backend/coffer/doma
 | Memory | `memory_aggregated`, `memory_distilled`, `memory_delivery_installed`, `memory_delivery_removed`, `memory_delivery_fired`, `memory_trigger_added`, `memory_trigger_proposed`, `memory_trigger_armed`, `memory_trigger_disarmed`, `memory_trigger_deleted` |
 | Channels | `channel_pairing_issued`, `channel_paired` |
 | Vault files | `vault_file_edited` (a hand edit committed as `disk`, by a person), `vault_file_restored` |
-| Vault sync | `sync_run`, `sync_confirmed`, `sync_rejected`, `sync_rolled_back`, `sync_machine_removed`, `master_key_exported`, `master_key_imported` |
+| Vault sync | `sync_run`, `sync_confirmed`, `sync_rejected`, `sync_rolled_back`, `sync_machine_removed`, `sync_plaintext_pushed`, `master_key_exported`, `master_key_imported` |
 | Providers | `provider_switched`, `provider_internal_default_set`, `provider_transcribe_default_set`, `provider_projection_refused` |
 
 No secret event carries a secret value; each records the ref, the standalone secret's name or the destination only.

@@ -43,6 +43,19 @@ class PulledCommitOut(BaseModel):
     files: int
 
 
+class PlaintextFindingOut(BaseModel):
+    """Where a round found a plaintext secret: the file, the line and the name
+    the value was assigned to (``token`` for one recognised by its shape).
+    Never the value."""
+
+    path: str
+    line: int
+    key: str
+    #: Whether the file still holds it; ``False``: only an earlier, unpushed
+    #: commit does.
+    current: bool
+
+
 class RoundOut(BaseModel):
     """One recorded round: what it pulled, applied and pushed, and why it
     stopped or failed."""
@@ -66,6 +79,11 @@ class RoundOut(BaseModel):
     join: str | None
     pulled_files: int
     pushed_files: int
+    #: What a ``plaintext_found`` round found; empty otherwise.
+    plaintext: list[PlaintextFindingOut] = []
+    #: How many unpushed commits the round folded into one so a value removed
+    #: from a file since was not pushed (0: none).
+    folded: int = 0
 
 
 class SyncRunListOut(BaseModel):
@@ -193,6 +211,7 @@ class ProblemOut(BaseModel):
         "unreachable",
         "auth_failed",
         "push_failed",
+        "plaintext_found",
         "cloud_folder",
         "layout",
         "git_missing",
@@ -206,6 +225,8 @@ class ProblemOut(BaseModel):
     #: rejected push, a refused sign-in, an unreachable remote, git missing.
     #: Never carries a token or a secret's value.
     handoff: HandoffOut | None = None
+    #: For ``plaintext_found``: each place the value was found, never the value.
+    plaintext: list[PlaintextFindingOut] = []
 
 
 class SyncStatusOut(BaseModel):

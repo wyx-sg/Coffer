@@ -26,6 +26,8 @@ export function makeRound(over: Partial<SyncRound> = {}): SyncRound {
     join: null,
     pulled_files: 0,
     pushed_files: 0,
+    plaintext: [],
+    folded: 0,
     ...over,
   };
 }

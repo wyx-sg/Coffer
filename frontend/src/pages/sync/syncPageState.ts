@@ -20,6 +20,7 @@ export type SyncStateKind =
   | "conflicts"
   | "held"
   | "push_failed"
+  | "plaintext_found"
   | "unreachable"
   | "auth_failed"
   | "cloud_folder"
@@ -47,6 +48,7 @@ const PILL_TONE: Record<SyncStateKind, PillTone> = {
   conflicts: "err",
   held: "err",
   push_failed: "err",
+  plaintext_found: "err",
   unreachable: "warn",
   auth_failed: "err",
   cloud_folder: "warn",

@@ -2534,7 +2534,21 @@ Exits 1 while a round waits for a person — stopped on conflicts, held, unable 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `--json` | option | flag |  | JSON output for scripts |
-| `--prompt` | option | flag |  | Print the prompt that hands the current problem (a refused push or sign-in, an unreachable remote, git missing) to your agent |
+| `--prompt` | option | flag |  | Print the prompt that hands the current problem (a refused push or sign-in, an unreachable remote, git missing, a plaintext secret in what a push would publish) to your agent |
+
+### sync push-anyway
+
+```sh
+coffer sync push-anyway [OPTIONS]
+```
+
+Push what the last round refused as a plaintext secret, once you checked it is not one.
+
+Allows exactly the file versions that round found (a file changed since is read again), records it in the audit log, and runs a round.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--yes, -y` | option | flag |  | Do not ask before pushing |
 
 ### sync history
 

@@ -177,7 +177,9 @@ flowchart LR
   C -- "no" --> D{"Loses too much?"}
   D -- "yes" --> H["Hold and ask you"]
   D -- "no" --> E["Snapshot, then check out"]
-  E --> F["Push"]
+  E --> P{"Plaintext secret?"}
+  P -- "yes" --> N["Push nothing and ask you"]
+  P -- "no" --> F["Push"]
 ```
 
 A deletion is applied only when some machine actually deleted that file relative to the shared base; a machine that merely lacks a file deletes nothing. A file you are editing right now is never overwritten: the round waits on it (`waiting on an edit`) and names the file. A round with nothing to do records `nothing to do`.
@@ -248,6 +250,21 @@ coffer sync hold --restore    # keep the files
 
 Either answer continues the round. On the web the **Status** tab says who deleted how many files, grouped by folder, and **Review deletions** lists them with **Delete n files…** (asks first; a safety snapshot is taken) and **Restore n files**. If this machine was just reinstalled or restored, restore: do not confirm.
 
+## When a round finds a plaintext secret
+
+Before a round pushes, it reads every file version the push would publish: each file changed in every commit the remote does not have yet. It uses the same detection as **Find plaintext keys** on the Secrets page and `coffer secret scan`: a value assigned to a name that says secret (`DB_PASSWORD=…`, `api_key: …`), or a well-known token shape. Encrypted secret files (`secret/*.enc`) are ciphertext and are not read.
+
+A value pushed to the remote stays in its history, in every clone and in every backup of either, so a round that finds one pushes **nothing** and says `plaintext found`. Pulling from the other machines still works; only this machine's push waits. The Sync page, the Overview's list and `coffer sync status` name each place by file, line and key, never the value:
+
+```sh
+coffer sync status             # each file:line and key the round found
+coffer sync status --prompt    # the prompt that hands the move to your agent
+coffer sync push-anyway        # lists the places, asks, then pushes them as they are
+```
+
+- **Move it into a secret.** **Ask an agent** (or `coffer sync status --prompt`) gives your agent the places and asks it to move each value into a Coffer secret with `coffer secret set`, without printing it, and to put a `coffer://secret/<name>` reference in its place. A skill command that needs the value runs through `coffer run --secret`. Then press **Retry**. The old value is still in the unpushed commits, so the round folds them into one commit that holds the files as they are now, and pushes that. The files on disk do not change; the separate history entries of those unpushed edits become one.
+- **Push anyway.** If a place is an example or a test value and not a real secret, **Push anyway…** (or `coffer sync push-anyway`) asks first, records who pushed which files in the audit log, and pushes exactly the versions it showed you. A file changed after that is read again.
+
 ## Roll back a round
 
 Every round snapshots the vault before it checks anything out, and the ten most recent snapshots are kept:
@@ -286,6 +303,7 @@ On the web the **Machines** tab lists every machine with when it was last seen, 
 | `sign-in refused` | No usable secret (your git config and keychain helper are not consulted), the token lacks push rights, the host wants another user name (GitLab: `--username oauth2`), or a token for a new URL is waiting for approval. | Store a token with the right scope and set `--secret-ref`, approve it in the desktop app, or use an SSH key that needs no prompt. |
 | `remote unreachable` | Network, VPN or a wrong URL. | Nothing is lost; the next round that gets through carries the changes. |
 | `push failed` | Applied here, but the remote refused the push (a protected branch, a read-only token). | Fix the branch protection or the token; the next round retries. |
+| `plaintext found` | A file the round would push holds what looks like a plaintext secret; nothing was pushed. | Move the value into a secret (**Ask an agent**, or `coffer sync status --prompt`) and retry, or `coffer sync push-anyway` if it is not a secret. |
 | `git missing` | No `git` on the PATH the daemon uses. | Install git the way that fits the machine. |
 | `paused (cloud folder)` | The vault is inside a folder Dropbox, iCloud Drive, Syncthing or similar also syncs. | Move `~/.coffer` out of that folder. |
 | `remote too new` | Another machine runs a newer Coffer. | Upgrade this machine. |
@@ -294,7 +312,7 @@ On the web the **Machines** tab lists every machine with when it was last seen, 
 | A held round after reinstalling Coffer | The empty vault would push its loss. | `coffer sync hold --restore`. |
 | Secrets cannot be decrypted | This machine lacks the master key they were encrypted with. | `coffer sync key import <file>` with the key from a machine that has it. |
 
-A refused push, a refused sign-in, an unreachable remote and a missing git each come with a prompt for your agent. The prompt names the remote without its credentials, the branch, the secret's name and git's message with tokens scrubbed, and says what to check. It is on the Sync page next to the message, and `coffer sync status --prompt` prints it. It never carries or asks for a token. **Retry** stays Coffer's own button.
+A refused push, a refused sign-in, an unreachable remote and a missing git each come with a prompt for your agent (a plaintext secret has its own, above). The prompt names the remote without its credentials, the branch, the secret's name and git's message with tokens scrubbed, and says what to check. It is on the Sync page next to the message, and `coffer sync status --prompt` prints it. It never carries or asks for a token. **Retry** stays Coffer's own button.
 
 For failures that do not fit here, the round's message is in `coffer sync status`, and the daemon log (**Activity → Daemon**) has the detail.
 

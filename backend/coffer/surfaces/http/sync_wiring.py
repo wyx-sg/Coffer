@@ -43,6 +43,7 @@ from coffer.infrastructure.persistence.sync_runs_repo import SyncRunRepo
 from coffer.infrastructure.platform.host import machine_label
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.secret.master_key import MasterKeyManager
+from coffer.infrastructure.secret.plaintext_scan import find_in_text
 from coffer.infrastructure.sync.cloud_folder import synchroniser_of
 from coffer.infrastructure.sync.identity import machine_name, resolve_identity
 from coffer.infrastructure.sync.local_state import ConflictScratch, JsonRemoteStore, JsonRoundState
@@ -131,6 +132,7 @@ def wire_sync(
         scratch=ConflictScratch(),
         validate=_validator_of(writer),
         cloud_folder=lambda: synchroniser_of(vault_root(), home=Path.home()),
+        find_plaintext=find_in_text,
     )
     service = SyncService(
         engine=RoundEngine(deps),

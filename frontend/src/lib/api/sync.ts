@@ -119,6 +119,8 @@ export const syncApi = {
   continueRound: () => call<SyncRound>("/sync/continue", { method: "POST" }),
   confirmHold: () => call<SyncRound>("/sync/hold/confirm", { method: "POST" }),
   restoreHold: () => call<SyncRound>("/sync/hold/restore", { method: "POST" }),
+  /** "I checked it, push anyway" for a round that found a plaintext secret. */
+  pushAnyway: () => call<SyncRound>("/sync/plaintext/push-anyway", { method: "POST" }),
 
   rollbackPlan: (runId: number) => call<RollbackPlan>(`/sync/runs/${runId}/rollback-plan`),
   rollback: (runId: number) => call<SyncRound>(`/sync/runs/${runId}/rollback`, { method: "POST" }),

@@ -496,6 +496,44 @@ paths:
       summary: Retire Machine
       tags:
       - sync
+  /api/v1/sync/plaintext/push-anyway:
+    post:
+      description: |-
+        "I checked it, push anyway": allow exactly what the last round found
+        (recorded in the audit log) and run a round. Refused with
+        ``SYNC_NO_PLAINTEXT_FOUND`` unless the last round is ``plaintext_found``.
+      operationId: push_anyway_api_v1_sync_plaintext_push_anyway_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Push Anyway
+      tags:
+      - sync
   /api/v1/sync/remote:
     delete:
       description: 'Stop syncing: forget the remote. The vault and its history stay.'
@@ -1729,6 +1767,31 @@ components:
       - name
       title: MachineRenameIn
       type: object
+    PlaintextFindingOut:
+      description: |-
+        Where a round found a plaintext secret: the file, the line and the name
+        the value was assigned to (``token`` for one recognised by its shape).
+        Never the value.
+      properties:
+        current:
+          title: Current
+          type: boolean
+        key:
+          title: Key
+          type: string
+        line:
+          title: Line
+          type: integer
+        path:
+          title: Path
+          type: string
+      required:
+      - path
+      - line
+      - key
+      - current
+      title: PlaintextFindingOut
+      type: object
     ProblemOut:
       properties:
         handoff:
@@ -1740,6 +1803,7 @@ components:
           - unreachable
           - auth_failed
           - push_failed
+          - plaintext_found
           - cloud_folder
           - layout
           - git_missing
@@ -1749,6 +1813,12 @@ components:
         message:
           title: Message
           type: string
+        plaintext:
+          default: []
+          items:
+            $ref: '#/components/schemas/PlaintextFindingOut'
+          title: Plaintext
+          type: array
         secret_ref:
           anyOf:
           - type: string
@@ -1765,6 +1835,7 @@ components:
       - secret_ref
       - since
       - handoff
+      - plaintext
       title: ProblemOut
       type: object
     PulledCommitOut:
@@ -1909,6 +1980,10 @@ components:
         finished_at:
           title: Finished At
           type: string
+        folded:
+          default: 0
+          title: Folded
+          type: integer
         from_commit:
           anyOf:
           - type: string
@@ -1932,6 +2007,12 @@ components:
           - type: string
           - type: 'null'
           title: Path
+        plaintext:
+          default: []
+          items:
+            $ref: '#/components/schemas/PlaintextFindingOut'
+          title: Plaintext
+          type: array
         pulled:
           items:
             $ref: '#/components/schemas/PulledCommitOut'
@@ -1991,6 +2072,8 @@ components:
       - join
       - pulled_files
       - pushed_files
+      - plaintext
+      - folded
       title: RoundOut
       type: object
     RoundStatus:
@@ -2010,6 +2093,7 @@ components:
       - paused_cloud_folder
       - remote_too_new
       - remote_too_old
+      - plaintext_found
       - rolled_back
       - failed
       title: RoundStatus

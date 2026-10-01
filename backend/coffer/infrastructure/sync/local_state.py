@@ -72,6 +72,15 @@ class JsonRoundState:
     def set_joined(self, joined: bool) -> None:
         self._set("joined", True if joined else None)
 
+    def plaintext_allowed(self) -> frozenset[str]:
+        return frozenset(self._get("plaintext_allowed") or ())
+
+    def allow_plaintext(self, blobs: Sequence[str]) -> None:
+        """Add ``blobs`` to what "Push anyway" allowed; an allowed blob stays
+        allowed (it is already on the remote once pushed)."""
+        merged = sorted(self.plaintext_allowed() | set(blobs))
+        self._set("plaintext_allowed", merged or None)
+
 
 class ConflictScratch:
     """``derived/sync-conflicts/<path>``."""

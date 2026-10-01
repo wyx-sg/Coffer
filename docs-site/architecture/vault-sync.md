@@ -82,7 +82,7 @@ sequenceDiagram
 5. **Stop?** A content conflict, the same resource name with two different uids, or a merged file that fails validation stops the round, whole. Nothing is checked out and nothing is pushed.
 6. **Guard.** The [deletion breaker](#the-deletion-breaker) runs over what the round would remove here and what this machine's own commits would remove from the shared history.
 7. **Check out.** `L` is tagged `refs/tags/coffer/pre-apply/<timestamp>` (ten kept). `M` is committed with parents `L` and `R`, and `git read-tree -m -u L M` moves the vault to it under the vault's write lock. Git verifies every path it will change against `L` before it writes a file, so a path you are editing (an uncommitted or invalid edit) makes the round wait with `waiting_on_edit` and name the file.
-8. **Publish.** This machine's descriptor is updated in its own commit, then the result is pushed. A rejected push is `push_failed`: the vault already holds the merge, and the next round tries again.
+8. **Publish.** This machine's descriptor is updated in its own commit. Before the push, every blob the push would publish (reachable from the commit being pushed and not from `R`, so every version in every unpushed commit) is read with `coffer secret scan`'s detection; `secret/*.enc` is ciphertext and is skipped. A value a file still holds stops the round as `plaintext_found` with nothing pushed. A value only an earlier unpushed commit holds is folded out: the unpushed commits become one commit on `R` with the same tree, which is pushed instead. Then the result is pushed. A rejected push is `push_failed`: the vault already holds the merge, and the next round tries again.
 
 After a round that changed the vault, the [reconciler](/architecture/reconciler) runs one pass, so each kind re-projects what arrived: agent config, shims, skill deliveries, provider projections. Sync itself imports no kind.
 
@@ -95,6 +95,7 @@ Every round is recorded in `runs.db` (`sync_runs`) and audited, whatever its out
 | `nothing_to_do` | Nothing to pull and nothing to push. A success, not a skip. |
 | `pulled`, `pushed`, `pulled_and_pushed` | What moved. |
 | `push_failed` | Applied here; the remote refused the push. |
+| `plaintext_found` | A file the push would publish holds a plaintext secret. Pulled and applied, nothing pushed. |
 | `stopped` | A conflict. Nothing checked out, nothing pushed. |
 | `held` | The deletion breaker held the round. |
 | `waiting_on_edit` | An edit you have not finished is on a path the round would change. |
@@ -176,6 +177,7 @@ Each machine writes exactly one file, `machines/<machine id>.json`, and never an
 | Unreachable | `unreachable` | Git could not reach the repository. | Nothing is lost; changes wait and go up with the next round that gets through. |
 | Sign-in failed | `auth_failed` | The remote refused the secret, or a token pointed at a new URL is waiting for approval. | Check the token, or approve it in the desktop app. |
 | Push rejected | `push_failed` | Applied here; the remote refused the push. | Check the branch's protection and the token's rights. |
+| Plaintext secret | `plaintext_found` | A file the push would publish holds a plaintext secret; the file, line and key are named, never the value. | Move the value into a secret (the agent hand-off) and retry, or Push anyway, which is audited. |
 | Cloud folder | `paused_cloud_folder` | The vault is inside a folder another tool synchronises. | Move the vault out of that folder. |
 | Layout | `remote_too_new`, `remote_too_old` | The remote was written with another vault layout. | Newer: upgrade this machine. Older: rebuild the remote. |
 

@@ -165,6 +165,7 @@ def test_the_routes_cover_every_sync_operation() -> None:
         ("POST", "/continue"),
         ("POST", "/hold/confirm"),
         ("POST", "/hold/restore"),
+        ("POST", "/plaintext/push-anyway"),
         ("GET", "/machines"),
         ("PATCH", "/machines/self"),
         ("DELETE", "/machines/{machine_id}"),

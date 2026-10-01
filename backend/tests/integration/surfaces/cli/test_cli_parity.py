@@ -194,6 +194,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "key",
         "machine",
         "now",
+        "push-anyway",
         "remote",
         "resolve",
         "rollback",
