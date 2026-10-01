@@ -80,6 +80,7 @@ coffer log audit                                   # newest 50
 coffer log audit --kind mcp_server --name filesystem
 coffer log audit --event-type secret_resolved --since 2026-09-01T00:00:00Z
 coffer log audit --event-type memory_delivery_fired --limit 20
+coffer log audit --trace 44e10b60da1b4f26         # one request's or turn's rows
 coffer log audit --json
 ```
 
@@ -89,6 +90,7 @@ coffer log audit --json
 | `--name` | 资源名。需要配合 `--kind`。 |
 | `--event-type` | 某一种事件类型。 |
 | `--since` | ISO 8601 下界，或者 `30m`、`1h`、`2d` 这样的时长。 |
+| `--trace` | 只看一个请求或轮次的行：它的 trace id，也就是抽屉、`X-Coffer-Trace` 响应头或一行守护进程日志上显示的那个。`coffer log mcp` 和 `coffer log daemon` 也接受它。 |
 | `--limit` | 1–500，默认 50。 |
 | `--json` | 机器可读的输出。 |
 

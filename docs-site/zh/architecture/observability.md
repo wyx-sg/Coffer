@@ -1,6 +1,6 @@
 ---
 title: 可观测性
-description: Coffer 如何记录自己做了什么——一个带 trace id 的 JSON 守护进程日志、一个记录变更的审计日志、一个记录经代理的 MCP 调用的调用日志、三者的保留策略、智能体和人如何读取它们，以及可选开启的评测采集。
+description: Coffer 如何记录自己做了什么——一个 JSON 守护进程日志、一个记录变更的审计日志和一个记录经代理的 MCP 调用的调用日志（三者由同一个 trace id 串起来）、受监督的后台任务与事件循环延迟、保留策略、智能体和人如何读取它们，以及可选开启的评测采集。
 ---
 
 # 可观测性 {#observability}
@@ -21,7 +21,9 @@ Coffer 是一个供其他程序调用的后台进程。出问题时，发现问�
 | 决策 | 理由 |
 | --- | --- |
 | 一个日志文件 `daemon.log`，每行一个 JSON 对象 | 每个读取方（「活动」页、`coffer log daemon`、智能体，或用 `grep` 的人）解析的是同一组字段。 |
-| 每个 HTTP 请求都有一个 trace id，并回显为 `X-Coffer-Trace` | 失败的响应能对应到它产生的那几行日志。 |
+| 每个 HTTP 请求和每个轮次都有一个 trace id，回显为 `X-Coffer-Trace`，并存进审计行和 MCP 调用记录 | 失败的响应能对应到它产生的那几行日志，一个请求或轮次的审计行、MCP 调用和日志行读起来是一个完整的故事。 |
+| 每个后台任务都在同一个监督器下运行，由它命名、记录崩溃并计数 | 抛异常的任务在它死掉的那一刻就被报告，而不是永远无声；崩溃的渠道适配器单独重启。 |
+| 状态接口上有一个事件循环延迟探针 | 一个阻塞循环的同步调用会让所有东西同时卡住；延迟指标让这件事以它本来的面目显现出来。 |
 | 一个独立的、结构化的审计日志，存在 SQLite 里 | “改了什么、谁改的”需要按资源、类型和事件类型过滤，而且要能挺过改名。 |
 | 一个记录经代理的 MCP 调用的调用日志，不含载荷 | 每次调用的延迟和结果有用；参数和结果可能带有密钥，不记录。 |
 | 所有类似日志的表和日志文件共用一套保留机制 | 增长有界，不必为每个功能单独写一个清理任务。 |
@@ -40,7 +42,9 @@ Coffer 自己的模块通过标准库（`logging.getLogger`）记日志。根 lo
 | `timestamp` | 记录自身的创建时间，UTC ISO-8601，末尾带 `Z` |
 | `level` | `debug`、`info`、`warning`、`error` 或 `critical` |
 | `logger` | 记录这条日志的模块 |
-| `trace_id` | 当前请求的 trace id，请求之外为 `-` |
+| `trace_id` | 当前请求或轮次的 trace id，两者之外为 `-` |
+| `session_id` | MCP 会话，出现在处理 `/mcp` 调用时写下的日志行上 |
+| `conversation_id`、`turn_id` | 对话和轮次，出现在对话或渠道轮次里写下的日志行上 |
 | 任何 `extra={...}` 键 | 调用处传入的内容 |
 | `exception` | 渲染后的 traceback，保留在同一行内 |
 
@@ -87,7 +91,7 @@ Coffer 自己的模块通过标准库（`logging.getLogger`）记日志。根 lo
 - 把 traceback 行和面板边框并入上一条记录（`continuation`），让一次失败就是一行；
 - 保留任何解析不了的行，原样放在 `raw` 下——并且把读不出级别的行视为通过所有级别过滤，因为解析不了的行多半是 traceback。
 
-HTTP 路由 `GET /api/v1/daemon/logs` 暴露这个读取器，支持 `since`、`level`（严重程度下限）、`errors_only` 和 `limit`（1–500，默认 100），最新的在前。它需要 API 令牌；`GET /api/v1/daemon/status` 不需要，因为它兼作就绪探针。
+HTTP 路由 `GET /api/v1/daemon/logs` 暴露这个读取器，支持 `since`、`level`（严重程度下限）、`errors_only`、`trace_id`（只看一个请求或轮次的日志行）和 `limit`（1–500，默认 100），最新的在前。它需要 API 令牌；`GET /api/v1/daemon/status` 不需要，因为它兼作就绪探针。
 
 ## Trace id {#trace-ids}
 
@@ -119,6 +123,20 @@ sequenceDiagram
 
 在请求之外记录的日志——后台 worker、MCP 会话回收器——带 `trace_id: "-"`。为处理某个 `/mcp` 请求而做的工作（比如启动一个上游服务器）带的是那个请求的 id。
 
+### 一个 id 贯穿三种记录 {#one-id-across-the-three-records}
+
+这个 id 不只属于 `daemon.log`。`application/runtime/correlation.py` 把当前这份工作的关联 id 放在一个上下文变量里——`trace_id`，在 `/mcp` 调用里再加上 `session_id`，在轮次里再加上 `conversation_id` 和 `turn_id`——绑定期间写下的每条记录都会继承它：
+
+| 记录 | 带有 |
+| --- | --- |
+| 一行 `daemon.log` | 总是带 `trace_id`；绑定了时带 `session_id`、`conversation_id`、`turn_id` |
+| 一行 `audit_log` | `trace_id`，由轮次写下的行还带 `conversation_id` 和 `turn_id` |
+| 一行 `mcp_invocations` | `session_id` 旁边的 `trace_id` |
+
+轮次在创建它的任务时绑定这些 id：一个新的 `turn_id`、对话的 id，以及发起它的那个请求的 trace id——如果是经 websocket 或长轮询到达、背后没有请求的渠道消息，就用轮次自己的 id 作为 trace id。因为 `asyncio` 会把上下文复制进它创建的每个任务，轮次的渲染器以及它启动的其他任何东西都带着同样的 id，中间不用传任何参数。
+
+所以“这个请求还做了什么？”在每种记录上都只是一个过滤条件：`GET /api/v1/audit?trace_id=…`、`GET /api/v1/mcp/invocations?trace_id=…` 和 `GET /api/v1/daemon/logs?trace_id=…`，或者在 `coffer log audit`、`coffer log mcp` 和 `coffer log daemon` 上加 `--trace <id>`。「活动」页的记录抽屉会显示变更和调用的 trace id。早于迁移 0137 的行没有 id，也不会为它们编造一个。
+
 ## 审计日志 {#the-audit-log}
 
 审计日志回答“改了什么、谁改的”。它在历史数据库 `~/.coffer/runs.db` 的 `audit_log` 表里。
@@ -133,6 +151,8 @@ sequenceDiagram
 | `resource_uid` | 资源的 uid；如果事件不涉及资源，或其资源在保险库布局之前就已删除，则为空 |
 | `resource_kind`、`resource_name` | 资源**当时**的标签 |
 | `details` | 事件相关字段，已脱敏 |
+| `trace_id` | 请求或轮次的关联 id；写入时没有绑定任何 id 的行（比如启动时的一轮）为空 |
+| `conversation_id`、`turn_id` | 对话和轮次，用于由轮次写下的行 |
 
 有两个决策塑造了它：
 
@@ -188,6 +208,7 @@ sequenceDiagram
 | `error_message` | 由 Coffer 撰写的摘要，从不是上游的结果文本 |
 | `session_id` | 调用来自的 `/mcp` 会话 |
 | `agent_uid` | 发起调用的会话所属的智能体，即它的 shim 在 `initialize` 时报告的值；会话没有报告时为空（手工配置的 shim、裸的 MCP 客户端） |
+| `trace_id` | `/mcp` 请求的 trace id；这次调用引起的审计行和日志行带的是同一个 |
 
 `status` 的含义：
 
@@ -202,7 +223,7 @@ sequenceDiagram
 
 写入是缓冲的：一个内存队列（最多 5,000 行）由一个写入任务每 50 毫秒或每 50 行刷一次，以先到者为准，所以一个大量调用工具的会话不必每次调用都付出一次 SQLite 提交的代价。队列满时，调用方会等待，而不是丢弃记录。
 
-你可以在「活动」页的「MCP 调用」标签页、在服务器详情页按服务器、用 `coffer log mcp [--server <name>]`，或通过 `GET /api/v1/mcp/invocations` 和 `GET /api/v1/resources/mcp_server/{uid}/invocations` 读取它。两个路由都按游标分页、最新的在前，接受 `agent_uid` 以只显示某个智能体的调用，并在每行返回它的 `id`。它们的回答和审计日志一样带有 `total`：所有分页中匹配过滤条件的行数，这样过滤后的视图不用翻到最后一页就能说出有多大。
+你可以在「活动」页的「MCP 调用」标签页、在服务器详情页按服务器、用 `coffer log mcp [--server <name>]`，或通过 `GET /api/v1/mcp/invocations` 和 `GET /api/v1/resources/mcp_server/{uid}/invocations` 读取它。两个路由都按游标分页、最新的在前，接受 `agent_uid` 以只显示某个智能体的调用、`trace_id` 以只显示某个请求的调用，并在每行返回它的 `id`。它们的回答和审计日志一样带有 `total`：所有分页中匹配过滤条件的行数，这样过滤后的视图不用翻到最后一页就能说出有多大。
 
 ## 保留 {#retention}
 
@@ -244,14 +265,45 @@ flowchart LR
 
 | 命令 | 读取 |
 | --- | --- |
-| `coffer log audit [--kind] [--name] [--event-type] [--since] [--limit] [--json]` | 审计日志，最新的在前 |
-| `coffer log mcp [--server] [--status ok\|error] [--since] [--limit] [--json]` | MCP 调用日志，最新的在前 |
-| `coffer log daemon [--errors] [--since] [--limit] [--json]` | `daemon.log` 的末尾，经过与「活动」页相同的宽容读取器 |
+| `coffer log audit [--kind] [--name] [--event-type] [--since] [--trace] [--limit] [--json]` | 审计日志，最新的在前 |
+| `coffer log mcp [--server] [--status ok\|error] [--since] [--trace] [--limit] [--json]` | MCP 调用日志，最新的在前 |
+| `coffer log daemon [--errors] [--since] [--trace] [--limit] [--json]` | `daemon.log` 的末尾，经过与「活动」页相同的宽容读取器 |
+| `coffer daemon status [--json]` | 事件循环延迟和后台任务计数，与守护进程的版本和端口一起 |
 | `coffer path logs` | 日志目录及其中的 `daemon.log`，供 `grep` 或 `tail` 使用 |
 
 `--since` 接受一个 ISO 8601 时间点，或 `30m`、`1h`、`2d` 这样的时长。解析不了的过滤条件——只给了名字没给类型，或者该类型下没有这个名字的资源——会报错，而不是被悄悄忽略，因为不加过滤的答案看起来就像“这个资源什么都没发生”。每条命令都是只读的，不打印任何密钥值：审计 details 在存储前就已脱敏，日志记录从构造上就不含密钥。
 
-遇到 `SECRET_MISSING` 错误的智能体不知道自己需要的是“改了什么”还是“什么失败了”，所以它会运行 `coffer log audit --since 1h` 和 `coffer log daemon --errors --since 1h`，或者在 `coffer path logs` 给出的文件里 grep 响应的 trace id。
+遇到 `SECRET_MISSING` 错误的智能体不知道自己需要的是“改了什么”还是“什么失败了”，所以它会运行 `coffer log audit --since 1h` 和 `coffer log daemon --errors --since 1h`，或者在 `coffer path logs` 给出的文件里 grep 响应的 trace id。拿到这个 id 后，`coffer log audit --trace <id>`、`coffer log mcp --trace <id>` 和 `coffer log daemon --trace <id>` 返回的正好是那个请求的记录。
+
+## 后台任务与事件循环延迟 {#background-tasks-and-event-loop-lag}
+
+守护进程做的所有事都运行在一个 `asyncio` 事件循环上，其中很多以后台任务的形式运行：每个渠道适配器的入站循环、每个轮次及其渲染器、调和器和各个周期性 worker。关于这个循环，有两件事过去是看不见的。
+
+**崩溃的任务一声不吭。** 协程抛异常的裸 `asyncio.create_task` 会把异常留着，直到有人去取——而对一个发出去就不管的任务，没有人会去取，所以它顶多在任务被垃圾回收时以 “Task exception was never retrieved” 的形式出现。现在 `application/runtime/supervisor.py` 是守护进程启动后台工作的唯一方式：
+
+- `spawn(coro, name=…)` 启动一个有名字的任务。它一旦抛异常，就在结束的那一刻向 `daemon.log` 写一行 `runtime.task.crashed`，带上任务名、异常类和 traceback，并计一次崩溃。
+- `spawn_restarting(factory, name=…)` 用于所有者希望它崩溃后回来的长期循环。崩溃后它会在一个退避之后重新运行，退避从 1 秒开始翻倍，上限 60 秒。渠道运行时、每个 Telegram 渠道的轮询循环（`telegram-poll:<channel>`）、每个 SeaTalk 渠道的 websocket 监督循环（`seatalk-ws:<channel>`）和各个周期性 worker 都这样运行，所以一个适配器崩溃只会重启那个适配器的循环，别的都不动。SeaTalk SDK 阻塞的 `listen()` 仍在它自己的线程上；受监督的是拥有并重启这个线程的 asyncio 循环。
+- 关闭时，在每个所有者按拆卸顺序停掉自己的任务之后，监督器取消所有还在运行的任务，并有超时上限。
+
+在函数返回前就被它自己等待或取消的任务——`asyncio.wait` 竞速的两边、一次 shield 住的写入、每个请求一个的泵——是结构化并发，不是后台工作，保持原样。`scripts/check_bare_tasks.py`（由 `make lint` 运行）按文件统计 `create_task` 和 `ensure_future` 调用，任何文件的调用数超过它在允许清单里的条目就失败，每个条目都写明它的调用为何是就地等待的。因此新加的裸任务会让 lint 失败，直到它改用监督器，或者带着理由加进清单。
+
+**被阻塞的循环看起来只是普遍变慢。** 循环上的一个同步调用——一次大的文件遍历、一次等待子进程——会让每个请求、渠道和轮次同时卡住。`application/runtime/loop_lag.py` 每次睡 0.5 秒，记录循环比要求的晚了多少才把它叫醒，保留五分钟的样本。
+
+`GET /api/v1/daemon/status` 在它的 `runtime` 块里带着这两样，`coffer daemon status` 会把它们打印出来：
+
+```json
+"runtime": {
+  "loop_lag_p99_ms": 1.84,
+  "loop_lag_max_ms": 12.6,
+  "loop_lag_samples": 600,
+  "loop_lag_window_seconds": 300.0,
+  "tasks_running": 14,
+  "task_crashes": 1,
+  "last_crash": {"task": "telegram-poll:family", "error": "RuntimeError", "at": "2026-10-01T08:12:03Z", "restarting": true}
+}
+```
+
+空闲的守护进程读数是一两毫秒。p99 到了几百毫秒，说明有东西在阻塞循环；最大值前后的守护进程日志通常会说明是什么。状态路由不需要令牌就能回答，所以 `last_crash` 只带异常的类名；它的消息和 traceback 在 `daemon.log` 的 `runtime.task.crashed` 下。
 
 ## 评测采集 {#eval-capture}
 
@@ -282,13 +334,16 @@ flowchart LR
 
 **只在守护进程日志里记审计事件。** 日志行无法按资源 id 过滤，也撑不过一年的滚动。表才是记录本身；日志行只是给正在 tail 文件的人的方便。
 
-**指标或追踪后端。** Coffer 在一台机器上为一个人运行。导出 OpenTelemetry span 或 Prometheus 指标会多一个依赖和第二个进程，而要回答的问题 `coffer log` 在本地就已经能回答。
+**指标或追踪后端。** Coffer 在一台机器上为一个人运行。导出 OpenTelemetry span 或 Prometheus 指标会多一个依赖和第二个进程，而要回答的问题 `coffer log` 在本地就已经能回答。关联 id 借用了追踪里唯一值得要的那个想法——一个 id 贯穿一个请求的每条记录——而不需要后端。
 
 ## 代码位置 {#where-it-lives-in-the-code}
 
 | 路径 | 作用 |
 | --- | --- |
-| [`backend/coffer/infrastructure/logging/setup.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/setup.py) | JSON 格式化器、滚动文件 handler、stderr 规则、trace id 上下文 |
+| [`backend/coffer/infrastructure/logging/setup.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/setup.py) | JSON 格式化器、滚动文件 handler、stderr 规则、每行上的关联字段 |
+| [`backend/coffer/application/runtime/correlation.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/runtime/correlation.py) | 当前这份工作的 trace、会话、对话和轮次 id |
+| [`backend/coffer/application/runtime/supervisor.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/runtime/supervisor.py)、[`loop_lag.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/runtime/loop_lag.py) | 受监督的后台任务和事件循环延迟探针 |
+| [`scripts/check_bare_tasks.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_bare_tasks.py) | 拦截裸后台任务的 lint 门禁 |
 | [`backend/coffer/infrastructure/logging/files.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/files.py) | 日志目录、每个上游的 stderr 文件、日志文件清理 |
 | [`backend/coffer/application/log_reader.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/log_reader.py) | 「活动」页和 `coffer log daemon` 共用的宽容尾部读取器 |
 | [`backend/coffer/surfaces/http/trace.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/trace.py) | trace id 中间件 |
@@ -310,5 +365,5 @@ flowchart LR
 - 指南：[活动与审计](/zh/guides/activity)、[故障排查](/zh/guides/troubleshooting)、[运行守护进程](/zh/guides/daemon)
 - 参考：[MCP 工具](/zh/reference/mcp-tools)、[文件与目录](/zh/reference/filesystem)、[配置](/zh/reference/configuration)、[错误码](/zh/reference/error-codes)
 - 架构：[MCP 网关](/zh/architecture/mcp-gateway)、[安全模型](/zh/architecture/security)、[持久化](/zh/architecture/persistence)
-- 决策记录：[评测：可选开启的采集、人工整理与确定性回归门禁](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/eval-capture-and-regression-gate.md)、[智能体控制层指南](https://github.com/wyx-sg/Coffer/blob/main/.agents/harness.md)、[资源身份是不可变的 UID](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md)
+- 决策记录：[后台工作受监督运行，每条记录带同一个关联 id](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/background-work-runs-supervised-and-correlated.md)、[评测：可选开启的采集、人工整理与确定性回归门禁](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/eval-capture-and-regression-gate.md)、[智能体控制层指南](https://github.com/wyx-sg/Coffer/blob/main/.agents/harness.md)、[资源身份是不可变的 UID](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md)
 - 规格：[daemon](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md)、[mcp-gateway](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md)、[resource-framework](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md)
