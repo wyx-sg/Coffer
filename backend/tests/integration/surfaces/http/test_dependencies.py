@@ -116,7 +116,9 @@ _PROVIDERS: list[_Provider] = [
 # channel's name only once it has published its note reader (spec channels "Tell
 # a channel-driven agent it is on a chat channel").
 _OPTIONAL_PROVIDERS: list[_Provider] = [
-    *_pairs(chat_deps, "_channel_mirror", "_channel_note_reader")
+    *_pairs(chat_deps, "_channel_mirror", "_channel_note_reader"),
+    # None in a graph built without the secret store.
+    *_pairs(skill_deps, "_skill_secret_presence"),
 ]
 
 _MODULES: list[ModuleType] = sorted(

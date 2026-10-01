@@ -48,17 +48,17 @@ def get_optional_skill_source_service() -> SkillSourceService | None:
     return _skill_source_service
 
 
-_secret_set: Callable[[str], bool] | None = None
+_skill_secret_presence: Callable[[str], bool] | None = None
 
 
 def set_skill_secret_presence(secret_set: Callable[[str], bool] | None) -> None:
     """Called by the composition root once on startup: whether a secret NAME
     is in Coffer's secret store (never its value), for the secrets a skill's
     SKILL.md declares it requires."""
-    global _secret_set
-    _secret_set = secret_set
+    global _skill_secret_presence
+    _skill_secret_presence = secret_set
 
 
 def get_skill_secret_presence() -> Callable[[str], bool] | None:
     """For the read model; ``None`` in a graph built without the secret store."""
-    return _secret_set
+    return _skill_secret_presence
