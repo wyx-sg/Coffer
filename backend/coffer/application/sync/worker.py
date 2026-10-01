@@ -19,6 +19,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
+from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.sync.remote import DEFAULT_INTERVAL_SECONDS, SyncRemote
 from coffer.domain.sync.rounds import RoundRecord
 
@@ -54,7 +55,7 @@ class SyncWorker:
 
     def start(self) -> None:
         if self._task is None:
-            self._task = asyncio.create_task(self._loop())
+            self._task = spawn_restarting(self._loop, name="sync-worker")
 
     async def stop(self) -> None:
         self._stop.set()

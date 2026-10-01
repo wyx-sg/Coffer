@@ -1,12 +1,8 @@
 """MCP invocation log: model + buffered writer repo.
 
-Extracted from ``persistence.py`` to keep that module under the 400-line
-guideline. ``persistence.py`` re-exports the public names so existing
-imports continue to work.
-
-The original implementation committed once per ``insert`` call.
-On a tool-call-heavy session that hot-path can dominate request latency
-against SQLite (each commit triggers an fsync). The repo here buffers rows
+Extracted from ``persistence.py`` (which re-exports the public names) for the
+400-line guideline. Committing once per ``insert`` let a tool-call-heavy
+session's fsyncs dominate request latency, so the repo here buffers rows
 in an in-memory queue drained by a small writer task that flushes either
 every ``flush_interval_seconds`` or once ``flush_batch_size`` rows
 accumulate — whichever fires first. The writer is owned by the composition
@@ -17,6 +13,7 @@ shutdown to drain the queue cleanly.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -26,10 +23,13 @@ from sqlalchemy import TIMESTAMP, Index, Integer, Select, String, Text, case, fu
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.mcp.capability import MCPInvocation
 from coffer.infrastructure.mcp.invocation_summary import InvocationSummary, summarize
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.keyset import newest_first_after
+
+_logger = logging.getLogger(__name__)
 
 
 class MCPInvocationModel(Base):
@@ -52,8 +52,10 @@ class MCPInvocationModel(Base):
     #: Not a foreign key, for the same reason ``resource_uid`` is not one: a
     #: deleted agent's calls stay in the history.
     agent_uid: Mapped[str | None] = mapped_column(String, nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
+        Index("idx_invocations_trace", "trace_id"),
         Index("idx_invocations_resource", "resource_uid", "timestamp"),
         Index("idx_invocations_time", "timestamp"),
         Index("idx_invocations_session", "session_id", "timestamp"),
@@ -73,8 +75,11 @@ def _filtered(
     status: str | None,
     since: datetime | None,
     agent_uid: str | None,
+    trace_id: str | None = None,
 ) -> Select[Any]:
     """The one WHERE both the page and its count read, so they cannot disagree."""
+    if trace_id is not None:
+        stmt = stmt.where(MCPInvocationModel.trace_id == trace_id)
     if resource_uid is not None:
         stmt = stmt.where(MCPInvocationModel.resource_uid == resource_uid)
     if status is not None:
@@ -98,6 +103,7 @@ def _inv_to_domain(row: MCPInvocationModel) -> MCPInvocation:
         error_message=row.error_message,
         session_id=row.session_id,
         agent_uid=row.agent_uid,
+        trace_id=row.trace_id,
     )
 
 
@@ -112,6 +118,7 @@ def _inv_to_model(inv: MCPInvocation) -> MCPInvocationModel:
         error_message=inv.error_message,
         session_id=inv.session_id,
         agent_uid=inv.agent_uid,
+        trace_id=inv.trace_id,
     )
 
 
@@ -153,7 +160,7 @@ class MCPInvocationRepo:
             return
         self._queue = asyncio.Queue(maxsize=self._queue_max)
         self._stopping = False
-        self._writer_task = asyncio.create_task(self._run(), name="mcp-invocation-writer")
+        self._writer_task = spawn(self._run(), name="mcp-invocation-writer")
 
     async def stop(self) -> None:
         """Drain remaining rows and stop the writer task."""
@@ -198,6 +205,7 @@ class MCPInvocationRepo:
         agent_uid: str | None = None,
         limit: int = 50,
         after: tuple[datetime, int] | None = None,
+        trace_id: str | None = None,
     ) -> list[MCPInvocation]:
         async with self._sm() as session:
             # Newest first, the id breaking ties, so ``after`` (the previous
@@ -210,7 +218,12 @@ class MCPInvocationRepo:
                     newest_first_after(MCPInvocationModel.timestamp, MCPInvocationModel.id, after)
                 )
             stmt = _filtered(
-                stmt, resource_uid=resource_uid, status=status, since=since, agent_uid=agent_uid
+                stmt,
+                resource_uid=resource_uid,
+                status=status,
+                since=since,
+                agent_uid=agent_uid,
+                trace_id=trace_id,
             )
             stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
@@ -223,6 +236,7 @@ class MCPInvocationRepo:
         status: Literal["ok", "error", "timeout", "denied"] | None = None,
         since: datetime | None = None,
         agent_uid: str | None = None,
+        trace_id: str | None = None,
     ) -> int:
         """How many rows match these filters across every page (no cursor)."""
         async with self._sm() as session:
@@ -232,6 +246,7 @@ class MCPInvocationRepo:
                 status=status,
                 since=since,
                 agent_uid=agent_uid,
+                trace_id=trace_id,
             )
             return int((await session.execute(stmt)).scalar_one())
 
@@ -376,11 +391,8 @@ class MCPInvocationRepo:
                 # Persistent DB failure shouldn't crash the writer; log and
                 # carry on. We do NOT requeue: better to drop one batch than
                 # to pin memory growing forever.
-                import logging
-
-                logging.getLogger(__name__).exception(
-                    "mcp.invocation_writer.commit_failed",
-                    extra={"batch_size": len(batch)},
+                _logger.exception(
+                    "mcp.invocation_writer.commit_failed", extra={"batch_size": len(batch)}
                 )
             if self._stopping and queue.empty():
                 return

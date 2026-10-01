@@ -143,3 +143,10 @@ class AuditEntry:
     resource_kind: str | None = None
     resource_name: str | None = None
     details: dict[str, Any] = field(default_factory=dict)
+    #: The correlation ids bound when the row was written (migration 0137): the
+    #: HTTP request's or the turn's ``trace_id`` — the key that joins this row to
+    #: the MCP invocations and the daemon log lines of the same request or turn —
+    #: and, for a row a chat or channel turn wrote, its conversation and turn.
+    trace_id: str | None = None
+    conversation_id: str | None = None
+    turn_id: str | None = None

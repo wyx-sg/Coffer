@@ -80,6 +80,7 @@ coffer log audit                                   # newest 50
 coffer log audit --kind mcp_server --name filesystem
 coffer log audit --event-type secret_resolved --since 2026-09-01T00:00:00Z
 coffer log audit --event-type memory_delivery_fired --limit 20
+coffer log audit --trace 44e10b60da1b4f26         # one request's or turn's rows
 coffer log audit --json
 ```
 
@@ -89,6 +90,7 @@ coffer log audit --json
 | `--name` | Resource name. Needs `--kind`. |
 | `--event-type` | One event type. |
 | `--since` | ISO 8601 lower bound, or an age such as `30m`, `1h`, `2d`. |
+| `--trace` | Only the rows of one request or turn: its trace id, the one the drawer, an `X-Coffer-Trace` header or a daemon log line shows. `coffer log mcp` and `coffer log daemon` take it too. |
 | `--limit` | 1–500, default 50. |
 | `--json` | Machine-readable output. |
 

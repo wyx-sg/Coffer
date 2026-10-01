@@ -45,6 +45,7 @@ function call(overrides: Partial<Invocation> = {}): Invocation {
     error_message: null,
     session_id: "s-1",
     agent_uid: "a-cc",
+    trace_id: null,
     ...overrides,
   };
 }
@@ -57,6 +58,9 @@ function audit(overrides: Partial<AuditEntry> & { id: number }): AuditEntry {
     resource_name: null,
     actor: "ui",
     details: null,
+    trace_id: null,
+    conversation_id: null,
+    turn_id: null,
     ...overrides,
   };
 }

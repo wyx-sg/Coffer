@@ -29,6 +29,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from coffer.application.chat.turn_state import stop_all_turns
+from coffer.application.runtime.supervisor import tasks
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.curation_wiring import stop_curation_worker
@@ -139,6 +140,10 @@ async def shutdown(running: Running) -> None:
     running.kinds.mcp.session_supervisors.clear()
     # Close per-/mcp/-session state in the protocol routes.
     await best_effort("mcp_sessions", shutdown_all_sessions())
+    # Last, the sweep: whatever background task its owner did not stop above
+    # (the loop-lag probe, an ingest still running, a restarting loop) is
+    # cancelled here, bounded, before the database it may be writing to goes.
+    await best_effort("supervised_tasks", tasks().shutdown())
     # The knowledge service holds no long-lived handles (the directory is
     # session-maker-bound + lazy), so only the shared engine needs disposal.
     await running.engine.dispose()

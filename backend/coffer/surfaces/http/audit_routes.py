@@ -63,6 +63,9 @@ def _to_out(e: AuditEntry) -> AuditEntryOut:
         resource_name=e.resource_name,
         actor=e.actor,
         details=e.details,
+        trace_id=e.trace_id,
+        conversation_id=e.conversation_id,
+        turn_id=e.turn_id,
     )
 
 
@@ -90,6 +93,14 @@ async def list_audit(
             "issued with; any other value is 400 CURSOR_INVALID."
         ),
     ),
+    trace_id: str | None = Query(
+        default=None,
+        description=(
+            "Only the rows written under this correlation id: one HTTP request's "
+            "or one chat/channel turn's, the same id its MCP invocations and "
+            "daemon log lines carry."
+        ),
+    ),
     svc: AuditService = Depends(get_audit_service),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> AuditListOut:
@@ -106,6 +117,7 @@ async def list_audit(
         since=since_dt,
         limit=limit,
         cursor=cursor,
+        trace_id=trace_id,
     )
     # The page is validated first so a bad cursor is refused before counting.
     total = await svc.count(
@@ -114,6 +126,7 @@ async def list_audit(
         event_type=event_type,
         event_prefix=event_prefix,
         since=since_dt,
+        trace_id=trace_id,
     )
     return AuditListOut(
         entries=[_to_out(e) for e in page.items], next_cursor=page.next_cursor, total=total

@@ -137,6 +137,7 @@ backend/coffer/
 │   ├── attention.py        # the cross-kind "needs you" list and its source port
 │   ├── reconcile/          # the unified reconciler: target port, loop, hints, drift source
 │   ├── events/             # the change feed: numbered hints, replay buffer, attention watch
+│   ├── runtime/            # supervised background tasks, event-loop lag probe, correlation ids
 │   ├── secret/             # ref-to-secret resolver
 │   ├── engine/             # which model Coffer's own passes run on
 │   ├── fs/                 # browse, pick, open, editor

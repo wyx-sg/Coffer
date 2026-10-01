@@ -36,8 +36,13 @@ class AuditLogModel(Base):
     resource_name: Mapped[str | None] = mapped_column(String, nullable=True)
     actor: Mapped[str] = mapped_column(String, nullable=False)
     details_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Correlation ids (migration 0137); see ``domain.audit.AuditEntry``.
+    trace_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    conversation_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    turn_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
+        Index("idx_audit_trace", "trace_id"),
         Index("idx_audit_resource", "resource_kind", "resource_name", "timestamp"),
         Index("idx_audit_resource_uid", "resource_uid", "timestamp"),
         Index("idx_audit_time", "timestamp"),

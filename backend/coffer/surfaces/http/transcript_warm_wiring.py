@@ -18,6 +18,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from coffer.application.agent.transcript_warm_worker import AgentTarget, TranscriptWarmWorker
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.transcripts import supports_transcripts
 
@@ -55,7 +56,7 @@ def start_transcript_warm_worker(
         return int(reader.warm(agent_type_value=agent_type_value, config_dir=config_dir))
 
     worker = TranscriptWarmWorker(warm=_warm, list_targets=_list_targets)
-    return worker, asyncio.create_task(worker.run())
+    return worker, spawn(worker.run(), name="transcript-warm")
 
 
 async def stop_transcript_warm_worker(

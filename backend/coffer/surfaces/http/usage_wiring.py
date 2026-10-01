@@ -26,6 +26,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.provider.prices import ProviderPriceResolver
 from coffer.application.provider.service import ProviderService
 from coffer.application.provider.usage_lookup import ProviderUsageLookup
+from coffer.application.runtime.supervisor import spawn
 from coffer.application.usage.ingest import UsageIngestService
 from coffer.application.usage.ports import (
     CodexRateLimitReader,
@@ -69,10 +70,8 @@ class UsageWiring:
         if self._tasks:
             return
         self._tasks = [
-            asyncio.create_task(self.ingest.run(INGEST_INTERVAL_SECONDS), name="usage-ingest"),
-            asyncio.create_task(
-                self.quota.run(BACKGROUND_INTERVAL.total_seconds()), name="usage-quota"
-            ),
+            spawn(self.ingest.run(INGEST_INTERVAL_SECONDS), name="usage-ingest"),
+            spawn(self.quota.run(BACKGROUND_INTERVAL.total_seconds()), name="usage-quota"),
         ]
 
     async def stop(self) -> None:

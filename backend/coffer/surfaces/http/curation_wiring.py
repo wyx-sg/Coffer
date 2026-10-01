@@ -25,6 +25,7 @@ from coffer.application.knowledge.curate import CurationPass
 from coffer.application.knowledge.curate_worker import CurationWorker
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.resource_service import ResourceService
+from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.internal_engine_config import CURATE
 from coffer.infrastructure.llm.agentic_reorg import LangchainAgenticReorg
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
@@ -136,7 +137,7 @@ def start_curation_worker(
         # half-way through a pass would carry a torn rewrite to other machines.
         lock=sync.service.lock,
     )
-    return asyncio.create_task(worker.run_forever())
+    return spawn_restarting(worker.run_forever, name="knowledge-curation")
 
 
 async def stop_curation_worker(task: asyncio.Task[None]) -> None:

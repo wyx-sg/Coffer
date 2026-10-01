@@ -29,6 +29,7 @@ Read the audit log, newest first, one page at a time.
 | `--since` | 选项 | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
 | `--limit` | 选项 | integer (1-500) | `50` | Most entries to print |
 | `--cursor` | 选项 | text |  | Read the page after this one: the next_cursor a previous read printed |
+| `--trace` | 选项 | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
 | `--json` | 选项 | 开关 |  | JSON output for scripts |
 
 ## log mcp
@@ -48,6 +49,7 @@ Without --server this is the log the Activity page shows, Coffer's own calls (se
 | `--since` | 选项 | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
 | `--limit` | 选项 | integer (1-500) | `20` | Most calls to print |
 | `--cursor` | 选项 | text |  | Read the page after this one: the next_cursor a previous read printed |
+| `--trace` | 选项 | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
 | `--json` | 选项 | 开关 |  | JSON output for scripts |
 
 ## log daemon
@@ -58,11 +60,14 @@ coffer log daemon [OPTIONS]
 
 Read the tail of the daemon log, newest first, normalised as the Activity page shows it.
 
+``--trace`` keeps the lines of one request or turn, the same id ``coffer log audit --trace`` and ``coffer log mcp --trace`` filter on.
+
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `--since` | 选项 | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
 | `--errors` | 选项 | 开关 |  | Only errors |
 | `--limit` | 选项 | integer (1-500) | `100` | Most records to print |
+| `--trace` | 选项 | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
 | `--json` | 选项 | 开关 |  | JSON output for scripts |
 
 ## log prune

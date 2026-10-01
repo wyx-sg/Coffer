@@ -29,6 +29,7 @@ from coffer.application.provider.proxy_state import build_proxy_state
 from coffer.application.provider.proxy_tokens import ProxyTokenService
 from coffer.application.provider.service import ProviderService
 from coffer.application.reconcile.reconciler import Reconciler
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.model_proxy.state import ProxyState, proxy_root
 from coffer.infrastructure.daemon.config import effective_proxy_port
 from coffer.infrastructure.model_proxy.supervisor import ProxySupervisor
@@ -56,7 +57,7 @@ class ModelProxyWiring:
     def schedule_refresh(self) -> None:
         """Re-push the proxy's state soon, from synchronous code."""
         try:
-            task = asyncio.get_running_loop().create_task(self._refresh())
+            task = spawn(self._refresh(), name="model-proxy-refresh")
         except RuntimeError:
             return
         self._pending.add(task)
@@ -122,7 +123,7 @@ def wire_model_proxy(
     )
     reconciler.add_pass_listener(lambda _report: wiring.schedule_refresh())
     if os.environ.get(AUTOSTART_ENV, "").lower() != "off":
-        wiring.task = asyncio.get_running_loop().create_task(supervisor.start())
+        wiring.task = spawn(supervisor.start(), name="model-proxy-start")
     return wiring
 
 

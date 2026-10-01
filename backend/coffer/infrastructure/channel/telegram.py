@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 
 from coffer.application.channel.ports import AdapterCallbacks, FetchedContext
+from coffer.application.runtime.supervisor import spawn, spawn_restarting
 from coffer.domain.channel.dedup import SeenIds
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
@@ -123,11 +124,11 @@ class TelegramAdapter:
         # awaited: it is up to six best-effort calls that nothing depends on,
         # and the reconciler is waiting on start() — against an unreachable API
         # they would hold up the channel for a minute to change nothing.
-        self._profile_task = asyncio.create_task(
+        self._profile_task = spawn(
             register_profile(self._call),
             name=f"telegram-profile:{self._name}",
         )
-        self._task = asyncio.create_task(self._poll_loop(), name=f"telegram-poll:{self._name}")
+        self._task = spawn_restarting(self._poll_loop, name=f"telegram-poll:{self._name}")
 
     async def stop(self) -> None:
         # Drop pending album timers/flush tasks so none leak past stop.

@@ -22,6 +22,7 @@ from coffer.application.attention import AttentionService, AttentionSource, Igno
 from coffer.application.audit_service import AuditService
 from coffer.application.reconcile.attention_source import DriftAttentionSource
 from coffer.application.reconcile.reconciler import Reconciler
+from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.reconcile import Outcome, Trigger
 from coffer.surfaces.http.reconcile_dependencies import set_attention_service, set_reconciler
 
@@ -76,7 +77,7 @@ def wire_attention(
 
 def start_reconciler(reconciler: Reconciler) -> asyncio.Task[None]:
     """The periodic loop, as a task the shutdown cancels."""
-    return asyncio.create_task(reconciler.serve(), name="reconciler")
+    return spawn_restarting(reconciler.serve, name="reconciler")
 
 
 __all__ = [

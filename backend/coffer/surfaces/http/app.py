@@ -38,6 +38,8 @@ from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.reconcile.hints import HintingResourceRepo
 from coffer.application.resource_service import ResourceService
+from coffer.application.runtime import loop_lag
+from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
 from coffer.infrastructure.logging.setup import configure_logging
@@ -297,7 +299,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Channel adapter reconciler (spec channels): Telegram polling and the
     # SeaTalk websocket connections converge from its first tick.
-    channel_runtime_task = asyncio.create_task(channel_runtime.run())
+    channel_runtime_task = spawn_restarting(channel_runtime.run, name="channel-runtime")
+    # The event-loop lag probe behind /daemon/status's ``runtime`` block.
+    spawn_restarting(loop_lag.probe().run, name="loop-lag-probe")
     # The reconciler's periodic loop; hints bring a pass forward.
     reconciler_task = start_reconciler(reconciler)
     # The Overview's "needs you" list: open drift, then each kind's signals.

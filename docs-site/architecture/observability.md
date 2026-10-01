@@ -1,6 +1,6 @@
 ---
 title: Observability
-description: How Coffer records what it did — one JSON daemon log with trace ids, an audit log of changes, an invocation log of proxied MCP calls, retention for all three, how agents and people read them, and opt-in eval capture.
+description: How Coffer records what it did — one JSON daemon log, an audit log of changes and an invocation log of proxied MCP calls joined by one trace id, supervised background tasks and event-loop lag, retention, how agents and people read them, and opt-in eval capture.
 ---
 
 # Observability
@@ -21,7 +21,9 @@ Coffer is a background process that other programs talk to. When something goes 
 | Decision | Reason |
 | --- | --- |
 | One log file, `daemon.log`, one JSON object per line | Every reader (the Activity page, `coffer log daemon`, an agent or a human with `grep`) parses the same fields. |
-| A trace id on every HTTP request, echoed as `X-Coffer-Trace` | A failed response can be tied to the exact log lines it produced. |
+| A trace id on every HTTP request and every turn, echoed as `X-Coffer-Trace` and stored on audit rows and MCP invocations | A failed response can be tied to the exact log lines it produced, and one request's or turn's audit rows, MCP calls and log lines read as one story. |
+| Every background task runs under one supervisor that names it, logs its crash and counts it | A task that raises is reported the moment it dies, instead of never; a channel adapter that crashes is restarted alone. |
+| An event-loop lag probe on the status | One synchronous call blocking the loop stalls everything at once; the lag makes that visible as itself. |
 | A separate, structured audit log in SQLite | "What changed, and who changed it" needs filtering by resource, kind and event type, and has to survive a rename. |
 | An invocation log for proxied MCP calls, with no payloads | Latency and outcome per call are useful; arguments and results can carry secrets and stay out. |
 | One retention mechanism for every log-like table and log file | Bounded growth without a separate cleanup job per feature. |
@@ -40,8 +42,10 @@ Coffer's own modules log through Python's standard logging library. Every handle
 | `timestamp` | the record's own creation time, UTC ISO-8601 with a trailing `Z` |
 | `level` | `debug`, `info`, `warning`, `error` or `critical` |
 | `logger` | the module that logged it |
-| `trace_id` | the current request's trace id, or `-` outside a request |
-| any extra keys | whatever structured fields the code that logged the record attached |
+| `trace_id` | the current request's or turn's trace id, or `-` outside both |
+| `session_id` | the MCP session, on a line written while serving a `/mcp` call |
+| `conversation_id`, `turn_id` | the chat conversation and the turn, on a line written inside a chat or channel turn |
+| any `extra={...}` keys | whatever the call site passed |
 | `exception` | the rendered traceback, kept inside the same line |
 
 A real line looks like this:
@@ -87,7 +91,7 @@ Because `daemon.log` is also the stdio of the daemon's children, it is never gua
 - folds traceback lines and panel borders into the record above them (`continuation`), so one failure is one row;
 - keeps any line it cannot parse, verbatim, under `raw` — and treats an unreadable level as passing every level filter, because an unparseable line is most often a traceback.
 
-The HTTP route `GET /api/v1/daemon/logs` exposes this reader with `since`, `level` (a severity floor), `errors_only` and `limit` (1–500, default 100), newest first. It requires the API token; `GET /api/v1/daemon/status` does not, because it doubles as a readiness probe.
+The HTTP route `GET /api/v1/daemon/logs` exposes this reader with `since`, `level` (a severity floor), `errors_only`, `trace_id` (only the lines of one request or turn) and `limit` (1–500, default 100), newest first. It requires the API token; `GET /api/v1/daemon/status` does not, because it doubles as a readiness probe.
 
 ## Trace ids
 
@@ -119,6 +123,20 @@ sequenceDiagram
 
 Records logged outside a request — background workers, the MCP session reaper — carry `trace_id: "-"`. Work done while serving an `/mcp` request, such as spawning an upstream server, carries that request's id.
 
+### One id across the three records
+
+The id is not only for `daemon.log`. `application/runtime/correlation.py` holds the correlation of the current unit of work in one context variable — `trace_id`, plus `session_id` inside an `/mcp` call and `conversation_id` and `turn_id` inside a turn — and every record written while it is bound inherits it:
+
+| Record | Carries |
+| --- | --- |
+| a `daemon.log` line | `trace_id` always; `session_id`, `conversation_id`, `turn_id` when bound |
+| an `audit_log` row | `trace_id`, and `conversation_id` and `turn_id` for a row a turn wrote |
+| an `mcp_invocations` row | `trace_id` beside its `session_id` |
+
+A turn binds its ids around the spawn of its task: a fresh `turn_id`, the conversation's id, and the trace id of the request that started it — or, for a channel message that arrived over a websocket or a long poll with no request behind it, the turn's own id as its trace id. Because `asyncio` copies the context into every task it creates, the turn's renderer and anything else it starts carry the same ids with no parameter threaded through.
+
+So "what else did this request do?" is one filter on each record: `GET /api/v1/audit?trace_id=…`, `GET /api/v1/mcp/invocations?trace_id=…` and `GET /api/v1/daemon/logs?trace_id=…`, or `--trace <id>` on `coffer log audit`, `coffer log mcp` and `coffer log daemon`. The Activity page's record drawer shows a change's and a call's trace id. Rows older than migration 0137 carry none, and no id is invented for them.
+
 ## The audit log
 
 The audit log answers "what changed, and who changed it". It lives in the `audit_log` table of `~/.coffer/runs.db`, the history database.
@@ -133,6 +151,8 @@ The audit log answers "what changed, and who changed it". It lives in the `audit
 | `resource_uid` | the resource's uid, or empty for an event that names no resource or whose resource was deleted before the vault layout |
 | `resource_kind`, `resource_name` | the label the resource carried **at the time** |
 | `details` | event-specific fields, already redacted |
+| `trace_id` | the request's or turn's correlation id; empty for a row written with none bound, such as a boot pass |
+| `conversation_id`, `turn_id` | the chat conversation and turn, for a row a turn wrote |
 
 Two decisions shape this:
 
@@ -188,6 +208,7 @@ Every call the gateway proxies — a tool call, a resource read, a prompt get �
 | `error_message` | a Coffer-authored summary, never the upstream's result text |
 | `session_id` | the `/mcp` session the call came from |
 | `agent_uid` | the agent whose session made the call, as its shim reported it on `initialize`; empty when the session reported none (a hand-configured shim, a bare MCP client) |
+| `trace_id` | the `/mcp` request's trace id; the audit rows and log lines the call caused carry the same one |
 
 What `status` means:
 
@@ -202,7 +223,7 @@ Rows are keyed by uid rather than name, so a server's history belongs to that re
 
 Writes are buffered: an in-memory queue (up to 5,000 rows) is flushed by a writer task every 50 ms or every 50 rows, whichever comes first, so a tool-heavy session does not pay an SQLite commit per call. When the queue is full, callers wait rather than drop rows.
 
-You read it on the **MCP calls** tab of the Activity page, per server on the server's detail page, with `coffer log mcp [--server <name>]`, or through `GET /api/v1/mcp/invocations` and `GET /api/v1/resources/mcp_server/{uid}/invocations`. Both routes page newest first by cursor, take `agent_uid` to show one agent's calls, and answer each row with its `id`. Their answer, like the audit log's, carries `total`: how many rows match the filters across every page, so a filtered view can say how big it is without paging to the end.
+You read it on the **MCP calls** tab of the Activity page, per server on the server's detail page, with `coffer log mcp [--server <name>]`, or through `GET /api/v1/mcp/invocations` and `GET /api/v1/resources/mcp_server/{uid}/invocations`. Both routes page newest first by cursor, take `agent_uid` to show one agent's calls and `trace_id` to show one request's, and answer each row with its `id`. Their answer, like the audit log's, carries `total`: how many rows match the filters across every page, so a filtered view can say how big it is without paging to the end.
 
 ## Retention
 
@@ -244,14 +265,45 @@ The realistic reader of these records is often an agent at the moment something 
 
 | Command | Reads |
 | --- | --- |
-| `coffer log audit [--kind] [--name] [--event-type] [--since] [--limit] [--json]` | the audit log, newest first |
-| `coffer log mcp [--server] [--status ok\|error] [--since] [--limit] [--json]` | the MCP invocation log, newest first |
-| `coffer log daemon [--errors] [--since] [--limit] [--json]` | the tail of `daemon.log`, through the same tolerant reader as the Activity page |
+| `coffer log audit [--kind] [--name] [--event-type] [--since] [--trace] [--limit] [--json]` | the audit log, newest first |
+| `coffer log mcp [--server] [--status ok\|error] [--since] [--trace] [--limit] [--json]` | the MCP invocation log, newest first |
+| `coffer log daemon [--errors] [--since] [--trace] [--limit] [--json]` | the tail of `daemon.log`, through the same tolerant reader as the Activity page |
+| `coffer daemon status [--json]` | the event-loop lag and the background task counts, beside the daemon's version and port |
 | `coffer path logs` | the log directory and the `daemon.log` in it, for `grep` or `tail` |
 
 `--since` takes an ISO 8601 instant or an age such as `30m`, `1h` or `2d`. A filter that cannot be resolved — a name without a kind, or a name that no resource of that kind has — is an error rather than being silently ignored, because an unfiltered answer would look like "nothing happened to this resource". Every command is read-only and prints no secret values: audit details are redacted before storage, and log records carry none by construction.
 
-An agent that hits a `SECRET_MISSING` error does not know whether it needs "what changed" or "what failed", so it runs `coffer log audit --since 1h` and `coffer log daemon --errors --since 1h`, or greps the file `coffer path logs` names for the response's trace id.
+An agent that hits a `SECRET_MISSING` error does not know whether it needs "what changed" or "what failed", so it runs `coffer log audit --since 1h` and `coffer log daemon --errors --since 1h`, or greps the file `coffer path logs` names for the response's trace id. Given that id, `coffer log audit --trace <id>`, `coffer log mcp --trace <id>` and `coffer log daemon --trace <id>` return exactly that request's records.
+
+## Background tasks and event-loop lag
+
+Everything the daemon does runs on one `asyncio` event loop, and much of it runs as background tasks: each channel adapter's inbound loop, each turn and its renderer, the reconciler and the periodic workers. Two things about that loop used to be invisible.
+
+**A task that crashed said nothing.** A bare `asyncio.create_task` whose coroutine raises keeps the exception until something retrieves it — and for a fire-and-forget task nothing does, so it surfaced, if at all, as "Task exception was never retrieved" when the task was garbage-collected. `application/runtime/supervisor.py` is the one way the daemon starts background work now:
+
+- `spawn(coro, name=…)` starts a named task. If it raises, a `runtime.task.crashed` line with the task's name, the exception class and the traceback reaches `daemon.log` the moment it ends, and the crash is counted.
+- `spawn_restarting(factory, name=…)` is for a long-lived loop whose owner wants it back. After a crash it is run again, after a backoff that doubles from 1 s to a 60 s cap. The channel runtime, each Telegram channel's poll loop (`telegram-poll:<channel>`), each SeaTalk channel's websocket supervisor (`seatalk-ws:<channel>`) and the periodic workers run this way, so one adapter's crash restarts that adapter's loop and nothing else. The SeaTalk SDK's blocking `listen()` stays on its own thread; the supervised part is the asyncio loop that owns and restarts it.
+- At shutdown, after each owner has stopped its own tasks in the teardown's order, the supervisor cancels whatever is still running, bounded by a timeout.
+
+Tasks a function awaits or cancels before it returns — the two sides of an `asyncio.wait` race, a shielded write, a per-request pump — are structured concurrency, not background work, and stay bare. `scripts/check_bare_tasks.py` (run by `make lint`) counts `create_task` and `ensure_future` calls per file and fails on any file that makes more than its allow-list entry, each entry stating why its calls are awaited in place. A new bare task therefore fails lint until it moves onto the supervisor or is argued onto the list.
+
+**A blocked loop looked like general slowness.** One synchronous call on the loop — a large file walk, a subprocess wait — stalls every request, channel and turn at once. `application/runtime/loop_lag.py` sleeps for 0.5 s at a time and records how much later than asked the loop woke it, keeping five minutes of samples.
+
+`GET /api/v1/daemon/status` carries both in its `runtime` block, and `coffer daemon status` prints them:
+
+```json
+"runtime": {
+  "loop_lag_p99_ms": 1.84,
+  "loop_lag_max_ms": 12.6,
+  "loop_lag_samples": 600,
+  "loop_lag_window_seconds": 300.0,
+  "tasks_running": 14,
+  "task_crashes": 1,
+  "last_crash": {"task": "telegram-poll:family", "error": "RuntimeError", "at": "2026-10-01T08:12:03Z", "restarting": true}
+}
+```
+
+An idle daemon reads a millisecond or two. A p99 in the hundreds means something is blocking the loop; the daemon log around the maximum usually says what. The status route answers without a token, so `last_crash` carries only the exception's class; its message and traceback are in `daemon.log` under `runtime.task.crashed`.
 
 ## Eval capture
 
@@ -282,13 +334,14 @@ The invocation log's honest `error` status for in-band tool errors is what makes
 
 **Audit events in the daemon log only.** A log line cannot be filtered by resource id or survive rotation for a year. The table is the record; the log line is a convenience for whoever is tailing the file.
 
-**A metrics or tracing backend.** Coffer runs on one machine for one person. Exporting OpenTelemetry spans or Prometheus metrics would add a dependency and a second process for a question `coffer log` already answers locally.
+**A metrics or tracing backend.** Coffer runs on one machine for one person. Exporting OpenTelemetry spans or Prometheus metrics would add a dependency and a second process for a question `coffer log` already answers locally. The correlation ids borrow the one idea worth having from tracing — a single id carried across every record of a request — without the backend.
 
 ## Where it lives in the code
 
 | Package | What it does |
 | --- | --- |
 | `infrastructure/logging/` | JSON formatter, rotating file handler, stderr rule, trace id context, log directory, per-upstream stderr files, log-file pruning, eval capture sink |
+| `application/runtime/` | correlation ids of the current unit of work (trace, session, conversation, turn), supervised background tasks, the event-loop lag probe |
 | the application layer | tolerant tail reader shared by the Activity page and `coffer log daemon`; recording and querying audit rows; prunable tables, prune logic and cadence; eval capture emit |
 | the MCP gateway, in `application/mcp/` | invocation status for proxied calls; invocation rows for builtin tools; eval capture hook |
 | `infrastructure/mcp/` | `mcp_invocations` table and buffered writer |
@@ -302,5 +355,5 @@ The invocation log's honest `error` status for in-band tool errors is what makes
 - Guides: [Activity and audit](/guides/activity), [Troubleshooting](/guides/troubleshooting), [Running the daemon](/guides/daemon)
 - Reference: [MCP tools](/reference/mcp-tools), [Files and directories](/reference/filesystem), [Configuration](/reference/configuration), [Error codes](/reference/error-codes)
 - Architecture: [MCP gateway](/architecture/mcp-gateway), [Security model](/architecture/security), [Persistence](/architecture/persistence)
-- Decision records: [Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/eval-capture-and-regression-gate.md), [the agent harness guide](https://github.com/wyx-sg/Coffer/blob/main/.agents/harness.md), [Resource Identity Is an Immutable UID](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md)
+- Decision records: [Background Work Runs Supervised, and Every Record Carries One Correlation Id](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/background-work-runs-supervised-and-correlated.md), [Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/eval-capture-and-regression-gate.md), [the agent harness guide](https://github.com/wyx-sg/Coffer/blob/main/.agents/harness.md), [Resource Identity Is an Immutable UID](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md)
 - Specs: [daemon](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md), [mcp-gateway](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md), [resource-framework](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md)

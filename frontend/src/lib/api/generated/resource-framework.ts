@@ -404,6 +404,8 @@ export interface components {
         AuditEntryOut: {
             /** Actor */
             actor: string;
+            /** Conversation Id */
+            conversation_id: string | null;
             /** Details */
             details: {
                 [key: string]: unknown;
@@ -421,6 +423,10 @@ export interface components {
              * Format: date-time
              */
             timestamp: string;
+            /** Trace Id */
+            trace_id: string | null;
+            /** Turn Id */
+            turn_id: string | null;
         };
         /**
          * AuditListOut
@@ -1063,6 +1069,8 @@ export interface operations {
                 limit?: number;
                 /** @description The previous page's next_cursor. Bound to the filters it was issued with; any other value is 400 CURSOR_INVALID. */
                 cursor?: string | null;
+                /** @description Only the rows written under this correlation id: one HTTP request's or one chat/channel turn's, the same id its MCP invocations and daemon log lines carry. */
+                trace_id?: string | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;

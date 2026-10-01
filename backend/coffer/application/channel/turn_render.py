@@ -40,6 +40,7 @@ from coffer.application.channel.turn_finish import (
 from coffer.application.channel.turn_status import LIVE_SEPARATOR, ReplyText, TurnStatus
 from coffer.application.channel.turn_surface import TurnSurface, typing_heartbeat
 from coffer.application.channel.turn_text import clip_stream_preview, with_mention
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.chat.events import TextDelta, ToolCall, ToolResult, TurnDone, TurnError
 
 #: How long a text-only turn must run before it is worth opening a live surface
@@ -119,7 +120,7 @@ class TurnRenderer:
             self.adapter, self.chat_id, self.thread_id, self.chat_kind, self._with_mention
         )
         await self._acknowledge()
-        ticker = asyncio.create_task(self._tick())
+        ticker = spawn(self._tick(), name=f"channel-turn-ticker:{self.chat_id}")
         stop_reason = "end_turn"
         error: TurnError | None = None
         tool_ids: set[str] = set()
@@ -256,14 +257,15 @@ class TurnRenderer:
         # completion by capability").
         caps = self.adapter.capabilities
         if caps.supports_typing and not caps.supports_reactions:
-            return asyncio.create_task(
+            return spawn(
                 typing_heartbeat(
                     self.adapter,
                     self.chat_id,
                     self.thread_id,
                     self.chat_kind,
                     self.heartbeat_seconds,
-                )
+                ),
+                name=f"channel-typing:{self.chat_id}",
             )
         return None
 

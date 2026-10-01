@@ -252,3 +252,25 @@ def test_a_record_does_not_follow_a_reassigned_sys_stderr(daemon_log: Path) -> N
     )
     # It still reached the log, which is where it belongs.
     assert "HTTP Request" in daemon_log.read_text()
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="a turn's records carry its conversation and turn"
+)
+def test_a_line_written_inside_a_turn_carries_its_ids(daemon_log: Path) -> None:
+    """The formatter stamps whatever correlation is bound where the line was
+    logged: the MCP session inside a ``/mcp`` call, the conversation and turn
+    inside a chat or channel turn."""
+    from coffer.application.runtime import correlation
+
+    with correlation.correlated(session_id="sess-1"), correlation.turn("conv-9") as bound:
+        logging.getLogger("coffer.application.channel.turn_driver").info("channel.turn.started")
+    logging.getLogger("coffer.application.sync.worker").info("sync.idle")
+
+    first, second = (json.loads(line) for line in daemon_log.read_text().splitlines())
+    assert first["conversation_id"] == "conv-9"
+    assert first["turn_id"] == bound.turn_id
+    assert first["trace_id"] == bound.turn_id
+    assert first["session_id"] == "sess-1"
+    assert second["trace_id"] == "-"
+    assert "turn_id" not in second and "session_id" not in second

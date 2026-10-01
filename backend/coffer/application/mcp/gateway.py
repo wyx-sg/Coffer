@@ -75,6 +75,7 @@ from coffer.application.mcp.ports import (
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.mcp.tiering_config import TieringConfig, load_tiering_config
 from coffer.application.resource_service import ResourceService
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.errors import UpstreamUnavailable
 
 _logger = logging.getLogger(__name__)
@@ -144,9 +145,8 @@ class MCPGatewaySession:
         self._session_cwd: str | None = None
         # Servers whose notifications this session already subscribed to.
         self._notification_subscriptions: set[str] = set()
-        # The event loop holds tasks weakly — an un-referenced
-        # ensure_future() task can be garbage-collected mid-flight, silently
-        # dropping an upstream notification. Hold strong refs until done.
+        # The loop holds tasks weakly; strong refs keep an upstream
+        # notification from being garbage-collected mid-flight.
         self._notification_tasks: set[asyncio.Task[None]] = set()
         # Tool tiering: servers whose discovery failed on the last tools/list. The
         # client caches tools/list and no list_changed can arrive from a server
@@ -259,7 +259,8 @@ class MCPGatewaySession:
             return
 
         def _spawn_notification_task(notif: Any) -> asyncio.Task[None]:
-            task = asyncio.ensure_future(self._on_upstream_notification(server_name, notif))
+            coro = self._on_upstream_notification(server_name, notif)
+            task = spawn(coro, name=f"mcp-upstream-notification:{server_name}")
             self._notification_tasks.add(task)
             task.add_done_callback(self._notification_tasks.discard)
             return task

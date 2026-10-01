@@ -228,3 +228,41 @@ async def test_status_reports_draining_during_teardown(tmp_path, monkeypatch):
         finally:
             # Restore so lifespan teardown (which also sets draining) is idempotent
             set_daemon_phase("ready")
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="the status reports loop lag and task crashes")
+@pytest.mark.asyncio
+async def test_status_reports_loop_lag_and_task_crashes(tmp_path, monkeypatch):
+    """The ``runtime`` block: the loop-lag probe's window and the supervisor's
+    crash count, answered without a token like the rest of the probe."""
+    import asyncio
+
+    from coffer.application.runtime import loop_lag
+    from coffer.application.runtime.supervisor import spawn, tasks
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    app = create_app()
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(transport=ASGITransport(app), base_url="http://t") as c,
+    ):
+        before = tasks().stats().crashes
+        loop_lag.probe().record(0.004)
+
+        async def broken() -> None:
+            raise LookupError("no such row")
+
+        await asyncio.wait({spawn(broken(), name="test-broken-worker")})
+        r = await c.get("/api/v1/daemon/status")
+    assert r.status_code == 200
+    runtime = r.json()["runtime"]
+    assert runtime["loop_lag_samples"] >= 1
+    assert runtime["loop_lag_p99_ms"] is not None and runtime["loop_lag_max_ms"] >= 4.0
+    assert runtime["loop_lag_window_seconds"] == 300.0
+    assert runtime["tasks_running"] >= 1  # the probe itself, at least
+    assert runtime["task_crashes"] == before + 1
+    last = runtime["last_crash"]
+    assert last["task"] == "test-broken-worker"
+    assert last["error"] == "LookupError"
+    assert "no such row" not in str(runtime)  # the message stays in daemon.log

@@ -24,14 +24,10 @@ A channel message rides the same queue with two extras: the attachments and
 title hint it persists into the user message, and an ``on_start`` sink that is
 handed a dedicated event queue (ending in ``None``) the moment its turn begins,
 which is what the channel renderer drains. The web observes the same turn on
-the bus.
-
-``start_turn`` is the immediate-or-refuse seam (start now or raise
-``TurnInProgress``); it is what tests that need a turn *right now* use.
-
-Per-conversation state (bus, in-flight turn, pending queue) is process-global
-and single-daemon by design; it lives in :mod:`turn_state` and is released
-once a conversation is idle with nobody watching.
+the bus. ``start_turn`` is the immediate-or-refuse seam (start now or raise
+``TurnInProgress``), for tests that need a turn *right now*. Per-conversation
+state (bus, in-flight turn, pending queue) is process-global and lives in
+:mod:`turn_state`, released once a conversation is idle with nobody watching.
 """
 
 from __future__ import annotations
@@ -63,6 +59,8 @@ from coffer.application.chat.turn_state import (
 from coffer.application.chat.turn_state import active_turns as active_turns
 from coffer.application.chat.turn_state import clear_active_turns as clear_active_turns
 from coffer.application.chat.turn_state import held_conversations as held_conversations
+from coffer.application.runtime import correlation
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.errors import TurnInProgress
 from coffer.domain.chat.events import AgentEvent, QueueChanged, TurnError
@@ -363,26 +361,29 @@ class TurnOrchestrator:
                 primary_queue.put_nowait(None)
             raise
 
-        task = asyncio.create_task(
-            run_turn_task(
-                conversation_id=conversation_id,
-                active=active,
-                adapter=adapter,
-                chat=self._chat,
-                idle_timeout=self._idle_timeout,
-                flush_interval=self._flush_interval,
-            ),
-            name=f"turn:{conversation_id}",
-        )
-        active.task = task
-        task.add_done_callback(self._advance_callback(conversation_id))
-        if message.on_start is not None and primary_queue is not None:
-            # After the task exists, so a renderer that stops the turn finds it.
-            message.on_start(primary_queue)
+        # Bound around the spawn: the turn task and whatever ``on_start`` spawns
+        # to render it copy the turn's correlation ids into every record.
+        with correlation.turn(conversation_id):
+            task = spawn(
+                run_turn_task(
+                    conversation_id=conversation_id,
+                    active=active,
+                    adapter=adapter,
+                    chat=self._chat,
+                    idle_timeout=self._idle_timeout,
+                    flush_interval=self._flush_interval,
+                ),
+                name=f"turn:{conversation_id}",
+            )
+            active.task = task
+            task.add_done_callback(self._advance_callback(conversation_id))
+            if message.on_start is not None and primary_queue is not None:
+                # After the task exists, so a renderer that stops the turn finds it.
+                message.on_start(primary_queue)
 
     def _advance_callback(self, conversation_id: str) -> Callable[[asyncio.Task[None]], None]:
         def _cb(_task: asyncio.Task[None]) -> None:
-            advance = asyncio.create_task(self._maybe_advance(conversation_id))
+            advance = spawn(self._maybe_advance(conversation_id), name="turn-advance")
             self._bg_tasks.add(advance)
             advance.add_done_callback(self._bg_tasks.discard)
 

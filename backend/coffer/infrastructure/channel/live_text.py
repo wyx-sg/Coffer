@@ -24,6 +24,7 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.infrastructure.channel.telegram_text import clip_tail_utf16
 
 _logger = logging.getLogger(__name__)
@@ -195,7 +196,7 @@ class LiveTextSurface:
     def _start_keepalive(self) -> None:
         if self._keepalive_seconds is None or self._keepalive is not None:
             return
-        self._keepalive = asyncio.create_task(self._keepalive_loop())
+        self._keepalive = spawn(self._keepalive_loop(), name="channel-live-text-keepalive")
 
     def _stop_keepalive(self) -> None:
         if self._keepalive is not None:

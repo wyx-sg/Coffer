@@ -16,6 +16,8 @@ from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from coffer.application.mcp.gateway import MCPGatewaySession
+from coffer.application.runtime import correlation
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.errors import CofferError
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.mcp.dependencies import get_mcp_session_factory
@@ -161,8 +163,9 @@ async def handle_post(
     method = envelope.get("method")
     params = envelope.get("params") or {}
 
-    # Allocate a session id on the very first request if the client didn't send one.
+    # Allocate a session id on the first request if the client sent none.
     session_id = mcp_session_id or str(uuid.uuid4())
+    correlation.bind(session_id=session_id)
     session = await _get_or_create_session(session_id, factory)
 
     # Hold a refcount across the request so a concurrent SSE-close-triggered
@@ -393,7 +396,5 @@ def start_session_reaper(
     max_idle_seconds: float = _DEFAULT_IDLE_TIMEOUT_S,
 ) -> asyncio.Task[None]:
     """Spawn the background session reaper task. Caller must cancel on shutdown."""
-    return asyncio.create_task(
-        _session_reaper_loop(interval_seconds, max_idle_seconds),
-        name="mcp-session-reaper",
-    )
+    reaper = _session_reaper_loop(interval_seconds, max_idle_seconds)
+    return spawn(reaper, name="mcp-session-reaper")

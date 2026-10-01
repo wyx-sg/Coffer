@@ -1037,6 +1037,7 @@
       },
       "took": "Took",
       "callId": "Call id",
+      "trace": "Trace id",
       "callProblem": {
         "error": "The call to {{server}} failed",
         "timeout": "The call to {{server}} timed out",

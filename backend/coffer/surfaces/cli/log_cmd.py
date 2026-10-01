@@ -38,6 +38,10 @@ _UNIT = {"s": "seconds", "m": "minutes", "h": "hours", "d": "days"}
 
 _SINCE_HELP = "ISO 8601 instant, or an age such as 30m, 1h, 2d"
 _CURSOR_HELP = "Read the page after this one: the next_cursor a previous read printed"
+_TRACE_HELP = (
+    "Only records of one request or turn: the trace id an audit row, an MCP call, "
+    "a log line or an X-Coffer-Trace header carries"
+)
 
 
 def since_instant(raw: str | None, *, now: datetime | None = None) -> str | None:
@@ -69,6 +73,7 @@ def audit(
     since: str | None = typer.Option(None, "--since", help=_SINCE_HELP),
     limit: int = typer.Option(50, "--limit", min=1, max=500, help="Most entries to print"),
     cursor: str | None = typer.Option(None, "--cursor", help=_CURSOR_HELP),
+    trace: str | None = typer.Option(None, "--trace", help=_TRACE_HELP),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
     """Read the audit log, newest first, one page at a time."""
@@ -85,6 +90,8 @@ def audit(
         params["since"] = since_instant(since)
     if cursor is not None:
         params["cursor"] = cursor
+    if trace is not None:
+        params["trace_id"] = trace
     c, _info = _cli_client.client_or_exit()
     with c:
         if name is not None and kind is not None:
@@ -100,13 +107,15 @@ def audit(
         return
     entries = body["entries"]
     table = Table(title="Audit log")
-    for col in ("Time", "Actor", "Event", "Resource"):
+    for col in ("Time", "Actor", "Event", "Resource", "Trace"):
         table.add_column(col)
     for e in entries:
         resource = (
             f"{e['resource_kind']}:{e.get('resource_name') or ''}" if e.get("resource_kind") else ""
         )
-        table.add_row(str(e["timestamp"]), e["actor"], e["event_type"], resource)
+        table.add_row(
+            str(e["timestamp"]), e["actor"], e["event_type"], resource, e.get("trace_id") or ""
+        )
     _console.print(table)
     _next_page_hint(body.get("next_cursor"))
 
@@ -119,6 +128,7 @@ def mcp(
     since: str | None = typer.Option(None, "--since", help=_SINCE_HELP),
     limit: int = typer.Option(20, "--limit", min=1, max=500, help="Most calls to print"),
     cursor: str | None = typer.Option(None, "--cursor", help=_CURSOR_HELP),
+    trace: str | None = typer.Option(None, "--trace", help=_TRACE_HELP),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
     """Read the MCP invocation log, newest first.
@@ -135,6 +145,8 @@ def mcp(
         params["since"] = since_instant(since)
     if cursor is not None:
         params["cursor"] = cursor
+    if trace is not None:
+        params["trace_id"] = trace
     c, _info = _cli_client.client_or_exit()
     with c:
         if server is None:
@@ -153,7 +165,7 @@ def mcp(
     table.add_column("Time")
     if server is None:
         table.add_column("Server")
-    for col in ("Type", "Key", "Duration (ms)", "Status"):
+    for col in ("Type", "Key", "Duration (ms)", "Status", "Trace"):
         table.add_column(col)
     for inv in rows:
         named = [inv.get("resource_name") or inv["resource_uid"]] if server is None else []
@@ -164,6 +176,7 @@ def mcp(
             inv["capability_key"],
             str(inv["duration_ms"]),
             inv["status"],
+            inv.get("trace_id") or "",
         )
     _console.print(table)
     _next_page_hint(body.get("next_cursor"))
@@ -181,12 +194,19 @@ def daemon(
     since: str | None = typer.Option(None, "--since", help=_SINCE_HELP),
     errors: bool = typer.Option(False, "--errors", help="Only errors"),
     limit: int = typer.Option(100, "--limit", min=1, max=500, help="Most records to print"),
+    trace: str | None = typer.Option(None, "--trace", help=_TRACE_HELP),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """Read the tail of the daemon log, newest first, normalised as the Activity page shows it."""
+    """Read the tail of the daemon log, newest first, normalised as the Activity page shows it.
+
+    ``--trace`` keeps the lines of one request or turn, the same id ``coffer log
+    audit --trace`` and ``coffer log mcp --trace`` filter on.
+    """
     params: dict[str, Any] = {"limit": limit, "errors_only": errors}
     if since is not None:
         params["since"] = since_instant(since)
+    if trace is not None:
+        params["trace_id"] = trace
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get("/daemon/logs", params=params)

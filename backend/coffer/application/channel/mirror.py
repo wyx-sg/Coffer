@@ -35,6 +35,7 @@ from coffer.application.channel.store_ports import (
     ChannelThreadLocation,
 )
 from coffer.application.channel.turn_driver import QueuedInbound
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.chat.events import TextDelta, TurnDone, TurnError
 from coffer.domain.chat.mirror import (
     ChannelPlaceView,
@@ -158,7 +159,7 @@ class ChannelMirror:
         the reply that asked for it."""
 
         def on_start(queue: asyncio.Queue[Any]) -> None:
-            task = asyncio.create_task(
+            task = spawn(
                 self._collect(conversation_id, loc, queue),
                 name=f"channel-mirror-collect:{conversation_id}",
             )

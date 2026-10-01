@@ -793,6 +793,16 @@ paths:
           - type: 'null'
           description: Only the calls made by this agent's sessions — the uid its shim reported. Calls from a session that reported no agent match no value.
           title: Agent Uid
+      - description: Only the calls made under this correlation id — one /mcp request's — the same id its audit rows and daemon log lines carry.
+        in: query
+        name: trace_id
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only the calls made under this correlation id — one /mcp request's — the same id its audit rows and daemon log lines carry.
+          title: Trace Id
       - in: header
         name: x-coffer-token
         required: false
@@ -1109,6 +1119,16 @@ paths:
           - type: 'null'
           description: Only the calls made by this agent's sessions — the uid its shim reported. Calls from a session that reported no agent match no value.
           title: Agent Uid
+      - description: Only the calls made under this correlation id — one /mcp request's — the same id its audit rows and daemon log lines carry.
+        in: query
+        name: trace_id
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only the calls made under this correlation id — one /mcp request's — the same id its audit rows and daemon log lines carry.
+          title: Trace Id
       - in: header
         name: x-coffer-token
         required: false
@@ -2299,6 +2319,11 @@ components:
           format: date-time
           title: Timestamp
           type: string
+        trace_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trace Id
       required:
       - id
       - timestamp
@@ -2310,6 +2335,7 @@ components:
       - status
       - error_message
       - session_id
+      - trace_id
       - agent_uid
       title: InvocationOut
       type: object

@@ -13,6 +13,7 @@ import logging
 import time
 
 from coffer.application.chat.service import ChatService
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.chat.events import (
     AgentEvent,
     TextDelta,
@@ -136,7 +137,9 @@ class PartialFlusher:
         wait = self._interval - (_clock() - self._last)
         if wait > 0:
             if self._trailing is None or self._trailing.done():
-                self._trailing = asyncio.create_task(self._flush_later(wait, message_id))
+                self._trailing = spawn(
+                    self._flush_later(wait, message_id), name=f"chat-partial-flush:{message_id}"
+                )
             return
         self._cancel_trailing()
         await self._write(message_id)

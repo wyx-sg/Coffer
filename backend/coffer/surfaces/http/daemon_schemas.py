@@ -22,6 +22,39 @@ class UpstreamSummary(BaseModel):
     unhealthy: int
 
 
+class TaskCrashOut(BaseModel):
+    """The most recent background task that ended by raising."""
+
+    task: str
+    #: The exception's class name; its message and traceback are in daemon.log.
+    error: str
+    at: datetime
+    #: Whether its owner asked for it to be restarted (a channel adapter, a
+    #: periodic worker); ``false`` for a one-off task, which stays gone.
+    restarting: bool
+
+
+class RuntimeHealthOut(BaseModel):
+    """The event loop's health and the background tasks' crash count.
+
+    Lag is how late the loop woke a periodic probe, over a rolling window: one
+    synchronous call blocking the loop stalls every request, channel and turn
+    at once, and this is where that shows. See ``application.runtime``.
+    """
+
+    #: The window's 99th-percentile loop lag in milliseconds; null before the
+    #: probe's first sample.
+    loop_lag_p99_ms: float | None
+    loop_lag_max_ms: float | None
+    loop_lag_samples: int
+    loop_lag_window_seconds: float
+    #: Supervised background tasks running now.
+    tasks_running: int
+    #: Background task crashes since the daemon started.
+    task_crashes: int
+    last_crash: TaskCrashOut | None = None
+
+
 class DaemonStatusOut(BaseModel):
     status: Literal["ready", "draining"]
     version: str
@@ -56,6 +89,10 @@ class DaemonStatusOut(BaseModel):
     #: the composition root has not wired the connection service, or when it
     #: could not be read.
     connected_agents: int | None = None
+    #: Loop lag and background task crashes (spec daemon "Report event-loop lag
+    #: and background task crashes on the status"). Null only from an app
+    #: assembled without the daemon's runtime.
+    runtime: RuntimeHealthOut | None = None
 
 
 class FeatureOut(BaseModel):

@@ -21,6 +21,7 @@ from coffer.application.events.attention_watch import AttentionWatcher
 from coffer.application.events.broker import DEFAULT_BUFFER_SIZE, EventBroker
 from coffer.application.reconcile.hints import HintSink, fan_out
 from coffer.application.reconcile.reconciler import Reconciler
+from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.surfaces.http.event_dependencies import set_event_broker
 
 #: How many recent envelopes a reconnecting client can resume across.
@@ -51,7 +52,7 @@ async def start_attention_watch(
     """Compute the attention baseline now, then watch it as a task the
     shutdown cancels."""
     await events.watcher.prime(attention.report)
-    return asyncio.create_task(events.watcher.serve(attention.report), name="attention-watch")
+    return spawn_restarting(lambda: events.watcher.serve(attention.report), name="attention-watch")
 
 
 __all__ = ["BUFFER_SIZE", "EventStream", "build_event_stream", "start_attention_watch"]

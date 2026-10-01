@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from coffer.application.repos import AuditRepo
+from coffer.application.runtime import correlation
 from coffer.domain.audit import AuditEntry
 from coffer.domain.pagination import Page, decode_cursor, paginate, position_of, time_and_id
 from coffer.domain.resource import Resource
@@ -53,7 +54,14 @@ class AuditService:
         nothing, which is the truth about it. There is deliberately no way to
         audit a resource by label alone — the moment there is one, something
         will use it, and that resource's history splits at the next rename.
+
+        The row also takes the correlation ids bound where it is written — the
+        request's or the turn's trace id, and a turn's conversation and turn —
+        so it joins the MCP invocations and daemon log lines of the same unit of
+        work (spec resource-framework "Correlate the audit log, the MCP
+        invocation log and the daemon log by one trace id").
         """
+        bound = correlation.current()
         await self._repo.insert(
             AuditEntry(
                 id=None,
@@ -64,6 +72,9 @@ class AuditService:
                 resource_name=resource.name if resource else None,
                 actor=actor,
                 details=details or {},
+                trace_id=bound.trace_id,
+                conversation_id=bound.conversation_id,
+                turn_id=bound.turn_id,
             )
         )
         # Mirror every audited event into the log. Coffer used to log only its
@@ -127,6 +138,7 @@ class AuditService:
         since: datetime | None = None,
         limit: int = 50,
         cursor: str | None = None,
+        trace_id: str | None = None,
     ) -> Page[AuditEntry]:
         """One page of :meth:`query`, newest first, continued by ``cursor``
         (spec resource-framework "Page growing lists by an opaque cursor").
@@ -141,6 +153,7 @@ class AuditService:
             "event_type": event_type,
             "event_prefix": event_prefix,
             "since": since.isoformat() if since else None,
+            "trace_id": trace_id,
         }
         after = time_and_id(decode_cursor(cursor, list_tag="audit", filters=filters), int)
         rows = await self._repo.query(
@@ -151,6 +164,7 @@ class AuditService:
             since=since,
             limit=limit + 1,
             after=after,
+            trace_id=trace_id,
         )
         return paginate(
             rows,
@@ -168,6 +182,7 @@ class AuditService:
         event_type: str | None = None,
         event_prefix: str | None = None,
         since: datetime | None = None,
+        trace_id: str | None = None,
     ) -> int:
         """How many entries match the filters :meth:`page` takes, across every
         page (spec resource-framework "Count a log's matching rows beside each
@@ -179,4 +194,5 @@ class AuditService:
             event_type=event_type,
             event_prefix=event_prefix,
             since=since,
+            trace_id=trace_id,
         )

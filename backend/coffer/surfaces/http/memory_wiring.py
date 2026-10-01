@@ -66,6 +66,7 @@ from coffer.application.memory.session_ledger import SessionLedger
 from coffer.application.memory.triggers import TriggerService
 from coffer.application.memory.turn_retrieval import TurnRetrieval
 from coffer.application.reconcile.reconciler import Reconciler
+from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.internal_engine_config import AGGREGATE, DISTIL
@@ -257,7 +258,7 @@ def start_aggregate_worker(
         is_enabled=_upkeep_enabled(engine_config, AGGREGATE),
         read_interval=_upkeep_interval(engine_config, AGGREGATE),
     )
-    return asyncio.create_task(worker.run_forever())
+    return spawn_restarting(worker.run_forever, name="memory-aggregate")
 
 
 async def stop_aggregate_worker(task: asyncio.Task[None]) -> None:
@@ -304,7 +305,7 @@ def start_distil_worker(
         is_enabled=_upkeep_enabled(engine_config, DISTIL),
         read_interval=_upkeep_interval(engine_config, DISTIL),
     )
-    return asyncio.create_task(worker.run_forever())
+    return spawn_restarting(worker.run_forever, name="memory-distil")
 
 
 async def stop_distil_worker(task: asyncio.Task[None]) -> None:

@@ -25,6 +25,7 @@ from coffer.application.provider.secret_gate import provider_destination
 from coffer.application.provider.service import ProviderService
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.resource_service import ResourceService
+from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.resource import Resource
@@ -144,9 +145,7 @@ def wire_provider_kind(
     prices = ProviderPriceResolver(provider_svc, price_list.current, reported_price_store())
     set_price_resolver(prices)
     refresh_task = (
-        None
-        if refresh_pinned_off()
-        else asyncio.get_running_loop().create_task(price_list.run(), name="price-refresh")
+        None if refresh_pinned_off() else spawn_restarting(price_list.run, name="price-refresh")
     )
     proxy = wire_model_proxy(provider_svc, secret_store, reconciler)
     # An approved key reaches the proxy on the next state push, not before.

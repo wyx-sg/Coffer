@@ -23,6 +23,9 @@ function makeEntry(overrides: Partial<AuditEntry> & { event_type: string }): Aud
     resource_kind: null,
     resource_name: null,
     details: null,
+    trace_id: null,
+    conversation_id: null,
+    turn_id: null,
     ...overrides,
   };
 }

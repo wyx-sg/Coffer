@@ -24,6 +24,7 @@ import os
 import time
 from pathlib import Path
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.usage.records import (
     PART_SUFFIX,
     SPOOL_DIR_ENV,
@@ -102,7 +103,7 @@ class UsageSpool:
     async def start(self) -> None:
         await asyncio.to_thread(self._prepare)
         self._queue = asyncio.Queue()
-        self._task = asyncio.create_task(self._run(), name="model-proxy-spool")
+        self._task = spawn(self._run(), name="model-proxy-spool")
 
     def _prepare(self) -> None:
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)

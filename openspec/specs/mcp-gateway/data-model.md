@@ -164,6 +164,7 @@ from the server's `state/mcp-preferences/` document, the times from
 | `error_message`   | `str \| None`                                 | populated when `status != "ok"` |
 | `session_id`      | `str \| None`                                 | per-session correlation         |
 | `agent_uid`       | `str \| None`                                 | the calling agent's uid, when the session names one |
+| `trace_id`        | `str \| None`                                 | the `/mcp` request's trace id; joins the audit rows and daemon log lines the call caused (0137) |
 
 Two reserved values appear in `resource_uid` and are deliberately not uids — a
 real uid is a 32-character `uuid4().hex`, and a name may not contain `:`, so
@@ -271,12 +272,14 @@ CREATE TABLE mcp_invocations (
     status           TEXT      NOT NULL,                    -- 'ok' | 'error' | 'timeout' | 'denied'
     error_message    TEXT,
     session_id       TEXT,
-    agent_uid        TEXT                                   -- the calling agent's uid as its session reported it; NULL when none (0113)
+    agent_uid        TEXT,                                  -- the calling agent's uid as its session reported it; NULL when none (0113)
+    trace_id         TEXT                                   -- the /mcp request's trace id; NULL before 0137
 );
 CREATE INDEX idx_invocations_resource ON mcp_invocations(resource_uid, timestamp DESC);
 CREATE INDEX idx_invocations_time     ON mcp_invocations(timestamp DESC);
 CREATE INDEX idx_invocations_session  ON mcp_invocations(session_id, timestamp);
 CREATE INDEX idx_invocations_agent    ON mcp_invocations(agent_uid, timestamp);
+CREATE INDEX idx_invocations_trace    ON mcp_invocations(trace_id);
 ```
 
 `MCPInvocationModel` (`infrastructure/mcp/invocation_writer.py`) is on the

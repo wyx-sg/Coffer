@@ -19,6 +19,7 @@ const call = (id: number, status: "ok" | "error") => ({
   error_message: status === "error" ? 'refused, "hard"' : null,
   session_id: null,
   agent_uid: null,
+  trace_id: null,
 });
 
 beforeEach(() => vi.mocked(getApiClient).mockReset());

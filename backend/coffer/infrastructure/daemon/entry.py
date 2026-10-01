@@ -27,6 +27,7 @@ from collections.abc import Callable, MutableMapping
 
 import uvicorn
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.agent.descriptor import AGENT_DESCRIPTORS
 from coffer.infrastructure.daemon import bootstrap, self_restart
 from coffer.infrastructure.daemon.port_alloc import PortInUse
@@ -194,8 +195,8 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
             on_started()
         # Only now that the spawn lock is freed can another daemon take
         # daemon.json from us, so the watcher starts here rather than at boot.
-        evictor = asyncio.create_task(_evict_when_superseded(server), name="daemon-orphan-evictor")
-        keepalive = asyncio.create_task(keep_unpack_dir_alive(), name="daemon-unpack-keepalive")
+        evictor = spawn(_evict_when_superseded(server), name="daemon-orphan-evictor")
+        keepalive = spawn(keep_unpack_dir_alive(), name="daemon-unpack-keepalive")
         try:
             await serve_task
         finally:

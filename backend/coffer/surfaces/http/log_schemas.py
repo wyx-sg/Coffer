@@ -26,6 +26,13 @@ class AuditEntryOut(BaseModel):
     resource_name: str | None = None
     actor: str
     details: dict[str, Any] | None = None
+    #: The request's or turn's correlation id; the same value the MCP
+    #: invocations and daemon log lines of that request or turn carry. Null on a
+    #: row written with none bound (a boot-time pass, a periodic worker).
+    trace_id: str | None = None
+    #: The chat conversation and turn a row written inside a turn belongs to.
+    conversation_id: str | None = None
+    turn_id: str | None = None
 
 
 class AuditListOut(BaseModel):
@@ -72,6 +79,10 @@ class InvocationOut(BaseModel):
     status: Literal["ok", "error", "timeout", "denied"]
     error_message: str | None = None
     session_id: str | None = None
+    #: The ``/mcp`` request's trace id, the key that joins this call to the
+    #: audit rows and daemon log lines it caused. Null on rows logged before
+    #: correlation ids existed.
+    trace_id: str | None = None
     #: The agent whose session made the call — the uid its shim reported — or
     #: null when the session reported none. Nullable but NOT defaulted, like
     #: ``resource_name``: the projection sets it on every row.

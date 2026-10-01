@@ -39,6 +39,7 @@ from coffer.application.channel.store_ports import (
 )
 from coffer.application.channel.turn_finish import TurnOutcome
 from coffer.application.channel.turn_render import TurnRenderer
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.channel.envelopes import ChoiceButton
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.errors import CofferError
@@ -278,7 +279,7 @@ class TurnDriver:
         # Keyed by the conversation, so `/stop` from anywhere that conversation is
         # reached finds its running turn; the task name says where it renders.
         session = self._session(binding.resource.name, peer.chat_id, item.conversation_thread_id)
-        task = asyncio.create_task(
+        task = spawn(
             self._render(binding, peer, item, conversation_id, queue, session),
             name=f"channel-render:{binding.resource.name}:{peer.chat_id}:{item.thread_id}",
         )

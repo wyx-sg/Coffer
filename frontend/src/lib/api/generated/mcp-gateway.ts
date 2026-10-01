@@ -953,6 +953,8 @@ export interface components {
              * Format: date-time
              */
             timestamp: string;
+            /** Trace Id */
+            trace_id: string | null;
         };
         /**
          * InvocationSummaryOut
@@ -2118,6 +2120,8 @@ export interface operations {
                 status?: ("ok" | "error" | "timeout" | "denied") | null;
                 /** @description Only the calls made by this agent's sessions — the uid its shim reported. Calls from a session that reported no agent match no value. */
                 agent_uid?: string | null;
+                /** @description Only the calls made under this correlation id — one /mcp request's — the same id its audit rows and daemon log lines carry. */
+                trace_id?: string | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;
@@ -2347,6 +2351,8 @@ export interface operations {
                 status?: ("ok" | "error" | "timeout" | "denied") | null;
                 /** @description Only the calls made by this agent's sessions — the uid its shim reported. Calls from a session that reported no agent match no value. */
                 agent_uid?: string | null;
+                /** @description Only the calls made under this correlation id — one /mcp request's — the same id its audit rows and daemon log lines carry. */
+                trace_id?: string | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;

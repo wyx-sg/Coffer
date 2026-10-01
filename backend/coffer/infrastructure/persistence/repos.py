@@ -36,6 +36,9 @@ def _audit_to_domain(row: AuditLogModel) -> AuditEntry:
         resource_name=row.resource_name,
         actor=row.actor,
         details=json.loads(row.details_json) if row.details_json else {},
+        trace_id=row.trace_id,
+        conversation_id=row.conversation_id,
+        turn_id=row.turn_id,
     )
 
 
@@ -47,8 +50,11 @@ def _audit_filtered(
     event_type: str | None,
     event_prefix: str | None,
     since: datetime | None,
+    trace_id: str | None = None,
 ) -> Select[Any]:
     """The one WHERE both an audit page and its count read, so they cannot disagree."""
+    if trace_id is not None:
+        stmt = stmt.where(AuditLogModel.trace_id == trace_id)
     if resource_uid is not None:
         # By uid alone: filtering by label would render a renamed resource's
         # trail and the trail of a deleted one that once held the name as one.
@@ -89,6 +95,9 @@ class SqlAlchemyAuditRepo:
                 resource_name=entry.resource_name,
                 actor=entry.actor,
                 details_json=json.dumps(entry.details) if entry.details else None,
+                trace_id=entry.trace_id,
+                conversation_id=entry.conversation_id,
+                turn_id=entry.turn_id,
             )
             session.add(row)
             await session.commit()
@@ -104,6 +113,7 @@ class SqlAlchemyAuditRepo:
         since: datetime | None = None,
         limit: int = 50,
         after: tuple[datetime, int] | None = None,
+        trace_id: str | None = None,
     ) -> list[AuditEntry]:
         async with self._sm() as session:
             # Newest first with the id as the tie-break, so ``after`` (the last
@@ -122,6 +132,7 @@ class SqlAlchemyAuditRepo:
                 event_type=event_type,
                 event_prefix=event_prefix,
                 since=since,
+                trace_id=trace_id,
             )
             stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
@@ -135,6 +146,7 @@ class SqlAlchemyAuditRepo:
         event_type: str | None = None,
         event_prefix: str | None = None,
         since: datetime | None = None,
+        trace_id: str | None = None,
     ) -> int:
         """How many rows :meth:`query` would page through with these filters."""
         async with self._sm() as session:
@@ -145,5 +157,6 @@ class SqlAlchemyAuditRepo:
                 event_type=event_type,
                 event_prefix=event_prefix,
                 since=since,
+                trace_id=trace_id,
             )
             return int((await session.execute(stmt)).scalar_one())

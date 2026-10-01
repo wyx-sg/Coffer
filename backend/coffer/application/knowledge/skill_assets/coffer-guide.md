@@ -140,8 +140,10 @@ happened, including what broke). Read them with `coffer log audit`,
 `coffer log mcp` and `coffer log daemon`. Each takes `--since` (an age such as
 `1h`, or an ISO 8601 instant) and `--limit`; `coffer log daemon --errors` and
 `coffer log mcp --status error` narrow to failures, and `coffer log audit`
-narrows with `--kind`, `--name` and `--event-type`. `coffer path logs` finds the
-daemon's log files. Reach for them when a Coffer tool fails in a way its error
+narrows with `--kind`, `--name` and `--event-type`. All three take `--trace <id>`:
+the trace id of one request or turn (an `X-Coffer-Trace` header, or the id a
+record already shows), which returns that request's audit rows, tool calls and
+log lines and nothing else. `coffer path logs` finds the daemon's log files. Reach for them when a Coffer tool fails in a way its error
 text does not explain, not as a debugger for the developer's own program.
 
 ## What not to put in

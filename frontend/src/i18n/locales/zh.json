@@ -1037,6 +1037,7 @@
       },
       "took": "耗时",
       "callId": "调用 ID",
+      "trace": "追踪 ID",
       "callProblem": {
         "error": "对 {{server}} 的调用失败",
         "timeout": "对 {{server}} 的调用超时",

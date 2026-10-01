@@ -28,6 +28,7 @@ import logging
 from collections.abc import Callable, Sequence
 from typing import Protocol
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient
 from coffer.infrastructure.daemon.child_process import ChildProcess
 from coffer.infrastructure.platform.user_path import which_on_user_path
@@ -99,7 +100,9 @@ class CodexSubprocessSession:
         if proc.stdin is None or proc.stdout is None:
             raise RuntimeError("codex app-server subprocess has no stdin/stdout pipe")
         if proc.stderr is not None:
-            self._stderr_task = asyncio.create_task(self._drain_stderr(proc.stderr))
+            self._stderr_task = spawn(
+                self._drain_stderr(proc.stderr), name="codex-app-server-stderr"
+            )
         self._rpc = CodexRpcClient(proc.stdout, proc.stdin)
         self._rpc.start()
 
