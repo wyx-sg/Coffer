@@ -211,7 +211,12 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
     port, token, knowledge_root = running_daemon
 
     async def _create_collection(name: str) -> None:
-        async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}") as http:
+        # httpx's default 5 s read timeout is a wall-clock assertion: creating
+        # a collection commits to the vault through git, which a loaded machine
+        # stretched past 5 s. The wait is bounded only as a hang guard.
+        async with httpx.AsyncClient(
+            base_url=f"http://127.0.0.1:{port}", timeout=httpx.Timeout(60.0)
+        ) as http:
             r = await http.post(
                 "/api/v1/knowledge/collections",
                 json={"name": name, "description": "oracle round-trip"},
