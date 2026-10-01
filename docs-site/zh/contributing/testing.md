@@ -156,11 +156,11 @@ pytest 标记在 `backend/pyproject.toml` 中注册，并在 `--strict-markers` 
 
 | 预算 | 实测 | 上限 | 测试 | 运行于 |
 | --- | --- | --- | --- | --- |
-| 守护进程启动：在假 home 和空 vault 上，从拉起进程到第一次报告 `ready` | 2.4–6.6 s | 15 s | `backend/tests/integration/perf/test_startup_time.py` | `make verify` |
+| 守护进程启动：在假 home 和空 vault 上，守护进程及其子进程从拉起到第一次报告 `ready` 所花的 CPU 时间 | 2.4–2.7 s CPU（墙钟 2.4–22 s） | 8 s CPU，另有 60 s 墙钟上限防止卡死 | `backend/tests/integration/perf/test_startup_time.py` | `make verify` |
 | 网关开销：一次 MCP 工具调用经过网关、相比直连多花的时间的中位数 | 2–5 ms | 50 ms | `backend/tests/integration/perf/test_gateway_overhead.py` | `make verify` |
 | 稳态下的一轮调和：两个已连接的智能体、20 个 skill、一个启用中的 provider 连接 | 27–40 ms | 2 s（`PASS_BUDGET_SECONDS`） | `backend/tests/integration/perf/test_reconcile_pass_cost.py` | 只在 `make verify-benchmark` |
 
-实测数据来自一台 Apple Silicon 笔记本，测量时机器上还有别的工作在跑。启动测试和网关测试各只需几秒，所以和集成层的其他测试一起运行。调和测试光是搭建它的机器就要将近一分钟，所以只有 `make verify-benchmark` 和它的 CI job 运行它。这三个测试都标记了 `benchmark`，所以 `make verify-benchmark` 会跑全部预算。
+实测数据来自一台 Apple Silicon 笔记本，测量时机器上还有别的工作在跑。启动的预算按 CPU 时间算，因为它的墙钟时间取决于机器：在那台笔记本上，负载高时启动一个进程要好几秒，同一次启动的墙钟时间从 2.4 秒到 22 秒不等，而 CPU 时间一直在 2.4 到 2.7 秒之间。启动测试和网关测试各只需几秒，所以和集成层的其他测试一起运行。调和测试光是搭建它的机器就要将近一分钟，所以只有 `make verify-benchmark` 和它的 CI job 运行它。这三个测试都标记了 `benchmark`，所以 `make verify-benchmark` 会跑全部预算。
 
 测试从不自动重试。只在机器负载高时才失败的测试是有 bug 的，bug 在测试里或者在代码里：找到其中对墙钟时间的假设，把它去掉。
 

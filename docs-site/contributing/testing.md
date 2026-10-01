@@ -156,11 +156,11 @@ A few costs have a budget that a test enforces. Each ceiling sits a few times ab
 
 | Budget | Measured | Ceiling | Test | Runs in |
 | --- | --- | --- | --- | --- |
-| Daemon startup: from spawn to the first `ready` status, on a fake home with an empty vault | 2.4–6.6 s | 15 s | `backend/tests/integration/perf/test_startup_time.py` | `make verify` |
+| Daemon startup: the CPU time the daemon and its child processes spend from spawn to the first `ready` status, on a fake home with an empty vault | 2.4–2.7 s CPU (2.4–22 s wall-clock) | 8 s CPU, plus 60 s wall-clock as a hang guard | `backend/tests/integration/perf/test_startup_time.py` | `make verify` |
 | Gateway overhead: the median extra time an MCP tool call takes through the gateway, compared with a direct connection | 2–5 ms | 50 ms | `backend/tests/integration/perf/test_gateway_overhead.py` | `make verify` |
 | One steady-state reconcile pass, with two connected agents, twenty skills and an active provider connection | 27–40 ms | 2 s (`PASS_BUDGET_SECONDS`) | `backend/tests/integration/perf/test_reconcile_pass_cost.py` | `make verify-benchmark` only |
 
-The measurements were taken on an Apple Silicon laptop while other work was running. The startup and gateway tests take a few seconds each, so they run with the rest of the integration tier. The reconcile test needs close to a minute to set up its machine, so only `make verify-benchmark` and its CI job run it. All three tests are marked `benchmark`, so `make verify-benchmark` runs every budget.
+The measurements were taken on an Apple Silicon laptop while other work was running. Startup is budgeted in CPU time because its wall-clock time depends on the machine: on that laptop, starting a process took seconds under load, and the same boot took anywhere from 2.4 to 22 seconds. Its CPU time stayed between 2.4 and 2.7 seconds. The startup and gateway tests take a few seconds each, so they run with the rest of the integration tier. The reconcile test needs close to a minute to set up its machine, so only `make verify-benchmark` and its CI job run it. All three tests are marked `benchmark`, so `make verify-benchmark` runs every budget.
 
 No test retries itself. A test that fails only on a loaded machine has a bug, in the test or in the code: find the assumption about wall-clock time and remove it.
 

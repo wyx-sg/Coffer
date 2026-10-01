@@ -1,19 +1,22 @@
 """The daemon boots to ready inside its startup budget.
 
 A real ``coffer.infrastructure.daemon.entry`` process on a fake ``HOME`` with
-an empty vault: the clock runs from spawning the process to the first
-``/api/v1/daemon/status`` that answers ``ready``, which is what the desktop
-shell and the CLI's detect-or-spawn wait for. uvicorn serves only after the
-lifespan's startup half returns, so that answer is the whole boot: imports,
-migrations on a fresh database, the vault's first commit, every worker the
-lifespan starts.
+an empty vault, from spawn to the first ``/api/v1/daemon/status`` that answers
+``ready`` (what the desktop shell and the CLI's detect-or-spawn wait for).
+uvicorn serves only after the lifespan's startup half returns, so that answer
+is the whole boot: imports, migrations on a fresh database, the vault's first
+commit, every worker the lifespan starts.
 
-Measured 2026-10-01 on an Apple-silicon laptop shared with other work:
-2.4-4.5 s from spawn to ready at a load average of 6-15, 4.7-6.6 s at 20-27.
-The ceiling is 2-3 times the loaded end of that, so it fails when boot starts
-doing work it should not (a network call, a scan of something that grows),
-not when the machine is busy. Cheap enough for ``make verify``; also marked
-``benchmark`` so ``make verify-benchmark`` runs every budget.
+The budget is **CPU time**, the daemon's own plus that of the children it
+reaped (its git calls). Wall-clock time to ready measured 2.4-22 s on the same
+Apple-silicon laptop on 2026-10-01, depending on what else ran: process
+launches there slow to seconds under load. CPU time measured 2.4-2.7 s across
+those same runs, so the ceiling is about three times that: it fails when boot
+starts doing work it should not (a scan of something that grows, a migration
+that rewrites everything), not when the machine is busy. A wall-clock limit
+stays only as a hang guard, for boot waiting on something (a network call, a
+lock). Cheap enough for ``make verify``; also marked ``benchmark`` so ``make
+verify-benchmark`` runs every budget.
 """
 
 from __future__ import annotations
@@ -28,12 +31,16 @@ import time
 from pathlib import Path
 
 import httpx
+import psutil
 import pytest
 
 import coffer
 
-#: Spawn to ready, in seconds (see the module docstring for the measurement).
-STARTUP_CEILING_S = 15.0
+#: CPU seconds the daemon (and the children it reaped) may spend from spawn
+#: to ready (see the module docstring for the measurement).
+CPU_CEILING_S = 8.0
+#: Wall-clock seconds from spawn to ready: only a hang guard.
+WALL_CEILING_S = 60.0
 
 _SOURCE = str(Path(coffer.__file__).resolve().parent.parent)
 
@@ -61,6 +68,13 @@ def _ready(home: Path) -> bool:
     return r.status_code == 200 and r.json().get("status") == "ready"
 
 
+def _cpu_seconds(proc: psutil.Process) -> float:
+    """The daemon's CPU time so far, with that of the children it has reaped
+    (git, migrations' helpers)."""
+    t = proc.cpu_times()
+    return float(t.user + t.system + t.children_user + t.children_system)
+
+
 def test_the_daemon_boots_to_ready_inside_its_ceiling(tmp_path: Path) -> None:
     home = tmp_path / "home"
     (home / ".coffer").mkdir(parents=True)
@@ -75,26 +89,36 @@ def test_the_daemon_boots_to_ready_inside_its_ceiling(tmp_path: Path) -> None:
         "COFFER_PORT_RANGE_END": str(port + 9),
         "PYTHONPATH": _SOURCE,
     }
+    # A file, not a pipe: nobody reads stderr while the daemon boots, and a
+    # full pipe would stall it.
+    errors = tmp_path / "daemon.stderr"
     started = time.monotonic()
-    proc = subprocess.Popen(
-        [sys.executable, "-m", "coffer.infrastructure.daemon.entry"],
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-    )
+    with errors.open("wb") as sink:
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "coffer.infrastructure.daemon.entry"],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=sink,
+        )
+    watched = psutil.Process(proc.pid)
     try:
-        # Poll well past the ceiling, so a slow boot reports its real time
-        # rather than a bare "never became ready".
-        deadline = started + STARTUP_CEILING_S * 4
+        deadline = started + WALL_CEILING_S
         while not _ready(home):
-            assert proc.poll() is None, proc.stderr.read().decode() if proc.stderr else ""
-            assert time.monotonic() < deadline, "the daemon never became ready"
+            assert proc.poll() is None, errors.read_text(errors="replace")
+            assert time.monotonic() < deadline, (
+                f"the daemon was not ready after {WALL_CEILING_S:.0f} s: it is waiting on "
+                "something (a network call, a lock), not just slow"
+            )
             time.sleep(0.05)
+        cpu = _cpu_seconds(watched)
         elapsed = time.monotonic() - started
-        print(f"\ndaemon spawn to ready: {elapsed:.2f} s (ceiling {STARTUP_CEILING_S:.0f} s)")
-        assert elapsed < STARTUP_CEILING_S, (
-            f"the daemon took {elapsed:.1f} s to become ready; the ceiling is "
-            f"{STARTUP_CEILING_S:.0f} s"
+        print(
+            f"\ndaemon spawn to ready: {elapsed:.2f} s wall, {cpu:.2f} s CPU "
+            f"(ceilings {WALL_CEILING_S:.0f} s, {CPU_CEILING_S:.0f} s)"
+        )
+        assert cpu < CPU_CEILING_S, (
+            f"the daemon spent {cpu:.1f} s of CPU becoming ready; the ceiling is "
+            f"{CPU_CEILING_S:.0f} s"
         )
     finally:
         if proc.poll() is None:

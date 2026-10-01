@@ -241,7 +241,7 @@ Each budget is a test with a ceiling a few times above the measured cost, so it 
 
 | Budget | Measured | Ceiling | Test (`backend/tests/integration/perf/`) | Runs in |
 | --- | --- | --- | --- | --- |
-| Daemon spawn → first `ready` `/api/v1/daemon/status`, fake `HOME`, empty vault | 2.4–6.6 s | 15 s (`STARTUP_CEILING_S`) | `test_startup_time.py` | `make verify` + `verify-benchmark` |
+| Daemon spawn → first `ready` `/api/v1/daemon/status`, fake `HOME`, empty vault — **CPU time** (daemon + reaped children, via `psutil`), because wall time swung 2.4–22 s with load | 2.4–2.7 s CPU | 8 s CPU (`CPU_CEILING_S`); 60 s wall only as a hang guard (`WALL_CEILING_S`) | `test_startup_time.py` | `make verify` + `verify-benchmark` |
 | Gateway median overhead per tool call vs a direct upstream connection | 2–5 ms | 50 ms | `test_gateway_overhead.py` (spec mcp-gateway) | `make verify` + `verify-benchmark` |
 | Steady-state reconcile pass (2 agents, 20 skills, a provider) | 27–40 ms | 2 s (`PASS_BUDGET_SECONDS`) | `test_reconcile_pass_cost.py` | `verify-benchmark` only (~1 min setup), `skipif` without `COFFER_RUN_BENCHMARKS=1` |
 
