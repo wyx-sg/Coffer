@@ -16,6 +16,7 @@ import contextlib
 import logging
 from typing import IO
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.application.skill import (
     source_change_ops,
     source_stage_ops,
@@ -152,7 +153,7 @@ class SkillUpdateWorker:
             await asyncio.sleep(self._interval)
 
     def start(self) -> asyncio.Task[None]:
-        self._task = asyncio.create_task(self.run())
+        self._task = spawn(self.run(), name="skill-source-updates")
         return self._task
 
     async def stop(self) -> None:

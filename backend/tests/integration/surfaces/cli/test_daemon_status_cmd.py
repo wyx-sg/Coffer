@@ -214,3 +214,22 @@ def test_the_status_probe_carries_what_the_shell_shows(live_daemon, monkeypatch)
         body["channel"],
         body["port"],
     )
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="the command line prints loop lag and task crashes")
+def test_status_prints_loop_lag_and_task_crashes(live_daemon):
+    from coffer.application.runtime import loop_lag
+    from coffer.application.runtime.supervisor import tasks
+
+    loop_lag.probe().record(0.0021)
+    res = CliRunner().invoke(app, ["daemon", "status"], env={"COLUMNS": "200"})
+    assert res.exit_code == 0, res.output
+    lines = res.stdout.splitlines()
+    [lag] = [line for line in lines if line.startswith("loop lag:")]
+    assert "p99" in lag and "ms" in lag and "(last 300s)" in lag
+    [count] = [line for line in lines if line.startswith("tasks:")]
+    assert f"{tasks().stats().crashes} crashed" in count
+
+    as_json = json.loads(CliRunner().invoke(app, ["daemon", "status", "--json"]).stdout)
+    assert as_json["runtime"]["loop_lag_samples"] >= 1
+    assert as_json["runtime"]["task_crashes"] == tasks().stats().crashes

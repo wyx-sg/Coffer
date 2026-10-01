@@ -421,6 +421,36 @@ test("a failed call opens with its error first", async () => {
   );
 });
 
+acceptance(
+  "resource-framework",
+  "the Activity drawer shows a record's trace id",
+  async () => {
+    mockApi({
+      audit: [{ ...AUDIT_ENTRY, trace_id: "req-a1b2" }],
+      invocations: [{ ...INVOCATION, trace_id: "mcp-c3d4" }],
+    });
+    const { unmount } = render(wrap(<ActivityPage />));
+    fireEvent.click((await screen.findByText(/filesystem/)).closest("tr")!);
+    const change = await screen.findByRole("complementary", { name: "Details" });
+    expect(within(change).getByText("Trace id")).toBeInTheDocument();
+    expect(within(change).getByText("req-a1b2")).toBeInTheDocument();
+    unmount();
+
+    render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
+    fireEvent.click((await screen.findByText(target("github.search_issues"))).closest("tr")!);
+    const call = await screen.findByRole("complementary", { name: "Details" });
+    expect(within(call).getByText("mcp-c3d4")).toBeInTheDocument();
+  },
+);
+
+test("a record written with no trace id shows no trace row", async () => {
+  mockApi({ audit: [AUDIT_ENTRY] });
+  render(wrap(<ActivityPage />));
+  fireEvent.click((await screen.findByText(/filesystem/)).closest("tr")!);
+  const drawer = await screen.findByRole("complementary", { name: "Details" });
+  expect(within(drawer).queryByText("Trace id")).not.toBeInTheDocument();
+});
+
 test("a change's before and after read as a diff", async () => {
   mockApi({
     audit: [

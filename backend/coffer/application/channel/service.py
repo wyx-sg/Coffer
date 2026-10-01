@@ -21,6 +21,7 @@ from coffer.application.channel.store_ports import (
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
 )
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.audit import AuditEventType
 from coffer.domain.channel.errors import ChannelNotPaired, ChannelNotRunning
 from coffer.domain.resource import Resource
@@ -268,7 +269,7 @@ class ChannelService:
         adapter = self._runtime.adapter(name)
         if adapter is None or not isinstance(adapter, EventIngestAdapter):
             raise ChannelNotRunning(name)
-        task = asyncio.create_task(adapter.handle_event(dict(envelope)))
+        task = spawn(adapter.handle_event(dict(envelope)), name=f"channel-ingest:{name}")
         self._ingest_tasks.add(task)
         task.add_done_callback(self._reap_ingest_task)
 

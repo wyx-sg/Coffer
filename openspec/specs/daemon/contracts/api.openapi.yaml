@@ -181,6 +181,16 @@ paths:
           minimum: 1
           title: Limit
           type: integer
+      - description: Only the lines written under this correlation id (a request's or a turn's).
+        in: query
+        name: trace_id
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only the lines written under this correlation id (a request's or a turn's).
+          title: Trace Id
       - in: header
         name: x-coffer-token
         required: false
@@ -1007,6 +1017,10 @@ components:
         port:
           title: Port
           type: integer
+        runtime:
+          anyOf:
+          - $ref: '#/components/schemas/RuntimeHealthOut'
+          - type: 'null'
         started_at:
           format: date-time
           title: Started At
@@ -1039,6 +1053,7 @@ components:
       - commit
       - data_dir
       - connected_agents
+      - runtime
       title: DaemonStatusOut
       type: object
     DaemonUpgradeOut:
@@ -1286,6 +1301,50 @@ components:
       - bytes
       title: LocalContentUsageOut
       type: object
+    RuntimeHealthOut:
+      description: |-
+        The event loop's health and the background tasks' crash count.
+
+        Lag is how late the loop woke a periodic probe, over a rolling window: one
+        synchronous call blocking the loop stalls every request, channel and turn
+        at once, and this is where that shows. See ``application.runtime``.
+      properties:
+        last_crash:
+          anyOf:
+          - $ref: '#/components/schemas/TaskCrashOut'
+          - type: 'null'
+        loop_lag_max_ms:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Loop Lag Max Ms
+        loop_lag_p99_ms:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Loop Lag P99 Ms
+        loop_lag_samples:
+          title: Loop Lag Samples
+          type: integer
+        loop_lag_window_seconds:
+          title: Loop Lag Window Seconds
+          type: number
+        task_crashes:
+          title: Task Crashes
+          type: integer
+        tasks_running:
+          title: Tasks Running
+          type: integer
+      required:
+      - loop_lag_p99_ms
+      - loop_lag_max_ms
+      - loop_lag_samples
+      - loop_lag_window_seconds
+      - tasks_running
+      - task_crashes
+      - last_crash
+      title: RuntimeHealthOut
+      type: object
     StorageSummaryOut:
       description: What Coffer keeps on this machine, by kind (Settings > Data).
       properties:
@@ -1303,6 +1362,29 @@ components:
       - history
       - cache
       title: StorageSummaryOut
+      type: object
+    TaskCrashOut:
+      description: The most recent background task that ended by raising.
+      properties:
+        at:
+          format: date-time
+          title: At
+          type: string
+        error:
+          title: Error
+          type: string
+        restarting:
+          title: Restarting
+          type: boolean
+        task:
+          title: Task
+          type: string
+      required:
+      - task
+      - error
+      - at
+      - restarting
+      title: TaskCrashOut
       type: object
     TokenRotationOut:
       properties:

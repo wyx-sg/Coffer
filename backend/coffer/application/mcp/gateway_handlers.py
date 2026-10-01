@@ -32,6 +32,7 @@ from coffer.application.mcp.ports import (
     MCPCapabilityPreferenceRepoPort,
     MCPInvocationRepoPort,
 )
+from coffer.application.runtime import correlation
 from coffer.domain.errors import (
     CofferError,
     InvalidPrefix,
@@ -133,6 +134,7 @@ async def record_invocation(
             error_message=error_message,
             session_id=session_id,
             agent_uid=agent_uid,
+            trace_id=correlation.current().trace_id,
         )
     )
 

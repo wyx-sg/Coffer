@@ -26,6 +26,7 @@ from collections.abc import Coroutine
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.application.vault.attention import VaultAttentionSource
 from coffer.domain.audit import AuditEventType
 from coffer.domain.vault.writers import WRITER_DISK
@@ -77,7 +78,7 @@ class VaultScanning:
             _log.warning("vault.edit_audit_skipped", extra={"version": result.version})
 
     def _spawn(self, result: CommitResult) -> None:
-        task = self._loop.create_task(self._record(result))
+        task = spawn(self._record(result), name="vault-edit-audit")
         self._pending.add(task)
         task.add_done_callback(self._pending.discard)
 
@@ -145,7 +146,7 @@ async def start_vault_scanning(
         # never waits on a person's half-finished edit.
         _log.warning("vault.boot_scan_failed", exc_info=True)
     if run:
-        scanning.task = asyncio.create_task(scanner.run(), name="vault-scanner")
+        scanning.task = spawn(scanner.run(), name="vault-scanner")
     return scanning
 
 

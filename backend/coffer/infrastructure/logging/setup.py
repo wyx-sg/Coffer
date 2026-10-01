@@ -50,18 +50,22 @@ import os
 import sys
 import time
 from collections.abc import MutableMapping
-from contextvars import ContextVar
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
 import structlog
 
+from coffer.application.runtime import correlation
+from coffer.application.runtime.correlation import bind_trace_id, get_trace_id
 from coffer.infrastructure.logging.eval_capture import install_eval_capture_handler
 from coffer.infrastructure.logging.files import log_dir
 
-_TRACE_ID: ContextVar[str | None] = ContextVar("coffer_trace_id", default=None)
-_SENTINEL: Final = "-"
+#: ``bind_trace_id`` / ``get_trace_id`` live with the rest of the correlation
+#: ids in ``application.runtime.correlation`` (so the audit service, which may
+#: not import infrastructure, reads the same value); re-exported here for the
+#: middleware and the error handlers that have always imported them from here.
+__all__ = ["bind_trace_id", "configure_logging", "get_trace_id"]
 
 #: Marks the stderr handler this module owns. ``configure_logging`` runs more
 #: than once (daemon boot, tests), and an unmarked handler could not be told
@@ -70,18 +74,17 @@ _SENTINEL: Final = "-"
 _STDERR_MARKER: Final = "_coffer_stderr"
 
 
-def bind_trace_id(trace_id: str | None) -> None:
-    _TRACE_ID.set(trace_id)
-
-
-def get_trace_id() -> str:
-    return _TRACE_ID.get() or _SENTINEL
-
-
 def _add_trace_id(
     _: Any, __: str, event_dict: MutableMapping[str, Any]
 ) -> MutableMapping[str, Any]:
-    event_dict.setdefault("trace_id", get_trace_id())
+    """Stamp the correlation ids bound where the record was logged.
+
+    ``trace_id`` on every line (``-`` when none is bound); ``session_id``,
+    ``conversation_id`` and ``turn_id`` when the line was written inside an MCP
+    call or a chat/channel turn. A call site's own ``extra`` value wins.
+    """
+    for key, value in correlation.current().log_fields().items():
+        event_dict.setdefault(key, value)
     return event_dict
 
 
@@ -135,7 +138,8 @@ def _processors() -> list[Any]:
       was discarded, which made them look like dead weight in the source;
     * ``_add_trace_id`` stamps the request's id, so a failed response's
       ``X-Coffer-Trace`` header can be grepped for in the log — the point of
-      :mod:`coffer.surfaces.http.trace`;
+      :mod:`coffer.surfaces.http.trace` — plus the MCP session and the chat
+      turn a line was written in (``application.runtime.correlation``);
     * ``format_exc_info`` renders an ``exc_info=True`` traceback into this
       record's own ``exception`` field. That is what keeps a traceback *inside*
       one JSON line (the newlines are escaped) instead of letting it become a

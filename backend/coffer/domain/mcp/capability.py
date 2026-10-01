@@ -97,3 +97,6 @@ class MCPInvocation:
     #: ``initialize``. ``None`` when the session reported none (a hand-configured
     #: shim, a bare MCP client): the log records what it was told, never a guess.
     agent_uid: str | None = None
+    #: The ``/mcp`` request's trace id (migration 0137): the key that joins this
+    #: call to the audit rows and daemon log lines it caused.
+    trace_id: str | None = None

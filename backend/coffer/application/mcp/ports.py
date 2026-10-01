@@ -103,6 +103,7 @@ class MCPInvocationRepoPort(Protocol):
         agent_uid: str | None = None,
         limit: int = 50,
         after: tuple[datetime, int] | None = None,
+        trace_id: str | None = None,
     ) -> list[MCPInvocation]: ...
     async def count(
         self,
@@ -111,6 +112,7 @@ class MCPInvocationRepoPort(Protocol):
         status: Any | None = None,
         since: datetime | None = None,
         agent_uid: str | None = None,
+        trace_id: str | None = None,
     ) -> int:
         """How many rows :meth:`query` would page through with these filters."""
         ...

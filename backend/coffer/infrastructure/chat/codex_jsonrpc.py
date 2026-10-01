@@ -34,6 +34,8 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, Protocol
 
+from coffer.application.runtime.supervisor import spawn
+
 _logger = logging.getLogger(__name__)
 
 #: A server→client request handler: ``(params) -> result``.
@@ -99,7 +101,7 @@ class CodexRpcClient:
     def start(self) -> None:
         """Spin up the inbound read loop (idempotent)."""
         if self._read_task is None:
-            self._read_task = asyncio.create_task(self._read_loop())
+            self._read_task = spawn(self._read_loop(), name="codex-jsonrpc-read")
 
     async def close(self) -> None:
         """Stop the read loop and fail any still-pending request futures."""
@@ -220,7 +222,9 @@ class CodexRpcClient:
         if handler is None:
             _logger.info("codex_jsonrpc.unhandled_server_request", extra={"method": method})
             return
-        task = asyncio.create_task(self._run_handler(handler, req_id, params))
+        task = spawn(
+            self._run_handler(handler, req_id, params), name=f"codex-jsonrpc-handler:{req_id}"
+        )
         self._handler_tasks.add(task)
         task.add_done_callback(self._handler_tasks.discard)
 

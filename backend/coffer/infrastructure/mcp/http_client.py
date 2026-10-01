@@ -46,6 +46,7 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.shared._httpx_utils import create_mcp_http_client
 from mcp.types import ServerNotification
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import HttpTransport
 from coffer.infrastructure.mcp.dispatch import dispatch_method
@@ -155,7 +156,7 @@ class HttpUpstreamConnection:
         close_event = asyncio.Event()
         self._ready = ready
         self._close_event = close_event
-        self._runner = asyncio.create_task(
+        self._runner = spawn(
             self._run_lifetime(http_client, ready, close_event),
             name=f"coffer-mcp-http-upstream:{self._server_name}",
         )

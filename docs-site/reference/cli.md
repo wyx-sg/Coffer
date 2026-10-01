@@ -165,7 +165,7 @@ coffer daemon status [OPTIONS]
 
 Show whether the daemon is running, and the passes it is running right now.
 
-Reports its version, channel, port and pid, and the long passes in flight (kind, target, start time), oldest first.
+Reports its version, channel, port and pid, the event loop's lag (p99 and maximum over the last few minutes), how many background tasks are running and how many have crashed, and the long passes in flight (kind, target, start time), oldest first.
 
 Read-only: when no daemon is running it says so and exits 3 instead of starting one.
 
@@ -311,6 +311,7 @@ Read the audit log, newest first, one page at a time.
 | `--since` | option | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
 | `--limit` | option | integer (1-500) | `50` | Most entries to print |
 | `--cursor` | option | text |  | Read the page after this one: the next_cursor a previous read printed |
+| `--trace` | option | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
 | `--json` | option | flag |  | JSON output for scripts |
 
 ### log mcp
@@ -330,6 +331,7 @@ Without --server this is the log the Activity page shows, Coffer's own calls (se
 | `--since` | option | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
 | `--limit` | option | integer (1-500) | `20` | Most calls to print |
 | `--cursor` | option | text |  | Read the page after this one: the next_cursor a previous read printed |
+| `--trace` | option | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
 | `--json` | option | flag |  | JSON output for scripts |
 
 ### log daemon
@@ -340,11 +342,14 @@ coffer log daemon [OPTIONS]
 
 Read the tail of the daemon log, newest first, normalised as the Activity page shows it.
 
+``--trace`` keeps the lines of one request or turn, the same id ``coffer log audit --trace`` and ``coffer log mcp --trace`` filter on.
+
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `--since` | option | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
 | `--errors` | option | flag |  | Only errors |
 | `--limit` | option | integer (1-500) | `100` | Most records to print |
+| `--trace` | option | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
 | `--json` | option | flag |  | JSON output for scripts |
 
 ### log prune

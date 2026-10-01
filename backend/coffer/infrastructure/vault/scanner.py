@@ -22,6 +22,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.vault.writes import CommitResult
 from coffer.infrastructure.vault.writer import VaultWriter
 
@@ -84,7 +85,7 @@ class VaultScanner:
     async def run(self) -> None:
         """Until cancelled: look on every hint (after it has been quiet) and on
         every interval."""
-        watcher = asyncio.create_task(self._watch_files()) if self._watch else None
+        watcher = spawn(self._watch_files(), name="vault-file-watch") if self._watch else None
         try:
             while True:
                 with contextlib.suppress(TimeoutError):

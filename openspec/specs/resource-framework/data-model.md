@@ -124,6 +124,9 @@ Plain dataclass.
 | `resource_name` | `str \| None`    | nullable; daemon-lifecycle events have no resource     |
 | `actor`         | `str`            | free string: `"cli"`, `"api"` or `"ui"` from the `X-Coffer-Actor` header (`"api"` when it is absent), `"system"` for the daemon's own work, `"sync"` for a change applied from the sync remote, a named worker such as `"system:memory-aggregate-worker"` or `"system:memory-distil-worker"`, or a domain actor a kind names itself (`"user"`, `"channel"`, an agent's name, or `"agent"` for a knowledge write whose session reported no agent) |
 | `details`       | `dict[str, Any]` | JSON-serialisable payload                              |
+| `trace_id`      | `str \| None`    | the correlation id bound when the row was written: the HTTP request's `X-Coffer-Trace`, or the turn's own id for a turn no request started; the key that joins this row to the MCP invocations and daemon log lines of the same request or turn (0137). `None` for a row written with none bound (a boot pass, a periodic worker) and for every row older than 0137 |
+| `conversation_id` | `str \| None`  | the chat conversation, for a row a chat or channel turn wrote (0137) |
+| `turn_id`       | `str \| None`    | the turn of that conversation (0137)                    |
 
 ### `AuditEventType` (`domain/audit.py`)
 
@@ -263,12 +266,16 @@ CREATE TABLE audit_log (
     resource_name   VARCHAR,
     actor           VARCHAR   NOT NULL,
     details_json    TEXT,                   -- nullable JSON payload
-    resource_uid    VARCHAR                 -- the resource's uid; survives a rename (0136)
+    resource_uid    VARCHAR,                -- the resource's uid; survives a rename (0136)
+    trace_id        VARCHAR,                -- the request's or turn's correlation id (0137)
+    conversation_id VARCHAR,                -- the turn's conversation, for a row a turn wrote (0137)
+    turn_id         VARCHAR                 -- the turn (0137)
 );
 CREATE INDEX idx_audit_resource     ON audit_log(resource_kind, resource_name, timestamp DESC);
 CREATE INDEX idx_audit_time         ON audit_log(timestamp DESC);
 CREATE INDEX idx_audit_eventtype    ON audit_log(event_type, timestamp DESC);
 CREATE INDEX idx_audit_resource_uid ON audit_log(resource_uid, timestamp);
+CREATE INDEX idx_audit_trace        ON audit_log(trace_id);
 ```
 
 `AuditLogModel` (`infrastructure/persistence/models.py`) is on the shared

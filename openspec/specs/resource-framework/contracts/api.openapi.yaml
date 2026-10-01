@@ -202,6 +202,16 @@ paths:
           - type: 'null'
           description: The previous page's next_cursor. Bound to the filters it was issued with; any other value is 400 CURSOR_INVALID.
           title: Cursor
+      - description: 'Only the rows written under this correlation id: one HTTP request''s or one chat/channel turn''s, the same id its MCP invocations and daemon log lines carry.'
+        in: query
+        name: trace_id
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: 'Only the rows written under this correlation id: one HTTP request''s or one chat/channel turn''s, the same id its MCP invocations and daemon log lines carry.'
+          title: Trace Id
       - in: header
         name: x-coffer-token
         required: false
@@ -1218,6 +1228,11 @@ components:
         actor:
           title: Actor
           type: string
+        conversation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conversation Id
         details:
           anyOf:
           - additionalProperties: true
@@ -1244,6 +1259,16 @@ components:
           format: date-time
           title: Timestamp
           type: string
+        trace_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trace Id
+        turn_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Turn Id
       required:
       - id
       - timestamp
@@ -1252,6 +1277,9 @@ components:
       - resource_name
       - actor
       - details
+      - trace_id
+      - conversation_id
+      - turn_id
       title: AuditEntryOut
       type: object
     AuditListOut:

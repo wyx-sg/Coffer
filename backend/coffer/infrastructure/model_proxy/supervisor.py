@@ -31,6 +31,7 @@ from typing import Any
 
 import httpx
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.model_proxy.state import CONTROL_TOKEN_HEADER, ProxyState
 from coffer.infrastructure.daemon.spawn import daemon_spawn_command
 from coffer.infrastructure.logging.files import log_dir
@@ -133,7 +134,7 @@ class ProxySupervisor:
             self._last_error = f"{type(exc).__name__}: {exc}"
             _logger.warning("model_proxy.supervisor_start_failed: %s", self._last_error)
         if self._watchdog is None:
-            self._watchdog = asyncio.create_task(self._watch(), name="model-proxy-watchdog")
+            self._watchdog = spawn(self._watch(), name="model-proxy-watchdog")
 
     async def refresh(self) -> None:
         """Push the current state. Safe to call often: callers that arrive while

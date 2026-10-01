@@ -9,7 +9,6 @@ Extracted from `app.py` so that file stays under the project's 400-LOC ceiling.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from dataclasses import dataclass
@@ -26,6 +25,7 @@ from coffer.application.chat.turn_runner import DEFAULT_TURN_IDLE_TIMEOUT_SECOND
 from coffer.application.provider.introspection import ModelIntrospectionService
 from coffer.application.provider.targets import projection_targets
 from coffer.application.resource_service import ResourceService
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.chat.channel_note import ChannelNote
 from coffer.domain.errors import ResourceNotFound, SecretMissing
@@ -244,7 +244,6 @@ def wire_chat(
 
     # 5. Startup sweep: flip any lingering ``status='streaming'`` rows to
     #    ``'failed'`` (recover from a prior daemon crash).
-    loop = asyncio.get_running_loop()
 
     async def _sweep() -> None:
         try:
@@ -254,7 +253,7 @@ def wire_chat(
         except Exception:
             _log.exception("chat.startup_sweep.failed")
 
-    loop.create_task(_sweep())  # noqa: RUF006
+    spawn(_sweep(), name="chat-startup-sweep")
 
     # 6. Provider introspection (test-connection + list-models). The OpenAI-
     #    compatible client + SSRF guard live in the infrastructure adapter; the

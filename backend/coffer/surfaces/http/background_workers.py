@@ -30,6 +30,7 @@ from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
+from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.application.sync.worker import SyncWorker
 from coffer.infrastructure.agent.transcript_reader import FileTranscriptReader
 from coffer.infrastructure.logging.files import prune_log_dir
@@ -77,7 +78,7 @@ def start_background_workers(
     platform: PlatformPort,
 ) -> BackgroundWorkers:
     retention_worker = RetentionWorker(retention_svc, prune_logs=prune_log_dir)
-    retention_task = asyncio.create_task(retention_worker.run())
+    retention_task = spawn_restarting(retention_worker.run, name="retention-worker")
 
     # Vault sync (spec vault-sync): a round on the configured remote's
     # interval, nothing until one is configured. Wired FIRST among the vault

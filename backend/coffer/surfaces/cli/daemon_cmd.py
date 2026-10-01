@@ -185,8 +185,10 @@ def status(
 ) -> None:
     """Show whether the daemon is running, and the passes it is running right now.
 
-    Reports its version, channel, port and pid, and the long passes in flight
-    (kind, target, start time), oldest first.
+    Reports its version, channel, port and pid, the event loop's lag (p99 and
+    maximum over the last few minutes), how many background tasks are running
+    and how many have crashed, and the long passes in flight (kind, target,
+    start time), oldest first.
 
     Read-only: when no daemon is running it says so and exits 3 instead of
     starting one.
@@ -226,12 +228,33 @@ def status(
     typer.echo(f"channel: {channel}")
     typer.echo(f"port:    {info.port}")
     typer.echo(f"pid:     {info.pid}")
+    for line in _runtime_lines(data.get("runtime")):
+        typer.echo(line)
     typer.echo("")
     typer.echo("passes in flight:")
     if not runs:
         typer.echo("  no pass is running")
     for run in runs:
         typer.echo(f"  {run['kind']:<10} {run['name']}  (started {run['started_at']})")
+
+
+def _runtime_lines(runtime: dict[str, Any] | None) -> list[str]:
+    """The loop-lag and task-crash lines, or none from a daemon that reports neither."""
+    if not runtime:
+        return []
+    p99 = runtime.get("loop_lag_p99_ms")
+    window = int(runtime.get("loop_lag_window_seconds") or 0)
+    lag = (
+        "no sample yet" if p99 is None else f"p99 {p99:g} ms, max {runtime['loop_lag_max_ms']:g} ms"
+    )
+    lines = [
+        f"loop lag: {lag} (last {window}s)",
+        f"tasks:   {runtime['tasks_running']} running, {runtime['task_crashes']} crashed",
+    ]
+    last = runtime.get("last_crash")
+    if last:
+        lines.append(f"         last crash: {last['task']} ({last['error']}) at {last['at']}")
+    return lines
 
 
 @app.command("rotate-token")

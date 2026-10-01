@@ -48,6 +48,17 @@ function Mono({ children, muted = false }: { children: ReactNode; muted?: boolea
   );
 }
 
+/** The request's or turn's correlation id: the key that joins an audit row,
+ * an MCP call and the daemon log lines of the same request or turn. */
+function TraceFact({ t, traceId }: { t: TFunction; traceId: string | null | undefined }) {
+  if (!traceId) return null;
+  return (
+    <Fact label={t("activity.drawer.trace")}>
+      <Mono muted>{traceId}</Mono>
+    </Fact>
+  );
+}
+
 function Aside({ children }: { children: ReactNode }) {
   return <span className="text-xs text-text-subtle">{children}</span>;
 }
@@ -83,6 +94,7 @@ export function ChangeBody({ t, entry }: { t: TFunction; entry: AuditEntry }) {
             ) : null}
           </Fact>
         ) : null}
+        <TraceFact t={t} traceId={entry.trace_id} />
       </div>
       {hasDiff ? (
         <section className="flex min-w-0 flex-col gap-2">
@@ -179,6 +191,7 @@ export function CallBody({
         <Fact label={t("activity.drawer.callId")}>
           <Mono muted>{call.id}</Mono>
         </Fact>
+        <TraceFact t={t} traceId={call.trace_id} />
       </div>
       <p className="flex items-start gap-2 rounded-lg bg-surface-sunken px-3 py-2.5 text-xs leading-[1.45] text-text-muted">
         <Info className="mt-px size-3.5 shrink-0 text-text-subtle" aria-hidden />

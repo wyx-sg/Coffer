@@ -24,11 +24,11 @@ and on any failure back off and try again — exponential from 1s capped at 30s.
 A *kick* is the exception and backs off a flat 60s: SeaTalk allows one live
 connection per app, so a kick means another process (another machine, an older
 daemon) has taken this bot over, and racing it would just trade the connection
-back and forth. Each state change is logged once, never per attempt.
-
-``state()`` is what the status surface reads and it must not flatter: ``connected``
-only while the socket is actually up, and ``sdk_missing``/``error`` carry the
-text of what went wrong so the owner can act on it.
+back and forth. Each state change is logged once, never per attempt. The
+supervision loop itself runs under the daemon's task supervisor, which restarts
+it should it ever crash. ``state()`` is what the status surface reads and must
+not flatter: ``connected`` only while the socket is up, and
+``sdk_missing``/``error`` carry the text of what went wrong.
 """
 
 from __future__ import annotations
@@ -42,6 +42,7 @@ from collections.abc import Awaitable, Callable
 from types import ModuleType
 from typing import Any
 
+from coffer.application.runtime.supervisor import spawn, spawn_restarting
 from coffer.infrastructure.channel.seatalk_sdk import SeaTalkSdkMissingError, load_sdk
 from coffer.infrastructure.channel.seatalk_ws_thread import listen_on_thread, require
 
@@ -156,7 +157,7 @@ class SeaTalkWebSocketConnector:
         self._loop = asyncio.get_running_loop()
         self._stopping.clear()
         self._set_state("connecting", None)
-        self._task = asyncio.create_task(self._supervise(), name=f"seatalk-ws:{self._name}")
+        self._task = spawn_restarting(self._supervise, name=f"seatalk-ws:{self._name}")
 
     async def stop(self) -> None:
         """Stop supervising and take the connection down.
@@ -373,7 +374,8 @@ class SeaTalkWebSocketConnector:
         # event waits for its chat's previous one. Different chats stay concurrent.
         event = envelope["event"] if isinstance(envelope.get("event"), dict) else {}
         key = str(event.get("group_id") or event.get("employee_code") or "")
-        task = asyncio.create_task(self._deliver(envelope, self._chat_tails.get(key)))
+        deliver = self._deliver(envelope, self._chat_tails.get(key))
+        task = spawn(deliver, name=f"seatalk-ingest:{self._name}")
         self._ingest_tasks.add(task)
         task.add_done_callback(self._reap_ingest)
         if key:
@@ -391,10 +393,6 @@ class SeaTalkWebSocketConnector:
         for key in [k for k, tail in self._chat_tails.items() if tail is task]:
             del self._chat_tails[key]  # the chat has gone idle
         if not task.cancelled() and task.exception() is not None:
-            # Never silent: an ingest that failed means a message the owner sent
-            # went nowhere.
-            _logger.error(
-                "channel.websocket.ingest_failed",
-                exc_info=task.exception(),
-                extra={"channel": self._name},
-            )
+            # Never silent: a failed ingest is a message the owner sent that went
+            # nowhere. The supervisor's crash line carries the traceback.
+            _logger.error("channel.websocket.ingest_failed", extra={"channel": self._name})

@@ -36,6 +36,7 @@ from coffer.infrastructure.vault.home import coffer_home, daemon_json_path
 from coffer.surfaces.http import daemon_port
 from coffer.surfaces.http.agent_dependencies import get_agent_connection_service_optional
 from coffer.surfaces.http.auth import require_token, set_active_token
+from coffer.surfaces.http.daemon_runtime import runtime_health
 from coffer.surfaces.http.dependencies import (
     get_actor,
     get_audit_service,
@@ -159,6 +160,7 @@ async def get_status(
         commit=build_channel.COMMIT,
         data_dir=_display_path(coffer_home()),
         connected_agents=await _connected_agents(connection),
+        runtime=runtime_health(),
     )
 
 
@@ -338,6 +340,10 @@ async def list_daemon_logs(
     #: the whole file. ``errors_only`` stays for callers that already send it.
     level: str = Query(default=""),
     limit: int = Query(default=100, ge=1, le=500),
+    trace_id: str | None = Query(
+        default=None,
+        description="Only the lines written under this correlation id (a request's or a turn's).",
+    ),
 ) -> DaemonLogListOut:
     """The tail of ``daemon.log``, newest-first — the same record ``coffer log daemon``
     reads, for the human looking at the Activity page.
@@ -361,6 +367,8 @@ async def list_daemon_logs(
         if len(records) >= limit:
             break
         if not matches_level(record, errors_only) or not at_least(record, level):
+            continue
+        if trace_id is not None and record.get("trace_id") != trace_id:
             continue
         at = str(record.get("timestamp", ""))
         # Cheap prefilter: ISO-8601 sorts lexically, so a string compare

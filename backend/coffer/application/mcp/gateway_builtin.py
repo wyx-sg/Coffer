@@ -22,6 +22,7 @@ from coffer.application.mcp.gateway_tool_search import (
 )
 from coffer.application.mcp.ports import MCPInvocationRepoPort
 from coffer.application.resource_service import ResourceService
+from coffer.application.runtime import correlation
 from coffer.domain.errors import ResourceNotFound, UpstreamUnavailable
 from coffer.domain.mcp.capability import BUILTIN_SERVER_UID, MCPInvocation
 
@@ -145,6 +146,7 @@ async def _log(
                 error_message=error_message,
                 session_id=session_id,
                 agent_uid=agent_uid,
+                trace_id=correlation.current().trace_id,
             )
         )
     except Exception:

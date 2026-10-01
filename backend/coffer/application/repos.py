@@ -75,6 +75,7 @@ class AuditRepo(Protocol):
         since: datetime | None = None,
         limit: int = 50,
         after: tuple[datetime, int] | None = None,
+        trace_id: str | None = None,
     ) -> list[AuditEntry]: ...
     async def count(
         self,
@@ -84,6 +85,7 @@ class AuditRepo(Protocol):
         event_type: str | None = None,
         event_prefix: str | None = None,
         since: datetime | None = None,
+        trace_id: str | None = None,
     ) -> int: ...
 
 

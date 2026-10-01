@@ -25,6 +25,7 @@ from typing import Any
 
 from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.turn_driver import QueuedInbound
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.channel.envelopes import InboundMessage
 from coffer.domain.chat.attachment import Attachment
 
@@ -190,7 +191,7 @@ class InboundBurst:
                 await asyncio.wait({previous})
             await self._on_flush(burst.context, merge_parts(burst.parts))
 
-        task = asyncio.ensure_future(release())
+        task = spawn(release(), name=f"channel-burst:{key}")
         self._releasing[key] = task
         task.add_done_callback(lambda t: self._reap(key, t))
 

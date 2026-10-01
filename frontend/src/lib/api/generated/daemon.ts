@@ -477,6 +477,7 @@ export interface components {
             pid: number;
             /** Port */
             port: number;
+            runtime: components["schemas"]["RuntimeHealthOut"] | null;
             /**
              * Started At
              * Format: date-time
@@ -632,6 +633,29 @@ export interface components {
             locations: string[];
         };
         /**
+         * RuntimeHealthOut
+         * @description The event loop's health and the background tasks' crash count.
+         *
+         *     Lag is how late the loop woke a periodic probe, over a rolling window: one
+         *     synchronous call blocking the loop stalls every request, channel and turn
+         *     at once, and this is where that shows. See ``application.runtime``.
+         */
+        RuntimeHealthOut: {
+            last_crash: components["schemas"]["TaskCrashOut"] | null;
+            /** Loop Lag Max Ms */
+            loop_lag_max_ms: number | null;
+            /** Loop Lag P99 Ms */
+            loop_lag_p99_ms: number | null;
+            /** Loop Lag Samples */
+            loop_lag_samples: number;
+            /** Loop Lag Window Seconds */
+            loop_lag_window_seconds: number;
+            /** Task Crashes */
+            task_crashes: number;
+            /** Tasks Running */
+            tasks_running: number;
+        };
+        /**
          * StorageSummaryOut
          * @description What Coffer keeps on this machine, by kind (Settings > Data).
          */
@@ -640,6 +664,23 @@ export interface components {
             history: components["schemas"]["HistoryUsageOut"];
             local_content: components["schemas"]["LocalContentUsageOut"];
             vault: components["schemas"]["VaultUsageOut"];
+        };
+        /**
+         * TaskCrashOut
+         * @description The most recent background task that ended by raising.
+         */
+        TaskCrashOut: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Error */
+            error: string;
+            /** Restarting */
+            restarting: boolean;
+            /** Task */
+            task: string;
         };
         /** TokenRotationOut */
         TokenRotationOut: {
@@ -813,6 +854,8 @@ export interface operations {
                 errors_only?: boolean;
                 level?: string;
                 limit?: number;
+                /** @description Only the lines written under this correlation id (a request's or a turn's). */
+                trace_id?: string | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;
