@@ -249,6 +249,8 @@ All three carry `pytestmark = pytest.mark.benchmark`, so `-m benchmark` selects 
 
 **Flaky means a wall-clock assumption.** No test retries itself (no `pytest-rerunfailures`, no loop-until-green). A test that fails only under load is fixed at the root: replace a sleep-then-assert with a wait on the condition, bound only the thing that can hang, and never let a per-test `pytest.mark.timeout` sit within a small factor of the test's loaded runtime. A hang that shows up only under load is often a patch that reached too far: `monkeypatch.setattr(module.time, "sleep", …)` replaces `time.sleep` for every thread in the process (`subprocess.Popen.wait` polls with it), so patch the module's own name instead (`monkeypatch.setattr(module, "time", fake)`) — `test_secret_boundary.py`'s `--wait` tests once deadlocked a daemon thread inside the vault writer's lock this way.
 
+**Why the sync tests are slow under load.** A sync integration test makes hundreds of `git` calls (one round-heavy test: ~625), so its wall time is the per-call spawn cost times that count. The thin-sync suite carries no per-test `pytest.mark.timeout` (the old `tests/integration/sync/` suite capped files at 60–180 s, which load routinely exceeded); the only wall-clock bound is `git.run`'s per-call hang guard (`LOCAL_TIMEOUT_S` 60 s, `NETWORK_TIMEOUT_S` 120 s). `git.run` resolves the real binary once (`git --exec-path`), because macOS's `/usr/bin/git` launcher measured 0.5 s median / 1.7 s max per call under load against 0.05 s for the binary. Don't pass a blanket `--timeout` to the integration tier: under load it fails sync tests that are merely slow.
+
 ## Make Targets
 
 ```bash

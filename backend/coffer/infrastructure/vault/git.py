@@ -19,6 +19,7 @@ a network call is the same call with a longer timeout.
 
 from __future__ import annotations
 
+import functools
 import os
 import shutil
 import subprocess
@@ -95,6 +96,35 @@ def git_available() -> bool:
     return shutil.which("git") is not None
 
 
+@functools.lru_cache(maxsize=8)
+def _executable(search_path: str | None) -> str:
+    """The ``git`` binary itself, found once per ``PATH``.
+
+    The ``git`` on ``PATH`` can be a launcher rather than git: the one Apple
+    puts in ``/usr/bin`` looks up the developer tools on every call, which
+    costs about 0.5 s a call on a busy machine (up to 1.7 s measured) against
+    0.05 s for the binary it starts. A sync round makes hundreds of calls, so
+    that lookup, not git, set how long a round took under load. Every git
+    install keeps its own binary in its exec path, so ask once and call that.
+    Falls back to plain ``git`` when the answer is not usable, and keyed by
+    ``PATH`` so a changed ``PATH`` is looked up again.
+    """
+    try:
+        done = subprocess.run(
+            ["git", "--exec-path"],
+            capture_output=True,
+            timeout=LOCAL_TIMEOUT_S,
+            check=False,
+            env={**os.environ, "PATH": search_path or ""},
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "git"
+    found = Path(done.stdout.decode("utf-8", "replace").strip()) / "git"
+    if done.returncode == 0 and found.is_file() and os.access(found, os.X_OK):
+        return str(found)
+    return "git"
+
+
 def redact(text: str, secret: str | None) -> str:
     return text.replace(secret, "***") if secret else text
 
@@ -146,7 +176,7 @@ def run(
     ``literal`` turns pathspec magic off, so a path is always the path it
     names. ``token`` adds the credential helper for a remote call.
     """
-    argv = ["git", *_PINNED]
+    argv = [_executable(os.environ.get("PATH")), *_PINNED]
     if token:
         argv += ["-c", "credential.helper=", "-c", f"credential.helper={_CREDENTIAL_HELPER}"]
     if literal:
