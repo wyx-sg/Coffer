@@ -286,3 +286,23 @@ def test_main_raises_fd_soft_limit_before_serving(
 
     assert order and order[0] == "fd", "fd soft limit must be raised before serving"
     assert "serve" in order
+
+
+def test_version_flag_prints_the_package_version_and_starts_nothing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``coffer-daemon --version`` used to be ignored as an unknown argument,
+    so asking for the version started a daemon. It prints the package version
+    and returns before anything is scrubbed, locked or bound."""
+    from importlib.metadata import version
+
+    def _must_not_run(*_a: object, **_k: object) -> None:
+        raise AssertionError("--version reached the daemon start path")
+
+    monkeypatch.setattr(entry.sys, "argv", ["coffer-daemon", "--version"])
+    monkeypatch.setattr(entry, "scrub_agent_home_env", _must_not_run)
+    monkeypatch.setattr(entry.bootstrap, "acquire_or_existing", _must_not_run)
+
+    entry.main()
+
+    assert capsys.readouterr().out == f"{version('coffer')}\n"

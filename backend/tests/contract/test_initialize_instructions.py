@@ -121,6 +121,16 @@ def test_initialize_result_keeps_the_protocol_contract():
     assert 0 < len(result["instructions"]) <= MAX_INSTRUCTIONS_CHARS
 
 
+def test_initialize_result_reports_the_package_version():
+    """``serverInfo.version`` is the installed package's version, not a copy
+    of it: a literal here said 0.1.0 while the package was 0.1.1."""
+    from importlib.metadata import version
+
+    result = build_initialize_result(hidden_count=0)
+
+    assert result["serverInfo"]["version"] == version("coffer")
+
+
 @pytest.mark.acceptance(
     spec="knowledge", scenario="the handshake names Coffer's tools and points at the skill"
 )

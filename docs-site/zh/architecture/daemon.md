@@ -136,7 +136,7 @@ sequenceDiagram
   E->>E: 开始每 30 s 一次的被取代检查
 ```
 
-逐步说明：
+逐步说明（有两个参数会跳过下面全部步骤：`--version` 打印包版本——与 `coffer --version` 打印的是同一行——然后退出；`proxy` 改为运行[本地模型代理](/zh/architecture/model-proxy)）：
 
 1. **环境清理。** 守护进程移除它继承来的每个智能体 home 变量（`CLAUDE_CONFIG_DIR`、`CODEX_HOME`，取自智能体描述符）。否则，从导出了这类变量的 shell 启动的守护进程，会让智能体跑在那个目录上，而 Coffer 却把技能和配置投递到登记的目录里。它还会把 `RLIMIT_NOFILE` 软上限提高到接近硬上限，最多 8192，因为由 GUI 应用启动的守护进程继承到的上限大约只有 256。
 2. **拉起锁。** 它在 `~/.coffer/daemon.lock` 上取一把独占 `flock`。锁挂在打开的描述符上，所以文件在两次运行之间一直留在磁盘上。

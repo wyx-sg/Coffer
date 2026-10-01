@@ -209,6 +209,15 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
 
 
 def main() -> None:
+    # `coffer-daemon --version` prints the package version — the same line
+    # `coffer --version` prints — and exits. Checked first: an argument this
+    # entry did not recognise used to be ignored, so asking for the version
+    # started a daemon.
+    if sys.argv[1:2] == ["--version"]:
+        from coffer import __version__
+
+        print(__version__)
+        return
     # The frozen binary's second mode: coffer-daemon proxy [--port N] runs the
     # local model proxy instead of the daemon (ADR api-key-providers-are-reached-
     # through-a-separate-local-model-proxy, "Distribution" — no fourth binary).
