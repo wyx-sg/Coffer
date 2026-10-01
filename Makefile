@@ -15,6 +15,10 @@ FRONTEND := frontend
 # untouched — CI uses it to pick one duration-balanced shard (pytest-split).
 PYTEST_WORKERS ?= auto
 PYTEST_ARGS ?=
+# Per-test wall-clock cap for the integration tier (pytest-timeout), so a hung
+# test fails within minutes, by name, instead of stalling the run for hours. A
+# test that needs longer says so with @pytest.mark.timeout(seconds).
+PYTEST_TIMEOUT ?= 300
 PYTEST_XDIST := -n $(PYTEST_WORKERS) --dist loadgroup
 
 .PHONY: help install install-e2e-browsers hooks \
@@ -222,9 +226,12 @@ verify-unit:
 # A `frontend/tests/integration` leg used to sit here; that directory was the
 # first scaffold's shape, deleted when the real web shell landed, and the guard
 # it left behind could only ever print its own skip message.
+# One integration run per machine: scripts/verify_lock.py queues a second run
+# (another worktree or session) until the first finishes, because two runs at
+# once slow each other until time-based tests fail. COFFER_VERIFY_LOCK=off skips it.
 verify-integration:
 	@if [ -d $(BACKEND)/tests/integration ]; then \
-		$(PY) -m pytest $(PYTEST_XDIST) $(PYTEST_ARGS) $(BACKEND)/tests/integration; \
+		$(PY) scripts/verify_lock.py -- $(PY) -m pytest $(PYTEST_XDIST) --timeout=$(PYTEST_TIMEOUT) $(PYTEST_ARGS) $(BACKEND)/tests/integration; \
 	else \
 		echo "verify-integration: $(BACKEND)/tests/integration/ does not exist yet — skipping backend"; \
 	fi
