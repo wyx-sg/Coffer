@@ -44,6 +44,7 @@ from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.agent.scan import scan_locations
 from coffer.domain.reconcile import PassReport, Trigger
 from coffer.domain.resource import Resource
+from coffer.domain.secrets import secret_ref
 from coffer.domain.skill.cli_status import ServerLauncher
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.agent.native_memory_store import FileNativeMemoryScanner
@@ -64,7 +65,7 @@ from coffer.surfaces.http.agent_dependencies import (
 )
 from coffer.surfaces.http.agent_mcp_import_routes import set_mcp_import_service
 from coffer.surfaces.http.cli_wiring import wire_cli_requirements
-from coffer.surfaces.http.skill_dependencies import set_skill_service
+from coffer.surfaces.http.skill_dependencies import set_skill_secret_presence, set_skill_service
 from coffer.surfaces.http.skill_source_wiring import SkillSources, wire_skill_sources
 from coffer.surfaces.http.vault_composition import VaultStores
 from coffer.surfaces.http.workspace_dependencies import (
@@ -325,7 +326,17 @@ def wire_agent_and_skill_kinds(
     set_agent_hooks_service(agent_hooks_svc)
     set_agent_transcript_service(agent_transcript_svc)
     set_skill_service(skill_svc)
-    wire_cli_requirements(skill_svc, servers=_CliServerLaunchers(McpStdioLaunchers(resource_svc)))
+
+    def _secret_set(name: str) -> bool:
+        # A presence probe: it stats the ciphertext file, never decrypts.
+        return secret_store.exists(secret_ref(name))
+
+    set_skill_secret_presence(_secret_set)
+    wire_cli_requirements(
+        skill_svc,
+        servers=_CliServerLaunchers(McpStdioLaunchers(resource_svc)),
+        secret_set=_secret_set,
+    )
 
     return AgentSkillWiring(
         skill_sources=skill_sources,

@@ -48,7 +48,7 @@ Coffer validates every folder before it accepts it:
 | Symlinks inside the folder | none may point outside the folder |
 | Total folder size | at most 50 MB |
 
-Coffer also reads the optional `license` field, the experimental `allowed-tools` field (a list, or a comma- or space-separated string), and `requires:` — the command-line tools the skill drives, which Coffer checks on this machine and shows on the skill's **Requires** tab and the [CLIs page](/guides/clis). Any other frontmatter key is kept and ignored.
+Coffer also reads the optional `license` field, the experimental `allowed-tools` field (a list, or a comma- or space-separated string), and `requires:` — the command-line tools the skill drives, which Coffer checks on this machine and shows on the skill's **Requires** tab and the [CLIs page](/guides/clis), and the Coffer secrets it needs (see [Secrets a skill needs](#secrets-a-skill-needs)). Any other frontmatter key is kept and ignored.
 
 A folder that breaks a rule is refused with the reason, and nothing is written to the vault.
 
@@ -390,6 +390,30 @@ requires: [jq, "gh>=2.40", uv]
 ```
 
 Each entry is a command name, optionally with a minimum version (`gh>=2.40`); `requires: {commands: [...]}` and entries like `{command: gh, version: "2.40"}` are read too. The skill's **Requires** tab lists them, each linking to its page on the CLIs page, and `coffer skill show <name> --json` carries them as `requires`. Declaring a requirement changes nothing about delivery: the skill is delivered whether or not the command is installed.
+
+## Secrets a skill needs
+
+A skill whose commands need a token or key names the Coffer secret under `secrets:` in the mapping form of `requires`:
+
+```yaml
+---
+name: gh-triage
+description: Label new issues, find duplicates, ask for missing details.
+requires:
+  commands: [jq, "gh>=2.40"]
+  secrets: [GITHUB_TOKEN]
+---
+```
+
+Each entry is a secret's name in Coffer's secret store, never its value. Only the mapping form carries `secrets:`; the list form (`requires: [jq, gh]`) names commands only. A name the secret store would not accept, or one given twice, is skipped with a warning, and a key other than `commands` and `secrets` is refused: Coffer reports it as a warning and reads nothing under it.
+
+You set the value yourself on the [Secrets page](/guides/secrets); the skill's commands receive it when they run under `coffer run --secret`, which sets it only in that command's environment:
+
+```sh
+coffer run --secret GITHUB_TOKEN -- gh issue list
+```
+
+The skill's **Requires** tab lists each declared secret below its commands, as **Set** or "secret GITHUB_TOKEN is not set" with **Open Secrets**. Coffer answers that from the secret store by name alone and never reads the value. A skill with a secret that is not set also says so in its row and in a banner above its tabs, and appears on the Overview's **Needs you** list, whose action opens the Secrets page. `coffer skill show <name> --json` carries the same list as `requires_secrets`, each with `name` and `is_set`. As with commands, the skill is delivered whether or not its secrets are set.
 
 ## Skill names and descriptions
 

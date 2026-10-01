@@ -147,6 +147,78 @@ async def test_a_launcher_only_servers_need_raises_no_cli_attention_item() -> No
     assert await CliAttentionSource(svc).items() == []
 
 
+def _secret_md(name: str, secrets: str) -> str:
+    return f"---\nname: {name}\ndescription: d\nrequires:\n  secrets: [{secrets}]\n---\n"
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="a secret a skill requires that is not set raises a needs-you item",
+)
+async def test_a_skill_missing_a_secret_raises_one_item_opening_secrets() -> None:
+    stored = {"NPM_TOKEN"}
+    asked: list[str] = []
+
+    def secret_set(name: str) -> bool:
+        asked.append(name)
+        return name in stored
+
+    svc = CliRequirementService(
+        skills=_Skills(
+            {
+                "triage": _secret_md("triage", "GH_TOKEN, NPM_TOKEN, SLACK_TOKEN"),
+                "publish": _secret_md("publish", "NPM_TOKEN"),
+            }
+        ),
+        probe=FakeCommandProbe(),
+        machine=lambda: FAKE_MACHINE,
+        secret_set=secret_set,
+    )
+    missing = await svc.missing_secrets()
+    assert [(m.skill_name, m.secret) for m in missing] == [
+        ("triage", "GH_TOKEN"),
+        ("triage", "SLACK_TOKEN"),
+    ]
+    [item] = await CliAttentionSource(svc).items()
+    assert (item.kind, item.uid, item.title, item.reason_code) == (
+        "skill",
+        "uid-triage",
+        "triage",
+        "skill_missing_secret",
+    )
+    assert item.reason == (
+        "secret GH_TOKEN is not set; secret SLACK_TOKEN is not set; the skill requires them."
+    )
+    assert (item.action.verb, item.action.method, item.action.path) == (
+        "set_secret",
+        "POST",
+        "/api/v1/secrets",
+    )
+    assert item.action.body == {"ref": "secret/GH_TOKEN"}
+    # A person's task: no hand-off prompt.
+    assert item.handoff is None
+    assert set(asked) == {"GH_TOKEN", "NPM_TOKEN", "SLACK_TOKEN"}
+
+
+async def test_a_secret_once_set_clears_its_item() -> None:
+    stored: set[str] = set()
+    svc = CliRequirementService(
+        skills=_Skills({"s": _secret_md("s", "API_KEY")}),
+        probe=FakeCommandProbe(),
+        machine=lambda: FAKE_MACHINE,
+        secret_set=stored.__contains__,
+    )
+    [item] = await CliAttentionSource(svc).items()
+    assert item.reason == "secret API_KEY is not set; the skill requires it."
+    stored.add("API_KEY")
+    assert await CliAttentionSource(svc).items() == []
+
+
+async def test_without_a_secret_store_no_secret_is_reported() -> None:
+    svc = _service({"s": _secret_md("s", "API_KEY")}, FakeCommandProbe())
+    assert await svc.missing_secrets() == ()
+
+
 def test_launcher_cli_maps_provided_launchers_and_skips_paths() -> None:
     assert [launcher_cli(c) for c in ("uvx", "npx", "bunx", "docker", "./run.sh", "/opt/x")] == [
         "uv",

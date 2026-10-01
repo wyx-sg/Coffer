@@ -52,6 +52,8 @@ function useSublineText(item: SkillAttention, agents: readonly AgentOut[]): stri
         return t("skills.row.needsLogin", { command: item.loggedOut[0] });
       }
       return t("skills.row.needsNewer", { command: item.outdated[0] });
+    case "secrets":
+      return t("skills.row.needsSecret", { name: item.missing[0] });
     case "sourceUnreachable":
       return t("skills.sourceUnreachable");
     case "updateAvailable":

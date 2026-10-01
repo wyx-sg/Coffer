@@ -2,10 +2,12 @@
 // The banners above the open skill's tabs, one per attention item
 // (lib/skills/attention.ts), most urgent first: the master folder is gone, a
 // folder is in the way of an agent's link (Review…), a command it needs is
-// missing or not logged in, its Git source cannot be reached (Check again), an
+// missing or not logged in, a secret it needs is not set (Open Secrets), its
+// Git source cannot be reached (Check again), an
 // update is waiting (Review update…). Each banner carries at most one action.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import { AlertCircle, AlertTriangle, Info, RefreshCw } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -144,6 +146,24 @@ export function SkillBanners({ skill, items, onReviewCopy, onReviewUpdate }: Pro
               </Banner>
             );
           }
+          case "secrets":
+            // Setting a secret is the person's own task on the Secrets page —
+            // no hand-off, and never a value here.
+            return (
+              <Banner
+                key="secrets"
+                tone="warning"
+                testId="skill-banner-secrets"
+                title={t("skills.banner.secretsTitle", { count: item.missing.length })}
+                action={
+                  <Button asChild variant="outline" size="sm">
+                    <Link to="/secrets">{t("skills.requires.openSecrets")}</Link>
+                  </Button>
+                }
+              >
+                {`${item.missing.map((name) => t("skills.requires.secretMissing", { name })).join("; ")}.`}
+              </Banner>
+            );
           case "sourceUnreachable":
             return (
               <Banner

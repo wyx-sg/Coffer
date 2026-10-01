@@ -30,10 +30,15 @@ function Where() {
   return <div data-testid="where">{useLocation().pathname}</div>;
 }
 
-function renderTab(skillUid = "sk-gh-triage", requires = ["jq", "gcloud", "uv"]) {
+function renderTab(
+  skillUid = "sk-gh-triage",
+  requires = ["jq", "gcloud", "uv"],
+  requiresSecrets: SkillOut["requires_secrets"] = [],
+) {
   const skill = {
     uid: skillUid,
     requires: requires.map((command) => ({ command, min_version: null })),
+    requires_secrets: requiresSecrets,
   } as SkillOut;
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -100,9 +105,44 @@ describe("SkillRequiresTab", () => {
     },
   );
 
+  acceptance(
+    "web-ui",
+    "the requires tab lists a skill's secrets and opens Secrets for a missing one",
+    async () => {
+      api.list.mockResolvedValue({ items: [JQ_MISSING], warnings: [] });
+      renderTab(
+        "sk-gh-triage",
+        ["jq"],
+        [
+          { name: "GITHUB_TOKEN", is_set: true },
+          { name: "NPM_TOKEN", is_set: false },
+        ],
+      );
+      await screen.findByText("Not installed");
+      const section = screen.getByTestId("skill-requires-secrets");
+      const [set, missing] = within(section).getAllByRole("listitem");
+      expect(within(set).getByText("GITHUB_TOKEN")).toBeInTheDocument();
+      expect(within(set).getByText("Set")).toBeInTheDocument();
+      expect(within(set).queryByRole("link")).toBeNull();
+      expect(within(missing).getByText("secret NPM_TOKEN is not set")).toBeInTheDocument();
+      // A person's task: a link to Secrets, no hand-off prompt, no command.
+      expect(within(section).queryByRole("button", { name: "Copy prompt" })).toBeNull();
+      expect(within(section).queryByText(/coffer /)).toBeNull();
+      fireEvent.click(within(missing).getByRole("link", { name: /Open Secrets/ }));
+      expect(screen.getByTestId("where")).toHaveTextContent("/secrets");
+    },
+  );
+
+  test("a skill that declares only secrets lists them without an empty state", async () => {
+    api.list.mockResolvedValue({ items: [], warnings: [] });
+    renderTab("sk-secrets-only", [], [{ name: "API_KEY", is_set: false }]);
+    expect(await screen.findByText("secret API_KEY is not set")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing required")).toBeNull();
+  });
+
   test("a skill that declares nothing says so", async () => {
     api.list.mockResolvedValue({ items: [UV_READY], warnings: [] });
     renderTab("sk-nothing", []);
-    expect(await screen.findByText("No commands required")).toBeInTheDocument();
+    expect(await screen.findByText("Nothing required")).toBeInTheDocument();
   });
 });

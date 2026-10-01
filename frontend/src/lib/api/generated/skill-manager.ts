@@ -1075,6 +1075,8 @@ export interface components {
             name: string;
             /** Requires */
             requires: components["schemas"]["SkillRequirementOut"][];
+            /** Requires Secrets */
+            requires_secrets: components["schemas"]["SkillSecretRequirementOut"][];
             scope: components["schemas"]["ScopeOut"] | null;
             /** Source */
             source: components["schemas"]["LocalImportSourceOut"] | components["schemas"]["ArchiveImportSourceOut"] | components["schemas"]["GitImportSourceOut"] | components["schemas"]["BuiltinSourceOut"];
@@ -1113,6 +1115,17 @@ export interface components {
             command: string;
             /** Min Version */
             min_version: string | null;
+        };
+        /**
+         * SkillSecretRequirementOut
+         * @description One Coffer secret the skill's SKILL.md says it needs, and whether it is
+         *     set in the secret store on this machine. Never a value.
+         */
+        SkillSecretRequirementOut: {
+            /** Is Set */
+            is_set: boolean;
+            /** Name */
+            name: string;
         };
         /**
          * SkillSourceStatusOut

@@ -48,7 +48,7 @@ Coffer 接受每个文件夹之前都会校验：
 | 文件夹内的符号链接 | 不能有任何一个指向文件夹之外 |
 | 文件夹总大小 | 最多 50 MB |
 
-Coffer 还会读取可选的 `license` 字段、实验性的 `allowed-tools` 字段（列表，或以逗号或空格分隔的字符串），以及 `requires:`——技能驱动的命令行工具，Coffer 会在这台机器上检查它们，并显示在技能的 **依赖** 标签页和[命令行工具页面](/zh/guides/clis)上。其他 frontmatter 键会保留但被忽略。
+Coffer 还会读取可选的 `license` 字段、实验性的 `allowed-tools` 字段（列表，或以逗号或空格分隔的字符串），以及 `requires:`——技能驱动的命令行工具，Coffer 会在这台机器上检查它们，并显示在技能的 **依赖** 标签页和[命令行工具页面](/zh/guides/clis)上，以及它需要的 Coffer 密钥（见[技能需要的密钥](#secrets-a-skill-needs)）。其他 frontmatter 键会保留但被忽略。
 
 违反规则的文件夹会被拒绝并给出原因，保险库里不会写入任何东西。
 
@@ -390,6 +390,30 @@ requires: [jq, "gh>=2.40", uv]
 ```
 
 每个条目是一个命令名，可选附带最低版本（`gh>=2.40`）；`requires: {commands: [...]}` 以及 `{command: gh, version: "2.40"}` 这样的条目也能读取。技能的 **依赖** 标签页会列出它们，每个都链接到它在命令行工具页面上的位置，`coffer skill show <name> --json` 以 `requires` 字段携带它们。声明依赖不会改变投递：无论命令装没装，技能都会投递。
+
+## 技能需要的密钥 {#secrets-a-skill-needs}
+
+如果技能的命令需要某个令牌或密钥，就在 `requires` 的映射形式中用 `secrets:` 写出这个 Coffer 密钥的名称：
+
+```yaml
+---
+name: gh-triage
+description: Label new issues, find duplicates, ask for missing details.
+requires:
+  commands: [jq, "gh>=2.40"]
+  secrets: [GITHUB_TOKEN]
+---
+```
+
+每个条目是 Coffer 密钥存储中一个密钥的名称，绝不是它的值。只有映射形式能带 `secrets:`；列表形式（`requires: [jq, gh]`）只声明命令。密钥存储不接受的名称，或重复写出的名称，会被跳过并给出警告；`commands` 和 `secrets` 之外的键会被拒绝：Coffer 把它报告为警告，不读取它下面的任何内容。
+
+值由你自己在[密钥页面](/zh/guides/secrets)设置；技能的命令在 `coffer run --secret` 下运行时拿到它，这个值只设置在该命令的环境中：
+
+```sh
+coffer run --secret GITHUB_TOKEN -- gh issue list
+```
+
+技能的 **依赖** 标签页在命令下方列出每个声明的密钥，显示为 **已设置**，或“密钥 GITHUB_TOKEN 未设置”并附 **打开密钥**。Coffer 只按名称向密钥存储查询，从不读取值。有未设置密钥的技能还会在它的列表行和标签页上方的横幅中说明，并出现在总览的 **需要你处理** 列表中，其操作会打开密钥页面。`coffer skill show <name> --json` 以 `requires_secrets` 携带同一份列表，每项带 `name` 和 `is_set`。和命令一样，无论密钥是否已设置，技能都会投递。
 
 ## 技能名称与描述 {#skill-names-and-descriptions}
 

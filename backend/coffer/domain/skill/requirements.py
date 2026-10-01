@@ -16,6 +16,18 @@ The shorter spellings of spec skill-manager "Show the commands a skill
 declares it needs" are the same list: ``requires: {commands: [...]}``, an entry
 ``name>=version`` (also ``==`` / ``~=``), and ``{command|name, version}``.
 
+Only the mapping form also names the Coffer secrets a skill needs (spec
+skill-manager "Declare the secrets a skill requires"):
+
+```yaml
+requires:
+  commands: [gh]
+  secrets: [GITHUB_TOKEN]       # names in Coffer's secret store; never values
+```
+
+A mapping key other than ``commands`` and ``secrets`` is refused: it is
+reported as a warning and nothing under it is read.
+
 Parsed leniently: the frontmatter is third-party, like ``allowed-tools``, so
 an entry that is not understood is skipped and reported as a warning, never a
 reason to refuse the skill. The rules are what keep a declaration from making
@@ -29,11 +41,14 @@ import re
 import shlex
 from dataclasses import dataclass
 
+from coffer.domain.secrets import is_valid_secret_name
 from coffer.domain.skill.validator import parse_frontmatter
 
 COMMAND_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 _MIN_VERSION_RE = re.compile(r"^\d+(?:\.\d+)*$")
 _TEXT_MAX = 200
+#: The keys the mapping form of ``requires:`` may carry.
+_MAPPING_KEYS = ("commands", "secrets")
 _KEYS = frozenset(
     {"command", "name", "title", "min_version", "version", "login_check", "login", "why"}
 )
@@ -58,6 +73,8 @@ class CommandRequirement:
 @dataclass(frozen=True)
 class RequirementsParse:
     requirements: tuple[CommandRequirement, ...] = ()
+    #: The Coffer secret names the skill needs, in the order declared.
+    secrets: tuple[str, ...] = ()
     #: One sentence per entry that was skipped (or field that was dropped).
     warnings: tuple[str, ...] = ()
 
@@ -76,17 +93,31 @@ def requirements_from_skill_md(text: str) -> RequirementsParse:
 
 def parse_requires(value: object) -> RequirementsParse:
     """Every entry of a ``requires:`` value that can be used, and a warning for
-    each one that cannot. A command named twice keeps its first entry."""
+    each one that cannot. A command or secret named twice keeps its first entry."""
+    warnings: list[str] = []
+    secrets: tuple[str, ...] = ()
     if isinstance(value, dict):
+        unknown = sorted(str(k) for k in value if k not in _MAPPING_KEYS)
+        if unknown:
+            warnings.append(
+                f"requires: unknown key(s) {', '.join(unknown)} refused; "
+                "only commands and secrets are read"
+            )
+        secrets = _secrets(value.get("secrets"), warnings)
         value = value.get("commands")
+    commands = _commands(value, warnings)
+    return RequirementsParse(commands, secrets, tuple(warnings))
+
+
+def _commands(value: object, warnings: list[str]) -> tuple[CommandRequirement, ...]:
     if isinstance(value, str):
         value = [value]
     if value is None:
-        return RequirementsParse()
+        return ()
     if not isinstance(value, list):
-        return RequirementsParse(warnings=("requires: expected a list of commands; ignored",))
+        warnings.append("requires: expected a list of commands; ignored")
+        return ()
     out: list[CommandRequirement] = []
-    warnings: list[str] = []
     seen: set[str] = set()
     for index, entry in enumerate(value, start=1):
         try:
@@ -100,7 +131,29 @@ def parse_requires(value: object) -> RequirementsParse:
             continue
         seen.add(requirement.command)
         out.append(requirement)
-    return RequirementsParse(tuple(out), tuple(warnings))
+    return tuple(out)
+
+
+def _secrets(value: object, warnings: list[str]) -> tuple[str, ...]:
+    """The ``secrets:`` list of the mapping form: secret names, never values."""
+    if isinstance(value, str):
+        value = [value]
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        warnings.append("requires secrets: expected a list of secret names; ignored")
+        return ()
+    out: list[str] = []
+    for index, entry in enumerate(value, start=1):
+        name = entry.strip() if isinstance(entry, str) else None
+        if not name or not is_valid_secret_name(name):
+            warnings.append(f"requires secret {index}: {entry!r} is not a secret name; skipped")
+            continue
+        if name in out:
+            warnings.append(f"requires secret {name}: declared twice; later entry skipped")
+            continue
+        out.append(name)
+    return tuple(out)
 
 
 def _entry(entry: object) -> tuple[CommandRequirement, list[str]]:

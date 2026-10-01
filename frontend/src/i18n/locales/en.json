@@ -2807,11 +2807,17 @@
     "requires": {
       "declared": "declared in SKILL.md",
       "openClis": "Open CLIs",
-      "emptyTitle": "No commands required",
-      "emptyBody": "This skill's SKILL.md declares no requires: list.",
+      "emptyTitle": "Nothing required",
+      "emptyBody": "This skill's SKILL.md declares no commands or secrets under requires:.",
       "title": "Requires",
       "footnote": "The skill is still delivered. Hand a command that needs you to your agent, then Check again.",
       "loadFailed": "Couldn't check the commands this skill requires",
+      "commandsTitle": "Commands",
+      "secretsTitle": "Secrets",
+      "secretSet": "Set",
+      "secretMissing": "secret {{name}} is not set",
+      "openSecrets": "Open Secrets",
+      "secretsFootnote": "The skill is still delivered. You set a secret on the Secrets page; Coffer never shows its value here.",
       "found": "Found",
       "outdated": "{{version}}, needs ≥ {{min}}",
       "unknown": "Not checked yet",
@@ -2881,7 +2887,8 @@
       "folderInWay": "Folder in the way in {{agent}}",
       "needsMissing": "Needs {{command}} · not installed",
       "needsLogin": "Needs {{command}} · not logged in",
-      "needsNewer": "Needs a newer {{command}}"
+      "needsNewer": "Needs a newer {{command}}",
+      "needsSecret": "Needs secret {{name}} · not set"
     },
     "selection": {
       "title_one": "{{count}} skill selected",
@@ -2930,6 +2937,8 @@
       "requiresOldPart_other": "{{commands}} are older than the skill needs",
       "unreachableTitle": "Can't reach {{repo}}",
       "unreachableBody": "Last check at {{time}}: {{error}} The skill keeps working from its pinned copy; only updates are paused.",
+      "secretsTitle_one": "{{count}} secret this skill needs is not set",
+      "secretsTitle_other": "{{count}} secrets this skill needs are not set",
       "updateTitle": "An update is available from {{repo}}",
       "updateBody_one": "{{ref}} moved {{count}} commit past the pinned {{commit}}; {{files}} file(s) in {{folder}} changed. Nothing changes until you review it.",
       "updateBody_other": "{{ref}} moved {{count}} commits past the pinned {{commit}}; {{files}} file(s) in {{folder}} changed. Nothing changes until you review it.",

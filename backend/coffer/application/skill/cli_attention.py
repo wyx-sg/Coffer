@@ -9,6 +9,13 @@ reason names none). A command only MCP servers need (a stdio launcher no
 skill declares) raises no item here: the server's own ``mcp_missing_launcher``
 item already names it. It reads the service's cache, probing only
 commands nothing was checked for yet.
+
+A skill with a secret it requires that is not set raises one item naming every
+such secret: kind ``skill`` with the skill's uid, reason
+``skill_missing_secret``, and the Secrets page's own write as its action, with
+the first secret's ref and no value — setting a secret is the person's task, so
+it carries no hand-off (spec skill-manager "Report a secret a skill requires
+that is not set").
 """
 
 from __future__ import annotations
@@ -16,7 +23,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from coffer.application.attention import AttentionAction, AttentionItem, Severity
-from coffer.application.skill.cli_requirements import CliRequirementService, CliView
+from coffer.application.skill.cli_requirements import (
+    CliRequirementService,
+    CliView,
+    MissingSecret,
+)
+from coffer.domain.secrets import secret_ref
 from coffer.domain.skill.cli_status import CliStatus
 
 KIND = "cli"
@@ -41,7 +53,7 @@ class CliAttentionSource:
 
     async def items(self) -> Sequence[AttentionItem]:
         listing = await self._service.listing()
-        return [
+        commands = [
             AttentionItem(
                 kind=KIND,
                 uid=view.required.command,
@@ -59,6 +71,37 @@ class CliAttentionSource:
             for view in listing.items
             if view.status is not CliStatus.READY and view.required.needed_by
         ]
+        return commands + _secret_items(await self._service.missing_secrets())
+
+
+def _secret_items(missing: Sequence[MissingSecret]) -> list[AttentionItem]:
+    """One item per skill (the list keys an item by kind, uid and reason),
+    naming every secret of it that is not set."""
+    by_skill: dict[str, list[MissingSecret]] = {}
+    for m in missing:
+        by_skill.setdefault(m.skill_uid, []).append(m)
+    return [_secret_item(group) for group in by_skill.values()]
+
+
+def _secret_item(group: Sequence[MissingSecret]) -> AttentionItem:
+    first = group[0]
+    unset = "; ".join(f"secret {m.secret} is not set" for m in group)
+    return AttentionItem(
+        kind="skill",
+        uid=first.skill_uid,
+        title=first.skill_name,
+        reason_code="skill_missing_secret",
+        reason=f"{unset}; the skill requires {'it' if len(group) == 1 else 'them'}.",
+        severity=Severity.WARNING,
+        # The Secrets page's own write, with the ref and no value: the person
+        # supplies the secret there.
+        action=AttentionAction(
+            verb="set_secret",
+            method="POST",
+            path="/api/v1/secrets",
+            body={"ref": secret_ref(first.secret)},
+        ),
+    )
 
 
 __all__ = ["CliAttentionSource"]

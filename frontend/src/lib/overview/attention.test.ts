@@ -79,6 +79,17 @@ describe("pages", () => {
     expect(actionPage(secret)).toBe("/secrets");
     expect(itemPage(secret)).toBe("/mcp-servers/github");
   });
+
+  test("a secret a skill requires is set on the Secrets page, the name opens the skill", () => {
+    const secret = item({
+      kind: "skill",
+      uid: "s1",
+      title: "gh-triage",
+      reason_code: "skill_missing_secret",
+    });
+    expect(actionPage(secret)).toBe("/secrets");
+    expect(itemPage(secret)).toBe("/skills/gh-triage");
+  });
 });
 
 test("a memory-hook problem opens the agent's Hooks tab and repairs as a hook", () => {

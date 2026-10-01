@@ -2807,11 +2807,17 @@
     "requires": {
       "declared": "声明于 SKILL.md",
       "openClis": "打开命令行工具",
-      "emptyTitle": "不需要命令",
-      "emptyBody": "这个技能的 SKILL.md 没有声明 requires: 列表。",
+      "emptyTitle": "没有依赖",
+      "emptyBody": "这个技能的 SKILL.md 没有在 requires: 下声明命令或密钥。",
       "title": "依赖",
       "footnote": "技能照常投递。把需要处理的命令交给你的智能体，然后点“再次检查”。",
       "loadFailed": "无法检查这个技能需要的命令",
+      "commandsTitle": "命令",
+      "secretsTitle": "密钥",
+      "secretSet": "已设置",
+      "secretMissing": "密钥 {{name}} 未设置",
+      "openSecrets": "打开密钥",
+      "secretsFootnote": "技能照常投递。密钥由你在密钥页面设置；Coffer 不会在这里显示它的值。",
       "found": "已找到",
       "outdated": "{{version}}，需要 ≥ {{min}}",
       "unknown": "尚未检查",
@@ -2881,7 +2887,8 @@
       "folderInWay": "{{agent}} 中有文件夹挡住",
       "needsMissing": "需要 {{command}} · 未安装",
       "needsLogin": "需要 {{command}} · 未登录",
-      "needsNewer": "需要更新版本的 {{command}}"
+      "needsNewer": "需要更新版本的 {{command}}",
+      "needsSecret": "需要密钥 {{name}} · 未设置"
     },
     "selection": {
       "title_one": "已选 {{count}} 个技能",
@@ -2930,6 +2937,8 @@
       "requiresOldPart_other": "{{commands}} 版本低于技能要求",
       "unreachableTitle": "无法访问 {{repo}}",
       "unreachableBody": "上次检查于 {{time}}：{{error}} 技能仍按固定的副本工作，只是暂停更新。",
+      "secretsTitle_one": "这个技能需要的 {{count}} 个密钥未设置",
+      "secretsTitle_other": "这个技能需要的 {{count}} 个密钥未设置",
       "updateTitle": "{{repo}} 有可用更新",
       "updateBody_one": "{{ref}} 比固定的 {{commit}} 多了 {{count}} 个提交；{{folder}} 中 {{files}} 个文件有变化。在你查看之前不会有任何改动。",
       "updateBody_other": "{{ref}} 比固定的 {{commit}} 多了 {{count}} 个提交；{{folder}} 中 {{files}} 个文件有变化。在你查看之前不会有任何改动。",

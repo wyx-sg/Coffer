@@ -80,6 +80,32 @@ test("the open skill repeats a missing command as a banner", async () => {
   expect(banner).toHaveTextContent("jq is not installed.");
 });
 
+acceptance(
+  "web-ui",
+  "a skill that needs a secret that is not set says so and links to Secrets",
+  async () => {
+    h.skills = [
+      makeSkill({
+        requires_secrets: [
+          { name: "GITHUB_TOKEN", is_set: false },
+          { name: "NPM_TOKEN", is_set: true },
+        ],
+      }),
+    ];
+    renderSkillsPage("/skills/hello");
+    const list = await screen.findByRole("list", { name: "Library" });
+    expect(
+      await within(list).findByText("Needs secret GITHUB_TOKEN · not set"),
+    ).toBeInTheDocument();
+    const banner = await screen.findByTestId("skill-banner-secrets");
+    expect(banner).toHaveTextContent("1 secret this skill needs is not set");
+    expect(banner).toHaveTextContent("secret GITHUB_TOKEN is not set.");
+    expect(banner).not.toHaveTextContent("NPM_TOKEN");
+    const open = within(banner).getByRole("link", { name: "Open Secrets" });
+    expect(open).toHaveAttribute("href", "/secrets");
+  },
+);
+
 test("a Git skill with an update offers Review update… above its tabs", async () => {
   renderSkillsPage("/skills/terraform-plan");
   const banner = await screen.findByTestId("skill-banner-update");

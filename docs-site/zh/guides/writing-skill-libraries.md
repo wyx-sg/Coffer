@@ -150,7 +150,7 @@ metadata:
 ---
 ```
 
-`metadata.profiles` 是该领域附带的 profile 文件的索引。`metadata.requires` 在[声明的依赖](#declared-dependencies)中介绍。顶层的 `requires:` 是另一回事：技能驱动的命令行工具（`gh`、`jq`），可带最低版本和登录检查，Coffer 会检查它们，缺失时交给你的智能体去安装——见[命令行工具](/zh/guides/clis)。封装某个 CLI 的载体技能应该在那里声明它。包含 `: `（冒号加空格）的描述要加引号；不加的话它是无效的 YAML，技能会解析失败。描述最多 1024 个字符；更长的 Coffer 会拒绝导入。
+`metadata.profiles` 是该领域附带的 profile 文件的索引。`metadata.requires` 在[声明的依赖](#declared-dependencies)中介绍。顶层的 `requires:` 是另一回事：技能驱动的命令行工具（`gh`、`jq`），可带最低版本和登录检查，Coffer 会检查它们，缺失时交给你的智能体去安装——见[命令行工具](/zh/guides/clis)。封装某个 CLI 的载体技能应该在那里声明它。同一个键的映射形式还可以写出技能的命令需要的 Coffer 密钥，如 `requires: {commands: [psql], secrets: [orders-db]}`，这样技能的 **依赖** 标签页和总览会在某个密钥未设置时告诉使用者——见[技能需要的密钥](/zh/guides/skills#secrets-a-skill-needs)。映射下的其他键会被拒绝并给出警告。包含 `: `（冒号加空格）的描述要加引号；不加的话它是无效的 YAML，技能会解析失败。描述最多 1024 个字符；更长的 Coffer 会拒绝导入。
 
 ### 文件夹卫生 {#folder-hygiene}
 
@@ -163,7 +163,7 @@ metadata:
   coffer run --env-file connection.env -- ./query.sh
   ```
 
-  不要保留 `~/.coffer/secrets/<name>.env` 这样的明文文件；`coffer secret scan` 会找出它们，`coffer secret import` 会把它们移入存储。见[密钥](/zh/guides/secrets)。
+  不要保留 `~/.coffer/secrets/<name>.env` 这样的明文文件；`coffer secret scan` 会找出它们，`coffer secret import` 会把它们移入存储。见[密钥](/zh/guides/secrets)。在 `requires: {secrets: [...]}` 下写出技能用到的每个密钥的名称，这样 Coffer 能在它未设置时告诉你。
 
 ## 描述 {#descriptions}
 

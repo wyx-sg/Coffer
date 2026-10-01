@@ -76,6 +76,14 @@ def requirement_out(r: CommandRequirement) -> SkillRequirementOut:
     return SkillRequirementOut(command=r.command, min_version=r.min_version)
 
 
+class SkillSecretRequirementOut(BaseModel):
+    """One Coffer secret the skill's SKILL.md says it needs, and whether it is
+    set in the secret store on this machine. Never a value."""
+
+    name: str
+    is_set: bool
+
+
 class SkillSourceStatusOut(BaseModel):
     """What this machine last learned about a Git-imported skill's source."""
 
