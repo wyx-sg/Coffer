@@ -165,14 +165,19 @@ acceptance(
       expect(disableResp.status).toBe(200);
       expect(fs.existsSync(deliveredSkill)).toBe(false);
 
-      // 6. Remove the skill through the UI: the open skill's Delete opens a
-      //    styled confirm dialog (no window.confirm); confirm via its
-      //    destructive Delete button.
+      // 6. Remove the skill through the UI: the header's More actions menu
+      //    holds Delete…, which opens a styled confirm dialog (no
+      //    window.confirm); confirm via its destructive Delete skill button.
       await page.reload();
-      await page.getByRole("button", { name: /^delete$/i }).click();
-      const confirmDialog = page.getByRole("dialog");
+      await page
+        .getByRole("button", { name: `More actions for ${skillName}` })
+        .click();
+      await page.getByRole("menuitem", { name: "Delete…" }).click();
+      const confirmDialog = page.getByRole("dialog", {
+        name: `Delete ${skillName}?`,
+      });
       await expect(confirmDialog).toBeVisible();
-      await confirmDialog.getByRole("button", { name: /^delete$/i }).click();
+      await confirmDialog.getByRole("button", { name: "Delete skill" }).click();
 
       // 7. The row vanishes from the library and the page returns to /skills.
       await expect(page).toHaveURL(/\/skills$/, { timeout: 10_000 });

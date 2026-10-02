@@ -82,12 +82,11 @@ function bindToChannel(conversationId: string, channelUid: string): void {
 import sqlite3, sys, datetime
 db, conv, uid = sys.argv[1:4]
 c = sqlite3.connect(db, timeout=10)
-rid = c.execute("SELECT id FROM resources WHERE uid = ?", (uid,)).fetchone()[0]
 c.execute("UPDATE conversations SET channel_uid = ?, peer_chat_id = ? WHERE id = ?", (uid, "e2e-chat", conv))
 c.execute(
-  "INSERT INTO channel_thread_history (resource_id, chat_id, thread_id, conversation_id, chat_kind, opened_at)"
+  "INSERT INTO channel_thread_history (resource_uid, chat_id, thread_id, conversation_id, chat_kind, opened_at)"
   " VALUES (?, ?, '', ?, 'direct', ?)",
-  (rid, "e2e-chat", conv, datetime.datetime.now(datetime.timezone.utc).isoformat()),
+  (uid, "e2e-chat", conv, datetime.datetime.now(datetime.timezone.utc).isoformat()),
 )
 c.commit()
 `;

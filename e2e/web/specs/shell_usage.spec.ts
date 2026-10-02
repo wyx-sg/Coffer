@@ -39,8 +39,12 @@ test("a fresh daemon shows the first-run state without controls", async ({
   await expect(
     quota.getByText("Appears after your next Claude Code response."),
   ).toBeVisible();
-  // The statusline wrapper is described, never switched on from the page.
-  await expect(quota.getByText(/coffer usage statusline --/)).toBeVisible();
+  // The statusline wrapper is handed to an agent (Principle IV), never
+  // switched on from the page and never shown as a command to run.
+  await expect(quota.getByText(/point Claude Code's status line at/)).toBeVisible();
+  await expect(quota.getByRole("button", { name: "Copy prompt" })).toBeVisible();
+  await expect(quota.getByRole("button", { name: "Ask an agent" })).toBeVisible();
+  await expect(quota.getByText(/coffer usage statusline --/)).toHaveCount(0);
   await expect(page.getByRole("switch")).toHaveCount(0);
 });
 

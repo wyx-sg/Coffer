@@ -1,7 +1,7 @@
 // e2e/web/specs/shell_providers.spec.ts
 //
-// The Model providers page against the real daemon: one list + detail, the
-// tab in the path, Used by naming Coffer's engine once the provider carries
+// The Model providers page against the real daemon: one list + detail (the
+// detail one column, no tabs), Used by naming Coffer's engine once the provider carries
 // it (and linking Settings › General), Edit renaming in place, and Delete —
 // blocked while the provider is the engine's, done for an unused one.
 //
@@ -61,7 +61,7 @@ async function removeProvider(uid: string): Promise<void> {
 const row = (page: Page, name: string) =>
   page.getByTestId("provider-row").filter({ hasText: name });
 
-test("the list opens a provider, and its tab lives in the path", async ({
+test("the list opens a provider as one column, addressed by its uid", async ({
   page,
 }) => {
   const name = generateUniqueName("e2eprov");
@@ -81,22 +81,22 @@ test("the list opens a provider, and its tab lives in the path", async ({
       page.getByRole("button", { name: "Replace key" }),
     ).toBeVisible();
 
-    // Radix tabs activate on mousedown.
-    await page.getByRole("tab", { name: /Models/ }).dispatchEvent("mousedown");
-    await page.getByRole("tab", { name: /Models/ }).click();
-    await expect(page).toHaveURL(new RegExp(`/model-providers/${uid}/models$`));
+    // One column, no tabs: Used by, Endpoint, Models.
+    await expect(page.getByRole("tab")).toHaveCount(0);
+    for (const section of ["Used by", "Endpoint", "Models"]) {
+      await expect(
+        page.getByRole("heading", { name: section, level: 3 }),
+      ).toBeVisible();
+    }
     // Nothing listens on the discard port: the listing says so and offers Retry.
     await expect(
       page.getByText("Couldn't list this endpoint's models"),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
 
-    // A deep link lands on the same tab.
-    await page.goto(`/model-providers/${uid}/models`);
-    await expect(page.getByRole("tab", { name: /Models/ })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    // A deep link lands on the same provider.
+    await page.goto(`/model-providers/${uid}`);
+    await expect(page.getByRole("heading", { name, level: 2 })).toBeVisible();
   } finally {
     await removeProvider(uid);
   }
