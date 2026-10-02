@@ -11,6 +11,7 @@ from coffer.application.retention_registry import (
 )
 from coffer.application.retention_service import RetentionService
 from coffer.domain.audit import AuditEventType
+from coffer.infrastructure.chat import persistence_models as _chat_models  # noqa: F401
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
