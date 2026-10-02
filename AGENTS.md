@@ -69,17 +69,19 @@ Four things describe the product, and **changing one means changing the others i
 - The canvas shows the final product only: no version labels and no planning material. The "Experimental" mark on the four experimental features (knowledge, memory, sync, model switching) is part of the product and is drawn.
 - A work item is not done while any of the four disagrees with the others. Give this rule to subagents explicitly. Report a canvas change you could not make as an open item for the user rather than skipping it silently.
 
-**The canvases** — one Claude Design artifact per module, plus the design system. Read the board you are about to change before you design or change a screen, and reuse its components, spacing, colour and copy so every screen keeps one visual style; the design system canvas and [`.agents/visual-language.md`](./.agents/visual-language.md) are the style source of truth.
+**The canvases** — one Claude Design artifact per sidebar group, plus one each for Foundations, the Shell and the docs site, plus the design system. A new screen goes on the canvas of the sidebar group its page sits in; anything outside the sidebar (the frame, Overview, the menu bar, the Settings modal) is the Shell canvas. Boards are numbered `<canvas>.<page>.<nn>`, so a board's number names its canvas. Read the board you are about to change before you design or change a screen, and reuse its components, spacing, colour and copy so every screen keeps one visual style; the design system canvas and [`.agents/visual-language.md`](./.agents/visual-language.md) are the style source of truth.
 
-| Canvas | Covers | Link |
-| --- | --- | --- |
-| Foundations & Shell | shell, sidebar, overview, foundations | <https://claude.ai/artifact/Jz7f6MqShmdWx4N7YTRm49> |
-| Agents | Agents, model providers | <https://claude.ai/artifact/NdBb9YeJXQSLq3ynUDC2Yr> |
-| Run | Conversations, Channels | <https://claude.ai/artifact/UXVgGBZBtrDx3Uqnc3ke82> |
-| Capabilities | MCP gateway, custom tools, Skills | <https://claude.ai/artifact/5bMJNV8g8TQz3CrvMEBS55> |
-| Context | Knowledge, Memory | <https://claude.ai/artifact/SiJTKEXTJWKxEmT3yNJkcR> |
-| System | Secrets, Activity, Settings, Usage, Sync | <https://claude.ai/artifact/GgTRNb7Ydtk3ZaTyK3vufH> |
-| Design System | tokens and shared components | <https://claude.ai/artifact/78ViLn9YyUszUNWhC8fyJh> |
+| # | Canvas | Covers | Link |
+| --- | --- | --- | --- |
+| 0 | Foundations | principles, brand, colour, type, spacing, shared component sheets | <https://claude.ai/artifact/NicV38VfXwViA294jgRfBV> |
+| 1 | Shell | app shell and global states, Overview, menu bar, Settings modal | <https://claude.ai/artifact/Jz7f6MqShmdWx4N7YTRm49> |
+| 2 | Agents | Agents, Model providers | <https://claude.ai/artifact/NdBb9YeJXQSLq3ynUDC2Yr> |
+| 3 | Run | Conversations, Channels, channel messages in SeaTalk / Telegram | <https://claude.ai/artifact/UXVgGBZBtrDx3Uqnc3ke82> |
+| 4 | Capabilities | MCP servers, Custom tools, Skills, CLIs | <https://claude.ai/artifact/5bMJNV8g8TQz3CrvMEBS55> |
+| 5 | Context | Knowledge, Memory | <https://claude.ai/artifact/SiJTKEXTJWKxEmT3yNJkcR> |
+| 6 | System | Secrets, Activity, Usage, Sync | <https://claude.ai/artifact/GgTRNb7Ydtk3ZaTyK3vufH> |
+| 7 | Docs site | docs-site pages | <https://claude.ai/artifact/LycoMx54recg7ACG1x212D> |
+| — | Design System | tokens and shared components | <https://claude.ai/artifact/78ViLn9YyUszUNWhC8fyJh> |
 
 ## 4. Decide vs Ask
 
