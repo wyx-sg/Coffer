@@ -87,6 +87,45 @@ def test_a_deleted_collection_comes_back_with_its_documents_readme_and_items(  #
     assert again.json()["error"]["code"] == "KNOWLEDGE_COLLECTION_EXISTS"
 
 
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a collection restore that fails part-way leaves nothing behind"
+)
+def test_a_failed_collection_restore_leaves_no_row_and_no_directory(  # type: ignore[no-untyped-def]
+    client, monkeypatch
+) -> None:
+    from coffer.application.knowledge import collection_writes
+
+    client.post("/api/v1/knowledge/collections", json={"name": "shopee", "description": "Shopee."})
+    _submit(client, collection="shopee", title="Cache", description="d", body="kept text")
+    assert client.delete(f"/api/v1/resources/{_uid(client, 'shopee')}").status_code in (200, 204)
+    removal = _change(client, "remove")
+
+    real = collection_writes.collection_files.restore_file
+    calls: list[str] = []
+
+    def failing(relpath: str, raw: bytes) -> None:
+        calls.append(relpath)
+        if len(calls) == 2:
+            raise OSError("disk full")
+        real(relpath, raw)
+
+    monkeypatch.setattr(collection_writes.collection_files, "restore_file", failing)
+    try:
+        failed = client.post(f"/api/v1/knowledge/changes/{removal['version']}/restore")
+    except OSError:
+        failed = None  # the test client re-raises an unhandled server error
+    assert failed is None or failed.status_code >= 500
+    assert len(calls) == 2
+    assert not (knowledge_root() / "shopee").exists()
+    rows = client.get("/api/v1/knowledge/collections").json()["collections"]
+    assert [r["name"] for r in rows] == []
+
+    monkeypatch.setattr(collection_writes.collection_files, "restore_file", real)
+    again = client.post(f"/api/v1/knowledge/changes/{removal['version']}/restore")
+    assert again.status_code == 200, again.text
+    assert (knowledge_root() / "shopee").is_dir()
+
+
 @pytest.mark.acceptance(spec="knowledge", scenario="restore a deleted document")
 def test_a_deleted_document_comes_back_as_a_new_version(client) -> None:  # type: ignore[no-untyped-def]
     _create_collection(client, "shopee")

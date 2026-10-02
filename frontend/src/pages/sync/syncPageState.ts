@@ -11,7 +11,7 @@
 // nothing moves until it is answered; and what waits to push outranks what
 // the last round pulled, because it is what the next round does.
 import type { SyncStatus } from "@/lib/api/sync";
-import type { StatusTone } from "@/components/status/statusTone";
+import type { StatusTone } from "@/lib/statusTone";
 
 export type SyncStateKind =
   | "setup"

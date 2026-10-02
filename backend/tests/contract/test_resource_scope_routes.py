@@ -159,7 +159,7 @@ async def test_put_scope_round_trips_agent_list_and_response_carries_scope(tmp_p
 @pytest.mark.asyncio
 async def test_put_empty_scope_is_dormant_and_null_clears(tmp_path):
     """An empty list is dormant; a null list and a null scope both mean every
-    agent. Reach is one record per resource in ``local/reach.json`` (plan D5),
+    agent. Reach is one record per resource in ``local/reach.json``,
     whose ``agents: null`` is the one way to say unrestricted, so a null list
     reads back as no scope at all."""
     c, engine, svc = await _client(tmp_path)

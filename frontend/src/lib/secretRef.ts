@@ -6,12 +6,12 @@
 //
 // A ref is an ADDRESS, not a description: nothing in it comes from the
 // resource's name, because rename is a field on `PATCH /resources/{uid}` for
-// every kind (docs/decisions/resource-identity-is-an-immutable-uid.md) and a
+// every kind (docs/decisions/identity-is-the-uid-inside-the-file.md) and a
 // name-derived ref would make the name a key into the encrypted store.
 //
-// The trailing logical key — `bot-token`, `SMART_PAT`. It is not
-// derived from anything mutable, and it is the only thing that makes a ref
-// readable in `coffer secret list`.
+// The trailing logical key (`bot-token`, `SMART_PAT`) is not derived from
+// anything mutable, and it is the only thing that makes a ref readable in
+// `coffer secret list`.
 
 /** A uuid4 as 32 hex characters, the spelling `machine_id` and provider refs
  *  already use.

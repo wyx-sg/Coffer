@@ -17,7 +17,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { UnmanagedSkillDetailPage } from "./UnmanagedSkillDetailPage";
 import { ToastProvider } from "@/components/ui/toast";
-import type { UnmanagedSkillDetailOut } from "@/lib/api/agents";
+import type { UnmanagedSkillDetailOut } from "@/lib/api/agents-workspace";
 import type { SkillFileNode } from "@/lib/api/skills";
 import { acceptance } from "@/test/acceptance";
 import en from "@/i18n/locales/en.json";

@@ -8,7 +8,7 @@
 // `secret_refs`, which the route answers `stored_secret_not_released`: a
 // stored secret is released only to a server that is added and approved.
 import type { McpConfigTestIn } from "@/lib/api/mcpTestConfig";
-import type { NewServer } from "../importMcpServers";
+import type { NewServer } from "@/lib/mcp/importMcpServers";
 
 export function addTestBodyOf(server: NewServer): McpConfigTestIn {
   const plain: Record<string, string> = {};

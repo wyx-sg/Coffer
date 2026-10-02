@@ -41,21 +41,22 @@ src/i18n/locales/{en,zh}.json     copy under the top-level "x" key
 
 - Components never call `useQuery` or `useMutation` directly. They call a hook from `src/lib/hooks/`. [`useSkills.ts`](https://github.com/wyx-sg/Coffer/blob/main/frontend/src/lib/hooks/useSkills.ts) is a compact example.
 - Resource kinds follow the same layout. There is no per-kind registry.
+- Imports only point down: `pages` to `components` to `lib`. `src/lib/**` never imports `src/components/**` or `src/pages/**`, and `src/components/**` never imports `src/pages/**`; ESLint enforces both. A type or pure helper that both layers need (a status tone, a reach mode, a save orchestration) lives in `lib/`. The one exception is `useToast`, a UI primitive hook the mutation hooks call. Test kits shared by several suites live in `src/test/`.
 - Shared primitives live in `src/components/ui/`, and shared surfaces (`PageHeader`, `DataTable`, `EmptyState`) in `src/components/`. Reuse the cross-feature helpers that already exist: `lib/reachFilter.ts`, `lib/agents/display.ts` and `lib/chat/turnErrors.ts`.
 - Routes are code-split with `lazyPage()` in `router.tsx`. List pages load eagerly. Detail pages, and anything that pulls in the editor or the markdown pipeline, load on first visit.
 - One naming exception is kept for history: the MCP server list is `pages/ResourcesPage.tsx`, routed at `mcp-servers`.
-- A page of an experimental feature is wrapped in `FeatureGate`. It renders a notice instead of the page when the feature is switched off on this machine. See [Experimental features](/guides/experimental-features).
+- A page of an experimental feature is wrapped in `FeatureGate`. It renders the not-found page when the feature is switched off on this machine, because a switched-off feature looks absent: its sidebar and palette entries are left out through the same registry, with no notice and no switch-on button. See [Experimental features](/guides/experimental-features).
 
 The file-size gate applies here too: a page ≤ 200 lines, a component ≤ 250 lines, a hook or utility ≤ 300 lines.
 
 ## The API layer
 
-Every request leaves through one of two modules. Both resolve the base URL and token through `src/lib/auth.ts`, and both send `X-Coffer-Token` and `X-Coffer-Actor: ui`. Nothing else in `src` calls `fetch`. The one exception is the chat event stream.
+Every request leaves through one module, `src/lib/api/client.ts`. It resolves the base URL and token through `src/lib/auth.ts` and sends `X-Coffer-Token` and `X-Coffer-Actor: ui`. Nothing else in `src` calls `fetch`. The one exception is the chat event stream.
 
 - **Generated types.** Every capability's contract is generated from the backend's models, and `npm run codegen` (or `make frontend-codegen`; `make contracts` runs both steps) runs openapi-typescript over every one of them and writes `src/lib/api/generated/<capability>.ts`. Never edit `generated/` by hand. `npm run lint` starts with `codegen:check`, so a contract regenerated without regenerating the types fails CI.
 - **The typed client** (`getApiClient()` in `src/lib/api/client.ts`, over openapi-fetch) knows every capability's paths, so a call through it is checked for its path, parameters, body and response.
-- **One hand-written helper**, `call<T>(path, { method, body })` in `src/lib/api/call.ts`, serves the modules that have not moved to the typed client. It builds the URL and headers, turns `204` into `undefined` and `{ error: { code, message, details } }` into an `ApiError`, and sends `FormData` bodies. Do not add a second helper.
-- **No hand-written wire types.** A wire type in `src/lib/api/x.ts` is an alias of the generated schema, for example `components["schemas"]["ProviderOut"]`. When the contract is not what the backend really sends, fix the backend model and regenerate, never the TypeScript. `codegen:check` refuses an exported interface, or a type spelling an object shape, in those modules. A type that never crosses the wire carries a `@ui-only` tag saying so, and the hand-written wire types that predate the generator are on an allow-list that the rebuild of each page empties; the gate also fails on an allow-list entry that is gone, so the list only shrinks.
+- **Request functions** in `src/lib/api/x.ts` call the typed client and settle the result with `unwrap` (the 2xx body), `unwrapOptional` (a body or `204`) or `unwrapVoid` (no body), which turn `{ error: { code, message, details } }` into an `ApiError`. There is no other transport and no second helper, and a hook or component never calls `getApiClient()` or `fetch` itself.
+- **No hand-written wire types.** A wire type in `src/lib/api/x.ts` is an alias of the generated schema, for example `components["schemas"]["ProviderOut"]`. When the contract is not what the backend really sends, fix the backend model and regenerate, never the TypeScript. `codegen:check` refuses an exported interface, or a type spelling an object shape, in those modules or under `src/lib/hooks/`, and an object-literal type argument on an `unwrap*` call. A type that never crosses the wire carries a `@ui-only` tag saying so; that tag is the only exemption.
 
 Errors converge on `ApiError(code, message)`. Show them with `translateApiError(t, error)`, which looks up `errors.<CODE>` in the catalogue and falls back to the server's message. Never show a raw error string.
 
@@ -102,7 +103,7 @@ export function useRemoveSkill() {
 | --- | --- |
 | Anything from the daemon | TanStack Query, through a `useX` hook |
 | Ephemeral UI (open, collapsed, draft input) | `useState` in the component |
-| A preference that survives reload | `src/lib/preferences.ts` (`localStorage`) |
+| A preference that survives reload | `localStorage`, guarded with try/catch so blocked storage falls back to the default (`src/lib/preferences.ts` for page size and editor) |
 | Which item is open | A route parameter: `/conversations/:id`, `/agents/:type` |
 | Which detail tab is selected | The last path segment: `/<kind>/<id>/<tab>`, the default tab at the bare path (`src/lib/detailTabs.ts`) |
 | Which file is selected | A search parameter (`?file=`) through `useSearchParams` |
@@ -128,7 +129,7 @@ When a token is missing, add it to the Tailwind config in the same pull request 
 
 | Pattern | Use |
 | --- | --- |
-| `PageHeader` | The one header for list and detail pages: `icon` on list pages, `back` on detail pages, `badges` beside the title, `actions` on the right. Detail actions keep a fixed order: reach, test or refresh, edit, delete |
+| `PageHeader` | The one header for list and detail pages: `back` on detail pages, `badges` beside the title, `actions` on the right. Detail actions keep a fixed order: reach, test or refresh, edit, delete |
 | `DataTable` | The one list table. Pass `isLoading` so the header stays mounted over skeleton rows, and `emptyAction` for the call to action. The reach column's header is `resources.cols.reach` on every table |
 | `EmptyState` | Every empty list, not-found page and zero-result search: icon, title, description, action |
 | `Skeleton` | Loading states keep the real shape of the surface. Never show a blank screen or a "Loading…" card |

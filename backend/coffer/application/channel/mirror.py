@@ -120,7 +120,7 @@ class ChannelMirror:
             return MirrorResult("kept", None)
         resource = target.resource
         body = FROM_COFFER + text
-        binding = self._processor.binding(resource.name)
+        binding = self._processor.binding(resource.uid)
         peer = await self._peers.get_by_chat(resource.uid, loc.chat_id)
         owed = await self._outbox.pending_for_conversation(conversation_id)
         if binding is not None and peer is not None and not owed:

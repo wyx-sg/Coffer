@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { AgentPicker } from "@/components/reach/AgentPicker";
 import { ReachButton } from "@/components/reach/ReachButton";
 import { ReachChoice } from "@/components/reach/ReachChoice";
-import { chosenAgents, pickableAgents, reachLabel } from "@/components/reach/reachState";
+import { chosenAgents, pickableAgents, reachLabel } from "@/lib/reach/reachState";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAgents } from "@/lib/hooks/useAgents";
 

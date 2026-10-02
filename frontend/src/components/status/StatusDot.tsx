@@ -6,7 +6,7 @@
 // is dot + word").
 import { cn } from "@/lib/utils";
 import { toneDotClass } from "@/lib/statusColors";
-import { STATUS_TONE, type StatusTone } from "./statusTone";
+import { STATUS_TONE, type StatusTone } from "@/lib/statusTone";
 
 interface StatusDotProps {
   tone: StatusTone;

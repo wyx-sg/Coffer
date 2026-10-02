@@ -1,4 +1,4 @@
-"""``derived/derived.db`` is rebuilt, never migrated (plan D11)."""
+"""``derived/derived.db`` is rebuilt, never migrated."""
 
 from __future__ import annotations
 

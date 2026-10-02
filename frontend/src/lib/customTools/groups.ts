@@ -1,7 +1,8 @@
 // src/lib/customTools/groups.ts — pure helpers the Custom tools page shares: which
 // `mcp_server` is a group, how groups are sectioned by health, and short labels.
-import type { StatusTone } from "@/components/status/statusTone";
+import type { StatusTone } from "@/lib/statusTone";
 import type { CustomTool, CustomToolGroup, GroupHealth, HttpMethod } from "@/lib/api/customTools";
+import { matchesReach, type ReachFilterValue } from "@/lib/reachFilter";
 
 /** The transport a custom-tool group's `mcp_server` carries. */
 const HTTP_API_TRANSPORT = "http_api";
@@ -44,19 +45,24 @@ function sectionOf(health: GroupHealth): GroupSection {
   return SECTION_OF[health];
 }
 
-/** The groups matching `filter` (name, host or a tool name), split into the
+/** The groups matching `filter` (name, host or a tool name) and `reach`, split into the
  *  sections that have any, failing first. */
 export function sectionGroups(
   groups: readonly CustomToolGroup[],
   filter: string,
+  reach: ReachFilterValue = "all",
 ): { section: GroupSection; groups: CustomToolGroup[] }[] {
   const q = filter.trim().toLowerCase();
   const matching = groups.filter(
     (g) =>
-      !q ||
-      g.name.toLowerCase().includes(q) ||
-      hostOf(g.base_url).toLowerCase().includes(q) ||
-      g.tools.some((tool) => tool.name.toLowerCase().includes(q)),
+      matchesReach(reach, {
+        enabled: g.enabled,
+        scope: g.scope === null ? null : { agents: g.scope },
+      }) &&
+      (!q ||
+        g.name.toLowerCase().includes(q) ||
+        hostOf(g.base_url).toLowerCase().includes(q) ||
+        g.tools.some((tool) => tool.name.toLowerCase().includes(q))),
   );
   const sorted = [...matching].sort(
     (a, b) => HEALTH_RANK[a.health] - HEALTH_RANK[b.health] || a.name.localeCompare(b.name),

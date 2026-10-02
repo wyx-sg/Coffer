@@ -113,7 +113,7 @@ async def test_the_owners_tap_enters_the_conversation_as_their_reply(env: Channe
 async def test_a_tap_from_someone_else_in_the_group_is_refused(env: ChannelEnv) -> None:
     env.provider.adapter = _asking()
     resource = await env.register_channel()
-    adapter = env.bind(resource, FakeChannelAdapter(supports_buttons=True, supports_groups=True))
+    adapter = env.bind(resource, FakeChannelAdapter(supports_buttons=True))
     await env.pair(resource, "owner", sender_id="owner-1")
     await env.processor.on_message(
         inbound("tg", "grp-1", "@bot go", chat_kind="group", sender_id="owner-1", thread_id="t1")

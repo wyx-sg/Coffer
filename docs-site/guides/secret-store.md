@@ -55,7 +55,7 @@ Most of the time you do not create refs by hand. The dialogs that ask for a secr
 
 Registering a resource that cites a ref the store does not hold fails, naming the missing secret, and nothing is saved.
 
-Several resources may cite the same ref, but a ref already sent to one place goes to a second place only after you approve it in the desktop app. A value you store and then cite within five minutes is used at once, because you just supplied it. Citing an older secret from a new resource, or changing where a resource sends one (a stdio server's command, an HTTP server's URL, the sync remote's URL), saves the change and holds the secret: the command prints `waiting for approval in the Coffer app` and exits `9`. See [Secrets → Approvals](/guides/secrets#approvals).
+Several resources may cite the same ref, but a ref already sent to one place goes to a second place only after you approve it in the desktop app. A value you store and then cite when you register a resource is used at once, because you just supplied it. Citing a secret already in use from a new resource, or changing where a resource sends one (a stdio server's command, an HTTP server's URL, the sync remote's URL), saves the change and holds the secret: the command prints `waiting for approval in the Coffer app` and exits `9`. See [Secrets → Approvals](/guides/secrets#approvals).
 
 ## List and inspect
 
@@ -190,12 +190,12 @@ To let a second machine decrypt them, move the key yourself, over a channel you 
    rm ~/coffer-master-key.cfk
    ```
 
-Or use **Import a master key** on **Settings › Security**, in the app or a browser. Importing needs no presence check — whoever holds the file and its passphrase already holds the key. A bare key (a development build's `master.key`) imports without a passphrase. The running daemon uses the imported key at once. The **Sync** page offers **Import key** as well, and its machine list shows whether each machine holds the **Same key**. Importing a different key keeps the previous one as a backup beside it: a timestamped `master.key.bak-*` file in a development build, a second Keychain item in a signed release.
+Or use **Import a master key** on **Settings › Security**, in the app or a browser. Importing needs no presence check — whoever holds the file and its passphrase already holds the key. A bare key (a development build's `master.key`) imports without a passphrase. The running daemon uses the imported key at once. A key you replace is first backed up to a `master.key.bak-*` file, wherever it was kept (in a development build that includes the OS keychain, where the imported key then replaces it). The **Sync** page offers **Import key** as well, and its machine list shows whether each machine holds the **Same key**. Importing a different key keeps the previous one as a backup beside it: a timestamped `master.key.bak-*` file in a development build, a second Keychain item in a signed release.
 
 ## What never gets logged
 
 - Secret values never appear in plaintext in the vault, in `runs.db`, in log files, in the audit log, or in the MCP invocation log.
-- Secret audit events — `secret_set`, `secret_revealed`, `secret_deleted`, `secret_migrated`, `master_key_relocated`, `master_key_exported`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events — carry the ref, the secret's name or the destination, never a value. `secret_revealed` records a reveal or copy in the desktop app; presence checks (`get`) and listings are not audited.
+- Secret audit events — `secret_set`, `secret_revealed`, `secret_deleted`, `master_key_relocated`, `master_key_exported`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events — carry the ref, the secret's name or the destination, never a value. `secret_revealed` records a reveal or copy in the desktop app; presence checks (`get`) and listings are not audited.
 - Plaintext exists only in the daemon's memory, between decryption and the process spawn or HTTP request that uses it — and in the desktop app's window while you look at a revealed value.
 - A stdio MCP server receives only its own secrets. It does not inherit the daemon's environment, so it cannot read other secrets the daemon was started with. Its own secrets sit in its environment, where other programs running as you can read them; the listing marks such refs "readable by local processes".
 - An HTTP upstream's connection errors are reported by exception type only, so a URL or header carrying a secret is not echoed into a message.
@@ -219,6 +219,6 @@ Or use **Import a master key** on **Settings › Security**, in the app or a bro
 - [Model providers](/guides/providers) — provider keys and `apiKeyHelper`
 - [Vault sync](/guides/vault-sync) — carrying ciphertext between machines
 - [Security model](/architecture/security) — the threat model behind these choices
-- [Envelope-Encrypted Credential Store](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
+- [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
 - [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)
 - Spec: [secret](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/secret/spec.md)

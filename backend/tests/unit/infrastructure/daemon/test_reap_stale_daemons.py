@@ -36,10 +36,20 @@ THEIRS = Path("/tmp/coffer-smoke-XXXX/.coffer")
 
 
 class _FakeProc:
-    def __init__(self, pid: int, exe: str | None, home: str | None = "/Users/dev") -> None:
+    def __init__(
+        self,
+        pid: int,
+        exe: str | None,
+        home: str | None = "/Users/dev",
+        argv: tuple[str, ...] = (),
+    ) -> None:
         self.pid = pid
+        self._argv = [exe or "", *argv]
         self._exe = exe
         self._home = home
+
+    def cmdline(self) -> list[str]:
+        return self._argv
 
     def exe(self) -> str:
         if self._exe is None:
@@ -213,3 +223,28 @@ def test_reap_swallows_kill_failures(monkeypatch) -> None:
     monkeypatch.setattr(orphan_sweep, "_kill_proc_tree", _raise)
     # A process that dies between enumeration and kill must not crash the sweep.
     assert reap_stale_daemons() == 0
+
+
+def test_reap_spares_the_model_proxy_which_runs_the_same_binary(monkeypatch) -> None:
+    """``coffer-daemon proxy`` shares the executable and HOME with the daemon; a
+    sweep that ignores argv would kill the proxy every frozen start, breaking
+    "a daemon restart does not stop the proxy"."""
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", "/A/coffer-daemon", raising=False)
+    monkeypatch.setenv("HOME", "/Users/dev")
+    procs = [
+        _FakeProc(200, "/A/coffer-daemon"),  # stale daemon -> kill
+        _FakeProc(201, "/A/coffer-daemon", argv=("proxy", "--port", "9")),  # proxy -> keep
+    ]
+    monkeypatch.setattr(orphan_sweep.psutil, "process_iter", lambda: iter(procs))
+    monkeypatch.setattr(orphan_sweep, "_protected_pids", lambda pid: set())
+    killed: list[int] = []
+    monkeypatch.setattr(orphan_sweep, "_kill_proc_tree", lambda proc, **kw: killed.append(proc.pid))
+
+    assert reap_stale_daemons() == 1
+    assert killed == [200]
+
+
+def test_proxy_argv_is_not_a_daemon_command_line() -> None:
+    assert orphan_sweep.is_proxy_argv(["/A/coffer-daemon", "proxy", "--port", "1"])
+    assert not orphan_sweep.is_proxy_argv(["/A/coffer-daemon"])

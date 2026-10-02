@@ -5,7 +5,7 @@ the agent's own native memory, and asserts the read-only listing plus the
 read-only browse of one store (its tree and one of its files).
 
 The agent is addressed by the immutable ``uid`` the registration minted (ADR
-resource-identity-is-an-immutable-uid), never by its label, so every test takes
+identity-is-the-uid-inside-the-file), never by its label, so every test takes
 the uid off the ``POST /api/v1/agents`` response it already makes. The ``dir``
 and ``path`` query parameters are untouched by that: they name a directory and a
 file on disk, which the store listing itself handed back — they were never

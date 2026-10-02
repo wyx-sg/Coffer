@@ -1,5 +1,5 @@
 """MCP capability switches: a vault document per server, seen-times derived
-(plan D13; spec vault-storage).
+(spec vault-storage).
 
 Whether a person switched a capability off is theirs, and travels: it is
 ``state/mcp-preferences/<server name>.json``::

@@ -23,8 +23,8 @@ events for the user. Ten orphaned daemons were once found holding all of
 
 Two further constraints decide *where* a port setting can live:
 
-- the port is chosen in `bootstrap.acquire`, before the database is opened and
-  before migrations run, so no database-backed setting can carry it;
+- the port is chosen in `bootstrap.acquire`, before the vault is opened and
+  before migrations run, so no vault- or database-backed setting can carry it;
 - the daemon is spawned detached by whichever client first needs one
   ([Detect-or-Spawn](daemon-detect-or-spawn.md)) and inherits that client's
   environment — a shell profile reaches the user's own terminal and nothing
@@ -86,10 +86,10 @@ again, by a different route. Loses.
 ### Option E — A row in the settings table
 
 Pros: one place for all settings, audited, reachable over REST. Cons: the port
-must be known before the database is opened and before migrations have created
-any table; a setting the daemon needs in order to start cannot live in the
-daemon's own database. The vault database also syncs between machines
-([Vault Sync](vault-sync.md)), and a port is a fact about one machine. Loses.
+must be known before the vault is opened and before the history database is
+migrated; a setting the daemon needs in order to start cannot live in state
+the daemon opens after it has bound. The vault also syncs between machines
+([Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md)), and a port is a fact about one machine. Loses.
 
 ### Option F — An OS-assigned port (`bind(0)`) published only through the discovery file
 
@@ -113,13 +113,12 @@ the fixes; a Coffer daemon found holding it is identified as such and is not
 killed automatically, since it is most often the user's own daemon still
 warming up and otherwise belongs to another vault.
 
-`daemon-config.json` is the one piece of configuration that is not in SQLite.
-It holds the settings a daemon needs before it opens its database or that must
+`daemon-config.json` is the one piece of configuration that is not in the vault.
+It holds the settings a daemon needs before it opens the vault or that must
 not sync: the port, the machine's display name, the cached derived machine id,
-and the per-machine experimental-feature switches. Writes merge, keep keys this
-build does not know (so a file written by a newer build survives an older one),
-and drop retired keys. The file carries no `version` key; earlier builds wrote
-one that nothing read, and it is kept as an unknown key where it still exists.
+and the per-machine experimental-feature switches. Writes merge and keep keys this
+build does not know, so a file written by a newer build survives an older one.
+The file carries no `version` key: nothing would read it.
 An unreadable file warns and falls back to the default rather than stopping the
 boot, since a daemon that cannot boot cannot be repaired from the UI it serves.
 
@@ -146,7 +145,7 @@ where a squatted port is diagnosed. A change takes effect at the next start;
   two sockets bind the same port while neither is listening, and a daemon is
   bound-but-not-listening for its whole boot window; setting it there let a
   second daemon bind the first one's port. macOS refuses that bind, so only the
-  Linux CI run found it (`test_port_alloc.py` pins it).
+  Linux CI run found it (`backend/tests/integration/infrastructure/daemon/test_port_alloc.py` pins it).
 - The port change is not audited. It is process configuration written with no
   daemon running, so the audit table is unreachable on exactly the path that
   matters; recording it only when a daemon happens to be up would be less

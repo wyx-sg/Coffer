@@ -162,7 +162,7 @@ describe("useCreateConversation", () => {
     });
 
     await act(async () => {
-      await result.current.mutateAsync(undefined);
+      await result.current.mutateAsync({ agent_key: "claude_code" });
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));

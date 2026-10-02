@@ -7,8 +7,8 @@ The decisions are the ADRs'
 [every-vault-write-is-a-validated-commit-naming-its-writer](../../../docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md),
 [sync-applies-clean-merges-and-stops-on-any-conflict](../../../docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md),
 [sync-deletion-breaker](../../../docs/decisions/sync-deletion-breaker.md),
-[reach-is-a-machine-local-predicate-over-a-context](../../../docs/decisions/reach-is-a-machine-local-predicate-over-a-context.md),
-[credentials-across-machines](../../../docs/decisions/credentials-across-machines.md)).
+[reach-is-a-machine-local-predicate-over-a-context](../../../docs/decisions/reach-is-machine-local-stored-by-uid-never-synced.md),
+[credentials-across-machines](../../../docs/decisions/credential-references.md)).
 This file records what the implementation chose inside them, and where it
 deviates from their text.
 

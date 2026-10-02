@@ -155,10 +155,6 @@ class AttentionService:
         self._ignores = ignores
         self._audit = audit
 
-    @property
-    def source_names(self) -> tuple[str, ...]:
-        return tuple(s.name for s in self._sources)
-
     async def report(self) -> AttentionReport:
         """Ask every source that applies now. Writes nothing."""
         found: list[AttentionItem] = []

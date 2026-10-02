@@ -20,7 +20,6 @@ def test_valid_config_defaults() -> None:
         secret_ref="provider/acme/key",
     )
     assert c.protocol is Protocol.ANTHROPIC
-    assert c.is_active is False
     assert c.internal_default is False
 
 
@@ -86,7 +85,7 @@ def test_only_a_keyless_wire_starts_dormant() -> None:
     The ``provider`` Kind asks this at registration (ADR per-agent-resource-scope)
     to decide between a dormant connection and an unscoped one. It cannot ask
     for a starting agent LIST any more: a scope holds agent uids
-    (ADR resource-identity-is-an-immutable-uid), and this module — a pure
+    (ADR identity-is-the-uid-inside-the-file), and this module — a pure
     function of the config, which is all ``Kind.default_scope`` is handed —
     knows none. That is what retired the table of ``claude_code`` / ``codex``
     strings this domain module used to spell out.

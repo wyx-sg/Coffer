@@ -25,7 +25,6 @@ from coffer.domain.mcp.server_config import (
     AnyTransport,
     HttpTransport,
     MCPServerConfig,
-    StdioTransport,
 )
 from coffer.domain.secrets import SecretDestination
 
@@ -47,8 +46,3 @@ def secret_target(transport: AnyTransport) -> str:
 
 def mcp_destination(uid: str, name: str, config: MCPServerConfig) -> SecretDestination:
     return SecretDestination(kind=KIND, uid=uid, target=secret_target(config.transport), label=name)
-
-
-def secrets_readable_by_local_processes(config: MCPServerConfig) -> bool:
-    """A stdio server whose environment carries a secret."""
-    return isinstance(config.transport, StdioTransport) and bool(config.transport.secret_refs)

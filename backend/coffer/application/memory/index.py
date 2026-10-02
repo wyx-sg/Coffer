@@ -41,7 +41,7 @@ Two things the line always carries beyond the conclusion:
 
 Pure and synchronous: no filesystem, no model. Keeping the render incapable of I/O is
 what guarantees the path "Distil mechanically with no internal connection" describes —
-an installation with **no** internal connection still gets a real index, grouped and
+an installation with **no** internal connection still gets a real index, ordered and
 readable, because nothing here can silently depend on a model having run first.
 
 Retired notes need no filtering here. A retirement takes the note's file out of
@@ -55,25 +55,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from coffer.domain.memory.note import (
-    TYPE_FEEDBACK,
-    TYPE_PROJECT,
-    TYPE_USER,
-    Note,
-)
-
-#: Group order: project notes first (what makes this partition distinct),
-#: then the two personal types. Any type outside this tuple (a future
-#: ``NOTE_TYPES`` addition, or a hand-edited file with a stray value) is
-#: still rendered — appended afterwards, sorted for determinism — rather
-#: than silently dropped.
-_TYPE_ORDER = (TYPE_PROJECT, TYPE_USER, TYPE_FEEDBACK)
-
-_TYPE_LABELS = {
-    TYPE_PROJECT: "Project",
-    TYPE_USER: "About the developer",
-    TYPE_FEEDBACK: "Feedback and standing instructions",
-}
+from coffer.domain.memory.note import Note
 
 
 def recency(note: Note) -> str:
@@ -140,14 +122,14 @@ def index_line(note: Note) -> str:
     return "".join(parts)
 
 
-def _type_order_key(type_: str) -> tuple[int, str]:
-    if type_ in _TYPE_ORDER:
-        return (_TYPE_ORDER.index(type_), "")
-    return (len(_TYPE_ORDER), type_)
-
-
 def render_index(notes: Sequence[Note], *, partition: str, repository_path: str) -> str:
-    """The whole ``MEMORY.md`` for one partition — grouped, newest first.
+    """The whole ``MEMORY.md`` for one partition — one list, newest first.
+
+    The same lines in the same order the delivered index spends its ceiling in
+    (``context._ordered``): the spec's "same lines, same newest-first order" is what
+    a person comparing the file with what an agent was given expects, and under a
+    trim the order is which notes survive. A note's type is not a heading here; it
+    is still in the note's own frontmatter.
 
     The header restates the partition's repository path because **the partition has to
     explain itself to a human browsing it** (see "Identify a partition by its
@@ -175,17 +157,8 @@ def render_index(notes: Sequence[Note], *, partition: str, repository_path: str)
         lines.append("No notes yet.")
         return "\n".join(lines) + "\n"
 
-    by_type: dict[str, list[Note]] = {}
-    for note in notes:
-        by_type.setdefault(note.type, []).append(note)
-
-    for type_ in sorted(by_type, key=_type_order_key):
-        group = sorted(by_type[type_], key=recency, reverse=True)
-        lines.append(f"## {_TYPE_LABELS.get(type_, type_)}")
-        lines.extend(index_line(n) for n in group)
-        lines.append("")
-
-    return "\n".join(lines).rstrip("\n") + "\n"
+    lines.extend(index_line(n) for n in sorted(notes, key=recency, reverse=True))
+    return "\n".join(lines) + "\n"
 
 
 __all__ = ["index_line", "recency", "render_index"]

@@ -37,11 +37,11 @@ import { shellSplit } from "@/lib/mcp/shellTokens";
 import { KeyValueRows } from "./add/KeyValueRows";
 import { ConfigTestResult } from "./env/ConfigTestResult";
 import { configTestBodyOf } from "./env/configTestBody";
-import { rowsOf } from "./env/rowsModel";
+import { rowsOf } from "@/lib/mcp/envRows";
 import { TransportInputs, WorkingDirInput } from "./env/TransportInputs";
 import { ServerTimeoutFields } from "./ServerTimeoutFields";
-import { timeoutsOf, type Timeouts } from "./serverTimeouts";
-import { configTextFrom, transportFieldsOf, type TransportForm } from "./editMcpServerSave";
+import { timeoutsOf, type Timeouts } from "@/lib/mcp/serverTimeouts";
+import { configTextFrom, transportFieldsOf, type TransportForm } from "@/lib/mcp/editMcpServerSave";
 
 type ResourceOut = components["schemas"]["ResourceOut"];
 

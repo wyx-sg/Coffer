@@ -12,7 +12,10 @@ import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
 import { acceptance } from "@/test/acceptance";
 import { AddMcpServerDialog } from "./AddMcpServerDialog";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: { list: vi.fn(), mcpEntries: vi.fn(), adoptMcpEntry: vi.fn() },
 }));
@@ -42,8 +45,13 @@ function installClient() {
     }
     return Promise.resolve({ data: {}, error: undefined });
   });
-  const GET = vi.fn(() =>
-    Promise.resolve({ data: { resources: existing.map((name) => ({ uid: `x-${name}`, name })) } }),
+  const GET = vi.fn((path: string) =>
+    Promise.resolve({
+      data:
+        path === "/secrets"
+          ? { refs: [] }
+          : { resources: existing.map((name) => ({ uid: `x-${name}`, name })) },
+    }),
   );
   vi.mocked(getApiClient).mockReturnValue({
     GET,
@@ -138,7 +146,7 @@ describe("AddMcpServerDialog — paste box", () => {
     const order = calls
       .filter((c) => c[0] === "/resources" || c[0] === "/secrets")
       .map((c) => (c[0] === "/resources" ? `register ${c[1]?.body?.name}` : "secret"));
-    expect(order).toEqual(["register notion", "secret", "register figma", "register docs-search"]);
+    expect(order).toEqual(["secret", "register notion", "register figma", "register docs-search"]);
     await waitFor(() => expect(posts("/resources/mcp_server/{uid}/test")).toHaveLength(3));
   });
 
@@ -165,7 +173,7 @@ describe("AddMcpServerDialog — paste box", () => {
       config: { transport: Record<string, unknown> };
     };
     expect(register.config.transport.args).toEqual(["-y", "@modelcontextprotocol/server-github"]);
-    expect(calls.map((c) => c[0]).slice(0, 2)).toEqual(["/resources", "/secrets"]);
+    expect(calls.map((c) => c[0]).slice(0, 2)).toEqual(["/secrets", "/resources"]);
     await waitFor(() => expect(posts("/resources/mcp_server/{uid}/test")).toHaveLength(1));
   });
 

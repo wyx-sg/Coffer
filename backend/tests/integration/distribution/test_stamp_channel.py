@@ -41,9 +41,6 @@ def copy(tmp_path: Path) -> Path:
     return target
 
 
-@pytest.mark.acceptance(
-    spec="experimental-features", scenario="the release workflow stamps the stable channel"
-)
 def test_stamping_stable_makes_the_build_channel_stable(copy: Path) -> None:
     main = _script()["main"]
     assert main(["stable"], target=copy) == 0  # type: ignore[operator]

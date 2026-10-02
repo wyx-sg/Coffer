@@ -86,11 +86,6 @@ def media_specs(message: dict[str, Any]) -> list[tuple[str, str, str]]:
     return specs
 
 
-def _oversized(message: dict[str, Any]) -> list[str]:
-    """Human labels for attachments too large for a bot to download."""
-    return list(_oversized_files(message).values())
-
-
 def _oversized_files(message: dict[str, Any]) -> dict[str, str]:
     """``file_id`` → human label for each attachment too large for a bot to download.
 

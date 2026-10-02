@@ -8,47 +8,6 @@ info:
 servers:
 - url: http://127.0.0.1:8000
 paths:
-  /api/v1/models/detect-protocol:
-    post:
-      description: Classify the endpoint's wire so the dialog needs no manual type selector.
-      operationId: detect_protocol_api_v1_models_detect_protocol_post
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DetectProtocolIn'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetectProtocolOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Detect Protocol
-      tags:
-      - models
   /api/v1/models/list-models:
     post:
       description: |-
@@ -397,9 +356,9 @@ paths:
   /api/v1/providers/use-builtin/{agent_type}:
     post:
       description: |-
-        Switch every agent of this type back to its OWN built-in login: remove
-        Coffer's projection from the native config and clear the active connection
-        covering it. Idempotent — a no-op when the agent already runs built-in.
+        Switch the agent of this type back to its OWN built-in login: remove
+        Coffer's projection from its native config and clear its connection. Only
+        this agent changes. Idempotent — a no-op when it already runs built-in.
       operationId: use_builtin_provider_api_v1_providers_use_builtin__agent_type__post
       parameters:
       - in: path
@@ -586,7 +545,11 @@ paths:
       - providers
   /api/v1/providers/{uid}/activate:
     post:
-      description: 'Switch: make this profile active for its wire format and project it.'
+      description: |-
+        Switch one agent onto this connection: project it into that agent's
+        native config and record it on the agent. Nothing else changes (409
+        ``PROVIDER_DOES_NOT_REACH_AGENT`` when the connection or agent is off or the
+        scope does not name the agent).
       operationId: activate_provider_api_v1_providers__uid__activate_post
       parameters:
       - in: path
@@ -611,6 +574,12 @@ paths:
           - type: string
           - type: 'null'
           title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivateIn'
+        required: true
       responses:
         '200':
           content:
@@ -795,7 +764,7 @@ paths:
       - providers
   /api/v1/proxy/routes/{agent_uid}:
     get:
-      description: The agent's provider and its fallbacks, as the proxy is serving them.
+      description: The agent's provider and its fallbacks, as the proxy would be served now.
       operationId: proxy_route_api_v1_proxy_routes__agent_uid__get
       parameters:
       - in: path
@@ -1375,29 +1344,36 @@ paths:
       - usage
 components:
   schemas:
+    ActivateIn:
+      description: |-
+        Which agent to switch onto the connection. There is one agent per type
+        (spec agent-registry "Keep one agent per type, named by it"), so the type
+        names it; the switch changes that agent and no other.
+      properties:
+        agent_type:
+          $ref: '#/components/schemas/AgentType'
+      required:
+      - agent_type
+      title: ActivateIn
+      type: object
     ActivateOut:
-      description: Result of a switch — which agents were written, which wire had none.
+      description: Result of switching one agent onto a connection.
       properties:
         activated:
           title: Activated
           type: string
-        projected:
-          items:
-            type: string
-          title: Projected
-          type: array
+        agent:
+          title: Agent
+          type: string
+        agent_type:
+          $ref: '#/components/schemas/AgentType'
         protocol:
           $ref: '#/components/schemas/Protocol'
-        skipped:
-          items:
-            type: string
-          title: Skipped
-          type: array
       required:
       - activated
       - protocol
-      - projected
-      - skipped
+      - agent_type
+      - agent
       title: ActivateOut
       type: object
     AgentQuotaOut:
@@ -1537,34 +1513,6 @@ components:
       - found
       - handoff
       title: DetectLocalOut
-      type: object
-    DetectProtocolIn:
-      properties:
-        base_url:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Base Url
-        secret_ref:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Secret Ref
-        secret_value:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Secret Value
-      title: DetectProtocolIn
-      type: object
-    DetectProtocolOut:
-      properties:
-        protocol:
-          title: Protocol
-          type: string
-      required:
-      - protocol
-      title: DetectProtocolOut
       type: object
     ErrorDetail:
       properties:
@@ -2059,9 +2007,9 @@ components:
         dropdown never offers an embedding or image model. ``internal_default``
         marks the connection Coffer's internal engine uses (at most one globally),
         ``transcribe_default`` the one it transcribes speech on — a separate flag
-        because they are separate models and neither falls back to the other; and
-        ``is_active`` marks the one currently projected. A connection may carry any
-        combination.
+        because they are separate models and neither falls back to the other. A
+        connection may carry either, both or neither. Which agents run on it is not a
+        field here: it is each agent's ``connection_uid``.
 
         ``uid`` is the connection's identity and what every route here takes; the
         ``name`` beside it is the label, free to change through
@@ -2069,7 +2017,7 @@ components:
         is the whole reason this kind no longer owns a rename operation of its own:
         nothing Coffer projects into an agent's config names the connection (the
         ``apiKeyHelper`` prints the agent's local proxy token), so a rename rewrites
-        nothing (ADR resource-identity-is-an-immutable-uid).
+        nothing (ADR identity-is-the-uid-inside-the-file).
       properties:
         base_url:
           title: Base Url
@@ -2097,9 +2045,6 @@ components:
           type: boolean
         internal_default:
           title: Internal Default
-          type: boolean
-        is_active:
-          title: Is Active
           type: boolean
         local_runtime:
           anyOf:
@@ -2144,7 +2089,6 @@ components:
       - secret_ref
       - compatible_agents
       - models
-      - is_active
       - internal_default
       - transcribe_default
       - enabled
@@ -2162,13 +2106,13 @@ components:
         can be wrong, so it is corrected in place rather than by re-entering the
         connection, key and all.
 
-        The wire DOES decide one thing, though, so that correction is refused with
-        409 ``PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`` while the connection is
-        ``is_active``: an ``ollama`` connection covers no agent whatever its scope
-        says. Moving the wire under a live projection would leave the native config
-        already written with nothing that would ever take it off. Revert the agents to their
-        built-in login, patch, then re-activate. An inactive connection patches
-        freely.
+        The wire DOES decide one thing, though: an ``ollama`` connection covers no
+        agent whatever its scope says. So the correction is refused with 409
+        ``PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`` while an agent runs on the
+        connection — moving the wire under a live projection would leave the native
+        config already written with nothing that would ever take it off. Revert those
+        agents to their built-in login, patch, then switch them back. A connection no
+        agent runs on patches freely.
 
         Re-targeting which agents the connection projects into is a scope edit, not
         a patch field (re-target then re-activate to re-project). ``models``

@@ -20,13 +20,22 @@ import { useTranslation } from "react-i18next";
 
 import { SettingsSection } from "@/components/settings/SettingsLayout";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { useProviders } from "@/lib/hooks/useProviders";
 
 import { InternalEngineSettings } from "./InternalEngineSettings";
 import { PriceRefreshSetting } from "./PriceRefreshSetting";
 import { SpeechToTextSettings } from "./SpeechToTextSettings";
 
+/** The section exists only while the Models feature is on: the engine is a
+ *  connection of a model provider, so with it off there is nothing to choose
+ *  and the section is absent. */
 export function EngineSettings() {
+  const models = useFeatureEnabled("models");
+  return models === true ? <EngineSection /> : null;
+}
+
+function EngineSection() {
   const { t } = useTranslation();
   // Both pickers list the same connections; until they arrive, keep the
   // section's shape rather than render pickers that read as unset.

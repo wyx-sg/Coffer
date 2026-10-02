@@ -284,8 +284,8 @@ def write_cached_machine_id(machine_id: str) -> None:
 #
 # A machine's own choice of which experimental features are on (spec
 # experimental-features "Decide a feature's state per machine"). It lives here
-# rather than in the database on purpose: the database syncs, and a switch in
-# it would switch every machine at once. Unlike the settings above, a change
+# rather than in the database on purpose: a machine's own choice is machine-local,
+# and the vault (not the history database) is what syncs. Unlike the settings above, a change
 # takes effect at once — the running daemon's feature service holds the value
 # and writes it here before it answers.
 
@@ -332,7 +332,7 @@ def write_feature_setting(key: str, enabled: bool) -> None:
 
 def clear_feature_setting(key: str) -> None:
     """Remove one feature from the ``features`` object, keeping every other key
-    in it, so the feature falls back to the channel default."""
+    in it, so the feature is off again."""
     payload = _read_raw() or {}
     current = payload.get("features")
     features = dict(current) if isinstance(current, dict) else {}

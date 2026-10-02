@@ -13,7 +13,7 @@ import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-import type { ChangeStatus } from "@/components/change-preview/changeCounts";
+import type { ChangeStatus } from "@/lib/changePreview/changeCounts";
 import { agentsApi, type AgentType, type AgentTypeOut } from "@/lib/api/agents";
 import { clearConnectFailure, recordConnectFailure } from "@/lib/agents/connectFailure";
 import { ApiError, translateApiError } from "@/lib/api/errors";

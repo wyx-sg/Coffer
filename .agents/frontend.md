@@ -8,6 +8,9 @@ counterpart to [`stack.md`](./stack.md) (backend) and
 [`visual-language.md`](./visual-language.md) (visual design).
 Read it before touching `frontend/src`.
 
+A UI change also updates its spec, its docs and the Claude Design canvas boards in
+the same work item (AGENTS.md §3 "Four-way sync").
+
 If this file and the code disagree, the code that matches the **canonical**
 column below wins; fix the outlier. If a rule here blocks you, stop and raise
 it — do not invent a parallel pattern.
@@ -19,8 +22,8 @@ it — do not invent a parallel pattern.
 - **openapi-typescript** generates wire types from every spec's OpenAPI
   contract, and that contract is itself generated from the backend's Pydantic
   models; **openapi-fetch** is the typed client over every capability's paths
-  (`src/lib/api/types.ts` merges them), and one shared hand-written `call<T>()`
-  transport helper serves the modules not yet moved onto it (§4, §9).
+  (`src/lib/api/types.ts` merges them). Every request function goes through it
+  (§4).
 - **shadcn/ui + Radix + Tailwind** for the design system (§6), themed by the
   Foundations tokens in `src/index.css` (light and dark).
 - **react-hook-form + zod** for forms, **i18next** for copy, **lucide-react**
@@ -39,9 +42,22 @@ src/components/x/                 — feature components, dialogs, tables (Pasca
 src/lib/hooks/useX.ts            — ALL queries + mutations for X (see §3)
 src/lib/api/x.ts                 — wire types + request functions for /api/v1/x
 src/lib/api/queryKeys.ts         — every query key builder (see §3)
-src/lib/x/                       — pure helpers a feature owns (parsers, filters)
+src/lib/x/                       — pure helpers a feature owns (parsers, filters,
+                                   save orchestration, state-to-words mappings)
 src/i18n/locales/{en,zh}.json    — under the top-level "x" key
 ```
+
+- **Imports only point down: `pages` -> `components` -> `lib`.** `src/lib/**`
+  must not import `src/components/**` or `src/pages/**`; `src/components/**`
+  must not import `src/pages/**` (ESLint `no-restricted-imports`, in
+  `frontend/eslint.config.js`). A type or pure helper that both layers need
+  (a status tone, a reach mode, a channel schema, a save orchestration) lives
+  in `lib/` and the component imports it from there; there are no re-export
+  shims. The one exception is `useToast` (`components/ui/toast`), a UI
+  primitive hook the mutation hooks call. Test files are exempt; a test kit
+  shared by several suites lives in `src/test/`, not in a component or page
+  folder. A page's sections and dialogs are components, so they live in
+  `components/<x>/`, not beside the page.
 
 - **One documented naming exception**: the MCP-server list page is
   `pages/ResourcesPage.tsx`, which serves both the list and a server's detail,
@@ -64,7 +80,10 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
 - UI primitives live in `src/components/ui/` (shadcn). Cross-feature helpers go
   in `src/lib/`. Three already exist — reuse them, do not re-derive:
   - `lib/reachFilter.ts` — the one "Reach" filter every scoped list offers
-    (MCP servers, skills, knowledge, memory, providers).
+    (MCP servers, skills, custom-tool groups): `matchesReach` is the rule and
+    `components/reach/ReachFilter.tsx` the control (All, then Disabled / Every
+    agent / Only selected agents). Knowledge, memory and providers are not
+    scoped lists.
   - `lib/agents/display.ts` — the human-readable forms of agent wire values
     (product name for a registry key, home-relative path), shared by the
     table, the add form and the detail header.
@@ -105,10 +124,10 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
 | --------------------------------------------------------------- | ------------------------------------------------------- |
 | Server data (anything from the daemon)                          | TanStack Query, via a `useX` hook                       |
 | Ephemeral UI state (open/collapsed, draft input)                | local `useState` in the component                       |
-| User preference that must survive reload                        | `localStorage` via `src/lib/preferences.ts`             |
+| User preference that must survive reload                        | `localStorage`, every read and write wrapped in try/catch (`src/lib/preferences.ts` holds the page size and editor; other modules own their key) |
 | **Addressable** app state (which conversation/resource is open) | the **URL** (router param), not `useState`              |
 | Detail-page tab                                                 | the **path** (`/<kind>/<id>/<tab>`) via `useDetailTab` (`lib/detailTabs.ts`) |
-| Selected file; tab on a page not yet rebuilt                    | the **URL search param** (`?file=`, `?tab=`) via `useSearchParams` |
+| Selected file; tab on a list page (Sync, Activity)              | the **URL search param** (`?file=`, `?tab=`) via `useSearchParams` |
 
 The API token is deliberately not in that table: it is read from
 `window.__COFFER_TOKEN__`, injected into the served page by whoever served it
@@ -123,8 +142,8 @@ default tab, `/<kind>/<id>/<tab>` otherwise — through `useDetailTab`
 servers are keyed by their fixed name, agents by their type, renamable kinds
 by uid. Skills, MCP servers, agents, knowledge
 (`/knowledge/<uid>/history`, `/knowledge/<uid>/inbox`) and memory partitions
-(`/memory/<uid>/delivered`) follow it; Sync and Activity still use `?tab=`
-until their rebuild, and the open file in a tree is always `?file=`. The default tab is never spelled out (`/overview`, `?tab=overview`).
+(`/memory/<uid>/delivered`) follow it; the tabs of a list page that has no
+detail to nest under (Sync, Activity) are `?tab=`, and the open file in a tree is always `?file=`. The default tab is never spelled out (`/overview`, `?tab=overview`).
 
 There is no global store. Cross-component server data is shared through the
 query cache (same query key → same data), not through Context. The only Context
@@ -155,7 +174,7 @@ whole subtree:
 
 ## 4. API Layer
 
-Every request leaves through one of two modules, and both resolve base URL +
+Every request leaves through one module, `src/lib/api/client.ts`, which resolves base URL +
 token through `src/lib/auth.ts` (`getCofferBaseUrl`, `getCofferToken`) and send
 `X-Coffer-Token` + `X-Coffer-Actor: "ui"`. **The actor is always `"ui"`** from
 the web surface. Nothing else in `src` calls `fetch` — the only exceptions are
@@ -165,35 +184,35 @@ the two SSE readers: the chat stream (below) and the daemon's change feed
 - **Generated types for every contract.** `npm run codegen`
   (`frontend/scripts/codegen.mjs`) runs openapi-typescript over each
   `openspec/specs/*/contracts/api.openapi.yaml` into `src/lib/api/generated/<spec>.ts`
-  — every contract that has one (the `CONTRACTS` array in `codegen.mjs` is the
-  list); `src/lib/api/types.ts` re-exports the
-  mcp-gateway one so `components["schemas"][…]` keeps working. `npm run lint`
+  — every contract that has one is discovered (there is no list to maintain);
+  `src/lib/api/types.ts` intersects every module's `components` and `paths`, so
+  `components["schemas"][…]` keeps working. `npm run lint`
   runs `codegen:check` first, so a contract edit without a regenerate fails CI;
   never hand-edit `generated/` (it is prettier-ignored, 4-space indented).
 - **Generated client** (`getApiClient()` over `src/lib/api/client.ts`) over
   every capability's paths (keyed without the `/api/v1` prefix the base URL
-  carries) — full path/response type safety. New request functions use it.
-- **One hand-written helper** — `call<T>(path, { method, body })` in
-  `src/lib/api/call.ts` (URL building, headers, 204 → `undefined`,
-  `{error:{code,message,details}}` → `ApiError`, `FormData` bodies). Every
-  other `src/lib/api/x.ts` module is request functions over `call` plus its
-  wire types, which are aliases of the generated schema
+  carries) — full path/response type safety. There is no other transport:
+  every request function in `src/lib/api/x.ts` calls the client and settles
+  the result with `unwrap` (2xx body), `unwrapOptional` (200 body or 204) or
+  `unwrapVoid` (no body), which turn `{error:{code,message,details}}` into an
+  `ApiError`. Wire types are aliases of the generated schema
   (`export type Provider = components["schemas"]["ProviderOut"]`). No wire type
   is hand-written: when the contract is narrower than what the backend really
   sends, the fix is in the backend model (and the contract regenerated from
   it), not a hand-written interface. Types that exist only in the UI and never
-  cross the wire are fine. Do not add a second helper.
+  cross the wire are fine. Do not add a second helper, and do not call
+  `getApiClient()` or `fetch` from a hook or component: add a request function.
 - **Direction.** Pydantic models → generated `contracts/api.openapi.yaml` →
   generated client (Principles, "II. Spec-as-Truth"; ADR
   `docs/decisions/wire-contract-generated-from-the-pydantic-models.md`). The
   contracts are regenerated with `make contracts` (models → contracts →
   `generated/`). `codegen:check` (in `npm run lint`) also runs
   `scripts/check-wire-types.mjs`: an exported `interface`, or an exported
-  `type` spelling an object shape, in a `src/lib/api/*.ts` module fails unless
-  it carries a `@ui-only` JSDoc tag (it never crosses the wire) or is listed in
-  `scripts/wire-types-allowlist.json` — the pre-generator debt the UI rebuild
-  removes page by page (§9). The gate fails on a stale allow-list entry too.
-  Never add to the allow-list.
+  `type` spelling an object shape, in a `src/lib/api/*.ts` module or anywhere
+  under `src/lib/hooks/` fails unless it carries a `@ui-only` JSDoc tag (it
+  never crosses the wire); so does an object-literal type argument on
+  `unwrap` / `unwrapOptional` / `unwrapVoid`. `@ui-only` is the only
+  exemption.
 
 All errors converge on `ApiError(code, message)` (`src/lib/api/errors.ts`).
 Surface them with `translateApiError(t, error)`, which maps `errors.<CODE>`
@@ -245,9 +264,8 @@ return useMutation({
   gives an object a menu of secondary commands (an agent's row and header).
   There is no `DropdownMenu`.
 - **Shared surfaces above the primitives**, used the same way everywhere:
-  - `PageHeader` is the one page header, list and detail alike: `icon` (list
-    pages), `back` (detail pages), `badges` beside the title, `actions` on the
-    right. Detail-page actions keep one fixed order: reach → test/refresh →
+  - `PageHeader` is the one page header, list and detail alike: `back` (detail pages), `badges` beside the title, `actions` on the
+    right (there is no title icon: the sidebar entry already carries it). Detail-page actions keep one fixed order: reach → test/refresh →
     edit → delete.
   - `DataTable` is the one list table. Pass `isLoading` so the header stays
     mounted over skeleton rows (never a "Loading…" card in the table's place)
@@ -373,11 +391,7 @@ In zh an agent is always **智能体** — never "Agent" or 代理.
 
 When you work near these, migrate toward the target; don't extend the debt:
 
-1. **Hand-written wire types on the allow-list.** `scripts/wire-types-allowlist.json`
-   names every wire type still declared by hand in `src/lib/api/`. When a
-   page is rebuilt, replace each of its types with an alias of the generated
-   schema (fixing the backend model first if the contract is not what the wire
-   carries) and delete the entry. The daemon-wide change feed
+1. **Per-hook polling.** The daemon-wide change feed
    (`GET /api/v1/events`, fetch-read with the token header like the chat
    stream) is the replacement for per-hook `refetchInterval` polling: a
    rebuilt page mounts `useDaemonEvents()`, which invalidates the query keys an

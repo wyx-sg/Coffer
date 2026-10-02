@@ -29,8 +29,10 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import { acceptance } from "@/test/acceptance";
 import i18n from "@/i18n";
-import { reachFilter, reachFilterOptions } from "@/lib/reachFilter";
-import { ReachControl, type ReachMode } from "./ReachControl";
+import { reachFilterOptions } from "@/lib/reachFilter";
+import { ReachFilter } from "./ReachFilter";
+import { ReachControl } from "./ReachControl";
+import type { ReachMode } from "@/lib/reach/reachState";
 import type { Scope } from "@/lib/hooks/useScope";
 
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn() }));
@@ -515,26 +517,33 @@ describe("reach conventions (web-ui)", () => {
     expect(within(axis).getAllByRole("checkbox")).toHaveLength(AGENTS.length);
   });
 
-  acceptance("web-ui", "the reach filter offers the panel's states under the reach name", () => {
-    seed();
-    render(<ReachControl mode="everywhere" {...handlers()} />);
-    openPanel();
-    const panelLabels = screen.getAllByRole("radio").map((r) => r.closest("label")?.textContent);
+  acceptance(
+    "web-ui",
+    "the reach filter offers the panel's states under the reach name",
+    async () => {
+      seed();
+      render(<ReachControl mode="everywhere" {...handlers()} />);
+      openPanel();
+      const panelLabels = screen.getAllByRole("radio").map((r) => r.closest("label")?.textContent);
 
-    const t = i18n.t.bind(i18n);
-    const options = reachFilterOptions(t);
-    expect(options.map((o) => o.value)).toEqual(["disabled", "everywhere", "restricted"]);
-    expect(options.map((o) => o.label)).toEqual(panelLabels);
-    expect(options.map((o) => o.label)).toEqual([
-      "Disabled",
-      "Every agent",
-      "Only selected agents",
-    ]);
+      const t = i18n.t.bind(i18n);
+      const options = reachFilterOptions(t);
+      expect(options.map((o) => o.value)).toEqual(["disabled", "everywhere", "restricted"]);
+      expect(options.map((o) => o.label)).toEqual(panelLabels);
+      expect(options.map((o) => o.label)).toEqual([
+        "Disabled",
+        "Every agent",
+        "Only selected agents",
+      ]);
 
-    const filter = reachFilter(t, (row: { on: boolean }) => ({ enabled: row.on, scope: null }));
-    expect(filter.label).toBe("Reach");
-    expect(filter.label).toBe(t("resources.cols.reach"));
-  });
+      // The control a list mounts is headed Reach and offers All plus those states.
+      render(<ReachFilter value="all" onChange={() => {}} />);
+      const trigger = screen.getByRole("combobox", { name: "Reach" });
+      fireEvent.keyDown(trigger, { key: "ArrowDown" });
+      const offered = (await screen.findAllByRole("option")).map((o) => o.textContent);
+      expect(offered).toEqual(["All", ...panelLabels]);
+    },
+  );
 
   acceptance("web-ui", "a dismissed reach panel writes nothing", () => {
     seed();

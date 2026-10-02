@@ -30,7 +30,10 @@ import { AddChannelDialog } from "./AddChannelDialog";
 import { acceptance } from "@/test/acceptance";
 import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 // The dialog binds the new channel to this machine, so it reads the daemon's
 // machine id. Stubbed rather than served, since nothing else here needs a daemon.
 vi.mock("@/lib/hooks/useMachines", () => ({ useThisMachineId: vi.fn() }));
@@ -106,6 +109,8 @@ function registeringApi(overrides: Partial<ApiClientMock> = {}) {
             }
           : { data: undefined, error: undefined },
       ) as ApiClientMock["POST"],
+      // The free-name scan: no channel exists yet.
+      GET: vi.fn(async () => ({ data: { resources: [] } })) as ApiClientMock["GET"],
       ...overrides,
     }),
   );
@@ -154,6 +159,12 @@ function writtenRef(api: ApiClientMock, nth: number): string {
 }
 
 /** The shape itself, where the pairing above is not what is under test. */
+/** A non-2xx the typed client hands back: the envelope under `error` and the response. */
+const failure = (code: string, message: string) => ({
+  error: { error: { code, message } },
+  response: new Response(null, { status: 422 }),
+});
+
 const refFor = (secret: string) =>
   expect.stringMatching(new RegExp(`^channel/[0-9a-f]{32}/${secret}$`));
 
@@ -272,6 +283,27 @@ describe("AddChannelDialog", () => {
     expect(body.name).toBe("team-bot");
   });
 
+  acceptance("channels", "a channel is named by any display name", async () => {
+    // The second half of the scenario: the name `team-bot` is already taken, so the
+    // same display name registers as `team-bot-2` instead of being refused.
+    const api = registeringApi({
+      GET: vi.fn(async (path: string) =>
+        path === "/resources"
+          ? { data: { resources: [{ name: "team-bot" }] } }
+          : { data: undefined, error: undefined },
+      ) as ApiClientMock["GET"],
+    });
+    renderDialog();
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Team bot!" } });
+    fireEvent.change(screen.getByLabelText(/bot token/i), { target: { value: "123:abc" } });
+    submit();
+
+    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
+    const body = (api.POST.mock.calls[1][1] as { body: Record<string, unknown> }).body;
+    expect(body.title).toBe("Team bot!");
+    expect(body.name).toBe("team-bot-2");
+  });
+
   acceptance(
     "secret",
     "a surface lifts a pasted secret into the store before registering",
@@ -338,11 +370,47 @@ describe("AddChannelDialog", () => {
     expect(api.POST).not.toHaveBeenCalled();
   });
 
+  test("a channel list that cannot be read stops the add before any secret is written", async () => {
+    // Picking a free name against a list that failed to load would collide
+    // after the secret was stored; the read has to fail the add up front.
+    const api = registeringApi({
+      GET: vi.fn(async () => failure("INTERNAL_ERROR", "list failed")) as ApiClientMock["GET"],
+    });
+    renderDialog();
+    fillTelegram();
+    submit();
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(api.POST).not.toHaveBeenCalled();
+    expect(api.DELETE).not.toHaveBeenCalled();
+  });
+
+  test("a rollback delete the daemon refuses is logged, and the registration error still shows", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const api = registeringApi({
+      POST: vi.fn(async (path: string) =>
+        path === "/resources"
+          ? failure("CONFIG_INVALID", "bad config")
+          : { data: undefined, error: undefined },
+      ) as ApiClientMock["POST"],
+      DELETE: vi.fn(async () => failure("SECRET_IN_USE", "in use")) as ApiClientMock["DELETE"],
+    });
+    renderDialog();
+    fillTelegram();
+    submit();
+
+    await waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(api.DELETE).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain("rollback delete failed");
+    expect(await screen.findByRole("alert")).toHaveTextContent(/configuration is invalid/i);
+    warn.mockRestore();
+  });
+
   acceptance("secret", "a failed registration leaves no orphaned secret", async () => {
     const api = registeringApi({
       POST: vi.fn(async (path: string) =>
         path === "/resources"
-          ? { error: { error: { code: "CONFIG_INVALID", message: "bad config" } } }
+          ? failure("CONFIG_INVALID", "bad config")
           : { data: undefined, error: undefined },
       ) as ApiClientMock["POST"],
     });

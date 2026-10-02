@@ -50,7 +50,6 @@ vi.mock("@/lib/hooks/useProviders", () => ({
         base_url: "https://api.anthropic.com",
         secret_ref: "ref",
         compatible_agents: ["claude_code"],
-        is_active: true,
         internal_default: false,
         transcribe_default: false,
         fallback: true,

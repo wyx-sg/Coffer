@@ -83,8 +83,10 @@ async def test_a_tampered_link_is_backed_up_and_repaired(tmp_path):
 
     assert _codes(report) == {"tampered_link": (Disposition.REPAIR, Outcome.APPLIED)}
     assert link.resolve() == master.resolve()
-    [backup] = list(link.parent.glob("s1.coffer-backup-*"))
-    # The spec's ``<path>.coffer-backup-<ts>`` shape: an integer timestamp.
+    # Not beside the link: the agent would load it as a second skill of that name.
+    assert list(link.parent.glob("s1.coffer-backup-*")) == []
+    [backup] = list((graph.store.backup_root / _agent.name).glob("s1.coffer-backup-*"))
+    # The spec's ``<name>.coffer-backup-<ts>`` shape: an integer timestamp.
     assert re.match(r".*\.coffer-backup-\d{10,}$", backup.name)
     assert backup.resolve() == elsewhere.resolve(), "the tampered link is kept, not deleted"
     [event] = await _events_after(graph, seen)
@@ -133,6 +135,26 @@ async def test_a_skill_no_longer_granted_is_reclaimed(tmp_path, how):
     [event] = await _events_after(graph, seen)
     assert event.event_type == AuditEventType.SKILL_UNBOUND.value
     assert (event.actor, event.details["agent"]) == ("system", agent.name)
+    await graph.dispose()
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="an agent whose config cannot be read keeps its deliveries"
+)
+async def test_an_agent_whose_config_does_not_parse_keeps_its_links(tmp_path, monkeypatch):
+    """What the agent wants is unknown while its config cannot be read — not
+    "nothing": its delivered links must not be reclaimed."""
+    graph, _agent, _skill, link = await _delivered(tmp_path)
+
+    def _unparsable(_agent):
+        raise ValueError("config does not parse")
+
+    monkeypatch.setattr(graph.skills, "_resolve_agent_skill_dir", _unparsable)
+
+    report = await graph.run(Trigger.HINT)
+
+    assert not report.results
+    assert link.is_symlink()
     await graph.dispose()
 
 
@@ -246,6 +268,7 @@ async def test_an_unrecordable_repair_is_undone(tmp_path, monkeypatch):
     assert _codes(report) == {"tampered_link": (Disposition.REPAIR, Outcome.FAILED)}
     assert link.resolve() == elsewhere.resolve()
     assert list(link.parent.glob("s1.coffer-backup-*")) == []
+    assert list(graph.store.backup_root.rglob("s1.coffer-backup-*")) == []
     assert await graph.skills.bindings_for(skill.uid) == before
     await graph.dispose()
 

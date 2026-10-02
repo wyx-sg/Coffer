@@ -24,7 +24,7 @@ export default defineConfig({
   fullyParallel: false, // sequential — all tests share the same daemon instance
   workers: 1,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  retries: 0, // a flaky spec must fail, not pass on a second attempt (.agents/testing.md)
   reporter: [["list"]],
 
   webServer: [

@@ -88,7 +88,12 @@ def test_an_approved_key_reaches_the_running_proxy(
     )
     assert created.status_code == 201, created.text
     uid = created.json()["uid"]
-    assert d.client.post(f"/api/v1/providers/{uid}/activate").status_code == 200
+    assert (
+        d.client.post(
+            f"/api/v1/providers/{uid}/activate", json={"agent_type": "claude_code"}
+        ).status_code
+        == 200
+    )
     _attach(d, proxy)
     # Minting the agent's token pushes the proxy its state before answering.
     token = d.client.get(f"/api/v1/proxy/tokens/{agent_uid}").json()["token"]
@@ -125,3 +130,26 @@ def test_an_approved_key_reaches_the_running_proxy(
 
     assert wait_for(reached_second, timeout=5.0)
     assert _keys(second_up)[-1] == "sk-second-key"
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching", scenario="removing an agent deletes its proxy token"
+)
+def test_removing_an_agent_deletes_its_proxy_token(daemon: BoundaryDaemon) -> None:
+    from coffer.application.provider.proxy_tokens import token_ref
+
+    config_dir = daemon.home / ".claude"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    agent = daemon.client.post(
+        "/api/v1/agents",
+        json={"type": "claude_code", "name": "claude-code", "config_dir": str(config_dir)},
+    )
+    assert agent.status_code == 201, agent.text
+    uid = agent.json()["uid"]
+    tokens = get_proxy_facade().tokens
+    assert daemon.client.get(f"/api/v1/proxy/tokens/{uid}").status_code == 200
+    assert tokens._secrets.get(token_ref(uid))  # type: ignore[attr-defined]
+
+    assert daemon.client.delete(f"/api/v1/agents/{uid}").status_code in (200, 204)
+
+    assert tokens._secrets.get(token_ref(uid)) is None  # type: ignore[attr-defined]

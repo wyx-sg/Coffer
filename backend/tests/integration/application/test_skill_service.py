@@ -59,7 +59,7 @@ async def _uid(skill_svc: SkillService, kind: str, name: str) -> str:
     """Resolve a LABEL to the uid everything inside the daemon addresses by.
 
     The same one-shot resolution the CLI does at its front door
-    (ADR resource-identity-is-an-immutable-uid): a test states what it means in
+    (ADR identity-is-the-uid-inside-the-file): a test states what it means in
     the names a person would type, and converts once.
     """
     return (await skill_svc._rs.get_by_name(kind, name)).uid
@@ -69,7 +69,7 @@ async def _by_name(skill_svc: SkillService, name: str) -> Resource:
     """Resolve a skill LABEL to its row.
 
     The one-shot resolution a surface does at its front door
-    (ADR resource-identity-is-an-immutable-uid): a test states what it means in
+    (ADR identity-is-the-uid-inside-the-file): a test states what it means in
     the name a person would type, and converts once.
     """
     return await skill_svc._rs.get_by_name("skill", name)

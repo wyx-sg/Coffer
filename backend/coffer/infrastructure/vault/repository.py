@@ -95,7 +95,7 @@ class VaultRepository:
 
     def set_carry_secret(self, carry: bool) -> None:
         """Whether ``secret/`` is committed (only when the remote carries
-        credentials; ADR credentials-across-machines)."""
+        credentials; ADR secrets-cross-machines-only-as-ciphertext)."""
         with self._lock:
             self._carry_secret = carry
             if self.exists():
@@ -311,10 +311,6 @@ class VaultRepository:
             args.insert(2, "--allow-empty")
         git.run(root, *args, stdin=message(meta).encode(), writer=meta.writer)
         return self.head()
-
-    def unstage(self, paths: Iterable[str]) -> None:
-        for chunk in _chunks(list(paths)):
-            git.run(self.root, "reset", "-q", "--", *chunk, check=False, literal=True)
 
 
 def _chunks(items: list[str], size: int = 200) -> Iterable[list[str]]:

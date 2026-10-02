@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-11
 **Deciders**: Yuxing Wu
-**Related**: [Provider Keys Never Land in Native Config](provider-keys-never-land-in-native-config.md), [Model Catalogue Read From the Agent](model-catalogue-read-from-the-agent.md), [Writing Agent Native Config Safely](writing-agent-native-config-safely.md), [Internal Engine Settings](internal-engine-settings.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), [Resource Reach Is Machine-Local](resource-reach-is-machine-local.md), [Kind Plugin Contract](kind-plugin-contract.md), [Vault Sync](vault-sync.md), spec provider-switching "Project into Claude Code settings without clobbering them", spec provider-switching "Project into Codex config without clobbering it", spec provider-switching "Keep at most one active connection per agent type", spec provider-switching "Activate a connection into the agents its scope reaches", spec provider-switching "Revert an agent type to its built-in login", spec provider-switching "Clear an active flag the agent's config contradicts", spec provider-switching "Converge connections across machines", research note [provider switching](../research/provider-switching.md), PR #165, PR #187, PR #202, PR #309, PR #320
+**Related**: [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [The Model Catalogue Is Read Back From the Installed Agent](model-catalogue-read-from-the-agent.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [Internal Engine Settings](internal-engine-settings.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md), [Kind Plugin Contract](kind-plugin-contract.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), spec provider-switching "Project into Claude Code settings without clobbering them", spec provider-switching "Project into Codex config without clobbering it", spec provider-switching "Keep an agent on at most one connection", spec provider-switching "Switch one agent at a time", spec provider-switching "Revert an agent type to its built-in login", spec provider-switching "Clear an agent's connection its config contradicts", spec provider-switching "Converge connections across machines", spec agent-registry "Carry the connection an agent runs on on the agent record", research note [provider switching](../research/provider-switching.md), PR #165, PR #187, PR #202, PR #309, PR #320
 
 ## Context
 
@@ -14,120 +14,149 @@ Codex from `model_provider` and a `[model_providers.<id>]` table in
 edits those files by hand, in two formats, with the key pasted in as plaintext,
 and does it again on every machine.
 
-Coffer already stores credentials encrypted, syncs resources across machines and
+Coffer already stores secrets encrypted, syncs resources across machines and
 audits every change. The question is how a gateway account the user registers in
 Coffer becomes the endpoint an agent actually calls, in a way that survives:
 
 - the agents being started by Coffer (chat, channels) **and** by the user in
   their own terminal;
 - the agent's own CLI and the user rewriting the same file;
-- a switch made on one machine arriving on another through sync;
+- a switch made on one machine not being mistaken for a switch on another;
 - the user wanting the agent's own login back.
 
 Two constraints narrow the field. Claude Code speaks only the Anthropic Messages
 wire, so its endpoint must present that wire, natively or through a translating
-gateway. Codex speaks only the OpenAI Responses wire; Codex 0.139.0 refuses to
-load a `config.toml` whose provider says `wire_api = "chat"`.
+gateway. Codex speaks only the OpenAI Responses wire; it refuses to load a
+`config.toml` whose provider says `wire_api = "chat"`.
 
 ## Options Considered
 
-### Option A — A connection resource projected into the agent's native file (chosen)
+### Option A — A connection resource, projected into the agent's native file, with the agent recording which connection it runs on (chosen)
 
-A connection is a `kind='provider'` resource whose config is
-`ProviderConfig` (`domain/provider/config.py`): `protocol` (`anthropic`,
-`openai`, `ollama` or `unknown`), `base_url`, an optional `credential_ref`, the
-curated `models` it offers, and three flags — `is_active`, `internal_default`,
-`transcribe_default`. The protocol is chosen from provider presets in the add
-dialog or set explicitly (`coffer provider add --protocol`). It carries no model
-to run: the model is chosen where it is used, on the agent record
-(`AgentConfig.model`, `.fast_model`, `.wire_api`), the conversation, or the
-engine settings.
+A connection is a `kind='provider'` resource whose config is `ProviderConfig`
+(`domain/provider/config.py`): `protocol` (`anthropic`, `openai`, `ollama` or
+`unknown`), `base_url`, an optional `secret_ref`, the curated `models` it offers,
+`local_runtime`, the failover `fallback` and `position`, and two defaults —
+`internal_default` and `transcribe_default`. The protocol is chosen from provider
+presets in the add dialog or set explicitly (`coffer provider add --protocol`). It
+carries no model to run and no flag saying it is switched on: the model is chosen
+where it is used, on the agent record (`AgentConfig.model`, `effort`,
+`tier_models`), the conversation, or the engine settings; and which connection an
+agent runs on is **one field of the agent record**, `AgentConfig.connection_uid`.
 
 Which agents a connection may reach is its framework-level `scope`
 ([Per-Agent Resource Scope](per-agent-resource-scope.md)). A credentialed
 connection starts unscoped, reaching every agent; a keyless `ollama` connection
 starts scoped to no agent and never projects (`_provider_default_scope` in
 `application/provider/kind.py`). `application/provider/targets.py` resolves a
-scope's agent uids to agent types and intersects them with `enabled`.
+scope's agent uids to agent types and intersects them with `enabled`. One pure
+function, `connection_for_agent`, answers which connection an agent is on, and
+projection, the proxy's route, the chat model list, the quota check and the
+protocol lock all ask it. A pointer that names a missing, switched-off or
+out-of-scope connection means the agent is treated as on its built-in login.
 
-Activating a connection projects it into every agent type its scope reaches.
-The writer is chosen by the agent type, not by the protocol
-(`domain/provider/projection.py`): Claude Code gets `apiKeyHelper` plus
-`env.ANTHROPIC_BASE_URL`, and `ANTHROPIC_MODEL` / `ANTHROPIC_SMALL_FAST_MODEL`
-from the agent's binding; Codex gets `model_provider = "coffer"`, a
-`[model_providers.coffer]` table with `base_url`, `wire_api` and `env_key`,
-and, when the connection curates models, `model_catalog_json` pointing at a
-Coffer-owned catalogue file so Codex's own picker offers them. At most one
-connection is active per agent type. Projection runs before the flag flips, so
-a failed or refused write leaves the registry unchanged
-(`application/provider/switch_ops.py`). `POST /api/v1/providers/use-builtin/{wire}`
-removes Coffer's keys and clears the flag, returning the agent to its own
-login. The switch is audited as `provider_switched` with
-`{from, to, protocol, agents}`.
+Switching an agent onto a connection (`POST /api/v1/providers/{uid}/activate`
+with an `agent_type`, `coffer provider switch`) projects it into **that agent's**
+native file and sets that agent's `connection_uid`; it touches no other agent's
+file or record. The writer is the agent's own provider projection
+(`domain/provider/agent_projection.py`, composed from the pure transforms in
+`domain/provider/projection.py` and `codex_projection.py`), chosen by agent type
+and never by protocol: a connection reaching `claude_code` writes Claude's
+`settings.json` in the anthropic shape, which is how an OpenAI-compatible gateway
+is routed to Claude Code. Projection runs before the record is written, so a
+failed or refused write puts the file back and leaves the record unchanged
+(`application/provider/switch_ops.py`). `POST /api/v1/providers/use-builtin/{agent_type}`
+removes the keys Coffer wrote and clears that agent's field, returning the agent to
+its own login. The switch is audited as `provider_switched` with
+`{from, to, protocol, agent_type, agents}`.
 
-The provider-projection target of the unified reconciler (ADR
-[one-level-triggered-reconciler-compares-parameters](one-level-triggered-reconciler-compares-parameters.md))
-keeps the flag honest against a file Coffer does not own. After a converge
-round, the import's pass re-derives each agent type's projection from the
-converged rows, because writing a native file is a machine-local side effect no
-synced document can carry. On every other pass it clears `is_active` when the
-projection is no longer in the file, and re-projects one whose values went
-stale. It never writes a missing projection back: the agent's file is
-the ground truth for what the agent runs on, and re-routing a user's agent on
-the strength of a stale flag would be a surprise (PR #320, after an agent ran
-on its built-in login for weeks while every surface reported a Coffer
-connection active).
+What is written is the proxy form, not the upstream endpoint. An API-key or local
+connection is reached through a local model proxy
+([API-Key Providers Are Reached Through a Separate Local Model Proxy](api-key-providers-are-reached-through-a-separate-local-model-proxy.md)):
+Claude Code gets `env.ANTHROPIC_BASE_URL` naming the proxy, an `apiKeyHelper` that
+prints the agent's local proxy token, and `NO_PROXY` for the loopback leg; Codex
+gets `model_provider = "coffer"` and a `[model_providers.coffer]` table with the
+proxy's `base_url`, `wire_api = "responses"` (fixed, since Codex loads nothing
+else), `supports_websockets = false`, `requires_openai_auth = false` and a
+command-backed `auth` that prints the same token, and, when the connection curates
+models, `model_catalog_json` pointing at a Coffer-owned catalogue file so Codex's
+own picker offers them. The file names the proxy, not the connection, so moving an
+agent between two API-key connections changes the proxy's route and leaves the
+file alone. The model keys written come from the agent's binding: the top-level
+`model` and `effortLevel`, the `ANTHROPIC_DEFAULT_<TIER>_MODEL` pins and
+`modelPicker` for Claude Code, `model`, `model_reasoning_effort` and the catalogue
+for Codex; never `ANTHROPIC_MODEL` or `ANTHROPIC_SMALL_FAST_MODEL`, which outrank
+the user's own `/model` choice. No provider key and no `env_key` appears in either
+file, and the user's own `shell_environment_policy` is left as it is.
+
+The provider-projection target of the unified reconciler
+([One Level-Triggered Reconciler](one-level-triggered-reconciler-compares-parameters.md))
+keeps the pointer honest against a file Coffer does not own. After a converge
+round, the import's pass re-derives each agent's projection from the converged
+rows, because writing a native file is a machine-local side effect no synced
+document can carry. On every other pass it clears an agent's `connection_uid`
+when Coffer's keys are no longer in its file, and re-projects one whose values
+went stale. It never writes a missing projection back: the agent's file is the
+ground truth for what the agent runs on, and re-routing a user's agent on the
+strength of a stale pointer would be a surprise (PR #320, after an agent ran on its
+built-in login for weeks while every surface reported a Coffer connection
+active). The opposite drift — Coffer's keys present while no connection serves the
+agent — is reported, not removed.
 
 Pros: the agent runs on the connection whether Coffer or the user started it,
-because the file is where the agent looks; no resident component is on the
-request path; the connection gets encryption, sync, audit, rename and delete
-from the resource framework; `use-builtin` is a clean undo. Cons: Coffer writes
-into files it shares with another program and with the user
+because the file is where the agent looks; the key never enters the agent's file or
+environment; the connection gets encryption, sync, audit, rename and delete from
+the resource framework; an agent runs on at most one connection by construction;
+`use-builtin` is a clean undo. Cons: Coffer writes into files it shares with
+another program and with the user
 ([Writing Agent Native Config Safely](writing-agent-native-config-safely.md));
-a running agent process does not reload, so a switch reaches it on its next
-start; the flag can drift from the file and needs the boot check. It wins
-because the native file is the only place both Coffer-driven and user-driven
-agent processes read.
+a running agent process does not reload, so a switch between a login and a
+connection reaches it on its next start; the pointer can drift from the file and
+needs the boot check. It wins because the native file is the only place both
+Coffer-driven and user-driven agent processes read.
 
-### Option B — A local proxy the agents always call
+### Option B — A local proxy the agents always call, with no file switching
 
 Point both agents once at a Coffer-hosted endpoint (the claude-code-router /
-LiteLLM shape). The proxy forwards to whichever connection is active, and can
+LiteLLM shape). The proxy forwards to whichever connection is chosen, and can
 translate wires and fail over.
 
 Pros: switching is instant, even for running processes; one endpoint could serve
-both agents through wire translation; failover and usage metering come for
-free. Cons: a resident component on every model call, adding latency and a new
-failure mode (daemon down means both agents dead, including in the user's own
-terminal); the proxy sees every prompt and completion, a much larger trust
-surface than a config writer; wire translation between Anthropic Messages and
-OpenAI Responses is a product of its own that lags both vendors. It loses on
-blast radius: Coffer would become a dependency of every agent call the user
-makes, not only the ones Coffer starts.
+both agents through wire translation; failover and usage metering come for free.
+Cons: a resident component on every model call, adding latency and a new failure
+mode; the proxy sees every prompt and completion, a much larger trust surface than
+a config writer; wire translation between Anthropic Messages and OpenAI Responses
+is a product of its own that lags both vendors; and an agent on its own
+subscription login would have to route through it, which Anthropic's credential
+policy forbids a third party to intermediate. It was first rejected on blast
+radius alone.
+
+It is **adopted in part**: API-key and local connections are reached through a
+separate supervised proxy that translates nothing, and the file projection above
+is what points the agent at it. Subscription logins never go through it, so a
+switch between a login and a connection is still a file write.
 
 ### Option C — Whole-file profile swap (the cc-switch shape)
 
-Keep complete copies of `settings.json` / `config.toml` per profile and swap
-the file on switch.
+Keep complete copies of `settings.json` / `config.toml` per profile and swap the
+file on switch.
 
 Pros: simple to implement; any key the user put in a profile comes along. Cons:
-the swap overwrites everything else the user and the agent's own CLI wrote to
-that file since the profile was saved — MCP servers, hooks, plugins, permissions
-— and Coffer itself manages several of those; profiles hold the key in
-plaintext; nothing converges across machines. It loses because Coffer is one of
-several writers of those files and cannot own the whole of either.
+the swap overwrites everything else the user and the agent's own CLI wrote to that
+file since the profile was saved — MCP servers, hooks, plugins, permissions — and
+Coffer itself manages several of those; profiles hold the key in plaintext; nothing
+converges across machines. It loses because Coffer is one of several writers of
+those files and cannot own the whole of either.
 
 ### Option D — Environment variables at launch only
 
-Leave the files alone; inject `ANTHROPIC_BASE_URL`, the key and so on into the
-agent processes Coffer spawns.
+Leave the files alone; inject `ANTHROPIC_BASE_URL` and the credential into the agent
+processes Coffer spawns.
 
-Pros: no file writes at all; no drift between flag and file. Cons: an agent the
-user starts in their own terminal — the common case — never sees the
-connection. The same connection would behave differently depending on who
-started the agent. It loses on that split. Coffer does use launch-time
-injection for the one thing that must not be written down, the Codex key
-([Provider Keys Never Land in Native Config](provider-keys-never-land-in-native-config.md)).
+Pros: no file writes at all; no drift between pointer and file. Cons: an agent the
+user starts in their own terminal — the common case — never sees the connection.
+The same connection would behave differently depending on who started the agent.
+It loses on that split.
 
 ### Option E — One protocol per connection, projected by wire, one active per wire
 
@@ -137,42 +166,64 @@ model.
 
 Pros: simple mapping. Cons: the wire was never the thing being taken over; a
 gateway that serves both wires needed two records; and an OpenAI-compatible
-endpoint routed to Claude Code through a translating gateway had no way to
-express itself. It was replaced by scope-driven reach and per-agent-type
-activation, with the writer chosen by agent type.
+endpoint routed to Claude Code through a translating gateway had no way to express
+itself. It was replaced by scope-driven reach, with the writer chosen by agent
+type.
+
+### Option F — An `is_active` flag on the connection, one per agent type
+
+The shape that followed: scope-driven reach, but "which connection is on" kept as
+a flag on each connection, at most one per agent type.
+
+Pros: one place to read what is switched on; the connection list could show it
+directly. Cons: the flag is a property of the connection that is really a fact
+about an agent, so two agents of the same type could not run on different
+connections, "at most one per type" had to be enforced across rows rather than
+holding by construction, and the flag travelled with the connection through sync
+although the file it describes is machine-local, so the same flag disagreed with
+the file on another machine until its next reconcile.
+
+Why it lost: moving the choice onto the agent record makes the invariant
+structural, lets each agent have its own connection, and keeps a machine-local fact
+(what an agent's file says) off a document that converges.
 
 ## Decision
 
-An LLM connection is a `provider` resource — endpoint, protocol, key reference,
-curated model set and three flags — with no model of its own. Activating it
-writes Coffer-managed keys into the native config file of each agent type its
-scope reaches, chosen by agent type, with at most one active connection per
-type. The agent's file is the ground truth: boot clears a flag the file
-contradicts and never re-projects, while a converge round re-projects the
-switch it just carried. `use-builtin` removes the keys and gives the agent back
-its own login.
+An LLM connection is a `provider` resource — endpoint, protocol, secret
+reference, curated model set and the default flags — with no model of its own and
+no flag saying it is on. Which connection an agent runs on is the agent record's
+`connection_uid`; switching an agent writes Coffer-managed keys into that agent's
+native config file, chosen by agent type, and sets the field, with the key
+reaching the agent only as a local proxy token. The agent's file is the ground
+truth: boot clears a pointer the file contradicts and never re-projects, while a
+converge round re-projects the switch it just carried. `use-builtin` removes the
+keys and gives the agent back its own login.
 
 Rules that follow:
 
 - Projection writes only the keys listed above, merged into the existing file,
-  and never a raw key.
-- A new agent type needs a projection writer in `domain/provider/projection.py`;
-  scope decides reach, not the protocol.
-- `ollama` connections are internal-only: they start dormant, activation is
-  refused (`ProviderInternalOnly`), and they serve only the internal engine.
+  and never a raw provider key.
+- A new agent type needs a provider projection in its facet; scope decides reach,
+  not the protocol.
+- `ollama` connections are internal-only: they start dormant, switching an agent
+  onto one is refused (`PROVIDER_INTERNAL_ONLY`), and they serve only the internal
+  engine.
 - Changing a live connection's protocol is refused
-  (`PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`) until it is switched off.
+  (`PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`) while an agent runs on it.
+- A connection's reach and an agent's `connection_uid` are machine-local choices
+  and never travel in a sync round; the connection document does.
 
 ## Consequences
 
 - Surfaces: `/api/v1/providers` (CRUD, `/{uid}/activate`,
-  `/use-builtin/{wire}`, the two default flags), `coffer provider …`, and the
-  connections page. `POST /api/v1/models/detect-protocol` survives as a probe;
-  the add dialog uses presets instead.
+  `/use-builtin/{agent_type}`, the two default flags, the fallback order),
+  `coffer provider …`, and the connections page.
 - A running agent keeps its old endpoint until restarted. Claude Code re-invokes
-  `apiKeyHelper` periodically, so a key rotation reaches it sooner than a
-  switch does.
+  `apiKeyHelper` periodically; moving between two API-key connections changes only
+  the proxy's route, so it takes effect for the next session without a restart.
 - Every projection write goes through the shared native-config writer, with its
   backup, fingerprint check and refusal event (`provider_projection_refused`).
-- The same flag may disagree with the file on another machine until its next
-  converge round or boot; both reconcilers are idempotent.
+- After a sync round that applied changes, the reconcile pass re-projects every
+  agent that runs on a connection from the connection as it now is, and removes
+  the keys Coffer left in the file of an agent that runs on none; both
+  reconcilers are idempotent.

@@ -8,7 +8,7 @@ import stat
 import pytest
 from cryptography.fernet import Fernet
 
-from coffer.domain.errors import MasterKeyMissing, SecretLocked
+from coffer.domain.secret_errors import MasterKeyMissing, SecretLocked
 from coffer.infrastructure.secret.master_key import KEYCHAIN_REF, MasterKeyManager
 
 
@@ -128,6 +128,30 @@ def test_install_key_backs_up_existing_different_key(key_path: pathlib.Path) -> 
     assert len(backups) == 1
     assert backups[0].read_bytes().strip() == old
     assert stat.S_IMODE(backups[0].stat().st_mode) == 0o600
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="an imported master key replaces the key where it is kept"
+)
+def test_install_key_replaces_the_keychain_key_and_backs_the_old_one_up(
+    key_path: pathlib.Path,
+) -> None:
+    """A development build whose key is in the keychain keeps ONE key: the one
+    brought in replaces it there, and the old one is backed up, not stranded
+    where a later move to the keychain would overwrite it unrecoverably."""
+    keyring = FakeKeyring()
+    mgr = MasterKeyManager(key_path=key_path, keyring=keyring)
+    old = Fernet.generate_key()
+    keyring.store[KEYCHAIN_REF] = old.decode()
+    new = Fernet.generate_key()
+
+    mgr.install_key(new)
+
+    assert not key_path.exists()
+    assert keyring.store[KEYCHAIN_REF] == new.decode()
+    assert mgr.location == "keychain"
+    [backup] = list(key_path.parent.glob("master.key.bak-*"))
+    assert backup.read_bytes().strip() == old
 
 
 def test_install_key_same_key_writes_no_backup(key_path: pathlib.Path) -> None:

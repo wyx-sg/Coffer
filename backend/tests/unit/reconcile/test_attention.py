@@ -81,7 +81,6 @@ async def test_items_sort_by_severity_and_are_counted_per_kind() -> None:
     ]
     assert report.counts_by_kind == {"mcp_server": 2, "agent": 1}
     assert report.errors == ()
-    assert svc.source_names == ("agent", "mcp")
 
 
 @pytest.mark.acceptance(
@@ -104,8 +103,8 @@ async def test_a_failing_source_is_reported_beside_the_others() -> None:
     spec="experimental-features", scenario="a switched-off feature's attention source is not asked"
 )
 async def test_a_switched_off_features_source_is_not_asked() -> None:
-    sync = _Source("sync", [_item("sync", Severity.ERROR)], feature="fake_feature")
-    svc = AttentionService([sync], feature_enabled=lambda key: key != "fake_feature")
+    sync = _Source("sync", [_item("sync", Severity.ERROR)], feature="sync")
+    svc = AttentionService([sync], feature_enabled=lambda key: key != "sync")
     report = await svc.report()
     assert report.items == () and sync.asked == 0
     svc_on = AttentionService([sync], feature_enabled=lambda _k: True)

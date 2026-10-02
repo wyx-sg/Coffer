@@ -110,40 +110,6 @@ def _drop_coffer_entries(hooks: dict[str, Any], *, keep_event: str | None = None
             del hooks[event]
 
 
-def install_entry(
-    text: str,
-    *,
-    event: str,
-    command: str,
-    matcher: str | None,
-    timeout: int | None = None,
-) -> str:
-    """Return `text` with Coffer's hook entry for `event` inserted/replaced.
-
-    Idempotent: every prior Coffer entry — on `event` or on any other event —
-    is dropped and one fresh entry carrying `command` is
-    appended to `event`; every other entry — another event entirely, or a
-    foreign hook on this SAME event — is left untouched.
-    """
-    data = _parse(text)
-    hooks = data.get(HOOKS_KEY)
-    if not isinstance(hooks, dict):
-        hooks = {}
-        data[HOOKS_KEY] = hooks
-    _drop_coffer_entries(hooks, keep_event=event)
-    entries = hooks.get(event)
-    kept = list(entries) if isinstance(entries, list) else []
-    leaf: dict[str, Any] = {"type": "command", "command": command}
-    if timeout is not None:
-        leaf["timeout"] = timeout
-    new_entry: dict[str, Any] = {"hooks": [leaf]}
-    if matcher is not None:
-        new_entry = {"matcher": matcher, "hooks": [leaf]}
-    kept.append(new_entry)
-    hooks[event] = kept
-    return _dump(data)
-
-
 @dataclass(frozen=True)
 class EntrySpec:
     """One entry Coffer wants on one event."""
@@ -293,7 +259,6 @@ __all__ = [
     "find_command",
     "find_installed",
     "install_entries",
-    "install_entry",
     "is_installed",
     "is_marked",
     "remove_entry",

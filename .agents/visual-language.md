@@ -85,8 +85,8 @@ everywhere (set on `body`). Sentence case everywhere; uppercase only for caption
 
 ## Spacing and sizes
 
-A 4px grid on Tailwind's default scale (`p-2.5` = 10px). Page padding 24 top /
-32 sides; section gap 24; card padding 16; dialog padding 20. Fixed geometry:
+A 4px grid on Tailwind's default scale (`p-2.5` = 10px). Page padding 40 top /
+24 sides on a phone and 40 from `md` up (`Layout`); section gap 24; card padding 16; dialog padding 20. Fixed geometry:
 `h-control-sm` 26 (in rows, banners, toolbars), `h-control-md` 30 (every
 default control), `h-control-lg` 36 (full-page states, onboarding); `min-h-row`
 40 list rows (56 with a sub-line), `min-h-setting-row` 56; `w-sidebar` 220,

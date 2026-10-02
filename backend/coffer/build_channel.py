@@ -1,11 +1,13 @@
-"""The release channel this build carries.
+"""The release channel this build carries, and the commit it was built from.
 
-``dev`` in the repository, so every build is ``dev`` — a source run, ``make
-desktop``, the owner's own frozen testing build. The release workflow runs
-``scripts/stamp_channel.py stable`` before PyInstaller, so only a tagged
-release is ``stable`` (spec experimental-features "Stamp every build with a
-release channel"). ``sys.frozen`` is not the signal: the owner's testing build
-is frozen too.
+The channel decides one thing: whether the development environment switches
+(``COFFER_ALLOWED_HOSTS``, ``COFFER_CORS_ORIGINS``, ``COFFER_DEV_CORS``) are
+read. It is ``dev`` in the repository; the release workflow runs
+``scripts/stamp_channel.py stable`` before PyInstaller, so a tagged release
+ignores them (no environment variable may weaken the protections). It changes
+nothing a person sees: experimental features are off by default in every
+build. ``sys.frozen`` is not the signal: the owner's testing build is frozen
+too.
 
 The same script stamps ``COMMIT``, the short hash of the commit the release was
 built from, which the Settings About tab shows beside the version; a build from

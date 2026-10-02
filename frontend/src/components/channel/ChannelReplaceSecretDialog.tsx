@@ -1,9 +1,10 @@
 // frontend/src/components/channel/ChannelReplaceSecretDialog.tsx
 // Replace a channel's bot token (Telegram) or app secret (SeaTalk). The new
 // value overwrites the secret the channel already points at, so pairing
-// and settings are kept; then the adapter restarts on it. When the daemon
-// holds the new value for approval instead, the channel keeps the old one
-// until someone approves in the Coffer app, and nothing is restarted.
+// and settings are kept; the daemon notices the replaced secret and restarts
+// the adapter on it by itself. When the daemon holds the new value for approval
+// instead, the channel keeps the old one until someone approves in the Coffer
+// app, and nothing is restarted until then.
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -19,8 +20,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import type { ResourceOut } from "@/lib/api/resources";
-import { useReconnectChannel, useUpdateChannel } from "@/lib/hooks/useChannels";
-import { planChannelEdit } from "./editChannel";
+import { useUpdateChannel } from "@/lib/hooks/useChannels";
+import { planChannelEdit } from "@/lib/channels/editChannel";
 
 interface Props {
   channel: ResourceOut;
@@ -32,7 +33,6 @@ export function ChannelReplaceSecretDialog({ channel, open, onOpenChange }: Prop
   const { t } = useTranslation();
   const id = useId();
   const update = useUpdateChannel();
-  const reconnect = useReconnectChannel(channel.uid);
   const [value, setValue] = useState("");
   const telegram = channel.config.channel_type === "telegram";
   const which = telegram ? "token" : "secret";
@@ -54,10 +54,7 @@ export function ChannelReplaceSecretDialog({ channel, open, onOpenChange }: Prop
       },
     });
     update.mutate(plan, {
-      onSuccess: ({ awaitingApproval }) => {
-        if (!awaitingApproval && channel.enabled) reconnect.mutate({ enabled: true });
-        close(false);
-      },
+      onSuccess: () => close(false),
     });
   };
 

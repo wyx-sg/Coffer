@@ -13,7 +13,7 @@ import pathlib
 
 import pytest
 
-from coffer.surfaces.http.migrations_runner import _alembic_config, run_migrations
+from coffer.infrastructure.persistence.migrations_runner import _alembic_config, run_migrations
 
 
 def _url(db: pathlib.Path) -> str:

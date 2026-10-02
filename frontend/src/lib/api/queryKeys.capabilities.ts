@@ -9,7 +9,6 @@
 export const skillsKey = ["skills"] as const;
 export const skillFilesKey = (uid: string) => ["skills", uid, "files"] as const;
 export const skillFileKey = (uid: string, path: string) => ["skills", uid, "file", path] as const;
-/** One file's three versions in a staged update (local, pinned, incoming). */
 /** The read-only drift report (Check copies): every agent's copy of every skill. */
 export const skillCopiesKey = ["skills", "copies"] as const;
 /** One agent's differing copy of a skill, compared with master. */
@@ -17,6 +16,7 @@ export const skillCopyKey = (uid: string, agentUid: string) =>
   ["skills", uid, "copies", agentUid] as const;
 /** Folders in the skills store no skill claims ("Not in your library"). */
 export const skillOrphansKey = ["skills", "orphans"] as const;
+/** One file's three versions in a staged update (local, pinned, incoming). */
 export const skillCompareKey = (uid: string, stagingId: string, path: string) =>
   ["skills", uid, "compare", stagingId, path] as const;
 

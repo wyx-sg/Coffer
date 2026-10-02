@@ -10,7 +10,7 @@ contents), adopt them into the master store, or delete them from disk.
 
 The agent is addressed by ``{uid}`` like everywhere else, but ``{skill}`` is a
 DIRECTORY name and stays one: an unmanaged folder has no resource row, so there
-is no uid to name it by (ADR resource-identity-is-an-immutable-uid). Adoption is
+is no uid to name it by (ADR identity-is-the-uid-inside-the-file). Adoption is
 the moment one is minted, which is why its response carries the new uid.
 """
 

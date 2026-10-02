@@ -89,7 +89,6 @@
   "common": {
     "close": "Close",
     "save": "Save",
-    "create": "Create",
     "cancel": "Cancel",
     "delete": "Delete",
     "dismiss": "Dismiss",
@@ -115,13 +114,10 @@
     },
     "bulk": {
       "selected": "{{count}} selected",
-      "selectAll": "Select all",
       "pageSelected": "All on this page selected",
       "selectAllMatching": "Select all {{count}}",
       "allSelected": "All {{count}} selected",
       "selectRow": "Select row",
-      "enable": "Enable",
-      "disable": "Disable",
       "delete": "Delete",
       "summary": {
         "allOk": "{{count}} succeeded",
@@ -141,17 +137,7 @@
     "undo": "Undo",
     "details": "Details",
     "lessDetails": "Less",
-    "earlierToasts": "{{count}} more",
-    "unsaved": {
-      "badge": "Unsaved changes",
-      "title": "Leave without saving?",
-      "body": "You edited <mono>{{file}}</mono> in <mono>{{name}}</mono>. If you leave now, those edits are lost.",
-      "bodyGeneric": "If you leave now, your edits are lost.",
-      "discard": "Discard changes",
-      "keep": "Keep editing",
-      "saveAndLeave": "Save and leave",
-      "saveFailed": "Couldn’t save"
-    }
+    "earlierToasts": "{{count}} more"
   },
   "picker": {
     "browse": "Choose…"
@@ -164,10 +150,7 @@
     "emptyDir": "No subfolders here."
   },
   "files": {
-    "conflict": "This file changed on disk since you opened it, so the save was refused. Your edits are still here — copy them somewhere safe, then reload to take the version on disk.",
-    "discardAndReload": "Discard my edits and reload",
-    "readOnlyTruncated": "Too large to load in full — read-only, so a save cannot truncate it",
-    "readOnlyMissing": "Not created yet — read-only"
+    "discardAndReload": "Discard my edits and reload"
   },
   "nav": {
     "skipToContent": "Skip to content",
@@ -291,32 +274,6 @@
       "noMatches": "No capabilities match your search.",
       "toggleAria": "Toggle {{kind}} {{key}}",
       "noSchema": "This tool declares no parameters."
-    },
-    "invocations": {
-      "empty": "No invocations yet.",
-      "noMatches": "No invocations match your filters.",
-      "searchPlaceholder": "Search invocations",
-      "filterSearch": "Search",
-      "filterStatus": "Status",
-      "header": {
-        "time": "Time",
-        "server": "Server",
-        "type": "Type",
-        "key": "Key",
-        "duration": "Duration",
-        "status": "Status"
-      },
-      "status": {
-        "ok": "OK",
-        "error": "Error",
-        "timeout": "Timeout",
-        "denied": "Denied"
-      }
-    },
-    "health": {
-      "healthy": "Healthy",
-      "unknown": "Unknown",
-      "failing": "Failing"
     },
     "add": {
       "dialogTitle": "Add MCP server",
@@ -595,6 +552,8 @@
         "confirm": "Delete server",
         "alsoSecrets_one": "Also delete the secret",
         "alsoSecrets_other": "Also delete the secrets",
+        "secretsKept_one": "Couldn't delete {{count}} secret; it stays on the Secrets page.",
+        "secretsKept_other": "Couldn't delete {{count}} secrets; they stay on the Secrets page.",
         "noOtherUser": "No other server uses it.",
         "pause": "This can't be undone. To stop it for a while, turn it off instead."
       },
@@ -666,7 +625,6 @@
       "noMatches": "No servers match.",
       "notFound": "No MCP server is named {{name}}.",
       "offBody": "Coffer doesn't start it for any session. Turning it on gives it back to the agents you chose last time.",
-      "offKept": "Off — kept: {{agents}}",
       "offTitle": "Off — no agent can use it",
       "openInActivity": "Open in Activity",
       "reason": {
@@ -740,25 +698,7 @@
       "noPrompts": "Coffer’s own server offers no prompts."
     }
   },
-  "timeRange": {
-    "from": "From",
-    "to": "To",
-    "apply": "Apply",
-    "1h": "Last 1 hour",
-    "6h": "Last 6 hours",
-    "24h": "Last 24 hours",
-    "7d": "Last 7 days",
-    "30d": "Last 30 days",
-    "all": "All time",
-    "custom": "Custom range…"
-  },
   "audit": {
-    "filter": {
-      "actor": "Actor",
-      "all": "All",
-      "search": "Search",
-      "searchPlaceholder": "Search activity"
-    },
     "actor": {
       "ui": "You (web UI)",
       "cli": "CLI",
@@ -841,8 +781,6 @@
       "provider_failover": "Failed over from {{from}} to {{to}} for {{model}}",
       "provider_reordered": "Reordered model providers",
       "secret_deleted": "Removed a secret",
-      "secret_migrated": "Secret migrated from OS keychain",
-      "secret_read": "Read a secret",
       "secret_set": "Stored a secret",
       "attention_ignored": "Ignored an item on Overview",
       "attention_unignored": "Stopped ignoring an item on Overview",
@@ -901,7 +839,6 @@
     "filters": {
       "any": "Any",
       "by": "Agent",
-      "agents": "Agents",
       "notAnAgent": "Not an agent",
       "server": "Server",
       "kind": "Kind",
@@ -1009,7 +946,6 @@
       "close": "Close details",
       "kinds": {
         "change": "Change",
-        "call": "MCP call",
         "daemon": "Daemon record"
       },
       "who": "Who",
@@ -1142,14 +1078,13 @@
   },
   "settings": {
     "title": "Settings",
-    "subtitle": "Your data and app preferences.",
     "tabs": {
       "general": "General",
-      "engine": "Coffer's model",
       "data": "Data",
       "security": "Security",
       "about": "About",
-      "daemon": "Daemon"
+      "daemon": "Daemon",
+      "features": "Features"
     },
     "general": {
       "pageSize": "Rows per page",
@@ -1177,25 +1112,29 @@
       "autostartUnsupported": "Only available on macOS."
     },
     "features": {
-      "title": "Experimental features",
-      "subtitle": "Features still being designed. Switching one off hides it everywhere on this machine and keeps everything it holds. This build is on the {{channel}} channel.",
-      "on": "On",
-      "off": "Off",
-      "channel": {
-        "stable": "stable",
-        "dev": "dev"
+      "title": "Features",
+      "subtitle": "Experimental features, each off until you switch it on here. Switching one off hides it everywhere on this machine and keeps everything it holds.",
+      "experimental": "Experimental",
+      "decidedBy": "Decided by",
+      "reset": "Reset to default",
+      "names": {
+        "knowledge": "Knowledge",
+        "memory": "Memory",
+        "sync": "Sync",
+        "models": "Model providers"
+      },
+      "descriptions": {
+        "knowledge": "Notes and documents that agents can look up, kept as plain files you can edit.",
+        "memory": "What agents remember between sessions, and the hook that delivers it.",
+        "sync": "Keep the vault in step with your own git remote across machines.",
+        "models": "Model providers, the local model proxy and token usage."
       },
       "source": {
         "pin": "Pinned by COFFER_FEATURES — change it where the daemon is started",
-        "setting": "Set on this machine",
-        "channel": "Default for the {{channel}} channel"
-      },
-      "offTitle": "{{name}} is switched off",
-      "offBody": "{{name}} is an experimental feature and is switched off on this machine. Nothing it holds was removed — switch it on and this page opens right away.",
-      "offPinned": "{{name}} is an experimental feature, held off by COFFER_FEATURES where the daemon is started, so it can't be switched on here. Nothing it holds was removed.",
-      "switchOn": "Switch on",
-      "switchingOn": "Switching on…",
-      "openSettings": "Open Settings"
+        "settingOn": "On, set on this machine",
+        "settingOff": "Off, set on this machine",
+        "default": "Off by default"
+      }
     },
     "retention": {
       "keepForever": "Keep forever",
@@ -1413,12 +1352,6 @@
         "none": "No key on this Mac yet"
       }
     },
-    "models": {
-      "testConnection": "Test connection"
-    },
-    "connections": {
-      "title": "Model providers"
-    },
     "internalEngine": {
       "connection": "Model provider",
       "connectionPlaceholder": "Choose a provider",
@@ -1440,7 +1373,6 @@
     "close": "Close settings",
     "sections": "Settings sections",
     "daemonTab": {
-      "title": "Status",
       "intro": "The background process that serves your agents and this page.",
       "state": {
         "connecting": "Connecting…",
@@ -1646,12 +1578,10 @@
     "MEMORY_RAW_ENTRY_NOT_FOUND": "That raw memory entry wasn't found",
     "MEMORY_TRIGGER_INVALID": "That memory trigger can't be used — check its kind, note and patterns",
     "MEMORY_TRIGGER_NOT_FOUND": "That memory trigger wasn't found",
-    "MEMORY_FILE_NOT_FOUND": "That file isn't in this partition",
     "MEMORY_UNREADABLE": "That memory file could not be read",
     "MEMORY_UNSAFE_PATH": "That path isn't allowed in the memory store",
     "NAME_IMMUTABLE": "This name is fixed once registered, because agents quote it. Delete it and register it again under the new name",
     "NOT_FOUND": "Not found.",
-    "NO_ACTIVE_PROVIDER": "No model provider is active — add one on the Model providers page",
     "ORIGIN_NOT_ALLOWED": "Coffer does not accept requests from pages on other sites.",
     "PLUGIN_NOT_FOUND": "Plugin not found",
     "PLUGIN_TOGGLE_UNSUPPORTED": "This plugin can't be enabled or disabled here",
@@ -1660,7 +1590,9 @@
     "PRIVILEGED_PATH": "That path is privileged and can't be used here",
     "PROVIDER_INTERNAL_DEFAULT_TAKEN": "Another connection is already Coffer's internal-engine default — move the default to this connection instead of setting the flag directly",
     "PROVIDER_INTERNAL_ONLY": "This connection uses the ollama protocol, which only Coffer's internal engine uses — it can't be switched on for an agent",
-    "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "This connection is switched on, so its wire format can't change — put its agents back on their built-in login first, then edit the wire, then switch it on again",
+    "PROVIDER_DOES_NOT_REACH_AGENT": "The connection can't be switched on for this agent — the connection or the agent is switched off, or the connection's scope doesn't name the agent",
+    "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "An agent is running on this connection, so its wire format can't change — put that agent back on its built-in login first, then edit the wire, then switch it onto the connection again",
+    "PROVIDER_TRANSCRIBE_DEFAULT_TAKEN": "Another connection is already Coffer's speech-to-text default — move the default to this connection instead of setting the flag directly",
     "RESOURCE_ALREADY_EXISTS": "A resource with that name already exists",
     "RESOURCE_NOT_FOUND": "Resource not found",
     "RESOURCE_NOT_TOGGLEABLE": "This kind of resource is always on and can't be enabled or disabled",
@@ -1672,9 +1604,7 @@
     "SKILL_INVALID": "The skill is invalid",
     "SYNC_CANNOT_RETIRE_SELF": "A machine cannot retire itself",
     "SYNC_NOTHING_TO_ROLL_BACK": "There is no round to roll back to",
-    "TARGET_CONFLICT": "A skill already exists at the target location",
     "TOOL_DISABLED": "This capability is disabled — enable it on the server's page",
-    "TURN_IN_PROGRESS": "A turn is already in progress in this conversation",
     "UPKEEP_ALREADY_RUNNING": "A pass over this one is already running",
     "UNAUTHENTICATED": "This page was opened by an earlier Coffer. Reload the page — it picks up the running one. If that does not help, restart Coffer.",
     "UNKNOWN_AGENT": "Unknown agent",
@@ -1684,15 +1614,15 @@
     "UNMANAGED_SKILL_NOT_FOUND": "Unmanaged skill not found",
     "UPSTREAM_TIMEOUT": "Upstream server did not respond in time — retry, or raise its request timeout",
     "UPSTREAM_UNAVAILABLE": "Upstream server is unreachable — check its command or URL, then run Test connection",
-    "KNOWLEDGE_CURATION_BOUND": "One curation pass may only rewrite a handful of documents. The rest continue on the next pass.",
-    "KNOWLEDGE_TOPIC_REFERENCES_FILE": "A curated document may not name another knowledge file — file names change when the collection is reorganised.",
+    "ADOPT_SECRET_REF_EXISTS": "Adopting only creates new secrets — one of these names is already stored or is a standalone secret",
+    "KNOWLEDGE_CURATION_HELD": "Curation is held while a sync round waits for you — resolve it in Sync, then run curation again",
+    "SECRET_BINDING_REJECTED": "That destination was refused in the Coffer app, so nothing was sent. Change the destination, or ask again from the Secrets page.",
     "ATTACHMENT_TOO_LARGE": "This file is over the 20 MB limit.",
     "ATTACHMENT_TYPE_UNSUPPORTED": "This file type can't be attached. Attach an image, a document, audio, or a text file.",
     "ATTACHMENT_NOT_FOUND": "An attached file is no longer available. Attach it again.",
     "ATTACHMENT_EXPIRED": "A file this message carried was deleted after 30 days, so it can't be sent again. Attach the file again and send a new message.",
     "MESSAGE_NOT_FOUND": "That message is no longer in this conversation.",
     "SECRET_BINDING_PENDING": "That secret is waiting for approval in the Coffer app before it is sent here.",
-    "APPROVAL_PENDING": "This change is waiting for approval in the Coffer app.",
     "PRESENCE_GRANT_INVALID": "The approval could not be verified. Try again from the Coffer app.",
     "APPROVAL_NOT_FOUND": "That approval no longer exists.",
     "APPROVAL_NOT_PENDING": "That approval has already been answered.",
@@ -1745,20 +1675,13 @@
     "SYNC_SECRET_NOT_EDITABLE": "An encrypted secret can't be edited by hand. Keep this Mac's version or take the other's."
   },
   "pagination": {
-    "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
-    "perPage": "Per page",
-    "prev": "Previous",
-    "next": "Next",
     "showing": "Showing {{shown}} of {{total}}",
     "loadMore": "Load {{count}} more",
     "loadingMore": "Loading more…"
   },
   "agents": {
     "title": "Agents",
-    "namePlaceholder": "Leave blank to use the default for this type",
     "loadFailed": "Failed to load agents.",
-    "removeConfirm": "Remove agent {{name}}?",
-    "removeConfirmBody": "It stays installed on your machine — you can detect and add it again anytime.",
     "type": "Type",
     "configDir": "Config directory",
     "detail": {
@@ -1786,14 +1709,9 @@
       "repairHook": "Repair Coffer’s memory hook"
     },
     "workspace": {
-      "overview": "Overview",
-      "config": "Config files",
       "skills": "Skills",
       "mcpServers": "MCP servers",
       "plugins": "Plugins",
-      "hooks": "Hooks",
-      "memory": "Memory",
-      "conversations": "Conversations",
       "mcp": {
         "detail": {
           "hint": "Configured directly in this agent's own config file, not managed by Coffer. Shown read-only — Coffer does not start it or list its tools.",
@@ -1814,7 +1732,6 @@
         }
       }
     },
-    "agentOwn": "Agent's own (not via Coffer)",
     "memoryTab": {
       "colProject": "Project",
       "colPath": "Path",
@@ -1826,14 +1743,6 @@
       "loadFailed": "Couldn’t read the memory stores",
       "open": "Open"
     },
-    "configDirOverride": "Config directory (optional)",
-    "configDirPlaceholder": "Leave blank for the default (~/.claude)",
-    "edit": "Edit",
-    "editTitle": "Edit agent",
-    "editSubtitle": "Update this agent's config directory and description.",
-    "save": "Save",
-    "description": "Description",
-    "descriptionPlaceholder": "Optional notes",
     "config": {
       "none": "No config files found.",
       "notCreated": "not created",
@@ -1848,29 +1757,6 @@
         "subagents": "Custom subagent definitions, one Markdown file per subagent.",
         "config": "Codex CLI configuration: model, providers, and tool settings.",
         "hooks": "Lifecycle hooks that run commands around Codex events."
-      }
-    },
-    "cofferConnection": {
-      "connected": "Connected",
-      "notConnected": "Not connected",
-      "needsRepair": "Needs repair",
-      "checking": "Checking…",
-      "connect": "Connect to Coffer",
-      "disconnect": "Disconnect from Coffer",
-      "connectedToast": "Connected to Coffer",
-      "disconnectedToast": "Disconnected from Coffer",
-      "helpLabel": "What connecting installs",
-      "helpIntro": "Connecting writes into this agent's own config:",
-      "parts": {
-        "mcp": "Gateway MCP entry — Coffer's MCP servers and tools",
-        "memory_hook": "Memory delivery hook — the memory index at session start"
-      },
-      "memoryOff": "The memory hook is added while Memory is switched on.",
-      "repairHint": "Some parts are missing — connect again to put them back.",
-      "disconnectNote": "Disconnecting removes only Coffer's own entries.",
-      "disconnectConfirm": {
-        "title": "Disconnect from Coffer?",
-        "body": "Coffer removes its own entries from this agent's config, and the agent no longer reaches Coffer's MCP servers, tools and memory. Nothing else in its config is touched. You can connect it again anytime."
       }
     },
     "skillsTab": {
@@ -2004,9 +1890,6 @@
       },
       "openFileFailed": "Couldn’t open the file."
     },
-    "detection": {
-      "notInstalled": "Not installed"
-    },
     "hooksTab": {
       "parseError": "Couldn’t read {{file}}: {{error}}",
       "emptyTitle": "{{agent}} has no hooks",
@@ -2061,7 +1944,6 @@
         "openActivity": "Open Activity"
       },
       "repair": "Repair Coffer’s memory hook",
-      "repairAria": "Repair Coffer’s memory hook",
       "openFile": "Open file",
       "openFileAria": "Open {{path}}",
       "search": "Search hooks",
@@ -2114,7 +1996,6 @@
         "own": "The agent’s own"
       },
       "loadFailed": "Couldn’t read this list",
-      "moreActions": "More actions",
       "moreFor": "More for {{name}}"
     },
     "state": {
@@ -2131,7 +2012,6 @@
     },
     "stateHeader": {
       "connected": "Connected to Coffer",
-      "config_left_behind": "Program not found",
       "hook_untrusted": "Hook not approved"
     },
     "tabs": {
@@ -2284,7 +2164,6 @@
         "provider": "Provider",
         "model": "Model",
         "effort": "Effort",
-        "reasoningEffort": "Reasoning effort",
         "defaultEffort": "Model default",
         "perConversation": "Chosen per session",
         "builtin": {
@@ -2314,12 +2193,6 @@
           "title": "Install {{name}}",
           "body": "Then check again. Coffer finds the program and your existing config; Connect turns back on."
         },
-        "onPurpose": {
-          "title": "Uninstalled it on purpose?",
-          "body": "The folder stays on disk until you delete it. Removing {{name}} here only takes it off Coffer’s list."
-        },
-        "reveal": "Reveal folder",
-        "removeFromList": "Remove from list",
         "leftIn": "Left in {{dir}}",
         "files": "Files",
         "lastVersion": "Last version",
@@ -2449,7 +2322,6 @@
       "provider": {
         "title": "Provider",
         "helpLabel": "About the Model tab",
-        "help": "Changes apply to new sessions. /effort in {{agent}} overrides Effort. Coffer sets everything else for this connection; edit the file on Config files if you need more.",
         "builtin": "Built-in login",
         "builtinDetail": {
           "claude_code": "Claude Code’s own Anthropic account",
@@ -2694,8 +2566,6 @@
     "title": "Skills",
     "loadFailed": "Failed to load skills",
     "add": "Add skill",
-    "name": "Name",
-    "description": "Description",
     "searchPlaceholder": "Filter skills",
     "noMatches": "No skill matches.",
     "detail": {
@@ -2745,12 +2615,6 @@
     "offMark": "Off",
     "updateAvailable": "Update available",
     "sourceUnreachable": "Source unreachable",
-    "filter": {
-      "label": "Show",
-      "all": "All",
-      "on": "On",
-      "off": "Off"
-    },
     "bulk": {
       "label": "Selected skills",
       "deleteTitle_one": "Delete {{count}} skill?",
@@ -2784,7 +2648,7 @@
       },
       "hint": {
         "linked": "Link to the master. Edits in Coffer reach it at once.",
-        "copied": "Links aren't allowed in {{dir}} on this machine, so Coffer copied the folder. It copies again after each edit in Coffer."
+        "copied": "Links aren't allowed in {{dir}} on this machine, so Coffer copied the folder. The copy follows the master folder at the next repair pass."
       },
       "reason": {
         "skillOff": "The skill is off.",
@@ -3593,8 +3457,7 @@
       "toggleAria": "Toggle tool call {{name}}"
     },
     "newConversation": {
-      "agent": "Agent",
-      "unavailable": "unavailable"
+      "agent": "Agent"
     },
     "modelPicker": {
       "label": "Agent model",
@@ -3688,7 +3551,6 @@
       "title": "New conversation",
       "hint": "Model and effort start from the agent’s Model tab; you can switch them in the conversation.",
       "agent": "Agent",
-      "unavailable": "not available on this Mac",
       "workingDir": "Working directory",
       "workingDirPlaceholder": "Coffer’s workspace (~/.coffer/content/workspace)",
       "start": "Start"
@@ -3699,6 +3561,10 @@
     },
     "files": {
       "title": "Files changed · {{count}}"
+    },
+    "queueHeld": {
+      "message": "A queued message could not start, so the queue is on hold: {{error}}",
+      "resume": "Resume queue"
     },
     "streamLost": {
       "title": "Lost the live stream from the daemon",
@@ -3878,6 +3744,7 @@
       "conversations": "Conversations from {{name}}"
     },
     "settings": {
+      "unavailable": "This channel's saved settings are not valid, so they can't be shown here. Correct them with `coffer channel edit`.",
       "saveState": {
         "saving": "Saving…",
         "saved": "Saved",
@@ -4067,11 +3934,18 @@
         "showSteps": "Show step lines",
         "showStepsHint": "While working, show the last 3 steps under the status line. Off keeps only the status line."
       },
+      "idle": {
+        "title": "Conversations",
+        "label": "Start a new conversation after",
+        "hint": "When a chat has been quiet this long, its next message opens a new conversation. The old one stays in Conversations. 0 never starts a new one.",
+        "unit": "h",
+        "invalid": "Enter a number of hours from {{min}} to {{max}}."
+      },
       "directories": {
         "title": "Working directories",
         "default": "Default",
         "defaultHint": "New conversations start here.",
-        "defaultPlaceholder": "The agent's own",
+        "defaultPlaceholder": "Coffer workspace (~/.coffer/content/workspace)",
         "allowed": "Allowed for /dir",
         "allowedHint": "/dir offers only these and the folders under them. With none, /dir is off.",
         "defaultTag": "default",
@@ -4117,6 +3991,7 @@
   },
   "sync": {
     "title": "Sync",
+    "loadFailed": "Couldn't load Sync",
     "tabs": {
       "machines": "Machines",
       "status": "Status",
@@ -4667,6 +4542,7 @@
     "rounds": {
       "today": "Today",
       "yesterday": "Yesterday",
+      "loadFailed": "Couldn't load the rounds",
       "title": "Rounds",
       "hint": "Each round pulls, applies, then pushes. Rounds with nothing to do are folded.",
       "empty": "No round has run yet.",
@@ -5129,7 +5005,6 @@
       "in24h": "in 24 h",
       "openActivity": "Open in Activity",
       "help": "A group is one set of HTTP API tools that shares a base URL, an auth header bound to a secret, and a default reach. Agents see each tool as <group>__<tool>; Coffer adds the secret when it makes the call, so it never reaches them.",
-      "enabled": "Turn {{name}} on or off",
       "edit": "Edit group",
       "delete": "Delete group",
       "deleteTitle": "Delete {{name}}?",
@@ -5353,11 +5228,6 @@
     },
     "skillCount_one": "{{count}} skill",
     "skillCount_other": "{{count}} skills",
-    "actions": {
-      "copy": "Copy",
-      "copied": "Copied",
-      "open": "Open"
-    },
     "warnings": {
       "title": "Some requires: entries were skipped",
       "line": "{{skill}}: {{message}}"
@@ -5380,7 +5250,6 @@
       "foundAt": "Found at",
       "version": "Version",
       "state": "State",
-      "whyNone": "No reason given",
       "subtitleNeeded": "{{title}} · needed by {{needed}}",
       "kind": {
         "server": "MCP server",
@@ -5606,6 +5475,12 @@
       "importKey": "Import master key…"
     },
     "savedAwaitingApproval": "Saved. The new secret takes effect once it is approved in the Coffer app.",
+    "refused": {
+      "title_one": "{{count}} refused change",
+      "title_other": "{{count}} refused changes",
+      "askAgain": "Ask again",
+      "asked": "Asked again — it now waits for approval."
+    },
     "approvals": {
       "title_one": "{{count}} change waiting for approval",
       "title_other": "{{count}} changes waiting for approval",
@@ -5820,10 +5695,6 @@
       "provider": "Provider"
     }
   },
-  "placeholder": {
-    "title": "Coming in this release",
-    "description": "This page is part of this release and is still being built. Everything else in the sidebar works today."
-  },
   "splitView": {
     "resizeList": "Resize the list"
   },
@@ -5872,6 +5743,7 @@
     }
   },
   "providers": {
+    "title": "Model providers",
     "loadFailed": "Couldn't load the model providers",
     "protocols": {
       "anthropic": "Anthropic",
@@ -5925,10 +5797,6 @@
       "notFound": "Model provider not found",
       "backToList": "Back to model providers"
     },
-    "tabs": {
-      "overview": "Overview",
-      "models": "Models"
-    },
     "actions": {
       "test": "Test",
       "testConnection": "Test connection",
@@ -5968,7 +5836,6 @@
     "endpoint": {
       "title": "Endpoint",
       "locked": "locked while {{agents}} runs on it",
-      "anAgent": "an agent",
       "runtime": "Runtime",
       "wires": "serves {{wires}}",
       "route": "Route",
@@ -5991,16 +5858,7 @@
       "review": "Review"
     },
     "overview": {
-      "models": "Models",
-      "choose": "Choose models",
-      "all": "All models offered",
-      "allOfListed_one": "All {{count}} offered",
-      "allOfListed_other": "All {{count}} offered",
-      "nOfListed_one": "{{n}} of {{count}} offered",
-      "nOfListed_other": "{{n}} of {{count}} offered",
-      "n_one": "{{count}} offered",
-      "n_other": "{{count}} offered",
-      "unrestricted": "Every model the endpoint lists is offered. Choose models to narrow the list."
+      "models": "Models"
     },
     "models": {
       "search": "Search models",
@@ -6276,7 +6134,6 @@
       "loading": "Preparing the update…",
       "upToDate": "Already up to date",
       "upToDateBody": "{{name}} is at the newest commit of its source.",
-      "commits": "Commits · {{count}}",
       "commitsLabel": "Commits in this update",
       "changes": "Changes · {{count}}",
       "noChanges": "No files change.",

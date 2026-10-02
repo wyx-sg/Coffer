@@ -47,7 +47,6 @@ const activeConnection = {
   base_url: "https://api.anthropic.com",
   secret_ref: "ref",
   compatible_agents: ["claude_code"],
-  is_active: true,
   internal_default: false,
   transcribe_default: false,
   fallback: true,
@@ -143,6 +142,27 @@ describe("DraftThread", () => {
       expect(document.body).not.toHaveTextContent(/npm|install -g|brew/);
     },
   );
+
+  test("an agent installed but not added links to the Agents page instead of the install prompt", () => {
+    // The daemon writes the install prompt only while no supported agent is
+    // installed; with none it is null and adding is Coffer's own action.
+    vi.mocked(useAgentInstallHandoff).mockReturnValue({ data: null } as never);
+    renderDraft({ noManagedAgent: true });
+    expect(screen.getByRole("link", { name: /agents/i })).toHaveAttribute("href", "/agents");
+    expect(screen.queryByRole("button", { name: "Copy prompt" })).not.toBeInTheDocument();
+  });
+
+  test("only agents that can run are offered in the picker", () => {
+    renderDraft({
+      agents: [
+        { agent_key: "claude_code", display_name: "Claude Code", available: true },
+        { agent_key: "codex", display_name: "Codex", available: false },
+      ],
+    });
+    fireEvent.keyDown(screen.getByRole("combobox", { name: /agent$/i }), { key: "ArrowDown" });
+    expect(screen.getByRole("option", { name: "Claude Code" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /codex/i })).not.toBeInTheDocument();
+  });
 
   test("offers a model picker beside the agent selector and commits the choice", () => {
     const onModelChange = vi.fn();

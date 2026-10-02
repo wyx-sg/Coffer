@@ -218,16 +218,49 @@ def _split_fence(block: str, limit: int) -> list[str]:
     return [f"{opener}\n{piece}\n```" for piece in pieces]
 
 
-def _hard_split(block: str, limit: int) -> list[str]:
-    if _FENCE_LINE.match(block.split("\n", 1)[0]):
-        return _split_fence(block, limit)
+def _fence_segments(block: str) -> list[tuple[bool, str]]:
+    """``(is_fence, text)`` runs of a block: its prose and its fenced code,
+    wherever in the block a fence starts."""
+    segments: list[tuple[bool, list[str]]] = []
+    open_fence = False
+    for line in block.split("\n"):
+        starts = bool(_FENCE_LINE.match(line))
+        if starts and not open_fence:
+            segments.append((True, [line]))
+            open_fence = True
+            continue
+        if not segments or segments[-1][0] != open_fence:
+            segments.append((open_fence, []))
+        segments[-1][1].append(line)
+        if starts:
+            open_fence = False
+    return [(is_fence, "\n".join(lines)) for is_fence, lines in segments]
+
+
+def _split_prose(text: str, limit: int) -> list[str]:
     pieces: list[str] = []
-    while len(block) > limit:
-        cut = block.rfind("\n", 0, limit)
+    while len(text) > limit:
+        cut = text.rfind("\n", 0, limit)
         cut = cut if cut > limit // 2 else limit
-        pieces.append(block[:cut])
-        block = block[cut:].lstrip("\n")
-    return [*pieces, block]
+        pieces.append(text[:cut])
+        text = text[cut:].lstrip("\n")
+    return [*pieces, text]
+
+
+def _hard_split(block: str, limit: int) -> list[str]:
+    """Cut an oversized block, never through the middle of a fenced code block:
+    its prose is cut at newlines, its fences at line boundaries with each piece
+    closed and reopened. A fence that starts partway through the block (``Here
+    is the log:`` followed by a fence) is a fence like any other."""
+    pieces: list[str] = []
+    for is_fence, text in _fence_segments(block):
+        if len(text) <= limit:
+            pieces.append(text)
+        elif is_fence:
+            pieces += _split_fence(text, limit)
+        else:
+            pieces += _split_prose(text, limit)
+    return [piece for piece in pieces if piece.strip()]
 
 
 def chunk_text(text: str, limit: int) -> list[str]:

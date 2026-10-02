@@ -22,7 +22,7 @@ async def enabled_mcp_servers(
     A server with no scope is visible to everyone; a scoped one only to the
     agents whose **uid** it names — a scope is a reference to another resource,
     so it holds the identity, not the label (ADR
-    resource-identity-is-an-immutable-uid). A session that reported no identity
+    identity-is-the-uid-inside-the-file). A session that reported no identity
     (``session_agent_uid is None`` — e.g. a hand-configured shim) sees only unscoped
     servers, i.e. strictly less, never more.
 

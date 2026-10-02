@@ -5,7 +5,7 @@ import { Cloud, FolderOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { fsApi } from "@/lib/api/fs";
+import { useFsActions } from "@/lib/fsActions";
 import { translateApiError } from "@/lib/api/errors";
 import type { SyncStatus } from "@/lib/api/sync";
 import { SyncBannerCard } from "./SyncBanner";
@@ -14,6 +14,7 @@ import { Body } from "./SyncProblemParts";
 export function SyncCloudFolderCard({ status }: { status: SyncStatus }) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const fs = useFsActions();
   const tool = status.synchroniser ?? t("sync.problem.cloud_folder.someTool");
   return (
     <SyncBannerCard
@@ -32,7 +33,7 @@ export function SyncCloudFolderCard({ status }: { status: SyncStatus }) {
           variant="outline"
           size="sm"
           onClick={() =>
-            void fsApi
+            void fs
               .reveal(status.vault_path)
               .catch((error: unknown) => toast.error(translateApiError(t, error)))
           }

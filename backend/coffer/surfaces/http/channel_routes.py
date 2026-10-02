@@ -1,4 +1,4 @@
-"""Channel routes (spec channels): pairing, status, notify.
+"""Channel routes (spec channels): pairing, status, notify, restart.
 
 Channel CRUD rides the generic /resources endpoints; these are the
 channel-specific operations from contracts/api.openapi.yaml. No route here is
@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any, Literal
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from coffer.domain.channel.config import ChannelConfig
+from coffer.domain.channel_type import ChannelType
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.channel_handoff import sdk_missing_handoff
 from coffer.surfaces.http.dependencies import get_actor
@@ -78,7 +80,7 @@ class ChannelStatusOut(BaseModel):
     #: A mutable label. It is what the page, the CLI and every error message
     #: about this channel show, because a uid in front of a person is a dead end.
     name: str
-    channel_type: str
+    channel_type: ChannelType
     enabled: bool
     running: bool
     pending_pairing: bool
@@ -105,6 +107,11 @@ class ChannelStatusOut(BaseModel):
     #: channels/seatalk "Load the websocket client library from an
     #: operator-supplied directory"). ``None`` in every other state.
     handoff: HandoffOut | None = None
+    #: The channel's settings with every default filled in (spec channels
+    #: "Manage channels from the Channels page and the CLI"): the one typed reading
+    #: of its configuration, so a surface never carries a copy of the defaults.
+    #: ``null`` only for a stored configuration that no longer validates.
+    settings: ChannelConfig | None = None
 
 
 class NotifyIn(BaseModel):
@@ -117,6 +124,11 @@ class NotifyIn(BaseModel):
 
 class NotifyOut(BaseModel):
     sent: bool
+
+
+class RestartOut(BaseModel):
+    #: Whether the channel's adapter is running once the restart has finished.
+    running: bool
 
 
 @router.post("/{uid}/pairing-code", response_model=PairingCodeOut)
@@ -150,7 +162,7 @@ async def channel_status(uid: str) -> ChannelStatusOut:
         uid=status.uid,
         name=status.name,
         title=status.title,
-        channel_type=status.channel_type,
+        channel_type=status.channel_type,  # type: ignore[arg-type]
         enabled=status.enabled,
         running=status.running,
         pending_pairing=status.pending_pairing,
@@ -161,6 +173,7 @@ async def channel_status(uid: str) -> ChannelStatusOut:
         ],
         runs_on=status.runs_on,
         runs_here=status.runs_here,
+        settings=status.settings,
         handoff=handoff_out(
             sdk_missing_handoff(status.name)
             if inbound is not None and inbound.websocket_state == "sdk_missing"
@@ -173,3 +186,9 @@ async def channel_status(uid: str) -> ChannelStatusOut:
 async def notify_channel(uid: str, body: NotifyIn, actor: str = Depends(get_actor)) -> NotifyOut:
     await get_channel_service().notify(uid, body.text, actor=actor, chat_id=body.chat_id)
     return NotifyOut(sent=True)
+
+
+@router.post("/{uid}/restart", response_model=RestartOut)
+async def restart_channel(uid: str) -> RestartOut:
+    """Stop and rebuild the channel's adapter, reading its secret afresh."""
+    return RestartOut(running=await get_channel_service().restart(uid))

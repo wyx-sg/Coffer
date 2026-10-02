@@ -103,21 +103,36 @@ def test_name_exactly_64_chars_is_ok(tmp_path):
     assert isinstance(result, ValidationOk)
 
 
-def test_in_folder_symlink_size_counted_once(tmp_path):
-    """A symlink to an in-folder file must not double-count the target's bytes."""
+def test_in_folder_file_symlink_counts_as_the_bytes_it_is_copied_as(tmp_path):
+    """The master-store copy turns a link to a file into a copy of the file, so
+    the link's bytes count against the cap (many links to one big file must not
+    slip under it)."""
     skill = tmp_path / "skill"
     _write_skill(skill)
     payload = skill / "data.bin"
     payload.write_bytes(b"x" * 4096)
-    # Symlink within the folder pointing at the real file. Following it during
-    # the size walk would add 4096 a second time.
     os.symlink(payload, skill / "alias.bin")
 
     skill_md_bytes = (skill / "SKILL.md").stat().st_size
     result = validate_skill_folder(skill)
     assert isinstance(result, ValidationOk)
-    # data.bin (4096) + SKILL.md only; the symlink contributes nothing.
-    assert result.total_size_bytes == 4096 + skill_md_bytes
+    assert result.total_size_bytes == 2 * 4096 + skill_md_bytes
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="reject a skill folder holding a link to a folder"
+)
+def test_a_symlink_to_a_folder_is_rejected(tmp_path):
+    """``loop -> .`` made the copy recurse until ELOOP; any folder link is refused."""
+    skill = tmp_path / "skill"
+    _write_skill(skill)
+    (skill / "sub").mkdir()
+    os.symlink(".", skill / "loop")
+    os.symlink("sub", skill / "alias")
+    result = validate_skill_folder(skill)
+    assert isinstance(result, ValidationFailure)
+    assert result.reason == "directory_symlinks"
+    assert sorted(result.details["offenders"]) == ["alias", "loop"]
 
 
 def test_path_escape_symlink_rejected(tmp_path):

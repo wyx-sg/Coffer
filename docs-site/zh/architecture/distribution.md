@@ -1,11 +1,11 @@
 ---
 title: 分发与发布
-description: Coffer 怎样被构建成冻结二进制，以命令行压缩包和桌面 .dmg 发布，在凭据齐备时签名并公证，由桌面应用原地更新，安装到 ~/.coffer/bin 下按版本分的目录，打上发布渠道标记，并由实验功能开关把关。
+description: Coffer 怎样被构建成冻结二进制，以命令行压缩包和桌面 .dmg 发布，在凭据齐备时签名并公证，由桌面应用原地更新，安装到 ~/.coffer/bin 下按版本分的目录，打上提交号标记并为正式发布加固，并由实验功能开关把关。
 ---
 
 # 分发与发布 {#distribution-and-releases}
 
-本页讲 Coffer 的 Python 代码怎样到达一台没有 Python 的机器：三个冻结二进制、产出它们的发布流水线、发布怎样签名和公证、桌面应用怎样自我更新、两档下载方式、新构建怎样装在旧构建旁边，以及发布渠道怎样决定哪些实验功能是开的。它写给构建或发布 Coffer 的贡献者，也写给想知道自己磁盘上到底装了什么的人。
+本页讲 Coffer 的 Python 代码怎样到达一台没有 Python 的机器：三个冻结二进制、产出它们的发布流水线、发布怎样签名和公证、桌面应用怎样自我更新、两档下载方式、新构建怎样装在旧构建旁边，以及实验功能怎样在一台机器上逐个开启。它写给构建或发布 Coffer 的贡献者，也写给想知道自己磁盘上到底装了什么的人。
 
 ## 问题 {#the-problem}
 
@@ -25,7 +25,8 @@ Coffer 是一个 Python 程序，但它的用户是跑 AI 编程智能体的人�
 | 发布三个二进制，始终放在一起 | shim 和命令行把 `coffer-daemon` 当作同目录的兄弟文件来找，所以放在一起本身就是发现机制。 |
 | 两档下载在同一个任务里、用同一批二进制构建 | 桌面应用不可能和它包着的命令行压缩包产生偏移。 |
 | 守护进程把兄弟二进制部署到 `~/.coffer/bin` 下按版本分的目录，再切换符号链接 | 部署从不覆盖可能正在运行的二进制，上一个构建也保留下来供手动回滚。 |
-| 构建里打上发布渠道标记（`stable` 或 `dev`） | 实验功能在打 tag 的发布里默认关闭、其他构建里默认开启，不需要发布分支。 |
+| 所有人用同一个构建，每个实验功能默认关闭，由人自己开启 | 没有发布分支，也没有第二个构建：维护者测的正是用户在跑的东西。 |
+| 构建标记：提交号，以及打 tag 的发布上的 `stable` 标记 | 打 tag 的发布会忽略开发用的环境开关，不让它们放宽 Host 和 Origin 检查。人看到的任何东西都不会因此改变。 |
 | 实验功能在请求时按机器把关 | 切换功能不需要重启，也从不删除它保存的东西。 |
 | 只有凭据齐备时才签名、公证和发布更新源 | 同一条流水线为维护者构建签名版本，在其他地方构建未签名版本，两种情况下都保持绿色。 |
 | 桌面应用从 GitHub Releases 上一份 minisign 签名的清单更新 | 更新用编译进应用的密钥来验证，所以装什么既不信任 GitHub，也不信任网络。 |
@@ -64,7 +65,7 @@ flowchart TD
     T["推送 tag v*"] --> I["uv sync --frozen, npm ci"]
     I --> F["构建前端（codegen + vite build）"]
     F --> P["发布计划：哪些 secret 已设置"]
-    P --> S["打上渠道标记 stable（签名时加上 access group）"]
+    P --> S["打上构建标记（签名时加上 access group）"]
     S --> B["构建二进制（PyInstaller ×3，能签就签）"]
     B --> K["冒烟测试（+ 校验签名、公证）"]
     K --> A["coffer-cli-aarch64-apple-darwin.tar.gz"]
@@ -80,7 +81,7 @@ flowchart TD
 1. 用 `uv sync --frozen` 按后端的锁文件（`uv.lock`）安装后端，让打 tag 的构建严格使用锁定的依赖集。
 2. 构建前端（`npm run codegen`、`npm run build`）。守护进程的 spec 会把 `frontend/dist` 作为要提供的 Web 界面收进去。
 3. 判断哪些签名步骤可以运行（见[签名、公证与更新](#signing-notarisation-and-updates)）。有 Developer ID 时，把它导入一个临时钥匙串，并打上钥匙串 access group 标记。
-4. 在 tag 上打上渠道标记 `stable`（见[发布渠道](#release-channels)）。
+4. 打上构建标记：始终写入提交号，在 tag 上再加 `stable` 标记（见[构建标记](#the-build-stamp)）。
 5. 冻结三个二进制——有 Developer ID 就用它签名——并对 `dist/` 跑冒烟测试。签名的构建随后会校验签名并对二进制做公证。
 6. 把 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim` 打包成 `coffer-cli-<triple>.tar.gz`。
 7. 把同样三个文件以 `<name>-<triple>` 的名字放进桌面 crate，运行 `tauri build`，产出 `.dmg`——签名时是 `Coffer-<triple>.dmg`（随后公证并 staple），否则是 `Coffer-unsigned-<triple>.dmg`——有更新密钥时还会产出签名的更新包和 `latest.json`。
@@ -162,28 +163,34 @@ stateDiagram-v2
 `install.sh` 往 `~/.coffer/bin` 里装的是普通文件，每个都改名覆盖公开名字，所以之前部署留下的符号链接会被替换而不是被写穿，版本目录保持完好。从 `~/.coffer/bin` 本身运行的守护进程会跳过部署，所以只用安装脚本的机器在别处的构建（比如桌面应用）启动守护进程之前，不会有版本目录。
 :::
 
-## 发布渠道 {#release-channels}
+## 构建标记 {#the-build-stamp}
 
-每个构建都带一个渠道，`stable` 或 `dev`，记录在后端包里的一个常量中。仓库里永远写的是 `dev`。发布流水线在 tag 上、PyInstaller 运行之前把它改写为 `stable`，所以只有打 tag 的发布是 `stable`。二进制是否冻结不是判断依据：维护者自己的测试构建也是冻结的，但仍是 `dev`。渠道由 `/api/v1/daemon/status` 以 `channel` 字段报告，它唯一的作用是决定实验功能的默认状态。
+每个构建都在后端包里带一个内部标记：构建所用的提交号，以及一个说明它是否为打 tag 正式版的标记。仓库里永远写的是 `dev`；在 tag 上，发布流水线在 PyInstaller 运行之前把它改写为 `stable`。二进制是否冻结不是判断依据：维护者自己的测试构建也是冻结的，但仍是 `dev`。
+
+这个标记只是一个安全细节，别无他用。打 tag 的发布会忽略开发用的环境开关 `COFFER_ALLOWED_HOSTS`、`COFFER_CORS_ORIGINS` 和 `COFFER_DEV_CORS`，这样一个遗留的环境变量就不会放宽已发布构建的 Host 和 Origin 检查（见[安全模型](/zh/architecture/security#the-host-and-origin-checks)）。它不改变任何默认值、任何界面、任何报告：从源码构建和正式发布的行为完全一致，守护进程状态、命令行和设置里都不提什么渠道。
 
 ## 实验功能 {#experimental-features}
 
-实验功能是一项在每个构建里都有、但在 `stable` 上默认关闭的能力。领域层里的功能注册表是唯一的清单；不在里面的一律开启。每个条目写明一个键、该功能拥有的 REST 前缀以及它拥有的资源类型。
+实验功能是一项在每个构建里都有、但在你开启之前一直关闭的能力。领域层里的功能注册表是唯一的清单；不在里面的一律开启。每个条目写明一个键、该功能拥有的 REST 前缀以及它拥有的资源类型。
 
-注册表目前是空的。同步（`vault_sync`）、知识（`knowledge`）和记忆（`memory`）在 1.0 之前是其中的条目，并在 1.0 转正：它们的条目和所有提到它们的门禁都被删除，一次迁移把它们存储的开关从 `daemon-config.json` 中清掉。注册表不再声明的已存储键会被忽略，所以残留的键无害。
+注册表里有四个条目，顺序为：`knowledge`、`memory`、`sync`（保险库同步）和 `models`（模型提供商、本地模型代理和用量）。对话和消息渠道始终开启。更早的设计里还有 `run` 和 `context` 两个条目，现在都没了，`context` 拆成了 `knowledge` 和 `memory`。存在注册表未声明的键下的设置会被忽略，所以残留的键无害，也不做任何迁移。
+
+没有哪个功能硬依赖另一个。关闭的功能只是在其他展示它的地方被略去那一部分：`knowledge` 关闭时，`coffer-guide` skill 没有知识相关章节，渠道里的 `/kb` 会说知识已关闭；`memory` 关闭时，渠道对话不带记忆；`models` 关闭时，内部引擎已选的连接仍然可用。
 
 功能状态在每次读取时解析，优先级从高到低：
 
 1. 来自 `COFFER_FEATURES` 环境变量的固定值（`key=on|off`，逗号分隔），在守护进程生命周期内不变；
 2. 本机自己的设置，存在 `~/.coffer/daemon-config.json`；
-3. 渠道默认值——`dev` 开，`stable` 关。
+3. 默认值：每个构建里的每个功能都默认关闭。
+
+状态会报告是三者中的哪一个决定的：`pin`（固定值）、`setting`（设置）或 `default`（默认）。
 
 ```mermaid
 flowchart LR
     Q["某功能前缀下的请求"] --> G{"功能门禁（key）"}
     G -->|固定值？| P["COFFER_FEATURES"]
     G -->|有设置？| S["daemon-config.json"]
-    G -->|否则| C["渠道默认值"]
+    G -->|否则| C["默认值：关"]
     G -->|开| R["路由执行"]
     G -->|关| X["404 FEATURE_DISABLED"]
 ```
@@ -192,9 +199,11 @@ flowchart LR
 
 - 前缀落在某功能前缀之下的每个路由器，挂载时都带一个检查该功能状态的功能门禁依赖。路由始终保持注册，所以 OpenAPI 文档从不随开关变化，开关在下一个请求就生效。
 - 与类型无关的 `/api/v1/resources` 路由会拒绝属于被关闭功能的类型的资源，并在列表中略去这些资源。
-- MCP 网关从工具列表中去掉该功能的内置工具，对它们的调用按未知工具处理；握手说明也不再提到它们。
+- MCP 网关从工具列表中去掉该功能的内置工具（`coffer__write` 随 `knowledge` 一起消失），对它们的调用按未知工具处理；握手说明也不再提到它们。
 - 命令行命令经由被把关的路由访问守护进程，会打印一行指向 `coffer config set feature.<key> on` 的提示，然后以 1 退出。
-- 该功能拥有的后台任务跳过它们的这一轮。
+- 该功能拥有的后台任务跳过它们的这一轮：`knowledge` 关闭时整理停止，`memory` 关闭时提炼和聚合停止，`models` 关闭时用量采集和价格刷新停止，`sync` 关闭时收敛任务停止。
+- 功能放到智能体面前的东西会被撤回，开启时放回：记忆投递 Hook 和指南里提到的记忆根目录（`memory`）、`coffer-guide` skill 的知识章节（`knowledge`），以及向每个智能体自己配置的提供商投射加上空的模型代理状态（`models`）。
+- Web 界面从守护进程状态读取功能状态，关闭的功能看起来就像不存在：它的侧边栏入口、命令面板条目、概览数字和页面里的相应部分都不见了，指向它页面的链接会落到“未找到”页面。页面上没有提示，也没有“开启”按钮。**设置 → 功能**是开启功能的唯一入口，每个构建里都有。
 
 关掉一个功能从不删除、移动或改写它保存的东西；重新打开后从同一状态继续。用 `coffer config set feature.<key> on|off` 或 `PUT /api/v1/daemon/features/{key}` 切换功能；被固定的功能会以 `409 FEATURE_PINNED` 拒绝修改。一个功能加入的方式是添加一个注册表条目，并通过它给自己的各个界面把关；准备好之后它离开（转正），方式是删除它的条目、所有提到它的门禁，并通过一次迁移删除它存储的开关。见[实验功能](/zh/guides/experimental-features)。
 
@@ -246,7 +255,7 @@ sequenceDiagram
 
 **体积与启动速度。** 冻结二进制很大（每个几十 MB），启动也比系统解释器慢。守护进程只启动一次并常驻，shim 不含服务端栈以保持启动快，所以这个代价很少需要付。
 
-**为未完成的工作开发布分支。** 把实验性工作放在分支上能让 `stable` 保持干净，但每个修复都得合两次，维护者测的也不是用户在跑的东西。渠道标记加上按机器的开关，让同一份代码库有不同的默认值。
+**为未完成的工作开发布分支。** 把实验性工作放在分支上能让 `stable` 保持干净，但每个修复都得合两次，维护者测的也不是用户在跑的东西。按机器的开关加上默认全部关闭，让同一份代码库只产出同一个构建。
 
 **原地覆盖二进制。** 更简单，但部署可能替换掉一个正在运行的进程马上要 `exec` 的文件，而一个坏构建会让你无处可退。按版本分的目录只多占一份磁盘副本。
 
@@ -261,7 +270,7 @@ sequenceDiagram
 | 目录 | 放着什么 |
 | --- | --- |
 | `backend/` | 三个 PyInstaller spec |
-| `scripts/` | 构建、冒烟测试、spec 检查、渠道与构建身份打标记、发布计划与签名、更新清单、版本号改写 |
+| `scripts/` | 构建、冒烟测试、spec 检查、构建与构建身份打标记、发布计划与签名、更新清单、版本号改写 |
 | `.github/workflows/` | 发布流水线和 `desktop` 检查流水线 |
 | `desktop/` | Tauri 壳：打包配置、entitlements、守护进程查找顺序、更新器 |
 | `docs-site/public/` | 一行安装脚本 |
@@ -273,5 +282,5 @@ sequenceDiagram
 - 参考：[文件与目录](/zh/reference/filesystem)、[配置](/zh/reference/configuration)
 - 架构：[守护进程与进程](/zh/architecture/daemon)、[安全模型](/zh/architecture/security)、[持久化](/zh/architecture/persistence)
 - 检查清单：[RELEASING.md](https://github.com/wyx-sg/Coffer/blob/main/RELEASING.md)
-- 决策记录：[The Master Key Lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)、[Distribution — PyInstaller-Bundled Daemon, Shim, and CLI](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md)、[Daemon Detect-or-Spawn Pattern](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-detect-or-spawn.md)、[The Desktop Shell Returns, Owning Only What a Browser Cannot Do](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/desktop-shell-over-a-shared-frontend.md)、[Experimental Features Instead of a Release Branch](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md)、[Envelope-Encrypted Credential Store](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
+- 决策记录：[The Master Key Lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)、[Distribution — PyInstaller-Bundled Daemon, Shim, and CLI](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md)、[Daemon Detect-or-Spawn Pattern](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-detect-or-spawn.md)、[The Desktop Shell Returns, Owning Only What a Browser Cannot Do](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/desktop-shell-over-a-shared-frontend.md)、[Experimental Features Instead of a Release Branch](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md)、[The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
 - 规格：[daemon](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md)、[desktop-app](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md)、[experimental-features](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md)

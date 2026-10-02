@@ -24,8 +24,9 @@ from coffer.application.sync.round_engine import RoundEngine
 from coffer.domain.error_base import CofferError
 from coffer.domain.sync.handoffs import agent_mergeable, is_secret_file
 from coffer.domain.sync.stops import Answer, ConflictFile, Stop, StopKind
+from coffer.domain.vault.content_ids import fingerprint
 from coffer.domain.vault.writers import OP_UPDATE, WRITER_USER, CommitMeta
-from coffer.domain.vault.writes import CommitResult
+from coffer.domain.vault.writes import CommitResult, Expect
 
 _MARKER = re.compile(rb"^(<{7}|={7}|>{7})( |$)", re.M)
 
@@ -190,7 +191,11 @@ def restore_held(engine: RoundEngine, *, actor: str) -> str | None:
         for path in stop.hold.paths:
             data = d.git.read(source, path)
             if data is not None:
-                txn.write(path, data, None)
+                # A held file's bytes on disk are deliberately not HEAD's, so
+                # the expectation is the held bytes themselves: restoring
+                # replaces exactly what the person was shown, nothing newer.
+                held = d.writer.read_disk(path)
+                txn.write(path, data, fingerprint(held) if held is not None else Expect.ABSENT)
     d.state.set_stop(None)
     return txn.version
 

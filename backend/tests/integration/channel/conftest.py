@@ -15,7 +15,6 @@ the chat integration tests use.
 from __future__ import annotations
 
 import asyncio
-import inspect
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -66,6 +65,7 @@ from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from tests.support.channel import FakeChannelAdapter as FakeChannelAdapter
 from tests.support.channel import FakeLiveText as FakeLiveText
 from tests.support.vault_stores import make_resource_repo
+from tests.support.waiting import wait_until  # noqa: F401  (re-exported to the channel tests)
 from tests.unit.chat.conftest import FakeAgentAdapter
 
 #: The agent key this fixture's own scripted provider is registered under, and
@@ -113,24 +113,15 @@ class _StubAgentConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-async def wait_until(
-    predicate: Any,
-    *,
-    timeout: float = 5.0,
-    interval: float = 0.01,
-    message: str = "condition not met within timeout",
-) -> None:
-    """Poll ``predicate`` (sync or async) until truthy, bounded by ``timeout``."""
-    deadline = asyncio.get_running_loop().time() + timeout
-    while True:
-        result = predicate()
-        if inspect.isawaitable(result):
-            result = await result
-        if result:
-            return
-        if asyncio.get_running_loop().time() >= deadline:
-            pytest.fail(message)
-        await asyncio.sleep(interval)
+#: ``{channel name: uid}`` for every channel ``register_channel`` has made. A
+#: channel is addressed on the wire by its uid now, but a test reads better with
+#: the name it registered the channel under, so the helpers below translate.
+_UIDS: dict[str, str] = {}
+
+
+def uid_of(name: str) -> str:
+    """The uid of the channel a test registered as ``name`` (unknown: as given)."""
+    return _UIDS.get(name, name)
 
 
 def inbound(
@@ -139,7 +130,7 @@ def inbound(
     text: str,
     *,
     sender_display: str = "Owner",
-    sender_id: str = "",
+    sender_id: str | None = None,
     thread_id: str = "",
     chat_kind: str = "direct",
     chat_title: str = "",
@@ -153,14 +144,17 @@ def inbound(
     group_main: bool = False,
 ) -> InboundMessage:
     return InboundMessage(
-        channel=channel,
+        channel=uid_of(channel),
         chat_id=chat_id,
         sender_display=sender_display,
         text=text,
         platform_message_id=platform_message_id,
         ephemeral_id=ephemeral_id,
         timestamp=datetime.now(tz=UTC),
-        sender_id=sender_id,
+        # A direct chat's id IS its person's id on both platforms, so a DM
+        # message that names no sender is the chat's own person; a group message
+        # that names none stays anonymous (the group gate refuses it).
+        sender_id=(chat_id if chat_kind == "direct" else "") if sender_id is None else sender_id,
         sender_mention_id=sender_mention_id,
         thread_id=thread_id,
         chat_kind=chat_kind,
@@ -194,7 +188,7 @@ def tap_event(
     chat_id: str,
     data: str,
     *,
-    sender_id: str = "",
+    sender_id: str | None = None,
     chat_kind: str = "direct",
     thread_id: str = "",
     platform_message_id: str = "",
@@ -205,9 +199,10 @@ def tap_event(
     the in-place card refresh.
     """
     return InboundCallback(
-        channel=channel,
+        channel=uid_of(channel),
         chat_id=chat_id,
-        sender_id=sender_id,
+        # As for ``inbound``: a direct chat's id is its person's id.
+        sender_id=(chat_id if chat_kind == "direct" else "") if sender_id is None else sender_id,
         data=data,
         platform_message_id=platform_message_id,
         chat_kind=chat_kind,
@@ -221,7 +216,7 @@ def lifecycle_event(
     """A non-message platform event about the bot's standing in a chat, for
     driving ``processor.on_lifecycle``."""
     return InboundLifecycle(
-        channel=channel, chat_id=chat_id, kind=kind, actor_display=actor_display
+        channel=uid_of(channel), chat_id=chat_id, kind=kind, actor_display=actor_display
     )
 
 
@@ -520,7 +515,7 @@ class ChannelEnv:
         """The uid of the agent row for ``agent_key``, registering it if needed.
 
         The helper a scope and a ``default_agent`` are both written with: both
-        hold agent uids (ADR resource-identity-is-an-immutable-uid), and a uid
+        hold agent uids (ADR identity-is-the-uid-inside-the-file), and a uid
         only exists once there is a row to mint it for.
         """
         name = name or agent_key.replace("_", "-")
@@ -561,7 +556,11 @@ class ChannelEnv:
             else {"channel_type": "telegram", "bot_token_ref": ref}
         )
         cfg.setdefault("default_agent", await self.agent_uid(DEFAULT_AGENT_KEY))
-        return await self.resources.register(kind="channel", name=name, config=cfg, actor="test")
+        resource = await self.resources.register(
+            kind="channel", name=name, config=cfg, actor="test"
+        )
+        _UIDS[name] = resource.uid
+        return resource
 
     async def pair(
         self, resource: Resource, chat_id: str = "owner", *, sender_id: str | None = None
@@ -571,7 +570,8 @@ class ChannelEnv:
             chat_id=chat_id,
             display_name="Owner",
             paired_at=datetime.now(tz=UTC),
-            sender_id=sender_id,
+            # Every pairing carries its sender; a DM's is the chat's own id.
+            sender_id=chat_id if sender_id is None else sender_id,
         )
         await self.peers.upsert(peer)
         return peer
@@ -587,8 +587,15 @@ class ChannelEnv:
         ignore_other_mentions: bool = False,
         agent_scope: Scope | None = None,
         directories: Sequence[str] = (),
+        new_conversation_after_idle_hours: float = 24.0,
     ) -> FakeChannelAdapter:
         adapter = adapter or FakeChannelAdapter()
+        _UIDS[resource.name] = resource.uid
+        if hasattr(adapter, "_name"):
+            # A real adapter built by the infrastructure fixtures was named
+            # "tg"/"st"; in the daemon the factory names it by the channel's uid,
+            # which is what its inbound messages carry.
+            adapter._name = resource.uid
         self.processor.bind(
             ChannelBinding(
                 resource=resource,
@@ -600,6 +607,7 @@ class ChannelEnv:
                 ignore_other_mentions=ignore_other_mentions,
                 agent_scope=agent_scope,
                 directories=tuple(directories),
+                new_conversation_after_idle_hours=new_conversation_after_idle_hours,
             )
         )
         return adapter

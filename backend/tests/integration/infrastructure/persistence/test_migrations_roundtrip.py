@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0137"
+HEAD_REVISION = "0138"
 #: The last revision whose tables still hold the pre-vault state: a data test
 #: of an older revision reads them here, before 0136 drops them.
 PRE_LAYOUT_REVISION = "0135"
@@ -408,6 +408,26 @@ def test_migration_roundtrip_is_reversible_and_idempotent(tmp_path, monkeypatch)
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
     assert _alembic_version(db_path) == HEAD_REVISION
+
+
+def test_0138_drops_the_conversation_owner_column_and_its_index(tmp_path, monkeypatch):
+    db_path = tmp_path / "owner.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+
+    def columns_and_indexes() -> tuple[set[str], set[str]]:
+        with sqlite3.connect(db_path) as conn:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(conversations)")}
+            idx = {r[1] for r in conn.execute("PRAGMA index_list(conversations)")}
+        return cols, idx
+
+    command.upgrade(cfg, "head")
+    cols, idx = columns_and_indexes()
+    assert "owner" not in cols and "idx_conversations_owner" not in idx
+
+    command.downgrade(cfg, "0137")
+    cols, idx = columns_and_indexes()
+    assert "owner" in cols and "idx_conversations_owner" in idx
 
 
 def test_0029_rewrites_skill_config_to_local_import_only(tmp_path, monkeypatch):

@@ -9,14 +9,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-import { getApiClient } from "@/lib/api/client";
+import { mcpServersApi, type McpTestResult } from "@/lib/api/mcpServers";
 import { mcpStatusKey, pendingApprovalsKey, resourcesKey } from "@/lib/api/queryKeys";
-import type { components } from "@/lib/api/types";
-import { saveMcpServerEdit, type SaveArgs } from "@/components/mcp/editMcpServerSave";
-import { importMcpServers, type ImportMcpServersArgs } from "@/components/mcp/importMcpServers";
+import { saveMcpServerEdit, type SaveArgs } from "@/lib/mcp/editMcpServerSave";
+import { importMcpServers, type ImportMcpServersArgs } from "@/lib/mcp/importMcpServers";
 import { useToast } from "@/components/ui/toast";
-
-type TestResult = components["schemas"]["McpTestResultOut"];
 
 /** Save the edit dialog: rotate secrets, then PATCH the resource. The
  *  caller closes the dialog via `mutate(args, { onSuccess })`. */
@@ -28,10 +25,11 @@ export function useSaveMcpServerEdit() {
     mutationFn: (args: Omit<SaveArgs, "t">) => saveMcpServerEdit({ ...args, t }),
     onSuccess: ({ awaitingApproval }) => {
       void qc.invalidateQueries({ queryKey: resourcesKey });
+      // A changed command or URL waits for approval from the save on.
+      void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
       // Saved, but a replaced secret keeps its old value until someone
       // approves in the Coffer app — say so, since the dialog just closes.
       if (awaitingApproval) {
-        void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
         toast.info(t("secrets.savedAwaitingApproval"));
       }
     },
@@ -50,24 +48,16 @@ export function useImportMcpServers() {
   const { t } = useTranslation();
   return useMutation({
     mutationFn: (vars: Omit<ImportMcpServersArgs, "t">) => importMcpServers({ ...vars, t }),
-    onSettled: (report) => {
+    onSettled: () => {
       void qc.invalidateQueries({ queryKey: resourcesKey });
-      if (report && report.awaitingApproval.length > 0) {
-        void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
-      }
+      // A server registered with a secret already in use waits for approval
+      // from the registration on.
+      void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
     },
   });
 }
 
-/** One test of a registered server (`POST /resources/mcp_server/{uid}/test`).
- *  A transport failure is thrown as an Error carrying the daemon's message. */
-async function runMcpServerTest(uid: string): Promise<TestResult> {
-  const { data, error } = await getApiClient().POST("/resources/mcp_server/{uid}/test", {
-    params: { path: { uid } },
-  });
-  if (error || data === undefined) throw new Error(error?.error?.message ?? "test failed");
-  return data;
-}
+const runMcpServerTest = (uid: string): Promise<McpTestResult> => mcpServersApi.test(uid);
 
 /**
  * Test servers just added, once each, and refresh what their result changes
@@ -93,6 +83,6 @@ export function useTestAddedServers() {
  *  folds into a failing result. */
 export function useTestMcpServer(uid: string) {
   return useMutation({
-    mutationFn: (): Promise<TestResult> => runMcpServerTest(uid),
+    mutationFn: (): Promise<McpTestResult> => runMcpServerTest(uid),
   });
 }

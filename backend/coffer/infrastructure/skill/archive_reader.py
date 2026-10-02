@@ -152,6 +152,20 @@ def extract_archive(archive: pathlib.Path, dest: pathlib.Path, *, cap_bytes: int
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
             written = _copy_entry(zf, info, target, written, cap_bytes)
+            _restore_mode(info, target)
+
+
+def _restore_mode(info: zipfile.ZipInfo, target: pathlib.Path) -> None:
+    """Give a script back the executable bit the archive recorded.
+
+    Only the owner/group/other execute bits are applied (``external_attr`` high
+    16 bits are the Unix mode); a mode from another system, or none, leaves the
+    file as written. Nothing else of the recorded mode is trusted — no setuid,
+    no write bits for others.
+    """
+    mode = info.external_attr >> 16
+    if mode & 0o100:
+        target.chmod(target.stat().st_mode | 0o111 & mode)
 
 
 def _copy_entry(

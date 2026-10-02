@@ -12,8 +12,8 @@ import { Button } from "@/components/ui/button";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import type { ResourceOut } from "@/lib/api/resources";
 import { channelHeading, useChannelMeta, useChannelStateWords } from "./channelLabels";
-import type { ChannelPrimaryAction, ChannelView } from "./channelState";
-import { channelPlatform } from "./channelState";
+import type { ChannelPrimaryAction, ChannelView } from "@/lib/channels/channelState";
+import { channelPlatform } from "@/lib/channels/channelState";
 import { PlatformMark } from "./PlatformMark";
 
 export type ChannelCommand = Exclude<ChannelPrimaryAction, null> | "changeMachine" | "delete";

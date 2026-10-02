@@ -4,10 +4,10 @@ details behind a summary card")."""
 from __future__ import annotations
 
 import pathlib
+import tempfile
 
 import pytest
 
-from coffer.application.channel.details_card import load_details
 from coffer.domain.chat.events import TextDelta, TurnDone, TurnStarted
 from tests.unit.chat.conftest import FakeAgentAdapter
 
@@ -52,7 +52,8 @@ async def test_the_answer_head_is_sent_and_its_details_go_behind_a_card(env: Cha
     assert adapter.card_titles == ["Deploy is green on live."]
     assert text == "2 more lines of details."
     assert [b.label for b in buttons] == ["Details", "As file"]
-    assert load_details(details_id) == "## Details\n\n- built in 3m\n- 412 tests passed"
+    kept = pathlib.Path(tempfile.gettempdir()) / "coffer-channel-details" / f"{details_id}.md"
+    assert kept.read_text(encoding="utf-8") == "## Details\n\n- built in 3m\n- 412 tests passed"
 
 
 @pytest.mark.acceptance(

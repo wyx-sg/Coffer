@@ -216,7 +216,7 @@ def test_the_daemon_listens_on_loopback_only(
         raise _StopBeforeServingError
 
     monkeypatch.setattr(entry.uvicorn, "Config", _capture_config)
-    monkeypatch.setattr(entry.uvicorn, "Server", _stop)
+    monkeypatch.setattr(entry, "_DaemonServer", _stop)
     bound_fd = sock.fileno()
     try:
         host, port = sock.getsockname()

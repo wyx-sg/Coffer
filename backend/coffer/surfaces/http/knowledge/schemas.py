@@ -16,9 +16,9 @@ surface no one asked for.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 
 class CollectionOut(BaseModel):
@@ -125,11 +125,11 @@ class MaterialIn(BaseModel):
     #: The collection's directory NAME: a filesystem value, like every path on
     #: this family — see the route module's docstring.
     collection: str = Field(min_length=1)
-    title: str = Field(min_length=1)
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
     #: Required: the skill's catalogue is how a document is ever found, and
     #: material that fails to describe itself is unfindable ("Carry title,
     #: description and actor in frontmatter").
-    description: str = Field(min_length=1)
+    description: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
     body: str = ""
 
 

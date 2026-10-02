@@ -20,7 +20,7 @@ import asyncio
 from collections.abc import Mapping
 from typing import Protocol
 
-from coffer.domain.errors import SecretMissing
+from coffer.domain.secret_errors import SecretMissing
 from coffer.domain.secrets import SecretDestination
 
 
@@ -34,6 +34,8 @@ class BoundaryPort(Protocol):
     """The approval gate (``application.secret.boundary.SecretBoundary``)."""
 
     def require(self, dest: SecretDestination, refs: Mapping[str, str]) -> None: ...
+
+    def bind(self, dest: SecretDestination, refs: Mapping[str, str], *, actor: str) -> object: ...
 
 
 class SecretResolver:
@@ -69,6 +71,16 @@ class SecretResolver:
                 raise SecretMissing(ref)
             out[key] = value
         return out
+
+    async def bind_async(
+        self, refs: dict[str, str], destination: SecretDestination, *, actor: str
+    ) -> None:
+        """Evaluate a destination the moment a person registers or changes it:
+        the value supplied for it is approved with the registration, anything
+        else records its pending approval now (spec secret "Approve a secret's
+        binding when its destination is registered"). Nothing is resolved."""
+        if self._boundary is not None and refs:
+            await asyncio.to_thread(self._boundary.bind, destination, refs, actor=actor)
 
     async def materialize_async(
         self, refs: dict[str, str], destination: SecretDestination | None = None

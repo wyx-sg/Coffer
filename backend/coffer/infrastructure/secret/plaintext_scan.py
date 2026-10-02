@@ -320,7 +320,7 @@ def move(
     skills_root: pathlib.Path,
     ids: Iterable[str] | None,
     *,
-    store: Callable[[str, str], bool],
+    store: Callable[[str, str], bool | str],
     dry_run: bool = False,
     skip: frozenset[str] = frozenset(),
 ) -> ImportResult:
@@ -329,10 +329,12 @@ def move(
     ``store(name, value)`` stores the value under ``secret/<name>`` and returns
     whether the store now decrypts that name back to exactly ``value``; a name
     already holding a different value is refused by it, and that finding is
-    skipped and its file left alone. A file that cannot be rewritten (read-only,
-    say) keeps its values: each of its findings is skipped as ``stored`` — the
-    value is in the store, the file still holds it — and the other files are
-    still rewritten. Moving the same finding again retries the file.
+    skipped and its file left alone; a reason string (a new secret held for
+    approval) skips it with that reason, the file likewise left alone. A file
+    that cannot be rewritten (read-only, say) keeps its values: each of its
+    findings is skipped as ``stored`` — the value is in the store, the file
+    still holds it — and the other files are still rewritten. Moving the same
+    finding again retries the file.
     """
     wanted = None if ids is None else set(ids)
     hits, _, _ = _all_hits(secrets_dir, skills_root, skip)
@@ -346,12 +348,10 @@ def move(
         if dry_run:
             moved.append(Moved(h.finding.id, h.finding.path, name))
             continue
-        if not store(name, h.value):
-            skipped.append(
-                Skipped(
-                    h.finding.id, h.finding.path, f"secret {name!r} already holds another value"
-                )
-            )
+        stored = store(name, h.value)
+        if stored is not True:
+            why = stored or f"secret {name!r} already holds another value"
+            skipped.append(Skipped(h.finding.id, h.finding.path, why))
             continue
         names[h.finding.id] = name
         by_file.setdefault(h.finding.path, []).append(h)

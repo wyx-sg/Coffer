@@ -24,6 +24,7 @@ import { useListProviderModels, useTestConnection } from "@/lib/hooks/useModelIn
 
 export type PairTestMode = "chat" | "list";
 
+/** @ui-only derived view; never crosses the wire. */
 export interface PairTestResult {
   /** `reachable`: the endpoint answered but lists no models to check against. */
   outcome: "ok" | "reachable" | "failed";

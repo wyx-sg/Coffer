@@ -71,3 +71,21 @@ def test_an_explicit_list_replaces_everything_including_the_shell(
     from coffer.surfaces.http.cors import cross_origin_allowlist
 
     assert cross_origin_allowlist() == ["https://example.test"]
+
+
+def test_a_tagged_release_reads_neither_environment_variable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The CLI starts the daemon from the caller's process, so a caller's shell
+    must not be able to widen the Origin or Host rule of a release build."""
+    from coffer import build_channel
+    from coffer.surfaces.http import host_guard
+    from coffer.surfaces.http.cors import SHELL_ORIGINS, cross_origin_allowlist
+
+    monkeypatch.setattr(build_channel, "CHANNEL", "stable")
+    monkeypatch.setenv("COFFER_CORS_ORIGINS", "https://evil.example")
+    monkeypatch.setenv("COFFER_DEV_CORS", "1")
+    monkeypatch.setenv("COFFER_ALLOWED_HOSTS", "*")
+
+    assert cross_origin_allowlist() == list(SHELL_ORIGINS)
+    assert not host_guard.is_allowed_host("evil.example:8000", 8000)

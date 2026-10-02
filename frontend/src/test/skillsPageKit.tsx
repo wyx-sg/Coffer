@@ -57,7 +57,6 @@ export function makeAgent(over: Partial<AgentOut> = {}): AgentOut {
     effort: null,
     tier_models: null,
     version: null,
-    wire_api: null,
     created_at: "2026-05-26T00:00:00Z",
     updated_at: "2026-05-26T00:00:00Z",
     ...over,

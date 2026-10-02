@@ -42,7 +42,9 @@ class MirrorTarget:
 
     resource: Resource | None
     location: ChannelThreadLocation | None
-    platform: str
+    #: The channel's type key (``seatalk`` / ``telegram``); ``None`` once the
+    #: channel is deleted. ``target`` carries the display name.
+    platform: str | None
     target: str
     reason: str | None
 
@@ -79,15 +81,16 @@ async def resolve_target(
     try:
         resource = await resources.get(channel_uid)
     except CofferError:
-        return MirrorTarget(None, None, "", "", "channel_deleted")
-    platform = platform_label(str(resource.config.get("channel_type", "")))
+        return MirrorTarget(None, None, None, "", "channel_deleted")
+    key = str(resource.config.get("channel_type", ""))
+    platform = platform_label(key)
     loc = await threads.locate(conversation_id)
     if loc is None or loc.resource_uid != resource.uid:
-        return MirrorTarget(resource, None, platform, platform, "not_located")
+        return MirrorTarget(resource, None, key, platform, "not_located")
     if loc.chat_kind not in ("direct", "group"):
-        return MirrorTarget(resource, None, platform, platform, "chat_kind_unknown")
+        return MirrorTarget(resource, None, key, platform, "chat_kind_unknown")
     row = await threads.get(loc.resource_uid, loc.chat_id, loc.thread_id)
     label = _place(platform, loc, row.parallel_mark if row is not None else None)
     if loc.chat_kind == "group" and loc.thread_id == "":
-        return MirrorTarget(resource, None, platform, label, "group_main")
-    return MirrorTarget(resource, loc, platform, label, None)
+        return MirrorTarget(resource, None, key, label, "group_main")
+    return MirrorTarget(resource, loc, key, label, None)

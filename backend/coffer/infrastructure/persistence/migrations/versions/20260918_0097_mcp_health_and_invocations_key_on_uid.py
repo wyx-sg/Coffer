@@ -3,8 +3,7 @@
 ``mcp_server_health.resource_name`` (its PRIMARY KEY) and
 ``mcp_invocations.resource_name`` (plus ``idx_invocations_resource``) were the
 last two places in the MCP kind that pointed at a server by the label its owner
-is allowed to change ([Resource Identity Is an Immutable
-`uid`](../../../../../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
+is allowed to change (ADR identity-is-the-uid-inside-the-file).
 Neither is a foreign key, so nothing enforced the pointer, and both broke
 quietly the moment a rename became possible for every kind:
 

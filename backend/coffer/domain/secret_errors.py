@@ -23,7 +23,7 @@ class SecretInUse(CofferError):  # noqa: N818
     one is and what it is called: ``channel 'my-bot'``, ``mcp_server 'github'``.
 
     It deliberately does NOT name uids. A uid is the identity the system holds
-    onto across a rename (ADR resource-identity-is-an-immutable-uid); it is not
+    onto across a rename (ADR identity-is-the-uid-inside-the-file); it is not
     what the user sees on the page they have to go to next, and a refusal
     spelling out two opaque hex strings would be a worse answer than one
     spelling out two names.
@@ -91,14 +91,27 @@ class SecretBindingPending(CofferError):  # noqa: N818
         self.approval_ids = approval_ids
 
 
-class ApprovalPending(CofferError):  # noqa: N818
-    """A change was saved as a pending approval instead of being applied."""
+class SecretBindingRejected(SecretBindingPending):
+    """A person refused this secret for this destination, and it stays refused.
 
-    code = "APPROVAL_PENDING"
+    A kind of ``SecretBindingPending`` for every caller that only needs "the
+    secret is withheld", but with its own code: nothing waits in the desktop
+    app, so retrying or waiting changes nothing. The refusal holds until the
+    destination changes or the person asks again (``POST
+    /api/v1/secrets/approvals/{id}/ask-again``).
+    """
 
-    def __init__(self, approval_id: str, description: str) -> None:
-        super().__init__(f"waiting for approval in the Coffer app: {description}")
-        self.approval_id = approval_id
+    code = "SECRET_BINDING_REJECTED"
+
+    def __init__(self, approval_ids: list[str], descriptions: list[str]) -> None:
+        joined = "; ".join(descriptions)
+        CofferError.__init__(
+            self,
+            f"refused in the Coffer app: {joined}. Nothing was sent, and nothing waits; "
+            "it stays refused until the destination changes or you ask again from the "
+            "Secrets page",
+        )
+        self.approval_ids = approval_ids
 
 
 class PresenceGrantInvalid(CofferError):  # noqa: N818

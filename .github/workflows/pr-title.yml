@@ -28,7 +28,7 @@ jobs:
         run: |
           npm install --no-save \
             @commitlint/cli@19 \
-            @commitlint/config-conventional@19
+            @commitlint/config-conventional@19.5.0
       - name: Lint PR title against .commitlintrc.yaml
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}

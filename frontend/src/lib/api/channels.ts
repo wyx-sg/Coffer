@@ -8,9 +8,9 @@
 // Wire types are the channels contract's generated schemas
 // (`openspec/specs/channels/contracts/api.openapi.yaml` → `generated/channels.ts`),
 // re-exported under the names the hooks and pages already import. Transport is
-// the shared `call` (.agents/frontend.md §4).
+// the typed client through `unwrap` (.agents/frontend.md §4).
 
-import { call, enc } from "@/lib/api/call";
+import { getApiClient, unwrap } from "@/lib/api/client";
 import type { components } from "@/lib/api/generated/channels";
 
 type Schemas = components["schemas"];
@@ -27,21 +27,37 @@ export type PairingCode = Schemas["PairingCodeOut"];
 
 export type NotifyOut = Schemas["NotifyOut"];
 
+export type RestartOut = Schemas["RestartOut"];
+
+/** A channel's settings with every default filled in by the daemon — the typed
+ *  reading of its configuration (`status.settings`), common fields included. */
+export type ChannelSettings = NonNullable<Schemas["ChannelStatusOut"]["settings"]>;
+
 // ---------------------------------------------------------------------------
 // API functions
 // ---------------------------------------------------------------------------
 
 /** Issue a single-use pairing code (replaces any previous pending code). */
 export function issuePairingCode(uid: string): Promise<PairingCode> {
-  return call<PairingCode>(`/channels/${enc(uid)}/pairing-code`, { method: "POST" });
+  return unwrap(getApiClient().POST("/channels/{uid}/pairing-code", { params: { path: { uid } } }));
 }
 
 /** Runtime, pairing, and inbound status of a channel. */
 export function getChannelStatus(uid: string): Promise<ChannelStatus> {
-  return call<ChannelStatus>(`/channels/${enc(uid)}/status`);
+  return unwrap(getApiClient().GET("/channels/{uid}/status", { params: { path: { uid } } }));
+}
+
+/** Stop the channel's adapter and start it again, reading its secret afresh. */
+export function restartChannel(uid: string): Promise<RestartOut> {
+  return unwrap(getApiClient().POST("/channels/{uid}/restart", { params: { path: { uid } } }));
 }
 
 /** Push a text message to the channel's paired peer. */
 export function notifyChannel(uid: string, text: string): Promise<NotifyOut> {
-  return call<NotifyOut>(`/channels/${enc(uid)}/notify`, { method: "POST", body: { text } });
+  return unwrap(
+    getApiClient().POST("/channels/{uid}/notify", {
+      params: { path: { uid } },
+      body: { text },
+    }),
+  );
 }

@@ -40,7 +40,7 @@ coffer log mcp [OPTIONS]
 
 Read the MCP invocation log, newest first.
 
-Without --server this is the log the Activity page shows, Coffer's own calls (server ``coffer``) and deleted servers' rows (``deleted:<name>``) included.
+Without --server this is the log the Activity page shows, Coffer's own calls (server ``coffer``) and the rows of servers since deleted included.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |

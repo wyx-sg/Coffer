@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
-import type { ReachMode } from "@/components/reach/ReachControl";
+import type { ReachMode } from "@/lib/reach/reachState";
 import {
   resourcesKey,
   scopeKey,

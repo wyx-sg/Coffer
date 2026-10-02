@@ -31,6 +31,8 @@ Four jobs, kept apart: **`.raw/` is faithful, `notes/` is useful, `MEMORY.md` is
 
 Assumptions: each agent's native memory is read at the shape it has today, and a format change is expected to break the reader visibly and locally; both agents distil their own memory well enough to be a good source; a partition's index fits a session's opening comfortably, and the delivery ceiling exists for when it does not; one round's new raw entries plus the existing index fit one completion; and every consumer of delivery is a process on this machine with filesystem access, including a channel-driven turn, which drives a local Claude Code or Codex.
 
+While the `memory` feature is switched off (spec [experimental-features](../experimental-features/spec.md) "Close the memory feature's surfaces"), the memory routes are closed, the memory delivery hook is withdrawn from agents, and the distil and aggregate passes skip their rounds; stored memory stays untouched and the hook returns when the feature is switched on. Requirements below describe the feature while it is on.
+
 ## Requirements
 
 ### Requirement: Read only registered and enabled agents' memory
@@ -52,7 +54,7 @@ Aggregation MUST be **read-only**. Coffer MUST NOT create, modify, move, delete 
 - **AND** every file under either config directory is byte-identical, with an unchanged modification time — Coffer created, moved, reformatted and deleted nothing (see "Never write an agent's native memory")
 
 ### Requirement: Read no transcripts or rollouts
-Aggregation MUST NOT read session transcripts, rollouts or raw capture files. Both supported agents already distil their own; this layer starts from that output. The one reading of a transcript this layer does is the count of "Count what memory delivered and what was read", which looks only at the file paths an agent's tool calls named and never at what any message, tool result or note says.
+Aggregation MUST NOT read session transcripts, rollouts or raw capture files **as a source of entries**. Both supported agents already distil their own; this layer starts from that output. The single narrow exception is Claude Code's project slug, which encodes a path lossily: the reader MAY scan a project's own session transcripts for the `cwd` they recorded, accepting it only when Claude Code's encoding of that `cwd` is exactly the slug, so that a renamed or deleted project still files under its real repository. Nothing but that one recorded path is taken, it is looked up once per project per pass, and no transcript is ever listed as a source. The one reading of a transcript this layer does is the count of "Count what memory delivered and what was read", which looks only at the file paths an agent's tool calls named and never at what any message, tool result or note says.
 
 #### Scenario: list no transcript or rollout as a source
 - **GIVEN** a Claude Code config directory holding a session transcript beside a project's memory directory, and a Codex home holding session rollouts beside its memory files
@@ -146,6 +148,11 @@ An entry MUST be filed into the partition of the repository it was learned in, e
 ### Requirement: Identify a partition by its repository
 A partition's identity is the **repository**, not a path. The main checkout, any worktree of it, and a second clone of it MUST resolve to one partition. The partition MUST be named by a readable slug — never an opaque id — and MUST record the repository's own absolute path on its Resource and restate it in its `MEMORY.md`. A name collision MUST be resolved by adding a distinguishing path segment.
 
+#### Scenario: a second clone resolves by repository identity and a gone checkout is replaced
+- **GIVEN** a partition recording one checkout's path and its repository key, and a second clone of the same remote at a path the partition does not record
+- **WHEN** a session's directory in that clone is resolved, and later aggregation reads the clone after the recorded checkout has left the disk
+- **THEN** the session resolves to the partition by key, and the partition records the clone's path as its repository path
+
 #### Scenario: a worktree and its main checkout resolve to one partition
 - **GIVEN** a fixture git repository, a worktree created from it, and raw entries recorded against both paths
 - **WHEN** aggregation runs
@@ -230,7 +237,7 @@ A note MUST be readable and useful **as a file**, with no Coffer process in the 
 - **THEN** it opens with a YAML frontmatter fence carrying its title and description and continues with its Markdown body
 
 ### Requirement: Distil incrementally in two stages
-A **distil** pass MUST run on its own interval — the `distil` pass's switch and interval in the internal engine's upkeep settings ([internal-engine](../internal-engine/spec.md) "Carry a switch and interval for each unattended pass") — rather than after each aggregation, over every partition that holds raw entries it has not yet distilled, driven by the internal connection; a partition with no new raw entries costs no model call. It MUST be **incremental**, and it MUST be incremental in the specific sense that **no single request carries the partition's bodies**. The pass therefore has two stages.
+A **distil** pass MUST run on its own interval — the `distil` pass's switch and interval in the internal engine's upkeep settings ([internal-engine](../internal-engine/spec.md) "Carry a switch and interval for each unattended pass") — rather than after each aggregation, over every partition that holds raw entries it has not yet distilled, driven by the internal connection; a partition with no new raw entries costs no model call. It MUST be **incremental**, and it MUST be incremental in the specific sense that **no single request carries the partition's bodies**. The pass therefore has two stages. Whenever an aggregation files entries into a partition or a distil pass finishes over one, Coffer MUST announce the partition on the daemon's event stream as a `memory` event carrying the partition's uid, because notes and raw entries change without any write to the partition's row ([resource-framework](../resource-framework/spec.md) "Announce every change on one daemon-wide event stream").
 
 - **Routing**: one request per batch, carrying this round's new raw entries, the **index** of the partition's existing notes and its retirement record — and no note body at all. Its output MUST be confined to four actions per entry: **merge** it into a named existing note, **open** a new note, **retire** a note it contradicts, or **keep nothing**.
 - **Writing**: one request per note the routing stage actually touched, carrying that one note's body and the entries routed to it, which returns the rewritten note.
@@ -242,6 +249,11 @@ A partition of a hundred notes that gained three entries therefore costs one rou
 - **WHEN** the distil pass runs
 - **THEN** the routing request carries the new entry and the notes' index lines but no note body
 - **AND** exactly one writing request is made, carrying only the body of the note the entry was routed to
+
+#### Scenario: aggregating and distilling announce the partition that changed
+- **GIVEN** a registered partition and a client reading the event stream
+- **WHEN** an aggregation files a new entry into it, and then a distil pass finishes over it
+- **THEN** a `memory` event naming the partition's uid is announced after each
 
 ### Requirement: Distil mechanically with no internal connection
 With no internal connection configured, distil MUST still produce a usable partition **mechanically**: each raw entry becomes a note of its own, and `MEMORY.md` is written from their frontmatter. It MUST NOT be a no-op — an installation with no internal model still gets an index and a delivery, thinner rather than absent — and it MUST NOT call a model on any path. It proposes no merge and no retirement by contradiction, because both are judgements about meaning; it still retires a note whose raw entries are all gone (see "Retire a note whose raw entries are all gone"), because that is not a judgement.
@@ -392,13 +404,13 @@ Coffer MUST record **an audit event for every delivery fire**, so that whether d
 - **THEN** one `memory_delivery_fired` event names moment `prompt` and the note, and another names moment `guard`, the trigger and its note, and neither carries the note's text
 
 ### Requirement: Cover memory management on REST and the CLI
-A REST family under `/api/v1/memory` MUST cover: list partitions and notes, show one note with its provenance, browse a partition's own directory and read one file from it, update memory (see "Update memory in one action"), answer one fire of the memory hook (`POST /hook`, whose session-start answer is the composed session context), manage triggers (see "Keep triggers in the vault, armed only by a person"), read the delivery overview and a partition's Delivered view (see "Count what memory delivered and what was read", "Show what each agent is given at session start"), and read what has been retired. The `coffer memory` CLI group MUST offer `list`, `show`, `edit`, `rm`, `sync` (update memory: an aggregation, then a distil pass over every partition that gained entries, see "Update memory in one action"), `hook` (the command every installed memory hook entry runs), `trigger` (`list`, `add`, `arm`, `disarm`, `delete`) and `delivered` (the overview, or one partition's Delivered view). It offers no `add`, because partitions are created only by aggregation (see "Provision partitions only from aggregation"), and no `enable` or `disable`, because a partition has no switch (see "Serve every partition to every agent"). A partition's notes, its index, its retirement record and its file tree are plain files (see "Keep notes readable as plain files"), so on the command line `coffer path memory [<partition>]` prints the absolute path of the memory root or of one partition, and they are read on disk; the `coffer memory` group carries no command that lists or prints a note or a file. Installing, inspecting and removing an agent's delivery hook are part of that agent's Coffer connection (spec agent-registry "Connect an agent to Coffer in one action") and are not in this family: on the command line they are `coffer agent connect|disconnect <agent>`, and `coffer agent show <agent>` carries the hook as a part of its `coffer_connection`.
+A REST family under `/api/v1/memory` MUST cover: list partitions and notes, show one note with its provenance, browse a partition's own directory as a read-only tree, update memory (see "Update memory in one action"), answer one fire of the memory hook (`POST /hook`, whose session-start answer is the composed session context), manage triggers (see "Keep triggers in the vault, armed only by a person"), read the delivery overview and a partition's Delivered view (see "Count what memory delivered and what was read", "Show what each agent is given at session start"), and read what has been retired. The `coffer memory` CLI group MUST offer `list`, `show`, `edit`, `rm`, `sync` (update memory: an aggregation, then a distil pass over every partition that gained entries, see "Update memory in one action"), `hook` (the command every installed memory hook entry runs), `trigger` (`list`, `add`, `arm`, `disarm`, `delete`) and `delivered` (the overview, or one partition's Delivered view). It offers no `add`, because partitions are created only by aggregation (see "Provision partitions only from aggregation"), and no `enable` or `disable`, because a partition has no switch (see "Serve every partition to every agent"). A partition's notes, its index, its retirement record and its file tree are plain files (see "Keep notes readable as plain files"), so on the command line `coffer path memory [<partition>]` prints the absolute path of the memory root or of one partition, and they are read on disk; the `coffer memory` group carries no command that lists or prints a note or a file. Installing, inspecting and removing an agent's delivery hook are part of that agent's Coffer connection (spec agent-registry "Connect an agent to Coffer in one action") and are not in this family: on the command line they are `coffer agent connect|disconnect <agent>`, and `coffer agent show <agent>` carries the hook as a part of its `coffer_connection`.
 
 #### Scenario: a partition's own directory is browsable as a file tree
 - **GIVEN** a distilled partition
-- **WHEN** its file tree is requested, and then one file out of it
-- **THEN** the tree's root carries the partition directory's absolute path and holds `MEMORY.md`, a `notes/` directory listing one Markdown file per note, and `RETIRED.md` when anything has been retired; reading `notes/<slug>.md` returns its text — not binary, not truncated — with the absolute path of the file and of the folder holding it
-- **AND** `.raw/` is not in the tree and reading a path under it is refused, the family is read-only (a write is refused with 405), and a path escaping the partition is refused with `MEMORY_UNSAFE_PATH` (400) (see "Present a partition as its memories", "Confine reads to registered agents' memory paths")
+- **WHEN** its file tree is requested
+- **THEN** the tree's root carries the partition directory's absolute path and holds `MEMORY.md`, a `notes/` directory listing one Markdown file per note, and `RETIRED.md` when anything has been retired, each node carrying its absolute path and that of the folder holding it
+- **AND** `.raw/` is not in the tree, no route serves a file's text (a note is read on disk, see "Keep notes readable as plain files"), and a write to the family is refused; `MEMORY_UNSAFE_PATH` (400) answers only a partition name or trigger id that is `..`, holds a path separator or is hidden (see "Present a partition as its memories", "Confine reads to registered agents' memory paths")
 
 #### Scenario: locate a partition's notes from the command line
 - **GIVEN** a distilled partition named `coffer`
@@ -486,9 +498,14 @@ This layer MUST NOT reintroduce transcript distillation, a journal lane, native-
 - **AND** a full aggregation and distil writes no journal directory and nothing outside `MEMORY.md`, `notes/`, `RETIRED.md` and `.raw/` in a partition
 
 ### Requirement: Retire a note whose raw entries are all gone
-Every distil pass — the model-driven one and the mechanical one alike — MUST first retire each note **none** of whose provenance entries is still under its partition's `.raw/`. Aggregation removes a raw entry when its source stops producing it: the agent deleted the fact, or placement now files it into a different partition (see "File personal entries into global"). A note is derived from what `.raw/` holds (see "Keep the memory tree derived and local"), so one with no source left MUST NOT stay in `notes/`, in the index or in delivery — otherwise the same lesson is served from two partitions once placement moves its entries.
+Every distil pass — the model-driven one and the mechanical one alike — MUST first retire each note **none** of whose provenance entries is still under its partition's `.raw/`. Aggregation removes a raw entry when its source stops producing it: the agent deleted the fact, or deleted the whole source file (judged only for a registered, enabled agent whose config directory is still there — a directory that is missing lists nothing and proves nothing), or placement now files it into a different partition (see "File personal entries into global"). A note is derived from what `.raw/` holds (see "Keep the memory tree derived and local"), so one with no source left MUST NOT stay in `notes/`, in the index or in delivery — otherwise the same lesson is served from two partitions once placement moves its entries.
 
 Such a retirement MUST be recorded in `RETIRED.md` like any other (see "Record retirements so they stick"), with a reason saying its sources are gone. Because nothing judged the note untrue, the record MUST NOT exclude anything from later passes: it names no raw entries, and its title MUST NOT be handed to routing as a retired subject, so material that comes back is distilled afresh. A note with at least one provenance entry still under `.raw/` MUST be left alone, and so MUST a note that names no provenance at all.
+
+#### Scenario: a deleted source file takes its raw entries with it
+- **GIVEN** an enabled agent with two native memory files, aggregated, and a second agent with one
+- **WHEN** the agent deletes one of its files and aggregation runs again
+- **THEN** that file's raw entries are gone from `.raw/`, the agent's other file's and the other agent's entries remain, and an agent whose config directory is missing loses nothing
 
 #### Scenario: a global note whose entries moved to the project partition is retired
 - **GIVEN** a `global` note distilled from a `feedback` entry, and an aggregation that now files that entry into its repository's partition and removes it from `global`'s `.raw/`
@@ -536,13 +553,18 @@ A partition MUST NOT carry the Resource framework's per-agent reach or an enable
 - **AND** no per-agent reach is written for it, and a request to disable it through the generic resource route is refused: the partition is served to every agent, including the one that contributed nothing to it
 
 ### Requirement: Update memory in one action
-`POST /api/v1/memory/sync` and `coffer memory sync` MUST run an aggregation (see "Aggregate on an interval and on demand") and then a distil pass over every partition holding raw entries it has not yet distilled (see "Distil incrementally in two stages"), and MUST answer with what the aggregation wrote and which partitions were distilled. A distil pass already running over a partition MUST NOT fail the action: that partition is reported as skipped. The web UI MUST offer this as one **Update memory** button, on the partitions page and on a partition's page, and MUST NOT offer aggregation or distillation as separate buttons.
+`POST /api/v1/memory/sync` and `coffer memory sync` MUST run an aggregation (see "Aggregate on an interval and on demand") and then a distil pass over every partition with something to distil — raw entries it has not yet distilled (see "Distil incrementally in two stages"), or a note none of whose raw entries is left (see "Retire a note whose raw entries are all gone") — and MUST answer with what the aggregation wrote and which partitions were distilled. A distil pass already running over a partition MUST NOT fail the action: that partition is reported as skipped. The web UI MUST offer this as one **Update memory** button, on the partitions page and on a partition's page, and MUST NOT offer aggregation or distillation as separate buttons.
 
 #### Scenario: one action reads new agent memory and distils it
 - **GIVEN** a registered agent whose native memory gained an entry about a repository with a distilled partition
 - **WHEN** `POST /api/v1/memory/sync` is called
 - **THEN** the entry is written under that partition's `.raw/` and the same call distils it into the partition's notes
 - **AND** the answer names that partition among the distilled ones
+
+#### Scenario: a partition whose only change is a deleted source is still distilled
+- **GIVEN** a partition whose single note was built from a native memory file the agent has since deleted, so its raw entries are gone and nothing new arrived
+- **WHEN** memory is updated
+- **THEN** the note is retired and the answer names that partition among the distilled ones
 
 ### Requirement: Retrieve the notes a prompt names
 For every prompt the developer sends a hook-driven session, Coffer MUST rank the notes of the session's repository partition and of `global` against the prompt — each note's title, description, search terms and body — with a lexical ranker (BM25, CJK text as bigrams), and MUST add to the session the **top three** notes that score at or above a **relevance floor** and that this session has not already been given. Each is delivered as the absolute path of its file and its substance (see "Word delivered notes as provenance plus fact"), and the whole delivery MUST stay within **1,500 UTF-8 bytes**. A prompt of fewer than three words, or a bare nudge such as `continue`, `ok` or `继续`, MUST retrieve nothing. What a session was already given is remembered per `session_id` — the id the agent hands its hook, never a process id — and survives a daemon restart (see "Remember what a session was given across daemon restarts").

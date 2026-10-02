@@ -42,7 +42,6 @@ export function ConversationsIndex({
   return (
     <div className="space-y-5">
       <PageHeader
-        icon={MessageSquare}
         title={t("conversations.title")}
         badges={
           c.listLoading || none ? null : (

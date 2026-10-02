@@ -18,6 +18,7 @@ import shutil
 from dataclasses import dataclass
 
 from coffer.domain.skill.binding import LinkMode
+from coffer.domain.skill.content_hash import folder_content_hash
 from coffer.domain.skill.drift import DriftKind
 from coffer.infrastructure.platform.links import (
     infer_dir_link_kind,
@@ -121,11 +122,16 @@ def classify_target(
         return TargetStatus(drift=DriftKind.TAMPERED_LINK, target_path=str(link))
 
     if link_mode is LinkMode.COPY_FALLBACK and link.is_dir():
-        # Copy-fallback bindings are real directories by design. A plain
-        # directory carrying the skill's SKILL.md is the expected state.
-        if (link / "SKILL.md").is_file():
-            return TargetStatus(drift=None, target_path=str(link))
-        return TargetStatus(drift=DriftKind.TAMPERED_LINK, target_path=str(link))
+        # Copy-fallback bindings are real directories by design, but a copy
+        # does not follow the master: one whose content no longer matches it
+        # (master edited since, or the copy edited) is replaced from master by
+        # the tampered-link repair, the old copy kept in the backup folder.
+        in_step = (link / "SKILL.md").is_file() and folder_content_hash(
+            link
+        ) == folder_content_hash(expected_master)
+        return TargetStatus(
+            drift=None if in_step else DriftKind.TAMPERED_LINK, target_path=str(link)
+        )
 
     return TargetStatus(drift=DriftKind.REPLACED_WITH_REGULAR, target_path=str(link))
 

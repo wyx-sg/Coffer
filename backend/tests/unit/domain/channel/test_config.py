@@ -84,7 +84,7 @@ def test_missing_channel_type_rejected():
 
 def test_a_channel_names_no_agent_until_its_owner_picks_one():
     # ``default_agent`` holds the UID of an agent resource (ADR
-    # resource-identity-is-an-immutable-uid), and there is no constant a schema
+    # identity-is-the-uid-inside-the-file), and there is no constant a schema
     # could default it to: a uid is minted per vault. So the absent value is
     # ``None`` — bound to nobody — and not a guess at which agent the owner
     # meant. The runtime refuses to start such a channel rather than routing it
@@ -166,6 +166,20 @@ def test_the_ping_threshold_defaults_to_ninety_seconds_and_zero_turns_it_off():
         parse_channel_config({**SEATALK_CONFIG, "notify_after_seconds": 3601})
 
 
+@pytest.mark.acceptance(
+    spec="channels", scenario="the idle period comes from the channel's settings"
+)
+def test_the_idle_period_defaults_to_a_day_and_zero_turns_it_off():
+    """spec channels "Open a new conversation after an idle period"."""
+    assert parse_channel_config(SEATALK_CONFIG).new_conversation_after_idle_hours == 24.0
+    zero = parse_channel_config({**SEATALK_CONFIG, "new_conversation_after_idle_hours": 0})
+    assert zero.new_conversation_after_idle_hours == 0
+    with pytest.raises(ValidationError):
+        parse_channel_config({**SEATALK_CONFIG, "new_conversation_after_idle_hours": -1})
+    with pytest.raises(ValidationError):
+        parse_channel_config({**SEATALK_CONFIG, "new_conversation_after_idle_hours": 9000})
+
+
 def test_raw_telegram_token_in_bot_token_ref_rejected():
     raw_token = "123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     with pytest.raises(ValidationError, match="looks like a raw secret"):
@@ -237,6 +251,7 @@ def test_root_model_round_trips_flat_dict():
         "wait_after_forward_seconds": 5.0,
         "show_steps": True,
         "notify_after_seconds": 90.0,
+        "new_conversation_after_idle_hours": 24.0,
         "directories": [],
         "runs_on": None,
     }
@@ -255,6 +270,7 @@ def test_root_model_round_trips_seatalk_dict():
         "wait_after_forward_seconds": 5.0,
         "show_steps": True,
         "notify_after_seconds": 90.0,
+        "new_conversation_after_idle_hours": 24.0,
         "directories": [],
         "runs_on": None,
     }

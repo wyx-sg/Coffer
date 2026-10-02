@@ -1,7 +1,7 @@
 """End-to-end HTTP coverage for /api/v1/providers/* (spec provider-switching).
 
 Every route under this prefix addresses a connection by its immutable ``uid``
-(ADR resource-identity-is-an-immutable-uid). The ``name`` beside it is a label:
+(ADR identity-is-the-uid-inside-the-file). The ``name`` beside it is a label:
 these tests assert on it, and resolve *through* it only via the one route that
 still finds a resource by label (``_uids_named`` below).
 """
@@ -117,6 +117,16 @@ def _register_agent(c: TestClient, *, agent_type: str, config_dir: pathlib.Path)
     )
     assert r.status_code == 201, r.text
     return r.json()["uid"]
+
+
+def _activate(c: TestClient, uid: str, agent_type: str = "claude_code"):
+    """Switch the agent of ``agent_type`` onto connection ``uid``."""
+    return c.post(f"/api/v1/providers/{uid}/activate", json={"agent_type": agent_type})
+
+
+def _connection_of(c: TestClient, agent_type: str) -> str | None:
+    """The uid of the connection the agent of ``agent_type`` runs on."""
+    return c.get(f"/api/v1/agents/{agent_type}").json()["connection_uid"]
 
 
 def _anthropic_body(name: str = "acme", **over) -> dict:
@@ -277,9 +287,11 @@ def test_activate_writes_claude_settings(tmp_path, monkeypatch):
     with _client(app) as c:
         _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body())
-        r = c.post(f"/api/v1/providers/{uid}/activate")
+        r = _activate(c, uid)
         assert r.status_code == 200, r.text
-        assert r.json()["projected"] == ["claude-code"]
+        assert r.json()["agent"] == "claude-code"
+        # The connection is recorded on the AGENT, not as a flag on itself.
+        assert _connection_of(c, "claude_code") == uid
         data = json.loads((cfg / "settings.json").read_text())
         # Claude Code calls the local proxy with its own token; the
         # connection's endpoint and key stay with the proxy, so this file
@@ -316,7 +328,7 @@ def test_agent_binding_drives_projected_model(tmp_path, monkeypatch):
         )
         assert rb.status_code == 200, rb.text
         assert rb.json()["model"] == "bound-opus"
-        c.post(f"/api/v1/providers/{uid}/activate")
+        _activate(c, uid)
         data = json.loads((cfg / "settings.json").read_text())
         assert data["model"] == "bound-opus"
         assert data["effortLevel"] == "high"
@@ -347,9 +359,10 @@ def test_activate_writes_codex_config(tmp_path, monkeypatch):
         # model lives on the binding, not the connection — spec provider-switching
         # "Take projected model keys from the agent's binding").
         c.patch(f"/api/v1/agents/{cx}", json={"model": "gpt-x"})
-        r = c.post(f"/api/v1/providers/{uid}/activate")
+        r = _activate(c, uid, "codex")
         assert r.status_code == 200, r.text
-        assert r.json()["projected"] == ["codex"]
+        assert r.json()["agent"] == "codex"
+        assert _connection_of(c, "codex") == uid
         doc = tomllib.loads((cfg / "config.toml").read_text())
         assert doc["model"] == "gpt-x"
         assert doc["model_provider"] == "coffer"
@@ -375,7 +388,8 @@ def test_use_builtin_removes_projection_and_clears_active(tmp_path, monkeypatch)
     with _client(app) as c:
         _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body())
-        c.post(f"/api/v1/providers/{uid}/activate")
+        _activate(c, uid)
+        assert _connection_of(c, "claude_code") == uid
         # sanity — the connection is projected into the agent config first
         assert json.loads((cfg / "settings.json").read_text())["env"]["ANTHROPIC_BASE_URL"]
 
@@ -395,9 +409,8 @@ def test_use_builtin_removes_projection_and_clears_active(tmp_path, monkeypatch)
         data = json.loads((cfg / "settings.json").read_text())
         assert "apiKeyHelper" not in data
         assert "ANTHROPIC_BASE_URL" not in data.get("env", {})
-        # and the connection is no longer the active override
-        providers = c.get("/api/v1/providers").json()["providers"]
-        assert all(not p["is_active"] for p in providers)
+        # and the agent no longer names a connection
+        assert _connection_of(c, "claude_code") is None
 
 
 def test_use_builtin_is_idempotent_noop(tmp_path, monkeypatch):
@@ -423,35 +436,62 @@ def test_use_builtin_takes_an_agent_type_not_a_wire(tmp_path, monkeypatch):
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="activating a profile deactivates the previous active profile of the same wire format",
+    scenario="switching one agent onto a connection moves only that agent",
 )
-def test_activate_deactivates_previous(tmp_path, monkeypatch):
+def test_switching_one_agent_moves_only_that_agent(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59800)
+    cc_dir, cx_dir = _agent_dir(tmp_path, "cc"), _agent_dir(tmp_path, "cx")
     with _client(app) as c:
-        first = _new(c, _anthropic_body(name="first"))
-        second = _new(c, _anthropic_body(name="second"))
-        c.post(f"/api/v1/providers/{first}/activate")
-        c.post(f"/api/v1/providers/{second}/activate")
-        actives = {p["uid"]: p["is_active"] for p in c.get("/api/v1/providers").json()["providers"]}
-        assert actives == {first: False, second: True}
+        _register_agent(c, agent_type="claude_code", config_dir=cc_dir)
+        _register_agent(c, agent_type="codex", config_dir=cx_dir)
+        both = _new(
+            c,
+            {
+                "name": "both",
+                "protocol": "openai",
+                "base_url": "https://gw/v1",
+                "secret_value": "sk-both",
+            },
+        )
+        other = _new(c, _anthropic_body(name="other"))
+        assert _activate(c, both, "claude_code").status_code == 200
+        assert _activate(c, both, "codex").status_code == 200
+        codex_before = (cx_dir / "config.toml").read_text()
+
+        # Claude Code moves to another connection; Codex is on `both` still.
+        assert _activate(c, other, "claude_code").status_code == 200
+        assert _connection_of(c, "claude_code") == other
+        assert _connection_of(c, "codex") == both
+        assert (cx_dir / "config.toml").read_text() == codex_before
 
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="activate a profile whose wire matches no registered agent records active but projects nothing",  # noqa: E501
+    scenario="a connection the agent is not reached by is refused",
 )
-def test_activate_without_matching_agent(tmp_path, monkeypatch):
+def test_a_connection_that_does_not_reach_the_agent_is_refused(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59810)
+    cx_dir = _agent_dir(tmp_path, "cx")
+    with _client(app) as c:
+        cc = _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path, "cc"))
+        _register_agent(c, agent_type="codex", config_dir=cx_dir)
+        uid = _new(c, _anthropic_body())
+        assert (
+            c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": [cc]}}).status_code
+            == 200
+        )
+        r = _activate(c, uid, "codex")
+        assert r.status_code == 409, r.text
+        assert r.json()["error"]["code"] == "PROVIDER_DOES_NOT_REACH_AGENT"
+        assert not (cx_dir / "config.toml").exists()
+        assert _connection_of(c, "codex") is None
+
+
+def test_an_unregistered_agent_cannot_be_switched(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59815)
     with _client(app) as c:
         uid = _new(c, _anthropic_body())
-        r = c.post(f"/api/v1/providers/{uid}/activate")
-        assert r.status_code == 200, r.text
-        assert r.json()["projected"] == []
-        # A credentialed wire defaults into both agents; neither is registered,
-        # so both are skipped. ``skipped`` names agent TYPES — it is telling the
-        # user which product received nothing, and a type is not a resource.
-        assert r.json()["skipped"] == ["claude_code", "codex"]
-        assert c.get(f"/api/v1/providers/{uid}").json()["is_active"] is True
+        assert _activate(c, uid, "codex").status_code == 404
 
 
 @pytest.mark.acceptance(
@@ -465,7 +505,7 @@ def test_switch_preserves_keys_and_backs_up(tmp_path, monkeypatch):
     with _client(app) as c:
         _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body())
-        c.post(f"/api/v1/providers/{uid}/activate")
+        _activate(c, uid)
         data = json.loads((cfg / "settings.json").read_text())
         assert data["theme"] == "dark"  # unrelated key preserved
         _assert_proxy_form(data)
@@ -478,8 +518,9 @@ def test_switch_preserves_keys_and_backs_up(tmp_path, monkeypatch):
 def test_switch_is_audited(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59830)
     with _client(app) as c:
+        _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path))
         uid = _new(c, _anthropic_body())
-        c.post(f"/api/v1/providers/{uid}/activate")
+        _activate(c, uid)
         r = c.get("/api/v1/audit", params={"event_type": "provider_switched"})
         assert r.status_code == 200
         assert "provider_switched" in r.text
@@ -527,9 +568,9 @@ def test_openai_connection_scoped_to_claude_code(tmp_path, monkeypatch):
         # ...and the reported effective set follows the scope.
         assert c.get(f"/api/v1/providers/{uid}").json()["compatible_agents"] == ["claude_code"]
 
-        act = c.post(f"/api/v1/providers/{uid}/activate")
+        act = _activate(c, uid)
         assert act.status_code == 200, act.text
-        assert act.json()["projected"] == ["claude-code"]
+        assert act.json()["agent"] == "claude-code"
         data = json.loads((cfg / "settings.json").read_text())
         _assert_proxy_form(data)
         # The proxy relays Claude Code's requests to agnes, with agnes's key.
@@ -556,7 +597,7 @@ def test_create_ollama_without_secret(tmp_path, monkeypatch):
         body = r.json()
         assert body["protocol"] == "ollama"
         assert body["secret_ref"] is None
-        assert body["is_active"] is False  # ollama never projects to an agent
+        assert "is_active" not in body  # which agent runs on it is the agent's field
         # Supplying a secret for ollama is rejected.
         r2 = c.post(
             "/api/v1/providers",
@@ -575,9 +616,9 @@ def test_create_ollama_without_secret(tmp_path, monkeypatch):
 )
 def test_activating_an_ollama_connection_is_refused_and_writes_nothing(tmp_path, monkeypatch):
     """An ollama connection is internal-only: even scoped to a registered
-    Claude Code agent, activating it writes no native config, never makes it
-    ``is_active``, and says so rather than reporting a switch that did not
-    happen."""
+    Claude Code agent, switching it on writes no native config, never becomes
+    the agent's connection, and says so rather than reporting a switch that did
+    not happen."""
     app = _app(tmp_path, monkeypatch, 59855)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
@@ -589,13 +630,13 @@ def test_activating_an_ollama_connection_is_refused_and_writes_nothing(tmp_path,
         scoped = c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": [cc]}})
         assert scoped.status_code == 200, scoped.text
 
-        act = c.post(f"/api/v1/providers/{uid}/activate")
+        act = _activate(c, uid)
         assert act.status_code == 409, act.text
         assert act.json()["error"]["code"] == "PROVIDER_INTERNAL_ONLY"
         assert "local-llama" in act.json()["error"]["message"]
 
         row = c.get(f"/api/v1/providers/{uid}").json()
-        assert row["is_active"] is False
+        assert _connection_of(c, "claude_code") is None
         assert row["compatible_agents"] == []
         assert not (cfg / "settings.json").exists()
 
@@ -920,7 +961,7 @@ def test_reject_malformed_curated_models(tmp_path, monkeypatch):
 # was written into Claude Code's ``settings.json`` and had to be rewritten
 # there. The projected helper cites the uid now, so that route is DELETED and
 # renaming is a field on ``PATCH /api/v1/resources/{uid}``, the same one every
-# kind gets (ADR resource-identity-is-an-immutable-uid). The tests below are
+# kind gets (ADR identity-is-the-uid-inside-the-file). The tests below are
 # that route's coverage rewritten against the PATCH — what has to stay true is
 # everything the old route worked to preserve.
 
@@ -936,7 +977,7 @@ def test_rename_keeps_the_uid_secret_and_projection(tmp_path, monkeypatch):
         _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body(name="acme"))
         ref_before = _ref_of(c, uid)
-        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
+        assert _activate(c, uid).status_code == 200
         helper_before = json.loads((cfg / "settings.json").read_text())["apiKeyHelper"]
 
         r = c.patch(f"/api/v1/resources/{uid}", json={"name": "acme-prod"})
@@ -1014,7 +1055,7 @@ def test_renamed_connection_still_serves_its_agent(tmp_path, monkeypatch):
     with _client(app) as c:
         cc = _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body(name="acme", secret_value="sk-the-key"))
-        c.post(f"/api/v1/providers/{uid}/activate")
+        _activate(c, uid)
         before = (cfg / "settings.json").read_text()
 
         assert c.patch(f"/api/v1/resources/{uid}", json={"name": "acme-2"}).status_code == 200
@@ -1025,7 +1066,7 @@ def test_renamed_connection_still_serves_its_agent(tmp_path, monkeypatch):
         assert (cfg / "settings.json").read_text() == before
         body = c.get(f"/api/v1/providers/{uid}").json()
         assert body["name"] == "acme-2"
-        assert body["is_active"] is True
+        assert _connection_of(c, "claude_code") == uid
         assert "claude_code" in body["compatible_agents"]
 
 
@@ -1082,8 +1123,8 @@ def test_each_agents_route_follows_the_connections_scope(tmp_path, monkeypatch):
         for uid, agent_uids in ((for_claude, [cc]), (for_codex, [cx])):
             r = c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": agent_uids}})
             assert r.status_code == 200, r.text
-        assert c.post(f"/api/v1/providers/{for_claude}/activate").status_code == 200
-        assert c.post(f"/api/v1/providers/{for_codex}/activate").status_code == 200
+        assert _activate(c, for_claude).status_code == 200
+        assert _activate(c, for_codex, "codex").status_code == 200
 
         routes = _route_keys(c)
         assert routes[cc] == [(for_claude, "sk-claude")]
@@ -1092,13 +1133,13 @@ def test_each_agents_route_follows_the_connections_scope(tmp_path, monkeypatch):
 
 def test_a_disabled_connection_serves_no_agent(tmp_path, monkeypatch):
     """``enabled`` is honoured at the projection seam, so switching a
-    connection off takes its route out of the proxy even while ``is_active``
-    still records that it was the one projected."""
+    connection off takes its route out of the proxy even while the agent's
+    record still names it."""
     app = _app(tmp_path, monkeypatch, 59930)
     with _client(app) as c:
         cc = _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path))
         uid = _new(c, _anthropic_body("acme"))
-        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
+        assert _activate(c, uid).status_code == 200
         assert cc in _route_keys(c)
         assert c.post(f"/api/v1/resources/{uid}/disable").status_code == 200
         assert cc not in _route_keys(c)
@@ -1110,7 +1151,7 @@ def test_scoping_a_connection_to_no_agent_retires_its_reach(tmp_path, monkeypatc
     with _client(app) as c:
         cc = _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path))
         uid = _new(c, _anthropic_body("acme"))
-        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
+        assert _activate(c, uid).status_code == 200
         assert (
             c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": []}}).status_code
             == 200

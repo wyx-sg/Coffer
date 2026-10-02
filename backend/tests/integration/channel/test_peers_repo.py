@@ -132,16 +132,6 @@ async def test_sender_id_roundtrips(env: ChannelEnv) -> None:
     assert peer.sender_id == "u-42"
 
 
-async def test_peer_paired_before_sender_awareness_reads_sender_id_as_none(
-    env: ChannelEnv,
-) -> None:
-    resource = await env.register_channel("tg")
-    await env.peers.upsert(_peer(resource.uid))  # no sender_id supplied
-    peer = await env.peers.get_by_chat(resource.uid, "chat-1")
-    assert peer is not None
-    assert peer.sender_id is None
-
-
 # ---------------------------------------------------------------------------
 # Multi-peer-per-channel (group/thread support, Task 3 — no migration)
 # ---------------------------------------------------------------------------

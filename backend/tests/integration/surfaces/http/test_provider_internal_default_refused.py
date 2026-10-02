@@ -106,3 +106,26 @@ def test_a_second_internal_default_is_refused_with_a_409(tmp_path, monkeypatch) 
         assert _flag(c, second) is True
         assert _flag(c, first) is False
     set_active_token(None)
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a second speech-to-text default outside the dedicated route is refused",
+)
+def test_a_second_transcribe_default_is_refused_with_a_409(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    with _client(tmp_path, monkeypatch) as c:
+        first = _new(c, "first")
+        second = _new(c, "second")
+        assert c.post(f"/api/v1/providers/{first}/transcribe-default").status_code == 200
+
+        row = c.get(f"/api/v1/resources/{second}").json()
+        r = c.patch(
+            f"/api/v1/resources/{second}",
+            json={"config": {**row["config"], "transcribe_default": True}},
+        )
+
+        assert r.status_code == 409, r.text
+        assert r.json()["error"]["code"] == "PROVIDER_TRANSCRIBE_DEFAULT_TAKEN"
+        assert "first" in r.json()["error"]["message"]
+        assert c.get(f"/api/v1/providers/{first}").json()["transcribe_default"] is True
+        assert c.get(f"/api/v1/providers/{second}").json()["transcribe_default"] is False

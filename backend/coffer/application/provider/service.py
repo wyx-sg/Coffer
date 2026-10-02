@@ -3,15 +3,15 @@ provider profiles (spec provider-switching).
 
 A profile is stored as a ``provider`` resource (CRUD + audit + sync come free
 from ``ResourceService``). This service adds the secret-vault handling, the
-single-active-per-agent invariant, the native-config projection (the "switch",
-chosen by the agents a connection's per-agent scope reaches — not its wire), and
-and the key decryption the model proxy's state is built from — no route
-returns a key; the proxy injects it (ADR api-key-providers-are-reached-through-
-a-separate-local-model-proxy).
+per-agent switch (which connection an agent runs on is a field of the agent's own
+record), the native-config projection it writes (the agent's file, chosen by the
+agent — not by the connection's wire), and the key decryption the model proxy's
+state is built from — no route returns a key; the proxy injects it (ADR
+api-key-providers-are-reached-through-a-separate-local-model-proxy).
 
-The secret store is synchronous (short-lived SQLite connections); every
-call is wrapped in ``asyncio.to_thread`` so the busy-wait never blocks the loop
-that holds the write lock (mirrors ``mcp_entry_service``).
+The secret store is synchronous (``.enc`` files under the vault); every call
+is wrapped in ``asyncio.to_thread`` so file I/O never blocks the event loop
+(mirrors ``mcp_entry_service``).
 """
 
 from __future__ import annotations
@@ -37,7 +37,6 @@ from coffer.application.provider.results import ActivateResult, DeactivateResult
 from coffer.application.provider.secret_gate import ProviderSecretBoundary, require_key
 from coffer.application.provider.switch_ops import activate as _activate_op
 from coffer.application.provider.switch_ops import deactivate as _deactivate_op
-from coffer.application.provider.targets import projection_targets
 from coffer.application.provider.transcribe_default_ops import (
     set_transcribe_default as _set_transcribe_default_op,
 )
@@ -50,7 +49,7 @@ from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.provider.config import CuratedModel, Protocol, ProviderConfig, ResolvedConnection
-from coffer.domain.provider.errors import NoActiveProvider, ProviderSecretSourceInvalid
+from coffer.domain.provider.errors import ProviderSecretSourceInvalid
 from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.resource import Resource
 from coffer.domain.secret_errors import SecretMissing
@@ -71,8 +70,14 @@ class _SecretStore(_Protocol):
     def delete(self, ref: str) -> None: ...
 
 
-class _AgentLister(_Protocol):
+class _AgentRegistry(_Protocol):
+    """The agent kind, as this one needs it: the rows, and the one field of an
+    agent's record a switch writes."""
+
     async def list(self) -> list[Resource]: ...
+    async def set_connection(
+        self, uid: str, connection_uid: str | None, *, actor: str = "api"
+    ) -> Resource: ...
 
 
 class ProviderService:
@@ -84,7 +89,7 @@ class ProviderService:
         # Handed straight to the projector, so it is annotated with the
         # projector's own port rather than a second copy of it here.
         config_store: ProjectionConfigStore,
-        agents: _AgentLister,
+        agents: _AgentRegistry,
         audit: AuditService,
         agent_catalog: AgentCatalog,
         engine: EngineNotifyPort | None = None,
@@ -138,17 +143,6 @@ class ProviderService:
     def _cfg(resource: Resource) -> ProviderConfig:
         return ProviderConfig.model_validate(resource.config)
 
-    @classmethod
-    def _compat(cls, resource: Resource, agents: list[Resource]) -> list[AgentType]:
-        """The agent types this connection projects into — its framework-level
-        scope, hydrated at the projection seam (ADR per-agent-resource-scope).
-        A disabled or keyless connection projects into nothing.
-
-        ``agents`` is the registry the scope's uids are resolved against; every
-        caller here has already listed it for the projection itself, so this
-        adds no read."""
-        return projection_targets(resource, cls._cfg(resource), agents)
-
     # --- CRUD ----------------------------------------------------------------
 
     async def create(
@@ -199,7 +193,6 @@ class ProviderService:
             base_url=base_url,
             secret_ref=ref,
             models=list(models or []),
-            is_active=False,
             local_runtime=local_runtime,
         )
         try:
@@ -286,36 +279,41 @@ class ProviderService:
 
     # --- switch ----------------------------------------------------------------
 
-    async def activate(self, uid: str, *, actor: str = "api") -> ActivateResult:
-        """Make this the active connection for each agent its scope reaches
-        and project it into every enabled agent of those types.
+    async def activate(
+        self, uid: str, agent_type: AgentType, *, actor: str = "api"
+    ) -> ActivateResult:
+        """Switch the agent of ``agent_type`` onto this connection: project it
+        into that agent's native config and record it as the agent's connection.
 
-        Projection happens BEFORE the ``is_active`` flip so a native-config write
-        failure (e.g. an unwritable agent config dir) aborts the switch with the
-        registry untouched. The invariant is at most one active connection PER
-        AGENT TYPE: activating this one takes over the agents it covers from any
-        previously-active connection, and de-projects that connection from the
-        agents this one does NOT cover so no stale config is left behind. A thin
-        delegate; the order of operations lives in ``switch_ops``.
+        Per agent: nothing else changes (spec provider-switching "Switch one
+        agent at a time"). Projection happens BEFORE the record is written so a
+        native-config write failure (an unwritable config dir, a file the user
+        edited under us) aborts the switch with the registry untouched, and a
+        failure after it puts the file back. A thin delegate; the order of
+        operations lives in ``switch_ops``.
         """
         async with self._hold():
-            return await _activate_op(self, uid, actor=actor)
+            return await _activate_op(self, uid, agent_type, actor=actor)
 
     async def deactivate(self, agent_type: AgentType, *, actor: str = "api") -> DeactivateResult:
-        """Switch every agent of ``agent_type`` back to its built-in login:
-        de-project Coffer's keys and clear the active connection's
-        ``is_active``. A connection reaching multiple agents is reverted as a
-        unit (the single ``is_active`` flag is all-or-nothing). Idempotent;
-        de-projects before the flip, mirroring :meth:`activate`."""
+        """Switch the agent of ``agent_type`` back to its built-in login:
+        de-project Coffer's keys and clear its connection. Idempotent;
+        de-projects before the record is written, mirroring :meth:`activate`."""
         async with self._hold():
             return await _deactivate_op(self, agent_type, actor=actor)
+
+    async def clear_agent_connection(self, agent_uid: str, *, actor: str = "system") -> None:
+        """Clear one agent's connection and write nothing else: the reconciler's
+        way of dropping a choice the agent's config contradicts (no file is
+        touched, the record is Coffer's own)."""
+        async with self._hold():
+            await self._agents.set_connection(agent_uid, None, actor=actor)
 
     async def _key_of(self, cfg: ProviderConfig, *, label: str, uid: str) -> str:
         """The decrypted key of one connection, for the model proxy's state —
         only once its base URL is an approved destination (``secret_gate``)."""
         ref = cfg.secret_ref
-        if ref is None:
-            raise NoActiveProvider(label)
+        assert ref is not None, "the proxy state asks for a key only of a keyed connection"
         await require_key(self, uid, label, cfg)
         value = await asyncio.to_thread(self._secrets.get, ref)
         if value is None:
@@ -356,10 +354,3 @@ class ProviderService:
         Satisfies ``application.engine.resolve.TranscribeConnectionPort``.
         """
         return await _transcribe_connection_op(self, model)
-
-    # --- internals -----------------------------------------------------------
-
-    async def _set_active(self, resource: Resource, *, active: bool, actor: str) -> None:
-        config = dict(resource.config)
-        config["is_active"] = active
-        await self._resources.update_config(resource.uid, config, actor)

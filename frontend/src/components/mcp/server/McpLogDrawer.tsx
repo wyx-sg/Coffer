@@ -10,7 +10,7 @@ import type { InvocationSummary } from "@/lib/hooks/useMcpServerPage";
 import { cn } from "@/lib/utils";
 import { McpCallsLog } from "./McpCallsLog";
 import { McpServerLogView } from "./McpServerLogView";
-import { transportOf } from "./serverState";
+import { transportOf } from "@/lib/mcp/serverState";
 
 export type LogTab = "calls" | "log";
 

@@ -32,27 +32,9 @@ const EXPORT_TIMEOUT: Duration = Duration::from_secs(30);
 const MIN_PASSPHRASE_CHARS: usize = 8;
 
 #[derive(serde::Serialize)]
-pub struct PresenceMode {
-    pub development: bool,
-}
-
-#[derive(serde::Serialize)]
 pub struct MasterKeyBackup {
     pub path: String,
     pub fingerprint: String,
-}
-
-/// Whether presence prompts are running in the clearly-marked development
-/// arrangement — the page says so beside every reveal/approve control.
-#[tauri::command]
-pub async fn presence_mode() -> Result<PresenceMode, String> {
-    blocking(|| {
-        let daemon = Daemon::find()?;
-        Ok(PresenceMode {
-            development: master_key::is_development_build() || daemon.development()?,
-        })
-    })
-    .await
 }
 
 /// Show a secret's value to the person at the window. The page uses the

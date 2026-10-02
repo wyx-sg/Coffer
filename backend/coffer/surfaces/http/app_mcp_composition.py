@@ -74,15 +74,17 @@ from coffer.surfaces.http.secret_boundary_wiring import (
     register_resource_destination,
 )
 from coffer.surfaces.http.secret_composition import boundary_resolver
+from coffer.surfaces.http.usage_wiring import register_usage_retention
 from coffer.surfaces.http.vault_composition import VaultStores
 
 _log = logging.getLogger(__name__)
 
 
-#: Registry key for the process-wide supervisor (step 4). A session id is a
-#: UUID, so this cannot collide with one, and the lifecycle hooks walk the
-#: registry rather than a list of sessions — they need every supervisor holding
-#: a live upstream, not every session.
+#: Registry key for the process-wide supervisor (step 4). The ``/mcp`` route
+#: never takes a client-sent id that starts with ``__`` as a session id
+#: (``protocol_routes.RESERVED_SESSION_PREFIX``), so this cannot collide with one,
+#: and the lifecycle hooks walk the registry rather than a list of sessions —
+#: they need every supervisor holding a live upstream, not every session.
 _PROCESS_SUPERVISOR_KEY = "__process__"
 
 
@@ -286,34 +288,13 @@ def build_prunable_registry() -> PrunableRegistry:
             default_retention_days=30,
             display_name="Delete Archived Chats",
             description="Delete archived conversations this many days after archival "
-            "(with their messages).",
+            "(with their messages), unless they were written to since.",
+            # An archived conversation can still take a message (a chat thread
+            # resumed from the phone): it is not deleted while that is true.
+            also_older_column="updated_at",
         )
     )
-    # Usage metering (ADR usage-is-metered-at-the-proxy-and-subscriptions-show-
-    # only-official-quota): the per-request detail is a run log like the MCP
-    # calls and follows THEIR window rather than growing a setting of its own;
-    # the daily rollup the Usage page charts is kept for a year. The rollup's
-    # ``day`` is a local ``YYYY-MM-DD`` string, which compares against the
-    # cutoff instant as text — to the day, which is the rollup's resolution.
-    registry.register(
-        PrunableTable(
-            name="usage_requests",
-            timestamp_column="started_at",
-            default_retention_days=None,
-            display_name="Usage Requests",
-            description="Per-request model usage recorded by the model proxy.",
-            policy_name="mcp_invocations",
-        )
-    )
-    registry.register(
-        PrunableTable(
-            name="usage_daily",
-            timestamp_column="day",
-            default_retention_days=365,
-            display_name="Daily Usage",
-            description="Daily model usage and estimated cost per agent, connection and model.",
-        )
-    )
+    register_usage_retention(registry)
     return registry
 
 

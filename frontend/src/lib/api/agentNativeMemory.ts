@@ -12,32 +12,35 @@
 //
 // Its own module rather than a section of api/agents.ts, so this surface can
 // move independently. Wire types from the agent-registry contract; transport
-// via the shared `call` (.agents/frontend.md §4).
-import { call, enc } from "@/lib/api/call";
+// via the typed client (.agents/frontend.md §4).
+import { getApiClient, unwrap } from "@/lib/api/client";
 import type { components } from "@/lib/api/generated/agent-registry";
 
 /** `memory_dir` is the store's real identity on disk — what open/reveal act on;
  * `path` the real project directory, when Coffer could resolve it. */
 export type NativeMemoryStore = components["schemas"]["NativeMemoryStoreOut"];
 
-export type NativeMemoryListOut = components["schemas"]["NativeMemoryListOut"];
-
 /** One entry in a store's tree. `path` is relative to the store directory. */
 export type NativeMemoryFileNode = components["schemas"]["MemoryFileNodeOut"];
-
-export type NativeMemoryFileTreeOut = components["schemas"]["MemoryFileTreeOut"];
 
 /** One file's contents. No fingerprint: this surface has no write. */
 export type NativeMemoryFileContent = components["schemas"]["MemoryFileContentOut"];
 
 export const agentNativeMemoryApi = {
-  list: (agentUid: string) => call<NativeMemoryListOut>(`/agents/${enc(agentUid)}/native-memory`),
+  list: (agentUid: string) =>
+    unwrap(
+      getApiClient().GET("/agents/{uid}/native-memory", { params: { path: { uid: agentUid } } }),
+    ),
   files: (agentUid: string, dir: string) =>
-    call<NativeMemoryFileTreeOut>(
-      `/agents/${enc(agentUid)}/native-memory/files?${new URLSearchParams({ dir })}`,
+    unwrap(
+      getApiClient().GET("/agents/{uid}/native-memory/files", {
+        params: { path: { uid: agentUid }, query: { dir } },
+      }),
     ),
   fileContent: (agentUid: string, dir: string, path: string) =>
-    call<NativeMemoryFileContent>(
-      `/agents/${enc(agentUid)}/native-memory/files/content?${new URLSearchParams({ dir, path })}`,
+    unwrap(
+      getApiClient().GET("/agents/{uid}/native-memory/files/content", {
+        params: { path: { uid: agentUid }, query: { dir, path } },
+      }),
     ),
 };

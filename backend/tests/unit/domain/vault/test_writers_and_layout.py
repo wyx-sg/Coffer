@@ -6,7 +6,7 @@ import pytest
 
 from coffer.domain.vault.content_ids import EMPTY_BLOB, blob_id
 from coffer.domain.vault.errors import VaultPathRefused
-from coffer.domain.vault.layout import area_of, is_document, resource_path, safe_stem
+from coffer.domain.vault.layout import area_of, resource_path, safe_stem
 from coffer.domain.vault.writers import (
     WRITER_AGENT,
     WRITER_DISK,
@@ -61,8 +61,6 @@ def test_every_path_has_one_area(path: str, area: str) -> None:
 
 def test_resources_are_filed_by_name_and_parsed_as_documents() -> None:
     assert resource_path("skill", "pdf-tools") == "resources/skill/pdf-tools.json"
-    assert is_document("resources/skill/pdf-tools.json")
-    assert not is_document("skills/pdf-tools/SKILL.md")
     assert safe_stem("a/b..c") == "a-b..c"
 
 

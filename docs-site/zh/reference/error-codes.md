@@ -70,7 +70,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `MASTER_KEY_PASSPHRASE_WRONG` | 422 | 导入受口令保护的主密钥备份（`.cfk`）时口令错误或没给口令。 | 输入在另一台 Mac 上导出主密钥时设置的口令。 |
 | `MASTER_KEY_PASSPHRASE_TOO_SHORT` | 422 | 请求主密钥备份时给的口令不足八个字符。什么都没写入。 | 选一个更长的口令。 |
 | `SECRET_BINDING_PENDING` | 409 | 某个密钥将发往一个没有人批准过的去处或目标。什么都没发送。`details.approval_ids` 列出等待中的审批。 | 在 Coffer 桌面应用中批准，或用 `coffer secret reject <id>` 拒绝。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
-| `APPROVAL_PENDING` | 202 | 这次改动被保存为待审批，而不是直接应用：替换了一个正在使用的值，或者关闭保护。 | 在 Coffer 桌面应用中批准。 |
+| `SECRET_BINDING_REJECTED` | 409 | 有人对这个目的地和目标拒绝过这个密钥，而且没有东西在等待。什么都没发送。`details.approval_ids` 列出被拒绝的审批。 | 更改去处，或在密钥页面再次询问（`POST /api/v1/secrets/approvals/{id}/ask-again`）。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
 | `APPROVAL_NOT_FOUND` | 404 | 没有这个 id 的审批。 | 用 `coffer secret approvals --all` 列出。 |
 | `APPROVAL_NOT_PENDING` | 409 | 该审批已被批准、拒绝或取代。 | 无需操作；新的改动会产生新的审批。 |
 | `PRESENCE_GRANT_INVALID` | 403 | 一次查看、主密钥备份或审批没有带有效的在场授权：缺失、过期、已用过、属于别的操作或目标，或者不是桌面应用签发的。 | 在 Coffer 桌面应用中操作，它会执行在场检查并签发授权。 |
@@ -107,7 +107,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
-| `AGENT_TYPE_REGISTERED` | 409 | 这个类型的智能体已经注册过。一台机器上每种类型只有一个智能体，并以类型命名。消息会给出已有智能体的 uid。 | 使用已有的智能体。要让它指向另一个目录，运行 `coffer agent edit <type> --config-dir <dir>`。 |
+| `AGENT_TYPE_REGISTERED` | 409 | 这个类型的智能体已经注册过。一台机器上每种类型只有一个智能体，并以类型命名。消息会给出已有智能体的 uid。 | 使用已有的智能体。要让它指向另一个目录，运行 `coffer agent edit <name> --config-dir <dir>`。 |
 | `AGENT_CONFIG_DIR_REGISTERED` | 409 | 已有智能体注册到这个配置目录。 | 使用已有的智能体，或换一个配置目录。 |
 | `AGENT_CONFIG_DIR_MISSING` | 409 | 该智能体的配置目录在本机上不存在。在应用同步过来的智能体时抛出。 | 在本机上安装该智能体，或在这里忽略它。 |
 | `PRIVILEGED_PATH` | 422 | 该路径是 Coffer 拒绝管理的系统位置。 | 选择你主目录下的路径。 |
@@ -122,6 +122,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `MCP_ENTRY_PROTECTED` | 422 | 该条目是 Coffer 自己的网关条目。 | 用安装和卸载操作，不要直接编辑它。 |
 | `MCP_ENTRY_SOURCE_AMBIGUOUS` | 422 | 该条目存在于多个配置文件中。 | 指明来源文件。 |
 | `ADOPT_SECRET_UNRESOLVED` | 422 | 纳入托管一个 MCP 条目时，发现了没有密钥映射的、疑似密钥的环境变量键。 | 纳入托管时把列出的每个键映射到一个密钥 ref。 |
+| `ADOPT_SECRET_REF_EXISTS` | 409 | 纳入托管一个 MCP 条目时，把某个密钥键映射到了已有值的 ref，或映射到独立密钥 `secret/<name>`。纳入托管只创建 ref。什么都没写入。 | 把该键映射到一个新的 ref；如果没有任何东西使用已有的密钥，也可以先删除它。 |
 | `PLUGIN_NOT_FOUND` | 404 | 没有已安装的插件使用这个标识符。 | 刷新插件列表。 |
 | `PLUGIN_TOGGLE_UNSUPPORTED` | 422 | 这个类型智能体的插件不能通过 Coffer 启用或禁用。 | 使用智能体自己的工具。 |
 | `PLUGIN_UNINSTALL_UNSUPPORTED` | 422 | 这个类型智能体的插件必须用智能体自己的工具卸载。 | 使用智能体自己的工具。 |
@@ -134,7 +135,6 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
 | `SKILL_INVALID` | 422 | 该技能文件夹不是有效的技能（例如缺少 `SKILL.md` 或其格式错误）。 | 修好文件夹后重新导入。 |
-| `TARGET_CONFLICT` | 409 | 投递技能会覆盖目标路径上一个不是 Coffer 放的东西。 | 移走冲突的文件或文件夹，然后运行 `coffer skill verify --fix`。 |
 | `SKILL_FILE_STALE` | 409 | 你读取之后，某个技能文件在磁盘上被改过。 | 重新加载，再重新做你的修改。 |
 | `UNMANAGED_SKILL_NOT_FOUND` | 404 | 在智能体自己的技能文件夹中找不到这个名字的技能。 | 刷新智能体的技能列表。 |
 | `UNMANAGED_SKILL_INVALID` | 422 | 智能体自己的某个技能因为文件夹无效而无法纳入托管。 | 修好它的 `SKILL.md`，再纳入托管。 |
@@ -158,8 +158,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `KNOWLEDGE_PATH_UNSAFE` | 400 | 路径跳出了知识根目录、指向隐藏条目，或无法指代一篇文档。 | 使用指向知识集内某篇 Markdown 文档的相对路径。 |
 | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 | 上传超过了消息中给出的大小上限。 | 拆分文档或上传更小的文件。 |
 | `INGEST_REJECTED` | 400 | 上传的内容无法转换。`details.reason` 为 `unsupported_type`、`scanned_pdf`（没有文本层的 PDF）或 `empty_conversion`；`details.doc_type` 给出类型。 | 转成支持的格式；对扫描的 PDF 做 OCR。 |
-| `KNOWLEDGE_TOPIC_REFERENCES_FILE` | 400 | 某篇整理后的文档用文件名引用了另一个知识文件。 | 写出主题，而不是文件名。 |
-| `KNOWLEDGE_CURATION_BOUND` | 400 | 一轮整理试图写入的文件超过了单轮允许的数量。 | 提交更小的材料。 |
+| `KNOWLEDGE_CURATION_HELD` | 409 | 立即整理被拒绝，因为同步轮次正在等你处理（冲突或确认）。 | 先在同步里处理，再重新点击立即整理。 |
 | `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 | 本机不记录知识历史，通常是因为没装 git。写入仍然可用。 | 安装 git；历史从下一次写入开始记录。 |
 | `KNOWLEDGE_VERSION_NOT_FOUND` | 404 | 知识历史中没有这个 id 的版本，或该文档没有这个版本。 | 用 `coffer knowledge history <path>` 或 `coffer knowledge changes` 列出版本。 |
 | `KNOWLEDGE_NOT_A_PASS` | 400 | 只有一轮整理可以撤销，而这个版本是其他类型的改动。 | 用 `coffer knowledge restore` 恢复文档的早期版本。 |
@@ -176,7 +175,6 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- | --- |
 | `MEMORY_NOTE_NOT_FOUND` | 404 | 该分区中没有这个 slug 的笔记。 | 在分区页面上列出笔记。 |
 | `MEMORY_RAW_ENTRY_NOT_FOUND` | 404 | 该分区中没有这个 id 的原始条目。 | 刷新；该条目可能已被提炼并移除。 |
-| `MEMORY_FILE_NOT_FOUND` | 404 | 分区内该路径下没有可读的文件。 | 浏览分区的文件。 |
 | `MEMORY_UNSAFE_PATH` | 400 | 某段路径是隐藏的、全是点，或因其他原因不安全。 | 使用分区内的路径。 |
 | `MEMORY_UNREADABLE` | 422 | 某个智能体的原生记忆文件无法解析。 | 修复消息中指出的文件。 |
 | `MEMORY_DELIVERY_UNSUPPORTED` | 422 | 这个类型的智能体没有 Coffer 可以安装的记忆 Hook。 | 无；该智能体用自己的文件工具从记忆根目录（`coffer path memory`）读取记忆笔记。 |
@@ -189,9 +187,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
 | `CONVERSATION_NOT_FOUND` | 404 | 没有这个 id 的对话。 | 刷新对话列表。 |
-| `TURN_IN_PROGRESS` | 409 | 该对话已有一个轮次在运行。 | 等待，或中断正在运行的轮次。 |
 | `UNKNOWN_AGENT` | 400 | 对话所用的智能体没有注册智能体提供方。 | 从 `GET /api/v1/agent-providers` 中选择一个智能体。 |
-| `AGENT_CONFIG_REJECTED` | 400 | 智能体拒绝了对话的配置，例如未知的模型。`details.reason` 是一个简短的标记，如 `model_not_found`。 | 选择该智能体提供的模型。 |
+| `AGENT_CONFIG_REJECTED` | 400 | 智能体拒绝了对话的配置，例如未知的模型，或者该类型没有 Coffer 管理的已启用智能体。`details.reason` 是一个简短的标记，如 `model_not_found` 或 `agent_not_managed`。 | 选择该智能体提供的模型，或在「智能体」页面添加或启用该智能体。 |
 | `MESSAGE_NOT_FOUND` | 404 | 重发时指定的用户消息不属于该对话。 | 刷新对话；重试那里显示的消息。 |
 | `ATTACHMENT_EXPIRED` | 410 | 再次发送（重试）的消息带有一个已被 30 天媒体清理删除的文件；什么都没发送。 | 重新附上文件，发送一条新消息。 |
 | `ATTACHMENT_NOT_FOUND` | 422 | 消息引用了一个没有存储过的附件：从未上传，或其文件已被清理。什么都没发送。 | 重新上传该文件。 |
@@ -206,10 +203,11 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
 | `PROVIDER_SECRET_SOURCE_INVALID` | 422 | 新建连接必须恰好提供密钥值或密钥 ref 中的一个。 | 传 `--secret` 或 `--secret-ref`，不要两个都传。 |
-| `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | 连接处于开启状态时不能更改其协议格式。 | 运行 `coffer provider builtin <wire>`，编辑后再重新切换。 |
+| `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | 有智能体运行在该连接上时，不能更改其协议格式。 | 对运行在它上面的每个智能体运行 `coffer provider builtin <agent_type>`，编辑后再重新切换。 |
+| `PROVIDER_DOES_NOT_REACH_AGENT` | 409 | 不能把智能体切到它不生效的连接上：连接或智能体被停用，或连接的作用范围没有指明该智能体。 | 开启该连接，或把该智能体加入它的作用范围，然后再切换。 |
 | `PROVIDER_INTERNAL_ONLY` | 409 | `ollama` 连接只供 Coffer 内部引擎使用，不能为智能体开启。 | 改为把它作为内部引擎的默认连接。 |
 | `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | 已有另一个连接是内部引擎的默认连接。 | 用 `coffer config set engine.provider <name>` 转移这个标记。 |
-| `NO_ACTIVE_PROVIDER` | 404 | 所请求的协议格式没有处于开启状态的连接。 | 用 `coffer provider switch <name>` 开启一个。 |
+| `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` | 409 | 已有另一个连接是语音转文字的默认连接。 | 用 `coffer config set transcribe.provider <name>` 转移这个标记。 |
 
 ## 保险库 {#the-vault}
 
@@ -250,7 +248,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
 | `FEATURE_DISABLED` | 404 | 该路由或资源属于一个在本机上已关闭的实验功能。`details.feature` 给出功能名。 | `coffer config set feature.<feature> on`。见[实验功能](/zh/guides/experimental-features)。 |
-| `FEATURE_UNKNOWN` | 404 | 该键不是实验功能，例如已转正的功能。 | 用 `coffer config list feature.` 列出键。 |
+| `FEATURE_UNKNOWN` | 404 | 该键不是实验功能。键只有 `knowledge`、`memory`、`sync` 和 `models`。 | 用 `coffer config list feature.` 列出键。 |
 | `FEATURE_PINNED` | 409 | `COFFER_FEATURES` 在守护进程的生命周期内固定了该功能。 | 修改 `COFFER_FEATURES` 并重启守护进程。 |
 
 ## 启动错误 {#startup-errors}

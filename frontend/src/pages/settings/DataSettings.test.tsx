@@ -9,7 +9,10 @@ import { acceptance } from "@/test/acceptance";
 
 import { DataSettings } from "./DataSettings";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 vi.mock("@/lib/api/fs", () => ({
   fsApi: {
     open: vi.fn().mockResolvedValue(undefined),
@@ -155,7 +158,7 @@ describe("DataSettings", () => {
     const vault = await screen.findByTestId("settings-data-vault");
     await within(vault).findByText("~/.coffer/vault");
     fireEvent.click(within(vault).getByRole("button", { name: /open folder/i }));
-    expect(fsApi.open).toHaveBeenCalledWith("/Users/u/.coffer/vault");
+    expect(fsApi.open).toHaveBeenCalledWith("/Users/u/.coffer/vault", undefined);
   });
 
   test("the vault block shows its size, versions and location, as drawn", async () => {

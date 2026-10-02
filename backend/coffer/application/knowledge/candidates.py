@@ -151,7 +151,9 @@ async def select(
     outcome = await service.match_documents(_alternation(terms), collection=collection)
     hits: dict[str, int] = {}
     for match in outcome.matches:
-        if match.path == source.path or match.path.rsplit("/", 1)[-1] == paths.README_NAME:
+        # Only a collection's own README is out of the corpus; a nested one is a document.
+        parts = match.path.split("/")
+        if match.path == source.path or (len(parts) == 2 and parts[1] == paths.README_NAME):
             continue
         hits[match.path] = hits.get(match.path, 0) + 1
     ranked = sorted(hits.items(), key=lambda item: (-item[1], item[0]))

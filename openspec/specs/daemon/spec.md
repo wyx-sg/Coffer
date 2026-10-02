@@ -93,10 +93,13 @@ serving, because it is the readiness probe every other rule here keys off. The p
 the daemon has finished wiring itself up — the server accepts connections after its startup hook
 returns — so no request can be answered before then, and a client that has just spawned the daemon
 MUST wait a bounded time for the probe to answer rather than read a refused connection as a
-failure. It MUST report the lifecycle phase (`ready`, or `draining` once shutdown has begun), the
+failure. It MUST report the lifecycle phase (`ready`, or `draining` once shutdown has begun — the
+daemon keeps answering for a short moment after shutdown begins, before it stops listening, so the
+phase can be observed, and it MUST NOT leave its port listening with nobody accepting once it has),
+the
 bound port, the start time, the build's version and the executable answering. It MUST also report
-the build's release channel, the on/off state of every registered experimental feature as a `features` map — empty
-while the registry names none (spec
+the on/off state of every registered experimental feature as a `features` map — one
+entry each for `knowledge`, `memory`, `sync` and `models` (spec
 [experimental-features](../experimental-features/spec.md) "Decide a feature's state per machine") —
 and this machine's id and name, the identity a channel is bound to, which is on the status because
 it belongs to the machine rather than to sync. It MAY carry a count of registered,
@@ -110,10 +113,16 @@ are not.
 - **AND** the call succeeds with no token, because it is the readiness probe every other lifecycle rule keys off,
 - **AND** a CLI or shim whose own version differs from the reported one prints a one-line warning naming both builds and the executable, and carries on.
 
+#### Scenario: a daemon that is shutting down reports draining
+- **GIVEN** a running daemon that has been asked to stop
+- **WHEN** `GET /api/v1/daemon/status` is called after shutdown has begun and before the daemon stops listening
+- **THEN** the response reports `status: "draining"`
+- **AND** once the daemon has stopped listening, a connection to its port is refused rather than left waiting
+
 #### Scenario: daemon status names this machine and its features
 - **GIVEN** a running daemon
 - **WHEN** `GET /api/v1/daemon/status` is called with no token
-- **THEN** the response carries `channel`, a `features` map with one entry per registered experimental feature (empty when none is registered), and this machine's `machine_id` and `machine_name`
+- **THEN** the response carries a `features` map with one entry per registered experimental feature (`knowledge`, `memory`, `sync` and `models`), and this machine's `machine_id` and `machine_name`
 
 ### Requirement: Decide liveness by the status call
 Liveness MUST be decided by that status call against the recorded port — never by a bare TCP
@@ -175,7 +184,11 @@ than tearing down inline, so an API stop and a signal stop cannot diverge. Exit 
 Users MUST be able to run `coffer daemon start`, `stop`, `restart`, `status [--json]`,
 `rotate-token` and `service install|uninstall|status`. `start` MUST key off the liveness probe rather than the
 presence of `daemon.json`, MUST diagnose a port that is already held *before* spawning rather than
-after a boot timeout, and MUST wait a bounded time for the daemon to publish itself. That pre-flight
+after a boot timeout, and MUST wait a bounded time for the spawned daemon to **answer its status call** — a published
+`daemon.json` is not that, because the file is written before the daemon has finished starting and a
+stale one left by a crash is there before it has started at all. A daemon that exits before it
+answers (a vault migration is required, git is too old) MUST be reported as failed with a pointer to
+`daemon.log`, never as started. That pre-flight
 check MUST be allowed to report "free" when the port is not — a port in `TIME_WAIT` from the daemon
 a `restart` has just stopped is bindable and must not be called a conflict — and MUST never err the
 other way: a missed conflict resolves downstream as "already running", while a false one blocks a
@@ -191,6 +204,11 @@ which says so when nothing is running, and as part of the object under `--json`.
 read and changed with `coffer config get|set|unset daemon.port`, and it and the `service` group MUST
 work with no daemon running (see "Bind a fixed, settable port" and "Change residency from the
 settings page or the command line").
+
+#### Scenario: start reports a daemon that refused to start
+- **GIVEN** a stale `~/.coffer/daemon.json` and a vault the daemon refuses to open
+- **WHEN** the user runs `coffer daemon start`
+- **THEN** the command exits non-zero saying the daemon exited at startup and pointing at `daemon.log`, and does not print that the daemon started
 
 #### Scenario: a recorded pid that is not ours is never signalled
 - **GIVEN** a `~/.coffer/daemon.json` whose recorded pid has been recycled onto an unrelated process,
@@ -330,7 +348,9 @@ versioned path stops working two upgrades later, and a supervisor that cannot ex
 fails silently — which is the one way autostart could stop without anyone finding out. It MUST
 write to the daemon log (see "Write one bounded daemon log in one format") rather than a file of
 its own. Installing and removing it MUST be available from the CLI with no daemon running, and MUST
-be reversible without trace; removing it MUST NOT stop a daemon that is already running. See
+be reversible without trace: removing it MUST NOT stop a daemon that is already running, and MUST
+unload it from launchd — at once when no process runs under it, otherwise as that daemon exits, so a
+crash after the user switched the service off is never restarted. See
 [Detect-or-Spawn](../../../docs/decisions/daemon-detect-or-spawn.md).
 
 #### Scenario: the daemon is up before anything asks for it
@@ -338,6 +358,12 @@ be reversible without trace; removing it MUST NOT stop a daemon that is already 
 - **WHEN** the user logs in,
 - **THEN** the daemon is started by the system, with the user's own `PATH`, logging to the daemon log,
 - **AND** a daemon that dies badly is restarted, while one that exited cleanly on purpose is left alone.
+
+#### Scenario: removing the login service unloads it without stopping the daemon
+- **GIVEN** an installed login service whose launchd job is the running daemon
+- **WHEN** the service is removed
+- **THEN** the daemon keeps running and answers the request that removed it
+- **AND** when that daemon exits, its launchd job is booted out, and a service whose job has no running process is booted out at once
 
 ### Requirement: Bind every endpoint to loopback only
 The daemon MUST bind every HTTP endpoint it exposes — the management API and the MCP protocol
@@ -542,8 +568,8 @@ MUST be bounded by rotation rather than by deletion, and the retention sweep tha
 per-process and per-upstream log files MUST NOT delete it or its rotations: it is held open, and
 deleting it would leave the daemon logging nowhere until the next restart.
 
-Because several writers share it — Coffer's own structured JSON, uvicorn, a rich-rendered upstream,
-some of it colour-escaped — the file is deliberately not one format, and every
+Because several writers share it — Coffer's own structured JSON, other processes' uvicorn-style
+lines, a rich-rendered upstream, some of it colour-escaped — the file is deliberately not one format, and every
 reader of it is obliged to normalise rather than to assume (see "Serve the daemon log tail
 normalised"). What the daemon *itself* writes, however, MUST be one format: every record produced
 inside the daemon process — its own modules and the libraries logging alongside them, alembic and
@@ -552,16 +578,24 @@ created, its level, the logger that emitted it and the message, with a traceback
 record that raised it rather than spread across lines that state none of those. A library MUST NOT
 be able to change that by configuring logging for its own purposes: the daemon owns its root logger
 for its whole life, and any library configuration that would replace it is removed at the call site
-rather than tolerated and parsed around. Each record MUST appear in the file exactly once — the file
+rather than tolerated and parsed around; the daemon's own HTTP server is configured not to install
+its own handlers, so its records take the same path. Each record MUST appear in the file exactly once — the file
 is also the redirect target for the daemon's own stdout and stderr (see "Spawn a detached daemon
 from any surface that needs one"), so a process writing to both that file and its stderr would
-record everything twice and make one event read as two.
+record everything twice and make one event read as two. Rotation MUST NOT strand the process's
+own stdout and stderr in a rotated-away file: after each rollover they MUST follow to the new
+`daemon.log`, so a traceback written straight to stderr stays readable where the reader looks.
 
 #### Scenario: every line the daemon writes carries the same fields
 - **GIVEN** a configured daemon, and a record emitted on an ordinary logger — one of Coffer's own modules, or a library's such as `alembic.runtime.migration` — after a migration has already run,
 - **WHEN** `daemon.log` is read back,
 - **THEN** that record is one line stating the instant it was created, its level, its logger and its message, and a record logged with an exception carries the traceback inside that same line rather than as lines stating none of those,
 - **AND** the record appears exactly once, even though the detached daemon's own stderr is that same file.
+
+#### Scenario: output written to stderr after a rotation lands in the current log
+- **GIVEN** a detached daemon whose stderr is `daemon.log`, and a log that has just been rotated
+- **WHEN** the process writes to stderr
+- **THEN** the text is in `daemon.log` and in none of its rotations
 
 #### Scenario: the command line names the daemon log file
 - **GIVEN** an install whose log directory is relocated with `COFFER_LOG_DIR`, and a running daemon that has written to its log,
@@ -590,7 +624,7 @@ prints the records as the route returns them. A refusal from the route MUST be p
 route's error and a non-zero exit.
 
 #### Scenario: the daemon log tail reads every writer's format
-- **GIVEN** a `daemon.log` holding Coffer's own structured JSON, a uvicorn line, a `LEVEL - logger - message` line from an upstream, a colour-escaped line from an upstream, and a multi-line traceback,
+- **GIVEN** a `daemon.log` holding Coffer's own structured JSON, a uvicorn-style line from another process, a `LEVEL - logger - message` line from an upstream, a colour-escaped line from an upstream, and a multi-line traceback,
 - **WHEN** `GET /api/v1/daemon/logs` is called with a token,
 - **THEN** the response is newest-first and bounded by `limit`, every record carries the time, level and logger its line actually stated, escape sequences are stripped, the traceback rides with the record that raised it, and a line no format fits is kept whole rather than dropped,
 - **AND** `level` and `since` narrow the window, while the same call with no token is rejected even though `/daemon/status` on the same router is open.
@@ -817,7 +851,7 @@ was installed, so the daemon MUST answer the token-gated
 `GET /api/v1/daemon/upgrade` with the install method it detects — `binaries`
 (the installer's or a release archive's frozen binaries), `app` (the macOS
 desktop app) or `source` (a source checkout) — and a `handoff` prompt for the
-person's agent. The prompt MUST name the running version and release channel,
+person's agent. The prompt MUST name the running version,
 the install method with the daemon's executable (and the checkout for a source
 run), the machine, and the install page's Upgrade section, and MUST tell the
 agent to keep `~/.coffer` exactly as it is, to restart the daemon, and to
@@ -825,15 +859,15 @@ confirm with `coffer --version` and `coffer daemon status` that both report the
 new version. It carries the standing rules of every hand-off.
 
 #### Scenario: the upgrade hand-off names how this copy was installed
-- **GIVEN** a daemon running Coffer 0.3.1 on the stable channel from the installer's frozen binaries
+- **GIVEN** a daemon running Coffer 0.3.1 from the installer's frozen binaries
 - **WHEN** `GET /api/v1/daemon/upgrade` is read
-- **THEN** the answer's install method is `binaries` and its prompt names 0.3.1, the stable channel, the executable, the machine and the install page's `#upgrade` section
+- **THEN** the answer's install method is `binaries` and its prompt names 0.3.1, the executable, the machine and the install page's `#upgrade` section
 - **AND** the prompt says to keep `~/.coffer` and to verify with `coffer --version` and `coffer daemon status`
 
 ### Requirement: Report the state the shell shows
 The daemon's state MUST be visible to the user while starting it stays automatic. Every fact the
 web UI's shell footer, its Settings → Daemon tab and its About tab show about the daemon —
-lifecycle phase, bound port, start time, version, executable, release channel, process id, the
+lifecycle phase, bound port, start time, version, executable, process id, the
 commit a release build was stamped with, Coffer's data folder and how many agents carry Coffer's
 connection — MUST come from
 `GET /api/v1/daemon/status` (see "Answer the status probe without a token"), so the page can show a
@@ -856,8 +890,7 @@ The daemon MUST report, for Settings › Data, what Coffer keeps on this machine
 of [Storage Is Five Classes by Nature](../../../docs/decisions/storage-is-five-classes-by-nature.md)
 the user acts on, through `GET /api/v1/storage`: the **vault** (the vault repository
 `~/.coffer/vault/`, a git repository whether or not it syncs — its path, its size with its
-history, how many versions it holds, when and by which writer its newest version was made, and
-whether a sync remote is set; no version count before the repository has been created), the
+history and how many versions it holds; no version count before the repository has been created), the
 **local content** (chat uploads and channel media under `~/.coffer/content/`, which never sync:
 their locations, the one folder to open, and their size), the **history** (the database file
 holding the records, `~/.coffer/runs.db` unless `COFFER_DB_URL` names another, with its WAL, and
@@ -873,9 +906,9 @@ because that pass is writing into the tree, and MUST record the clear in the aud
 bytes freed.
 
 #### Scenario: the storage summary reports the four kinds
-- **GIVEN** a vault repository of three commits, chat and channel media, a database with its WAL, a memory tree and a transcript summary cache, and no sync remote set
+- **GIVEN** a vault repository of three commits, chat and channel media, a database with its WAL, a memory tree and a transcript summary cache
 - **WHEN** `GET /api/v1/storage` is called
-- **THEN** it reports the vault as `~/.coffer/vault` with 3 versions, its newest version's time and writer and no sync remote, the local content with both media locations under `~/.coffer/content` and their size, the history as `runs.db` with its WAL, and the cache as the size of the memory tree and the transcript cache
+- **THEN** it reports the vault as `~/.coffer/vault` with 3 versions, the local content with both media locations under `~/.coffer/content` and their size, the history as `runs.db` with its WAL, and the cache as the size of the memory tree and the transcript cache
 - **AND** before the vault repository has been created it reports the vault with no version count
 
 #### Scenario: clearing the cache leaves everything else

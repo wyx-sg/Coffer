@@ -11,14 +11,14 @@ Each resource is one JSON document, filed by its kind's storage class
   ``derived/resources/<kind>/<name>.json`` — written atomically, no history.
 
 What the file does **not** hold: ``enabled`` and ``scope`` are reach, true of
-this machine only, in ``local/reach.json`` (``reach_store``); ``rev`` and
-``updated_at`` are a derived per-uid counter (``uid_index``). ``set_enabled``
+this machine only, in ``local/reach.json`` (``reach_store``); ``updated_at``
+is the file's modification time on this machine. ``set_enabled``
 and ``update_scope`` therefore touch no file and make no commit.
 
 Structured writes are read-modify-write under the vault's lock against what
 ``HEAD`` holds (``Expect.HEAD``; a new file ``Expect.ABSENT``), so a person's
 unsettled edit to the same file is refused as ``VaultFileStale`` rather than
-overwritten (plan D7). A rename moves the file to ``<new name>.json`` in the
+overwritten. A rename moves the file to ``<new name>.json`` in the
 same commit, and a file name already used by an unrelated file falls back to
 ``<name>-<uid[:8]>.json``. Every other store that files a document after its
 owner's name registers a *follower*: it is handed the open transaction on a
@@ -58,10 +58,20 @@ from coffer.infrastructure.vault.reach_store import Reach, ReachStore, reach_pat
 from coffer.infrastructure.vault.resource_config import for_application, for_file
 from coffer.infrastructure.vault.resource_files import Entry, ResourceFiles
 from coffer.infrastructure.vault.resource_hints import ChangeAnnouncer, Known, Sink
-from coffer.infrastructure.vault.uid_index import IndexRow, Seen, UidIndex, index_path, parse_time
 from coffer.infrastructure.vault.writer import Transaction
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_time(raw: Any) -> datetime | None:
+    if not isinstance(raw, str):
+        return None
+    try:
+        value = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
 
 #: ``follower(txn, resource, new_name)``: the owner is being renamed to
 #: ``new_name``, or deleted when it is ``None``. Called inside the one vault
@@ -70,7 +80,7 @@ Follower = Callable[[Transaction, Resource, str | None], None]
 
 
 class FileResourceRepo:
-    """``ResourceRepo`` over resource files, reach and the uid index."""
+    """``ResourceRepo`` over resource files and this machine's reach."""
 
     def __init__(
         self,
@@ -85,8 +95,6 @@ class FileResourceRepo:
         self._writer = vault_writer(vault_root(self._base))
         self.files = ResourceFiles(self._writer, self._base)
         self._reach = ReachStore(reach_path(self._base))
-        self._index = UidIndex(index_path(self._base))
-        self._rows: dict[str, IndexRow] = {}
         self._followers: list[Follower] = []
         self._hints = ChangeAnnouncer()
         # Registered after ``files``' own listener, so the cache is patched first.
@@ -112,7 +120,7 @@ class FileResourceRepo:
             return
         found = self._snapshot().get(uid)
         if found is not None:
-            self._hints.emit(Changed(found.kind, found.uid, found.rev, "upsert"))
+            self._hints.emit(Changed(found.kind, found.uid, "upsert"))
 
     def _on_commit(self, result: CommitResult) -> None:
         mine = [p for p in result.paths if p.startswith("resources/")]
@@ -137,38 +145,32 @@ class FileResourceRepo:
     def _snapshot(self) -> dict[str, Resource]:
         entries = self.files.by_uid()
         reach = self._reach.all()
-        seen: list[Seen] = []
-        configs: dict[str, dict[str, Any]] = {}
-        reaches: dict[str, Reach] = {}
+        out: dict[str, Resource] = {}
         for uid, entry in entries.items():
             config = for_application(entry.doc.config)
-            configs[uid] = config
-            reaches[uid] = reach.get(uid) or self._default_reach(entry.doc.kind, config)
-            seen.append(
-                Seen(
-                    uid=uid,
-                    path=f"{entry.storage.value}/{entry.path}",
-                    blob=entry.blob,
-                    reach=reaches[uid].fingerprint(),
-                    created_at=parse_time(entry.doc.created_at),
-                )
-            )
-        self._rows = self._index.observe(seen, forget_others=True)
-        out = {uid: self._resource(entries[uid], configs[uid], reaches[uid]) for uid in entries}
+            held = reach.get(uid) or self._default_reach(entry.doc.kind, config)
+            out[uid] = self._resource(entry, config, held)
         self._hints.remember(
             {
-                e.path: Known(uid, e.doc.kind, out[uid].rev)
+                e.path: Known(uid, e.doc.kind)
                 for uid, e in entries.items()
                 if e.storage is StorageClass.VAULT
             }
         )
         return out
 
+    def _modified(self, entry: Entry) -> datetime | None:
+        """When this machine last saw the file change: its modification time."""
+        try:
+            stamp = (self.files.root(entry.storage) / entry.path).stat().st_mtime
+        except OSError:
+            return None
+        return datetime.fromtimestamp(stamp, tz=UTC)
+
     def _resource(self, entry: Entry, config: dict[str, Any], reach: Reach) -> Resource:
         doc = entry.doc
-        row = self._rows.get(entry.uid)
-        now = datetime.now(tz=UTC)
-        created = parse_time(doc.created_at) or (row.first_seen if row else now)
+        modified = self._modified(entry)
+        created = _parse_time(doc.created_at) or modified or datetime.now(tz=UTC)
         return Resource(
             uid=entry.uid,
             kind=doc.kind,
@@ -177,10 +179,9 @@ class FileResourceRepo:
             config=config,
             enabled=reach.enabled,
             created_at=created,
-            updated_at=row.updated_at if row else created,
+            updated_at=modified or created,
             scope=reach.scope,
             title=doc.title,
-            rev=row.rev if row else 1,
         )
 
     async def find(self, uid: str) -> Resource | None:
@@ -342,6 +343,14 @@ class FileResourceRepo:
         self._set_reach(uid, lambda r: Reach(enabled=r.enabled, scope=normal))
         return await self._require(uid)
 
+    def _ensure_writable(self, uid: str) -> None:
+        entry = self._entry(uid)
+        if entry.storage is StorageClass.VAULT:
+            self._writer.compare(entry.path, self._writer.read_disk(entry.path), Expect.HEAD)
+
+    async def ensure_writable(self, uid: str) -> None:
+        await asyncio.to_thread(self._ensure_writable, uid)
+
     def _rename(self, uid: str, new_name: str) -> None:
         entry = self._entry(uid)
         kind = entry.doc.kind
@@ -382,7 +391,6 @@ class FileResourceRepo:
 
         self._commit(OP_DELETE, f"Deleted {entry.doc.kind} {entry.doc.name}", work)
         self._reach.remove(uid)
-        self._index.forget(uid)
 
     async def delete(self, uid: str) -> None:
         await asyncio.to_thread(self._delete, uid)

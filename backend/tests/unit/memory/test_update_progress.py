@@ -105,9 +105,9 @@ def _event(at: datetime, **details: Any) -> AuditEntry:
 def test_the_last_read_and_an_agent_it_could_not_read_are_reported() -> None:
     failed = {"agent": "codex", "path": "/h/.codex/memories", "reason": "not readable"}
     entries = [
-        _event(_T0, failures=["/h/.codex/memories"], failure_details=[failed]),
-        _event(_T0 - timedelta(hours=1), failures=["/h/.codex/memories"], failure_details=[failed]),
-        _event(_T0 - timedelta(days=3), failures=[], failure_details=[]),
+        _event(_T0, failure_details=[failed]),
+        _event(_T0 - timedelta(hours=1), failure_details=[failed]),
+        _event(_T0 - timedelta(days=3), failure_details=[]),
     ]
 
     reading = reading_of(entries)
@@ -125,20 +125,48 @@ def test_the_last_read_and_an_agent_it_could_not_read_are_reported() -> None:
 
 def test_no_read_yet_and_a_clean_read() -> None:
     assert reading_of([]).read_at is None
-    clean = reading_of([_event(_T0.replace(tzinfo=None), failures=[], failure_details=[])])
+    clean = reading_of([_event(_T0.replace(tzinfo=None), failure_details=[])])
     assert clean.read_at == _T0
     assert clean.failures == ()
 
 
-def test_an_old_event_that_names_no_agent_is_not_a_clean_read() -> None:
+def test_an_agent_that_failed_in_the_previous_read_too_has_no_clean_read() -> None:
     entries = [
+        _event(_T0, failure_details=[{"agent": "cc", "path": "/p", "reason": "r"}]),
         _event(
-            _T0, failures=["/p"], failure_details=[{"agent": "cc", "path": "/p", "reason": "r"}]
+            _T0 - timedelta(hours=1),
+            failure_details=[{"agent": "cc", "path": "/p", "reason": "r"}],
         ),
-        _event(_T0 - timedelta(hours=1), failures=["/p"]),
     ]
     [failure] = reading_of(entries).failures
     assert failure.last_read_at is None
-    # An event from before agents were recorded still reports its paths.
-    [legacy] = reading_of(entries[1:]).failures
-    assert (legacy.agent, legacy.path, legacy.last_read_at) == ("", "/p", None)
+
+
+@pytest.mark.acceptance(
+    spec="memory", scenario="a partition whose only change is a deleted source is still distilled"
+)
+async def test_a_partition_whose_source_was_deleted_is_distilled_to_retire_its_note() -> None:
+    from coffer.domain.memory.note import Note, Origin
+    from coffer.infrastructure.memory import store
+
+    # A note whose raw entry has gone, and nothing new: no undistilled entry, so
+    # only the owed retirement says this partition has work.
+    store.write_note(
+        Note(
+            slug="dead",
+            title="Dead",
+            description="d",
+            type=TYPE_PROJECT,
+            body="b",
+            partition="alpha",
+            origins=(Origin(agent="codex", native_path="/gone.md", anchor="x"),),
+            created_at="2026-01-01",
+            updated_at="2026-01-01",
+        )
+    )
+    runs = UpkeepRunRegistry()
+    service = _Service(runs, ["alpha", "idle"])
+
+    result = await update_memory(service, actor="user", runs=runs)  # type: ignore[arg-type]
+
+    assert result.distilled == ("alpha",)

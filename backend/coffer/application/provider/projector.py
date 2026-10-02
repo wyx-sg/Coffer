@@ -100,10 +100,13 @@ class ProviderProjector:
         cfg: ProviderConfig,
         agents: list[Resource],
         agent_type: AgentType,
+        priors: Priors | None = None,
     ) -> list[str]:
         """Project ``connection`` into every enabled agent of ``agent_type``;
         return the projected agent names (empty if the type is unprojectable or no
-        such agent is registered).
+        such agent is registered). Each file written is recorded into ``priors``
+        as it is written, so a caller whose later step fails can :meth:`restore`
+        what this one already did.
 
         The whole resource rather than its name, because the projection needs
         both halves of it and they are no longer the same thing: its UID is what
@@ -115,19 +118,22 @@ class ProviderProjector:
             return []
         projected: list[str] = []
         for agent in self.agents_of_type(agents, agent_type):
-            self._project(connection, cfg, agent, facet)
+            self._project(connection, cfg, agent, facet, priors)
             projected.append(agent.name)
         return projected
 
-    def deproject_type(self, agents: list[Resource], agent_type: AgentType) -> list[str]:
+    def deproject_type(
+        self, agents: list[Resource], agent_type: AgentType, priors: Priors | None = None
+    ) -> list[str]:
         """Remove Coffer's projection from every enabled agent of ``agent_type``
-        so it falls back to its own built-in login; return the reverted names."""
+        so it falls back to its own built-in login; return the reverted names.
+        ``priors`` collects what each file held before, as in :meth:`project_type`."""
         facet = self.projection_for(agent_type)
         if facet is None:
             return []
         reverted: list[str] = []
         for agent in self.agents_of_type(agents, agent_type):
-            self._deproject(agent, facet)
+            self._deproject(agent, facet, priors)
             reverted.append(agent.name)
         return reverted
 
@@ -147,6 +153,19 @@ class ProviderProjector:
             proxy_root=self._proxy_root(),
             wire=wire,
         )
+
+    def restore(self, priors: Priors) -> None:
+        """Put every file in ``priors`` back as it was (delete one that did not
+        exist) — the undo of a switch that failed part-way. Best effort per
+        file: one that cannot be restored does not stop the others."""
+        for path, before in priors.items():
+            try:
+                if before is None:
+                    self._config_store.delete_with_backup(path)
+                else:
+                    self._config_store.write_text_atomic(path, before)
+            except Exception:
+                continue
 
     def project_agent(self, connection: Resource, cfg: ProviderConfig, agent: Resource) -> Priors:
         """Project ``connection`` into one agent; return the prior content of
@@ -172,14 +191,19 @@ class ProviderProjector:
         cfg: ProviderConfig,
         agent: Resource,
         facet: ProviderProjection,
+        priors: Priors | None = None,
     ) -> Priors:
         agent_cfg = AgentConfig.model_validate(agent.config)
         spec = spec_for(agent_cfg.type, facet.config_key, agent_cfg.resolved_config_dir())
         current = self._config_store.read_text(spec.path)
         request = self.request_for(connection, cfg, agent)
-        return self._perform(spec.path, current, facet.apply(current or "", request, spec.path))
+        return self._perform(
+            spec.path, current, facet.apply(current or "", request, spec.path), priors
+        )
 
-    def _deproject(self, agent: Resource, facet: ProviderProjection) -> Priors:
+    def _deproject(
+        self, agent: Resource, facet: ProviderProjection, priors: Priors | None = None
+    ) -> Priors:
         agent_cfg = AgentConfig.model_validate(agent.config)
         spec = spec_for(agent_cfg.type, facet.config_key, agent_cfg.resolved_config_dir())
         current = self._config_store.read_text(spec.path)
@@ -187,10 +211,18 @@ class ProviderProjector:
         if not text.strip():
             return {}  # nothing was ever projected
         plan = facet.remove(text, spec.path, binding_of(agent_cfg))
-        return self._perform(spec.path, current, plan)
+        return self._perform(spec.path, current, plan, priors)
 
-    def _perform(self, path: pathlib.Path, current: str | None, plan: ProjectionPlan) -> Priors:
-        priors: Priors = {}
+    def _perform(
+        self,
+        path: pathlib.Path,
+        current: str | None,
+        plan: ProjectionPlan,
+        priors: Priors | None = None,
+    ) -> Priors:
+        """Run the plan's writes in order, recording each file's prior content
+        into ``priors`` (the caller's accumulator when given) as it is written."""
+        priors = {} if priors is None else priors
         for side in plan.before:
             if side.text is not None:
                 self._write_if_changed(
@@ -286,10 +318,8 @@ def projection_request(
         # provider-switching "Take projected model keys from the agent's
         # binding"); an unbound agent projects no model.
         binding=binding_of(agent_cfg),
-        wire_api=agent_cfg.wire_api,
         models=projected_models(cfg),
         local=cfg.is_local,
-        loopback_proxy=True,
     )
 
 

@@ -5,12 +5,32 @@
 // settings — no user data — so they live in the browser, not the daemon.
 import { useCallback, useSyncExternalStore } from "react";
 
+// Storage can be blocked (private windows, cleared or denied site data): every
+// read falls back to the default and every write is skipped, because these are
+// per-viewer conveniences and `getSnapshot` runs in render.
+function readStored(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(key: string, value: string | null): void {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    // Not persisted; the choice lasts until the page reloads.
+  }
+}
+
 const PAGE_SIZE_KEY = "coffer.pageSize";
 export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 20;
 
 export function getDefaultPageSize(): number {
-  const raw = Number(localStorage.getItem(PAGE_SIZE_KEY));
+  const raw = Number(readStored(PAGE_SIZE_KEY));
   return PAGE_SIZE_OPTIONS.includes(raw as (typeof PAGE_SIZE_OPTIONS)[number])
     ? raw
     : DEFAULT_PAGE_SIZE;
@@ -25,7 +45,7 @@ function subscribe(cb: () => void): () => void {
 }
 
 export function setDefaultPageSize(size: number): void {
-  localStorage.setItem(PAGE_SIZE_KEY, String(size));
+  writeStored(PAGE_SIZE_KEY, String(size));
   listeners.forEach((cb) => cb());
 }
 
@@ -49,16 +69,16 @@ const PREFERRED_EDITOR_KEY = "coffer.preferredEditor";
  * the browser, never the daemon.
  */
 export function getPreferredEditor(): string {
-  return localStorage.getItem(PREFERRED_EDITOR_KEY) ?? "";
+  return readStored(PREFERRED_EDITOR_KEY) ?? "";
 }
 
 function setPreferredEditor(editor: string): void {
   const trimmed = editor.trim();
   if (trimmed) {
-    localStorage.setItem(PREFERRED_EDITOR_KEY, trimmed);
+    writeStored(PREFERRED_EDITOR_KEY, trimmed);
   } else {
     // Empty / whitespace clears the override → fall back to the OS default.
-    localStorage.removeItem(PREFERRED_EDITOR_KEY);
+    writeStored(PREFERRED_EDITOR_KEY, null);
   }
   listeners.forEach((cb) => cb());
 }

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-15
 **Deciders**: Yuxing Wu
-**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [Agent Hook Installation](agent-hook-installation.md), [Aggregate Agent Memory, Never Write It](aggregate-agent-memory-never-write-it.md), [Audit and Retention](audit-and-retention.md), spec agent-registry "Address config files only by allowlisted key", spec agent-registry "Validate config-file content before saving it", spec agent-registry "Write config files atomically with a backup and an audit entry", spec agent-registry "Reject stale config-file writes by fingerprint", spec agent-registry "Degrade a facet to a parse-error state when its config file is unparseable", spec agent-registry "Uninstall a plugin by the type's own strategy", spec agent-registry/codex "Install Coffer's MCP entry into config.toml preserving its layout", spec agent-registry/codex "Never expose Codex's credential file", spec agent-registry/claude-code "Delegate Claude Code plugin uninstall to its CLI", PR #60, PR #337, PR #386
+**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [Agent Hook Installation](agent-hook-installation.md), [Aggregate Agent Memory, Never Write It](aggregate-agent-memory-never-write-it.md), [Audit and Retention](audit-and-retention.md), spec agent-registry "Address config files only by allowlisted key", spec agent-registry "Validate config-file content before saving it", spec agent-registry "Write config files atomically with a backup and an audit entry", spec agent-registry "Reject stale config-file writes by fingerprint", spec agent-registry "Degrade a facet to a parse-error state when its config file is unparseable", spec agent-registry "Uninstall a plugin by the type's own strategy", spec agent-registry/codex "Install Coffer's MCP entry into config.toml preserving its layout", spec agent-registry/codex "Never expose Codex's credential file", spec agent-registry/claude-code "Delegate Claude Code plugin uninstall to its CLI", PR #60, PR #337, PR #386
 
 ## Context
 
@@ -109,11 +109,16 @@ update is likely, not everywhere:
   the fingerprint of the text it read to the store, so a projection refuses to
   overwrite an edit the user saved in between. It also skips the write when
   the new text equals the old.
+- **The reconciler's repair of Coffer's own MCP entry**
+  (`application/agent/mcp_reconcile.py`) passes the fingerprint of the text it
+  read, for the same reason as the projector: it runs on a timer, not at a
+  person's click.
 - **Every other structural writer** — Coffer MCP install and uninstall
-  (`mcp_service.py`), direct MCP entry removal and adoption
-  (`mcp_entry_service.py`), the MCP home migration, plugin toggle and Codex
-  plugin uninstall, and memory-delivery hook install (`memory/delivery.py`) —
-  reads, transforms and writes with no fingerprint.
+  (`application/agent/mcp_service.py`), direct MCP entry removal and adoption
+  (`application/agent/mcp_entry_service.py`), plugin toggle and Codex plugin
+  uninstall, and memory-delivery hook install
+  (`application/memory/delivery.py`) — reads, transforms and writes with no
+  fingerprint.
 
 Pros of applying it everywhere: no Coffer write could discard a concurrent
 edit. Cons: a check is a read-compare-replace without a lock, so it narrows the
@@ -144,9 +149,9 @@ refuses malformed input and unparseable targets, edits only the entry Coffer
 owns while preserving the rest, replaces the file atomically, keeps three
 rotating backups, and records an audit entry. Files the product treats as
 internal are left to its own CLI. The content fingerprint is required on
-config-editor writes from the CLI and the in-app editor and on every provider
-projection, optional on raw REST editor writes, and absent from the other
-structural writers.
+config-editor writes from the CLI and the in-app editor, on every provider
+projection and on the reconciler's repair of Coffer's MCP entry, optional on
+raw REST editor writes, and absent from the other structural writers.
 
 ## Consequences
 

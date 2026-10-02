@@ -10,15 +10,17 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ReachFilter } from "@/components/reach/ReachFilter";
 import { SearchInput } from "@/components/SearchInput";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useMcpServerListReads } from "@/lib/hooks/useMcpServerPage";
+import { matchesReach, type ReachFilterValue } from "@/lib/reachFilter";
 import { McpBuiltinRow } from "./McpBuiltinRow";
 import { McpServerListRow } from "./McpServerListRow";
 import { McpServersBulkBar } from "./McpServersBulkBar";
-import { GROUP_ORDER, serverState, transportOf, type ServerGroup } from "./serverState";
+import { GROUP_ORDER, serverState, transportOf, type ServerGroup } from "@/lib/mcp/serverState";
 
 /** The fixed name of Coffer's own server, and its address on this page. */
 export const BUILTIN_NAME = "coffer";
@@ -42,6 +44,7 @@ export function McpServerList({
   const { t } = useTranslation();
   const { data: agents = [] } = useAgents();
   const [query, setQuery] = useState("");
+  const [reach, setReach] = useState<ReachFilterValue>("all");
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
 
   const { details, splits } = useMcpServerListReads(servers.map((s) => s.uid));
@@ -53,12 +56,13 @@ export function McpServerList({
     servers.forEach((s, i) => {
       const haystack = `${s.name} ${s.title ?? ""} ${transportOf(s.config).target}`.toLowerCase();
       if (q && !haystack.includes(q)) return;
+      if (!matchesReach(reach, s)) return;
       out.get(serverState(s, detailOf(i)).group)?.push(i);
     });
     return out;
     // detailOf reads `details`, whose answers are what change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [servers, query, details]);
+  }, [servers, query, reach, details]);
 
   const selected = servers.filter((s) => picked.has(s.uid));
   const toggle = (uid: string, on: boolean) =>
@@ -79,6 +83,9 @@ export function McpServerList({
           placeholder={t("mcp.page.filter")}
           ariaLabel={t("mcp.page.filter")}
         />
+        <div className="mt-2.5">
+          <ReachFilter value={reach} onChange={setReach} />
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {isLoading ? (
@@ -87,7 +94,7 @@ export function McpServerList({
               <Skeleton key={i} className="h-10 w-full" />
             ))}
           </div>
-        ) : shown === 0 && servers.length > 0 && query.trim() !== "" ? (
+        ) : shown === 0 && servers.length > 0 && (query.trim() !== "" || reach !== "all") ? (
           <p className="px-2.5 py-3 text-xs text-text-muted">{t("mcp.page.noMatches")}</p>
         ) : (
           GROUP_ORDER.map((group) => {

@@ -1,7 +1,7 @@
 """RetentionRepo — the policies in ``local/retention.json``, the sweep in SQL.
 
 A retention policy is a setting of this machine (how long *its* history is
-kept), so it is local state (ADR storage-is-five-classes-by-nature; plan D10):
+kept), so it is local state (ADR storage-is-five-classes-by-nature):
 one JSON object ``{table: {retention_days, last_pruned_at, last_pruned_rows,
 updated_at}}`` written atomically. What a policy prunes is history, so the
 sweep itself stays SQL against ``runs.db``.
@@ -42,6 +42,8 @@ def allowlist_from_registry(tables: Iterable[PrunableTable]) -> dict[str, set[st
         columns.add(table.timestamp_column)
         if table.archive_set_column is not None:
             columns.add(table.archive_set_column)
+        if table.also_older_column is not None:
+            columns.add(table.also_older_column)
     return allow
 
 
@@ -137,17 +139,28 @@ class FileRetentionRepo:
             {"last_pruned_at": datetime.now(tz=UTC).isoformat(), "last_pruned_rows": rows},
         )
 
+    def _older_than(self, table: str, column: str, also_column: str | None) -> str:
+        """The ``WHERE`` condition (against ``:cutoff``) of rows past the window:
+        ``column`` older than it and, when given, ``also_column`` too. Both names
+        are checked against the allowlist before they reach any SQL."""
+        allowed = self._allowlist.get(table)
+        for name in (column, also_column):
+            if name is not None and (allowed is None or name not in allowed):
+                raise UnknownPrunableTable(f"table/column not in allowlist: ({table!r}, {name!r})")
+        condition = f"{column} < :cutoff"
+        if also_column is not None:
+            condition += f" AND {also_column} < :cutoff"
+        return condition
+
     async def delete_older_than(
         self,
         table: str,
         timestamp_column: str,
         cutoff: datetime,
+        *,
+        also_older_column: str | None = None,
     ) -> int:
-        allowed_columns = self._allowlist.get(table)
-        if allowed_columns is None or timestamp_column not in allowed_columns:
-            raise UnknownPrunableTable(
-                f"table/column not in allowlist: ({table!r}, {timestamp_column!r})"
-            )
+        where = self._older_than(table, timestamp_column, also_older_column)
         async with self._sm() as session:
             if table == "conversations":
                 # A conversation owns its messages; pruning a thread must take
@@ -156,11 +169,11 @@ class FileRetentionRepo:
                 await session.execute(
                     text(
                         "DELETE FROM chat_messages WHERE conversation_id IN "
-                        f"(SELECT id FROM conversations WHERE {timestamp_column} < :cutoff)"
+                        f"(SELECT id FROM conversations WHERE {where})"
                     ),
                     {"cutoff": cutoff},
                 )
-            stmt = text(f"DELETE FROM {table} WHERE {timestamp_column} < :cutoff")
+            stmt = text(f"DELETE FROM {table} WHERE {where}")
             result = await session.execute(stmt, {"cutoff": cutoff})
             await session.commit()
             return int(result.rowcount or 0)
@@ -170,16 +183,14 @@ class FileRetentionRepo:
         table: str,
         timestamp_column: str,
         cutoff: datetime,
+        *,
+        also_older_column: str | None = None,
     ) -> tuple[int, int]:
         """``(all rows, rows older than cutoff)``: what a prune at ``cutoff`` would delete."""
-        allowed_columns = self._allowlist.get(table)
-        if allowed_columns is None or timestamp_column not in allowed_columns:
-            raise UnknownPrunableTable(
-                f"table/column not in allowlist: ({table!r}, {timestamp_column!r})"
-            )
+        where = self._older_than(table, timestamp_column, also_older_column)
         async with self._sm() as session:
             stmt = text(
-                f"SELECT COUNT(*), COALESCE(SUM(CASE WHEN {timestamp_column} < :cutoff "
+                f"SELECT COUNT(*), COALESCE(SUM(CASE WHEN {where} "
                 f"THEN 1 ELSE 0 END), 0) FROM {table}"
             )
             total, older = (await session.execute(stmt, {"cutoff": cutoff})).one()

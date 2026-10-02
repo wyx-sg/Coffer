@@ -53,7 +53,7 @@ function Box({ checked }: { checked: boolean | "mixed" }) {
     <span
       aria-hidden
       className={cn(
-        "inline-flex size-[15px] shrink-0 items-center justify-center rounded-[4px]",
+        "inline-flex size-[15px] shrink-0 items-center justify-center rounded-xs",
         checked ? "bg-accent text-accent-foreground" : "border border-input bg-surface-raised",
       )}
     >
@@ -141,7 +141,7 @@ export function ChecklistPill({
                   aria-label={item.text}
                   onClick={() => onToggle(item.value)}
                   className={cn(
-                    "flex min-h-[30px] w-full items-center gap-2 rounded-sm px-2 text-left text-sm text-text",
+                    "flex min-h-control-md w-full items-center gap-2 rounded-sm px-2 text-left text-sm text-text",
                     "hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:outline-none",
                     item.indent && "min-h-7 pl-[31px]",
                     item.strong && "font-label",

@@ -147,11 +147,11 @@ A **destination** is a place Coffer sends a secret's plaintext. Each one has a *
 
 A provider connection's key goes through the same check against its base URL: the local model proxy and Coffer's own engine receive it only for an approved URL, and replacing a key in use waits for approval too. A custom tool's authentication will join when custom tools are built; a new destination type joins this list in the change that introduces it.
 
-Every consumer asks the boundary before it resolves a secret, at the moment of use — spawning a server, starting a channel adapter, pushing a sync round. A secret approved for its current target is injected. Otherwise nothing is injected, the attempt fails with `SECRET_BINDING_PENDING`, and one pending approval is recorded per target; a newer target supersedes the approval for an older one. Because the check happens at use, a change made behind Coffer's back — a vault file edited by hand, a server another machine synced in — is caught where it matters.
+The boundary is applied twice. When a resource is registered or its configuration changes, one seam every kind goes through (an MCP server, a channel, a provider connection, and the sync remote when it is set) evaluates the destination at once: a supplied value is approved, and a ref in use elsewhere or a target that moved records its pending approval in the same call, so it is on the approvals list and shown where you saved it. And every consumer asks the boundary before it resolves a secret, at the moment of use — spawning a server, starting a channel adapter, pushing a sync round. A secret approved for its current target is injected. Otherwise nothing is injected, the attempt fails with `SECRET_BINDING_PENDING`, and one pending approval is recorded per target; a newer target supersedes the approval for an older one. Because the check happens at use, a change made behind Coffer's back — a vault file edited by hand, a server another machine synced in — is caught where it matters.
 
 Two things approve a binding without a person:
 
-- **A value supplied for it.** A ref that has never been sent anywhere, is not a standalone secret, and was stored within the last five minutes is used at once. Every "add" flow stores the pasted secret and cites it seconds later; a secret stored long ago, already sent elsewhere, or kept for `coffer run` is not fresh.
+- **A value supplied for it.** When a destination is registered or changed, a ref that has never been sent anywhere, is not a standalone secret and was written on this machine within the last five minutes is approved with that registration. Every "add" flow stores the pasted secret and then registers what cites it, and the binding is recorded in that call, so a second destination citing the same ref waits, however soon it comes. A secret already sent elsewhere, kept for `coffer run`, or met only at the moment of use is never counted as supplied.
 - **The protection switched off**, which itself waits for an approval.
 
 Two more changes widen where a secret goes and wait for the same approval:
@@ -220,7 +220,7 @@ You only need this when you serve the UI yourself instead of opening it from the
 
 Both variables are read when the daemon starts, so restart it after you change them. Never put a site you do not control on the list: any page on a listed origin can call the daemon.
 
-`COFFER_ALLOWED_HOSTS` (comma-separated hostnames, or `*`) adds names that the Host check accepts. It never relaxes the Origin check. The backend test suite sets it because it drives the app in-process with made-up hostnames. A real installation does not need it.
+`COFFER_ALLOWED_HOSTS` (comma-separated hostnames, or `*`) adds names that the Host check accepts. It never relaxes the Origin check. The backend test suite sets it because it drives the app in-process with made-up hostnames. A real installation does not need it, and a tagged release does not read it (nor `COFFER_CORS_ORIGINS` or `COFFER_DEV_CORS`), because the CLI starts the daemon from the caller's own environment.
 
 ### The model proxy listener
 
@@ -234,7 +234,7 @@ At every start the daemon mints a fresh random URL-safe token from 32 bytes (256
 
 ### Checking it
 
-Every route under `/api/v1/*` and the `/mcp` endpoint require an `X-Coffer-Token` header, compared in constant time against the daemon's in-process token. A missing or wrong token is `401`; a request that arrives before the daemon has published its token is `503`. The one unauthenticated API route is `GET /api/v1/daemon/status`, the readiness probe the CLI and shim call before they have a token; it returns lifecycle phase, version, executable, port, release channel, feature switches, machine name and an aggregate upstream health summary — nothing secret.
+Every route under `/api/v1/*` and the `/mcp` endpoint require an `X-Coffer-Token` header, compared in constant time against the daemon's in-process token. A missing or wrong token is `401`; a request that arrives before the daemon has published its token is `503`. The one unauthenticated API route is `GET /api/v1/daemon/status`, the readiness probe the CLI and shim call before they have a token; it returns lifecycle phase, version, executable, port, feature switches, machine name and an aggregate upstream health summary — nothing secret.
 
 `coffer daemon rotate-token` (or `POST /api/v1/daemon/rotate-token`) mints a new token, rewrites `daemon.json`, invalidates the old token immediately, and records `token_rotated` in the audit log.
 
@@ -301,9 +301,9 @@ A copy of `~/.coffer` without its master key yields no secrets, and in a signed 
 
 The SSRF guard resolves a URL's host and refuses it if any resolved address is loopback, private (RFC 1918, `fc00::/7`), link-local, carrier-grade NAT (`100.64.0.0/10`), multicast, unspecified or reserved. A name that fails to resolve counts as blocked.
 
-The rule ([Principles → Network defaults](/architecture/principles)) is that a URL Coffer probes or fetches on your behalf from something typed into a form passes the guard, while an endpoint you configure as your own does not. Four paths fetch from typed input. The first is the provider introspector, behind the three probes a connection editor runs before anything is saved — `POST /api/v1/models/list-models`, `/test-connection` and `/detect-protocol`. Each checks the base URL before its first request. Two cases skip the check:
+The rule ([Principles → Network defaults](/architecture/principles)) is that a URL Coffer probes or fetches on your behalf from something typed into a form passes the guard, while an endpoint you configure as your own does not. Four paths fetch from typed input. The first is the provider introspector, behind the three probes a connection editor runs before anything is saved — `POST /api/v1/models/list-models`, `/test-connection` and `/detect-protocol`. Each checks the base URL before its first request. A stored key never travels on its own: the `secret_ref` of a request is honoured only when a saved provider connection holds it for the same base URL, and only once that connection's key is an approved destination; any other pairing is refused before anything is decrypted. A key typed into the dialog travels as an inline value and touches no stored secret. Two cases skip the check:
 
-- A connection whose protocol is local by design (`ollama`) is never checked, since its URL is loopback.
+- A base URL that really is loopback is not checked, so a local model runtime works. The exemption follows the URL itself, never the protocol the request names: labelling a metadata or LAN address `ollama` does not skip the guard.
 - `detect-protocol` classifies a loopback host (`localhost`, `127.0.0.1`, `::1`, `0.0.0.0`, `host.docker.internal`) as `ollama` without sending any request.
 
 The OpenAPI import of [custom tools](/guides/custom-tools) is the second: a spec URL typed into the import form is checked before it is fetched, and so is every redirect it answers with (the fetch is capped at 5 MiB and 20 seconds). A spec on a private host is imported as a file instead.
@@ -352,7 +352,7 @@ Channel secrets are refs, resolved from the secret store when the adapter starts
 ## What goes into logs and audit
 
 - **Logs** (`~/.coffer/logs/`, one JSON object per line) record events, identifiers and errors. No code path logs a secret value, a token or a decrypted secret.
-- **Audit** records every lifecycle change with its actor. Secret events (`secret_set`, `secret_revealed`, `secret_deleted`, `secret_migrated`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events) record the **ref**, the secret's name or the destination only. Resource configs pass through the kind's audit redactor first — the MCP kind strips `transport.env` and `transport.headers` entirely — so a value pasted into the wrong field still does not reach the audit log. Master-key events (`master_key_relocated`, `master_key_exported`, `master_key_imported`) record that the event happened, not the key.
+- **Audit** records every lifecycle change with its actor. Secret events (`secret_set`, `secret_revealed`, `secret_deleted`, `secret_resolved`, `secret_imported` and the `secret_approval_*` events) record the **ref**, the secret's name or the destination only. Resource configs pass through the kind's audit redactor first — the MCP kind strips `transport.env` and `transport.headers` entirely — so a value pasted into the wrong field still does not reach the audit log. Master-key events (`master_key_relocated`, `master_key_exported`, `master_key_imported`) record that the event happened, not the key.
 - **The sync history** stores the remote's commit and errors after the push secret has been redacted out.
 
 ## Sync carries ciphertext only
@@ -406,7 +406,7 @@ See [Vault sync](/architecture/vault-sync) for the full protocol.
 - [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)
 - [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
 - [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md)
-- [Envelope-Encrypted Credential Store](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
+- [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
 - [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-auth-and-origin-guard.md)
 - [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md)
 - [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/managed-agents-run-with-full-permissions.md)

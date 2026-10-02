@@ -138,7 +138,7 @@ def include_all_routers(app: FastAPI) -> None:
         mcp_page_router,  # the MCP server page's 24 h summary, log and tiering reads
         knowledge_router,  # the one knowledge kind (experimental: knowledge)
         knowledge_history_router,  # … and its history
-        *memory_routers,  # the one memory kind (experimental: memory)
+        *memory_routers,  # the one memory kind
         # the turn platform's own surfaces (spec chat; spec channels's agents run on it)
         agent_provider_router,
         model_router,

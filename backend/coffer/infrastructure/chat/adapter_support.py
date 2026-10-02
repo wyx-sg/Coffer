@@ -25,6 +25,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 
 from coffer.domain.chat.channel_note import ChannelNote
+from coffer.domain.chat.errors import AgentConfigRejected
 from coffer.domain.chat.message import Message, Role, TextBlock
 
 #: Persist a discovered upstream session id back onto the conversation.
@@ -36,6 +37,8 @@ class ParseState:
     """Mutable state threaded through an adapter's per-turn output parsing."""
 
     session_id: str | None = None
+    #: The model the agent reported running this turn on, once it has said.
+    model: str | None = None
     tool_names: dict[str, str] = field(default_factory=dict)
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
@@ -155,7 +158,7 @@ ModelLister = Callable[[str], Awaitable[Sequence[str]]]
 MemoryContextComposer = Callable[[str, str, str], Awaitable[str | None]]
 #: (channel uid, conversation id) -> the facts the channel note is written from,
 #: or None when no channel carries that uid any more. A conversation stores the
-#: uid of the channel it is bridged to (ADR resource-identity-is-an-immutable-uid);
+#: uid of the channel it is bridged to (ADR identity-is-the-uid-inside-the-file);
 #: the note wants the name a human uses, the platform, whether this conversation
 #: is a direct chat or a group thread, and what renders there. This callable is
 #: the one place those meet — a narrow seam rather than a channel dependency, so
@@ -168,6 +171,23 @@ ChannelNoteResolver = Callable[[str, str], Awaitable[ChannelNote | None]]
 #: providers on the type's one agent"). A narrow seam so chat never imports the agent kind; the
 #: composition root builds it over the agent registry.
 HomeEnvResolver = Callable[[], Awaitable[dict[str, str]]]
+#: () -> whether an ENABLED agent of this provider's type is registered with
+#: Coffer. Chat talks to managed agents only (spec chat "Offer and run only
+#: managed agents"): without one the provider is not offered and runs no turn.
+#: ``None`` at a provider means "no registry to ask" (tests), never "unmanaged".
+ManagedCheck = Callable[[], Awaitable[bool]]
+
+
+async def require_managed(check: ManagedCheck | None, agent_key: str) -> None:
+    """Refuse a turn for an agent type no enabled managed agent answers for."""
+    if check is not None and not await check():
+        raise AgentConfigRejected(
+            reason="agent_not_managed",
+            message=(
+                f"no enabled {agent_key} agent is managed by Coffer; add or enable it on "
+                "the Agents page"
+            ),
+        )
 
 
 async def compose_system_context(

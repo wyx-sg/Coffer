@@ -319,6 +319,26 @@ def test_material_waits_in_the_inbox_when_a_pass_could_merge_it(  # type: ignore
     assert client.get("/api/v1/knowledge/tree", params={"path": "shopee"}).json()["files"] == []
 
 
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="submitting material announces the collection on the event stream"
+)
+def test_submitting_material_announces_the_collection_on_the_event_stream(client) -> None:  # type: ignore[no-untyped-def]
+    """The inbox count and the documents change with no write to the collection's row,
+    so no resource hint fires; the page learns of it from this event."""
+    from coffer.surfaces.http.event_dependencies import get_event_broker
+
+    _create_collection(client, "shopee")
+    uid = client.get("/api/v1/resources", params={"kind": "knowledge", "name": "shopee"}).json()[
+        "resources"
+    ][0]["uid"]
+    before = get_event_broker().head
+
+    _submit(client, collection="shopee", title="Gateway", description="d", body="b")
+
+    announced = [e for e in get_event_broker().buffered if e.seq > before]
+    assert [(e.kind, e.id) for e in announced if e.kind == "knowledge"][-1] == ("knowledge", uid)
+
+
 def test_two_submissions_of_one_title_are_two_pieces_of_material(client) -> None:  # type: ignore[no-untyped-def]
     """Material is never written over: a second note with the same title is
     more knowledge, not a replacement of the first."""
@@ -349,6 +369,26 @@ def test_material_with_no_description_is_refused(client) -> None:  # type: ignor
     resp = client.post(
         "/api/v1/knowledge/material",
         json={"title": "t", "description": "", "body": "b", "collection": "shopee"},
+    )
+    assert resp.status_code == 422, resp.text
+
+
+def test_material_with_a_whitespace_only_description_is_refused(client) -> None:  # type: ignore[no-untyped-def]
+    _create_collection(client, "shopee")
+    resp = client.post(
+        "/api/v1/knowledge/material",
+        json={"title": "t", "description": "   ", "body": "b", "collection": "shopee"},
+    )
+    assert resp.status_code == 422, resp.text
+
+
+def test_a_collection_description_of_only_spaces_is_refused(client) -> None:  # type: ignore[no-untyped-def]
+    _create_collection(client, "shopee")
+    uid = client.get("/api/v1/resources", params={"kind": "knowledge", "name": "shopee"}).json()[
+        "resources"
+    ][0]["uid"]
+    resp = client.put(
+        f"/api/v1/knowledge/collections/{uid}/description", json={"description": "  "}
     )
     assert resp.status_code == 422, resp.text
 
@@ -484,3 +524,29 @@ def test_collection_list_carries_no_title(client) -> None:  # type: ignore[no-un
 
     resp = client.patch(f"/api/v1/resources/{row['uid']}", json={"title": "Team notes"})
     assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="Curate now is refused while a sync round waits for a person"
+)
+def test_curate_now_is_refused_while_a_sync_round_waits_for_a_person(  # type: ignore[no-untyped-def]
+    client, monkeypatch
+) -> None:
+    """A rewrite is not piled onto files a person is deciding between ("Never
+    overlap a curation pass and a round") — the manual trigger honours that too."""
+    from coffer.surfaces.http.knowledge import curation_state
+
+    _create_collection(client, "shopee")
+    uid = client.get("/api/v1/resources", params={"kind": "knowledge", "name": "shopee"}).json()[
+        "resources"
+    ][0]["uid"]
+
+    async def _waiting() -> bool:
+        return True
+
+    monkeypatch.setattr(curation_state, "_curation_hold", _waiting)
+
+    resp = client.post(f"/api/v1/knowledge/collections/{uid}/curate")
+
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["error"]["code"] == "KNOWLEDGE_CURATION_HELD"

@@ -95,7 +95,7 @@ export function ActivityTimeRange({ timeRange, from, to, onChange }: Props) {
                 aria-selected={selected}
                 onClick={() => choose(preset)}
                 className={cn(
-                  "flex min-h-[30px] items-center gap-2 rounded-sm px-2.5 text-left text-sm text-text",
+                  "flex min-h-control-md items-center gap-2 rounded-sm px-2.5 text-left text-sm text-text",
                   "hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:outline-none",
                   selected && "bg-surface-selected",
                 )}

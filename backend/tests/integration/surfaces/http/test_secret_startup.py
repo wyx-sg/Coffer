@@ -14,7 +14,7 @@ import keyring.core
 import pytest
 from keyring.errors import KeyringLocked
 
-from coffer.domain.errors import MasterKeyMissing, SecretLocked
+from coffer.domain.secret_errors import MasterKeyMissing, SecretLocked
 from coffer.infrastructure.vault.home import coffer_home, vault_root
 from coffer.surfaces.http import secret_composition as cred_comp
 from tests.fixtures.keyring import install_in_memory_keyring

@@ -82,9 +82,9 @@ sequenceDiagram
 5. **Stop?** A content conflict, the same resource name with two different uids, or a merged file that fails validation stops the round, whole. Nothing is checked out and nothing is pushed.
 6. **Guard.** The [deletion breaker](#the-deletion-breaker) runs over what the round would remove here and what this machine's own commits would remove from the shared history.
 7. **Check out.** `L` is tagged `refs/tags/coffer/pre-apply/<timestamp>` (ten kept). `M` is committed with parents `L` and `R`, and `git read-tree -m -u L M` moves the vault to it under the vault's write lock. Git verifies every path it will change against `L` before it writes a file, so a path you are editing (an uncommitted or invalid edit) makes the round wait with `waiting_on_edit` and name the file.
-8. **Publish.** This machine's descriptor is updated in its own commit. Before the push, every blob the push would publish (reachable from the commit being pushed and not from `R`, so every version in every unpushed commit) is read with `coffer secret scan`'s detection; `secret/*.enc` is ciphertext and is skipped. A value a file still holds stops the round as `plaintext_found` with nothing pushed. A value only an earlier unpushed commit holds is folded out: the unpushed commits become one commit on `R` with the same tree, which is pushed instead. Then the result is pushed. A rejected push is `push_failed`: the vault already holds the merge, and the next round tries again.
+8. **Publish.** This machine's descriptor is updated in its own commit. Before the push, every blob the push would publish (reachable from the commit being pushed and not from `R`, so every version in every unpushed commit) is read with `coffer secret scan`'s detection; `secret/*.enc` is ciphertext and is skipped. A value a file still holds stops the round as `plaintext_found` with nothing pushed. A value only an earlier unpushed commit holds is folded out: the unpushed commits become one commit on `R` with the same tree, which is pushed instead, and the descriptor is written again on top of it so the pushed descriptor names a commit the remote holds. Then the result is pushed. A rejected push is `push_failed`: the vault already holds the merge, and the next round tries again.
 
-After a round that changed the vault, the [reconciler](/architecture/reconciler) runs one pass, so each kind re-projects what arrived: agent config, shims, skill deliveries, provider projections. Sync itself imports no kind.
+After a round that changed the vault, the [reconciler](/architecture/reconciler) runs one pass, so each kind re-projects what arrived: agent config, shims, skill deliveries, provider projections. The round [holds the reconciler](/architecture/reconciler) from its first git call until that pass has run, so no pass judges the vault half applied. Sync itself imports no kind.
 
 ### Round outcomes
 
@@ -143,7 +143,7 @@ A hold is answered one of two ways, and either continues the round:
 
 ## Joining
 
-A machine that has never converged with the remote is **joining**. A timer never joins on its own: until you join, rounds end as `join_required` and move nothing. Joining is always previewed first, from the same facts the join then uses, so what you are shown is what happens:
+A machine that has never converged with the remote is **joining**. A timer never joins on its own: until you join, rounds end as `join_required` and move nothing — even when the remote you point it at shares history with the vault (a mirror, a renamed repository). Joining is always previewed first, from the same facts the join then uses, so what you are shown is what happens:
 
 | Case | How it is recognised | What joining does |
 | --- | --- | --- |
@@ -231,5 +231,5 @@ All paths are under `backend/coffer/`.
 ## Related
 
 - Spec: [vault-sync](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md), and [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md) for `runs_on`
-- Decision records: [Sync Only Pulls and Pushes the Vault Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Sync Round That Would Lose Too Much Is Held](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-deletion-breaker.md), [Storage Is Five Classes by Nature](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/storage-is-five-classes-by-nature.md), [Secrets Cross Machines Only as Ciphertext](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/credentials-across-machines.md)
+- Decision records: [Sync Only Pulls and Pushes the Vault Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Sync Round That Would Lose Too Much Is Held](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-deletion-breaker.md), [Storage Is Five Classes by Nature](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/storage-is-five-classes-by-nature.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/secrets-cross-machines-only-as-ciphertext.md)
 - [Vault sync guide](/guides/vault-sync) · [Persistence](/architecture/persistence) · [Knowledge architecture](/architecture/knowledge) · [Security model](/architecture/security)

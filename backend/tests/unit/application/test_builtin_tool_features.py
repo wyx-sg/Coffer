@@ -14,14 +14,14 @@ import pytest
 
 from coffer.application.builtin_tools import AgentDirectory, BuiltinTool, BuiltinToolRegistry
 from coffer.domain.features import ExperimentalFeature, FeatureUnknown
-from tests.support.features import register_fake_features
+from tests.support.features import replace_registry
 
 _TOOLS, _DIRS = "fake_tools", "fake_dirs"
 
 
 @pytest.fixture(autouse=True)
 def _fake_features(monkeypatch: pytest.MonkeyPatch) -> None:
-    register_fake_features(
+    replace_registry(
         monkeypatch,
         ExperimentalFeature(key=_TOOLS, route_prefixes=()),
         ExperimentalFeature(key=_DIRS, route_prefixes=()),

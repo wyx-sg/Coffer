@@ -144,7 +144,7 @@ async def _setup(
 #: names. Written out rather than derived from a registered agent because these
 #: tests never register one: a scope is a list of strings and ``is_active``
 #: compares strings, so using name-shaped values here would let a test pass for
-#: the wrong reason (ADR resource-identity-is-an-immutable-uid).
+#: the wrong reason (ADR identity-is-the-uid-inside-the-file).
 CLAUDE_CODE_UID = "9f2c41a0b7d94e6a8c1f35b2d07ae914"
 CODEX_UID = "3b7e08d1c4f2456ab90d61ea5c2f7d38"
 
@@ -213,46 +213,6 @@ async def test_initialize_returns_capabilities(
         assert "tools" in caps
         assert "resources" in caps
         assert "prompts" in caps
-    finally:
-        await session.dispose()
-        await _safe_dispose(engine)
-
-
-@pytest.mark.asyncio
-async def test_initialize_captures_agent_uid_from_meta(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Per "Take the agent identity from the handshake", the shim self-reports
-    its bound agent's name at the handshake via
-    ``params._meta["coffer/agent-uid"]``, alongside the existing ``coffer/cwd``
-    key; the gateway captures it onto the session. It is
-    the agent's UID, so the value survives a rename of the agent and matches the
-    uids a resource's ``scope`` holds (ADR resource-identity-is-an-immutable-uid)."""
-    _with_in_memory(monkeypatch)
-    session, _rsvc, _prefs, _inv, engine = await _setup(tmp_path, {})
-    try:
-        await session.handle_initialize(
-            {
-                "protocolVersion": "2025-06-18",
-                "_meta": {"coffer/cwd": "/work/repo", "coffer/agent-uid": CLAUDE_CODE_UID},
-            }
-        )
-        assert session._session_agent_uid == CLAUDE_CODE_UID
-        assert session._session_cwd == "/work/repo"
-    finally:
-        await session.dispose()
-        await _safe_dispose(engine)
-
-
-@pytest.mark.asyncio
-async def test_initialize_without_agent_meta_leaves_session_agent_uid_none(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _with_in_memory(monkeypatch)
-    session, _rsvc, _prefs, _inv, engine = await _setup(tmp_path, {})
-    try:
-        await session.handle_initialize({"protocolVersion": "2025-06-18"})
-        assert session._session_agent_uid is None
     finally:
         await session.dispose()
         await _safe_dispose(engine)
@@ -769,6 +729,7 @@ async def test_concurrent_sessions_are_isolated(
     import asyncio as _asyncio
 
     _with_in_memory(monkeypatch)
+    monkeypatch.setenv("HOME", str(tmp_path))
 
     configs = {
         "fs": _stdio_config(tools=["read_file", "write_file"]),
@@ -797,6 +758,12 @@ async def test_concurrent_sessions_are_isolated(
 
         assert names_a == expected, f"Session A got wrong tools: {names_a}"
         assert names_b == expected, f"Session B got wrong tools: {names_b}"
+
+        # Each session spawned its own child for each server: two sessions x two
+        # servers are four distinct pid files, which is how the spec counts them.
+        pid_files = list((tmp_path / ".coffer" / "upstream-pids").glob("*"))
+        assert len(pid_files) == 4, [f.name for f in pid_files]
+        assert len({f.read_text() for f in pid_files}) == 4
 
         # Run both tool-call requests concurrently — each session routes to its own
         # upstream; results must be correct and must not bleed across sessions.

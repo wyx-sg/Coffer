@@ -6,35 +6,27 @@
 // completion ping, the step lines) and its working directories — after the
 // machine. Switches and list edits save at once; typed values save a moment
 // after typing stops, and only when valid (useSettingDraft).
+//
+// Every starting value is read from the daemon's typed settings
+// (`ChannelSettings`, defaults filled in), never from the raw config.
 import { useState } from "react";
 
-import type { ResourceOut } from "@/lib/api/resources";
-import {
-  parseBurstWait,
-  parseNotifyAfter,
-  storedBurstWait,
-  storedNotifyAfter,
-  storedShowSteps,
-} from "./channelTurnSettings";
+import type { ChannelSettings } from "@/lib/api/channels";
+import { parseBurstWait, parseIdleHours, parseNotifyAfter } from "./channelTurnSettings";
 import {
   honoursRequireMention,
   normaliseDirectory,
   storedDefaultDirectory,
-  storedDirectories,
   type ChannelEditValues,
-} from "./editChannel";
+} from "@/lib/channels/editChannel";
 import { EditChannelBurstFields } from "./EditChannelBurstFields";
 import { EditChannelDirectoriesField } from "./EditChannelDirectoriesField";
 import { EditChannelGroupFields, type ChannelGroupDraft } from "./EditChannelGroupFields";
+import { EditChannelIdleField } from "./EditChannelIdleField";
 import { EditChannelReplyFields } from "./EditChannelReplyFields";
 import { useSettingDraft } from "./useSettingDraft";
 
 type Save = (values: Partial<ChannelEditValues>) => void;
-
-function boolField(config: Record<string, unknown>, key: string, fallback: boolean): boolean {
-  const v = config[key];
-  return typeof v === "boolean" ? v : fallback;
-}
 
 /** A typed default folder: blank clears it, an absolute path sets it, anything
  *  else is invalid (`null`) and is not saved. */
@@ -44,21 +36,24 @@ const parseDefault = (text: string): { path: string | null } | null => {
   return path === null ? null : { path };
 };
 
-export function ChannelBatchingFields({ channel, save }: { channel: ResourceOut; save: Save }) {
-  const config = channel.config;
-  const channelType = typeof config.channel_type === "string" ? config.channel_type : "telegram";
+export function ChannelBatchingFields({
+  settings,
+  save,
+}: {
+  settings: ChannelSettings;
+  save: Save;
+}) {
+  const channelType = settings.channel_type;
 
   const [group, setGroup] = useState<ChannelGroupDraft>(() => ({
-    requireMention: boolField(config, "require_mention", true),
-    ignoreOtherMentions: boolField(config, "ignore_other_mentions", false),
+    requireMention: settings.require_mention,
+    ignoreOtherMentions: settings.ignore_other_mentions,
   }));
-  const afterText = useSettingDraft(
-    String(storedBurstWait(config, "wait_after_text_seconds")),
-    parseBurstWait,
-    (v) => save({ wait_after_text_seconds: v }),
+  const afterText = useSettingDraft(String(settings.wait_after_text_seconds), parseBurstWait, (v) =>
+    save({ wait_after_text_seconds: v }),
   );
   const afterForward = useSettingDraft(
-    String(storedBurstWait(config, "wait_after_forward_seconds")),
+    String(settings.wait_after_forward_seconds),
     parseBurstWait,
     (v) => save({ wait_after_forward_seconds: v }),
   );
@@ -89,19 +84,25 @@ export function ChannelBatchingFields({ channel, save }: { channel: ResourceOut;
 }
 
 export function ChannelReplyDirectoryFields({
-  channel,
+  settings,
   save,
 }: {
-  channel: ResourceOut;
+  settings: ChannelSettings;
   save: Save;
 }) {
-  const config = channel.config;
-  const [showSteps, setShowSteps] = useState(() => storedShowSteps(config));
-  const [directories, setDirectories] = useState(() => storedDirectories(config));
-  const notifyAfter = useSettingDraft(String(storedNotifyAfter(config)), parseNotifyAfter, (v) =>
-    save({ notify_after_seconds: v }),
+  const [showSteps, setShowSteps] = useState(() => settings.show_steps);
+  const [directories, setDirectories] = useState(() => settings.directories);
+  const notifyAfter = useSettingDraft(
+    String(settings.notify_after_seconds),
+    parseNotifyAfter,
+    (v) => save({ notify_after_seconds: v }),
   );
-  const defaultDir = useSettingDraft(storedDefaultDirectory(config) ?? "", parseDefault, (v) =>
+  const idle = useSettingDraft(
+    String(settings.new_conversation_after_idle_hours),
+    parseIdleHours,
+    (v) => save({ new_conversation_after_idle_hours: v }),
+  );
+  const defaultDir = useSettingDraft(storedDefaultDirectory(settings) ?? "", parseDefault, (v) =>
     save({ default_directory: v.path }),
   );
 
@@ -117,6 +118,9 @@ export function ChannelReplyDirectoryFields({
           if (patch.notifyAfter !== undefined) notifyAfter.change(patch.notifyAfter);
         }}
       />
+      <div onBlur={idle.flush}>
+        <EditChannelIdleField value={idle.text} onChange={idle.change} />
+      </div>
       <div onBlur={defaultDir.flush}>
         <EditChannelDirectoriesField
           defaultText={defaultDir.text}

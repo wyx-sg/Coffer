@@ -17,7 +17,7 @@ import { McpBuiltinTools } from "./McpBuiltinTools";
 import { McpCallout } from "./McpCallout";
 import { McpCallsLog } from "./McpCallsLog";
 import { Fact, McpOverviewTab } from "./McpOverviewTab";
-import { relativeTime, type ServerState } from "./serverState";
+import { relativeTime, type ServerState } from "@/lib/mcp/serverState";
 
 const HEALTHY: ServerState = { kind: "healthy", group: "healthy", tone: "ok" };
 

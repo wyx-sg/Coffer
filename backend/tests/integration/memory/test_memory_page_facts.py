@@ -32,8 +32,6 @@ _FILE = (
 def client(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59340")
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59349")
     (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)

@@ -103,42 +103,21 @@ class UploadTooLarge(KnowledgeError):  # noqa: N818
         self.limit = limit
 
 
-class TopicReferencesFile(KnowledgeError):  # noqa: N818
-    """A curated document naming another knowledge file.
+class KnowledgeCurationHeld(KnowledgeError):  # noqa: N818
+    """Curate now was refused because a sync round waits for a person.
 
-    Spec knowledge "Refuse file-name references in documents".
-
-    Refused at the write rather than asked for in the prompt. Document paths are
-    chosen by curation and move as the corpus is reorganised, so a file name
-    written into prose is a link that rots — 343 of the corpus's 398 internal
-    references were already dead when this rule was introduced. A document
-    names its subject; the catalogue resolves subjects to paths.
+    Spec knowledge "Curate on one owner machine only" and vault-sync "Never
+    overlap a curation pass and a round": a rewrite is never piled onto the very
+    files a person is deciding between. Surfaces map this to 409.
     """
 
-    code = "KNOWLEDGE_TOPIC_REFERENCES_FILE"
+    code = "KNOWLEDGE_CURATION_HELD"
 
-    def __init__(self, path: str, reference: str) -> None:
+    def __init__(self) -> None:
         super().__init__(
-            f"topic {path!r} references the file {reference!r}; name the subject, not the file"
+            "curation is held while a sync round waits for you — resolve the conflict "
+            "or confirmation in Sync, then run it again"
         )
-        self.path = path
-        self.reference = reference
-
-
-class CurationBoundExceeded(KnowledgeError):  # noqa: N818
-    """A curation pass tried to write more files than one pass may.
-
-    Spec knowledge "Bound a pass to eight writes".
-
-    The bound is what makes a pass *incremental*: one source must never be able
-    to trigger a corpus-wide rewrite, however confident the model is.
-    """
-
-    code = "KNOWLEDGE_CURATION_BOUND"
-
-    def __init__(self, limit: int) -> None:
-        super().__init__(f"a curation pass may write at most {limit} files")
-        self.limit = limit
 
 
 class KnowledgeHistoryUnavailable(KnowledgeError):  # noqa: N818

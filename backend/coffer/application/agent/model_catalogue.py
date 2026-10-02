@@ -19,10 +19,8 @@ shaped to prevent:
   it directly: ``offered()`` is the only way out to a surface.
 * ``offered()`` / ``suggest()`` — what a PICKER should show. Usually the same
   list: the agent's catalogue is what the agent itself can run, and nothing
-  narrows it — not the agent, and not the surface doing the asking. Curation
-  lived on the agent once and on the channel after that; migration 0068 took the
-  last of it away, so the web picker and a channel's ``/model`` card both offer
-  the whole list.
+  narrows it — not the agent, and not the surface doing the asking, so the
+  web picker and a channel's ``/model`` card both offer the whole list.
 
   With an LLM connection ACTIVE for the agent, the IDS come from somewhere else
   entirely. The agent's turns then go to that endpoint, not to the account its

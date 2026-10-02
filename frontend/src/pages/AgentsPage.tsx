@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Bot, Plus, RotateCcw } from "lucide-react";
+import { Plus, RotateCcw } from "lucide-react";
 
 import {
   AgentConnectionChangeDialog,
@@ -47,7 +47,6 @@ export function AgentsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={Bot}
         title={t("agents.title")}
         subtitle={
           <span className="flex flex-col gap-2">

@@ -33,7 +33,7 @@ coffer agent add [OPTIONS] TYPE
 
 Register the agent of TYPE — one per type, named by it.
 
-Without ``--config-dir`` it is registered at the type's standard directory; an agent installed but never run gets that directory created. To move a registered agent, use ``coffer agent edit TYPE --config-dir``.
+Without ``--config-dir`` it is registered at the type's standard directory; an agent installed but never run gets that directory created. To move a registered agent, use ``coffer agent edit NAME --config-dir``.
 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -43,14 +43,14 @@ Without ``--config-dir`` it is registered at the type's standard directory; an a
 ## agent show
 
 ```sh
-coffer agent show [OPTIONS] TYPE
+coffer agent show [OPTIONS] NAME
 ```
 
 Show one agent, with its Coffer connection part by part.
 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `TYPE` | 参数 | text | 必填 | Agent type (claude-code \| codex) or uid |
+| `NAME` | 参数 | text | 必填 | Agent name (claude-code \| codex) or uid |
 | `--json` | 选项 | 开关 |  | JSON output for scripts |
 
 ## agent prompt
@@ -71,23 +71,22 @@ Offered while the program is not found, added or not — the same words the Agen
 ## agent edit
 
 ```sh
-coffer agent edit [OPTIONS] TYPE
+coffer agent edit [OPTIONS] NAME
 ```
 
 Change an agent's config directory or model binding.
 
-An agent's name is its type and it carries no title or description, so these are the whole of what can change. The model binding lives on the agent, not on the connection: an unbound agent projects no model and runs on its own default. A change here takes effect on disk the next time that agent's connection is activated (`coffer provider switch <name>`), which is what re-projects the config.
+An agent's name is its type and it carries no title or description, so these are the whole of what can change. The model binding lives on the agent, not on the connection: an unbound agent projects no model and runs on its own default. A change here takes effect on disk the next time that agent is switched onto its connection (`coffer provider switch <name> --agent <type>`), which is what re-projects the config.
 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `TYPE` | 参数 | text | 必填 | Agent type (claude-code \| codex) or uid |
+| `NAME` | 参数 | text | 必填 | Agent name (claude-code \| codex) or uid |
 | `--config-dir` | 选项 | text |  | Use a different config directory |
 | `--model` | 选项 | text |  | Model this agent answers with |
 | `--effort` | 选项 | text |  | Reasoning effort level |
 | `--clear-effort` | 选项 | 开关 |  | Unbind the effort |
 | `--tier` | 选项 | text（可重复） |  | Claude Code tier pin &lt;tier&gt;=&lt;model&gt; (opus, sonnet, haiku, fable); repeatable |
 | `--clear-tiers` | 选项 | 开关 |  | Unbind every tier pin |
-| `--wire-api` | 选项 | text |  | Codex wire api; `responses` is the only value it still loads |
 
 ## agent rm
 
@@ -162,7 +161,7 @@ The listing pages by cursor: a page with more after it ends with the --cursor va
 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Agent name |
+| `NAME` | 参数 | text | 必填 | Agent name or uid |
 | `[ID]` | 参数 | text |  | A session id from the listing; omit to list sessions |
 | `--limit` | 选项 | integer |  | Sessions to list (default 20) or turns to show (default 200) |
 | `--offset` | 选项 | integer | `0` | With an ID: skip this many turns. |
@@ -176,14 +175,14 @@ The listing pages by cursor: a page with more after it ends with the --cursor va
 ## agent models
 
 ```sh
-coffer agent models [OPTIONS] AGENT_KEY
+coffer agent models [OPTIONS] TYPE
 ```
 
 List the models a picker offers for this agent, with their effort levels.
 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `AGENT_KEY` | 参数 | text | 必填 | Agent type, e.g. claude_code or codex |
+| `TYPE` | 参数 | text | 必填 | Agent type, e.g. claude_code or codex |
 | `--json` | 选项 | 开关 |  | JSON output |
 
 ## agent hooks
@@ -196,7 +195,7 @@ List every hook the agent will run; Coffer's own is marked with \*.
 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Agent name |
+| `NAME` | 参数 | text | 必填 | Agent name or uid |
 | `--json` | 选项 | 开关 |  | JSON output |
 
 ## agent config
@@ -221,7 +220,7 @@ Opens $EDITOR on the current content, or takes it from --from-file. Coffer valid
 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Agent name |
+| `NAME` | 参数 | text | 必填 | Agent name or uid |
 | `KEY[/CHILD]` | 参数 | text | 必填 | Config-file key (e.g. settings, config, instructions), or KEY/CHILD for one file inside a directory entry (e.g. subagents/reviewer.md) |
 | `--from-file` | 选项 | text |  | Take the new content from PATH ('-' for stdin) instead of opening $EDITOR. |
 
@@ -235,7 +234,7 @@ Delete one file inside a directory entry (its content is kept as .bak).
 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Agent name |
+| `NAME` | 参数 | text | 必填 | Agent name or uid |
 | `KEY/CHILD` | 参数 | text | 必填 | One file inside a directory entry (e.g. subagents/x.md) |
 | `--force, --yes, -f, -y` | 选项 | 开关 |  | Do not ask |
 
@@ -259,7 +258,7 @@ List the agent's installed plugins and known marketplaces.
 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Agent name |
+| `NAME` | 参数 | text | 必填 | Agent name or uid |
 | `--json` | 选项 | 开关 |  | JSON output for scripts |
 
 ## agent plugin show
@@ -272,7 +271,7 @@ Show one plugin: its metadata, install dir and everything it contributes.
 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Agent name |
+| `NAME` | 参数 | text | 必填 | Agent name or uid |
 | `PLUGIN_ID` | 参数 | text | 必填 | Plugin id (name@marketplace) |
 | `--json` | 选项 | 开关 |  | JSON output |
 
@@ -286,7 +285,7 @@ Enable a plugin in the agent's config.
 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Agent name |
+| `NAME` | 参数 | text | 必填 | Agent name or uid |
 | `PLUGIN_ID` | 参数 | text | 必填 | Plugin id (name@marketplace) |
 
 ## agent plugin disable
@@ -299,7 +298,7 @@ Disable a plugin in the agent's config.
 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Agent name |
+| `NAME` | 参数 | text | 必填 | Agent name or uid |
 | `PLUGIN_ID` | 参数 | text | 必填 | Plugin id (name@marketplace) |
 
 ## agent plugin rm
@@ -312,6 +311,6 @@ Uninstall a plugin (Codex edits its config; Claude Code shells out to its own CL
 
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Agent name |
+| `NAME` | 参数 | text | 必填 | Agent name or uid |
 | `PLUGIN_ID` | 参数 | text | 必填 | Plugin id (name@marketplace) |
 | `--force, --yes, -f, -y` | 选项 | 开关 |  | Do not ask |

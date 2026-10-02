@@ -26,7 +26,7 @@ import ctypes
 import ctypes.util
 from typing import Protocol
 
-from coffer.domain.errors import SecretLocked
+from coffer.domain.secret_errors import SecretLocked
 
 SERVICE = "coffer"
 ACCOUNT = "master-key"

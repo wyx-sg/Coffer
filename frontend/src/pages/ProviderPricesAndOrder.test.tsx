@@ -57,7 +57,6 @@ const provider = (uid: string, over: Partial<Provider> = {}): Provider => ({
   secret_ref: `provider/${uid}`,
   local_runtime: null,
   compatible_agents: ["codex"],
-  is_active: false,
   internal_default: false,
   transcribe_default: false,
   fallback: true,

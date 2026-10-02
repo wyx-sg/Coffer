@@ -46,9 +46,6 @@ def _collection(name: str, description: str, documents: int = 1):  # type: ignor
     return entry, files
 
 
-_MEMORY = "~/.coffer/memory"
-
-
 def test_the_default_root_is_rendered_home_relative() -> None:
     """``~`` is not cosmetic: it is what makes the file identical on two
     machines whose home directories differ."""
@@ -79,19 +76,15 @@ def test_two_machines_render_the_same_bytes() -> None:
     catalogue = [_collection("shopee", "Shopee's account system.")]
     one = pathlib.Path("/Users/ana")
     two = pathlib.Path("/home/bruno")
-    assert render(
-        display_root(one / ".coffer" / "knowledge", home=one), catalogue, memory_root=_MEMORY
-    ) == render(
-        display_root(two / ".coffer" / "knowledge", home=two), catalogue, memory_root=_MEMORY
+    assert render(display_root(one / ".coffer" / "knowledge", home=one), catalogue) == render(
+        display_root(two / ".coffer" / "knowledge", home=two), catalogue
     )
 
 
 def test_the_rendering_is_stable_across_calls() -> None:
     """No timestamp, no ordering that depends on a set's iteration."""
     catalogue = [_collection("a", "First."), _collection("b", "Second.")]
-    assert render("~/.coffer/knowledge", catalogue, memory_root=_MEMORY) == render(
-        "~/.coffer/knowledge", catalogue, memory_root=_MEMORY
-    )
+    assert render("~/.coffer/knowledge", catalogue) == render("~/.coffer/knowledge", catalogue)
 
 
 def test_the_description_stays_inside_the_importers_cap() -> None:
@@ -119,10 +112,13 @@ def test_subjects_are_dropped_from_the_tail_not_cut_mid_sentence() -> None:
 def test_an_empty_corpus_still_renders_a_usable_manual() -> None:
     """A vault with nothing filed yet still needs the half of this skill that
     explains the tools — that half is what a new user's agent reads first."""
-    text = render("~/.coffer/knowledge", [], memory_root=_MEMORY)
+    text = render("~/.coffer/knowledge", [])
     assert f"name: {GUIDE_SKILL_NAME}" in text
     assert "coffer__search_tools" in text
     assert "No collections have been created yet" in text
+
+
+_MEMORY = "~/.coffer/memory"
 
 
 @pytest.mark.acceptance(
@@ -193,9 +189,7 @@ def _roundtrip(description: str) -> tuple[str, str]:
     catalogue = [_collection("ops", description)]
     folder = pathlib.Path(tempfile.mkdtemp()) / "coffer-guide"
     folder.mkdir(parents=True)
-    (folder / "SKILL.md").write_text(
-        render("~/.coffer/knowledge", catalogue, memory_root=_MEMORY), encoding="utf-8"
-    )
+    (folder / "SKILL.md").write_text(render("~/.coffer/knowledge", catalogue), encoding="utf-8")
     result = validate_skill_folder(folder)
     assert isinstance(result, ValidationOk), f"the skill did not even parse: {result}"
     return render_description(catalogue), result.frontmatter.description
@@ -235,13 +229,55 @@ def test_the_parsed_description_is_what_the_cap_measures() -> None:
     assert len(render_description(catalogue)) <= MAX_DESCRIPTION_CHARS
 
 
-def test_no_placeholder_or_marker_reaches_an_agent() -> None:
+def test_with_knowledge_switched_off_the_guide_carries_no_catalogue() -> None:
+    """``None`` is the knowledge feature switched off (spec
+    experimental-features): the manual stays, the catalogue and every
+    collection subject go, and the description promises no knowledge."""
+    text = render("~/.coffer/knowledge", None)
+    assert f"name: {GUIDE_SKILL_NAME}" in text
+    assert "coffer__search_tools" in text
+    assert "## What is in this developer's knowledge" not in text
+    assert "No collections have been created yet" not in text
+    description = text.split("---")[1]
+    assert "knowledge" not in description
+    assert "coffer__write" not in description
+    assert render("~/.coffer/knowledge", None) == text
+
+
+def test_with_knowledge_switched_off_the_manual_documents_no_knowledge_tool_or_root() -> None:
+    """The whole guide, not only its description: ``coffer__write`` and the
+    knowledge root leave with the feature, and the tool count follows."""
+    text = render("~/.coffer/knowledge", None, memory_root=_MEMORY)
+    assert "coffer__write" not in text
+    assert "~/.coffer/knowledge" not in text
+    assert _MEMORY in text
+    assert "adds one tool of its own" in text
+    assert "<!--" not in text
+
+
+def test_with_memory_switched_off_the_guide_names_no_memory_root() -> None:
+    catalogue = [_collection("ops", "Runbooks.")]
+    text = render("~/.coffer/knowledge", catalogue)
+    assert "<MEMORY_ROOT>" not in text
+    assert "~/.coffer/memory" not in text
+    assert "## Coffer reads your memory" not in text
+    assert "coffer__write" in text
+    assert "### ops" in text
+    assert "adds two tools of its own" in text
+    assert "memory notes" not in text.split("---")[1]
+
+    both_off = render("~/.coffer/knowledge", None)
+    assert "~/.coffer/memory" not in both_off
+    assert "coffer__write" not in both_off
+    assert "adds one tool of its own" in both_off
+    assert "`coffer path logs`" in both_off  # the log readers are always there
+    assert "<!--" not in both_off
+
+
+def test_with_every_feature_on_no_span_marker_reaches_an_agent() -> None:
     text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
     assert "<!--" not in text
     assert "<TOOL_COUNT>" not in text
     assert "<MEMORY_ROOT>" not in text
-    assert "<KNOWLEDGE_ROOT>" not in text
     assert "adds two tools of its own" in text
-    description = text.split("---")[1]
-    assert "memory notes" in description
-    assert "coffer__write" in description
+    assert "memory notes" in text.split("---")[1]

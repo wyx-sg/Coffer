@@ -27,6 +27,7 @@ from coffer.surfaces.http.dependencies import get_actor, get_resource_service
 from coffer.surfaces.http.handoff_schemas import handoff_out
 from coffer.surfaces.http.provider_dependencies import get_price_resolver, get_provider_service
 from coffer.surfaces.http.provider_schemas import (
+    ActivateIn,
     ActivateOut,
     DeactivateOut,
     DetectLocalIn,
@@ -132,7 +133,6 @@ def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
             )
             for m in cfg.models
         ],
-        is_active=cfg.is_active,
         local_runtime=cfg.local_runtime,
         fallback=cfg.fallback,
         internal_default=cfg.internal_default,
@@ -294,16 +294,20 @@ async def delete_provider(
 @router.post("/{uid}/activate", response_model=ActivateOut)
 async def activate_provider(
     uid: str,
+    body: ActivateIn,
     svc: ProviderService = Depends(get_provider_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> ActivateOut:
-    """Switch: make this profile active for its wire format and project it."""
-    result = await svc.activate(uid, actor=actor)
+    """Switch one agent onto this connection: project it into that agent's
+    native config and record it on the agent. Nothing else changes (409
+    ``PROVIDER_DOES_NOT_REACH_AGENT`` when the connection or agent is off or the
+    scope does not name the agent)."""
+    result = await svc.activate(uid, body.agent_type, actor=actor)
     return ActivateOut(
         activated=result.activated,
         protocol=result.protocol,  # type: ignore[arg-type]
-        projected=result.projected,
-        skipped=result.skipped,
+        agent_type=AgentType(result.agent_type),
+        agent=result.agent,
     )
 
 
@@ -313,9 +317,9 @@ async def use_builtin_provider(
     svc: ProviderService = Depends(get_provider_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> DeactivateOut:
-    """Switch every agent of this type back to its OWN built-in login: remove
-    Coffer's projection from the native config and clear the active connection
-    covering it. Idempotent — a no-op when the agent already runs built-in."""
+    """Switch the agent of this type back to its OWN built-in login: remove
+    Coffer's projection from its native config and clear its connection. Only
+    this agent changes. Idempotent — a no-op when it already runs built-in."""
     result = await svc.deactivate(agent_type, actor=actor)
     return DeactivateOut(
         agent_type=AgentType(result.agent_type),

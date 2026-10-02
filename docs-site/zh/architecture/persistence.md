@@ -54,7 +54,7 @@ flowchart LR
 | **local** | `local/` | 本机专属资源（智能体）、生效范围、同步远端、保留策略、密钥边界的批准记录、本机专属密文。 | 从不 | 无 | 你会丢掉一些需要重新设置的设置 |
 | **content** | `content/` | 聊天和消息渠道的附件、聊天工作目录。 | 暂不 | 无 | 否：这是你唯一的副本 |
 | **runs** | `runs.db` | 审计日志、MCP 调用、对话、消息渠道线程和发件箱、同步轮次、用量、额度。 | 从不 | 它*本身*就是历史 | 你会丢掉历史 |
-| **derived** | `derived/` | `derived.db`、记忆树、智能体会话记录缓存、uid 索引、Coffer 自己的指南技能、同步冲突的编辑器副本。 | 从不 | 无 | 是：会被重建 |
+| **derived** | `derived/` | `derived.db`、记忆树、智能体会话记录缓存、Coffer 自己的指南技能、同步冲突的编辑器副本。 | 从不 | 无 | 是：会被重建 |
 
 一个资源属于哪个类别由它的类型声明，并可按行细化：大多数类型在保险库里，`agent` 在本地（智能体的配置目录是关于这台机器的事实），`memory` 分区是派生的，内置的 `coffer-guide` 技能也是派生的，因为每台机器都自己渲染它。
 
@@ -98,7 +98,7 @@ flowchart LR
 - **每个文档都带 `format_version`。** 比当前构建旧的文件会经过内存中的升级链读取，普通写入时不会被重写；比当前构建新的文件只读，如果这个构建读不了就会被标记。未知字段留在原处。见[每个保险库文件都带有自己的格式版本](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-file-carries-its-format-version.md)。
 - **家目录下的路径** 按 `${HOME}` 写入，在每台机器上展开。
 - **生效范围不在文件里。** 一个资源在这里是否启用、对哪些智能体启用，记录在 `local/reach.json`。
-- **`rev` 和 `updated_at` 不在文件里。** 它们是派生索引（`derived/index/resources.json`）里按 uid 的计数器，文件内容变化时递增。删掉索引会让计数器从头开始，而只有进程内的事件去重会读它。
+- **`updated_at` 不在文件里。** 它是文件在本机的修改时间，不再保留修订计数器或索引。
 
 Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一个另一台机器可能改动的受跟踪 `.gitignore`：编辑器和系统的杂项文件、知识集里的隐藏条目（`.inbox/` 除外），以及 `secret/`（除非你的同步远端携带密钥）。
 
@@ -164,7 +164,6 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 ├── derived.db                   MCP server health, skill deliveries, capability first/last seen
 ├── memory/<partition>/          the memory tree (MEMORY.md, notes/, RETIRED.md, .raw/)
 ├── cache/agent/                 agent transcript cache
-├── index/resources.json         uid index and per-uid revision counter
 ├── resources/                   derived resource files (memory partitions, coffer-guide)
 ├── skills/coffer-guide/         Coffer's own guide skill, rendered from the build
 └── sync-conflicts/              editor copies of a stopped round's conflicting files
@@ -199,7 +198,7 @@ flowchart LR
 
 ## runs.db 的迁移 {#migrations-of-runs-db}
 
-`runs.db` 的 schema 变更是放在持久化包里的 Alembic 修订，每个修订一个文件，命名为 `YYYYMMDD_NNNN_<slug>`。当前 head 是 `0136`，正是把旧数据库变成 `runs.db` 的那个修订：它把历史表改为以 uid 为键，并删掉了所有状态已移到文件里的表。schema 变更永远是一次迁移，从不由模型隐式建表。
+`runs.db` 的 schema 变更是放在持久化包里的 Alembic 修订，每个修订一个文件，命名为 `YYYYMMDD_NNNN_<slug>`。当前 head 是 `0138`，它删掉了 `conversations` 上没人使用的 `owner` 列。`0137` 给审计日志加上了关联 id，更早的 `0136` 把旧数据库变成了 `runs.db`：它把历史表改为以 uid 为键，并删掉了所有状态已移到文件里的表。schema 变更永远是一次迁移，从不由模型隐式建表。
 
 迁移在守护进程的 lifespan 里、在构建任何服务之前运行：
 
@@ -245,7 +244,7 @@ flowchart TB
 | 应用层的 `vault` 包 | 校验规则、历史与恢复、问题。 |
 | 基础设施层的 `vault` 包 | `~/.coffer` 下各类别的根目录、仓库、写入器、扫描器、资源和状态存储、生效范围、本地 JSON、一次性升级。 |
 | 基础设施层的 `persistence` 包 | runs.db 引擎、模型和 Alembic 修订；`derived.db`。 |
-| HTTP 界面 | 启动时迁移、备份、“太新”守卫、拒绝旧的家目录。 |
+| 基础设施层的 `persistence` 包（迁移运行器部分） | 迁移运行器：启动时迁移、备份、“太新”守卫、拒绝旧的家目录；守护进程启动和 `coffer migrate` 都调用它。 |
 | 基础设施层的 `secret` 包 | 以文件形式存放的密钥密文。 |
 | 基础设施层的 `daemon` 包 | `daemon-config.json`。 |
 

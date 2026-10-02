@@ -20,7 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useAgentNativeMemory } from "@/lib/hooks/useAgentNativeMemory";
-import { MemorySection } from "./MemorySection";
+import { Section } from "@/components/Section";
 
 type AgentRow = NonNullable<ReturnType<typeof useAgents>["data"]>[number];
 
@@ -86,7 +86,13 @@ export function MemoryWelcomePanel() {
         description={t("memory.welcome.body")}
         action={<MemoryUpdateButton />}
       />
-      <MemorySection title={t("memory.welcome.found")} meta={t("memory.welcome.foundMeta")}>
+      <Section
+        as="h2"
+        gap="snug"
+        labelled
+        title={t("memory.welcome.found")}
+        meta={t("memory.welcome.foundMeta")}
+      >
         <ul
           className="overflow-hidden rounded-lg border border-border-subtle bg-surface-raised"
           data-testid="memory-found"
@@ -95,7 +101,7 @@ export function MemoryWelcomePanel() {
             <FoundRow key={a.uid} agent={a} />
           ))}
         </ul>
-      </MemorySection>
+      </Section>
     </div>
   );
 }

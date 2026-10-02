@@ -408,6 +408,57 @@ async def test_get_with_session_id_accepted(
     assert r.status_code == 400
 
 
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a dropped session is answered 404 and the client handshakes again"
+)
+@pytest.mark.asyncio
+async def test_an_unknown_session_id_is_404_so_the_client_handshakes_again(
+    http_client: AsyncClient,
+) -> None:
+    """After the idle reaper (or a restart) drops a session, rebuilding it
+    silently would lose the identity ``initialize`` carried: anything but
+    ``initialize`` on an unknown id is 404, and ``initialize`` opens a session."""
+    init = await http_client.post(
+        "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+    )
+    session_id = init.headers["mcp-session-id"]
+    await reap_idle_sessions(max_idle_seconds=-1)
+    assert session_id not in _ACTIVE_SESSIONS
+
+    r = await http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        headers={"Mcp-Session-Id": session_id},
+    )
+    assert r.status_code == 404
+    assert session_id not in _ACTIVE_SESSIONS  # nothing was rebuilt
+    again = await http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 3, "method": "initialize", "params": {}},
+        headers={"Mcp-Session-Id": session_id},
+    )
+    assert again.status_code == 200 and session_id in _ACTIVE_SESSIONS
+    # An open stream is a client waiting for it: GET on a dropped session is 404 too.
+    await reap_idle_sessions(max_idle_seconds=-1)
+    assert (
+        await http_client.get("/mcp", headers={"Mcp-Session-Id": session_id})
+    ).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_a_client_cannot_name_a_session_after_the_daemons_own_registry_key(
+    http_client: AsyncClient,
+) -> None:
+    r = await http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        headers={"Mcp-Session-Id": "__process__"},
+    )
+    assert r.status_code == 200
+    assert r.headers["mcp-session-id"] != "__process__"
+    assert "__process__" not in _ACTIVE_SESSIONS
+
+
 @pytest.mark.asyncio
 async def test_sse_queue_is_bounded_and_drops_oldest(
     http_client: AsyncClient,

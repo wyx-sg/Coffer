@@ -224,6 +224,21 @@ def test_importing_moves_a_value_and_leaves_a_reference(cli: BoundaryDaemon) -> 
     assert (env.read_text(), script.read_text()) == before
     assert d.value("secret/db.DB_PASSWORD") is None
 
+    # The protection is on, so each new standalone secret waits for a person:
+    # nothing is stored, no file is rewritten, and no plaintext reaches `coffer run`.
+    held = _runner.invoke(cli_app, ["secret", "import", "--yes"])
+    assert held.exit_code == 0, held.output
+    assert (env.read_text(), script.read_text()) == before
+    assert d.value("secret/db.DB_PASSWORD") is None
+    waiting = d.pending(op="add_secret")
+    assert {a["ref"] for a in waiting} == {
+        "secret/db.DB_HOST",
+        "secret/db.DB_PASSWORD",
+        "secret/deploy.api_token",
+    }
+    for a in waiting:
+        d.approve(a["id"])
+
     moved = _runner.invoke(cli_app, ["secret", "import", "--yes"])
 
     assert moved.exit_code == 0, moved.output

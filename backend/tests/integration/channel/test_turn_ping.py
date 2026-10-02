@@ -79,7 +79,7 @@ async def test_a_long_streamed_turn_ends_with_one_done_line() -> None:
 
 @pytest.mark.acceptance(spec="channels/seatalk", scenario="a group ping mentions the asker")
 async def test_a_group_ping_mentions_the_asker_in_the_same_thread() -> None:
-    adapter = _streaming(supports_groups=True, mention_template=_MENTION)
+    adapter = _streaming(mention_template=_MENTION)
 
     await _run(adapter, _ANSWER, duration=252.0, chat_kind="group")
 

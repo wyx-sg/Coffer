@@ -36,7 +36,7 @@ def _at_0115(tmp_path, monkeypatch, config: object | None):
 
 
 @pytest.mark.acceptance(
-    spec="experimental-features", scenario="graduating a feature strips its stored setting"
+    spec="experimental-features", scenario="leaving the registry strips its stored setting"
 )
 def test_0116_strips_the_three_graduated_keys_and_keeps_the_rest(tmp_path, monkeypatch):
     path, cfg = _at_0115(

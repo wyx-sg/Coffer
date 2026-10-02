@@ -13,10 +13,10 @@
 // One endpoint answers for every kind, so a page filters the list for its own
 // target rather than each kind carrying a near-identical per-target route.
 //
-// Transport via the shared `call` (.agents/frontend.md §4); wire types are the
+// Transport via the typed client (.agents/frontend.md §4); wire types are the
 // generated ones.
 
-import { call } from "@/lib/api/call";
+import { getApiClient, unwrap } from "@/lib/api/client";
 import type { components } from "@/lib/api/generated/resource-framework";
 
 export type UpkeepRunOut = components["schemas"]["UpkeepRunOut"];
@@ -29,5 +29,5 @@ export type UpkeepKind = "memory" | "knowledge";
 /** Every pass in flight, oldest first. An empty list means nothing is
  *  running — a target absent from it has no pass. */
 export function listUpkeepRuns(): Promise<UpkeepRunListOut> {
-  return call<UpkeepRunListOut>("/upkeep/runs");
+  return unwrap(getApiClient().GET("/upkeep/runs"));
 }

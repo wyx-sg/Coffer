@@ -45,7 +45,7 @@ Coffer validates every folder before it accepts it:
 | `SKILL.md` present | required |
 | `name` | lowercase letters, digits and `-`; starts with a letter or digit; at most 64 characters |
 | `description` | non-empty, at most 1024 characters |
-| Symlinks inside the folder | none may point outside the folder |
+| Symlinks inside the folder | none may point outside the folder or at a folder (a link to a file counts as that file's bytes) |
 | Total folder size | at most 50 MB |
 
 Coffer also reads the optional `license` field, the experimental `allowed-tools` field (a list, or a comma- or space-separated string), and `requires:` — the command-line tools the skill drives, which Coffer checks on this machine and shows on the skill's **Requires** tab and the [CLIs page](/guides/clis), and the Coffer secrets it needs (see [Secrets a skill needs](#secrets-a-skill-needs)). Any other frontmatter key is kept and ignored.
@@ -63,7 +63,7 @@ Because the delivered path is a link, editing `SKILL.md` from inside `~/.claude/
 
 ## The Skills page
 
-**Skills** (under Capabilities in the sidebar) is your library beside the skill you are reading. The list on the left has a search box, an **All / On / Off** filter and **Check copies**; each row shows the skill's name and its reach, with **Built-in** or **Off** where they apply, and its description — or, in its place, the one thing that needs you: **Master missing**, **Folder in the way in Codex**, **Needs jq · not installed**, **Source unreachable** or **Update available**. Tick rows (a box appears on hover) to set the reach of several skills at once or to delete them; the selection shows as a bar under the filter and in the reading pane. Folders in `~/.coffer/vault/skills/` that no skill claims are listed apart, under **Not in your library** (see [below](#folders-not-in-your-library)).
+**Skills** (under Capabilities in the sidebar) is your library beside the skill you are reading. The list on the left has a search box, a **Reach** filter (All, Disabled, Every agent, Only selected agents) and **Check copies**; each row shows the skill's name and its reach, with **Built-in** or **Off** where they apply, and its description — or, in its place, the one thing that needs you: **Master missing**, **Folder in the way in Codex**, **Needs jq · not installed**, **Source unreachable** or **Update available**. Tick rows (a box appears on hover) to set the reach of several skills at once or to delete them; the selection shows as a bar under the filter and in the reading pane. Folders in `~/.coffer/vault/skills/` that no skill claims are listed apart, under **Not in your library** (see [below](#folders-not-in-your-library)).
 
 The open skill's header carries its reach button and a **⋯** menu: **Open in editor**, **Reveal in Finder**, **Copy master path**, **Check agents' copies**, **Turn off** (removes it from every agent and keeps who you chose) and **Delete…**. Above its tabs, a banner says what needs you — a folder in the way, a missing command, an update — with the one action that answers it.
 
@@ -139,7 +139,7 @@ Coffer clones the repository with this machine's own `git`, resolves the branch,
 The skill is **pinned** to the commit it was copied from. It does not change when the repository does; see [Update a skill from its repository](#update-a-skill-from-its-repository).
 
 ::: info Which repositories Coffer can reach
-Git runs without a prompt, and Coffer gives it no credential and stores none. A public repository always works. A private one works when this machine's git can already clone it — through a credential helper such as the macOS keychain, or SSH keys — because Coffer uses your own git configuration. If git would ask for a password, the add fails with git's message instead.
+Git runs without a prompt, and Coffer gives it no credential and stores none. A public repository always works. A private one works when this machine's git can already clone it — through a credential helper such as the macOS keychain, or SSH keys — because Coffer uses your own git configuration. If git would ask for a password, the add fails with git's message instead. A repository URL that carries a user name or password (`https://user:token@…`) is refused, because the URL is stored in the vault and shown on the skill's page; let the credential helper or an SSH key supply it. An archive's scripts keep the executable bit the archive recorded.
 :::
 
 ### When the name is taken
@@ -349,7 +349,7 @@ A disabled agent receives nothing. Its links are removed, and they come back whe
 | macOS, Linux | A directory symlink. |
 | Windows | A directory symlink; if that is not permitted, a directory junction; if the filesystem supports neither (FAT32, some network shares), a full copy. |
 
-A copied delivery is refreshed after each edit in Coffer. The skill's **Delivery** tab shows that agent's copy as **Copied, not linked**, with the reason.
+A copied delivery follows the master folder at the next repair pass. The skill's **Delivery** tab shows that agent's copy as **Copied, not linked**, with the reason.
 
 If something that is not a Coffer link already sits at `<config_dir>/skills/<name>`, Coffer reports a conflict for that skill (a folder in the way) and leaves the existing file or folder untouched. The rest of the skills are still delivered. See [Resolve a folder in the way](#resolve-a-folder-in-the-way).
 
@@ -460,7 +460,7 @@ To repair the repairable kinds now instead of at the next start:
 coffer skill verify --fix
 ```
 
-`--fix` re-creates missing links. For a tampered link it first moves the existing link aside to `<path>.coffer-backup-<timestamp>`, then re-creates it. It prints what it repaired and what still needs you, and exits 2 if anything remains.
+`--fix` re-creates missing links. For a tampered link it first moves the existing link aside to `~/.coffer/content/backup/skills/<agent>/<name>.coffer-backup-<timestamp>` (outside the agent's skills directory, so the agent never loads it), then re-creates it. It prints what it repaired and what still needs you, and exits 2 if anything remains.
 
 In the web UI, **Check copies** on the Skills page runs the same report and lists each finding with the skill, the agent (or Library), what differs and whether it needs you. A missing or repointed link has **Repair**, which puts it back; a folder in the way, a missing master and a folder not in your library have **Review…**, which opens the place to answer it. A skill's **Delivery** tab has **Check again**, which does the same for that one skill's copies.
 

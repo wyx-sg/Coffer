@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coffer"
-version = "0.1.1"
+version = "0.2.0"
 description = "Local-first AI agent vault — backend"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -60,7 +60,6 @@ dependencies = [
     "openai>=1.40",
     # Agent turns: built-in LangGraph multi-LLM agent.
     "langgraph>=1.2",
-    "langchain>=1.3",
     "langchain-anthropic>=1.4",
     "langchain-openai>=1.2",
     "langchain-ollama>=1.1",
@@ -215,6 +214,16 @@ ignore_imports = [
     "coffer.application.binary_deploy -> coffer.infrastructure.vault.home",
 ]
 
+# The CLI is a client of the daemon's HTTP API, not a sibling of its routes: it
+# imports nothing from the HTTP surface (the migration runner it needs lives in
+# infrastructure.persistence).
+[[tool.importlinter.contracts]]
+name = "CLI does not import the HTTP surface"
+type = "forbidden"
+source_modules = ["coffer.surfaces.cli"]
+forbidden_modules = ["coffer.surfaces.http"]
+allow_indirect_imports = "True"
+
 # Contract 3: domain is pure — no imports from any other project layer, no
 # external SDKs that imply I/O. The list of forbidden externals is the smell
 # set; add more here when a new I/O dependency joins the project.
@@ -353,6 +362,10 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.cli._channel_machine",
+    "coffer.surfaces.cli._channel_options",
+    "coffer.surfaces.cli._channel_show",
+    "coffer.surfaces.http.channel_handoff",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",
@@ -450,6 +463,10 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.cli._channel_machine",
+    "coffer.surfaces.cli._channel_options",
+    "coffer.surfaces.cli._channel_show",
+    "coffer.surfaces.http.channel_handoff",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",
@@ -547,6 +564,10 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.cli._channel_machine",
+    "coffer.surfaces.cli._channel_options",
+    "coffer.surfaces.cli._channel_show",
+    "coffer.surfaces.http.channel_handoff",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",
@@ -648,6 +669,10 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.cli._channel_machine",
+    "coffer.surfaces.cli._channel_options",
+    "coffer.surfaces.cli._channel_show",
+    "coffer.surfaces.http.channel_handoff",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",
@@ -693,6 +718,10 @@ source_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.cli._channel_machine",
+    "coffer.surfaces.cli._channel_options",
+    "coffer.surfaces.cli._channel_show",
+    "coffer.surfaces.http.channel_handoff",
 ]
 forbidden_modules = [
     "coffer.domain.mcp",
@@ -852,6 +881,10 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.cli._channel_machine",
+    "coffer.surfaces.cli._channel_options",
+    "coffer.surfaces.cli._channel_show",
+    "coffer.surfaces.http.channel_handoff",
     "coffer.domain.provider",
     "coffer.application.provider",
     "coffer.infrastructure.provider",
@@ -953,6 +986,10 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.cli._channel_machine",
+    "coffer.surfaces.cli._channel_options",
+    "coffer.surfaces.cli._channel_show",
+    "coffer.surfaces.http.channel_handoff",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",
@@ -1054,6 +1091,10 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.cli._channel_machine",
+    "coffer.surfaces.cli._channel_options",
+    "coffer.surfaces.cli._channel_show",
+    "coffer.surfaces.http.channel_handoff",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",
@@ -1164,6 +1205,10 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.cli._channel_machine",
+    "coffer.surfaces.cli._channel_options",
+    "coffer.surfaces.cli._channel_show",
+    "coffer.surfaces.http.channel_handoff",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",
@@ -1207,6 +1252,17 @@ source_modules = [
     "coffer.application.resource_scope_ops",
     "coffer.application.resource_enable_ops",
     "coffer.application.resource_delete_ops",
+    "coffer.application.resource_rename_ops",
+    "coffer.application.resource_title_ops",
+    "coffer.application.resource_kind_ops",
+    "coffer.application.resource_actor",
+    "coffer.application.repos",
+    # The reconciler, the attention list and the event stream carry every
+    # kind's hints and signals; each kind supplies its own through a port.
+    "coffer.application.reconcile",
+    "coffer.domain.reconcile",
+    "coffer.application.attention",
+    "coffer.application.events",
     "coffer.application.audit_service",
     "coffer.application.retention_service",
     "coffer.application.retention_worker",
@@ -1295,6 +1351,10 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.cli._channel_machine",
+    "coffer.surfaces.cli._channel_options",
+    "coffer.surfaces.cli._channel_show",
+    "coffer.surfaces.http.channel_handoff",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",

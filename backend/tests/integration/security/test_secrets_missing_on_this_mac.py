@@ -45,7 +45,7 @@ def _plant_foreign_ciphertext(d: BoundaryDaemon, ref: str) -> None:
 def test_a_ciphertext_from_another_key_is_listed_as_locked(d: BoundaryDaemon) -> None:
     _plant_foreign_ciphertext(d, "secret/sentry-token")
     d.store("secret/github-token", "ghp_this_mac")
-    before = len(d.audit("secret_read")) + len(d.audit("secret_revealed"))
+    before = len(d.audit_all())
 
     rows = _listed(d)
 
@@ -53,7 +53,7 @@ def test_a_ciphertext_from_another_key_is_listed_as_locked(d: BoundaryDaemon) ->
     assert rows["secret/sentry-token"]["locked"] is True
     assert rows["secret/github-token"]["locked"] is False
     # Listing decrypts nothing and audits nothing.
-    assert len(d.audit("secret_read")) + len(d.audit("secret_revealed")) == before
+    assert len(d.audit_all()) == before
 
 
 @pytest.mark.acceptance(
@@ -103,6 +103,12 @@ def test_a_file_that_cannot_be_rewritten_keeps_its_key_and_says_so(d: BoundaryDa
     before = env.read_text()
     secrets.chmod(0o500)
     try:
+        # A new standalone secret waits for a person, so the first import only asks.
+        first = d.client.post("/api/v1/secrets/import", json={})
+        assert first.status_code == 200, first.text
+        assert "waits for approval" in first.json()["skipped"][0]["reason"]
+        for waiting in d.pending(op="add_secret"):
+            d.approve(waiting["id"])
         r = d.client.post("/api/v1/secrets/import", json={})
         assert r.status_code == 200, r.text
         out = r.json()
@@ -137,3 +143,16 @@ def test_a_scan_that_finds_nothing_says_how_many_files_it_read(d: BoundaryDaemon
     assert r.status_code == 200, r.text
     assert r.json()["findings"] == []
     assert r.json()["files_checked"] >= 1
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="a dot-only segment is refused rather than answered with a server error"
+)
+def test_a_dot_only_ref_segment_is_refused_not_answered_with_a_500(d: BoundaryDaemon) -> None:
+    """``.`` and ``..`` pass a character-class check but name no file."""
+    for ref in ("..", "a/../b", "."):
+        r = d.client.post("/api/v1/secrets", json={"ref": ref, "value": "x"})
+        assert r.status_code == 422, (ref, r.text)
+    # Over the path routes the segment arrives percent-encoded.
+    assert d.client.get("/api/v1/secrets/%2E%2E/exists").status_code == 422
+    assert d.client.delete("/api/v1/secrets/a/%2E%2E").status_code == 422

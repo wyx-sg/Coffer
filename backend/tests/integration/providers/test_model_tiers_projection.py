@@ -57,8 +57,16 @@ def test_switching_back_removes_every_key_coffer_wrote(tmp_path, monkeypatch):
         )
         c.patch(f"/api/v1/agents/{cc}", json={"model": "kimi-k3", "effort": "high"})
         c.patch(f"/api/v1/agents/{cx}", json={"model": "gpt-x", "effort": "high"})
-        assert c.post(f"/api/v1/providers/{anthropic}/activate").status_code == 200
-        assert c.post(f"/api/v1/providers/{openai}/activate").status_code == 200
+        assert (
+            c.post(
+                f"/api/v1/providers/{anthropic}/activate", json={"agent_type": "claude_code"}
+            ).status_code
+            == 200
+        )
+        assert (
+            c.post(f"/api/v1/providers/{openai}/activate", json={"agent_type": "codex"}).status_code
+            == 200
+        )
 
         settings = json.loads((cc_dir / "settings.json").read_text())
         assert settings["model"] == "kimi-k3" and settings["effortLevel"] == "high"
@@ -97,7 +105,10 @@ def test_codex_catalogue_carries_window_and_levels(tmp_path, monkeypatch):
             ),
         )
         c.patch(f"/api/v1/agents/{cx}", json={"model": "gpt-x", "effort": "high"})
-        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
+        assert (
+            c.post(f"/api/v1/providers/{uid}/activate", json={"agent_type": "codex"}).status_code
+            == 200
+        )
 
     entry = json.loads((cx_dir / "coffer-model-catalog.json").read_text())["models"][0]
     assert entry["context_window"] == entry["max_context_window"] == 200000

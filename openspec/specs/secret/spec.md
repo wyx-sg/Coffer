@@ -44,7 +44,7 @@ re-enters their secrets.
 
 ### Requirement: Address a secret by an opaque reference
 A secret MUST be addressed by an opaque reference — a slash-separated string of `[A-Za-z0-9_.-]`
-segments — which carries no meaning to the store. A write to an existing ref MUST re-encrypt in
+segments, none of them made only of dots (`.` and `..` name no file) — which carries no meaning to the store. A write to an existing ref MUST re-encrypt in
 place rather than create a second file, so rotating a secret needs no change anywhere that cites it.
 When two writes reach the same ref, the later write wins, and the ref keeps its creation time.
 
@@ -53,6 +53,11 @@ When two writes reach the same ref, the later write wins, and the ref keeps its 
 - **WHEN** a second value is written under the same ref
 - **THEN** the store still holds exactly one file for that ref, which now decrypts to the second value
 - **AND** the ref keeps its original creation time
+
+#### Scenario: a dot-only segment is refused rather than answered with a server error
+- **GIVEN** a running daemon
+- **WHEN** a secret is stored under the ref `..` or `a/../b`, or presence is probed or a delete is asked for such a ref
+- **THEN** each is refused as a validation error (`422`) and nothing is written
 
 ### Requirement: Report undecryptable ciphertext as unreadable
 A stored ciphertext that will not decrypt with the current master key MUST raise
@@ -93,6 +98,11 @@ rather than a missing one.
 - **WHEN** the key is relocated to the OS keychain and then back to the file
 - **THEN** after the first move the keychain holds the key and the file no longer exists
 - **AND** after the second move the file holds the same key with mode `0600` and the keychain entry is gone
+
+#### Scenario: an imported master key replaces the key where it is kept
+- **GIVEN** a development build whose master key is in the OS keychain
+- **WHEN** a different master key is imported
+- **THEN** the keychain holds the imported key and no key file appears, and the old key is backed up to a `master.key.bak-*` file instead of staying behind in the keychain
 
 ### Requirement: Confine key management to the secret package
 Only this capability's `infrastructure/secret/` package MAY manage the master key, and only its
@@ -210,7 +220,7 @@ The delete MUST be refused with `409 SECRET_IN_USE` while any registered resourc
 configuration still cites the ref, and the error MUST name every citing resource by kind and current
 name, so the user knows exactly what to detach first; it MUST NOT identify them by uid, which is the
 identity the system keeps across a rename and not something the user can recognise on a page
-([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
+([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md)).
 A Coffer-initiated delete MUST NOT leave any resource citing a reference the store does not hold.
 
 #### Scenario: a secret in use cannot be deleted
@@ -305,7 +315,7 @@ or invocation record.
 - **THEN** an automated scan of every file under `~/.coffer` — the vault, `local/`, the history database, and every log file under `~/.coffer/logs/` — and of every database row, audit entry and invocation record reveals zero occurrences of the secret's literal value.
 
 ### Requirement: Keep secret values out of secret audit events
-The events `secret_set`, `secret_revealed`, `secret_deleted`, `secret_migrated`,
+The events `secret_set`, `secret_revealed`, `secret_deleted`,
 `master_key_relocated`, `master_key_exported`, `secret_resolved`, `secret_imported` and the
 `secret_approval_*` events MUST carry the ref, the name or the destination only. An audit payload
 MUST NOT carry a secret value, and a new secret event that does MUST NOT be added.
@@ -418,14 +428,19 @@ the destination and the **target** that receives the value (a stdio server's
 whole command line with its working directory and non-secret environment, an
 HTTP URL, a git URL, a channel's platform and app) before it resolves a secret,
 and MUST inject nothing into a target no person approved: the attempt answers
-`SECRET_BINDING_PENDING` (409) naming the pending approvals. Citing an existing
+`SECRET_BINDING_PENDING` (409) naming the pending approvals, or
+`SECRET_BINDING_REJECTED` (409) naming a refused one (nothing waits, and it
+stays refused for that target until the destination changes or
+`POST /api/v1/secrets/approvals/{id}/ask-again` supersedes the refusal). Citing an existing
 secret from a destination that did not cite it, and changing the target of one
 that did, each record a pending approval, once per target; a later target
 supersedes the approval for the earlier one. A binding already approved for
 its target MUST keep working. A binding is approved without a person only when
-its value was supplied for it — the ref was never bound anywhere, is not a
-standalone `secret/` name, and was stored within the last five minutes — or
-while the protection is switched off. Approving MUST
+its value was supplied for it — the destination was just registered or changed,
+and the ref was never bound anywhere, is not a standalone `secret/` name and
+was written on this machine within the last five minutes (see "Approve a secret's binding when its
+destination is registered") — or while the protection is switched off.
+Approving MUST
 take a presence grant (`POST /api/v1/secrets/approvals/{id}/approve`);
 refusing (`POST .../reject`) MUST NOT. `GET /api/v1/secrets/approvals`
 lists approvals, having first evaluated every current destination, and marks
@@ -436,6 +451,17 @@ superseded those nothing asks for any more.
 - **WHEN** a second MCP server citing the same ref is registered, and a session reaches its tools
 - **THEN** the second server is not spawned with the secret, the attempt answers `SECRET_BINDING_PENDING`, and one pending approval names the ref, the new server and its command line
 - **AND** the first server keeps receiving the secret
+
+#### Scenario: a refused binding says it was refused and can be asked about again
+- **GIVEN** a pending approval for a server's secret that a person rejects
+- **WHEN** the server is next started or listed, and then the refusal is asked about again with `POST /api/v1/secrets/approvals/{id}/ask-again`
+- **THEN** the first answers `SECRET_BINDING_REJECTED` (409, a refusal, not a wait) and a command that saved the server prints that it was refused and exits with the conflict code instead of `9`
+- **AND** asking again supersedes the refusal, and a fresh pending approval for the same target waits for a person; a target that has changed since drops the old refusal without being asked
+
+#### Scenario: an approval that cannot be applied stays pending
+- **GIVEN** a pending replacement whose sealed value the current master key cannot open
+- **WHEN** it is approved with a presence grant
+- **THEN** the approval is not recorded as approved, it stays pending with its sealed value, and the old value is unchanged
 
 #### Scenario: changing where a secret goes asks again
 - **GIVEN** an MCP server whose secret is approved for its command line
@@ -449,10 +475,35 @@ superseded those nothing asks for any more.
 - **THEN** the key is not handed to the proxy or the engine for the new URL until the approval naming that URL is applied, and the replaced key waits sealed until its own approval is applied
 - **AND** once each is approved the proxy is refreshed with the key
 
+#### Scenario: adopting an MCP entry never replaces or deletes a secret it did not create
+- **GIVEN** a registered server citing a secret ref, and an agent's config entry whose adoption maps a secret key to that same ref
+- **WHEN** the entry is adopted, and again under a name that is already taken
+- **THEN** the first is refused with `ADOPT_SECRET_REF_EXISTS` (409), the second with the name-conflict error before any value is written, and the existing secret still holds its value and is still approved for the server citing it
+- **AND** a ref that is a standalone `secret/<name>` is refused the same way
+
+#### Scenario: a stored key goes only to the endpoint of the connection that holds it
+- **GIVEN** an MCP server's token stored under a ref, and a saved provider connection whose key is another ref
+- **WHEN** `POST /api/v1/models/list-models` or `/test-connection` is sent that ref with a base URL no saved connection holds it for, or a ref no connection holds
+- **THEN** each is refused as a validation error before anything is decrypted or sent, whatever protocol the request names, while an inline typed key and a saved connection's own ref and base URL work as before
+
 #### Scenario: a value supplied for its destination needs no approval
-- **GIVEN** a secret stored a moment ago under a ref nothing has ever received
-- **WHEN** a destination citing that ref first uses it
-- **THEN** the secret is injected and the binding is recorded as approved
+- **GIVEN** a secret stored under a ref nothing has ever received
+- **WHEN** a destination citing that ref is registered
+- **THEN** the binding is recorded as approved with the registration, and the secret is injected when the destination first uses it
+
+### Requirement: Approve a secret's binding when its destination is registered
+The secret boundary MUST be applied when a destination is **registered or changed**, not only at its first use. Every resource kind that sends a secret somewhere — an MCP server, a channel, a provider connection — MUST go through one post-register seam that the resource service runs after every create and every configuration change, whichever surface made it; the sync remote, which is not a resource, MUST run the same evaluation when its remote is set or checked. The seam MUST evaluate the destination the kind declares against the boundary at that moment: a value **supplied for the destination** — a ref never bound anywhere, not a standalone `secret/` name, and written on this machine within the last five minutes — MUST be approved and its binding recorded within the registration, so a later destination citing the same ref is a second destination and waits, however soon it comes; a ref already in use elsewhere, or a target that moved, MUST record its pending approval within the same call, so the approval is on the list and shown where the resource was saved rather than at the first spawn. A binding met only at the moment of use — a spawn, an adapter start, a push, a listing — MUST never count as supplied. A failure of the seam MUST NOT undo the registration, and the binding is evaluated again at every use.
+
+#### Scenario: a destination registered with a stored secret is settled at once
+- **GIVEN** a secret stored under a ref nothing has ever received
+- **WHEN** an MCP server citing it is registered, and then a second server citing the same ref is registered
+- **THEN** the first server's binding is approved by its registration, with no approval to answer
+- **AND** the second server's registration records one pending approval naming the ref and its command line, so a second destination cannot borrow a value supplied for the first
+
+#### Scenario: a target change waits where it is saved
+- **GIVEN** an MCP server whose secret is approved for its command line
+- **WHEN** its command is changed and saved
+- **THEN** the pending approval naming the new command line exists as soon as the save answers, before any spawn or listing
 
 ### Requirement: Answer a pending approval on the command line by waiting or exiting
 A command that saves a change which then waits for approval — `coffer mcp add`,
@@ -602,8 +653,11 @@ managed agent is available, Ask an agent beside them;
 `POST /api/v1/secrets/import` (`coffer secret import
 [--id]… [--dry-run]`) MUST store each chosen value as `secret/<proposed name>`,
 confirm the store reads back the same value, and only then replace the value in
-its file with the reference, atomically and keeping the file's mode; a name
-already holding a different value MUST be skipped with its file untouched; a
+its file with the reference, atomically and keeping the file's mode; a name that
+is new waits for approval like any new standalone secret (the finding is skipped
+as waiting, the value is not stored and its file is untouched, and importing
+again once the approval is applied moves it); a name already holding a different
+value MUST be skipped with its file untouched; a
 file that cannot be rewritten MUST leave its findings skipped as `stored` —
 naming the secret the value is now stored as, the file still holding it — while
 the other files are rewritten, and importing the same findings again MUST retry
@@ -624,11 +678,12 @@ the file; `--dry-run` writes nothing. Each value stored MUST be audited as
 #### Scenario: importing moves a value and leaves a reference
 - **GIVEN** those findings
 - **WHEN** they are imported
-- **THEN** each value reads back from the store under its standalone name, each file now cites `coffer://secret/<name>` in place of the value with its mode unchanged, and a dry run beforehand changed nothing
+- **THEN** a dry run changed nothing, and the first import stores nothing and leaves every file as it was, with one pending `add_secret` approval per name
+- **AND** once those approvals are applied with a presence grant, importing again makes each value read back from the store under its standalone name and each file cite `coffer://secret/<name>` in place of the value with its mode unchanged
 
 #### Scenario: a file that cannot be rewritten keeps its key and says so
 - **GIVEN** a plaintext secrets file in a folder Coffer cannot write
-- **WHEN** its finding is imported
+- **WHEN** its finding is imported, after the approval that new secret waits for was applied
 - **THEN** nothing is reported moved, the finding is skipped as `stored` naming its secret and why, the file is unchanged, the store holds the value and one `secret_imported` entry names it
 - **AND** importing the same finding again once the folder is writable moves it and rewrites the file
 
@@ -723,7 +778,7 @@ password); in a browser Approve MUST be disabled, naming the desktop app, while
 
 ### Requirement: Store every secret only as a ciphertext file
 The system MUST persist every secret only as Fernet ciphertext
-([Envelope-Encrypted Credential Store](../../../docs/decisions/envelope-encrypted-credential-store.md)),
+([The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](../../../docs/decisions/master-key-lives-in-the-macos-keychain.md)),
 one file per ref: `~/.coffer/vault/secret/<ref>.enc`, or `~/.coffer/local/secret/<ref>.enc` for a
 ref that is true of this machine only, such as a model-proxy token
 ([vault-storage](../vault-storage/spec.md) "Keep secret ciphertext as one file per reference").

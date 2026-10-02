@@ -61,9 +61,6 @@ class SkillBindingRepo:
     async def list_for_agent(self, agent_uid: str) -> list[BindingState]:
         return await self._where(SkillAgentBindingModel.agent_uid == agent_uid)
 
-    async def list_enabled(self) -> list[BindingState]:
-        return await self._where(SkillAgentBindingModel.enabled.is_(True))
-
     async def list_all(self) -> list[BindingState]:
         """One-shot read of every binding row, so a list endpoint builds its
         ``skill_uid -> [bindings]`` map without one query per skill."""

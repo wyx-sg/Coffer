@@ -7,8 +7,8 @@ Responsibilities:
   truncated version of the first user message text.
 - Cascade delete: messages first, then the conversation row.
 
-The ``MessageRepo`` Protocol is defined inline here; ``ConversationRepo`` lives
-beside the cursor pages of its listings in ``conversation_repo`` and is
+``ConversationRepo`` lives beside the cursor pages of its listings in
+``conversation_repo`` and ``MessageRepo`` in ``message_repo``; both are
 re-exported here.
 Concrete SQLAlchemy implementations live in ``infrastructure/chat/persistence.py``.
 """
@@ -18,10 +18,11 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any
 
 from coffer.application.chat.conversation_repo import ConversationRepo as ConversationRepo
 from coffer.application.chat.conversation_repo import page_conversations
+from coffer.application.chat.message_repo import MessageRepo as MessageRepo
 from coffer.application.chat.preview import message_preview
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.chat.agent_config import AgentConfig
@@ -35,67 +36,6 @@ _PLACEHOLDER_TITLE = "New conversation"
 #: How many text-bearing messages back a preview looks: the newest may hold only
 #: blank text, so a couple more are read in the same query.
 _PREVIEW_DEPTH = 3
-
-
-# ---------------------------------------------------------------------------
-# Repository Protocols
-# ---------------------------------------------------------------------------
-
-
-class MessageRepo(Protocol):
-    """Persistence port for ``chat_messages`` rows."""
-
-    async def append(self, message: Message) -> Message: ...
-
-    async def finalize(
-        self,
-        message_id: str,
-        *,
-        content: list[ContentBlock],
-        status: str,
-        prompt_tokens: int | None,
-        completion_tokens: int | None,
-    ) -> None:
-        """Update an existing (streaming) message with its final content/status."""
-        ...
-
-    async def save_partial(self, message_id: str, *, content: list[ContentBlock]) -> None:
-        """Overwrite a still-``streaming`` row's content (a mid-turn flush); a row
-        already finalised is left untouched."""
-        ...
-
-    async def delete_message(self, message_id: str) -> None:
-        """Delete a single message by id."""
-        ...
-
-    async def list_by_conversation(
-        self, conversation_id: str, *, limit: int | None = None
-    ) -> list[Message]:
-        """Return messages ordered by ``seq`` ascending; ``limit`` keeps only
-        the most recent N (still oldest-first)."""
-        ...
-
-    async def latest_with_text(
-        self, conversation_ids: Sequence[str], *, depth: int
-    ) -> dict[str, list[Message]]:
-        """Up to ``depth`` of each conversation's newest messages that carry a
-        text block, newest first, in ONE read; a conversation with none is
-        absent."""
-        ...
-
-    async def next_seq(self, conversation_id: str) -> int:
-        """Return the next sequence number for the given conversation."""
-        ...
-
-    async def delete_by_conversation(self, conversation_id: str) -> None: ...
-
-    async def sweep_streaming(self) -> int:
-        """Flip all ``status='streaming'`` rows to ``'failed'``.
-
-        Called once at startup to recover from a prior crash.  Returns the
-        number of rows updated.
-        """
-        ...
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +68,6 @@ class ChatService:
         agent_config: dict[str, Any] | None = None,
         channel_uid: str | None = None,
         peer_chat_id: str | None = None,
-        owner: str | None = None,
     ) -> Conversation:
         """Create a conversation for the named agent.
 
@@ -142,14 +81,8 @@ class ChatService:
         return address for relaying output back to an IM channel (spec channels).
         ``channel_uid`` is the channel resource's uid — the binding has to keep
         naming the same channel after the user renames it, and only the uid does
-        (ADR resource-identity-is-an-immutable-uid). Chat itself never reads the
+        (ADR identity-is-the-uid-inside-the-file). Chat itself never reads the
         channel's label; whoever shows it resolves it from the uid.
-
-        ``owner`` names the surface this conversation belongs to, and only a
-        caller that is not the developer passes one. It keeps the conversation
-        out of the chat list without keeping it out of this table: such a
-        transcript is an ordinary transcript, read through this service like
-        any other.
         """
         provider = self._registry.get(agent_key)  # raises UnknownAgent (-> 400)
 
@@ -162,7 +95,6 @@ class ChatService:
             updated_at=now,
             channel_uid=channel_uid,
             peer_chat_id=peer_chat_id,
-            owner=owner,
         )
         created = await self._conversations.create(conv)
 
@@ -330,6 +262,7 @@ class ChatService:
         *,
         content: list[ContentBlock],
         status: str,
+        model_id: str | None = None,
         prompt_tokens: int | None = None,
         completion_tokens: int | None = None,
     ) -> None:
@@ -342,6 +275,7 @@ class ChatService:
             message_id,
             content=content,
             status=status,
+            model_id=model_id,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
         )

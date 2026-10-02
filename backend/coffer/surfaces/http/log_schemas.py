@@ -58,11 +58,9 @@ class InvocationOut(BaseModel):
     #: Which upstream server the call went to — the value actually recorded in
     #: the log, and what to filter or link by. Required, not optional: the
     #: cross-server timeline is unreadable without it, and the per-server route
-    #: knows it too. Two of its forms are not resource uids and resolve to
-    #: nothing: ``BUILTIN_SERVER_UID`` ("coffer"), the sentinel Coffer's own
-    #: built-in tools log under, and the ``DELETED_SERVER_UID_PREFIX`` form
-    #: ("deleted:<name>") given to rows whose server was already gone when the
-    #: log was re-keyed from names to uids.
+    #: knows it too. It is a resource uid, except for ``BUILTIN_SERVER_UID``
+    #: ("coffer"), the sentinel Coffer's own built-in tools log under; a uid
+    #: whose server has since been deleted resolves to nothing as well.
     resource_uid: str
     #: The same server's label, resolved at read time by the route, so the
     #: timeline is readable without a client holding the whole resource list.

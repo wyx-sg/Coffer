@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from coffer.domain.knowledge.history import (
     WRITER_DISK,
@@ -153,7 +153,9 @@ class VersionBodyOut(BaseModel):
 class CollectionDescribeIn(BaseModel):
     """A collection's new description: its README's opening paragraph."""
 
+    # Stripped before the length check: a whitespace-only description is empty.
     description: str = Field(min_length=1, max_length=2000)
+    model_config = ConfigDict(str_strip_whitespace=True)
 
 
 class VersionRestoreIn(BaseModel):

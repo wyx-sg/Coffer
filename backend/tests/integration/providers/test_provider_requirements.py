@@ -19,6 +19,7 @@ from starlette.testclient import TestClient
 from coffer.domain.audit import AuditEventType
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.secret_boundary_wiring import get_secret_boundary
 from coffer.surfaces.http.secret_composition import get_secret_store
 from tests.fixtures.keyring import install_in_memory_keyring
 
@@ -116,22 +117,31 @@ def test_rotate_a_connections_secret_without_changing_its_ref(env: pathlib.Path)
         assert "sk-after-rotation" not in r.text
 
         assert c.get(f"/api/v1/providers/{uid}").json()["secret_ref"] == ref
+        # The connection's key was bound to its base URL by its registration, so
+        # the new value waits sealed for a person (spec secret "Hold a replaced
+        # value in use until a person approves it"); the old one stays in use.
+        assert get_secret_store().get(ref) == "sk-before-rotation"
+        [waiting] = [
+            a for a in get_secret_boundary().list(status="pending") if a.op == "replace_value"
+        ]
+        assert waiting.ref == ref
+        get_secret_boundary().approve(waiting.id, actor="desktop")
         # No secret route returns a value; read the daemon's own store.
         assert get_secret_store().get(ref) == "sk-after-rotation"
 
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="boot clears an active flag the agent's config does not carry",
+    scenario="boot clears a connection the agent's config does not carry",
 )
-def test_boot_clears_an_active_flag_the_agents_config_does_not_carry(env: pathlib.Path) -> None:
+def test_boot_clears_a_connection_the_agents_config_does_not_carry(env: pathlib.Path) -> None:
     cfg = env / "cc-config"
     with _daemon() as c:
         _register_agent(c, "claude_code", "cc", cfg)
         uid = _new(c, _anthropic("acme"))
-        act = c.post(f"/api/v1/providers/{uid}/activate")
+        act = c.post(f"/api/v1/providers/{uid}/activate", json={"agent_type": "claude_code"})
         assert act.status_code == 200, act.text
-        assert c.get(f"/api/v1/providers/{uid}").json()["is_active"] is True
+        assert c.get("/api/v1/agents/claude_code").json()["connection_uid"] == uid
 
     # While the daemon was down, something else rewrote the agent's config —
     # it carries none of Coffer's keys any more.
@@ -140,7 +150,7 @@ def test_boot_clears_an_active_flag_the_agents_config_does_not_carry(env: pathli
     settings.write_text(user_owned, encoding="utf-8")
 
     with _daemon() as c:
-        assert c.get(f"/api/v1/providers/{uid}").json()["is_active"] is False
+        assert c.get("/api/v1/agents/claude_code").json()["connection_uid"] is None
 
     # The heal corrects Coffer's own record only: nothing was written back.
     assert settings.read_text(encoding="utf-8") == user_owned
@@ -163,7 +173,12 @@ def test_each_provider_operation_records_its_own_audit_event(env: pathlib.Path) 
             },
         )
 
-        assert c.post(f"/api/v1/providers/{acme}/activate").status_code == 200
+        assert (
+            c.post(
+                f"/api/v1/providers/{acme}/activate", json={"agent_type": "claude_code"}
+            ).status_code
+            == 200
+        )
         assert c.post(f"/api/v1/providers/{acme}/internal-default").status_code == 200
         assert c.post(f"/api/v1/providers/{other}/transcribe-default").status_code == 200
 

@@ -75,7 +75,6 @@ database schema revision '0118' is newer than this Coffer build understands — 
 coffer: WARNING: attached to a Coffer daemon at version 0.1.1 (/Users/you/.coffer/bin/0.1.1/coffer-daemon) but this coffer is 0.2.0; run `coffer daemon restart` to serve the current build
 ```
 
-`coffer daemon status` 也可能显示 `channel: unknown — the running daemon predates this CLI; restart it: coffer daemon restart`。
 
 **原因。** 你安装了新版本，而旧的守护进程还在运行。守护进程比连接它的命令行和 shim 进程活得更久，所以回答请求的仍是旧版本。
 
@@ -136,11 +135,11 @@ shim 自己的日志是 `~/.coffer/logs/shim-<pid>-<time>.log`。
 
 **解决办法。** 固定一个端口：`coffer config get daemon.port` 告诉你配置的端口；`coffer config unset daemon.port` 恢复为 8000。
 
-### 页面说某个功能 "is switched off" {#a-page-says-a-feature-is-switched-off}
+### 页面或命令不见了，或命令提示某个功能已关闭 {#a-page-or-command-is-missing-or-a-command-says-a-feature-is-switched-off}
 
-**原因。** 这个页面属于一个在这台机器上被关掉的[实验功能](/zh/guides/experimental-features)。在发布版本里，实验功能默认关闭。目前没有任何功能是实验性的，所以当前版本不会显示这个提示。
+**原因。** 这个页面、命令或工具属于一个在这台机器上被关掉的[实验功能](/zh/guides/experimental-features)。实验功能默认关闭，关闭的功能看起来就像不存在：没有侧边栏入口，命令面板里搜不到，直接打开它的页面链接会显示「未找到」页面。四个功能是知识、记忆、同步和模型提供商。
 
-**解决办法。** 按提示上的**开启**，在**设置 → 通用**里切换它，或者运行 `coffer config set feature.<key> on`。如果提示说 `COFFER_FEATURES` 把它固定为关闭，说明这个功能在守护进程的环境里被钉住了；到启动守护进程的地方去改。
+**解决办法。** 在**设置 → 功能**里开启它，或者运行 `coffer config set feature.<key> on`（需要某个功能的命令会原样打印这一行）。`coffer config list feature.` 会显示每个功能由什么决定；如果显示 `pin`，说明 `COFFER_FEATURES` 在守护进程的环境里把它固定了，到启动守护进程的地方去改。
 
 ## 密钥和 macOS 钥匙串提示 {#secrets-and-macos-keychain-prompts}
 
@@ -221,7 +220,7 @@ coffer channel show <name>
 
 ## 为 bug 报告收集信息 {#collect-information-for-a-bug-report}
 
-1. 版本和渠道：`coffer daemon status`，或者**设置 → 关于 → 复制诊断信息**。
+1. 版本：`coffer daemon status`，或者**设置 → 关于 → 复制诊断信息**。
 2. 你是怎么安装的（桌面应用、发布压缩包、源码），以及你的 macOS 版本。
 3. 打印出来的错误原文，以及产生它的命令或操作。用 `coffer -v …` 重新运行失败的命令行命令，可以得到完整的 traceback 和 HTTP 上下文。
 4. `daemon.log` 中相关的行（按失败发生的时间过滤），或者失败请求的 `X-Coffer-Trace` id。

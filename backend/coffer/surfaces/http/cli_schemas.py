@@ -36,8 +36,9 @@ class CliServerOut(BaseModel):
 
 class CliLoginOut(BaseModel):
     """``state`` is ``None`` when the command was not found, so its login check
-    could not run. ``command`` is the login command to copy — Coffer never
-    runs it. ``check`` is the declared login check."""
+    could not run, or when the check has not been run yet (only a Check runs
+    it). ``command`` is the login command to copy — Coffer never runs it.
+    ``check`` is the declared login check."""
 
     state: CliLoginStateOut | None
     check: list[str] | None

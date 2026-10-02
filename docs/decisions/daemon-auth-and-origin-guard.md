@@ -3,12 +3,12 @@
 **Status**: Accepted
 **Date**: 2026-09-13
 **Deciders**: Yuxing Wu
-**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [Desktop Shell Over a Shared Frontend](desktop-shell-over-a-shared-frontend.md), [stdio Shim Bridge](stdio-shim-bridge.md), spec daemon "Require a token on every management call", spec daemon "Answer the status probe without a token", spec daemon "Rotate the token from REST or the command line", spec daemon "Hand the browser its token in the served page", spec daemon "Refuse a request whose Host or Origin is not the daemon's own", spec daemon "Serve the built web UI from the daemon's own origin", spec desktop-app "Supply the page its daemon connection over IPC", PR #342, PR #376
+**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [Desktop Shell Over a Shared Frontend](desktop-shell-over-a-shared-frontend.md), [stdio Shim Bridge](stdio-shim-bridge.md), [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), spec daemon "Require a token on every management call", spec daemon "Answer the status probe without a token", spec daemon "Rotate the token from REST or the command line", spec daemon "Hand the browser its token in the served page", spec daemon "Refuse a request whose Host or Origin is not the daemon's own", spec daemon "Serve the built web UI from the daemon's own origin", spec desktop-app "Supply the page its daemon connection over IPC", PR #342, PR #376
 
 ## Context
 
-The daemon holds the user's MCP servers, decrypted credentials on demand, the
-agents' configuration and memory. It binds `127.0.0.1` only (spec daemon "Bind
+The daemon holds the user's MCP servers, the ciphertext of their secrets and
+the means to decrypt it on demand, the agents' configuration and memory. It binds `127.0.0.1` only (spec daemon "Bind
 every endpoint to loopback only"), which keeps other machines out but not other
 things on this machine: another local user, and — the harder case — any web
 page the user has open, since a browser will send requests to `127.0.0.1` on a
@@ -106,13 +106,13 @@ two-mechanism cost and the cross-origin shell.
 
 Pros: nothing to hand anyone. Cons: loopback is not a boundary against the
 browser — any web page can send requests to `127.0.0.1`, and a "simple" POST
-needs no preflight — nor against other local users. With credentials and agent
+needs no preflight — nor against other local users. With secrets and agent
 configuration behind the API that is not acceptable. Loses.
 
 ### Option E — Persist one long-lived token across restarts
 
 Pros: the stored-token bug disappears; the page could keep it. Cons: a
-long-lived on-disk token that unlocks the credential endpoints is a worse trade
+long-lived on-disk token that unlocks the secret endpoints is a worse trade
 than a per-process one, and a token that never changes cannot be revoked by
 restarting. Loses.
 
@@ -182,9 +182,19 @@ Rules a future change must respect:
 - The fixed port ([Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md))
   and the injected token together make a bookmark a complete way in: the
   address does not move and the page does not need anything stored.
-- The daemon's loopback socket is the only socket Coffer listens on, so the host
-  guard covers every surface there is. A future listener on the same port
-  inherits it; one on a different port must bring its own.
+- The guard covers every surface on the daemon's port: REST, `/mcp`, the event
+  stream and the served UI. A future route on that port inherits it. The one
+  other listener Coffer runs, the local model proxy, is a separate process on
+  its own port and so brings its own copy of the rule: the same loopback `Host`
+  check without the `COFFER_ALLOWED_HOSTS` escape hatch, and a refusal of any
+  `Origin` at all, since no page has business with it
+  ([API-Key Providers Are Reached Through a Separate Local Model Proxy](api-key-providers-are-reached-through-a-separate-local-model-proxy.md)).
+  A listener added on yet another port must do the same.
+- The token and the guard are what keep a browser page and other local users
+  away from the management API. They are not what keeps a secret from an agent:
+  an agent runs as the user and can read `daemon.json`. That boundary is drawn
+  at the secret itself, by [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md),
+  which relies on this ADR's `Host` and `Origin` checks for its browser half.
 - `COFFER_ALLOWED_HOSTS` (comma-separated, or `*`) widens the Host check, never
   the Origin check. The backend test suite sets `*` because it drives the ASGI
   app in-process; nothing in a real deployment needs it.

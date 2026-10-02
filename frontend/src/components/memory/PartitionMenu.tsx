@@ -13,7 +13,7 @@ import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import { useToast } from "@/components/ui/toast";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
 import { useFsActions } from "@/lib/fsActions";
-import { usePartitionFiles } from "@/lib/hooks/useMemory";
+import { useMemoryNotes } from "@/lib/hooks/useMemory";
 import { displayName } from "@/lib/resourceTitle";
 
 interface Props {
@@ -25,9 +25,11 @@ export function PartitionMenu({ partition }: Props) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { reveal } = useFsActions();
-  const files = usePartitionFiles(partition.uid);
+  const notes = useMemoryNotes(partition.uid);
   const [deleting, setDeleting] = useState<PartitionOut | null>(null);
-  const folder = files.data?.abs_path ?? null;
+  // The partition folder is two levels above any memory's file (`<folder>/notes/<slug>.md`).
+  const firstFile = notes.data?.[0]?.file_path;
+  const folder = firstFile ? firstFile.replace(/\/notes\/[^/]+$/, "") : null;
 
   const actions: MenuAction[] = [
     {

@@ -3,7 +3,7 @@
 import { useTranslation } from "react-i18next";
 
 import { OpChip } from "./OpChip";
-import { OP_ORDER, countByOp, groupByAgent, type ChangeItem } from "./changeCounts";
+import { OP_ORDER, countByOp, groupByAgent, type ChangeItem } from "@/lib/changePreview/changeCounts";
 
 interface Props {
   items: readonly ChangeItem[];

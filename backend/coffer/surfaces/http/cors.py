@@ -44,6 +44,10 @@ on the daemon's port:
   ``http://127.0.0.1:5173``.
 - ``COFFER_CORS_ORIGINS`` (comma-separated) replaces the list entirely, shell
   origin included — the escape hatch for a host this file does not know.
+
+Both are development switches: a tagged release (``build_channel.CHANNEL ==
+"stable"``) reads neither, because the CLI starts the daemon from the caller's
+process and so from whatever environment the caller has.
 """
 
 from __future__ import annotations
@@ -52,6 +56,8 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from coffer import build_channel
 
 #: The desktop shell's own page origin. macOS serves the bundled asset from
 #: ``tauri://localhost``; Tauri uses ``http://tauri.localhost`` on Windows and
@@ -76,10 +82,13 @@ def cross_origin_allowlist() -> list[str]:
     nor on this list. Re-read on every call, so a test can change the
     environment between apps.
     """
+    origins = list(SHELL_ORIGINS)
+    # A tagged release reads neither variable (see ``host_guard._allowed_extra``).
+    if build_channel.CHANNEL == "stable":
+        return origins
     explicit = os.environ.get("COFFER_CORS_ORIGINS")
     if explicit:
         return [o.strip() for o in explicit.split(",") if o.strip()]
-    origins = list(SHELL_ORIGINS)
     if os.environ.get("COFFER_DEV_CORS") == "1":
         origins.extend(_DEV_ORIGINS)
     return origins

@@ -2,16 +2,19 @@
 // Pure helpers for a channel conversation's mirror (spec chat "Show where a
 // reply will also be sent"): the platform's display name, and which of the
 // thread's user messages the channel has not received yet.
-import type { ChannelMirror, ContentBlock, Message } from "@/lib/api/chat";
+import type { ChannelMirror, ChannelPlatform, ContentBlock, Message } from "@/lib/api/chat";
 
 /** The prefix the channel copy of a web reply carries (backend `FROM_COFFER`). */
 const FROM_COFFER = "(from Coffer) ";
 
-const PLATFORM_NAMES: Record<string, string> = { seatalk: "SeaTalk", telegram: "Telegram" };
+const PLATFORM_NAMES: Record<ChannelPlatform, string> = {
+  seatalk: "SeaTalk",
+  telegram: "Telegram",
+};
 
 /** A platform key as its product name (`seatalk` → `SeaTalk`). */
 export function platformName(platform: string): string {
-  return PLATFORM_NAMES[platform] ?? platform;
+  return PLATFORM_NAMES[platform as ChannelPlatform] ?? platform;
 }
 
 /** The text of a message's blocks, joined — what a user bubble prints. */

@@ -15,7 +15,12 @@ import { useTranslation } from "react-i18next";
 
 import { secretsApi } from "@/lib/api/secret";
 import { translateApiError } from "@/lib/api/errors";
-import { secretsKey, pendingApprovalsKey, secretBoundaryKey } from "@/lib/api/queryKeys";
+import {
+  secretsKey,
+  pendingApprovalsKey,
+  refusedApprovalsKey,
+  secretBoundaryKey,
+} from "@/lib/api/queryKeys";
 import { approvePending, onApprovalsEvent } from "@/lib/tauri";
 import { useToast } from "@/components/ui/toast";
 
@@ -52,6 +57,26 @@ export function usePendingApprovals() {
     queryFn: () => secretsApi.pendingApprovals(),
     refetchInterval: POLL_MS,
     refetchIntervalInBackground: false,
+  });
+}
+
+/** Every refused approval nothing has superseded — what "Ask again" applies to. */
+export function useRefusedApprovals() {
+  return useQuery({
+    queryKey: refusedApprovalsKey,
+    queryFn: () => secretsApi.refusedApprovals(),
+  });
+}
+
+/** Put a refused binding to a person again (spec secret: ask-again). */
+export function useAskAgain() {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (id: string) => secretsApi.askAgain(id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: secretsKey }),
+    onError: (e) => toast.error(translateApiError(t, e)),
   });
 }
 

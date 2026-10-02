@@ -6,10 +6,10 @@
 // health. The action opens the page's change preview; Enable is the switch.
 import type { ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { AlertTriangle, Link2, Power, RotateCcw, ShieldAlert, Unlink, Wrench } from "lucide-react";
+import { Link2, Power, ShieldAlert, Unlink, Wrench } from "lucide-react";
 
 import { StatusWord } from "@/components/status/StatusWord";
-import { STATUS_TONE } from "@/components/status/statusTone";
+import { STATUS_TONE } from "@/lib/statusTone";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,7 +33,9 @@ import {
   repairsOnlyHook,
   type ConnectionCardState,
 } from "./connectionCopy";
-import { InlineCode, InlinePath, OverviewSection } from "./OverviewSection";
+import { Section } from "@/components/Section";
+import { ConnectFailed } from "./ConnectFailed";
+import { InlineCode, InlinePath } from "./OverviewParts";
 import { hookConfigPath, mcpConfigPath } from "./paths";
 
 const K = "agents.overviewTab.connection";
@@ -56,13 +58,13 @@ export function OverviewConnection(props: Props) {
   const connectFailure = useConnectFailure(agent.uid);
   if (!isConnectionCardState(state) || !connection) {
     return (
-      <OverviewSection title={t(`${K}.heading`)}>
+      <Section title={t(`${K}.heading`)}>
         {failed ? (
           <p className="text-xs text-text-muted">{t(`${K}.loadFailed`)}</p>
         ) : (
           <Skeleton className="h-[120px] w-full rounded-xl" />
         )}
-      </OverviewSection>
+      </Section>
     );
   }
   const awaiting = hookAwaitsApproval(state, hook);
@@ -73,7 +75,7 @@ export function OverviewConnection(props: Props) {
     hookFile: hookConfigPath(agent, hook?.path),
   };
   return (
-    <OverviewSection title={t(`${K}.heading`)}>
+    <Section title={t(`${K}.heading`)}>
       <Card className="flex flex-col gap-2.5 px-4 py-3.5">
         <div className="flex items-start gap-3">
           <span
@@ -133,30 +135,7 @@ export function OverviewConnection(props: Props) {
           <ConnectFailed reason={connectFailure} onRetry={() => actions.onConnection("connect")} />
         ) : null}
       </Card>
-    </OverviewSection>
-  );
-}
-
-/** The last Connect from this window failed: why, and Try again (board 2.1.09). */
-function ConnectFailed({ reason, onRetry }: { reason: string; onRetry: () => void }) {
-  const { t } = useTranslation();
-  return (
-    <div
-      role="alert"
-      className={cn(
-        "ml-[46px] flex items-start gap-2.5 rounded-lg px-3 py-2.5",
-        toneClass(STATUS_TONE.err),
-      )}
-    >
-      <AlertTriangle aria-hidden className="mt-px size-4 shrink-0" />
-      <span className="min-w-0 grow text-xs leading-normal text-text">
-        {t(`${K}.connectFailed`, { reason })}
-      </span>
-      <Button variant="outline" size="sm" onClick={onRetry}>
-        <RotateCcw aria-hidden />
-        {t(`${K}.tryAgain`)}
-      </Button>
-    </div>
+    </Section>
   );
 }
 

@@ -1,9 +1,8 @@
 # backend/coffer/application/repos.py
 """Repository Protocols used by the application layer.
 
-Concrete implementations live in `coffer.infrastructure.persistence.repos`
-(kind-agnostic core) and `coffer.infrastructure.mcp.persistence` (MCP
-kind-specific).
+The resource repository is `coffer.infrastructure.vault.resource_store.FileResourceRepo`
+(files in the vault); the others live in `coffer.infrastructure.persistence.repos`.
 """
 
 from __future__ import annotations
@@ -61,6 +60,10 @@ class ResourceRepo(Protocol):
     # ``None`` clears it; the caller has already normalised and capped it.
     async def set_title(self, uid: str, title: str | None) -> Resource: ...
     async def delete(self, uid: str) -> None: ...
+    # Raises what a rename or a delete would raise for a file it cannot write
+    # right now (read-only, or carrying an unsettled edit), changing nothing:
+    # asked before a kind's hook tears its own half down.
+    async def ensure_writable(self, uid: str) -> None: ...
 
 
 class AuditRepo(Protocol):
@@ -100,6 +103,8 @@ class RetentionRepo(Protocol):
         table: str,
         timestamp_column: str,
         cutoff: datetime,
+        *,
+        also_older_column: str | None = None,
     ) -> int: ...
     async def archive_older_than(
         self,
@@ -114,5 +119,7 @@ class RetentionRepo(Protocol):
         table: str,
         timestamp_column: str,
         cutoff: datetime,
+        *,
+        also_older_column: str | None = None,
     ) -> tuple[int, int]: ...
     async def exists(self, table_name: str) -> bool: ...

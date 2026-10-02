@@ -18,19 +18,6 @@ class ConversationNotFound(CofferError):  # noqa: N818
         self.conversation_id = conversation_id
 
 
-class TurnInProgress(CofferError):  # noqa: N818
-    """Raised when a second message is sent to a conversation with an active turn."""
-
-    code = "TURN_IN_PROGRESS"
-
-    def __init__(self, conversation_id: str) -> None:
-        super().__init__(
-            f"conversation {conversation_id!r} already has a turn in progress; "
-            "wait for it to complete before sending another message"
-        )
-        self.conversation_id = conversation_id
-
-
 class UnknownAgent(CofferError):  # noqa: N818
     """Raised when a conversation names an ``agent_key`` no provider is registered for."""
 

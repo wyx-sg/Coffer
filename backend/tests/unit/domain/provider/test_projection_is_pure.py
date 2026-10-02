@@ -76,7 +76,6 @@ def test_projection_transforms_touch_no_file(monkeypatch: pytest.MonkeyPatch) ->
         _EXISTING_TOML,
         base_url="https://gw/v1",
         model="m-codex",
-        wire_api="responses",
         display_name="Coffer (acme)",
         catalog_path=_CATALOG,
         auth=_AUTH,

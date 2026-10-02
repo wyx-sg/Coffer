@@ -30,7 +30,7 @@ async def _running(env: ChannelEnv, adapter: FakeChannelAdapter, **config: objec
     env.bind(resource, adapter)
     # The diagnostic reads the LIVE adapter, so the channel has to look started.
     # Registering it directly keeps the test off the reconciler's timing.
-    env.runtime._running[resource.name] = SimpleNamespace(adapter=adapter)
+    env.runtime._running[resource.uid] = SimpleNamespace(adapter=adapter)
     return resource
 
 
@@ -97,7 +97,7 @@ async def test_a_pairing_code_comes_with_a_link_that_carries_it(env: ChannelEnv)
     assert pair_url == f"https://t.me/cofferbot?start={code}"
     # Opening the link sends "/start <CODE>", which claims it exactly as typing
     # the code does — same single-use, TTL-bounded gate.
-    assert env.pairing.try_claim(channel.name, f"/start {code}") is True
+    assert env.pairing.try_claim(channel.uid, f"/start {code}") is True
 
 
 async def test_a_channel_with_no_known_username_still_issues_a_code(env: ChannelEnv) -> None:

@@ -3,7 +3,7 @@
 // One Server-Sent Events stream for the whole daemon (spec resource-framework
 // "Announce every change on one daemon-wide event stream"). It is gated by the
 // token header, so it is read with `fetch` rather than `EventSource`, and it
-// carries three events: `change` (an invalidation hint `{seq, kind, id, rev,
+// carries three events: `change` (an invalidation hint `{seq, kind, id,
 // op}` — never the resource's state), `resync` (something may have been
 // missed: refetch everything) and `heartbeat` (nothing changed).
 //

@@ -40,4 +40,18 @@ describe("sectionGroups", () => {
     ]);
     expect(sectionGroups(withTool, "pager.internal")[0].section).toBe("off");
   });
+
+  test("narrows to a reach state, and the scope's agent list is what restricts", () => {
+    const reach = [
+      makeGroup({ name: "everyone" }),
+      makeGroup({ name: "some", scope: ["ag-1"] }),
+      makeGroup({ name: "nobody", enabled: false, health: "off" }),
+    ];
+    const names = (r: "all" | "disabled" | "everywhere" | "restricted") =>
+      sectionGroups(reach, "", r).flatMap((s) => s.groups.map((g) => g.name));
+    expect(names("all")).toHaveLength(3);
+    expect(names("everywhere")).toEqual(["everyone"]);
+    expect(names("restricted")).toEqual(["some"]);
+    expect(names("disabled")).toEqual(["nobody"]);
+  });
 });

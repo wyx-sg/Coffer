@@ -8,13 +8,15 @@ what it will not.
 
 ## Coffer's own tools
 
-Coffer adds two tools of its own, prefixed `coffer__`. Everything else you can
+Coffer adds <TOOL_COUNT> of its own, prefixed `coffer__`. Everything else you can
 see through Coffer belongs to an upstream server and is named `<server>__<tool>`.
 
 | Tool | Reach for it when |
 | --- | --- |
 | `coffer__search_tools` | You need a capability and nothing in your tool list offers it. |
+<!-- when:knowledge -->
 | `coffer__write` | You learned something durable about this environment. |
+<!-- end:knowledge -->
 
 If you cannot see Coffer's tools at all, the agent you are running as is not
 connected to Coffer; the developer connects it with `coffer agent connect <agent>`.
@@ -36,6 +38,7 @@ loading or registering step between the search result and the call.
 Coffer's own `coffer__` tools are always listed and never consume that budget,
 so this only ever concerns upstream tools.
 
+<!-- when:knowledge -->
 ## Knowledge is a directory of files, and you read it yourself
 
 The developer's knowledge lives under `<KNOWLEDGE_ROOT>/<collection>/`: one
@@ -68,6 +71,8 @@ To correct or extend a document you have read, you may also edit the file
 itself with your own tools, as the developer does in their editor. Coffer's
 model notices the edit and carries it into the rest of the collection.
 
+<!-- end:knowledge -->
+<!-- when:memory -->
 ## Coffer reads your memory. It never writes it.
 
 Coffer reads the native memory of every registered agent — your own memory
@@ -75,11 +80,13 @@ files, in your own format — and modifies nothing there: not a file, not a
 format, not your memory setting. What it reads it distils into its own notes
 under `<MEMORY_ROOT>`, which are derived and are Coffer's to own.
 
+<!-- when:knowledge -->
 The practical consequence: **you cannot ask Coffer to write a memory for you.**
 `coffer__write` files knowledge, which is a different store with a different
 purpose. If you want something in your own memory, write it there yourself, the
 way you normally would.
 
+<!-- end:knowledge -->
 ### Finding a note
 
 Coffer's notes are Markdown files under `<MEMORY_ROOT>/<partition>/notes/`, one
@@ -88,6 +95,7 @@ this repository's partition and of `global`. For a note from another project,
 search `<MEMORY_ROOT>` with your own tools — grep for a distinctive word or
 phrase — and read the file you find. There is no Coffer tool for this.
 
+<!-- end:memory -->
 ## Nothing here waits on a human
 
 Every tool Coffer exposes runs immediately. There is no approval prompt, no
@@ -146,6 +154,7 @@ record already shows), which returns that request's audit rows, tool calls and
 log lines and nothing else. `coffer path logs` finds the daemon's log files. Reach for them when a Coffer tool fails in a way its error
 text does not explain, not as a debugger for the developer's own program.
 
+<!-- when:knowledge -->
 ## What not to put in
 
 - **No secrets.** No keys, tokens, passwords or secrets — not in knowledge,
@@ -157,6 +166,7 @@ text does not explain, not as a debugger for the developer's own program.
 - Address knowledge files by collection and relative path. A path that climbs
   out of the knowledge root is refused.
 
+<!-- end:knowledge -->
 ## This file
 
 Coffer wrote it and Coffer rewrites it — at every daemon start, and whenever the

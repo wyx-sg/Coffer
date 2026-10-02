@@ -125,8 +125,9 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "agent config": {"edit", "rm"},
     "agent plugin": {"list", "show", "enable", "disable", "rm"},
     # `edit` carries the group-gating switches; `pair`, `bind` and `notify`
-    # are the channel's own acts (spec channels).
-    "channel": {*_LIFECYCLE, "add", "scope", "pair", "bind", "notify"},
+    # are the channel's own acts (spec channels); `restart` is the explicit
+    # reconnect of a channel's adapter.
+    "channel": {*_LIFECYCLE, "add", "scope", "pair", "bind", "notify", "restart"},
     # Exactly spec skill-manager "Cover skill management on REST, the CLI and
     # the web": `add <folder>` is the import, and the master folder is named
     # by `path skill <name>` rather than listed, printed or written here.
@@ -251,7 +252,7 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     "knowledge edit": {"--name", "--description"},
     # The model an agent answers with is a FIELD of the agent, bound by the
     # verb that edits the agent. It mirrors PATCH /api/v1/agents/{uid}, whose
-    # `model` / `effort` / `tier_models` / `wire_api` the projector reads. Its
+    # `model` / `effort` / `tier_models` the projector reads. Its
     # config directory is the one other thing an agent's edit changes.
     "agent edit": {
         "--config-dir",
@@ -260,7 +261,6 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
         "--clear-effort",
         "--tier",
         "--clear-tiers",
-        "--wire-api",
     },
     # A connection's wire is a FIELD of the connection, corrected on the verb
     # that edits it: PATCH /api/v1/providers/{uid} carries `protocol`.
@@ -337,7 +337,6 @@ _FILE_BACKED_ROUTES: dict[str, str] = {
     "PUT /knowledge/file": "path knowledge <collection>",
     "DELETE /knowledge/file": "path knowledge <collection>",
     "GET /memory/partitions/{uid}/files": "path memory <partition>",
-    "GET /memory/partitions/{uid}/files/content": "path memory <partition>",
     "GET /memory/partitions/{uid}/notes": "path memory <partition>",
     "GET /memory/partitions/{uid}/notes/{slug}": "path memory <partition>",
     "GET /memory/partitions/{uid}/retired": "path memory <partition>",

@@ -34,19 +34,6 @@ const TONE_TEXT: Record<Tone, string> = {
   muted: "text-text-muted",
 };
 
-const HEALTH_TONE: Record<string, Tone> = {
-  healthy: "ok",
-  failing: "error",
-  unknown: "muted",
-};
-
-const INVOCATION_TONE: Record<string, Tone> = {
-  ok: "ok",
-  error: "error",
-  timeout: "warn",
-  denied: "muted",
-};
-
 /** Badge class for a semantic tone the caller has already chosen — the
  * Activity page's Daemon tab maps a structlog level onto this vocabulary so an
  * error line reads the same red as a failed call does everywhere else. */
@@ -62,15 +49,4 @@ export function toneDotClass(tone: Tone): string {
 /** Word colour for a tone beside its dot: muted when ok or off. */
 export function toneTextClass(tone: Tone): string {
   return TONE_TEXT[tone];
-}
-
-/** Badge class for an MCP server health state. */
-export function healthStatusClass(state: string): string {
-  return TONE_CLASS[HEALTH_TONE[state] ?? "muted"];
-}
-
-/** Badge class for an invocation status; "" for an unrecognised status. */
-export function invocationStatusClass(status: string): string {
-  const tone = INVOCATION_TONE[status];
-  return tone ? TONE_CLASS[tone] : "";
 }

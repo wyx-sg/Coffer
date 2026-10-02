@@ -1,5 +1,5 @@
 """The master key and the secret files, as sync reads them
-(ADR credentials-across-machines).
+(ADR secrets-cross-machines-only-as-ciphertext).
 
 A sync round never needs the key: ciphertext travels as the files it is. The
 key is read for two things only — the fingerprint each machine publishes in

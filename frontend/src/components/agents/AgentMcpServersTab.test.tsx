@@ -13,12 +13,16 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { AgentMcpServersTab } from "./AgentMcpServersTab";
 import { ToastProvider } from "@/components/ui/toast";
-import type { AgentOut, McpEntryOut } from "@/lib/api/agents";
+import type { AgentOut } from "@/lib/api/agents";
+import type { McpEntryOut } from "@/lib/api/agents-workspace";
 import { getApiClient } from "@/lib/api/client";
 import { acceptance } from "@/test/acceptance";
 import { mockApiClient } from "@/test/mockApiClient";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
     mcpEntries: vi.fn(),
@@ -40,9 +44,9 @@ const AGENT: AgentOut = {
   model: null,
   effort: null,
   tier_models: null,
-  wire_api: null,
   version: null,
   install_handoff: null,
+  connection_uid: null,
   state: "installed_active",
   created_at: "",
   updated_at: "",

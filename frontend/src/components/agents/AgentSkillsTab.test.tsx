@@ -13,7 +13,8 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { AgentSkillsTab } from "./AgentSkillsTab";
 import { ToastProvider } from "@/components/ui/toast";
-import type { AgentOut, UnmanagedSkillOut } from "@/lib/api/agents";
+import type { AgentOut } from "@/lib/api/agents";
+import type { UnmanagedSkillOut } from "@/lib/api/agents-workspace";
 import { ApiError } from "@/lib/api/errors";
 import type { SkillOut } from "@/lib/api/skills";
 import { acceptance } from "@/test/acceptance";
@@ -45,10 +46,10 @@ const AGENT: AgentOut = {
   model: null,
   effort: null,
   tier_models: null,
-  wire_api: null,
   version: null,
   state: "installed_active",
   install_handoff: null,
+  connection_uid: null,
   created_at: "",
   updated_at: "",
 };

@@ -209,7 +209,7 @@ async def test_a_reply_the_channel_cannot_send_is_kept_and_retried(
 ) -> None:
     resource, adapter = await _channel(env)
     conversation_id = await _conversation_from_chat(env, resource, adapter)
-    env.processor.unbind(resource.name)  # the channel is not running
+    env.processor.unbind(resource.uid)  # the channel is not running
     env.provider.adapter = default_reply_adapter("answered while away")
 
     ack = await web.reply(conversation_id, "are you there")
@@ -258,7 +258,7 @@ async def test_a_refused_send_keeps_the_reply_pending(env: ChannelEnv, web: _Web
 async def test_a_flush_after_a_failure_waits_out_the_backoff(env: ChannelEnv, web: _Web) -> None:
     resource, adapter = await _channel(env)
     conversation_id = await _conversation_from_chat(env, resource, adapter)
-    env.processor.unbind(resource.name)
+    env.processor.unbind(resource.uid)
     await web.reply(conversation_id, "later")
     env.bind(resource, _RefusingAdapter())
     await web.mirror.flush(_binding(env, resource))
@@ -289,7 +289,7 @@ async def test_the_runtime_tick_flushes_each_running_channel(env: ChannelEnv) ->
     await runtime.reconcile_once()
 
     assert seen == [resource.name, resource.name]
-    assert runtime.is_running(resource.name)
+    assert runtime.is_running(resource.uid)
     await runtime.dispose()
 
 
@@ -303,7 +303,7 @@ async def test_the_conversation_says_where_a_reply_will_also_go(env: ChannelEnv,
 
     assert await web.mirror_view(direct) == {
         "deliverable": True,
-        "platform": "Telegram",
+        "platform": "telegram",
         "target": "Telegram · direct chat",
         "reason": None,
         "undelivered": [],
@@ -317,8 +317,20 @@ async def test_the_conversation_says_where_a_reply_will_also_go(env: ChannelEnv,
     assert all(c["channel_binding"]["mirror"] is None for c in listing["conversations"])
 
 
+async def test_a_deleted_channel_still_reads_with_no_platform(env: ChannelEnv, web: _Web) -> None:
+    resource, adapter = await _channel(env)
+    conversation_id = await _conversation_from_chat(env, resource, adapter)
+    await env.resources.delete(resource.uid, actor="cli")
+
+    view = await web.mirror_view(conversation_id)
+
+    assert view["deliverable"] is False
+    assert view["reason"] == "channel_deleted"
+    assert view["platform"] is None
+
+
 def _binding(env: ChannelEnv, resource: Resource) -> ChannelBinding:
-    binding = env.processor.binding(resource.name)
+    binding = env.processor.binding(resource.uid)
     assert binding is not None
     return binding
 

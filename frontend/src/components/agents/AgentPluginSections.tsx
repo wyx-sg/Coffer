@@ -12,7 +12,7 @@ import { useTranslation } from "react-i18next";
 import { FileActions } from "@/components/FileActions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { PluginComponentOut, PluginDetailOut } from "@/lib/api/agents";
+import type { PluginComponentOut, PluginDetailOut } from "@/lib/api/agents-workspace";
 
 export function PluginOverviewCard({ detail }: { detail: PluginDetailOut }) {
   const { t } = useTranslation();

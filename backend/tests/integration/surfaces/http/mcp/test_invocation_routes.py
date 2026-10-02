@@ -15,7 +15,6 @@ from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.domain.mcp.capability import (
     BUILTIN_SERVER_UID,
-    DELETED_SERVER_UID_PREFIX,
     MCPInvocation,
 )
 from coffer.domain.mcp.server_config import MCPServerConfig
@@ -37,6 +36,8 @@ from coffer.surfaces.http.mcp.invocation_routes import (
 from coffer.surfaces.http.mcp.invocation_routes import router as invocation_router
 from tests.support.vault_stores import make_resource_repo
 
+#: The uid of a server since deleted: its rows stay in the log, under the uid.
+_GONE_UID = "0123456789abcdef0123456789abcdef"
 _STDIO = {"transport": {"type": "stdio", "command": "/bin/true", "args": []}}
 
 
@@ -392,7 +393,7 @@ async def test_per_server_route_also_carries_resource_name(inv_client: tuple) ->
 
 
 # ---------------------------------------------------------------------------
-# Read-time name resolution (ADR resource-identity-is-an-immutable-uid)
+# Read-time name resolution (ADR identity-is-the-uid-inside-the-file)
 # ---------------------------------------------------------------------------
 
 
@@ -416,20 +417,17 @@ async def test_rename_carries_the_whole_history_under_the_new_name(inv_client: t
 
 @pytest.mark.asyncio
 async def test_builtin_and_deleted_uids_resolve_to_a_null_name(inv_client: tuple) -> None:
-    """Two recorded values are not resource uids and resolve to nothing: the
-    sentinel Coffer's own built-in tools log under, and the marker rows whose
-    server was already gone when the log was re-keyed carry. Both must still
-    appear on the timeline, with a null name the client falls back from."""
+    """Two recorded values resolve to no resource: the sentinel Coffer's own
+    built-in tools log under, and the uid of a server since deleted. Both must
+    still appear on the timeline, with a null name the client falls back from."""
     client, _engine, repo, _rsvc, _uids = inv_client
     await repo.insert(_make_invocation(BUILTIN_SERVER_UID, capability_key="coffer__search"))
-    await repo.insert(
-        _make_invocation(f"{DELETED_SERVER_UID_PREFIX}gone", capability_key="do_thing")
-    )
+    await repo.insert(_make_invocation(_GONE_UID, capability_key="do_thing"))
 
     r = await client.get("/api/v1/mcp/invocations")
     by_uid = {inv["resource_uid"]: inv for inv in r.json()["invocations"]}
     assert by_uid[BUILTIN_SERVER_UID]["resource_name"] is None
-    assert by_uid[f"{DELETED_SERVER_UID_PREFIX}gone"]["resource_name"] is None
+    assert by_uid[_GONE_UID]["resource_name"] is None
 
 
 @pytest.mark.asyncio

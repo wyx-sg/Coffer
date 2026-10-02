@@ -34,7 +34,7 @@ class DistilRunner(Protocol):
     The partition is named by its **uid**, not by its label. A pass spends a
     model and rewrites every note in a directory, so what it is aimed at has to
     be the thing that cannot be edited while it runs (ADR
-    resource-identity-is-an-immutable-uid); the service resolves the row and
+    identity-is-the-uid-inside-the-file); the service resolves the row and
     reads the directory name off it. It is also what makes Update memory's
     upkeep-runs claim and the worker's claim collide the way "Run one distil
     pass per partition at a time" needs them to — both key on this same value,

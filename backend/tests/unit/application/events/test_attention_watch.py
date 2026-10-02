@@ -15,6 +15,7 @@ from coffer.application.attention import (
 from coffer.application.events.attention_watch import AttentionWatcher, fingerprint
 from coffer.application.events.broker import Envelope, EventBroker
 from coffer.domain.reconcile import Changed, PassReport, Trigger
+from tests.support.waiting import wait_until
 
 _ACTION = AttentionAction("test", "POST", "/api/v1/resources/mcp_server/u1/test")
 
@@ -55,14 +56,14 @@ async def test_the_first_check_is_only_the_baseline() -> None:
     assert broker.head == 0
 
 
-async def test_a_new_item_publishes_one_attention_envelope_without_id_or_rev() -> None:
+async def test_a_new_item_publishes_one_attention_envelope_without_an_id() -> None:
     broker = EventBroker()
     watcher = AttentionWatcher(broker)
     reports = _Reports(AttentionReport(()))
     await watcher.check(reports.report)
     reports.current = AttentionReport((_item(),))
     assert await watcher.check(reports.report) is True
-    assert broker.buffered == (Envelope(1, "attention", None, None, "upsert"),)
+    assert broker.buffered == (Envelope(1, "attention", None, "upsert"),)
     # Unchanged since: nothing more.
     assert await watcher.check(reports.report) is False
     assert broker.head == 1
@@ -89,21 +90,18 @@ async def test_a_resource_write_or_a_pass_prompts_a_settled_recompute() -> None:
     reports = _Reports(AttentionReport(()))
     task = asyncio.ensure_future(watcher.serve(reports.report))
     try:
-        await asyncio.sleep(0.02)
-        assert reports.calls == 1  # the baseline
+        await wait_until(lambda: reports.calls == 1)  # the baseline
         reports.current = AttentionReport((_item(),))
-        watcher.on_changed(Changed("mcp_server", "u1", 2))
-        watcher.on_changed(Changed("mcp_server", "u1", 3))  # settles into one recompute
-        await asyncio.sleep(0.05)
-        assert reports.calls == 2
-        assert len(_attention_envelopes(broker)) == 1
+        watcher.on_changed(Changed("mcp_server", "u1"))
+        watcher.on_changed(Changed("mcp_server", "u1"))  # settles into one recompute
+        await wait_until(lambda: reports.calls == 2)
+        await wait_until(lambda: len(_attention_envelopes(broker)) == 1)
 
         reports.current = AttentionReport(())
         now = datetime.now(tz=UTC)
         watcher.on_pass(PassReport(Trigger.PERIOD, False, now, now, ()))
-        await asyncio.sleep(0.05)
-        assert reports.calls == 3
-        assert len(_attention_envelopes(broker)) == 2
+        await wait_until(lambda: reports.calls == 3)
+        await wait_until(lambda: len(_attention_envelopes(broker)) == 2)
     finally:
         task.cancel()
 
@@ -116,8 +114,7 @@ async def test_the_period_recomputes_with_nothing_prompting_it() -> None:
     task = asyncio.ensure_future(watcher.serve(reports.report))
     try:
         reports.current = AttentionReport((_item(),))
-        await asyncio.sleep(0.05)
-        assert len(_attention_envelopes(broker)) == 1
+        await wait_until(lambda: len(_attention_envelopes(broker)) == 1)
     finally:
         task.cancel()
 

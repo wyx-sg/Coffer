@@ -1,7 +1,7 @@
 """Core Resource domain entities.
 
 A resource's identity is its **``uid``** — an opaque, immutable string minted
-once and never reused (ADR resource-identity-is-an-immutable-uid).
+once and never reused (ADR identity-is-the-uid-inside-the-file).
 Its ``name`` is a mutable label: unique within its kind, because a user should
 not have two skills called the same thing, but uniqueness is a constraint and
 not an identity. Everything that has to keep pointing at the same resource
@@ -108,10 +108,6 @@ class Resource:
     #: carries one (``Kind.titled``). It travels with the synced document;
     #: reach does not.
     title: str | None = None
-    #: Monotonic revision, bumped whenever the resource's file or its reach
-    #: changes (a derived per-uid counter, not stored in the file); carried by
-    #: the reconciler's ``Changed`` hint (ADR one-level-triggered-reconciler).
-    rev: int = 0
 
 
 @dataclass(frozen=True)

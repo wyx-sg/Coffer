@@ -24,7 +24,7 @@ class DriftEntry:
     They are not two spellings of one thing: the names are what the report
     SAYS, and the uids are what a repair re-delivers against, so a
     skill renamed between the verify pass and the repair pass is still the
-    skill that gets repaired (ADR resource-identity-is-an-immutable-uid).
+    skill that gets repaired (ADR identity-is-the-uid-inside-the-file).
 
     Both uids are ``None`` for an ORPHAN_MASTER entry, which is a folder on
     disk that no resource row claims — there is no identity to record, and

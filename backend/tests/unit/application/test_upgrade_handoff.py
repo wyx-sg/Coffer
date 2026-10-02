@@ -19,13 +19,12 @@ from coffer.infrastructure.daemon.install_method import install_facts
 def test_the_prompt_names_the_version_the_install_method_and_the_upgrade_page() -> None:
     prompt = upgrade_handoff(
         "0.3.1",
-        "stable",
         InstallFacts(
             method=InstallMethod.BINARIES, executable="/h/.coffer/bin/0.3.1/coffer-daemon"
         ),
         "macOS 15.6, arm64",
     )
-    assert "Coffer 0.3.1, on the stable channel" in prompt
+    assert "Coffer 0.3.1." in prompt
     assert "/h/.coffer/bin/0.3.1/coffer-daemon" in prompt
     assert f"{INSTALL_PAGE}#upgrade" in prompt
     assert "Keep ~/.coffer exactly as it is" in prompt
@@ -37,7 +36,6 @@ def test_the_prompt_names_the_version_the_install_method_and_the_upgrade_page() 
 def test_a_source_run_names_its_checkout() -> None:
     prompt = upgrade_handoff(
         "0.3.1",
-        "dev",
         InstallFacts(method=InstallMethod.SOURCE, executable="/r/.venv/bin/python", checkout="/r"),
         "m",
     )

@@ -9,9 +9,8 @@
 // name. The kind segment is gone because a uid already names exactly one row,
 // and the name is gone because it is a label the user edits — a request built
 // from it would stop resolving the moment someone renamed the thing it was
-// about (ADR resource-identity-is-an-immutable-uid).
-import { getApiClient } from "@/lib/api/client";
-import { ApiError, throwApiError } from "@/lib/api/errors";
+// about (ADR identity-is-the-uid-inside-the-file).
+import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type { components } from "@/lib/api/types";
 
 /** One row of the kind-agnostic resource list (`GET /resources`). */
@@ -22,53 +21,36 @@ export type ResourceCreate = components["schemas"]["ResourceCreate"];
 /** `PATCH /resources/{uid}` body — name, title, description and/or config. */
 export type ResourceUpdate = components["schemas"]["ResourceUpdate"];
 
+/** `GET /resources` — every resource, or those of one kind. */
+export type ResourceList = components["schemas"]["ResourceListOut"];
+
 export const resourcesApi = {
+  /** The resources of one kind. A failed read throws, so a caller that picks a
+   *  name from the answer never picks one against an empty list it misread. */
+  list: (kind: string): Promise<ResourceList> =>
+    unwrap(getApiClient().GET("/resources", { params: { query: { kind } } })),
   /** Register a resource of any kind whose create the framework allows
    *  generically, so a kind with no bespoke registration surface of its own
    *  writes through this endpoint. The refusal is thrown as-is so a caller can
    *  read the offending field's JSON path out of it. */
-  create: async (body: ResourceCreate): Promise<void> => {
-    const { error } = await getApiClient().POST("/resources", { body });
-    if (error) throwApiError(error, "INTERNAL_ERROR", "register failed");
-  },
-  update: async (uid: string, body: ResourceUpdate): Promise<void> => {
-    const { error } = await getApiClient().PATCH("/resources/{uid}", {
-      params: { path: { uid } },
-      body,
-    });
-    if (error) throwApiError(error, "INTERNAL_ERROR", "update failed");
-  },
-  enable: async (uid: string): Promise<void> => {
-    const { error } = await getApiClient().POST("/resources/{uid}/enable", {
-      params: { path: { uid } },
-    });
-    if (error) throwApiError(error, "INTERNAL_ERROR", "enable failed");
-  },
-  disable: async (uid: string): Promise<void> => {
-    const { error } = await getApiClient().POST("/resources/{uid}/disable", {
-      params: { path: { uid } },
-    });
-    if (error) throwApiError(error, "INTERNAL_ERROR", "disable failed");
-  },
-  remove: async (uid: string): Promise<void> => {
-    const { error } = await getApiClient().DELETE("/resources/{uid}", {
-      params: { path: { uid } },
-    });
-    if (error) throwApiError(error, "INTERNAL_ERROR", "delete failed");
-  },
+  create: (body: ResourceCreate): Promise<ResourceOut> =>
+    unwrap(getApiClient().POST("/resources", { body })),
+  update: (uid: string, body: ResourceUpdate): Promise<void> =>
+    unwrapVoid(getApiClient().PATCH("/resources/{uid}", { params: { path: { uid } }, body })),
+  enable: (uid: string): Promise<void> =>
+    unwrapVoid(getApiClient().POST("/resources/{uid}/enable", { params: { path: { uid } } })),
+  disable: (uid: string): Promise<void> =>
+    unwrapVoid(getApiClient().POST("/resources/{uid}/disable", { params: { path: { uid } } })),
+  remove: (uid: string): Promise<void> =>
+    unwrapVoid(getApiClient().DELETE("/resources/{uid}", { params: { path: { uid } } })),
   /** Set or clear (null) a resource's display title. Titles exist only on the
    *  kinds that carry one — not agent, mcp_server or skill, which the daemon
    *  refuses with 422 (spec resource-framework "Carry an optional editable
    *  title on the kinds that have one"). */
-  setTitle: async (uid: string, title: string | null): Promise<ResourceOut> => {
-    const { data, error } = await getApiClient().PATCH("/resources/{uid}", {
-      params: { path: { uid } },
-      body: { title },
-    });
-    if (error) throwApiError(error, "INTERNAL_ERROR", "update failed");
-    if (!data) throw new ApiError("INTERNAL_ERROR", "empty update response");
-    return data;
-  },
+  setTitle: (uid: string, title: string | null): Promise<ResourceOut> =>
+    unwrap(
+      getApiClient().PATCH("/resources/{uid}", { params: { path: { uid } }, body: { title } }),
+    ),
   /**
    * Rename a resource of ANY kind.
    *
@@ -82,13 +64,6 @@ export const resourcesApi = {
    * A label another resource of the same kind already holds answers 409, which
    * the caller renders where the user typed it.
    */
-  rename: async (uid: string, name: string): Promise<ResourceOut> => {
-    const { data, error } = await getApiClient().PATCH("/resources/{uid}", {
-      params: { path: { uid } },
-      body: { name },
-    });
-    if (error) throwApiError(error, "INTERNAL_ERROR", "rename failed");
-    if (!data) throw new ApiError("INTERNAL_ERROR", "empty rename response");
-    return data;
-  },
+  rename: (uid: string, name: string): Promise<ResourceOut> =>
+    unwrap(getApiClient().PATCH("/resources/{uid}", { params: { path: { uid } }, body: { name } })),
 };

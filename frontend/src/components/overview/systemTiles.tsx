@@ -143,13 +143,12 @@ export function UsageTile({ area }: AreaProps) {
       content={(summary) => ({
         status: null,
         note: t("overview.health.usage.period"),
-        // An answer without totals (an older daemon) reads as no use, never a crash.
         value: formatTokens(
-          summary.totals ? summary.totals.input_tokens + summary.totals.output_tokens : 0,
+          summary.totals.input_tokens + summary.totals.output_tokens,
           i18n.language,
         ),
         unit: t("overview.health.usage.unit"),
-        summary: summary.totals ? usageSummary(summary, i18n.language) || null : null,
+        summary: usageSummary(summary, i18n.language) || null,
       })}
     />
   );

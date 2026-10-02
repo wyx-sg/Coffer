@@ -35,18 +35,17 @@ In the web UI, **Settings → Daemon → Restart** restarts it from a browser to
 ```text
 status:  ready
 version: 0.2.0
-channel: stable
 port:    8000
 pid:     41822
 ```
 
-`status` is `ready` while the daemon serves and `draining` while it shuts down. There is no earlier phase to see: the daemon opens its port only once it has finished starting. `channel` is the build's release channel, which decides whether [experimental features](/guides/experimental-features) are on by default (none is experimental right now). Add `--json` for scripts.
+`status` is `ready` while the daemon serves and `draining` while it shuts down. There is no earlier phase to see: the daemon opens its port only once it has finished starting. Four [experimental features](/guides/experimental-features) are off until you switch them on. Add `--json` for scripts.
 
 With no daemon running, `coffer daemon status` prints `status:  not running` (`{"status": "stopped"}` under `--json`) and exits 3. It does not start a daemon, so its answer never changes what it reports on; use `coffer daemon start` for that.
 
 A few behaviours worth knowing:
 
-- `start` decides "already running" by asking the daemon, not by checking whether `daemon.json` exists. A discovery file left behind by a crash never blocks a start.
+- `start` decides "already running" by asking the daemon, not by checking whether `daemon.json` exists. A discovery file left behind by a crash never blocks a start. `start` reports success only once the new daemon answers its status call; if the daemon refuses to start (a vault migration is required, git is too old) it says so and points at `daemon.log`.
 - `start` checks the port before spawning. If something else holds it, you get the diagnosis at once instead of a ten-second timeout (see [When the port is taken](#when-the-port-is-taken)).
 - `stop` checks that the recorded pid really is a Coffer daemon before signalling it. If the pid has been recycled onto another process, `stop` removes the stale `daemon.json` and says so instead of killing a stranger.
 - `restart` is how a setting read before the daemon binds (the port) takes effect.

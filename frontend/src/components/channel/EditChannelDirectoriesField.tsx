@@ -14,7 +14,7 @@ import { FolderPickerField } from "@/components/FolderPickerField";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { DIRECTORIES_MAX, normaliseDirectory } from "./editChannel";
+import { DIRECTORIES_MAX, normaliseDirectory } from "@/lib/channels/editChannel";
 
 interface Props {
   /** The default folder as typed (blank = none). */

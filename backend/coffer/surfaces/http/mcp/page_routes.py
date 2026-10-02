@@ -14,10 +14,10 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 
+from coffer.application.mcp.saved_tools import current_tools
 from coffer.application.mcp.tiering_config import load_tiering_config
 from coffer.application.mcp.tiering_split import tiering_split
 from coffer.application.resource_service import ResourceService
-from coffer.domain.resource import Resource
 from coffer.infrastructure.logging.upstream_tail import read_upstream_tail
 from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceStore, MCPInvocationRepo
 from coffer.surfaces.http.auth import require_token
@@ -34,10 +34,6 @@ from coffer.surfaces.http.mcp.page_schemas import (
     ToolTieringOut,
     invocation_summary_out,
 )
-
-#: The seen-time of a capability this machine has never seen (see
-#: ``MCPCapabilityPreferenceStore.list_for``).
-_NEVER_SEEN = datetime.fromtimestamp(0, tz=UTC)
 
 router = APIRouter(
     prefix="/api/v1/resources/mcp_server",
@@ -86,23 +82,6 @@ async def server_log(
     )
 
 
-async def _current_tools(
-    prefs: MCPCapabilityPreferenceStore, resource: Resource
-) -> list[tuple[str, bool]]:
-    """The tools discovery last saw for ``resource``, with their switch.
-
-    Every rediscovery stamps each tool it still sees with one ``last_seen_at``;
-    rows for tools the server no longer offers keep an older stamp, so the
-    current set is the rows carrying the newest one. A tool switched off on
-    another machine and never seen here has no stamp, and is not current.
-    """
-    rows = [r for r in await prefs.list_for(resource.uid, "tool") if r.last_seen_at > _NEVER_SEEN]
-    if not rows:
-        return []
-    newest = max(r.last_seen_at for r in rows)
-    return [(r.capability_key, r.enabled) for r in rows if r.last_seen_at == newest]
-
-
 @router.get("/{uid}/tiering", response_model=ToolTieringOut)
 async def tool_tiering(
     uid: str,
@@ -112,10 +91,10 @@ async def tool_tiering(
 ) -> ToolTieringOut:
     """Which of this server's tools are listed to agents and which only reached through search."""
     resource = await require_mcp_server(uid, resource_service)
-    own = await _current_tools(prefs, resource)
+    own = await current_tools(prefs, resource)
     catalogue: dict[str, list[str]] = {}
     for server in await resource_service.list(kind="mcp_server", enabled=True):
-        tools = own if server.uid == resource.uid else await _current_tools(prefs, server)
+        tools = own if server.uid == resource.uid else await current_tools(prefs, server)
         catalogue[server.name] = [name for name, on in tools if on]
     split = await tiering_split(
         catalogue,

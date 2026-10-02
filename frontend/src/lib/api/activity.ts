@@ -6,8 +6,7 @@
 // growing lists by an opaque cursor", "Count a log's matching rows beside
 // each page"). The daemon log (`GET /daemon/logs`) is a bounded tail with no
 // cursor: one read is all there is.
-import { getApiClient } from "@/lib/api/client";
-import { ApiError, throwApiError } from "@/lib/api/errors";
+import { getApiClient, unwrap } from "@/lib/api/client";
 import type { components } from "@/lib/api/types";
 
 type AuditListOut = components["schemas"]["AuditListOut"];
@@ -21,6 +20,8 @@ export const MAX_PAGE = 500;
 export interface AuditParams {
   since?: string;
   kind?: string;
+  name?: string;
+  eventType?: string;
 }
 
 /** @ui-only The server-side filters the invocation route takes. */
@@ -44,53 +45,57 @@ export type SourceParams =
   | { source: "call"; params: CallParams }
   | { source: "daemon"; params: DaemonParams };
 
-export async function fetchAuditPage(
+export function fetchAuditPage(
   params: AuditParams,
   limit: number,
   cursor?: string | null,
 ): Promise<AuditListOut> {
-  const query: Record<string, string | number> = { limit };
-  if (params.since) query.since = params.since;
-  if (params.kind) query.kind = params.kind;
-  if (cursor) query.cursor = cursor;
-  const { data, error } = await getApiClient().GET("/audit", {
-    params: { query: query as never },
-  });
-  if (error) throwApiError(error, "INTERNAL_ERROR", "list audit failed");
-  if (!data) throw new ApiError("INTERNAL_ERROR", "empty audit response");
-  return data;
+  return unwrap(
+    getApiClient().GET("/audit", {
+      params: {
+        query: {
+          limit,
+          since: params.since || undefined,
+          kind: params.kind || undefined,
+          name: params.name || undefined,
+          event_type: params.eventType || undefined,
+          cursor: cursor || undefined,
+        },
+      },
+    }),
+  );
 }
 
-export async function fetchCallPage(
+export function fetchCallPage(
   params: CallParams,
   limit: number,
   cursor?: string | null,
 ): Promise<InvocationListOut> {
-  const query: Record<string, string | number> = { limit };
-  if (params.since) query.since = params.since;
-  if (params.uid) query.uid = params.uid;
-  if (params.status) query.status = params.status;
-  if (params.agentUid) query.agent_uid = params.agentUid;
-  if (cursor) query.cursor = cursor;
-  const { data, error } = await getApiClient().GET("/mcp/invocations", {
-    params: { query: query as never },
-  });
-  if (error) throwApiError(error, "INTERNAL_ERROR", "list invocations failed");
-  if (!data) throw new ApiError("INTERNAL_ERROR", "empty invocations response");
-  return data;
+  return unwrap(
+    getApiClient().GET("/mcp/invocations", {
+      params: {
+        query: {
+          limit,
+          since: params.since || undefined,
+          uid: params.uid || undefined,
+          status: params.status || undefined,
+          agent_uid: params.agentUid || undefined,
+          cursor: cursor || undefined,
+        },
+      },
+    }),
+  );
 }
 
-export async function fetchDaemonTail(
+export function fetchDaemonTail(
   params: DaemonParams,
   limit: number = MAX_PAGE,
 ): Promise<DaemonLogListOut> {
-  const query: Record<string, string | number> = { limit };
-  if (params.since) query.since = params.since;
-  if (params.level) query.level = params.level;
-  const { data, error } = await getApiClient().GET("/daemon/logs", {
-    params: { query: query as never },
-  });
-  if (error) throwApiError(error, "INTERNAL_ERROR", "list daemon logs failed");
-  if (!data) throw new ApiError("INTERNAL_ERROR", "empty daemon log response");
-  return data;
+  return unwrap(
+    getApiClient().GET("/daemon/logs", {
+      params: {
+        query: { limit, since: params.since || undefined, level: params.level || undefined },
+      },
+    }),
+  );
 }

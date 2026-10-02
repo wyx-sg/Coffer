@@ -149,11 +149,12 @@ Show or set which agents a connection reaches (this machine only).
 coffer provider switch [OPTIONS] NAME
 ```
 
-Switch the agents this connection reaches onto it and write their native config.
+Switch agents onto this connection and write their native config.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Connection to activate |
+| `NAME` | argument | text | required | Connection to switch onto |
+| `--agent` | option | text |  | Agent type to switch: claude_code \| codex. Default: every registered, enabled agent the connection reaches |
 
 ## provider builtin
 
@@ -161,9 +162,9 @@ Switch the agents this connection reaches onto it and write their native config.
 coffer provider builtin [OPTIONS] AGENT_TYPE
 ```
 
-Switch's other half: put every agent of this type back on its OWN login.
+Switch's other half: put the agent of this type back on its OWN login.
 
-Removes Coffer's projection from the native config and clears the active connection covering it. Idempotent — a no-op when the agent already runs built-in.
+Removes Coffer's projection from its native config and clears its connection. Only that agent changes. Idempotent — a no-op when the agent already runs built-in.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |

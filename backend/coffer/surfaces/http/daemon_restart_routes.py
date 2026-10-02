@@ -57,8 +57,9 @@ def get_self_restart() -> SelfRestart:
     return SelfRestart(spawn_successor=self_restart.spawn_successor, exit_self=_exit_gracefully)
 
 
-#: Set once a successor is started: a second press while this daemon is on its
-#: way out answers the same way instead of starting a second successor.
+#: Set as soon as a restart is claimed (before the successor is spawned): a
+#: second press while this daemon is on its way out answers the same way
+#: instead of starting a second successor.
 _RESTARTING = False
 
 
@@ -85,13 +86,16 @@ async def restart_daemon(
     port = bootstrap.planned_port() or daemon_port.get_port()
     if _RESTARTING:
         return DaemonRestartOut(port=port)
+    # Claimed before the spawn is awaited: a second request arriving while the
+    # first is still spawning must see the claim, not start a second successor.
+    _RESTARTING = True
     try:
         successor = await asyncio.to_thread(restart.spawn_successor)
     except OSError as exc:
+        _RESTARTING = False
         raise HTTPException(
             status_code=500, detail=f"could not start the replacement daemon: {exc}"
         ) from None
-    _RESTARTING = True
     await audit.record(
         AuditEventType.DAEMON_RESTARTED.value,
         actor=actor,

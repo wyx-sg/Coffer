@@ -66,7 +66,7 @@ official or third-party integration connects it to any coding agent.
   fields (`domain/channel/config.py`). Migration `0103` removed the webhook-era
   fields — `delivery`, `signing_secret_ref`, `public_base_url`,
   `tunnel_token_ref` — from every stored SeaTalk channel and left the
-  credential values they cited in the store, because a migration that deletes
+  secret values they cited in the store, because a migration that deletes
   secrets cannot be reversed.
 - **The SDK is an optional runtime dependency the operator provides.**
   `infrastructure/channel/seatalk_sdk.py` looks in `$COFFER_SEATALK_SDK_DIR`,

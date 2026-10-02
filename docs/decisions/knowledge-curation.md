@@ -156,13 +156,19 @@ reverted.**
   that say otherwise — and does not revert or reword it. Both are instructions
   to the model (`application/knowledge/curate_prompt.py`), because no code can
   adjudicate a contradiction.
-- **Out-of-band edits are found without state.** Coffer writes a
-  `coffer_curated_at` stamp into the frontmatter of every document curation has
-  handled and sets the file's mtime to that stamp
-  (`infrastructure/knowledge/fs.py`). A document whose mtime is newer than its
-  stamp, or that has none, was edited or added by someone else. No table, no
-  watermark file. Curation's own writes are stamped as written, so the sweep
-  never hands a pass its own output back.
+- **Out-of-band edits are found by content, not by time.** Curation keeps a
+  record of its own, `~/.coffer/local/curation.json`: for each document, the
+  content id (git blob) it had when curation last settled it, after a pass
+  over it, after a pass wrote it, or when material was promoted into it. A
+  document is *pending* when its current blob differs from the settled one and
+  the newest commit that touched it was made by a person or an agent, not by
+  curation or by sync (`infrastructure/knowledge/curation_state.py`). A file's
+  modification time never decides, so a checkout, a backup restore or a clock
+  change that only moves times makes nothing pending. Nothing is written into
+  the document to mark it; the record is machine-local, never committed or
+  synced, and losing it costs one more pass over each document. Curation's own
+  writes are recorded as settled as they are written, so the sweep never hands
+  a pass its own output back.
 - **The pass is fenced.** Its tool surface is exactly `list_documents`,
   `read_document`, `write_document` and `retire_document`, over one
   collection's documents: no handler can reach the inbox, the collection's
@@ -170,7 +176,7 @@ reverted.**
   A retire is allowed only for a document the pass has read and whose content it
   has since written into a *different* document.
 - **The pass is bounded.** At most **eight** writes, a retire counting as one
-  (`MAX_WRITES_PER_PASS`), and a recursion limit (24). An item cut off by the
+  (`MAX_WRITES_PER_PASS`), and a recursion limit. An item cut off by the
   limit three times in a row is settled as it stands (`gave_up`); an item past
   120,000 characters is never shown to a model (`too_large`). A pass sees the
   item in full, at most **five** candidate documents in full, and the
@@ -178,7 +184,7 @@ reverted.**
   by literal matching: distinctive strings pulled from the item — backticked
   identifiers, dotted names, constants, headings, CJK runs — are handed to
   ripgrep (`infrastructure/knowledge/grep.py`), with a pure-Python walk of the
-  same semantics where `rg` is absent (`grep_fallback.py`). Selection may miss,
+  same semantics where `rg` is absent (`infrastructure/knowledge/grep_fallback.py`). Selection may miss,
   because the catalogue is in the prompt too: a model shown five wrong
   candidates can still open a new document.
 - **A document may not name another knowledge file.** Enforced at
@@ -186,11 +192,12 @@ reverted.**
   refused — not requested in a prompt, because a prompt is what produced 343
   dead references. A document names its subject; the generated catalogue maps
   subjects to paths.
-- **Settle last.** Material leaves the inbox, or an edited document gets its
-  stamp, only after the pass completes; a pass that raises leaves the item for
+- **Settle last.** Material leaves the inbox, or an edited document is recorded as
+  settled, only after the pass completes; a pass that raises leaves the item for
   a later sweep.
-- **Scheduling.** A sweep runs one minute after boot and then every 60 s by
-  default, the interval re-read on every sweep; it takes inbox material first,
+- **Scheduling.** A sweep runs one minute after boot and then every 60 minutes
+  by default, the one global curation interval in Settings, re-read on every
+  sweep; it takes inbox material first,
   oldest first, then edited documents, at most five passes per collection per
   sweep (`application/knowledge/curate_worker.py`). One pass per collection at
   a time: a manual trigger during one is refused with `UPKEEP_ALREADY_RUNNING`
@@ -209,12 +216,14 @@ reverted.**
   one document reaches the others that repeated the mistake.
 - **Curation rewrites the only copy.** What protects a document is the rule
   that a person's edit is never reverted, the eight-write bound, one pass per
-  collection, an audit event per pass, and — where vault sync is configured —
-  the vault's git history. A bad merge is fixed by editing the document.
+  collection, an audit event per pass, and the vault's git history, where a
+  pass is one commit that can be undone as a whole. A bad merge is fixed by
+  editing the document or undoing the pass.
 - **Uploads are not archival.** A bad conversion cannot be redone from a file
   Coffer kept; the person re-uploads from their own copy.
-- **There is a wait.** Material is unreadable until a pass runs; the 60-second
-  cadence and the no-model promotion keep it short.
+- **There is a wait.** Material is unreadable until a pass runs, up to the
+  sweep interval; the manual *Curate now* trigger and the no-model promotion
+  shorten it.
 - **Broken internal links are structurally impossible**, and the catalogue is
   the only map.
 - **Every outcome is a status, not an error.** The curation route answers 200

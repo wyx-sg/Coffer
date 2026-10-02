@@ -106,7 +106,7 @@ Each tool also has an on/off switch (**All on · All off** switches every tool o
 
 ## The Custom tools page
 
-With no group yet, the page shows only how custom tools work and the two ways in, with **Add custom tool** in the header and the page. Once there are groups, the list puts groups that **need attention** first — a group whose last call failed, whose secret is missing or waits for approval — then healthy ones, then the ones switched off. A group's page shows, on one page:
+With no group yet, the page shows only how custom tools work and the two ways in, with **Add custom tool** in the header and the page. Once there are groups, the list puts groups that **need attention** first — a group whose last call failed, whose secret is missing or waits for approval — then healthy ones, then the ones switched off. A **Reach** filter under the search box narrows the list to Disabled, Every agent or Only selected agents. A group's page shows, on one page:
 
 - a header with **Edit group** and a **⋯** menu: Edit group, Re-import (for an imported group), Turn off and Delete group;
 - its **definition** — what agents see (`billing__<tool>`), the reach, the base URL, the auth header with the secret's name, and the spec it came from;

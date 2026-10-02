@@ -86,7 +86,7 @@ class AttentionWatcher:
         moved = self._last is not None and current != self._last
         self._last = current
         if moved:
-            self._broker.publish(ATTENTION_KIND, None, None, "upsert")
+            self._broker.publish(ATTENTION_KIND, None, "upsert")
         return moved
 
     async def prime(self, report: ReportFn) -> None:

@@ -41,7 +41,7 @@ export interface paths {
         post?: never;
         /**
          * Unset Feature
-         * @description Remove this machine's setting, so the feature follows the channel default.
+         * @description Remove this machine's setting, so the feature is off again.
          *
          *     Answers with the feature's state after the removal. The same refusals as
          *     the switch: 404 ``FEATURE_UNKNOWN``, 409 ``FEATURE_PINNED``.
@@ -452,11 +452,6 @@ export interface components {
         };
         /** DaemonStatusOut */
         DaemonStatusOut: {
-            /**
-             * Channel
-             * @enum {string}
-             */
-            channel: "stable" | "dev";
             /** Commit */
             commit: string | null;
             /** Connected Agents */
@@ -534,11 +529,6 @@ export interface components {
         };
         /** FeatureListOut */
         FeatureListOut: {
-            /**
-             * Channel
-             * @enum {string}
-             */
-            channel: "stable" | "dev";
             /** Features */
             features: components["schemas"]["FeatureOut"][];
         };
@@ -555,7 +545,7 @@ export interface components {
              * Source
              * @enum {string}
              */
-            source: "pin" | "setting" | "channel";
+            source: "pin" | "setting" | "default";
         };
         /** FeatureSetIn */
         FeatureSetIn: {

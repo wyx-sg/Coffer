@@ -104,7 +104,7 @@ coffer log mcp --server filesystem          # one server
 coffer log mcp --status error --since 1d --json
 ```
 
-Without `--server` the output includes Coffer's own built-in tool calls (server `coffer`) and rows of deleted servers (`deleted:<name>`). `--limit` accepts 1–500.
+Without `--server` the output includes Coffer's own built-in tool calls (server `coffer`) and rows of servers since deleted (shown by their uid). `--limit` accepts 1–500.
 
 An invocation has one of four statuses:
 

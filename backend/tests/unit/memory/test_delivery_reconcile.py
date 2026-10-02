@@ -2,8 +2,10 @@
 ``Reconciler`` over the dict-backed fakes of ``test_delivery_service``.
 
 Covers the direction policy of ``DeliveryHookTarget`` (spec memory "Repair
-stale delivery hooks", "Install delivery hooks explicitly and removably"). The
-same policies on real files, and the dry-run and audit-failure
+stale delivery hooks", "Install delivery hooks explicitly and removably"; spec
+experimental-features "Withdraw what a switched-off feature put in front of
+agents") and the ``memory`` switch subscriber that asks the reconciler for a
+pass. The same policies on real files, and the dry-run and audit-failure
 rules, are in ``tests/integration/application/test_delivery_hook_reconcile.py``.
 """
 
@@ -41,8 +43,17 @@ pytestmark = pytest.mark.asyncio
 _STALE = f': {MARKER}; /moved/away/coffer memory hook --agent-uid {_CC_UID} --cwd "$PWD"'
 
 
+class _Features:
+    def __init__(self, memory: bool) -> None:
+        self.memory = memory
+
+    def is_enabled(self, key: str) -> bool:
+        assert key == "memory"
+        return self.memory
+
+
 class _Rig:
-    def __init__(self, *, connected: list[str] | None = None) -> None:
+    def __init__(self, *, memory: bool = True, connected: list[str] | None = None) -> None:
         self.store = FakeStore()
         self.repo = FakeAuditRepo()
         audit = AuditService(self.repo)
@@ -52,13 +63,16 @@ class _Rig:
             store=self.store,
             catalog=agent_catalog(),
         )
+        self.features = _Features(memory)
         self.connected = list(connected or [])
         self.reconciler = Reconciler(audit=audit)
 
         async def _connected() -> list[str]:
             return list(self.connected)
 
-        self.reconciler.register(DeliveryHookTarget(delivery=self.delivery, connected=_connected))
+        self.reconciler.register(
+            DeliveryHookTarget(delivery=self.delivery, features=self.features, connected=_connected)
+        )
 
     async def installed(self, uid: str) -> bool:
         return (await self.delivery.status(uid)).installed
@@ -198,7 +212,7 @@ async def test_an_unreadable_settings_file_is_blocked_and_left_untouched() -> No
     rig = _Rig(connected=[_CC_UID])
     rig.store._files[_CC_SETTINGS_PATH] = "{not valid json"
 
-    result = _only(await rig.run(Trigger.MANUAL))
+    result = _only(await rig.run(Trigger.SWITCH))
 
     assert result.change.decision.disposition is Disposition.BLOCKED
     assert result.change.decision.reason_code == "unreadable_config"
@@ -208,31 +222,79 @@ async def test_an_unreadable_settings_file_is_blocked_and_left_untouched() -> No
 
 
 # ---------------------------------------------------------------------------
-# A person asking installs a missing hook
+# The ``memory`` switch
 # ---------------------------------------------------------------------------
 
 
-async def test_a_manual_pass_installs_into_the_connected_agents_only() -> None:
+@pytest.mark.acceptance(
+    spec="experimental-features",
+    scenario="switching memory on installs the memory hook again",
+)
+async def test_switching_on_installs_into_the_connected_agents_only() -> None:
     # "ghost" is connected but not registered: nothing to install it into.
     rig = _Rig(connected=[_CC_UID, "ghost"])
 
-    result = _only(await rig.run(Trigger.MANUAL))
+    result = _only(await rig.run(Trigger.SWITCH))
 
     assert result.change.decision.reason_code == "hook_missing"
     assert result.outcome is Outcome.APPLIED
     assert await rig.installed(_CC_UID)
     assert not await rig.installed(_CODEX_UID)
     (event,) = rig.events(AuditEventType.MEMORY_DELIVERY_INSTALLED)
-    assert event.actor == "api"
+    assert event.actor == "system:features"
 
 
-async def test_a_manual_pass_leaves_an_installed_hook_alone() -> None:
+async def test_switching_on_leaves_an_installed_hook_alone() -> None:
     rig = _Rig(connected=[_CC_UID])
     await rig.delivery.install(_CC_UID, actor="ui")
     writes = len(rig.store.writes)
 
-    assert (await rig.run(Trigger.MANUAL)).results == ()
+    assert (await rig.run(Trigger.SWITCH)).results == ()
     assert len(rig.store.writes) == writes
+
+
+async def test_a_manual_pass_installs_a_missing_hook_too() -> None:
+    rig = _Rig(connected=[_CC_UID])
+
+    result = _only(await rig.run(Trigger.MANUAL))
+
+    assert result.outcome is Outcome.APPLIED
+    assert await rig.installed(_CC_UID)
+
+
+@pytest.mark.acceptance(
+    spec="experimental-features",
+    scenario="memory off withdraws the memory delivery hook",
+)
+async def test_switching_off_and_a_boot_with_memory_off_withdraw_everywhere() -> None:
+    rig = _Rig(memory=False, connected=[_CC_UID])
+    await rig.delivery.install(_CC_UID, actor="ui")
+    await rig.delivery.install(_CODEX_UID, actor="ui")
+
+    report = await rig.run(Trigger.SWITCH)
+
+    assert {r.change.decision.reason_code for r in report.results} == {"feature_off"}
+    assert all(r.outcome is Outcome.APPLIED for r in report.results)
+    assert not await rig.installed(_CC_UID)
+    assert not await rig.installed(_CODEX_UID)
+    removed = rig.events(AuditEventType.MEMORY_DELIVERY_REMOVED)
+    assert sorted(e.resource_name for e in removed) == ["cc", "codex"]
+    assert {e.actor for e in removed} == {"system:features"}
+
+    await rig.delivery.install(_CODEX_UID, actor="ui")
+    assert _only(await rig.run(Trigger.BOOT)).outcome is Outcome.APPLIED
+    assert not await rig.installed(_CODEX_UID)
+    assert rig.events(AuditEventType.MEMORY_DELIVERY_REMOVED)[-1].actor == "system"
+
+
+async def test_with_memory_off_nothing_is_desired_and_no_connection_is_asked() -> None:
+    rig = _Rig(memory=False)
+
+    async def _never() -> list[str]:
+        raise AssertionError("with memory off nobody asks who is connected")
+
+    target = DeliveryHookTarget(delivery=rig.delivery, features=rig.features, connected=_never)
+    assert await target.desired() == []
 
 
 async def test_a_failed_audit_puts_back_what_the_repair_replaced() -> None:
@@ -258,7 +320,7 @@ async def test_a_failed_audit_removes_a_file_the_install_created() -> None:
         raise RuntimeError("database is locked")
 
     rig.repo.insert = _refuse  # type: ignore[method-assign]
-    result = _only(await rig.run(Trigger.MANUAL))
+    result = _only(await rig.run(Trigger.SWITCH))
 
     assert result.outcome is Outcome.FAILED
     assert _CC_SETTINGS_PATH not in rig.store._files

@@ -41,21 +41,22 @@ src/i18n/locales/{en,zh}.json     copy under the top-level "x" key
 
 - 组件从不直接调用 `useQuery` 或 `useMutation`，而是调用 `src/lib/hooks/` 里的某个 hook。[`useSkills.ts`](https://github.com/wyx-sg/Coffer/blob/main/frontend/src/lib/hooks/useSkills.ts) 是一个紧凑的例子。
 - 各资源类型遵循同样的布局。没有按类型划分的注册表。
+- 导入只向下指：`pages` 到 `components` 再到 `lib`。`src/lib/**` 不得导入 `src/components/**` 或 `src/pages/**`，`src/components/**` 不得导入 `src/pages/**`，由 ESLint 强制。两层都要用的类型或纯函数（状态色调、触达模式、保存编排）放在 `lib/`。唯一的例外是 `useToast`，它是变更 hook 要调用的界面原语 hook。多个测试套件共用的测试工具放在 `src/test/`。
 - 共享原语放在 `src/components/ui/`，共享的界面组件（`PageHeader`、`DataTable`、`EmptyState`）放在 `src/components/`。复用已有的跨功能工具：`lib/reachFilter.ts`、`lib/agents/display.ts` 和 `lib/chat/turnErrors.ts`。
 - 路由在 `router.tsx` 里用 `lazyPage()` 做代码分割。列表页立即加载。详情页，以及任何引入编辑器或 markdown 处理流水线的页面，在第一次访问时加载。
 - 出于历史原因保留了一个命名例外：MCP 服务器列表是 `pages/ResourcesPage.tsx`，路由为 `mcp-servers`。
-- 实验功能的页面包在 `FeatureGate` 里。当该功能在本机被关闭时，它渲染一条提示而不是页面。见[实验功能](/zh/guides/experimental-features)。
+- 实验功能的页面包在 `FeatureGate` 里。当该功能在本机被关闭时，它渲染“未找到”页面，因为关闭的功能看起来就像不存在：它的侧边栏和命令面板入口通过同一份注册表被略去，没有提示，也没有“开启”按钮。见[实验功能](/zh/guides/experimental-features)。
 
 文件大小门禁在这里同样适用：页面 ≤ 200 行，组件 ≤ 250 行，hook 或工具函数 ≤ 300 行。
 
 ## API 层 {#the-api-layer}
 
-每个请求都从两个模块之一发出。两者都通过 `src/lib/auth.ts` 解析 base URL 和令牌，都发送 `X-Coffer-Token` 和 `X-Coffer-Actor: ui`。`src` 里没有其他地方调用 `fetch`，唯一的例外是聊天事件流。
+每个请求都从同一个模块 `src/lib/api/client.ts` 发出。它通过 `src/lib/auth.ts` 解析 base URL 和令牌，并发送 `X-Coffer-Token` 和 `X-Coffer-Actor: ui`。`src` 里没有其他地方调用 `fetch`，唯一的例外是聊天事件流。
 
 - **生成的类型。** 每项能力的契约都从后端模型生成，`npm run codegen`（或 `make frontend-codegen`；`make contracts` 会运行两步）对每一份契约运行 openapi-typescript，写出 `src/lib/api/generated/<capability>.ts`。永远不要手动编辑 `generated/`。`npm run lint` 以 `codegen:check` 开头，所以只重新生成了契约却没重新生成类型，CI 会失败。
 - **类型化客户端**（`src/lib/api/client.ts` 中的 `getApiClient()`，基于 openapi-fetch）知道每项能力的路径，所以经由它的调用会检查路径、参数、请求体和响应。
-- **唯一的手写辅助函数**，`src/lib/api/call.ts` 中的 `call<T>(path, { method, body })`，服务于尚未迁移到类型化客户端的模块。它构建 URL 和请求头，把 `204` 变成 `undefined`，把 `{ error: { code, message, details } }` 变成 `ApiError`，并发送 `FormData` 请求体。不要再加第二个辅助函数。
-- **没有手写的传输类型。** `src/lib/api/x.ts` 中的传输类型是生成 schema 的别名，比如 `components["schemas"]["ProviderOut"]`。当契约与后端实际发送的内容不符时，修复后端模型并重新生成，永远不要改 TypeScript。`codegen:check` 会拒绝这些模块中导出的 interface，或拼写出对象形状的 type。从不跨越传输层的类型要带一个 `@ui-only` 标签说明这一点；生成器出现之前手写的传输类型列在一个允许列表里，每重建一个页面就清掉一部分；允许列表中已经不存在的条目也会让门禁失败，所以这个列表只会缩短。
+- **请求函数** 位于 `src/lib/api/x.ts`，调用类型化客户端，并用 `unwrap`（2xx 响应体）、`unwrapOptional`（响应体或 `204`）或 `unwrapVoid`（无响应体）处理结果，把 `{ error: { code, message, details } }` 变成 `ApiError`。没有其他传输方式，也没有第二个辅助函数；hook 和组件都不直接调用 `getApiClient()` 或 `fetch`。
+- **没有手写的传输类型。** `src/lib/api/x.ts` 中的传输类型是生成 schema 的别名，比如 `components["schemas"]["ProviderOut"]`。当契约与后端实际发送的内容不符时，修复后端模型并重新生成，永远不要改 TypeScript。`codegen:check` 会拒绝这些模块以及 `src/lib/hooks/` 下导出的 interface，或拼写出对象形状的 type，也拒绝 `unwrap*` 调用上的对象字面量类型参数。从不跨越传输层的类型要带一个 `@ui-only` 标签说明这一点；该标签是唯一的豁免。
 
 错误统一收敛到 `ApiError(code, message)`。用 `translateApiError(t, error)` 显示它们，它会在文案目录里查找 `errors.<CODE>`，找不到就退回到服务端的消息。永远不要显示原始错误字符串。
 
@@ -102,7 +103,7 @@ export function useRemoveSkill() {
 | --- | --- |
 | 来自守护进程的任何东西 | TanStack Query，经由一个 `useX` hook |
 | 临时 UI 状态（展开、折叠、输入草稿） | 组件里的 `useState` |
-| 刷新后仍要保留的偏好 | `src/lib/preferences.ts`（`localStorage`） |
+| 刷新后仍要保留的偏好 | `localStorage`，读写都用 try/catch 保护，存储被禁用时回退到默认值（页大小和编辑器见 `src/lib/preferences.ts`） |
 | 打开的是哪一项 | 路由参数：`/conversations/:id`、`/agents/:type` |
 | 选中的是哪个详情 tab | 路径的最后一段：`/<kind>/<id>/<tab>`，默认 tab 对应不带该段的路径（`src/lib/detailTabs.ts`） |
 | 选中的是哪个文件 | 通过 `useSearchParams` 读取的查询参数（`?file=`） |
@@ -128,7 +129,7 @@ token 来自 [`frontend/tailwind.config.js`](https://github.com/wyx-sg/Coffer/bl
 
 | 模式 | 用法 |
 | --- | --- |
-| `PageHeader` | 列表页和详情页共用的唯一页头：列表页用 `icon`，详情页用 `back`，标题旁放 `badges`，右侧放 `actions`。详情页操作保持固定顺序：生效范围、测试或刷新、编辑、删除 |
+| `PageHeader` | 列表页和详情页共用的唯一页头：详情页用 `back`，标题旁放 `badges`，右侧放 `actions`。详情页操作保持固定顺序：生效范围、测试或刷新、编辑、删除 |
 | `DataTable` | 唯一的列表表格。传入 `isLoading`，让表头在骨架行上方保持挂载；传入 `emptyAction` 作为行动号召。每张表格上生效范围列的表头都是 `resources.cols.reach` |
 | `EmptyState` | 每一个空列表、未找到页面和零结果搜索：图标、标题、描述、操作 |
 | `Skeleton` | 加载状态保持界面的真实形状。永远不要显示空白屏幕或 "Loading…" 卡片 |

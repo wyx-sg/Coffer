@@ -1,5 +1,5 @@
 """What the encrypted store itself promises on disk (spec secret; ADR
-storage-is-five-classes-by-nature, credentials-across-machines).
+storage-is-five-classes-by-nature, secrets-cross-machines-only-as-ciphertext).
 
 Real files, a real vault repository, a real Fernet key and the store's own
 code — the tests read the ciphertext files and the vault's git history back

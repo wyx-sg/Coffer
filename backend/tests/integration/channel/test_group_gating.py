@@ -329,7 +329,7 @@ async def test_dm_still_pairs_and_drives_a_turn(env: ChannelEnv) -> None:
     through ``get_by_chat`` instead of the legacy single-peer accessor."""
     resource = await env.register_channel("tg")
     adapter = env.bind(resource)
-    code, _expires = env.pairing.issue("tg")
+    code, _expires = env.pairing.issue(resource.uid)
 
     await env.processor.on_message(inbound("tg", "owner", code, sender_display="Owner"))
     peer = await env.peers.get_by_chat(resource.uid, "owner")
@@ -359,7 +359,7 @@ async def test_group_turn_types_into_the_group_thread_not_the_dm_endpoint(
     resource = await env.register_channel("st")
     adapter = env.bind(
         resource,
-        FakeChannelAdapter(supports_typing=True, supports_groups=True),
+        FakeChannelAdapter(supports_typing=True),
     )
     await env.pair(resource, "owner", sender_id="owner-1")
 
@@ -399,7 +399,6 @@ async def test_the_group_reply_mentions_the_sender_the_transport_named(env: Chan
         FakeChannelAdapter(
             supports_edit=False,
             supports_live_text=False,
-            supports_groups=True,
             mention_template='<mention-tag target="seatalk://user?id={user_id}"/>',
         ),
     )

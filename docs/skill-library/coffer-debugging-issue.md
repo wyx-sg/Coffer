@@ -8,8 +8,9 @@ for internal review. It is an orchestrator domain in the sense of
 it owns the method, and every layer it inspects is handed to an existing
 carrier domain named by the profile.
 
-Status: design approved in conversation on 2026-09-28; this document is the
-written spec awaiting review.
+Status: design for a skill that is not built yet. The skill itself belongs to
+the skill library a person imports into Coffer, not to this repository; this
+document is its written design.
 
 ## Why
 

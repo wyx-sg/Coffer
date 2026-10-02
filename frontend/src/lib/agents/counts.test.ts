@@ -1,7 +1,8 @@
 // src/lib/agents/counts.test.ts — the per-kind counts, and who a resource reaches.
 import { describe, expect, test } from "vitest";
 
-import type { AgentHooksOut, McpEntryOut, PluginOut } from "@/lib/api/agents";
+import type { AgentHooksOut } from "@/lib/api/agents";
+import type { McpEntryOut, PluginOut } from "@/lib/api/agents-workspace";
 import { hookCounts, mcpCounts, pluginCounts, reachesAgent, skillCounts } from "./counts";
 import { countByOwner, filterByOwner, parseOwnerFilter } from "./owner";
 

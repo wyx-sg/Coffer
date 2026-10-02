@@ -7,7 +7,10 @@ import type { PropsWithChildren } from "react";
 import { resourcesKey } from "@/lib/api/queryKeys";
 import { useImportMcpServers, useTestMcpServer } from "./useMcpServerMutations";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 

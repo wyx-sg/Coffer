@@ -38,9 +38,6 @@ export type DeliveredOut = Schemas["DeliveredOut"];
 export type DeliveryOverviewOut = Schemas["DeliveryOverviewOut"];
 export type AgentDeliveryStatsOut = Schemas["AgentDeliveryStatsOut"];
 
-/** The partition directory as a tree. The page only reads absolute paths out
- *  of it (open / reveal); it never renders the tree. */
-export type MemoryFileNode = Schemas["FileNodeOut"];
 export type MemoryFileTreeOut = Schemas["FileTreeOut"];
 
 export type AggregationResultOut = Schemas["AggregationResultOut"];

@@ -15,7 +15,7 @@ A **resource document** (``resources/<kind>/<name>.json``) holds what the
 resource *is* — ``uid``, ``kind``, ``format_version``, ``name``, an optional
 ``title``, ``description``, ``config``, ``created_at`` — and nothing about
 where it reaches: ``enabled`` and ``scope`` are machine-local and live in
-``local/`` (ADR reach-is-a-machine-local-predicate-over-a-context). There is
+``local/`` (ADR reach-is-machine-local-stored-by-uid-never-synced). There is
 no ``updated_at``: two machines stamping it would conflict on every edit, and
 git already knows when a file changed.
 """

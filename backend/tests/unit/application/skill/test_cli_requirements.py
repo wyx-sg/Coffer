@@ -63,10 +63,25 @@ async def test_results_are_cached_until_checked_again() -> None:
 async def test_login_check_runs_the_located_file_and_logged_out_is_reported() -> None:
     probe = FakeCommandProbe({"gh": FakeCommand("2.41", logged_in=False, printed="octocat")})
     doc = _md("s", "  - command: gh\n    login_check: gh auth status\n")
-    view = await _service({"s": doc}, probe).get("gh")
+    view = await _service({"s": doc}, probe).check("gh")
     assert view.status.value == "logged_out"
     assert probe.login_calls == [("/fake/bin/gh", "auth", "status")]
     assert view.handoff is not None and "octocat" not in view.handoff
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="a login check runs only when someone asks")
+async def test_a_read_never_runs_a_login_check() -> None:
+    """A login check runs a program with arguments a skill chose: the reads the
+    attention poll makes probe the version and leave the login unknown."""
+    probe = FakeCommandProbe({"gh": FakeCommand("2.41", logged_in=False)})
+    doc = _md("s", "  - command: gh\n    login_check: gh auth status\n")
+    svc = _service({"s": doc}, probe)
+
+    listed = await svc.listing()
+    got = await svc.get("gh")
+
+    assert probe.login_calls == []
+    assert listed.items[0].probe.login is None and got.status.value == "ready"
 
 
 async def test_an_unknown_command_is_not_required() -> None:

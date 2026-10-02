@@ -10,9 +10,7 @@ the answer is read back from the log rather than kept in the daemon: it
 survives a restart, and it is the same answer whoever started the read.
 
 Only the newest event decides whether something failed; earlier ones are
-consulted only for the failing agent's last clean read. An event written
-before failures carried their agent names cannot say whose read failed, so it
-is never taken as a clean read for anyone.
+consulted only for the failing agent's last clean read.
 """
 
 from __future__ import annotations
@@ -53,21 +51,15 @@ def _utc(moment: datetime) -> datetime:
     return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
 
 
-def _failures_of(entry: AuditEntry) -> list[dict[str, Any]] | None:
-    """The event's failures with their agents, or ``None`` when it predates
-    them (it listed paths only, and cannot say whose they were)."""
-    details = entry.details or {}
-    if "failure_details" in details:
-        return [f for f in details["failure_details"] if isinstance(f, dict)]
-    if not details.get("failures"):
-        return []
-    return None
+def _failures_of(entry: AuditEntry) -> list[dict[str, Any]]:
+    """The failures one ``memory_aggregated`` event recorded, with their agents."""
+    details = (entry.details or {}).get("failure_details") or []
+    return [f for f in details if isinstance(f, dict)]
 
 
 def _last_clean_read(agent: str, older: Sequence[AuditEntry]) -> datetime | None:
     for entry in older:
-        failures = _failures_of(entry)
-        if failures is not None and all(f.get("agent") != agent for f in failures):
+        if all(f.get("agent") != agent for f in _failures_of(entry)):
             return _utc(entry.timestamp)
     return None
 
@@ -77,10 +69,6 @@ def reading_of(entries: Sequence[AuditEntry]) -> Reading:
     if not entries:
         return Reading(read_at=None, failures=())
     newest, older = entries[0], entries[1:]
-    failures = _failures_of(newest)
-    if failures is None:
-        paths = (newest.details or {}).get("failures") or []
-        failures = [{"agent": "", "path": str(p), "reason": ""} for p in paths]
     return Reading(
         read_at=_utc(newest.timestamp),
         failures=tuple(
@@ -92,7 +80,7 @@ def reading_of(entries: Sequence[AuditEntry]) -> Reading:
                 if f.get("agent")
                 else None,
             )
-            for f in failures
+            for f in _failures_of(newest)
         ),
     )
 

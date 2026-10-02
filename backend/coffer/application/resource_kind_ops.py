@@ -71,7 +71,7 @@ def storage_of(kinds: Registry, kind: str, config: Mapping[str, Any]) -> Storage
 
 
 def check_name(kind_def: Kind, name: str) -> None:
-    """Framework rule then kind rule, BEFORE any DB write.
+    """Framework rule then kind rule, BEFORE any write.
 
     One helper because registration and rename must apply the same rules;
     while rename lived in one kind's service the two had already drifted —

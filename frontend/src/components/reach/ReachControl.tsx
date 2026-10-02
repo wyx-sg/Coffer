@@ -58,12 +58,10 @@ import {
   reachLabel,
   WARNING_CLASS,
   type ReachMode,
-} from "@/components/reach/reachState";
+} from "@/lib/reach/reachState";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAgents } from "@/lib/hooks/useAgents";
 import type { Scope } from "@/lib/hooks/useScope";
-
-export type { ReachMode };
 
 /** Narrowing from "every agent" starts on an empty list — dormant until the
  *  user picks one, which is the prompt the choice is asking for. */

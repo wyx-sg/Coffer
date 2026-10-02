@@ -31,7 +31,7 @@ If no managed agent is available, the page shows **No managed agent available** 
 
 1. Open **Conversations** in the sidebar (under **Run**). The page opens on the list of conversations; there is no welcome or suggestions page.
 2. Choose **New conversation** beside the page title. A dialog asks for two things:
-   - **Agent** — an agent whose CLI is not on the daemon's `PATH` is listed as **not available on this Mac** and cannot be chosen.
+   - **Agent** — only agents that are installed and added (and enabled) on the Agents page are offered. One that is not installed, or installed but not added, does not appear; with none, the draft links to the **Agents** page.
    - **Working directory** — the folder the agent works in (see [Working directory](#working-directory)).
 3. Choose **Start**. The draft opens at `/conversations/new`, with the agent, its model and effort and the folder in its header.
 4. Type your message and press **Enter**. **Shift+Enter** inserts a new line.
@@ -61,7 +61,7 @@ Two controls sit beside the agent in the header, both on the draft and in an ope
 | Model | **Agent model** | **Default** first, then the models the platform offers for this agent, then the conversation's current value if it is not already listed. |
 | Reasoning effort | **Reasoning effort** | **Agent default**, then the levels the chosen model reports. The control is hidden for a model that reports no levels. |
 
-The model list is the agent's own catalogue, read from the installed CLI. If a [model provider](/guides/providers) is active for the agent, the list is that provider's curated text models instead. The picker is a fixed dropdown and accepts no free text.
+The model list is the agent's own catalogue, read from the installed CLI. If the agent runs on a [model provider](/guides/providers), the list is that provider's curated text models instead. The picker is a fixed dropdown and accepts no free text.
 
 - **Default** clears the model, so the agent runs whatever its own configuration says.
 - A change applies from the next turn. Model and effort are re-read every turn; the agent and working directory are not.
@@ -234,7 +234,7 @@ Events are named `turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_d
 
 ## Troubleshooting
 
-**The agent is listed as unavailable.** Its CLI is not on the daemon's `PATH`. Install it, or restart the daemon from a shell where `claude` or `codex` resolves. The desktop app passes your login shell's `PATH` to a daemon it starts.
+**The agent is listed as unavailable.** Either its CLI is not on your `PATH` (your login shell's `PATH` merged with the daemon's own), or no enabled agent of that type is added on the Agents page. Install the CLI, or add or enable the agent. Chat runs only agents Coffer manages.
 
 **Every turn fails with `stream_ended`.** The agent process is exiting mid-turn. Check that the agent works in a terminal, then look at **Activity → Daemon** for the underlying error.
 

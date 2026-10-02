@@ -51,8 +51,8 @@ def build_chat_model(
         A LangChain ``BaseChatModel`` instance ready for use.
 
     Raises:
-        ValueError: When the protocol is unsupported or a required parameter
-            (secret for a cloud wire) is missing.
+        ValueError: When a required parameter (the secret of a connection that
+            is not a local runtime) is missing.
         ImportError: When the required LangChain integration package is not
             installed.
     """
@@ -60,12 +60,31 @@ def build_chat_model(
 
     if protocol is Protocol.ANTHROPIC:
         return _build_anthropic(resolved, secret_resolver, timeout)
-    if protocol is Protocol.OPENAI:
+    # ``unknown`` is a first-class wire (an endpoint the probe could not
+    # classify); the engine drives it over the OpenAI-compatible API, as
+    # speech-to-text already does.
+    if protocol in (Protocol.OPENAI, Protocol.UNKNOWN):
         return _build_openai(resolved, secret_resolver, timeout)
-    if protocol is Protocol.OLLAMA:
-        return _build_ollama(resolved, timeout)
+    return _build_ollama(resolved, timeout)
 
-    raise ValueError(f"Unsupported protocol: {protocol!r}")  # pragma: no cover
+
+#: What a keyless local runtime is given as an API key: the client libraries
+#: refuse an empty one and a local server ignores it.
+_LOCAL_PLACEHOLDER_KEY = "local"
+
+
+def _api_key(
+    resolved: ResolvedConnection, secret_resolver: Callable[[str], str], label: str
+) -> str:
+    """The connection's key; a placeholder for a local runtime that has none
+    (its secret is optional, spec provider-switching "Make the secret optional
+    for ollama and local runtimes")."""
+    config = resolved.config
+    if config.secret_ref:
+        return secret_resolver(config.secret_ref)
+    if config.local_runtime is not None:
+        return _LOCAL_PLACEHOLDER_KEY
+    raise ValueError(f"{label} connection is missing secret_ref")
 
 
 # ---------------------------------------------------------------------------
@@ -87,10 +106,7 @@ def _build_anthropic(
         ) from exc
 
     config = resolved.config
-    if not config.secret_ref:
-        raise ValueError("anthropic connection is missing secret_ref")
-
-    api_key = secret_resolver(config.secret_ref)
+    api_key = _api_key(resolved, secret_resolver, "anthropic")
     # base_url is the connection's endpoint (honoured for proxies / relays like
     # Kimi or DeepSeek); ``base_url`` is ChatAnthropic's populate-by-alias name.
     return ChatAnthropic(  # type: ignore[call-arg]
@@ -115,10 +131,7 @@ def _build_openai(
         ) from exc
 
     config = resolved.config
-    if not config.secret_ref:
-        raise ValueError("openai connection is missing secret_ref")
-
-    api_key = secret_resolver(config.secret_ref)
+    api_key = _api_key(resolved, secret_resolver, "openai")
     # ``base_url`` lets an OpenAI-COMPATIBLE endpoint (Azure/OpenRouter/aggregators)
     # be used; ``None`` falls back to the official OpenAI API. Without this an
     # openai-compatible provider's calls silently hit api.openai.com and 401.

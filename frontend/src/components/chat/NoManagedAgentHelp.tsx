@@ -25,8 +25,16 @@ interface Props {
 
 export function NoManagedAgentHelp({ layout }: Props) {
   const { t } = useTranslation();
-  const prompt = useAgentInstallHandoff().data ?? null;
+  // Two states, told apart by the daemon: it writes the install prompt only
+  // while NO supported agent is installed on this machine. Once one is installed
+  // but not added (or disabled) there is no prompt and adding it is Coffer's own
+  // action, so the surface links to the Agents page.
+  const handoff = useAgentInstallHandoff();
+  const prompt = handoff.data ?? null;
   const { copied, copy } = useCopyText();
+
+  // Not yet known which of the two states this is: say nothing rather than guess.
+  if (handoff.isPending) return null;
 
   const description = t(
     prompt ? "conversations.draft.noAgentInstall" : "conversations.draft.noAgentAdd",

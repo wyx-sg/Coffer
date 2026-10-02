@@ -18,8 +18,7 @@ same entries the pass a minute later would have seen anyway.
 ``~/.coffer/derived/memory/``, which is derived by construction (see "Keep the memory tree
 derived and local"): delete it, run aggregation and distil, and an equivalent partition
 comes back. The switch exists because each pass spends a model call, and the operator
-may turn it off or re-time it; the whole pass also stands still while the
-``memory`` experimental feature is off.
+may turn it off or re-time it.
 
 **One pass per partition, whoever started it (see "Run one distil pass per partition at
 a time").** The timer and Update memory are two writers over one directory, so both

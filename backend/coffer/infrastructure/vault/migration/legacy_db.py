@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from coffer.domain.scope import Scope, ScopeValidationError
+from coffer.infrastructure.vault.migration.connection_choice import settle_connection_choice
 
 
 @dataclass(frozen=True)
@@ -148,6 +149,7 @@ def read_legacy(db: Path) -> LegacyState:
             if found is not None:
                 state.resources.append(found)
                 uids[int(row["id"])] = found.uid
+        state.resources = settle_connection_choice(state.resources)
         state.secrets = _rows(conn, tables, "secrets")
         state.secret_bindings = _rows(conn, tables, "secret_bindings")
         state.secret_approvals = _rows(conn, tables, "secret_approvals")

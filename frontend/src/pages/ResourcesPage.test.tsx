@@ -47,7 +47,8 @@ vi.mock("@/lib/hooks/useMcpAddFlow", () => ({
 }));
 
 const statusOf: Record<string, unknown> = {};
-vi.mock("@/lib/api/client", () => ({
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: () => ({
     GET: vi.fn(async (path: string, opts: { params: { path: { uid: string } } }) => {
       const uid = opts.params.path.uid;
@@ -234,6 +235,28 @@ describe("ResourcesPage", () => {
     });
     expect(screen.queryByText("github")).toBeNull();
     expect(screen.getByText("linear")).toBeInTheDocument();
+  });
+
+  test("the Reach filter narrows the list to one reach state", async () => {
+    stubQuery({
+      data: [
+        server("u1", "github"),
+        server("u2", "linear", { scope: { agents: ["ag-1"] } }),
+        server("u3", "sentry", { enabled: false }),
+      ],
+    });
+    renderAt();
+    const choose = async (name: string) => {
+      fireEvent.keyDown(screen.getByRole("combobox", { name: "Reach" }), { key: "ArrowDown" });
+      fireEvent.click(await screen.findByRole("option", { name }));
+    };
+    await choose("Only selected agents");
+    await waitFor(() => expect(screen.queryByText("github")).toBeNull());
+    expect(screen.getByText("linear")).toBeInTheDocument();
+    expect(screen.queryByText("sentry")).toBeNull();
+    await choose("Disabled");
+    await waitFor(() => expect(screen.getByText("sentry")).toBeInTheDocument());
+    expect(screen.queryByText("linear")).toBeNull();
   });
 
   test("ticking rows shows the selection bar with the reach choice and Delete", async () => {

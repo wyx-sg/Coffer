@@ -7,23 +7,14 @@
 // save hook raises no toast of its own.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getApiClient } from "@/lib/api/client";
-import { ApiError, throwApiError } from "@/lib/api/errors";
+import { daemonApi } from "@/lib/api/daemon";
 import { daemonPortKey } from "@/lib/api/queryKeys";
-import type { components } from "@/lib/api/types";
-
-export type DaemonPort = components["schemas"]["DaemonPortOut"];
 
 export function useDaemonPort(enabled = true) {
   return useQuery({
     queryKey: daemonPortKey,
     enabled,
-    queryFn: async (): Promise<DaemonPort> => {
-      const { data, error } = await getApiClient().GET("/daemon/port");
-      if (error) throwApiError(error, "INTERNAL_ERROR", "port read failed");
-      if (!data) throw new ApiError("INTERNAL_ERROR", "empty port response");
-      return data;
-    },
+    queryFn: daemonApi.port,
   });
 }
 
@@ -31,12 +22,7 @@ export function useDaemonPort(enabled = true) {
 export function useSetDaemonPort() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (port: number): Promise<DaemonPort> => {
-      const { data, error } = await getApiClient().PUT("/daemon/port", { body: { port } });
-      if (error) throwApiError(error, "INTERNAL_ERROR", "port update failed");
-      if (!data) throw new ApiError("INTERNAL_ERROR", "empty port response");
-      return data;
-    },
+    mutationFn: (port: number) => daemonApi.setPort(port),
     onSuccess: (fresh) => qc.setQueryData(daemonPortKey, fresh),
   });
 }

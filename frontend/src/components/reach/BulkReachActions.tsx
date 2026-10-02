@@ -27,16 +27,15 @@
 import type { QueryKey } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-import { ReachControl, type ReachMode } from "@/components/reach/ReachControl";
-import { resourcesApi } from "@/lib/api/resources";
-import { scopeApi, type Scope } from "@/lib/api/scope";
-import { agentsKey, resourcesKey, scopeKey } from "@/lib/api/queryKeys";
-import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
+import { ReachControl } from "@/components/reach/ReachControl";
+import type { ReachMode } from "@/lib/reach/reachState";
+import type { Scope } from "@/lib/api/scope";
+import { useBulkReach } from "@/lib/hooks/useScope";
 
 /** The minimum a row must carry to be reachable: its resource identity. `kind`
  *  is not part of any request — every route here takes the uid — it only says
  *  which kind's behaviour (and list key) the write belongs to. */
-export interface ReachTarget {
+interface ReachTarget {
   kind: string;
   uid: string;
 }
@@ -52,21 +51,16 @@ interface Props {
 
 export function BulkReachActions({ rows, invalidate = [], onDone }: Props) {
   const { t } = useTranslation();
-  const bulk = useBulkMutate({
-    invalidate: [resourcesKey, scopeKey, agentsKey, ...invalidate],
-  });
+  const bulk = useBulkReach(invalidate);
 
-  const runAll = async (apply: (row: ReachTarget) => Promise<unknown>) => {
-    await bulk.run(rows, apply);
-    onDone();
-  };
-
-  const goDisabled = () => void runAll((r) => resourcesApi.disable(r.uid));
+  const goDisabled = () =>
+    void bulk.disable(rows).then(() => {
+      onDone();
+    });
 
   const goEnabled = (scope: Scope | null) =>
-    void runAll(async (r) => {
-      await resourcesApi.enable(r.uid);
-      await scopeApi.put(r.uid, scope);
+    void bulk.enable(rows, scope).then(() => {
+      onDone();
     });
 
   // There is no "current one": the selection can hold rows in all three states,

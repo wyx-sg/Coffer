@@ -6,6 +6,7 @@ allows exactly what was found and is audited; ciphertext is not read."""
 from __future__ import annotations
 
 import dataclasses
+import json
 import subprocess
 from pathlib import Path
 
@@ -93,6 +94,13 @@ def test_a_fixed_file_is_pushed_with_its_unpushed_commits_folded(pair: tuple[Box
     assert not got.plaintext
     assert VALUE.encode() not in _remote_objects(mac.url)
     assert mac.git.head() == mac.git.fetch("main", None)
+    # The descriptor in what was pushed names a commit the remote holds.
+    descriptor = json.loads(mac.disk(mac.host.descriptor_path()) or b"{}")
+    known = subprocess.run(
+        ["git", "--git-dir", mac.url, "cat-file", "-e", descriptor["last_converged_commit"]],
+        capture_output=True,
+    )
+    assert known.returncode == 0
     mini.round()
     assert mini.disk(DOC) == mac.disk(DOC)
     assert mini.disk("knowledge/team/deploy.md") == b"Deploy on Tuesdays.\n"

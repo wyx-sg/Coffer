@@ -115,6 +115,8 @@ def callback_from_query(query: dict[str, Any], *, channel: str) -> InboundCallba
         platform_message_id=str(card.get("message_id", "")),
         chat_kind="group" if is_group(card) else "direct",
         thread_id=str(card.get("message_thread_id") or ""),
+        sender_display=str(sender.get("first_name") or sender.get("username") or ""),
+        sender_mention_id=str(sender.get("id") or ""),
     )
 
 

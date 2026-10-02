@@ -671,8 +671,9 @@ export interface components {
         /**
          * CliLoginOut
          * @description ``state`` is ``None`` when the command was not found, so its login check
-         *     could not run. ``command`` is the login command to copy — Coffer never
-         *     runs it. ``check`` is the declared login check.
+         *     could not run, or when the check has not been run yet (only a Check runs
+         *     it). ``command`` is the login command to copy — Coffer never runs it.
+         *     ``check`` is the declared login check.
          */
         CliLoginOut: {
             /** Check */
@@ -887,7 +888,7 @@ export interface components {
          *     Both halves of the agent's identity ride along: ``agent_uid`` is what a
          *     client follows to that agent, ``agent_name`` is what it prints. A delivery
          *     is a fact about an agent row, so it keeps pointing at the same agent when
-         *     the user renames it (ADR resource-identity-is-an-immutable-uid).
+         *     the user renames it (ADR identity-is-the-uid-inside-the-file).
          */
         SkillBindingOut: {
             /** Agent Name */

@@ -15,7 +15,7 @@ import sqlite3
 
 import pytest
 
-from coffer.surfaces.http.migrations_runner import (
+from coffer.infrastructure.persistence.migrations_runner import (
     KEEP_PRE_MIGRATION_COPIES,
     backup_before_migrate,
     run_migrations,

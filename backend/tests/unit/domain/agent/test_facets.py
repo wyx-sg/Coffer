@@ -10,7 +10,6 @@ import pytest
 from coffer.domain.agent.descriptor import AGENT_DESCRIPTORS
 from coffer.domain.agent.detection import ProgramInfo
 from coffer.domain.agent.facets import (
-    AgentCatalog,
     AgentProjection,
     AssetType,
     Landing,
@@ -76,7 +75,6 @@ def test_a_missing_facet_is_none_and_consumers_can_ask() -> None:
         assert catalog.provider_projection(d.type) is None
         assert catalog.delivery_hook(d.type) is None
         assert catalog.dependency_probe(d.type) is None
-    assert catalog.agents_speaking("anthropic") == ()
 
 
 def test_an_agent_with_nothing_to_receive_has_no_projection_facet() -> None:
@@ -134,31 +132,7 @@ def test_registry_entries_name_the_file_each_asset_lands_in() -> None:
 def test_an_empty_projection_accepts_nothing() -> None:
     empty = AgentProjection()
     assert empty.entries == ()
-    assert not empty.accepts(AssetType.MCP_SERVER)
-
-
-def test_provider_protocols_are_declared_per_agent_and_may_be_empty() -> None:
-    catalog = agent_catalog()
-    assert catalog.agents_speaking("anthropic") == (AgentType.CLAUDE_CODE,)
-    assert catalog.agents_speaking("openai") == (AgentType.CODEX,)
-    assert catalog.agents_speaking("ollama") == ()
-    # Two agents may speak one wire: nothing maps a protocol to one agent.
-    both = AgentCatalog(
-        {
-            d.type: dataclasses.replace(
-                d,
-                projection=dataclasses.replace(
-                    d.projection,  # type: ignore[arg-type]
-                    provider=dataclasses.replace(
-                        d.projection.provider,  # type: ignore[union-attr,arg-type]
-                        protocols=("anthropic",),
-                    ),
-                ),
-            )
-            for d in catalog
-        }
-    )
-    assert both.agents_speaking("anthropic") == (AgentType.CLAUDE_CODE, AgentType.CODEX)
+    assert empty.entry(AssetType.MCP_SERVER) is None
 
 
 def test_the_probe_is_built_from_the_record_program_name() -> None:

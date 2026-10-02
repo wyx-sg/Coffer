@@ -18,8 +18,11 @@
 //
 // Edits auto-save, like every other settings surface here (no Save button).
 import { useTranslation } from "react-i18next";
+import { RotateCcw } from "lucide-react";
 
+import { EmptyState } from "@/components/EmptyState";
 import { ModelPairRow } from "@/components/settings/cofferModel/ModelPairRow";
+import { Button } from "@/components/ui/button";
 import { SettingRow } from "@/components/settings/SettingsLayout";
 import {
   Select,
@@ -57,7 +60,7 @@ function timeoutLabel(t: Translate, seconds: number): string {
 
 export function InternalEngineSettings() {
   const { t } = useTranslation();
-  const { data: providers = [], error } = useProviders();
+  const { data: providers = [], error, refetch } = useProviders();
   const selected = providers.find((p) => p.internal_default) ?? null;
   const setInternalDefault = useSetInternalDefaultProvider();
   const { data: config } = useInternalEngineConfig();
@@ -70,9 +73,17 @@ export function InternalEngineSettings() {
 
   if (error) {
     return (
-      <p className="py-3 text-sm text-danger" role="alert">
-        {translateApiError(t, error)}
-      </p>
+      <EmptyState
+        tone="error"
+        size="compact"
+        title={t("providers.loadFailed")}
+        description={translateApiError(t, error)}
+        action={
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            <RotateCcw aria-hidden /> {t("common.retry")}
+          </Button>
+        }
+      />
     );
   }
 

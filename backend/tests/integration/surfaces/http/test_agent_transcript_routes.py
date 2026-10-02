@@ -5,7 +5,7 @@ every transcript the reader walks — lives inside the test's own temp tree. The
 user's real ``~/.claude`` / ``~/.codex`` is never read.
 
 Both routes address the agent by its immutable ``uid`` (ADR
-resource-identity-is-an-immutable-uid), never by the label the user typed, so
+identity-is-the-uid-inside-the-file), never by the label the user typed, so
 every test here takes the uid straight off the registration response rather than
 re-spelling the name in the URL. The ``path`` query parameter is untouched by
 that change: it is a filesystem path the listing handed back, not an identity.

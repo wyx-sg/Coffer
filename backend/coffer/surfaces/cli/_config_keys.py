@@ -229,7 +229,7 @@ PRICES_REFRESH = Setting(
 _SOURCE_LABEL = {
     "pin": "pinned by COFFER_FEATURES",
     "setting": "set on this machine",
-    "channel": "channel default",
+    "default": "off by default",
 }
 
 
@@ -245,12 +245,12 @@ def _feature(row: dict[str, Any]) -> Setting:
 
     def read(_s: Session) -> Reading:
         note = _SOURCE_LABEL.get(row["source"], row["source"])
-        return Reading(row["enabled"], "channel", note=note, extra={"source": row["source"]})
+        return Reading(row["enabled"], False, note=note, extra={"source": row["source"]})
 
     return Setting(
         f"feature.{key}",
         "on|off",
-        f"Experimental feature '{key}' (unset: the channel default)",
+        f"Experimental feature '{key}' (unset: off)",
         f"PUT {route}",
         switch(f"feature.{key}"),
         read,

@@ -163,7 +163,7 @@ Some consequences to know:
 
 - **Reach is set per machine.** A server that should run only on the desktop is registered everywhere but disabled on the laptop. A resource arriving on a machine for the first time takes that machine's default reach.
 - **A channel travels, but its adapter runs on one machine.** A chat bot can have only one consumer, so each channel names the machine that runs it. To move a bot, run `coffer channel bind <name> [<machine_id>]` from the machine that currently runs it. See [Channels](/guides/channels).
-- **Curation runs on one machine.** The pass that merges new knowledge into documents runs on one owner machine, so two machines do not rewrite the same documents differently. Once the vault spans several machines, choose it under **Curation runs on** in the Knowledge header's **Automatic** popover, or with `coffer config set engine.curate_owner`. See [Knowledge](/guides/knowledge).
+- **Curation runs on one machine.** The pass that folds new knowledge into documents runs on one owner machine, so two machines do not rewrite the same documents differently. Once the vault spans several machines, choose it under **Curation runs on** in the Knowledge header's **Automatic** popover, or with `coffer config set engine.curate_owner`. See [Knowledge](/guides/knowledge).
 - **The plugin inventory records, it does not install.** Each machine's descriptor lists its agents' plugins; nothing is written into any agent's configuration.
 - Paths under your home directory are stored against a `${HOME}` placeholder and expanded with each machine's own home.
 

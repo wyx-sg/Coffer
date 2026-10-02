@@ -2,7 +2,7 @@
 //
 // Settings as a modal over the page underneath, addressed by route, through
 // the app's real route table (change revise-web-ui-ia; spec web-ui "Open
-// Settings as a modal from the sidebar footer", "Organise Settings into five
+// Settings as a modal from the sidebar footer", "Organise Settings into six
 // tabs"). Plain tests until the change is archived (its task 7.14b).
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -12,18 +12,23 @@ import { MemoryRouter, useLocation, useNavigate, useRoutes } from "react-router-
 import { acceptance } from "@/test/acceptance";
 import { routes } from "@/router";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 const { getApiClient } = await import("@/lib/api/client");
 
-// The daemon's experimental-feature registry; empty (as it ships) unless a
-// test registers the test-only `fake_feature`.
-let registered: { key: string; enabled: boolean; source: string }[] = [];
+// The four experimental features, every one off by default.
+const REGISTERED = ["knowledge", "memory", "sync", "models"].map((key) => ({
+  key,
+  source: "default",
+  enabled: false,
+}));
 
 beforeEach(() => {
-  registered = [];
   const get = vi.fn().mockImplementation((path: string) =>
     path === "/daemon/features"
-      ? Promise.resolve({ data: { channel: "stable", features: registered }, error: undefined })
+      ? Promise.resolve({ data: { features: REGISTERED }, error: undefined })
       : Promise.resolve({
           data: {
             resources: [],
@@ -35,7 +40,8 @@ beforeEach(() => {
             version: "0.0.0",
             port: 8000,
             started_at: "2026-01-01T00:00:00Z",
-            features: {},
+            features: { knowledge: false, memory: false, sync: false, models: false },
+            totals: { input_tokens: 0, output_tokens: 0 },
           },
           error: undefined,
         }),
@@ -86,7 +92,7 @@ describe("the Settings modal", () => {
     const tabs = within(within(modal).getByRole("navigation", { name: "Settings sections" }))
       .getAllByRole("link")
       .map((link) => link.textContent);
-    expect(tabs).toEqual(["General", "Security", "Data", "Daemon", "About"]);
+    expect(tabs).toEqual(["General", "Security", "Data", "Daemon", "About", "Features"]);
     expect(within(modal).getByRole("link", { name: "General" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -158,22 +164,34 @@ describe("the Settings modal", () => {
     expect(screen.queryByTestId("settings-modal")).not.toBeInTheDocument();
   });
 
-  test("with an empty registry the General tab has no Experimental features section", async () => {
+  acceptance("experimental-features", "settings carry the Features tab", async () => {
     renderAt("/settings/general");
-    const pane = await screen.findByTestId("settings-pane-general", {}, { timeout: 5_000 });
-    await waitFor(() =>
-      expect(vi.mocked(getApiClient)().GET).toHaveBeenCalledWith("/daemon/features"),
-    );
-    expect(within(pane).queryByText(/experimental features/i)).not.toBeInTheDocument();
-    // Start at login moved to the Daemon tab.
-    expect(within(pane).queryByText(/start at login/i)).not.toBeInTheDocument();
+    const modal = await screen.findByTestId("settings-modal", {}, { timeout: 5_000 });
+    const nav = within(modal).getByRole("navigation", { name: "Settings sections" });
+    expect(
+      within(nav)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["General", "Security", "Data", "Daemon", "About", "Features"]);
+
+    // The General tab carries no features card.
+    const general = await screen.findByTestId("settings-pane-general", {}, { timeout: 5_000 });
+    expect(within(general).queryByTestId("experimental-features")).not.toBeInTheDocument();
+
+    fireEvent.click(within(nav).getByRole("link", { name: "Features" }));
+    await waitFor(() => expect(where.pathname).toBe("/settings/features"));
+    const pane = await screen.findByTestId("settings-pane-features", {}, { timeout: 5_000 });
+    for (const name of ["Knowledge", "Memory", "Sync", "Model providers"]) {
+      expect(await within(pane).findByRole("switch", { name })).not.toBeChecked();
+    }
+    expect(within(pane).getAllByText("Experimental")).toHaveLength(4);
   });
 
-  test("a registered feature puts the Experimental features section on the General tab", async () => {
-    registered = [{ key: "fake_feature", enabled: false, source: "channel" }];
-    renderAt("/settings/general");
-    const pane = await screen.findByTestId("settings-pane-general", {}, { timeout: 5_000 });
-    expect(await within(pane).findByText("Experimental features")).toBeInTheDocument();
-    expect(within(pane).getByRole("switch", { name: "fake_feature" })).not.toBeChecked();
+  test("the Features address opens directly", async () => {
+    renderAt("/settings/features");
+    expect(
+      await screen.findByTestId("settings-pane-features", {}, { timeout: 5_000 }),
+    ).toBeInTheDocument();
+    expect(where.pathname).toBe("/settings/features");
   });
 });

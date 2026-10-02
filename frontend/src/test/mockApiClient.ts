@@ -25,7 +25,9 @@
 //
 // Tests must still call vi.mock("@/lib/api/client", () => ({ … })) at
 // module scope because vitest hoists vi.mock; that part is unavoidable.
-// This helper just builds the verb-bag.
+// This helper just builds the verb-bag. Spread the real module in the factory
+// (`async (orig) => ({ ...(await orig<typeof import("@/lib/api/client")>()), getApiClient })`)
+// so the `unwrap*` helpers stay real.
 
 import type { Mock } from "vitest";
 import { vi } from "vitest";

@@ -91,7 +91,7 @@ Add new knowledge as an item. Coffer curates it into the documents.
 | `--title, -t` | 选项 | text | 必填 |  |
 | `--description, -d` | 选项 | text | 必填 | What it is about |
 | `--body, -b` | 选项 | text | `""` |  |
-| `--in` | 选项 | text | 必填 | Collection to add it to |
+| `--collection` | 选项 | text | 必填 | Collection to add it to |
 
 ## knowledge upload
 
@@ -163,7 +163,7 @@ Recent changes to knowledge across collections, and the items waiting.
 | 名称 | 类别 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `VERSION` | 参数 | text | `""` | Show this change in full, with each document's diff |
-| `--in` | 选项 | text | `""` | Only this collection |
+| `--collection` | 选项 | text | `""` | Only this collection |
 | `--limit` | 选项 | integer | `20` | How many changes |
 | `--json` | 选项 | 开关 |  | JSON output for scripts |
 

@@ -8,6 +8,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { resetApiClient } from "@/lib/api/client";
 import type { PropsWithChildren } from "react";
 
 import { useResourceScope, useUpdateResourceScope } from "./useScope";
@@ -23,14 +24,7 @@ const WRITING_UID = "u-skill-4e8d";
  *  picker prints beside it. */
 const CLAUDE = "u-agent-7f21";
 
-/**
- * `lib/api/scope.ts` declares `ResourceScope` by hand, because the generated
- * client does not cover the `.../scope` sub-routes — so nothing checks at
- * compile time that its field names still match `ResourceScopeOut` in
- * `backend/coffer/surfaces/http/schemas.py`. This is the guard that module
- * points at: a literal in the wire's spelling, typed as the interface, so a
- * field renamed on one side and not the other fails `npm run typecheck`.
- */
+/** A literal in the wire's spelling, typed as the generated `ResourceScopeOut`, so a field renamed on the backend fails `npm run typecheck`. */
 const resourceScopeContract: ResourceScope = {
   scope: { agents: [CLAUDE] },
   supports_scope: true,
@@ -48,13 +42,19 @@ function makeWrapper() {
   };
 }
 
-function stubFetch(payload: unknown, ok = true, status = 200) {
-  const fetchMock = vi.fn().mockResolvedValue({
-    ok,
-    status,
-    json: async () => payload,
-  });
+function stubFetch(payload: unknown, status = 200) {
+  // A fresh Response per call: the typed client reads the body, which a
+  // single shared one allows only once.
+  const fetchMock = vi.fn().mockImplementation(
+    async () =>
+      new Response(JSON.stringify(payload), {
+        status,
+        headers: { "Content-Type": "application/json" },
+      }),
+  );
   vi.stubGlobal("fetch", fetchMock);
+  // The client binds `fetch` when it is built, so a stub needs a fresh one.
+  resetApiClient();
   return fetchMock;
 }
 
@@ -71,7 +71,9 @@ describe("useResourceScope", () => {
     expect(result.current.data).toEqual(resourceScopeContract);
     // The uid alone addresses the row: there is no kind segment left to get
     // wrong, and the name never reaches the wire.
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(new RegExp(`/resources/${FS_UID}/scope$`));
+    expect((fetchMock.mock.calls[0][0] as Request).url).toMatch(
+      new RegExp(`/resources/${FS_UID}/scope$`),
+    );
   });
 
   test("is disabled for an empty uid", () => {
@@ -118,11 +120,11 @@ describe("useUpdateResourceScope", () => {
       await result.current.mutateAsync({ agents: [CLAUDE] });
     });
 
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(new RegExp(`/resources/${FS_UID}/scope$`));
-    const init = fetchMock.mock.calls[0][1] as RequestInit;
-    expect(init.method).toBe("PUT");
+    const request = fetchMock.mock.calls[0][0] as Request;
+    expect(request.url).toMatch(new RegExp(`/resources/${FS_UID}/scope$`));
+    expect(request.method).toBe("PUT");
     // The body names agents by uid, which is what the picker ticks write.
-    expect(JSON.parse(init.body as string)).toEqual({
+    expect(await request.clone().json()).toEqual({
       scope: { agents: [CLAUDE] },
     });
   });
@@ -151,7 +153,7 @@ describe("useUpdateResourceScope", () => {
   });
 
   test("surfaces an ApiError when the PUT fails", async () => {
-    stubFetch({ error: { code: "RESOURCE_NOT_FOUND", message: "not found" } }, false, 404);
+    stubFetch({ error: { code: "RESOURCE_NOT_FOUND", message: "not found" } }, 404);
 
     const { wrapper } = makeWrapper();
     const { result } = renderHook(() => useUpdateResourceScope("mcp_server", "u-mcp-missing"), {

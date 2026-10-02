@@ -180,11 +180,9 @@ def test_prepend_context_flattens_forward_origin_user():
     assert "Alice: hello there" in out
 
 
-def test_prepend_context_flattens_legacy_forward_from():
+def test_the_pre_bot_api_7_forward_fields_are_not_read():
     message = _message(forward_from={"first_name": "Bob"})
-    out = prepend_context(message, "old style forward")
-    assert out.splitlines()[0] == "[Forwarded chat record]"
-    assert "Bob: old style forward" in out
+    assert prepend_context(message, "old style forward") == "old style forward"
 
 
 def test_prepend_context_no_forward_or_reply_is_unchanged():
@@ -206,7 +204,7 @@ def test_prepend_context_quotes_reply_text():
 
 def test_prepend_context_combines_forward_and_reply():
     message = _message(
-        forward_from={"first_name": "Bob"},
+        forward_origin={"type": "user", "sender_user": {"first_name": "Bob"}},
         reply_to_message={"from": {"first_name": "Sam"}, "text": "original message"},
     )
     out = prepend_context(message, "hi")

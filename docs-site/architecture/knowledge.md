@@ -164,7 +164,7 @@ There is no index, so candidates are selected literally:
 
 1. It extracts up to 24 distinctive terms from the item, most specific first: backticked identifiers, dotted service names, ALL-CAPS constants, words from the title and headings, and CJK runs. Short terms and a short stopword list are dropped. Latin terms need 4 characters and CJK terms need 2.
 2. It joins them into one escaped alternation and runs it over the collection's documents with ripgrep.
-3. It ranks documents by hit count and keeps the top five. The item itself and the README are never candidates. The inbox is never searched, because ripgrep skips hidden directories.
+3. It ranks documents by hit count and keeps the top five. The item itself and the collection's own README are never candidates (a README in a subfolder is an ordinary document). The inbox is never searched, because ripgrep skips hidden directories.
 
 The selection is crude on purpose. Getting it wrong is survivable because the catalogue is also in the prompt: a model handed five irrelevant candidates can still see that none of them owns the subject and open a new document.
 
@@ -281,7 +281,7 @@ On each tick the worker does the following:
 1. **Re-renders the guide skill**, before and regardless of the gate. Creating or deleting a collection changes what every agent is told, even on a machine where curation is off or that is not the owner. A render that produces the same bytes writes nothing.
 2. **Settles edits on disk.** Anything changed in the tree since the last commit, such as a person's editor or an agent's file tools, is committed as an edit on disk through the vault writer, whether or not the gate lets curation run, so the history stays current.
 3. **Checks the gate.** `auto_curate_enabled` must be on (the default), and `curate_owner_machine_id` must name this machine or be unset. The pass also does not run while a sync round is waiting on the user: stopped on a conflict, held for deletions, or waiting on a join's choices.
-4. **Takes the vault-write lock**, the same lock a sync round holds. See [Locking with sync](#locking-with-sync).
+4. **Takes the vault-write lock for each pass**, the same lock a sync round holds, never for the whole sweep. See [Locking with sync](#locking-with-sync).
 5. **Works through each collection**, identified by uid; every collection is listed. Pending items are all inbox material, oldest first, then edited documents, oldest first. The worker claims the collection in the in-process upkeep-run registry and skips it if a manual run holds it. It re-reads the pending list inside the claim, pushes items cut off last time behind the rest, and runs at most five passes. `no_model` or `failed` ends that collection's sweep. `truncated` does not, so one stubborn item cannot starve the rest.
 6. **Waits for the next tick.** The interval defaults to one hour; a manual run drains a collection at once when something is wanted sooner. It is re-read while the wait runs, so a change made with `coffer config set engine.upkeep.curate.interval` or in the Knowledge page's Automatic popover applies within a slice rather than after a wait committed at boot.
 
@@ -295,9 +295,9 @@ A pass rewrites synced content unattended. If two machines curated the same corp
 
 ### Manual runs
 
-`coffer knowledge curate <collection>` and the Knowledge page's **Curate** action run the same pass the worker uses, through a drain that runs passes one after another. The route claims the collection first, so a second request is refused immediately with 409 `UPKEEP_ALREADY_RUNNING` rather than blocking.
+`coffer knowledge curate <collection>` and the Knowledge page's **Curate** action run the same pass the worker uses, through a drain that runs passes one after another. The route claims the collection first, so a second request is refused immediately with 409 `UPKEEP_ALREADY_RUNNING` rather than blocking. A run is also refused with 409 `KNOWLEDGE_CURATION_HELD` while a sync round waits for a person; the owner-machine gate is the sweep's alone, because pressing the button is choosing this machine.
 
-A run reads the pending list **once**: inbox items oldest first, then documents edited out of band. It then runs one pass per item, one at a time, each still bounded to eight writes, until nothing that was pending is left. It takes the vault-write lock for each pass rather than for the whole run, so a sync round can interleave between passes. Items that arrive during the run wait for the next run or sweep, which keeps *m* in "n of m" fixed.
+A run reads the pending list **once**: inbox items oldest first, then documents edited out of band. It then runs one pass per item, one at a time, each still bounded to eight writes, until nothing that was pending is left. It takes the vault-write lock for each pass rather than for the whole run, so a sync round can interleave between passes. A pass refuses to overwrite a document whose bytes changed after it read them, and counts the refusal in `refused`. Items that arrive during the run wait for the next run or sweep, which keeps *m* in "n of m" fixed.
 
 | Pass outcome | What the run does |
 | --- | --- |
@@ -311,7 +311,7 @@ Given `--document <path>` (or a document in the request body), a run is exactly 
 
 ## Locking with sync
 
-A curation pass and a [vault sync](/architecture/vault-sync) round both write the vault. A merge checked out halfway through a rewrite would land on a torn state. So both take the one lock owned by the sync service: the manual route takes it once per pass, and the worker is handed the same lock when it starts.
+A curation pass and a [vault sync](/architecture/vault-sync) round both write the vault. A merge checked out halfway through a rewrite would land on a torn state. So both take the one lock owned by the sync service: the manual route and the worker each take it once per pass, never for a whole run or sweep.
 
 Two locks are in play, at different scopes:
 
@@ -352,7 +352,7 @@ A delete, of one document or of a whole collection, is itself a change in the fe
 
 ### Recent changes
 
-`GET /api/v1/knowledge/changes` (`coffer knowledge changes [--in <collection>]`) is one feed of changes across every collection, or one, newest first and paged by an opaque cursor. Each change carries its writer, its time, its collections and, for each document it touched, whether the document was added, modified or removed with its line counts. Inbox-only commits are left out of the feed; the items still waiting in each inbox are returned beside it with their title, who submitted them and when. One change can be read in full, with each document's diff (`GET /api/v1/knowledge/changes/{version}`; `coffer knowledge changes <version>`), so a pass can be inspected before it is undone.
+`GET /api/v1/knowledge/changes` (`coffer knowledge changes [--collection <collection>]`) is one feed of changes across every collection, or one, newest first and paged by an opaque cursor. Each change carries its writer, its time, its collections and, for each document it touched, whether the document was added, modified or removed with its line counts. Inbox-only commits are left out of the feed; the items still waiting in each inbox are returned beside it with their title, who submitted them and when. One change can be read in full, with each document's diff (`GET /api/v1/knowledge/changes/{version}`; `coffer knowledge changes <version>`), so a pass can be inspected before it is undone.
 
 ### Undoing a pass
 
@@ -360,7 +360,7 @@ A curation pass is undone as a whole (`POST /api/v1/knowledge/changes/{version}/
 
 - Every document the pass wrote or retired goes back to its exact bytes before the pass, and documents it created are removed, as one new commit naming the user.
 - Each restored document is recorded as settled in `local/curation.json`, so the sweep does not read the undo as an edit and redo the pass.
-- The item the pass consumed is not put back in the inbox. Its text stays in the history.
+- The item a pass merged is not put back in the inbox; its text stays in the history. An item a pass promoted as it stood (`no_model`, `too_large`, or given up on) is put back in the inbox, because removing the document it became would otherwise lose it.
 - When any later commit touched one of the pass's documents, the undo is refused with 409 `KNOWLEDGE_UNDO_CONFLICT` naming that document, and nothing is written. Overwriting a later change would lose it.
 
 Only a pass can be undone this way (400 `KNOWLEDGE_NOT_A_PASS` otherwise); any single version is restored instead. An unknown version answers 404 `KNOWLEDGE_VERSION_NOT_FOUND`.

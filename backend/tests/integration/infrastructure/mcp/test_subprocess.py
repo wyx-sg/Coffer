@@ -184,3 +184,50 @@ async def test_close_is_idempotent() -> None:
     await conn.spawn_and_initialize()
     await conn.close()
     await conn.close()  # second close must not raise
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_start_leaves_no_child_and_no_pid_file(tmp_path, monkeypatch) -> None:
+    """The gateway's listing budget cancels a slow cold start. The child, its
+    pipes and its pid file must go with the attempt, not stay until the next
+    daemon start."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    conn = StdioUpstreamConnection(
+        transport=_transport("--init-delay-ms", "20000", scenario="slow"),
+        env_overlay={},
+        spawn_timeout_seconds=30,
+    )
+    before = {c.pid for c in psutil.Process().children(recursive=True)}
+
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(conn.spawn_and_initialize(), timeout=1.5)
+
+    leaked = {c.pid for c in psutil.Process().children(recursive=True)} - before
+    assert leaked == set()
+    assert list((tmp_path / ".coffer" / "upstream-pids").glob("*")) == []
+
+
+@pytest.mark.asyncio
+async def test_another_child_started_meanwhile_is_not_recorded_as_the_servers(
+    tmp_path, monkeypatch
+) -> None:
+    """The pid recorded (and later killed) is the one the SDK created. A git, a
+    codex or any other child the daemon starts while the server is starting must
+    never end up in its pid file."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    conn = StdioUpstreamConnection(
+        transport=_transport("--init-delay-ms", "800", scenario="slow"), env_overlay={}
+    )
+    bystander = None
+    try:
+        starting = asyncio.create_task(conn.spawn_and_initialize())
+        await asyncio.sleep(0.3)
+        bystander = subprocess.Popen(["sleep", "30"])
+        await starting
+        assert len(conn._pid_files) == 1
+        assert conn._child_pids and bystander.pid not in conn._child_pids
+    finally:
+        await conn.close()
+        if bystander is not None:
+            bystander.kill()
+            bystander.wait()

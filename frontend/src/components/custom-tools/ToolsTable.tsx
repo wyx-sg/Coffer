@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Pencil, Plus } from "lucide-react";
 
 import { AgentBadgeGroup } from "@/components/agent/AgentBadgeGroup";
-import { pickableAgents } from "@/components/reach/reachState";
+import { pickableAgents } from "@/lib/reach/reachState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";

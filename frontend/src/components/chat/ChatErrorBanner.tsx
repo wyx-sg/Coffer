@@ -14,11 +14,13 @@ interface Props {
   onDismiss?: () => void;
   /** Re-runs the failed action; the button is shown only when provided. */
   onRetry?: () => void;
+  /** The action button's label when it is not a plain Retry (e.g. Resume queue). */
+  retryLabel?: string;
   /** Border side and any extra layout classes from the caller. */
   className?: string;
 }
 
-export function ChatErrorBanner({ message, onDismiss, onRetry, className }: Props) {
+export function ChatErrorBanner({ message, onDismiss, onRetry, retryLabel, className }: Props) {
   const { t } = useTranslation();
   return (
     <div
@@ -38,7 +40,7 @@ export function ChatErrorBanner({ message, onDismiss, onRetry, className }: Prop
           className="h-7 shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
           onClick={onRetry}
         >
-          {t("common.retry")}
+          {retryLabel ?? t("common.retry")}
         </Button>
       ) : null}
       {onDismiss ? (

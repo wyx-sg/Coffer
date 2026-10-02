@@ -5,13 +5,12 @@
 // endpoint, so the list page fetched `/status` twice per row; both now `select`
 // their slice out of a single cached read.
 import { useQuery } from "@tanstack/react-query";
-import { getApiClient } from "@/lib/api/client";
+import { mcpServersApi, type McpStatusDetail } from "@/lib/api/mcpServers";
 import { mcpStatusKey } from "@/lib/api/queryKeys";
-import type { components } from "@/lib/api/types";
 
 type McpServerStatus = "healthy" | "failing";
 /** The status read's explanation fields (last error, since when, missing secret…). */
-export type McpStatusDetail = components["schemas"]["McpServerStatusOut"];
+export type { McpStatusDetail };
 
 interface ServerStatusRead {
   /** `null` = nothing known yet, so the card shows no badge. */
@@ -25,11 +24,8 @@ interface ServerStatusRead {
 /** A cheap backend read of persisted state (discovered capabilities + last
  * invocation), no subprocess spawn. An API error degrades to "nothing known". */
 export async function readServerStatus(serverUid: string): Promise<ServerStatusRead> {
-  const client = getApiClient();
-  const { data, error } = await client.GET("/resources/mcp_server/{uid}/status", {
-    params: { path: { uid: serverUid } },
-  });
-  if (error || !data) return { status: null, missingRunner: null, detail: null };
+  const data = await mcpServersApi.status(serverUid);
+  if (!data) return { status: null, missingRunner: null, detail: null };
   return {
     status: data.status === "unknown" ? null : data.status,
     missingRunner: data.missing_runner ?? null,
@@ -50,19 +46,11 @@ function useServerStatusRead<T>(serverUid: string, select: (read: ServerStatusRe
 // Module-level selectors keep a stable identity, so `select` is not re-run on
 // every render of every row.
 const selectStatus = (read: ServerStatusRead) => read.status;
-const selectRunner = (read: ServerStatusRead) => ({ missingRunner: read.missingRunner });
 const selectDetail = (read: ServerStatusRead) => read.detail;
 
 /** Card-level health of a server; `null` = nothing known yet. */
 export function useMcpServerStatus(serverUid: string) {
   return useServerStatusRead(serverUid, selectStatus);
-}
-
-/** The stdio launcher missing on THIS machine (imported server, runner not
- * installed here), if any. Coffer does not install software on the user's
- * machine: the status read's `handoff` gives the install to an agent. */
-export function useMcpServerRunner(serverUid: string) {
-  return useServerStatusRead(serverUid, selectRunner);
 }
 
 /** The whole status answer — what the server page and the list's reasons are

@@ -55,6 +55,8 @@ Deliberately out of scope:
   chatter private in a group"; the per-platform mechanics are in
   [`channels/telegram`](telegram/spec.md).
 
+Channels are always on: no experimental feature gates their routes or adapters. While `memory` is off, a channel turn carries no memory index or retrieval; while `knowledge` is off, `/kb` is out of `/help` and the menus and answers that Knowledge is switched off, keeping any pending document (spec [experimental-features](../experimental-features/spec.md) "Close the memory feature's surfaces", "Close the knowledge feature's surfaces").
+
 ## Requirements
 
 ### Requirement: Register channels as a secret-referencing resource kind
@@ -66,7 +68,7 @@ registration whose reference does not resolve is rejected with nothing
 persisted.
 
 A channel is addressed by its immutable `uid`
-([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md));
+([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md));
 its config is the type, the secret refs, the default agent and its config,
 and `runs_on` — the `machine_id` of the one machine whose daemon runs this
 channel's adapter (see "Bind each channel to the one machine that runs it").
@@ -98,6 +100,42 @@ deleting the channel stops the adapter and removes its peer binding.
 - **GIVEN** an enabled, paired channel
 - **WHEN** the user deletes the channel resource
 - **THEN** the adapter stops and the peer binding is removed
+
+#### Scenario: renaming a channel keeps its adapter running
+- **GIVEN** an enabled channel with a running adapter
+- **WHEN** the owner renames the channel
+- **THEN** the adapter is not restarted, and it keeps answering under the new name
+
+### Requirement: Restart a channel's adapter on demand
+A running adapter reads its secret once, when it is built, and the lifecycle
+only rebuilds an adapter when the channel's configuration or routing changes, so
+the daemon MUST offer an explicit restart: `POST /api/v1/channels/{uid}/restart`
+stops the channel's adapter and its inbound connection (a SeaTalk websocket),
+forgets any failure it was waiting out, and starts them afresh at once from the
+stored configuration and the secret as it is now. It answers whether the adapter
+is running afterwards; a disabled channel, or one bound to another machine, stays
+stopped. The Channels page's **Reconnect** action and `coffer channel restart
+<name>` MUST both call it.
+
+Replacing a secret under its existing ref MUST restart the adapter that uses it
+without anyone asking: the daemon notices that the stored value changed and
+rebuilds the adapter and, for SeaTalk, reconnects the websocket with the new
+secret. A replaced value held for approval changes nothing until it is approved,
+and the restart follows the approval. Adapters, failure state and pending
+pairing codes are all keyed by the channel's `uid`, so renaming a channel never
+restarts it.
+
+#### Scenario: a restart rebuilds the adapter on demand
+- **GIVEN** an enabled channel with a running adapter
+- **WHEN** the owner presses Reconnect, or runs `coffer channel restart <name>`
+- **THEN** the old adapter stops and a new one starts and reads its secret again
+- **AND** a channel waiting out a failed start is retried at once, and a disabled channel stays stopped
+
+#### Scenario: a replaced secret restarts the adapter
+- **GIVEN** a running channel whose bot token or app secret is stored under a ref
+- **WHEN** a new value is stored under the same ref
+- **THEN** the adapter is rebuilt with the new value, and for SeaTalk the websocket reconnects with it
+- **AND** a channel whose secret did not change is left running
 
 ### Requirement: Pair exactly one owner with a single-use code
 The daemon MUST issue, per channel, an 8-character single-use pairing code
@@ -167,7 +205,7 @@ each call from its input (e.g. `⏳ Bash · list the desktop`,
 `✅ Read · wedding.json`). Capabilities are declared by the adapter, not
 special-cased in the core: a `ChannelCapabilities` record states what the
 adapter can do — a live-updating surface via `supports_live_text`, rewriting a
-delivered message via `supports_edit` (the two are independent), interactive
+delivered selection card via `supports_card_update`, interactive
 buttons via `supports_buttons`, a typing indicator — and the core picks
 rendering strategies from it. When the platform rejects a formatted message the
 channel retries the same content as plain text before reporting failure, and
@@ -178,6 +216,12 @@ when the platform rate-limits outbound sends, sends back off and retry.
 - **WHEN** the turn completes
 - **THEN** the reply arrives as multiple messages split on paragraph
   boundaries, in order
+
+#### Scenario: a rate-limited send backs off and retries
+- **GIVEN** a platform that answers a send with a rate limit and says how long to wait
+- **WHEN** the channel sends a reply
+- **THEN** it waits that long and sends again, a bounded number of times, and
+  reports the failure only if the platform keeps refusing
 
 #### Scenario: markdown rendering degrades by channel capability
 - **GIVEN** the same markdown reply
@@ -250,7 +294,7 @@ the agent").
 
 #### Scenario: the queue is bounded and overflow is reported
 - **GIVEN** a turn in progress
-- **WHEN** the peer sends ten more messages, and then an eleventh
+- **WHEN** the peer sends ten more messages, each after the quiet window of the one before has closed (so none merges into another), and then an eleventh
 - **THEN** each of the ten is answered "⏳ Queued (n)" with its place, and all ten run in order
 - **AND** the eleventh is dropped and the peer is told that ten were already waiting
 
@@ -279,41 +323,47 @@ reuses.
 - **THEN** the call fails with a clear error and nothing is sent
 
 ### Requirement: Manage channels from the Channels page and the CLI
-The Channels page MUST list channels, register new ones (storing secrets
-through the secret store), show each row's paired peer and health, set each
-channel's reach (enable/disable and scope), bind each channel to the machine
-that runs it (see "Bind each channel to the one machine that runs it"), and
-delete a channel from its row. A channel's detail page MUST show its status
-(adapter running, paired peer, and the inbound state the channel's type
-reports — for SeaTalk, its websocket connection),
-issue pairing codes, edit the channel, send a test notification to its paired
-owner (see "Notify the paired owner on demand"), and delete it. The detail page
-MUST split into two tabs, in this order: **Overview**, the default, at the bare
-`/channels/<uid>` — the paired owner and re-pairing, the default agent, the
-agents the channel may drive, and a link to the conversations it started — and
-**Settings**, at `/channels/<uid>/settings` — the settings below, the machine
-that runs it and its secrets. Choosing a tab changes the address and nothing
-else.
+The Channels page MUST be a list beside a detail pane. The **list** shows every
+channel as one row — its platform, its name and one line saying what state it is
+in — grouped by that state (needs attention, connected, running on another
+machine, off), filterable by name, with a way to register a new channel (storing
+secrets through the secret store); a row opens the channel. The **detail pane**
+MUST show the open channel's status (adapter running, paired peer, and the
+inbound state the channel's type reports — for SeaTalk, its websocket
+connection) in a header that offers the one action that state calls for, with
+the rest — send a test notification to its paired owner (see "Notify the paired
+owner on demand"), reconnect (see "Restart a channel's adapter on demand"), change
+the machine, replace the secret, delete — in a menu. The detail pane MUST split into two tabs, in this order: **Overview**, the
+default, at the bare `/channels/<uid>` — the paired owner and re-pairing, the
+default agent, the agents the channel may drive (its reach) and a link to the
+conversations it started — and **Settings**, at `/channels/<uid>/settings` — the
+settings below, the machine that runs it (see "Bind each channel to the one
+machine that runs it") and its secrets, and the channel's deletion. Choosing a tab
+changes the address and nothing else.
 
-Editing changes the channel's default agent, its type's plain settings (a
-SeaTalk app id), its title and its two group-gating switches, `require_mention` and
-`ignore_other_mentions` (see "Configure when the bot answers in a group"). Rotating an existing
-secret happens **in place**: the new value MUST be written to the secret
-store under the ref the channel already cites before the configuration is
-saved, and that ref MUST stay in the saved configuration, so a rotation moves
-no secret and leaves the channel's machine binding and pairing untouched. A
-secret field left blank rotates nothing.
+Settings are saved as they change, with no save button, and say whether the last
+change was saved. They cover the channel's title, its type's plain settings (a
+SeaTalk app id), its two group-gating switches, `require_mention` and
+`ignore_other_mentions` (see "Configure when the bot answers in a group"), and
+the rest of what this requirement and the others in this spec name as a channel
+setting. A secret is shown masked and replaced through its own dialog, **in
+place**: the new value MUST be written to the secret store under the ref the
+channel already cites before the configuration is saved, and that ref MUST stay in
+the saved configuration, so a rotation moves no secret and leaves the channel's
+machine binding and pairing untouched. A secret left blank rotates nothing.
 
 The CLI MUST offer these operations in the `coffer channel` group. Its uniform
 lifecycle verbs are `list`, `show`, `add`, `edit`, `rm`, `enable`, `disable` and
 `scope <name> [--agents a,b | --all | --none]` (see
 [resource-framework](../resource-framework/spec.md), the requirement that
 generates each kind's lifecycle verbs), and its channel-specific commands are
-`pair`, `bind` and `notify`:
+`pair`, `bind`, `restart` and `notify`:
 
 - `coffer channel show <name>` MUST report the channel's configuration together
   with its status — adapter run state, paired peer, machine binding and the
-  inbound state its type reports — in plain and `--json` output.
+  inbound state its type reports — in plain and `--json` output. The group
+  gating and the idle period it prints are the settings with their defaults
+  filled in, as the daemon reads them.
 - `coffer channel add` and `coffer channel edit` MUST take the group-gating
   switches as `--require-mention/--no-require-mention` and
   `--ignore-other-mentions/--no-ignore-other-mentions`. `edit` also takes
@@ -322,7 +372,15 @@ generates each kind's lifecycle verbs), and its channel-specific commands are
 - `coffer secret set <ref>` rotates a secret under a ref that
   `coffer channel show` reports.
 
-Editing a channel's default agent or type settings is served by the detail page
+The channel's status (`GET /api/v1/channels/{uid}/status`) carries its
+**settings**: the typed reading of its stored configuration with every default
+filled in (`TelegramChannelConfig` or `SeaTalkChannelConfig` in this capability's
+contract). The Channels page starts every settings field from them and the CLI
+prints them, so a default is written in one place, in the daemon, and no surface
+keeps a copy. A stored configuration that no longer validates reports no
+settings, and the page says so rather than guess.
+
+Changing a channel's default agent or type settings is served by the detail page
 and `PATCH /api/v1/resources/{uid}`.
 
 #### Scenario: register and list channels from the command line
@@ -336,11 +394,17 @@ and `PATCH /api/v1/resources/{uid}`.
 - **THEN** adapter run state, paired peer, and the channel type's own inbound
   state are reported accurately
 
+#### Scenario: a channel's settings arrive with their defaults filled in
+- **GIVEN** a channel whose stored configuration names none of the optional settings
+- **WHEN** its status is read
+- **THEN** the settings carry every default (group gating, quiet windows, replies, idle period, directories)
+- **AND** the Channels page shows them without a default of its own
+
 #### Scenario: rotating a channel secret keeps its refs and pairing
 - **GIVEN** a registered telegram channel whose bot token is stored under a
   secret ref
-- **WHEN** the owner enters a new bot token in the channel detail page's edit
-  dialog and saves
+- **WHEN** the owner enters a new bot token in the channel's replace-token dialog
+  and confirms
 - **THEN** the new token is written under the channel's existing ref first
 - **AND** the channel's configuration is then saved to the same channel with
   every ref unchanged, so nothing its pairing and binding hang off moves
@@ -364,7 +428,7 @@ and `PATCH /api/v1/resources/{uid}`.
 ### Requirement: Audit the events that grant the right to drive turns
 Channel events MUST be audited where an event grants or moves the right to
 drive turns: a pairing code issued, and a sender claiming it, each queryable in
-the audit log by channel with the sender. Those two are the whole
+the audit log by channel — the claim with the claiming sender's id. Those two are the whole
 channel-specific audit surface, alongside the automatic resource-lifecycle audit
 the framework records. Traffic MUST NOT be audited — a notification sent and a
 turn run are neither irreversible nor invisible afterwards, and the conversation
@@ -381,15 +445,20 @@ API, are already their record.
 The owner gate MUST verify sender identity, not only chat identity. Every
 inbound envelope carries a `sender_id`, whose platform meaning each child spec
 names; pairing records it on the peer, and an inbound message is accepted only
-when its `chat_id` matches and — when the peer has a stored `sender_id` — its
-sender matches. A peer paired before this requirement (no stored `sender_id`)
-degrades to the chat-id-only gate.
+when its `chat_id` matches and its sender matches the peer's stored
+`sender_id`. A message that names no sender is refused, in a direct chat as in a
+group: ownership that cannot be proven is not ownership. Pairing refuses the
+same way — a code sent in a message that names no sender binds nobody and burns
+no attempt.
 
-The peer is a `ChannelPeer`: `(resource, chat_id)`, display name, paired-at, a
-pointer to the active conversation, the paired sender's identity (`sender_id`),
-and sticky preferences (the chosen agent) — one row per (channel, chat): the
-paired owner plus one row per group or thread the owner has addressed the bot
-in. The core never sees platform payloads: every adapter produces and consumes
+The peer is a `ChannelPeer`: `(resource, chat_id)`, display name, paired-at and
+the paired sender's identity (`sender_id`) — one row per (channel, chat): the
+paired owner plus one row per group the owner has addressed the bot in. The
+conversation a chat is in the middle of, and its sticky preferences (the chosen
+agent, model, effort and directory), are not on the peer: they live in the
+thread conversation rows keyed by (channel, chat, thread).
+
+The core never sees platform payloads: every adapter produces and consumes
 the normalized `InboundMessage`, `InboundCallback` and `OutboundMessage`
 envelopes, and inbound carries the sender's identity for this gate.
 
@@ -398,15 +467,43 @@ envelopes, and inbound carries the sender's identity for this gate.
 - **WHEN** a message arrives with the same chat id but a different sender id
 - **THEN** no reply is sent and no turn is started
 
+#### Scenario: a direct message that names no sender is ignored
+- **GIVEN** a paired channel
+- **WHEN** a message arrives in the owner's chat but the transport supplied no sender id
+- **THEN** no reply is sent and no turn is started
+
+#### Scenario: a pairing code sent with no sender binds nobody
+- **GIVEN** a channel with a pending pairing code
+- **WHEN** the right code arrives in a message that names no sender
+- **THEN** nobody is paired and the code is still valid
+
 #### Scenario: ignore messages from strangers
 - **GIVEN** a paired channel
 - **WHEN** a different account messages the bot
 - **THEN** no reply is sent and no turn or conversation is created
 
+### Requirement: Backfill DM sender ids in the vault upgrade
+The vault upgrade MUST set, once, the `sender_id` of every direct-chat pairing
+that carries an empty one to the pairing's `chat_id` — a direct chat's id is the
+person's id on Telegram and on SeaTalk. At runtime the owner gate MUST refuse a
+message whose sender id is empty and MUST NOT complete or repair a pairing from
+an inbound message: no legacy reader is kept.
+
+#### Scenario: the vault upgrade backfills a DM pairing's sender id
+- **GIVEN** a vault holding a direct-chat pairing whose `sender_id` is empty
+- **WHEN** the vault upgrade runs
+- **THEN** the pairing's `sender_id` equals its `chat_id`
+- **AND** a second run changes nothing
+
+#### Scenario: a message with an empty sender id is refused
+- **GIVEN** an inbound message whose sender id is empty
+- **WHEN** the owner gate evaluates it
+- **THEN** no turn runs and no pairing is changed
+
 ### Requirement: Summarise a turn that did not end normally
 After a turn that did not end normally the channel MUST send one compact
 completion summary as a fresh message: a failure reports the error, an
-interrupt reports the stop, and the tool-iteration limit reports the limit, each
+interrupt reports the stop, each
 with tool count, duration, and token usage. A turn error is reported to the IM
 chat as a short notice and the channel stays up. Where a long turn pings (see
 "Ping the asker when a long turn ends"), the ping carries these facts and takes
@@ -422,9 +519,9 @@ regardless of whether the transport can edit messages); the one line a clean
 
 #### Scenario: a turn that does not end normally sends a completion summary
 - **GIVEN** a paired channel
-- **WHEN** a turn fails, is interrupted, or hits the tool-iteration limit
+- **WHEN** a turn fails or is interrupted
 - **THEN** a compact completion summary is sent to the chat reporting the outcome
-  (the error / stop / limit) with tool count, duration, and tokens
+  (the error or the stop) with tool count, duration, and tokens
 
 #### Scenario: a clean success sends no completion summary
 - **GIVEN** a paired channel (whether or not the transport can edit messages)
@@ -625,15 +722,20 @@ the owner's `sender_id`.
 #### Scenario: the owner @mentions the bot in a group main chat
 - **GIVEN** a paired channel and a group chat with no active thread
 - **WHEN** the owner @mentions the bot in the group's main chat
-- **THEN** a turn runs and the reply is delivered into a thread rather than the
-  group main chat, no thread history is read, and a peer is
-  recorded for the group chat inheriting the owner's `sender_id`
+- **THEN** a turn runs, no thread history is read, and a peer is recorded for the
+  group chat inheriting the owner's `sender_id`
+- **AND** where the platform threads group replies (SeaTalk) the reply is delivered
+  into a thread rather than the group main chat, while an ordinary Telegram group,
+  which has no thread to put it in, is answered in the chat itself
 
 ### Requirement: Act in a group only on an addressed message from the owner
 The bot MUST act in a group ONLY on an addressed message (an @mention of the
 bot). Un-addressed group messages are ignored. An addressed message from a
 non-owner — including one whose `sender_id` the transport could not supply — is
-refused with a short "not authorized" reply and starts no turn.
+refused with a short "not authorized" reply and starts no turn. A non-owner
+message that is **not** addressed — which reaches the gate only when the channel
+is set to answer without a mention — is dropped silently: the refusal is spoken
+to someone who spoke to the bot, never to the room's chatter.
 
 #### Scenario: an un-addressed group message is ignored
 - **GIVEN** a paired channel and a group chat the bot is a member of
@@ -645,6 +747,11 @@ refused with a short "not authorized" reply and starts no turn.
 - **WHEN** someone other than the owner @mentions the bot in a group chat
 - **THEN** the bot replies that the sender is not authorized and no turn is
   started
+
+#### Scenario: a non-owner's un-addressed group message is dropped silently
+- **GIVEN** a paired channel set to answer in groups without a mention, and a group chat
+- **WHEN** someone other than the owner sends a group message that does not address the bot
+- **THEN** no reply is sent, no turn is started and no peer row is created
 
 #### Scenario: an empty sender_id in a group cannot bypass the owner gate
 - **GIVEN** a paired channel with a known owner and a group chat
@@ -860,14 +967,17 @@ this.
   Starting a channel on the grounds that nobody else claims it would be the
   rival-consumer failure arriving by the back door: every machine that cannot
   resolve the id would reason identically and they would all start.
-- A `runs_on` that **cannot be a machine id** MUST NOT be honoured as a binding.
-  A channel's configuration is a bag the system has written other things into
-  before — the retired machine axis put ULIDs under this very key — so a value of
-  the wrong shape names no machine that has ever existed and is a fossil, not a
-  decision. Coffer MUST bind such a channel to this machine, the answer it would
-  have given had the key been absent. This is the one case where an existing
-  value is overwritten, and it is the one case where leaving it would silently
-  stop a working bot on upgrade.
+- A `runs_on` that **cannot be a machine id**, found when an existing vault is
+  upgraded, MUST NOT be honoured as a binding. A channel's configuration is a bag
+  the system has written other things into before — the retired machine axis put
+  ULIDs under this very key — so a value of the wrong shape names no machine that
+  has ever existed and is a fossil, not a decision. The upgrade MUST bind such a
+  channel to this machine, the answer it would have given had the key been
+  absent. This is the one case where an existing value is overwritten, and it is
+  the one case where leaving it would silently stop a working bot on upgrade.
+  Past the upgrade a value is written only by the surfaces, and `coffer channel
+  bind` refuses an id the machine registry does not hold; whatever else ends up
+  there fails closed and is reported as a binding to an unknown machine.
 - Rebinding MUST converge without a restart and without a command that reaches
   another machine: changing `runs_on` is an ordinary configuration edit. The
   losing machine MUST stop its adapter within one reconcile tick of seeing the
@@ -1032,6 +1142,64 @@ the message came from.
 - **THEN** the turn runs in the direct chat's conversation, with its context
 - **AND** the reply is posted inside that thread
 
+### Requirement: Open a new conversation after an idle period
+A channel MUST open a new conversation when the owner's next message reaches a
+chat whose active conversation has been idle longer than the channel's
+`new_conversation_after_idle_hours` (default 24, from 0 to 8760; 0 never does).
+Idle time is measured from the conversation's last activity, in hours. It
+applies to every conversation a channel keeps, per key: a direct chat's
+conversation and each group thread's or parallel thread's own (see "Key
+conversation identity by channel, chat and thread"). The old conversation stays
+where it was, in the conversation list; the chat is told in one short line,
+`🆕 Started a new conversation after 24 h idle.`, before the answer. The new
+conversation opens exactly as `/new` opens one, so the chat's sticky agent,
+model, effort and directory carry over (see "Keep a chat's settings across its
+conversations").
+
+The setting is edited on the Channels page, on the channel's Settings tab, and
+with `coffer channel add|edit --new-conversation-after-idle-hours <hours>`;
+`coffer channel show` reports it.
+
+#### Scenario: a chat idle past the configured hours opens a new conversation
+- **GIVEN** a paired chat whose active conversation was last active 25 hours ago, on a channel with the default 24
+- **WHEN** the owner sends a message
+- **THEN** a new conversation becomes the chat's active one and answers the message
+- **AND** the chat is told `Started a new conversation after 24 h idle`
+- **AND** the old conversation is still in the conversation list
+
+#### Scenario: a chat active within the idle period keeps its conversation
+- **GIVEN** a paired chat whose active conversation was last active 23 hours ago
+- **WHEN** the owner sends a message
+- **THEN** the message joins that conversation and nothing is announced
+
+#### Scenario: zero idle hours never opens a new conversation
+- **GIVEN** a channel whose `new_conversation_after_idle_hours` is 0 and a conversation idle for 90 days
+- **WHEN** the owner sends a message
+- **THEN** the message joins that conversation
+
+#### Scenario: the idle period applies to each group thread's conversation
+- **GIVEN** two threads of one group, each with its own conversation, one idle past the period and one not
+- **WHEN** the owner messages both threads
+- **THEN** only the idle thread opens a new conversation
+
+#### Scenario: the idle period comes from the channel's settings
+- **WHEN** a channel config omits `new_conversation_after_idle_hours`, sets it to 0, or sets it below 0 or above 8760
+- **THEN** it is 24, it is 0 (never), and it is refused
+- **AND** the owner can set it with `coffer channel edit <name> --new-conversation-after-idle-hours 6` and on the channel's Settings tab, and a value outside the range is refused in both
+
+### Requirement: Open a new conversation when the active one is archived
+A message that reaches a chat whose active conversation is archived MUST open a
+new conversation, the same way a deleted one is replaced. The archived
+conversation stays archived: a channel message never un-archives it and the
+retention sweep never deletes it on account of the message. Nothing is announced
+— archiving was the owner's own act.
+
+#### Scenario: a message to an archived conversation opens a new one
+- **GIVEN** a paired chat whose active conversation the owner archived on the web
+- **WHEN** the owner sends a message to the chat
+- **THEN** a new conversation becomes the chat's active one and answers the message
+- **AND** the archived conversation is still archived and has not been deleted
+
 ### Requirement: Persist inbound attachments as references
 Inbound attachments MUST be visible on later turns. The persisted user message
 records an attachment *reference* as an `AttachmentBlock` (path, mime,
@@ -1169,7 +1337,7 @@ type). On a `supports_reactions` transport the owner's own message carries one
 reaction that follows the turn: a **received** mark the moment it arrives (a
 message queued behind a running turn keeps it), a **working** mark when its turn
 starts, and one of **done** (a clean finish, including one that ends on a
-question for the owner), **failed** (an error or the tool-iteration limit) or
+question for the owner), **failed** (an error) or
 **stopped** (interrupted) when it ends. Which emoji each stage uses is the
 transport's declared `reactions` set, because a platform may accept only a fixed
 list — each child spec names its own. A reaction replaces the previous one, so
@@ -1210,12 +1378,13 @@ A reply MUST grow in place, by whatever live-text mechanism the platform has —
 chosen from the adapter's declared capabilities, never its type — so the answer
 never arrives as a run of fragments. The capability the core asks about is
 `supports_live_text` ("is there a surface I can keep updating while this turn
-runs?"), NOT `supports_edit` ("can a delivered message be rewritten?"). The two
-flags are set independently, because a transport can have a live surface while
-being unable to rewrite a delivered message at all; keying the strategy on
-`supports_edit` silently denied such a transport the live experience it does
-support, and its replies arrived as several chunked messages at the end of the
-turn.
+runs?"), whether the transport gets there by editing one message (Telegram) or
+by streaming one (SeaTalk, which cannot rewrite a delivered message at all). The
+core asks for a live-text handle and never branches on the mechanism underneath,
+so no capability says "can rewrite a delivered text message": keying the strategy
+on that would silently deny a streaming transport the live experience it does
+support, and its replies would arrive as several chunked messages at the end of
+the turn.
 
 A turn keeps exactly ONE live surface. WHEN it opens depends on whether that
 surface becomes the reply or is scaffolding thrown away at the end, which the
@@ -1652,19 +1821,23 @@ The coalesced turn carries:
   attaches to and mentions.
 
 Every message is still acknowledged when it arrives (see "Acknowledge receipt
-and completion by capability"), never only when the window closes. Messages
+and completion by capability"), never only when the window closes, and every
+message of the burst — not only the last — carries the turn's later marks, so none
+stays on its receipt mark; a message `/stop` discards from the burst is marked
+stopped. Messages
 sent while a turn is running are coalesced the same way before they join the
 conversation's pending queue.
 
 A slash command is never held. It first releases what its chat and thread are
 holding, so the turn it follows still runs first. `/stop` is the exception:
-it drops the held messages instead, since they had not started.
+it drops the held messages instead, since they had not started. A tap on a command
+button is the command typed, so it settles the held messages the same way.
 
 #### Scenario: a forwarded record and its follow-up become one turn
 - **GIVEN** a paired direct chat
 - **WHEN** the owner forwards a chat record and, two seconds later, sends "look into this"
 - **THEN** one turn runs, and its text holds the forwarded record followed by "look into this"
-- **AND** both messages were acknowledged when they arrived
+- **AND** both messages were acknowledged when they arrived, and both carry the turn's done mark when it ends
 
 #### Scenario: messages further apart than the window are separate turns
 - **GIVEN** a paired direct chat
@@ -1674,7 +1847,7 @@ it drops the held messages instead, since they had not started.
 #### Scenario: /stop drops messages still being held
 - **GIVEN** a message waiting in its quiet window
 - **WHEN** the owner sends `/stop` before the window closes
-- **THEN** the waiting message never becomes a turn
+- **THEN** the waiting message never becomes a turn, and it is marked stopped
 
 #### Scenario: a channel's quiet windows come from its settings
 - **GIVEN** a channel whose config sets no windows
@@ -1908,7 +2081,7 @@ directory from chat — but only to a directory the channel allows. A channel's
 Settings carry its Working directories: a **Default**, the absolute path new
 conversations start in (stored as the default agent configuration's `cwd`; set
 with `coffer channel add|edit --default-dir PATH`, cleared with `edit
---no-default-dir`; none means the agent's own), and the list **Allowed for
+--no-default-dir`; none means the Coffer workspace `~/.coffer/content/workspace`), and the list **Allowed for
 /dir**, `directories`, absolute paths shown as rows with Remove and an Add
 directory… folder picker, the default's row marked "default", and edited with
 `coffer channel add|edit --dir PATH` (repeatable; `edit --no-dirs` clears it);
@@ -1950,7 +2123,7 @@ is refused with the allowed ones named.
 - **GIVEN** a registered channel
 - **WHEN** the owner sets its Default working directory in the channel's settings on the Channels page, or with `coffer channel edit --default-dir`
 - **THEN** the channel's default agent configuration carries that absolute path as `cwd`, new conversations start there, and `--no-default-dir` clears it
-- **AND** a relative path is refused with nothing saved
+- **AND** a relative path is refused with nothing saved, on the page and in `coffer channel add|edit --default-dir` and `--dir` alike
 
 ### Requirement: Resume an earlier conversation from chat
 Every conversation a chat thread opens MUST be remembered for that thread, and
@@ -1985,7 +2158,7 @@ the title "Status": the conversation's title (or its parallel mark); one line
 with the agent by its display name, the model by the name its button shows, the
 effort when one is set, and the working directory (under the home directory as
 `~/…`); then "Running", "Running · n waiting", "n waiting" or "Idle"; in a
-direct chat, one "Parallel threads:" line naming each with its state (see "Open
+direct chat, one "Parallel threads (n):" line naming each with its agent and its state (see "Open
 parallel conversations beside a direct chat"). It shows no conversation or agent
 ids. Where the transport has buttons it is a card whose buttons — Stop while a
 turn runs, then New, Model, Resume, Dir — run those commands, so a user who
@@ -2112,8 +2285,7 @@ finishing a live surface that persists from the turn's start (see "Grow a reply
 in place on one live surface"): a message created minutes ago notifies nobody
 when it is finished. The ping reads `✅ Done · 4m 12s — <first line of the
 answer>`, the first line read as plain words and clipped to 120 characters; a
-turn that failed, was stopped or hit the tool-iteration limit pings `⚠️ Failed ·
-…`, `⏹ Stopped · …` or `⚠️ Tool limit · …` with the tool count and tokens, and
+turn that failed or was stopped pings `⚠️ Failed · …` or `⏹ Stopped · …` with the tool count and tokens, and
 that ping takes the place of its separate summary. It is sent the way the turn's
 other replies are — into the same chat and thread — and in a group it opens with
 the asker's @mention (see "Mention the asker in a group answer"). A turn whose

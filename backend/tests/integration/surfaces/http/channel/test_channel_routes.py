@@ -73,6 +73,11 @@ class _StubRuntime:
         self.adapters: dict[str, _StubAdapter] = {}
         #: channel uid -> (websocket state, last error)
         self.websockets: dict[str, tuple[str, str | None]] = {}
+        self.restarted: list[str] = []
+
+    async def restart(self, channel_uid: str) -> bool:
+        self.restarted.append(channel_uid)
+        return True
 
     def is_running(self, name: str) -> bool:
         return name in self.adapters
@@ -213,9 +218,12 @@ async def test_pairing_code_returns_8_char_code_with_expiry(ctx: _Ctx) -> None:
     assert set(body["code"]) <= _PAIRING_ALPHABET  # unambiguous alphabet only
     expires = datetime.fromisoformat(body["expires_at"])
     assert expires > datetime.now(tz=UTC)
-    assert ctx.pairing.pending("tg") is True  # the service's manager holds the code
+    assert ctx.pairing.pending(ctx.tg_uid) is True  # the service's manager holds the code
 
 
+@pytest.mark.acceptance(
+    spec="channels", scenario="a channel's settings arrive with their defaults filled in"
+)
 async def test_status_telegram_defaults(ctx: _Ctx) -> None:
     async with _client(ctx.app) as c:
         r = await c.get(f"/api/v1/channels/{ctx.tg_uid}/status")
@@ -240,6 +248,23 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
         "runs_here": True,  # this runtime has no machine, so nothing is foreign
         "title": None,  # none set, so a surface shows the name
         "handoff": None,  # nothing to hand to an agent
+        # The typed configuration with every default filled in: the one place a
+        # surface reads a default from, instead of carrying its own copy.
+        "settings": {
+            "channel_type": "telegram",
+            "bot_token_ref": "channel/tg/bot",
+            "default_agent": None,
+            "default_agent_config": None,
+            "require_mention": True,
+            "ignore_other_mentions": False,
+            "wait_after_text_seconds": 1.5,
+            "wait_after_forward_seconds": 5.0,
+            "show_steps": True,
+            "notify_after_seconds": 90.0,
+            "new_conversation_after_idle_hours": 24.0,
+            "directories": [],
+            "runs_on": None,
+        },
     }
 
 
@@ -248,7 +273,7 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
     scenario="channel status reports runtime, pairing, and callback details",
 )
 async def test_status_reports_runtime_pairing_and_callback_details(ctx: _Ctx) -> None:
-    ctx.runtime.adapters["st"] = _StubAdapter()
+    ctx.runtime.adapters[ctx.st_uid] = _StubAdapter()
     ctx.runtime.websockets[ctx.st_uid] = ("connected", None)
     await _pair(ctx, ctx.st_uid)
     async with _client(ctx.app) as c:
@@ -295,7 +320,7 @@ async def test_management_surface_reports_status_owner_agent_and_health(ctx: _Ct
         },
         actor="test",
     )
-    ctx.runtime.adapters["mg"] = _StubAdapter()  # adapter live -> healthy
+    ctx.runtime.adapters[mg.uid] = _StubAdapter()  # adapter live -> healthy
     await _pair(ctx, mg.uid)
 
     # The list view mirrors the MCP-server/memory/skill surfaces: each row is a
@@ -318,7 +343,7 @@ async def test_management_surface_reports_status_owner_agent_and_health(ctx: _Ct
 
 async def test_notify_delivers_to_paired_peer(ctx: _Ctx) -> None:
     adapter = _StubAdapter()
-    ctx.runtime.adapters["tg"] = adapter
+    ctx.runtime.adapters[ctx.tg_uid] = adapter
     await _pair(ctx, ctx.tg_uid, chat_id="555")
     async with _client(ctx.app) as c:
         r = await c.post(f"/api/v1/channels/{ctx.tg_uid}/notify", json={"text": "build green"})
@@ -328,7 +353,7 @@ async def test_notify_delivers_to_paired_peer(ctx: _Ctx) -> None:
 
 
 async def test_notify_unpaired_channel_is_409(ctx: _Ctx) -> None:
-    ctx.runtime.adapters["tg"] = _StubAdapter()
+    ctx.runtime.adapters[ctx.tg_uid] = _StubAdapter()
     async with _client(ctx.app) as c:
         r = await c.post(f"/api/v1/channels/{ctx.tg_uid}/notify", json={"text": "hi"})
     assert r.status_code == 409
@@ -353,7 +378,7 @@ async def test_notify_rejects_empty_text(ctx: _Ctx) -> None:
 async def test_the_webhook_routes_are_gone(ctx: _Ctx) -> None:
     """No route here is called by an IM platform any more: SeaTalk pushes down
     the websocket connection the daemon holds."""
-    ctx.runtime.adapters["st"] = _StubAdapter()
+    ctx.runtime.adapters[ctx.st_uid] = _StubAdapter()
     async with _client(ctx.app) as c:
         for path in (
             f"/api/v1/channels/{ctx.st_uid}/events",
@@ -365,9 +390,9 @@ async def test_the_webhook_routes_are_gone(ctx: _Ctx) -> None:
 
 async def test_ingest_hands_a_pushed_event_to_the_adapter(ctx: _Ctx) -> None:
     """``ChannelService.ingest_event`` is the seam the websocket controller
-    feeds; it schedules the adapter's handling in the background."""
+    feeds; it returns once the adapter has handled the event."""
     adapter = _StubAdapter()
-    ctx.runtime.adapters["st"] = adapter
+    ctx.runtime.adapters[ctx.st_uid] = adapter
     envelope = {
         "event_type": "message_from_bot_subscriber",
         "timestamp": 1718000000,
@@ -407,7 +432,7 @@ async def test_status_hands_a_missing_sdk_to_an_agent(
 ) -> None:
     vendor = tmp_path / "sdk-home"
     monkeypatch.setenv("COFFER_SEATALK_SDK_DIR", str(vendor))
-    ctx.runtime.adapters["st"] = _StubAdapter()
+    ctx.runtime.adapters[ctx.st_uid] = _StubAdapter()
     ctx.runtime.websockets[ctx.st_uid] = ("sdk_missing", "not found")
     async with _client(ctx.app) as c:
         missing = (await c.get(f"/api/v1/channels/{ctx.st_uid}/status")).json()
@@ -423,3 +448,14 @@ async def test_status_hands_a_missing_sdk_to_an_agent(
     assert "coffer channel show st" in prompt
     assert "I will log in myself" in prompt
     assert connected["handoff"] is None
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a restart rebuilds the adapter on demand")
+async def test_restart_route_restarts_the_adapter_and_reports_whether_it_runs(ctx: _Ctx) -> None:
+    async with _client(ctx.app) as c:
+        r = await c.post(f"/api/v1/channels/{ctx.tg_uid}/restart")
+        missing = await c.post("/api/v1/channels/no-such-uid/restart")
+    assert r.status_code == 200
+    assert r.json() == {"running": True}
+    assert ctx.runtime.restarted == [ctx.tg_uid]
+    assert missing.status_code == 404

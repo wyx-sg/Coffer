@@ -23,13 +23,11 @@ by a message rather than by registration.
 | `archived_at` | TIMESTAMP, NULL | NULL = active. Set by the owner or by the auto-archive stage. |
 | `channel_uid` | TEXT, NULL | Return address: the **uid** of the channel this thread is also reachable on. "Has a binding" iff set. A uid and not a name, because a binding has to keep naming the same channel after the user renames it (ADR resource-identity-is-an-immutable-uid); the label a person or an agent reads is resolved from it at read time. |
 | `peer_chat_id` | TEXT, NULL | The chat id that return address aims at. |
-| `owner` | TEXT, NULL | The surface that owns this conversation, when it is not the developer's own. NULL = the developer's (every conversation chat itself or a channel opens). Written only by a surface that owns its conversations — `ChatService.create_conversation(owner=...)`; no surface currently passes one — and never exposed on the wire. An owned conversation is left out of both listings (see "Show every conversation on the Conversations page") and stays readable by id. |
 
 Indexes: `idx_conversations_updated (updated_at)` — the recency ordering of
 "List conversations by latest activity" — and `idx_conversations_archived
 (archived_at)` — the active/archived split, which is two listings rather than
-one filtered list — and `idx_conversations_owner (owner)`, because every
-listing filters out owned conversations.
+one filtered list.
 
 ### What a listed conversation carries beyond its row
 
@@ -162,8 +160,7 @@ every other retained table:
 | --- | --- |
 | `CONVERSATION_NOT_FOUND` | Any operation naming a conversation that does not exist. |
 | `UNKNOWN_AGENT` | A turn names an `agent_key` no provider answers for (see "Distinguish a missing agent path from a bad turn body"). A *subresource path* for the same key is 404 instead. |
-| `AGENT_CONFIG_REJECTED` | The named agent refuses the configuration — e.g. a `cwd` that is not an existing directory. |
-| `TURN_IN_PROGRESS` | The immediate-or-refuse entry point was asked to start a turn while one is running. The queueing path ("Queue messages sent during a turn") never raises it. |
+| `AGENT_CONFIG_REJECTED` | The named agent refuses the configuration — e.g. a `cwd` that is not an existing directory — or no enabled managed agent of the type exists (`reason` `agent_not_managed`). |
 
 ## What points at a conversation from outside
 
@@ -185,7 +182,8 @@ need; `20260621_0036_chat_models_to_provider_resources` moved model state out of
 the conversation; `20260916_0083_drop_conversation_model_id` removed the last of
 it, leaving the model on the message that ran (`model_id`) and on
 `agent_config` as an override — one column answering one question each.
-`20260918_0091_conversation_owner` added `owner` and `idx_conversations_owner`;
+`20260918_0091_conversation_owner` added `owner` and `idx_conversations_owner`, and
+`20261002_0138_drop_conversation_owner` dropped both again: no surface ever set it;
 `20260918_0096_cross_references_point_at_uids` renamed `channel_name` to
 `channel_uid` and rewrote each stored channel name into that channel's uid;
 `20260923_0102_conversation_agent_key_has_no_default` dropped the `builtin`

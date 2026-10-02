@@ -24,7 +24,7 @@ from coffer.domain.chat.events import (
 )
 from coffer.domain.chat.message import Message, Role, TextBlock
 
-from .conftest import ChannelEnv, FakeChannelAdapter, inbound, turn_body, wait_until
+from .conftest import ChannelEnv, FakeChannelAdapter, inbound, turn_body, uid_of, wait_until
 
 
 class GatedAdapter:
@@ -144,7 +144,7 @@ async def test_unbind_mid_turn_interrupts_the_draining_turn(env: ChannelEnv) -> 
     assert running_conversation is not None
     assert running_conversation in active_turns()
 
-    env.processor.unbind(resource.name)
+    env.processor.unbind(resource.uid)
 
     # The live turn is interrupted instead of completing undelivered.
     await wait_until(lambda: running_conversation not in active_turns())
@@ -302,20 +302,25 @@ async def test_platform_stop_control_interrupts_like_a_typed_stop(env: ChannelEn
     conversation_id = await env.active_conversation(resource)
     assert conversation_id is not None
     assert conversation_id in active_turns()
+    await env.send(inbound("tg", "owner", "queued behind it"))
 
     # The user presses the button Telegram drew on the streamed draft.
-    await env.processor.on_stop(InboundStop(channel="tg", chat_id="owner"))
+    await env.processor.on_stop(InboundStop(channel=uid_of("tg"), chat_id="owner"))
 
     assert "⏹ Stopping…" in adapter.texts()
     await wait_until(lambda: "⏹ Stopped." in adapter.texts())
     await wait_until(lambda: conversation_id not in active_turns())
     assert not any(t.startswith("echo:") for t in adapter.texts())
+    # Like a typed /stop it pauses the queue: the waiting message is held, not run.
+    await asyncio.sleep(0.05)
+    assert [turn_body(t) for t in env.orchestrator.pending(conversation_id)] == ["queued behind it"]
+    assert gated.runs == ["long job"]
 
 
 async def test_platform_stop_with_nothing_running_says_so(env: ChannelEnv) -> None:
     _resource, adapter = await env.paired_channel()
 
-    await env.processor.on_stop(InboundStop(channel="tg", chat_id="owner"))
+    await env.processor.on_stop(InboundStop(channel=uid_of("tg"), chat_id="owner"))
 
     assert "Nothing is running." in adapter.texts()
 
@@ -324,7 +329,7 @@ async def test_platform_stop_from_an_unpaired_chat_is_ignored(env: ChannelEnv) -
     # Answering would confirm to a stranger that this channel exists.
     _resource, adapter = await env.paired_channel(chat_id="owner")
 
-    await env.processor.on_stop(InboundStop(channel="tg", chat_id="stranger"))
+    await env.processor.on_stop(InboundStop(channel=uid_of("tg"), chat_id="stranger"))
 
     assert adapter.sent == []
 
@@ -333,7 +338,7 @@ async def test_platform_stop_in_a_thread_answers_in_that_thread(env: ChannelEnv)
     _resource, adapter = await env.paired_channel(chat_id="-100group")
 
     await env.processor.on_stop(
-        InboundStop(channel="tg", chat_id="-100group", thread_id="8", chat_kind="group")
+        InboundStop(channel=uid_of("tg"), chat_id="-100group", thread_id="8", chat_kind="group")
     )
 
     assert ("-100group", "Nothing is running.", "8", "group") in adapter.sent_routed

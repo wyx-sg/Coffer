@@ -8,7 +8,7 @@ would record the same fact twice.
 The entries are uids and not agent names, which is why none of the literals
 below look like something a user typed. While the list held names, renaming an
 agent silently emptied every scope that named it; a uid cannot change
-underneath a reference (ADR resource-identity-is-an-immutable-uid).
+underneath a reference (ADR identity-is-the-uid-inside-the-file).
 """
 
 import pytest

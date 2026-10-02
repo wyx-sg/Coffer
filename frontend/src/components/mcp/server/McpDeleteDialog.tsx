@@ -10,11 +10,11 @@ import { useTranslation } from "react-i18next";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { secretsApi } from "@/lib/api/secret";
+import { useToast } from "@/components/ui/toast";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
-import { useSecrets } from "@/lib/hooks/useSecrets";
-import { secretLabel } from "./serverState";
+import { useDeleteSecret, useSecrets } from "@/lib/hooks/useSecrets";
+import { secretLabel } from "@/lib/mcp/serverState";
 
 interface Props {
   resource: ResourceOut;
@@ -46,6 +46,8 @@ export function McpDeleteDialog({
   const { t } = useTranslation();
   const del = useDeleteResource();
   const secrets = useSecrets();
+  const dropSecret = useDeleteSecret();
+  const { toast } = useToast();
   const [dropSecrets, setDropSecrets] = useState(false);
 
   const mine = new Set(citedRefs(resource.config));
@@ -89,9 +91,15 @@ export function McpDeleteDialog({
           {
             onSuccess: () => {
               if (dropSecrets) {
-                // Best-effort: the server is gone either way; a secret that
-                // cannot go stays on the Secrets page.
-                for (const s of onlyMine) void secretsApi.remove(s.ref).catch(() => undefined);
+                // The server is gone either way; a secret that cannot go
+                // stays on the Secrets page, and the user is told once.
+                void Promise.allSettled(onlyMine.map((s) => dropSecret.mutateAsync(s.ref))).then(
+                  (results) => {
+                    const failed = results.filter((r) => r.status === "rejected").length;
+                    if (failed > 0)
+                      toast.error(t("mcp.page.delete.secretsKept", { count: failed }));
+                  },
+                );
               }
               onOpenChange(false);
               onDeleted();

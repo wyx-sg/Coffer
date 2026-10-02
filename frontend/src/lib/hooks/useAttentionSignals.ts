@@ -29,6 +29,7 @@ import { useSyncAttention } from "@/lib/hooks/useSyncAttention";
 
 export type AttentionTone = "danger" | "warning";
 
+/** @ui-only derived view; never crosses the wire. */
 export interface AttentionSignal {
   count: number;
   /** Danger while any counted item is a failure, warning otherwise. */

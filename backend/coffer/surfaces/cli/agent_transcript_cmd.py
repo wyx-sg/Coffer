@@ -43,7 +43,7 @@ def _short_time(value: str | None) -> str:
 
 def transcript(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
+    name: str = typer.Argument(..., metavar="NAME", help="Agent name or uid"),
     session_id: str | None = typer.Argument(
         None, metavar="[ID]", help="A session id from the listing; omit to list sessions"
     ),

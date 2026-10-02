@@ -48,18 +48,35 @@ acceptance(
     // This list is the whole inventory, and the count assertion below is what
     // makes "and only those" true: a fence with no upper bound is not a fence.
     // Adding a sidebar entry means adding it here. See
-    // `frontend/src/lib/navigation.ts`. No entry is experimental while the
-    // daemon registers no feature, so no name carries the marker.
+    // `frontend/src/lib/navigation.ts`. The e2e daemon pins all four
+    // experimental features on (`scripts/start_daemon.sh`), so the five
+    // entries they own are listed and each carries the Experimental marker
+    // beside its label.
+    const EXP = String.raw`\s*Experimental`;
     const SIDEBAR_GROUPS: [string | null, RegExp[]][] = [
       [null, [/^Overview$/i]],
-      ["Agents", [/^Agents$/i, /^Model providers$/i]],
+      ["Agents", [/^Agents$/i, new RegExp(`^Model providers${EXP}$`, "i")]],
       ["Run", [/^Conversations$/i, /^Channels$/i]],
       [
         "Capabilities",
         [/^MCP servers$/i, /^Custom tools$/i, /^Skills$/i, /^CLIs$/i],
       ],
-      ["Context", [/^Knowledge$/i, /^Memory$/i]],
-      ["System", [/^Secrets$/i, /^Activity$/i, /^Usage$/i, /^Sync$/i]],
+      [
+        "Context",
+        [
+          new RegExp(`^Knowledge${EXP}$`, "i"),
+          new RegExp(`^Memory${EXP}$`, "i"),
+        ],
+      ],
+      [
+        "System",
+        [
+          /^Secrets$/i,
+          /^Activity$/i,
+          new RegExp(`^Usage${EXP}$`, "i"),
+          new RegExp(`^Sync${EXP}$`, "i"),
+        ],
+      ],
     ];
     const nav = page.getByRole("navigation", { name: /Primary navigation/i });
     for (const [heading, labels] of SIDEBAR_GROUPS) {

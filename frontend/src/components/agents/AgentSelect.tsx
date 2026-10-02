@@ -6,7 +6,7 @@
 // That asymmetry is the whole component. Every stored reference to an agent —
 // a channel's `default_agent`, a resource scope's agent list, a skill binding —
 // holds the uid, because a reference has to keep pointing at the same agent
-// after the owner relabels it (ADR resource-identity-is-an-immutable-uid). A
+// after the owner relabels it (ADR identity-is-the-uid-inside-the-file). A
 // uid is also the one thing a person cannot read. So every surface that binds
 // an agent faces the same two-sided problem, and solving it once here is what
 // stops each of them solving it slightly differently.

@@ -108,7 +108,6 @@ pub fn run() {
             daemon::get_daemon_info,
             daemon::daemon_version_matches,
             tray::set_ui_language,
-            secrets::presence_mode,
             secrets::reveal_secret,
             secrets::export_master_key_backup,
             secrets::approve_pending,

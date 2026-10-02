@@ -16,7 +16,7 @@ import pytest
 
 from coffer.application.channel.resume_switch import GROUP_MAIN_RESUME
 
-from .conftest import ChannelEnv, FakeChannelAdapter, Resource, inbound, wait_until
+from .conftest import ChannelEnv, FakeChannelAdapter, Resource, inbound, uid_of, wait_until
 from .test_queue_and_stop import GatedAdapter
 
 GROUP = "grp-1"
@@ -43,7 +43,7 @@ async def _channel(
     env: ChannelEnv, directories: list[str] = ()
 ) -> tuple[Resource, FakeChannelAdapter]:
     resource = await env.register_channel("tg")
-    adapter = env.bind(resource, FakeChannelAdapter(supports_groups=True), directories=directories)
+    adapter = env.bind(resource, FakeChannelAdapter(), directories=directories)
     await env.pair(resource, "owner", sender_id="owner-1")
     return resource, adapter
 
@@ -127,7 +127,7 @@ async def test_stop_in_the_main_chat_stops_every_turn_in_the_group(env: ChannelE
     await env.send(_in_thread("deploy the api", "th-1"))
     await env.send(_in_thread("write the docs", "th-2"))
     await wait_until(
-        lambda: len(env.processor._running_in_chat("tg", GROUP)) == 2,
+        lambda: len(env.processor._running_in_chat(uid_of("tg"), GROUP)) == 2,
         message="both thread turns should be running",
     )
     titles = [
@@ -145,7 +145,7 @@ async def test_stop_in_the_main_chat_stops_every_turn_in_the_group(env: ChannelE
     assert reply[0] == "⏹ Stopping 2 turns:"
     assert sorted(reply[1:]) == sorted(f"• {t}" for t in titles)
     await wait_until(
-        lambda: env.processor._running_in_chat("tg", GROUP) == [],
+        lambda: env.processor._running_in_chat(uid_of("tg"), GROUP) == [],
         message="every turn in the group should have stopped",
     )
     gated.release.set()

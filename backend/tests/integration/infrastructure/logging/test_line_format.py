@@ -221,7 +221,8 @@ def test_no_stderr_handler_when_stderr_is_the_log_file(
             root.handlers = saved_handlers
             root.setLevel(saved_level)
 
-    assert [type(h) for h in handlers] == [logging.handlers.RotatingFileHandler]
+    assert len(handlers) == 1
+    assert isinstance(handlers[0], logging.handlers.RotatingFileHandler)
     assert log_path.read_text().count('"event": "once"') == 1
 
 

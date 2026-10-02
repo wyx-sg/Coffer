@@ -79,7 +79,6 @@ const makeProvider = (over: Partial<Provider> = {}): Provider => {
     secret_ref: `provider/${name}/key`,
     local_runtime: null,
     compatible_agents: ["claude_code"],
-    is_active: false,
     internal_default: false,
     transcribe_default: false,
     fallback: true,
@@ -92,13 +91,18 @@ const makeProvider = (over: Partial<Provider> = {}): Provider => {
   };
 };
 
-const agent = (type: "claude_code" | "codex", model: string | null = null): AgentOut =>
+const agent = (
+  type: "claude_code" | "codex",
+  model: string | null = null,
+  connection_uid: string | null = null,
+): AgentOut =>
   ({
     uid: `a-${type}`,
     type,
     name: type,
     display_name: type === "codex" ? "Codex" : "Claude Code",
     model,
+    connection_uid,
     config_dir: type === "codex" ? "/Users/me/.codex" : "/Users/me/.claude",
   }) as AgentOut;
 
@@ -162,9 +166,9 @@ describe("ModelProvidersPage", () => {
     "provider-switching",
     "the connections page lists profiles and their compatible agents",
     async () => {
-      agentsState.data = [agent("claude_code", "claude-opus-4-1")];
+      agentsState.data = [agent("claude_code", "claude-opus-4-1", UIDS.official)];
       serve([
-        makeProvider({ name: "official", is_active: true, compatible_agents: ["claude_code"] }),
+        makeProvider({ name: "official", compatible_agents: ["claude_code"] }),
         makeProvider({
           name: "agnes",
           protocol: "openai",

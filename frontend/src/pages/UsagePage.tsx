@@ -7,7 +7,7 @@
 // for fresh quota; Claude Code's row re-reads its own. The ⋯ beside the
 // filters exports the current range and filters as CSV.
 import { useState } from "react";
-import { Gauge, RotateCw } from "lucide-react";
+import { RotateCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 
@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { QuotaSection } from "@/components/usage/QuotaSection";
 import { UsageSection } from "@/components/usage/UsageSection";
+import { useAgents } from "@/lib/hooks/useAgents";
 import { useProviders } from "@/lib/hooks/useProviders";
 import { useRetentionPolicies } from "@/lib/hooks/useRetention";
 import {
@@ -27,6 +28,7 @@ import {
 import type { Provider } from "@/lib/api/providers";
 import type { UsageQuery } from "@/lib/api/usage";
 import { presetById, vendorOf } from "@/lib/providers/presets";
+import { activeProviderFor } from "@/lib/providers/usedBy";
 import { formatClock } from "@/lib/usage/format";
 import { addDays, localDay, readUsageQuery, writeUsageQuery } from "@/lib/usage/range";
 
@@ -65,6 +67,7 @@ export function UsagePage() {
   });
   const quota = useUsageQuota();
   const providers = useProviders();
+  const agents = useAgents();
   const refresh = useRefreshQuota();
   const invalidate = useInvalidateUsage();
   const exportCsv = useExportUsageCsv();
@@ -83,12 +86,11 @@ export function UsagePage() {
   const reason = refresh.data && !refresh.data.refreshed ? refresh.data.reason : null;
 
   const proxied = (providers.data ?? []).filter((p) => !p.local_runtime);
-  // An agent runs on an API-key provider when one that reaches it is enabled
-  // and active — the rule the agent's Model tab uses.
+  // An agent runs on an API-key provider when its record names one that is
+  // enabled and reaches it — the rule the agent's Model tab uses.
   const apiKeyVendorFor = (agentType: string) => {
-    const active = proxied.find(
-      (p) => p.enabled && p.is_active && (p.compatible_agents ?? []).some((a) => a === agentType),
-    );
+    const agent = (agents.data ?? []).find((a) => a.type === agentType);
+    const active = agent ? activeProviderFor(agent, proxied) : null;
     return active ? vendorLabel(active) : null;
   };
   const subscriptionAgents = new Set(
@@ -106,7 +108,6 @@ export function UsagePage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        icon={Gauge}
         title={t("usage.title")}
         actions={
           <div className="flex items-center gap-2.5">

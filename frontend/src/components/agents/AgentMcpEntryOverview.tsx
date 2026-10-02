@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import { FileActions } from "@/components/FileActions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { McpEntryDetailOut } from "@/lib/api/agents";
+import type { McpEntryDetailOut } from "@/lib/api/agents-workspace";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (

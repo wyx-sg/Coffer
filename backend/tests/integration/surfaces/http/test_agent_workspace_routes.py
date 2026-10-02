@@ -1,7 +1,7 @@
 """HTTP coverage for /api/v1/agents/{uid}/mcp-entries and /plugins.
 
 The agent is addressed by its immutable ``uid``
-(ADR resource-identity-is-an-immutable-uid), taken off the registration
+(ADR identity-is-the-uid-inside-the-file), taken off the registration
 response the helpers below already make. The ``{entry}`` and ``{plugin_id}``
 segments beside it deliberately stay names: they identify a stanza in the
 agent's OWN config file and an installed plugin, neither of which is a Coffer

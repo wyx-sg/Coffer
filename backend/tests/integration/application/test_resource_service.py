@@ -83,21 +83,6 @@ async def test_register_mints_a_distinct_uid_per_resource(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_register_accepts_a_supplied_uid_for_the_sync_applier(tmp_path):
-    """``uid=`` has exactly one caller: the sync applier, putting a resource
-    this vault has not seen before at the identity the other machine already
-    gave it. Without that, the same resource on two machines would be two
-    resources and every reference to it would resolve on only one of them."""
-    svc, _, engine = await _service(tmp_path)
-    r = await svc.register(
-        kind="fake_kind", name="t", config={"foo": 1}, actor="sync", uid="from-the-other-machine"
-    )
-    assert r.uid == "from-the-other-machine"
-    assert (await svc.get("from-the-other-machine")).name == "t"
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
 async def test_register_validates_via_schema(tmp_path):
     svc, _, engine = await _service(tmp_path)
     with pytest.raises(ConfigValidationError):
@@ -168,7 +153,7 @@ async def test_kind_supplied_secret_extractor_and_audit_redactor(tmp_path):
     a kind that stores its ref/secret OUTSIDE any ``transport`` key.
     """
     from coffer.domain.audit import AuditEventType
-    from coffer.domain.errors import SecretMissing
+    from coffer.domain.secret_errors import SecretMissing
 
     class _SecretConfig(BaseModel):
         secret_ref: str

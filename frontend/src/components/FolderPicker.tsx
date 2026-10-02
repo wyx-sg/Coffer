@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { translateApiError } from "@/lib/api/errors";
-import { fsApi } from "@/lib/api/fs";
+import { useFsActions } from "@/lib/fsActions";
 import { useFsBrowse } from "@/lib/hooks/useFsBrowse";
 
 export function FolderPicker({
@@ -34,12 +34,13 @@ export function FolderPicker({
 }) {
   const { t } = useTranslation();
   const [browserOpen, setBrowserOpen] = useState(false);
+  const fs = useFsActions();
 
   const onBrowse = async () => {
     // Ask the daemon to open the OS-native dialog. Fall back to the in-app
     // browser only when this host has no native dialog tool.
     try {
-      const res = await fsApi.pickFolder(value ?? undefined);
+      const res = await fs.pickFolder(value ?? undefined);
       if (res.available) {
         if (res.path) onChange(res.path);
         return; // native dialog handled it (picked or cancelled)

@@ -12,11 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
-import { fsApi } from "@/lib/api/fs";
+import { useFsActions } from "@/lib/fsActions";
 import { translateApiError } from "@/lib/api/errors";
 import { useMcpServerLog } from "@/lib/hooks/useMcpServerPage";
 import { cn } from "@/lib/utils";
-import { shortTime } from "./serverState";
+import { shortTime } from "@/lib/mcp/serverState";
 
 const ERROR_LINE = /\b(error|failed|exception|traceback|not found|refused|denied)\b/i;
 
@@ -28,6 +28,7 @@ interface Props {
 export function McpServerLogView({ serverUid, isHttp }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const fs = useFsActions();
   const log = useMcpServerLog(serverUid, !isHttp);
   const [only, setOnly] = useState<"all" | "errors">("all");
 
@@ -75,8 +76,7 @@ export function McpServerLogView({ serverUid, isHttp }: Props) {
             variant="outline"
             disabled={!path}
             onClick={() =>
-              path &&
-              fsApi.open(path).catch((err: unknown) => toast.error(translateApiError(t, err)))
+              path && fs.open(path).catch((err: unknown) => toast.error(translateApiError(t, err)))
             }
           >
             <FileText aria-hidden /> {t("mcp.page.log.openFile")}

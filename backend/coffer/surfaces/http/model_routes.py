@@ -12,11 +12,15 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from coffer.application.provider.introspection import ModelIntrospectionService
+from coffer.application.provider.introspection_gate import authorize_stored_key
+from coffer.application.provider.service import ProviderService
+from coffer.infrastructure.provider.introspector import PROTOCOL_BASE_URLS
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.provider_dependencies import get_introspection_service
+from coffer.surfaces.http.provider_dependencies import (
+    get_introspection_service,
+    get_provider_service,
+)
 from coffer.surfaces.http.provider_schemas import (
-    DetectProtocolIn,
-    DetectProtocolOut,
     ListModelsIn,
     ProviderModel,
     ProviderModelsOut,
@@ -35,6 +39,7 @@ router = APIRouter(
 async def list_provider_models(
     body: ListModelsIn,
     svc: ModelIntrospectionService = Depends(get_introspection_service),  # noqa: B008
+    providers: ProviderService = Depends(get_provider_service),  # noqa: B008
 ) -> ProviderModelsOut:
     """List the models a provider exposes (empty + message → enter manually).
 
@@ -43,6 +48,13 @@ async def list_provider_models(
     the answer (spec provider-switching "Store a modality with each curated
     model").
     """
+    await authorize_stored_key(
+        providers,
+        secret_ref=body.secret_ref,
+        secret_value=body.secret_value,
+        base_url=body.base_url,
+        default_base_url=PROTOCOL_BASE_URLS.get(body.provider),
+    )
     result = await svc.list_models(
         provider=body.provider,
         base_url=body.base_url,
@@ -60,8 +72,16 @@ async def list_provider_models(
 async def test_connection(
     body: TestConnectionIn,
     svc: ModelIntrospectionService = Depends(get_introspection_service),  # noqa: B008
+    providers: ProviderService = Depends(get_provider_service),  # noqa: B008
 ) -> TestResultOut:
     """Probe a chat provider with a minimal request; 200 with ok=true/false."""
+    await authorize_stored_key(
+        providers,
+        secret_ref=body.secret_ref,
+        secret_value=body.secret_value,
+        base_url=body.base_url,
+        default_base_url=PROTOCOL_BASE_URLS.get(body.provider),
+    )
     result = await svc.test_connection(
         provider=body.provider,
         model=body.model,
@@ -70,17 +90,3 @@ async def test_connection(
         secret_value=body.secret_value,
     )
     return TestResultOut(ok=result.ok, message=result.message, detail=result.detail)
-
-
-@router.post("/detect-protocol", response_model=DetectProtocolOut)
-async def detect_protocol(
-    body: DetectProtocolIn,
-    svc: ModelIntrospectionService = Depends(get_introspection_service),  # noqa: B008
-) -> DetectProtocolOut:
-    """Classify the endpoint's wire so the dialog needs no manual type selector."""
-    protocol = await svc.detect_protocol(
-        base_url=body.base_url,
-        secret_ref=body.secret_ref,
-        secret_value=body.secret_value,
-    )
-    return DetectProtocolOut(protocol=protocol)

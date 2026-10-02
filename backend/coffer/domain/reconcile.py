@@ -215,17 +215,14 @@ ChangeOp = Literal["upsert", "delete"]
 class Changed:
     """An in-process hint that a resource was written.
 
-    ``rev`` is the resource's monotonic revision after the write (a delete
-    carries the row's last revision plus one); ``op`` says whether the row
-    still exists. A hint only brings the next pass forward for the targets
-    that follow ``kind``; losing one costs at most one period, never
+    ``op`` says whether the resource still exists. A hint only brings the next
+    pass forward for the targets that follow ``kind``; losing one costs at most one period, never
     correctness, because every pass reads the whole state again. The daemon's
     event stream turns the same hint into an invalidation envelope.
     """
 
     kind: str
     uid: str
-    rev: int
     op: ChangeOp = "upsert"
 
 

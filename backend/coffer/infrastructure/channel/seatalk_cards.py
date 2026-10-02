@@ -25,8 +25,7 @@ async def update_interactive_card(
 ) -> None:
     """Rewrite a delivered card through SeaTalk's Update Message.
 
-    Applies to interactive cards ONLY — never to a text message, which is why
-    ``supports_edit`` stays false while ``supports_card_update`` is true — and
+    Applies to interactive cards ONLY — never to a text message — and
     only within 7 days, only for the bot that sent it. All three hold for a
     selection card Coffer just sent and the owner just tapped.
 

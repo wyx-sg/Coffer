@@ -1,33 +1,33 @@
 """A provider connection's projection into each agent, as a reconcile target.
 
-ADR one-level-triggered-reconciler-compares-parameters. ``is_active`` is a flag
-in Coffer's database; what it means is a handful of keys inside a file Coffer
-does not own — ``settings.json``, Codex's ``config.toml`` and the model
-catalogue beside it. Those files are rewritten by their own CLIs, by other
-tooling, by the user and by restores from backup. This target judges each
-enabled agent's file by every key Coffer owns in it (``projection_params``),
-against what projecting the active connection would write now — so a base
-URL, model, ``apiKeyHelper`` command or catalogue that no longer matches is a
-difference exactly as a missing projection is. The boot heal it replaces
-looked at presence alone.
+ADR one-level-triggered-reconciler-compares-parameters. Which connection an agent
+runs on is a field of the agent's record (``AgentConfig.connection_uid``, read
+through ``targets.connection_for_agent``); what it means is a handful of keys
+inside a file Coffer does not own — ``settings.json``, Codex's ``config.toml``
+and the model catalogue beside it. Those files are rewritten by their own CLIs,
+by other tooling, by the user and by restores from backup. This target judges
+each enabled agent's file by every key Coffer owns in it (``projection_params``),
+against what projecting the agent's connection would write now — so a base URL,
+model, ``apiKeyHelper`` command or catalogue that no longer matches is a
+difference exactly as a missing projection is. The boot heal it replaces looked
+at presence alone.
 
-**Direction policy** (spec provider-switching "Clear an active flag the
-agent's config contradicts", "Converge connections across machines"):
+**Direction policy** (spec provider-switching "Clear an agent's connection its
+config contradicts"):
 
 - keys present, values differ → re-project (``projection_stale``);
-- active connection, keys absent → project when the pass carries a warrant
-  (a sync import brought the switch from another machine, or a person asked),
-  or when another agent of the same type does carry the keys (the activation
-  took effect); otherwise the flag is what is stale — Coffer clears its own
-  record (``ProviderService.deactivate``) and never re-routes an agent on a
-  leftover flag (``flag_contradicted``);
-- keys present, nothing active reaches the agent → reported only
+- the agent is on a connection, keys absent → project when the pass carries a
+  warrant (a sync import, or a person asked); otherwise the RECORD is what is
+  stale: Coffer clears this one agent's own ``connection_uid``
+  (``ProviderService.clear_agent_connection``, audited as the pass's repair),
+  writes no agent's file, and never re-routes an agent on a leftover choice
+  (``choice_contradicted``). Nothing else moves: the choice is per agent;
+- keys present, the agent is on no connection → reported only
   (``projection_unclaimed``): removing them would change what the agent talks
   to. Removed under the same warrant as above.
 
-A file that cannot be read or does not parse is skipped on both sides and
-blocks clearing the flag for its type: guessing "absent" from a file Coffer
-could not inspect would clear a flag on no evidence.
+A file that cannot be read or does not parse is skipped: guessing "absent" from
+a file Coffer could not inspect would clear a choice on no evidence.
 """
 
 from __future__ import annotations
@@ -38,8 +38,9 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from coffer.application.provider.projection_named import named_connection
 from coffer.application.provider.projector import Priors, ProviderProjector, binding_of
-from coffer.application.provider.targets import projection_targets
+from coffer.application.provider.targets import connection_for_agent
 from coffer.application.reconcile.ports import Applied, AuditEvent, Undo
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
@@ -71,10 +72,16 @@ _log = logging.getLogger(__name__)
 
 TARGET = "provider_projection"
 #: The triggers that carry a warrant to change what an agent talks to.
-_WARRANTED = frozenset({Trigger.IMPORT, Trigger.MANUAL})
+#: ``SWITCH`` is the ``models`` feature being switched: off withdraws Coffer's
+#: keys from every agent, on projects each agent's connection again (spec
+#: experimental-features "Withdraw what a switched-off feature put in front of
+#: agents"). Without the warrant, switching on would read as a contradicted
+#: choice and clear the agents' records.
+_WARRANTED = frozenset({Trigger.IMPORT, Trigger.MANUAL, Trigger.SWITCH})
 
-#: ``ProviderService.deactivate`` — clears the flag, audits the switch itself.
-Deactivate = Callable[[AgentType], Awaitable[object]]
+#: ``ProviderService.clear_agent_connection`` — takes an agent uid, clears that
+#: agent's connection and writes nothing else.
+ClearChoice = Callable[[str], Awaitable[object]]
 
 
 class _Lister(Protocol):
@@ -96,7 +103,7 @@ class _Seen:
     agent: Resource
     agent_type: AgentType
     path: pathlib.Path
-    #: The active connection reaching this agent, if any.
+    #: The connection this agent runs on, if any.
     connection: tuple[Resource, ProviderConfig] | None
     desired: dict[str, Any] | None
     observed: dict[str, Any] | None
@@ -105,10 +112,6 @@ class _Seen:
 @dataclass
 class _Scan:
     seen: dict[str, _Seen]
-    #: Types where some enabled agent's file carries Coffer's keys.
-    carried: set[AgentType]
-    #: Types where some enabled agent's file could not be judged.
-    unreadable: set[AgentType]
 
 
 def _title(r: Resource) -> str:
@@ -128,16 +131,18 @@ class ProviderProjectionTarget:
         agents: _Lister,
         projector: ProviderProjector,
         store: _Store,
-        deactivate: Deactivate,
+        clear_choice: ClearChoice,
+        is_enabled: Callable[[], bool] = lambda: True,
     ) -> None:
+        # Whether the ``models`` feature is on right now: while it is off no
+        # agent is wanted on a connection, so every projection is withdrawn
+        # (the agents' records keep their choice, and switching on restores it).
+        self._is_enabled = is_enabled
         self._providers = providers
         self._agents = agents
         self._projector = projector
         self._store = store
-        self._deactivate = deactivate
-        #: The last scan's per-type facts, which ``decide`` reads: a matching
-        #: agent makes no difference, yet it still says the activation took.
-        self._last = _Scan({}, set(), set())
+        self._clear_choice = clear_choice
 
     # --- reading ---------------------------------------------------------------
 
@@ -151,30 +156,11 @@ class ProviderProjectionTarget:
             out.append((row, cfg))
         return out
 
-    async def _active(
-        self, agents: list[Resource]
-    ) -> tuple[dict[AgentType, tuple[Resource, ProviderConfig]], dict[str, Resource]]:
-        """The active connection per agent type (sorted by name, first wins,
-        so a transient double-active state resolves deterministically), and
-        every connection by uid."""
-        active: dict[AgentType, tuple[Resource, ProviderConfig]] = {}
-        by_uid: dict[str, Resource] = {}
-        for row in sorted(await self._providers.list(), key=lambda r: r.name):
-            by_uid[row.uid] = row
-            try:
-                cfg = ProviderConfig.model_validate(row.config)
-            except Exception:
-                continue
-            if not cfg.is_active:
-                continue
-            for agent_type in projection_targets(row, cfg, agents):
-                active.setdefault(agent_type, (row, cfg))
-        return active, by_uid
-
     async def _scan(self) -> _Scan:
         rows = await self._enabled_agents()
-        active, by_uid = await self._active([r for r, _ in rows])
-        scan = _Scan({}, set(), set())
+        connections = await self._providers.list()
+        by_uid = {r.uid: r for r in connections}
+        scan = _Scan({})
         for row, cfg in rows:
             facet = self._projector.projection_for(cfg.type)
             if not row.enabled or facet is None:
@@ -184,15 +170,11 @@ class ProviderProjectionTarget:
                 # a projection write (mkdir -p).
                 continue
             try:
-                seen = self._judge(row, cfg, facet, active.get(cfg.type), by_uid)
+                seen = self._judge(row, cfg, facet, connection_for_agent(row, connections), by_uid)
             except Exception as exc:  # unreadable or unparseable: never guessed from
                 _log.warning("provider_projection: %s left alone: %r", row.name, exc)
-                scan.unreadable.add(cfg.type)
                 continue
             scan.seen[row.uid] = seen
-            if seen.observed is not None:
-                scan.carried.add(cfg.type)
-        self._last = scan
         return scan
 
     def _judge(
@@ -233,44 +215,14 @@ class ProviderProjectionTarget:
                 side_paths |= {spec.path.parent / n.split(":", 1)[1] for n in want_files}
             files = {f"file:{p.name}": digest(self._store.read_text(p)) for p in side_paths}
             have = {**params_of(cur, keys), **files}
-            have["connection"] = self._named_connection(have, want, by_uid)
+            have["connection"] = named_connection(have, want, by_uid)
         return _Seen(row, cfg.type, spec.path, connection, want, have)
-
-    @staticmethod
-    def _named_connection(
-        have: dict[str, Any], want: dict[str, Any] | None, by_uid: dict[str, Resource]
-    ) -> str | None:
-        """The connection the file names: a uid one of its values carries (the
-        ``apiKeyHelper``); else the wanted connection, when every key whose
-        wanted value names it (Codex's provider label) holds what it writes."""
-        for value in have.values():
-            if isinstance(value, str):
-                for uid in by_uid:
-                    if uid in value:
-                        return uid
-        if want is None:
-            return None
-        uid = str(want["connection"])
-        row = by_uid.get(uid)
-        labels = [uid] + ([row.name] if row is not None and row.name else [])
-        naming = [
-            k
-            for k, v in want.items()
-            if k != "connection" and isinstance(v, str) and any(n in v for n in labels)
-        ]
-        if naming and all(have.get(k) == want[k] for k in naming):
-            return uid
-        # A file that names no connection at all — the proxy form, where the
-        # agent calls the local proxy and the proxy decides the upstream — is
-        # on the wanted connection exactly when every key Coffer owns holds
-        # what projecting it would write.
-        if not naming and all(have.get(k) == v for k, v in want.items() if k != "connection"):
-            return uid
-        return None
 
     # --- the target --------------------------------------------------------------
 
     async def desired(self) -> Sequence[Item]:
+        if not self._is_enabled():
+            return []
         scan = await self._scan()
         return [self._item(s, s.desired) for s in scan.seen.values() if s.desired is not None]
 
@@ -289,20 +241,25 @@ class ProviderProjectionTarget:
         )
 
     def decide(self, differences: Sequence[Difference], trigger: Trigger) -> Sequence[Decision]:
-        scan = self._last
         warranted = trigger in _WARRANTED
         out: list[Decision] = []
         for d in differences:
-            seen = scan.seen.get(d.key)
-            agent_type = seen.agent_type if seen is not None else None
             if d.op is Op.MODIFY:
                 names = ", ".join(d.changed_params)
                 out.append(
                     Decision(
                         Disposition.REPAIR,
                         "projection_stale",
-                        f"The projection's {names} differ from what the active connection "
+                        f"The projection's {names} differ from what the agent's connection "
                         "writes; it is projected again.",
+                    )
+                )
+            elif d.op is Op.REMOVE and not self._is_enabled():
+                out.append(
+                    Decision(
+                        Disposition.REPAIR,
+                        "feature_off",
+                        "Models is switched off, so Coffer's keys are withdrawn from this agent.",
                     )
                 )
             elif d.op is Op.REMOVE:
@@ -310,50 +267,37 @@ class ProviderProjectionTarget:
                     Decision(
                         Disposition.REPAIR if warranted else Disposition.REPORT,
                         "projection_unclaimed",
-                        "Coffer's keys are in the agent's config but no active connection "
-                        "reaches it; removing them would change what the agent talks to.",
+                        "Coffer's keys are in the agent's config but the agent runs on no "
+                        "connection; removing them would change what the agent talks to.",
                     )
                 )
-            elif warranted or agent_type in scan.carried:
+            elif warranted:
                 out.append(
                     Decision(
                         Disposition.REPAIR,
                         "projection_missing",
-                        "The active connection is not projected into this agent; it is projected.",
-                    )
-                )
-            elif agent_type in scan.unreadable:
-                out.append(
-                    Decision(
-                        Disposition.BLOCKED,
-                        "config_unreadable",
-                        "Another agent of this type has a config Coffer cannot read, so "
-                        "whether the connection is in use cannot be told.",
+                        "The agent's connection is not projected into it; it is projected.",
                     )
                 )
             else:
                 out.append(
                     Decision(
                         Disposition.REPAIR,
-                        "flag_contradicted",
-                        "The connection is marked active but no agent of this type carries "
-                        "it; Coffer clears its own flag and the agent stays on its "
-                        "built-in login.",
+                        "choice_contradicted",
+                        "The agent is recorded as running on a connection but its config "
+                        "carries none of Coffer's keys; Coffer clears its own record and the "
+                        "agent stays on its built-in login.",
                     )
                 )
         return out
 
     async def apply(self, change: PlannedChange) -> Applied:
         d = change.difference
-        seen = (await self._scan()).seen.get(d.key)
+        scan = await self._scan()
+        seen = scan.seen.get(d.key)
         if seen is None:
             raise LookupError(f"agent {d.key} is no longer judged by this target")
         reason = change.decision.reason_code
-        if reason == "flag_contradicted":
-            # Audited by the service itself (PROVIDER_SWITCHED); nothing of the
-            # agent's is written.
-            await self._deactivate(seen.agent_type)
-            return Applied(event=None)
         details: dict[str, Any] = {
             "agent": seen.agent.name,
             "agent_uid": seen.agent.uid,
@@ -361,6 +305,17 @@ class ProviderProjectionTarget:
             "repaired": list(d.changed_params),
             "reason": reason,
         }
+        if reason == "choice_contradicted":
+            # Only Coffer's own record changes; no agent's file is written.
+            name = seen.connection[0].name if seen.connection is not None else None
+            await self._clear_choice(seen.agent.uid)
+            return Applied(
+                AuditEvent(
+                    AuditEventType.PROVIDER_PROJECTION_REPAIRED.value,
+                    seen.agent,
+                    {**details, "action": "clear_connection", "connection": name},
+                )
+            )
         if d.op is Op.REMOVE:
             priors = self._projector.deproject_agent(seen.agent)
             event = AuditEvent(
@@ -370,7 +325,7 @@ class ProviderProjectionTarget:
             )
             return Applied(event, undo=self._restore(priors))
         if seen.connection is None:
-            raise LookupError(f"no active connection reaches agent {seen.agent.name}")
+            raise LookupError(f"agent {seen.agent.name} runs on no connection")
         connection, cfg = seen.connection
         priors = self._projector.project_agent(connection, cfg, seen.agent)
         event = AuditEvent(
@@ -393,4 +348,4 @@ class ProviderProjectionTarget:
         return _undo
 
 
-__all__ = ["TARGET", "Deactivate", "ProviderProjectionTarget"]
+__all__ = ["TARGET", "ClearChoice", "ProviderProjectionTarget"]

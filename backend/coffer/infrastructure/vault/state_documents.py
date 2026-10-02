@@ -1,5 +1,5 @@
 """A kind's state documents in the vault: ``state/<area>/<owner name>.json``
-(plan D13; spec vault-storage).
+(spec vault-storage).
 
 Some state belongs to a resource without being part of it — an MCP server's
 capability switches, a channel's paired chats. It is the person's, so it is in
@@ -10,7 +10,7 @@ document is found by; the file name only follows the owner's label, and the
 resource store moves or deletes the document in the same commit when the
 owner is renamed or deleted (:meth:`StateDocuments.follow`).
 
-Reads are the documents at ``HEAD`` (plan D8), parsed once and refreshed when
+Reads are the documents at ``HEAD``, parsed once and refreshed when
 a commit touches the area — and, for a path the writer holds
 (``VaultWriter.held``: a join's differing file left as it is here until the
 person chooses), the document on disk, which is the one in effect. Every

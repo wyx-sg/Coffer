@@ -20,6 +20,9 @@ def test_an_interval_under_a_minute_is_refused_before_anything_is_stored() -> No
     with pytest.raises(ValidationError, match="60"):
         SyncRemoteIn(url=URL, interval_seconds=59)
     assert SyncRemoteIn(url=URL, interval_seconds=60).interval_seconds == 60
+    # The domain object (which also reads a hand-edited remote file) refuses too.
+    with pytest.raises(SyncRemoteInvalid, match="60"):
+        SyncRemote(url=URL, interval_seconds=59)
 
 
 @pytest.mark.acceptance(

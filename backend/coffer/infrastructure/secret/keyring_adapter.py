@@ -1,6 +1,6 @@
 """KeyringAdapter — the only file in the codebase that imports `keyring`.
 
-Secrets themselves live Fernet-encrypted in the coffer DB (see
+Secrets themselves live Fernet-encrypted as files in the vault (see
 encrypted_store.py); the OS keychain is used only for the opt-in
 master-key storage of a development build (master_key.py).
 
@@ -15,7 +15,7 @@ import contextlib
 import keyring  # Secrets-invariant gatekeeper — the only import of keyring in the codebase
 from keyring.errors import KeyringError, KeyringLocked, NoKeyringError
 
-from coffer.domain.errors import SecretLocked
+from coffer.domain.secret_errors import SecretLocked
 
 _SERVICE = "coffer"
 

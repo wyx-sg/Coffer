@@ -1,14 +1,14 @@
 // frontend/src/lib/api/agentTranscripts.ts — the read-only conversation surfaces
 // for /api/v1/agents/{uid}/transcripts: the browse list, and the single-session
 // read behind one conversation's page. Split from agents.ts for file-size. Wire
-// types are aliases of the agent-registry contract's schemas; transport via the shared `call`
+// types are aliases of the agent-registry contract's schemas; transport via the typed client
 // (.agents/frontend.md §4).
 //
 // The two are separate calls because the wire shapes are deliberately different:
 // a listing of a thousand sessions carries no message text at all, and the body
 // only ever travels for the one session a reader opened.
 
-import { call, enc } from "@/lib/api/call";
+import { getApiClient, unwrap } from "@/lib/api/client";
 import type { components, paths } from "@/lib/api/generated/agent-registry";
 
 // ---------------------------------------------------------------------------
@@ -61,15 +61,21 @@ export function listTranscripts(
   agentUid: string,
   opts: TranscriptListParams = {},
 ): Promise<TranscriptSessionListResponse> {
-  const sp = new URLSearchParams();
-  sp.set("limit", String(opts.limit ?? 100));
-  if (opts.cursor) sp.set("cursor", opts.cursor);
-  if (opts.q) sp.set("q", opts.q);
-  if (opts.project) sp.set("project", opts.project);
-  if (opts.sort) sp.set("sort", opts.sort);
-  if (opts.order) sp.set("order", opts.order);
-  return call<TranscriptSessionListResponse>(
-    `/agents/${enc(agentUid)}/transcripts?${sp.toString()}`,
+  return unwrap(
+    getApiClient().GET("/agents/{uid}/transcripts", {
+      params: {
+        path: { uid: agentUid },
+        query: {
+          limit: opts.limit ?? 100,
+          // An empty string means "not set", as it did when the query was built by hand.
+          cursor: opts.cursor || undefined,
+          q: opts.q || undefined,
+          project: opts.project || undefined,
+          sort: opts.sort,
+          order: opts.order,
+        },
+      },
+    }),
   );
 }
 
@@ -85,10 +91,12 @@ export function readTranscriptSession(
   sourcePath: string,
   opts: { limit?: number; offset?: number } = {},
 ): Promise<TranscriptSessionDetail> {
-  const sp = new URLSearchParams({ path: sourcePath });
-  sp.set("limit", String(opts.limit ?? 200));
-  sp.set("offset", String(opts.offset ?? 0));
-  return call<TranscriptSessionDetail>(
-    `/agents/${enc(agentUid)}/transcripts/session?${sp.toString()}`,
+  return unwrap(
+    getApiClient().GET("/agents/{uid}/transcripts/session", {
+      params: {
+        path: { uid: agentUid },
+        query: { path: sourcePath, limit: opts.limit ?? 200, offset: opts.offset ?? 0 },
+      },
+    }),
   );
 }

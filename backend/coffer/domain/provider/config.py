@@ -20,8 +20,8 @@ resource row (ADR per-agent-resource-scope), which the user may set to anything 
 openai-compatible gateway routed to Claude Code). The wire only decides whether
 a newly created connection starts DORMANT (``starts_dormant``) — it cannot
 supply a starting agent LIST any more, because a scope holds agent uids and no
-pure function of this config knows one. Activation lives in
-``is_active`` (≤1 active per agent type, enforced by the switch op);
+pure function of this config knows one. Which connection an agent runs on is
+NOT recorded here: it is ``AgentConfig.connection_uid`` on the agent.
 ``internal_default`` (global, ≤1) marks the connection Coffer's internal engine
 uses.
 
@@ -51,7 +51,9 @@ from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.provider.modality import Modality
 
 # Same ref grammar the secret store accepts (slash-namespaced segments).
-_CRED_REF_PATTERN = re.compile(r"^[A-Za-z0-9_.\-]+(/[A-Za-z0-9_.\-]+)*$")
+_CRED_REF_PATTERN = re.compile(
+    r"^\.*[A-Za-z0-9_\-][A-Za-z0-9_.\-]*(/\.*[A-Za-z0-9_\-][A-Za-z0-9_.\-]*)*$"
+)
 
 #: Shape-only bounds for the curated ``models`` set. Model ids are OPAQUE — they
 #: are passed verbatim to the vendor, and Coffer writes down no model name of its
@@ -163,7 +165,7 @@ def starts_dormant(protocol: str) -> bool:
     """Whether a connection on ``protocol`` is CREATED scoped to no agent.
 
     The whole of what the wire still says about scope, and all it can say. A
-    scope names agents by uid (ADR resource-identity-is-an-immutable-uid), and
+    scope names agents by uid (ADR identity-is-the-uid-inside-the-file), and
     a uid is not derivable from this config — so the old table that handed each
     wire a starting agent LIST is gone, along with the ``claude_code`` /
     ``codex`` name strings this module had to spell out to build it. What
@@ -201,9 +203,6 @@ class ProviderConfig(BaseModel):
     # narrowed by this. Ids are opaque strings passed verbatim to the vendor;
     # Coffer never checks them against a list of its own.
     models: list[CuratedModel] = Field(default_factory=list)
-    # At most one active connection per agent type (enforced by the switch op).
-    # ollama never projects to an agent, so it stays inactive.
-    is_active: bool = False
     # At most one connection globally is Coffer's internal-engine default
     # (enforced by ``ProviderService.set_internal_default``).
     internal_default: bool = False
@@ -260,7 +259,7 @@ class ProviderConfig(BaseModel):
             return None
         if not _CRED_REF_PATTERN.match(v):
             raise ValueError(
-                f"invalid secret_ref {v!r}: must match ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+                f"invalid secret_ref {v!r}: slash-separated [A-Za-z0-9_.-] segments, none only dots"
             )
         return v
 

@@ -132,12 +132,9 @@ async def test_non_json_upstream_surfaces_as_channel_send_failed(
         await adapter.stop()
 
 
-async def test_edit_and_delete_are_unsupported_capabilities(fake_seatalk: FakeSeaTalk) -> None:
+async def test_delete_is_an_unsupported_capability(fake_seatalk: FakeSeaTalk) -> None:
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
-        assert adapter.capabilities.supports_edit is False
-        with pytest.raises(ChannelSendFailed):
-            await adapter.edit_text("emp-1", "m1", "new")
         with pytest.raises(ChannelSendFailed):
             await adapter.delete_message("emp-1", "m1")
     finally:
@@ -726,10 +723,9 @@ async def test_send_text_direct_without_thread_id_omits_thread_field(
     assert "thread_id" not in body["message"]
 
 
-async def test_capabilities_declare_groups_and_history_fetch(fake_seatalk: FakeSeaTalk) -> None:
+async def test_capabilities_declare_history_fetch(fake_seatalk: FakeSeaTalk) -> None:
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
-        assert adapter.capabilities.supports_groups is True
         assert adapter.capabilities.supports_history_fetch is True
     finally:
         await adapter.stop()
@@ -1722,9 +1718,8 @@ async def test_open_live_text_is_declared_and_returns_a_stream_surface(
 ) -> None:
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
-        # supports_edit stays literally false — SeaTalk still cannot rewrite a
-        # delivered message — while the live-text capability is what the core asks.
-        assert adapter.capabilities.supports_edit is False
+        # SeaTalk cannot rewrite a delivered text message; the live-text
+        # capability is what the core asks.
         assert adapter.capabilities.supports_live_text is True
         live = await adapter.open_live_text("emp-1")
         assert isinstance(live, SeaTalkLiveText)

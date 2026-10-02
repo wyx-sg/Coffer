@@ -12,6 +12,7 @@ but this module writes or deletes one.
 from __future__ import annotations
 
 import pathlib
+from datetime import UTC, datetime
 
 from coffer.domain.knowledge.entry import ACTOR_AGENT, KnowledgeFile
 from coffer.domain.knowledge.errors import KnowledgeFileNotFound
@@ -75,13 +76,28 @@ def submit_material(
     return target.name
 
 
+def _submitted_at(entry: pathlib.Path) -> float:
+    """When an item was submitted: its own ``created_at``, else its file time.
+
+    The file time is only a fallback. A checkout, a restore or a sync round
+    rewrites every mtime at once and would scramble "oldest first" ("A modification
+    time never decides"), whereas ``created_at`` travels with the item.
+    """
+    try:
+        fm, _ = split_frontmatter(decode(entry.read_bytes()))
+        stamp = datetime.fromisoformat(str(fm.get("created_at") or ""))
+    except (OSError, ValueError):
+        return entry.stat().st_mtime
+    return (stamp if stamp.tzinfo else stamp.replace(tzinfo=UTC)).timestamp()
+
+
 def inbox_items(collection: str) -> tuple[str, ...]:
-    """The names of a collection's unmerged items, oldest first."""
+    """The names of a collection's unmerged items, oldest submitted first."""
     directory = paths.inbox_dir(collection)
     if not directory.is_dir():
         return ()
     found = [
-        (entry.stat().st_mtime, entry.name)
+        (_submitted_at(entry), entry.name)
         for entry in directory.iterdir()
         if entry.is_file() and is_markdown(entry.name)
     ]

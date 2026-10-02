@@ -231,19 +231,6 @@ export function presenceAvailable(): boolean {
 /** In the desktop shell? For Settings › Daemon's Restart and About's host line. */
 export const inDesktopShell = (): boolean => isTauri();
 
-/** What `presence_mode` reports about the daemon the shell signs for. */
-export interface PresenceMode {
-  /** A development build keeps its master key in a file any local process can
-   *  read, so a grant can be forged there and the boundary does not hold. */
-  development: boolean;
-}
-
-/** Ask the shell whether the daemon is a development build. Throws outside it. */
-export async function presenceMode(): Promise<PresenceMode> {
-  if (!isTauri()) throw new PresenceUnavailableError("presence_mode");
-  return shellInvoke<PresenceMode>("presence_mode");
-}
-
 /** Reveal one secret's plaintext after a presence check. Throws outside the shell. */
 export async function revealSecret(secretRef: string): Promise<string> {
   if (!isTauri()) throw new PresenceUnavailableError("reveal_secret");

@@ -304,6 +304,49 @@ def test_changing_where_a_secret_goes_asks_again(daemon: BoundaryDaemon) -> None
     assert len(d.audit("secret_approval_approved")) == 1
 
 
+def _waiting_on_disk(d: BoundaryDaemon) -> list[dict[str, Any]]:
+    """The pending binding approvals as the daemon's own file holds them, read
+    without listing anything (a listing would evaluate every destination)."""
+    return [
+        a
+        for a in d.local_secrets("approvals").get("approvals", [])
+        if a["op"] == "bind" and a["status"] == "pending"
+    ]
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="a destination registered with a stored secret is settled at once"
+)
+def test_a_registration_settles_its_bindings_before_any_use(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    d.store("mcp_server/shared/TOKEN", "shared-value-123")
+    first = d.register_stdio("first", "server-one", {"TOKEN": "mcp_server/shared/TOKEN"})
+    assert d.local_secrets("bindings"), "the first server's binding is recorded by its registration"
+    assert _waiting_on_disk(d) == []
+
+    second = d.register_stdio("second", "evil.sh", {"TOKEN": "mcp_server/shared/TOKEN"})
+
+    [waiting] = _waiting_on_disk(d)
+    assert waiting["destination_uid"] == second["uid"] and waiting["target"] == "stdio evil.sh"
+    assert d.resolve_for(first) == {"TOKEN": "shared-value-123"}
+
+
+@pytest.mark.acceptance(spec="secret", scenario="a target change waits where it is saved")
+def test_a_target_change_waits_as_soon_as_it_is_saved(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    d.store("gh/token", "ghp_boundary_value_1")
+    first = d.register_stdio("first", "server-one", {"TOKEN": "gh/token"})
+    config = {**first["config"]}
+    config["transport"] = {**config["transport"], "command": "curl-to-attacker"}
+
+    r = d.client.patch(f"/api/v1/resources/{first['uid']}", json={"config": config})
+
+    assert r.status_code == 200, r.text
+    [waiting] = _waiting_on_disk(d)
+    assert waiting["destination_uid"] == first["uid"]
+    assert waiting["target"] == "stdio curl-to-attacker"
+
+
 @pytest.mark.acceptance(
     spec="secret", scenario="a value supplied for its destination needs no approval"
 )
@@ -413,12 +456,15 @@ def test_replacing_a_value_in_use_waits(daemon: BoundaryDaemon) -> None:
     approval = r.json()["approval"]
     assert approval["op"] == "replace_value" and "attacker-bot-token" not in r.text
     assert d.value("gh/token") == "ghp_boundary_value_1"
-    [held] = d.local_secrets("approvals")["approvals"]
+    # The second server's own binding has waited since it was registered; only
+    # the replacement holds a sealed value.
+    [held] = [a for a in d.local_secrets("approvals")["approvals"] if a["op"] == "replace_value"]
     assert held["pending_ciphertext"]
     assert b"attacker-bot-token" not in base64.b64decode(held["pending_ciphertext"])
     d.approve(approval["id"])
     assert d.value("gh/token") == "attacker-bot-token"
-    assert [a["pending_ciphertext"] for a in d.local_secrets("approvals")["approvals"]] == [None]
+    replaced = [a for a in d.local_secrets("approvals")["approvals"] if a["op"] == "replace_value"]
+    assert [a["pending_ciphertext"] for a in replaced] == [None]
 
 
 @pytest.mark.acceptance(
@@ -483,6 +529,9 @@ def test_a_push_token_pointed_at_a_new_url_waits(daemon: BoundaryDaemon) -> None
     d.store("sync/push-token", "push-token-value")
     resolver = boundary_resolver(get_secret_store())
     first = sync_remote_destination("https://git.example.com/me/vault.git")
+    # Setting the remote is what supplies the token for it (the seam the sync
+    # service runs when a remote is set).
+    d.boundary.bind(first, {"token": "sync/push-token"}, actor="user")
     assert resolver.materialize({"token": "sync/push-token"}, first) == {
         "token": "push-token-value"
     }

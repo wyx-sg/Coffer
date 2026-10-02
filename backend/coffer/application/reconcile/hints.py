@@ -1,11 +1,10 @@
-"""Where ``Changed(kind, uid, rev)`` hints come from: every write to a
+"""Where ``Changed(kind, uid, op)`` hints come from: every write to a
 resource row.
 
 :class:`HintingResourceRepo` wraps the resource repository the
-``ResourceService`` writes through. After each write that returns the row it
-emits one hint carrying the row's new revision; a delete emits the row's last
-revision plus one, marked ``op="delete"``. Because every surface — REST, the
-CLI through the daemon, a sync import's appliers — writes through
+``ResourceService`` writes through. After each write that returns the resource
+it emits one hint; a delete emits one marked ``op="delete"``. Because every
+surface — REST, the CLI through the daemon — writes through
 ``ResourceService``, this one seam sees them all, and no kind has to remember
 to announce its own writes.
 
@@ -40,9 +39,8 @@ class HintingResourceRepo:
     def _emit(self, resource: Resource | None, *, op: ChangeOp = "upsert") -> None:
         if resource is None:
             return
-        rev = resource.rev + 1 if op == "delete" else resource.rev
         try:
-            self._sink(Changed(resource.kind, resource.uid, rev, op))
+            self._sink(Changed(resource.kind, resource.uid, op))
         except Exception:
             _log.exception("reconcile.hint_failed")
 
@@ -56,6 +54,9 @@ class HintingResourceRepo:
 
     async def list(self, kind: str | None = None, enabled: bool | None = None) -> list[Resource]:
         return await self._inner.list(kind=kind, enabled=enabled)
+
+    async def ensure_writable(self, uid: str) -> None:
+        await self._inner.ensure_writable(uid)
 
     # --- writes announce themselves -------------------------------------------
 

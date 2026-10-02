@@ -42,12 +42,14 @@ from coffer.application.knowledge.service import (
     CatalogueChanged,
     KnowledgeService,
 )
+from coffer.domain.features import KNOWLEDGE
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 from coffer.infrastructure.knowledge.history import KNOWLEDGE_HISTORY
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.infrastructure.platform.host import machine_label
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
+from coffer.surfaces.http.event_dependencies import announce_change
 from coffer.surfaces.http.guide_wiring import GuideRenderer
 from coffer.surfaces.http.knowledge.dependencies import (
     set_history_service,
@@ -98,9 +100,9 @@ def wire_knowledge_kind(
         on_catalogue_changed=on_catalogue_changed,
         merge_available=_merge_available,
         # Every write a commit naming its writer (spec knowledge "Keep every
-        # document's history and undo a pass as a whole"), in the knowledge
-        # root's own repository until the vault is one.
+        # document's history and undo a pass as a whole"), in the vault's repository.
         history=KNOWLEDGE_HISTORY,
+        announce=lambda uid: announce_change(KIND_KNOWLEDGE, uid),
     )
     set_knowledge_service(service)
     set_history_service(
@@ -123,18 +125,26 @@ def wire_knowledge_kind(
     )
     set_ingest_service(ingest_service)
 
+    features = app.state.feature_service
+
     async def _render_guide() -> str:
         # One rendering for the whole machine: the catalogue carries no
-        # per-agent slice, so there is one text and every agent gets it. The
-        # memory root is read off the registry the memory kind put it in: this
-        # kind may not import that one.
+        # per-agent slice, so there is one text and every agent gets it.
+        # While the ``knowledge`` feature is off the skill carries no catalogue,
+        # documents no knowledge tool and does not name the memory root (spec
+        # experimental-features); nothing the feature holds moves. The memory
+        # root is read off the registry the memory kind put it in, which
+        # answers None while that feature is off.
+        on = features.is_enabled(KNOWLEDGE)
         memory_root = builtin_tools.directory("memory")
-        if memory_root is None:
-            raise RuntimeError("the memory kind registered no memory root")
         return guide_render.render(
             guide_render.display_root(paths.knowledge_root()),
-            await service.catalogue(),
-            memory_root=guide_render.display_memory_root(pathlib.Path(memory_root)),
+            await service.catalogue() if on else None,
+            memory_root=(
+                guide_render.display_memory_root(pathlib.Path(memory_root))
+                if memory_root is not None
+                else None
+            ),
         )
 
     register_knowledge_builtin_tools(builtin_tools, knowledge_service=service)

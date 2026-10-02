@@ -41,7 +41,8 @@ daemon log.
 check accepts. The backend test suite sets ``*`` because it drives the ASGI
 app in-process, where transports send made-up authorities like
 ``testserver``; the guard's own tests clear it. It never relaxes the Origin
-check. Nothing in a real deployment should need it.
+check. A tagged release (``build_channel.CHANNEL == "stable"``) does not read
+it at all; nothing in a real deployment should need it.
 """
 
 from __future__ import annotations
@@ -54,6 +55,7 @@ from fastapi.responses import JSONResponse
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from coffer import build_channel
 from coffer.infrastructure.net import loopback_authority
 from coffer.surfaces.http import cors, daemon_port
 
@@ -78,6 +80,12 @@ _logged: set[tuple[str, str]] = set()
 
 
 def _allowed_extra() -> tuple[str, ...]:
+    # A tagged release never reads the environment for this: the CLI starts the
+    # daemon from the caller's process, so whatever the caller's shell exports
+    # would otherwise weaken the Host rule (ADR rule 3: no environment variable
+    # may weaken the protections).
+    if build_channel.CHANNEL == "stable":
+        return ()
     raw = os.environ.get("COFFER_ALLOWED_HOSTS", "")
     return tuple(part.strip().lower() for part in raw.split(",") if part.strip())
 

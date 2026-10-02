@@ -68,6 +68,7 @@ line each:
 | `scripts/check_agent_type_branches.py`       | `make lint`           | Code outside the agent descriptor and its facets branches on an agent type (tests: `test_agent_type_gate.py`)              |
 | `scripts/check_frontend_colors.py`           | `make lint`           | A colour literal appears in `frontend/src/` outside `index.css` (tests: `test_frontend_colors_gate.py`)                     |
 | `scripts/check_ignored_sources.py`           | `make lint`           | A `.gitignore` rule hides a path in a source tree, or an unanchored pattern names a source-folder word such as `lib/`      |
+| `scripts/check_bare_tasks.py`                | `make lint`           | A module under `backend/coffer/` makes more `create_task` / `ensure_future` calls than its allowance in the script (background work goes through `application/runtime/supervisor`; tests: `test_bare_tasks_gate.py`) |
 | `scripts/dump_i18n_backend_keys.py --check`  | `make lint`           | A backend error code or audit event type is missing from the frontend's locale-coverage fixture                             |
 | `scripts/check_unit_purity.py`               | `make verify-unit`    | A test under `backend/tests/unit/` imports an I/O module                                                                    |
 | `openspec validate --all --strict`          | `make verify-acceptance` | A spec or change is malformed, or a requirement owns no scenario (runs first, before `audit_acceptance.py`)             |
@@ -83,7 +84,7 @@ or `release.yml` and never by `make verify`: `build_binaries.sh`
 (`make refresh-prices`) and `render_tray_icons.sh` (redraws the desktop tray
 icons from `desktop/icons/tray/tray.svg`).
 
-Each gate's own tests live in `backend/tests/integration/harness/`.
+Where a gate has tests of its own they live in `backend/tests/integration/harness/`. `scripts/verify_lock.py` is run-time tooling, not a gate: `make verify-integration` runs the integration suite through it so a second run on one machine queues instead of competing.
 
 ## How it is tested
 

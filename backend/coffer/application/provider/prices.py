@@ -71,10 +71,6 @@ class ProviderPriceResolver:
         self._reported = reported
 
     @property
-    def bundled_list(self) -> BundledPrices:
-        return self._bundled()
-
-    @property
     def bundled_version(self) -> str:
         return self._bundled().version
 

@@ -371,7 +371,7 @@ wheels = [
 
 [[package]]
 name = "coffer"
-version = "0.1.1"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
@@ -382,7 +382,6 @@ dependencies = [
     { name = "httpx" },
     { name = "httpx2" },
     { name = "keyring" },
-    { name = "langchain" },
     { name = "langchain-anthropic" },
     { name = "langchain-ollama" },
     { name = "langchain-openai" },
@@ -439,7 +438,6 @@ requires-dist = [
     { name = "import-linter", marker = "python_full_version == '3.14.*' and platform_machine == 'x86_64' and sys_platform == 'darwin' and extra == 'dev'", specifier = ">=1.10,<1.11" },
     { name = "import-linter", marker = "(python_full_version != '3.14.*' and extra == 'dev') or (platform_machine != 'x86_64' and extra == 'dev') or (sys_platform != 'darwin' and extra == 'dev')", specifier = ">=2.0" },
     { name = "keyring", specifier = ">=25.0" },
-    { name = "langchain", specifier = ">=1.3" },
     { name = "langchain-anthropic", specifier = ">=1.4" },
     { name = "langchain-ollama", specifier = ">=1.1" },
     { name = "langchain-openai", specifier = ">=1.2" },
@@ -1300,20 +1298,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/43/4b/674af6ef2f97d56f0ab5153bf0bfa28ccb6c3ed4d1babf4305449668807b/keyring-25.7.0.tar.gz", hash = "sha256:fe01bd85eb3f8fb3dd0405defdeac9a5b4f6f0439edbb3149577f244a2e8245b", size = 63516, upload-time = "2025-11-16T16:26:09.482Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/81/db/e655086b7f3a705df045bf0933bdd9c2f79bb3c97bfef1384598bb79a217/keyring-25.7.0-py3-none-any.whl", hash = "sha256:be4a0b195f149690c166e850609a477c532ddbfbaed96a404d4e43f8d5e2689f", size = 39160, upload-time = "2025-11-16T16:26:08.402Z" },
-]
-
-[[package]]
-name = "langchain"
-version = "1.3.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "langchain-core" },
-    { name = "langgraph" },
-    { name = "pydantic" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/11/e5/6350e77a9e2764eaafcb2d581cbf0b800f53c6bc98fdf5ebc85f3a931ded/langchain-1.3.1.tar.gz", hash = "sha256:bc283c220233230f48b8e50ab1fbf1b688bcb206d933fa448d40a9b143177f62", size = 581329, upload-time = "2026-05-15T18:14:55.368Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/78/11/3d7ed10b535413a07ed5e15682abcb77f3c4204ac49586977a495f9b24e6/langchain-1.3.1-py3-none-any.whl", hash = "sha256:154e9c30c90b391eba4315296f6bf6b6fac6b058ddea4cc771a10470968fe36f", size = 114345, upload-time = "2026-05-15T18:14:53.984Z" },
 ]
 
 [[package]]

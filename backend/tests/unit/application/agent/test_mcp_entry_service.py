@@ -37,6 +37,7 @@ from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import (
+    AdoptSecretRefExists,
     AdoptSecretUnresolved,
     McpEntryProtected,
     McpEntrySourceAmbiguous,
@@ -190,9 +191,17 @@ class FakeResourceService:
 class FakeKeyring:
     def __init__(self) -> None:
         self.set_calls: list[tuple[str, str]] = []
+        self.values: dict[str, str] = {}
 
     def set(self, ref: str, value: str) -> None:
         self.set_calls.append((ref, value))
+        self.values[ref] = value
+
+    def delete(self, ref: str) -> None:
+        self.values.pop(ref, None)
+
+    def exists(self, ref: str) -> bool:
+        return ref in self.values
 
 
 class FakeAuditRepo:
@@ -523,12 +532,14 @@ async def test_adopt_unresolved_secret_rejected(svc, store, rs, keyring):
 # ---------------------------------------------------------------------------
 
 
-async def test_adopt_name_conflict_bubbles(svc, store, rs):
+async def test_adopt_name_conflict_bubbles(svc, store, rs, keyring):
     store._files[_CODEX_CONFIG] = _CODEX_TOML
     rs.raise_on_register = ResourceAlreadyExists("mcp_server", "jira")
 
     with pytest.raises(ResourceAlreadyExists):
         await svc.adopt(_CX_UID, "jira", secrets={"JIRA_API_TOKEN": "mcp/jira/T"})
+
+    assert keyring.values == {}  # the value this call wrote is gone again
 
     assert store._files[_CODEX_CONFIG] == _CODEX_TOML  # file unchanged
     assert store._writes == []
@@ -656,3 +667,55 @@ async def test_adopt_rollback_on_verify_failure(svc, store, rs):
     # File untouched.
     assert store._files[_CODEX_CONFIG] == _CODEX_TOML
     assert store._writes == []
+
+
+# ---------------------------------------------------------------------------
+# adopt never replaces or deletes a secret it did not create
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="secret",
+    scenario="adopting an MCP entry never replaces or deletes a secret it did not create",
+)
+async def test_adopt_refuses_a_ref_that_already_holds_a_value(svc, store, rs, keyring):
+    """Re-adopting an entry whose refs exist must leave them exactly as they
+    are: no overwrite before the register, and no delete when it then fails."""
+    store._files[_CODEX_CONFIG] = _CODEX_TOML
+    keyring.values["mcp/jira/T"] = "in-use-by-an-existing-server"
+
+    with pytest.raises(AdoptSecretRefExists):
+        await svc.adopt(_CX_UID, "jira", secrets={"JIRA_API_TOKEN": "mcp/jira/T"})
+
+    assert keyring.values == {"mcp/jira/T": "in-use-by-an-existing-server"}
+    assert keyring.set_calls == []
+    assert rs.resources == []
+
+
+@pytest.mark.acceptance(
+    spec="secret",
+    scenario="adopting an MCP entry never replaces or deletes a secret it did not create",
+)
+async def test_adopt_refuses_a_standalone_name(svc, store, keyring):
+    store._files[_CODEX_CONFIG] = _CODEX_TOML
+
+    with pytest.raises(AdoptSecretRefExists):
+        await svc.adopt(_CX_UID, "jira", secrets={"JIRA_API_TOKEN": "secret/shared"})
+
+    assert keyring.values == {}
+
+
+@pytest.mark.acceptance(
+    spec="secret",
+    scenario="adopting an MCP entry never replaces or deletes a secret it did not create",
+)
+async def test_adopt_name_clash_is_answered_before_any_secret_is_written(svc, store, rs, keyring):
+    store._files[_CODEX_CONFIG] = _CODEX_TOML
+    await svc.adopt(_CX_UID, "jira", secrets={"JIRA_API_TOKEN": "mcp/jira/T"})
+    store._files[_CODEX_CONFIG] = _CODEX_TOML  # the entry is still in the file
+
+    with pytest.raises(ResourceAlreadyExists):
+        await svc.adopt(_CX_UID, "jira", secrets={"JIRA_API_TOKEN": "mcp/jira/T"})
+
+    # The first adoption's secret survives the second attempt untouched.
+    assert keyring.values["mcp/jira/T"]

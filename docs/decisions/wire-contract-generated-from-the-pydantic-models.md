@@ -1,70 +1,62 @@
 # The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
 **Related**: [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do](desktop-shell-over-a-shared-frontend.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database](one-level-triggered-reconciler-compares-parameters.md), spec chat "Recover a dropped event stream with bounded retries", spec chat "Send fire-and-return and stream output over one subscription", PR #392
 
 ## Context
 
-The wire contract today runs **hand-written YAML → everything else**.
-`.agents/stack.md` line 80 states it:
+Before this decision the wire contract ran **hand-written YAML → everything
+else**: each capability's `contracts/api.openapi.yaml` was written and
+PR-reviewed by hand, the backend's Pydantic `BaseModel`s were hand-written to
+match it, and the frontend's typed client was generated from it. The stack
+notes and the design-principles page both said so.
 
-> The authoritative wire contract for any feature is `openspec/specs/<short-name>/contracts/api.openapi.yaml` (hand-written, PR-reviewed …). Backend Pydantic `BaseModel`s are HAND-WRITTEN to match the yaml.
+Measured on `main` at `b7d3e505`, before the change:
 
-and `docs-site/architecture/design-principles.md` line 58, under "Spec as
-truth", repeats it: "backend models are hand-written to match it, `make
-verify-contract` fails on structural drift, and the frontend's typed client
-is generated from it."
-
-Measured on `main` at `b7d3e505`:
-
-- **Two hand-written copies of one fact.** There are 13 contract files under
-  `openspec/specs/*/contracts/` and a Pydantic model behind every route. FastAPI
-  already derives an OpenAPI document from those models (`app.openapi()`),
-  and the docs-site REST reference is generated from that runtime document
-  (`docs-site/scripts/gen_rest_reference.py`), not from the YAML. The YAML is a
-  third description, kept in step by tests.
-- **The backend gates are good and still leak.**
-  `backend/tests/contract/` checks route sets both ways
-  (`test_contract_coverage.py`), property names
-  (`test_schemas_match_openapi.py`) and, since PR #392, property type kinds
-  (`test_schema_types_match_openapi.py`). That last module's docstring names
-  four divergences the name-only gates had let ship (`SkillOut.scope` served
-  as an object while declared an array, among them) and lists deliberate
-  blind spots — constraints, nullable spellings, formats — because two
-  hand-written documents legitimately disagree there.
-- **The frontend is where types are actually hand-written.**
-  `frontend/src/lib/api/` holds 21 domain modules beside the four shared ones
-  (`call`, `client`, `errors`, `queryKeys`). Eleven of them declare 46
-  `export interface` wire types by hand, and the modules make 109
-  `call<T>()` calls whose `T` is chosen by hand. No gate compares any of those
-  types with anything: `codegen:check` only proves `generated/` matches the
-  YAML. `memory` is excluded from codegen altogether (`frontend/scripts/codegen.mjs`,
-  because its contract's schema names differ from what `memoryTypes.ts`
-  exports). The typed `openapi-fetch` client covers only the mcp-gateway
+- **Two hand-written copies of one fact.** There were 13 contract files under
+  `openspec/specs/*/contracts/` and a Pydantic model behind every route.
+  FastAPI already derives an OpenAPI document from those models
+  (`app.openapi()`), so the YAML was a third description, kept in step by
+  tests.
+- **The backend gates were good and still leaked.** The contract tests
+  checked route sets both ways, property names and, since PR #392, property
+  type kinds. The type gate's docstring named four divergences the name-only
+  gates had let ship (`SkillOut.scope` served as an object while declared an
+  array, among them) and listed deliberate blind spots — constraints,
+  nullable spellings, formats — because two hand-written documents
+  legitimately disagree there.
+- **The frontend was where types were actually hand-written.** Eleven of the
+  21 domain modules under `frontend/src/lib/api/` declared 46
+  `export interface` wire types by hand, and the modules made 109 hand-written
+  `call<T>()` calls (since replaced by the generated typed client) whose `T`
+  was chosen by hand. No gate compared any of those types
+  with anything: the codegen check only proved `generated/` matched the YAML.
+  The `memory` capability was excluded from codegen altogether, because its
+  contract's schema names differed from what the hand-written types
+  exported. The typed `openapi-fetch` client covered only the mcp-gateway
   paths.
-- **Every route declares a shape.** Of 165 route decorators, 143 declare
-  `response_model` and 22 declare `response_class` — 204 no-body responses,
-  the MCP protocol endpoint and the chat SSE stream — so
-  `scripts/check_response_models.py` passes. The gap is not in the backend.
-- **There is no daemon-wide change feed.** The only streams are chat's
-  per-conversation `GET …/events` and the MCP protocol endpoint. The UI keeps
-  other data fresh by polling: `refetchInterval` in `useSync`, `useUpkeep`,
-  `useChannels`, `useDaemon` and `useMcpInvocations` (5 s to 60 s). Chat's
-  stream reader (`frontend/src/lib/chat/streamClient.ts`) already uses `fetch`
-  with the `X-Coffer-Token` header, because `EventSource` cannot send one.
-- **Lists page by `limit`, `since` and `offset`** (`mcp/invocation_routes.py`,
-  `agent_transcript_routes.py`), which skip or repeat rows when new ones
-  arrive mid-read.
+- **Every route declared a shape.** Of 165 route decorators, 143 declared
+  `response_model` and 22 `response_class` (204 no-body responses, the MCP
+  protocol endpoint and the chat SSE stream), so
+  `scripts/check_response_models.py` passed. The gap was not in the backend.
+- **There was no daemon-wide change feed.** The only streams were chat's
+  per-conversation `GET …/events` and the MCP protocol endpoint. The UI kept
+  other data fresh by polling (`refetchInterval` of 5 s to 60 s in several
+  hooks). Chat's stream reader (`frontend/src/lib/chat/streamClient.ts`)
+  already uses `fetch` with the `X-Coffer-Token` header, because
+  `EventSource` cannot send one.
+- **Lists paged by `limit`, `since` and `offset`**, which skip or repeat rows
+  when new ones arrive mid-read.
 
 ## Options Considered
 
 ### Option A — Pydantic models → generated OpenAPI → generated client (chosen)
 
 The Pydantic models in `surfaces/http/` are the single hand-written
-description of the wire. A generator writes the app's OpenAPI document, split
-by path ownership into each capability's `contracts/api.openapi.yaml`, so the
+description of the wire. A generator (`scripts/gen_contracts.py`, `make contracts`) writes the app's
+OpenAPI document, split by a route-ownership table into each capability's `contracts/api.openapi.yaml`, so the
 contract stays inside the spec folder and every change to it is visible as a
 diff in review. The frontend's client and types are generated from those
 files for **every** capability, and request functions are thin wrappers over
@@ -72,26 +64,27 @@ the generated client.
 
 Gates change accordingly:
 
-- **Freshness, not agreement.** CI regenerates the contracts and fails if the
-  checked-in files differ. Backend ↔ YAML cannot disagree, so the
-  hand-maintained exclusions in `test_schema_types_match_openapi.py` go away
-  with it.
+- **Freshness, not agreement.** `make lint` runs
+  `scripts/gen_contracts.py --check`, which regenerates the contracts and
+  fails if the checked-in files differ, and also fails when a served route has
+  no owning capability. Backend and YAML cannot disagree, so the
+  hand-maintained exclusions of the old name-and-type gates are gone.
 - **Types at the consumer.** Wire types in `frontend/src/lib/api/` are aliases
-  of generated schemas only; a lint rule rejects a hand-written `interface` or
-  `type` there that is not marked UI-only, and `tsc` over the generated
-  client is the type check — it compares types, not names.
+  of generated schemas only; `frontend/scripts/check-wire-types.mjs` (part of
+  `codegen:check`) rejects a hand-written `interface` or object-shaped `type`
+  there that is not marked UI-only, and `tsc` over the generated client is the
+  type check — it compares types, not names.
 - **Schema names are stable.** Models carry explicit schema names so a class
   rename is not a wire rename.
 
 Migration happens **per domain on the existing paths**: a domain's models are
 brought to what the UI really consumes, its contract becomes generated, its
-hand-written module is deleted, and the next domain follows. There is no
-`/api/v2` beside `/api/v1`.
+hand-written types are replaced by generated ones, and the next domain
+follows. There is no `/api/v2` beside `/api/v1`.
 
 - **Pros.** One description of the wire instead of three; the class of bug the
-  type gate was written for cannot occur; the frontend's 46 hand-written
-  interfaces and `memory`'s exclusion disappear; the docs-site reference and
-  the contract finally come from the same document.
+  type gate was written for cannot occur; the frontend's hand-written
+  interfaces and `memory`'s exclusion disappear.
 - **Cons.** The contract is no longer designed ahead of the code in YAML; a
   reviewer designs it in Pydantic and reads the generated diff. Generated
   schema names and nullable spellings are FastAPI's, so a model change can
@@ -149,12 +142,12 @@ The contract also fixes how the UI learns that data changed:
 
 - **Option E1 — a daemon-wide change feed of invalidation hints (chosen).**
   One `GET /api/v1/events` stream carries envelopes
-  `{seq, kind, id, rev, op}` — a sequence number, the resource kind, its uid,
-  its revision, and `upsert` / `delete`. An envelope says *what* changed,
+  `{seq, kind, id, op}` — a sequence number, the resource kind, its uid (or
+  none for the attention list), and `upsert` / `delete`. An envelope says *what* changed,
   never the new state: the client invalidates the matching queries and
   refetches through the normal typed endpoints, so the stream can never become
   a second, untyped copy of the contract. The client resumes with
-  `Last-Event-ID`; when the daemon no longer holds that `seq`, it sends
+  `Last-Event-ID`; when the daemon's bounded replay buffer no longer holds that `seq`, it sends
   `resync` and the client refetches everything. The stream is read with
   `fetch` and the token header, as chat's stream already is. Chat's
   per-conversation token stream stays its own endpoint, because it carries
@@ -177,43 +170,35 @@ running app and checked in, and the frontend's client and types are generated
 from those files for every capability. Gates check that the contracts are
 fresh and that frontend wire types are generated, so types are compared by
 the compiler rather than names by a script. Migration is per domain on the
-existing `/api/v1` paths, deleting each hand-written module as its domain
-moves. UI freshness comes from one change feed whose envelopes
-(`seq`, `kind`, `id`, `rev`, `op`) are invalidation hints only, resumable by
-`Last-Event-ID` with a `resync` fallback, read over `fetch` with the token
+existing `/api/v1` paths. UI freshness comes from one change feed whose
+envelopes (`seq`, `kind`, `id`, `op`) are invalidation hints only, resumable
+by `Last-Event-ID` with a `resync` fallback, read over `fetch` with the token
 header; growing lists page by cursor.
 
-**This reverses a stated rule, so it needs an amendment in a separate PR,
-which is not part of this ADR's change.** [Principles](../../docs-site/architecture/principles.md)
-states Spec-as-Truth at line 54 — "Specifications under `openspec/specs/` …
-are the canonical product contract" — but has **no clause on which way the
-wire contract is derived**; the hand-written direction is stated in
-`docs-site/architecture/design-principles.md` line 58 and `.agents/stack.md`
-line 80, quoted above. The amending PR adds that direction explicitly under
-Spec-as-Truth (the behavioural spec is written first; the wire schema inside
-the spec folder is generated from the models and reviewed as a diff) and
-rewrites those two passages, following the Amendments procedure in
-Principles. No domain migrates before that PR merges.
+The direction is written into [Principles](../../docs-site/architecture/principles.md)
+under Spec-as-Truth ("Contract direction"): the behavioural spec is written
+first; the wire schema inside the spec folder is generated from the models and
+reviewed as a diff; the frontend's client and wire types are generated from
+that schema.
 
 ## Consequences
 
-- **Supersedes** the hand-written direction recorded in `.agents/stack.md`,
-  `.agents/frontend.md` ("hand-written — with a comment saying why — only where
-  the contract is narrower") and `.agents/openspec.md`, once the amendment
-  lands.
-- `test_schema_types_match_openapi.py`, `test_schemas_match_openapi.py` and
-  the per-capability `test_*_openapi.py` shape tests are replaced by the
-  freshness check; `test_contract_coverage.py` keeps its role of proving each
-  served route has an owning capability. `check_response_models.py` stays.
-  `codegen:check` is rewritten to check that no hand-written wire type
-  remains.
-- The docs-site REST reference and the contracts now come from the same
-  document.
-- The change feed needs a monotonic `rev` per resource, shared with the
-  reconciler's `Changed` hint, and a bounded replay buffer in the daemon.
-- **Follow-up work:** the generator and freshness gate, run once beside the
-  current gates before any domain moves; per-domain migration in the order the
-  v0.2 pages ship (MCP, Skills, Agents, Settings, Activity), each deleting its
-  hand-written module; the events endpoint and a query-invalidation client;
-  cursor pagination for invocations, audit and transcripts; the principles
-  amendment PR.
+- `scripts/gen_contracts.py` and its `--check` mode replace the hand-written
+  contracts and the name-and-type agreement tests; the contract tests that
+  remain under `backend/tests/contract/` prove each served route has an owning
+  capability and check individual behaviours. `scripts/check_response_models.py`
+  stays.
+- The frontend's `codegen:check` regenerates the types and runs
+  `check-wire-types.mjs`, which fails on a hand-written wire type unless it is
+  marked UI-only.
+- The change feed's replay buffer is bounded and lives in the daemon's event
+  broker; a client that falls behind receives one `resync`. The envelope
+  carries no revision, because a client refetches rather than reconciles.
+- Growing lists (audit, invocations, transcripts) page by an opaque cursor
+  bound to the filters it was issued with.
+- Built: every frontend call site goes through the generated typed client
+  (`unwrap` / `unwrapVoid` / `unwrapOptional`); no hand-written wire type or
+  `call<T>()` remains. The chat turn-event stream is part of the contract too
+  (`TurnEventMessage`, read by `lib/chat/streamClient.ts`).
+- Not built yet: a generated REST reference for the docs site. The docs-site
+  generates only its CLI reference; the contracts are the REST reference.

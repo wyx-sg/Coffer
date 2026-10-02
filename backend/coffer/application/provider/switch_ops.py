@@ -1,11 +1,16 @@
-"""The switch itself: activate one connection, or put an agent back on its own
+"""The switch itself: put one agent on a connection, or back on its own
 built-in login (spec provider-switching).
 
-Both halves of one invariant — at most one active connection PER AGENT TYPE —
-so they live together rather than beside the CRUD they are not. Each projects
-(or de-projects) BEFORE it touches the ``is_active`` flag, so a native-config
+Both are PER AGENT. Which connection an agent runs on is a field of the agent's
+own record (``AgentConfig.connection_uid``), so a switch changes that agent's
+native config file and that agent's record and nothing else: no other agent type
+is de-projected, no other connection loses a flag, and there is no
+all-or-nothing "revert as a unit".
+
+Each projects (or de-projects) BEFORE it touches the record, so a native-config
 write that fails, or that the store refuses because the user edited the file,
-leaves the registry exactly as it was.
+leaves the registry exactly as it was — and the file is put back if the write
+that follows it is the one that failed.
 
 Lives here rather than in ``provider/service.py`` because that module is at its
 file-size ceiling; ``ProviderService.activate`` / ``deactivate`` stay thin
@@ -17,56 +22,74 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coffer.application.provider.projection_ops import deproject_connection, project_connection
+from coffer.application.provider.projector import Priors
 from coffer.application.provider.results import ActivateResult, DeactivateResult
+from coffer.application.provider.targets import connection_for_agent, reaches
+from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
+from coffer.domain.errors import ResourceNotFound
 from coffer.domain.provider.config import Protocol
-from coffer.domain.provider.errors import ProviderInternalOnly
+from coffer.domain.provider.errors import ProviderDoesNotReachAgent, ProviderInternalOnly
 from coffer.domain.resource import Resource
 
 if TYPE_CHECKING:
     from coffer.application.provider.service import ProviderService
 
 
-async def activate(service: ProviderService, uid: str, *, actor: str) -> ActivateResult:
-    """Make this the active connection for each agent its scope reaches, and
-    project it into every enabled agent of those types."""
+def agent_of_type(agents: list[Resource], agent_type: AgentType) -> Resource | None:
+    """The registered agent of ``agent_type`` (there is at most one)."""
+    for row in agents:
+        try:
+            if AgentConfig.model_validate(row.config).type is agent_type:
+                return row
+        except ValueError:
+            continue
+    return None
+
+
+async def activate(
+    service: ProviderService, uid: str, agent_type: AgentType, *, actor: str
+) -> ActivateResult:
+    """Make ``uid`` the connection the agent of ``agent_type`` runs on, and
+    project it into that agent's native config."""
     resource = await service.get(uid)
     cfg = service._cfg(resource)
-    # ollama is internal-only: it reaches no agent, is never ``is_active`` and
-    # activating it writes nothing. Refused before anything is touched, so no
-    # other connection is switched off on its behalf either.
+    # ollama is internal-only: it reaches no agent and switching one onto it
+    # writes nothing. Refused before anything is touched.
     if cfg.protocol is Protocol.OLLAMA:
         raise ProviderInternalOnly(resource.name)
     agents = await service._agents.list()
-    targets = service._compat(resource, agents)
+    agent = agent_of_type(agents, agent_type)
+    if agent is None:
+        raise ResourceNotFound(agent_type.default_name())
+    if not agent.enabled:
+        # Coffer writes nothing into an agent the user switched off.
+        raise ProviderDoesNotReachAgent(
+            resource.name, agent_type.value, "the agent is switched off"
+        )
+    if not resource.enabled:
+        raise ProviderDoesNotReachAgent(
+            resource.name, agent_type.value, "the connection is switched off"
+        )
+    if not reaches(resource, cfg, agent):
+        raise ProviderDoesNotReachAgent(
+            resource.name, agent_type.value, "its scope does not name the agent"
+        )
+    previous = connection_for_agent(agent, await service.list())
 
-    # 1) Project first. ``skipped`` lists in-scope agents with no registered one.
-    projected = await project_connection(service, resource, cfg, targets, agents, actor=actor)
-    covered = {at for at in targets if service._projector.agents_of_type(agents, at)}
-    skipped = [at.value for at in targets if at not in covered]
-
-    # 2) Flip activation: take over from any overlapping active connection,
-    #    de-projecting it from the agents this one will not cover. The
-    #    single-process daemon serialises the clear-then-set (spec
-    #    provider-switching "Keep at most one active connection per agent type").
-    mine = set(targets)
-    previous: str | None = None
-    for r in await service.list():
-        # By uid: "is this the row I am activating" is an identity question, and
-        # two connections may exchange names between two reads.
-        if r.uid == resource.uid:
-            continue
-        rc = service._cfg(r)
-        other = set(service._compat(r, agents))
-        if not rc.is_active or not (other & mine):
-            continue
-        for at in other - mine:
-            await deproject_connection(service, agents, at, actor=actor, connection=r)
-        await service._set_active(r, active=False, actor=actor)
-        previous = r.name
-    if not cfg.is_active:
-        await service._set_active(resource, active=True, actor=actor)
+    # The file is the agent's own; the record write that follows could still
+    # fail, and an agent pointed at the proxy with no connection behind it is
+    # worse than the switch not happening.
+    priors: Priors = {}
+    try:
+        projected = await project_connection(
+            service, resource, cfg, [agent_type], [agent], actor=actor, priors=priors
+        )
+        await service._agents.set_connection(agent.uid, resource.uid, actor=actor)
+    except Exception:
+        service._projector.restore(priors)
+        raise
 
     await service._audit.record(
         AuditEventType.PROVIDER_SWITCHED.value,
@@ -76,56 +99,58 @@ async def activate(service: ProviderService, uid: str, *, actor: str) -> Activat
             # Labels, for a human reading the trail. The row the event belongs
             # to travels as ``resource``, so the entry stays attached to this
             # connection whatever it is later called.
-            "from": previous,
+            "from": previous[0].name if previous is not None else None,
             "to": resource.name,
             "protocol": cfg.protocol.value,
+            "agent_type": agent_type.value,
             "agents": projected,
         },
     )
     return ActivateResult(
         activated=resource.name,
         protocol=cfg.protocol.value,
-        projected=projected,
-        skipped=skipped,
+        agent_type=agent_type.value,
+        agent=agent.name,
     )
 
 
 async def deactivate(
     service: ProviderService, agent_type: AgentType, *, actor: str
 ) -> DeactivateResult:
-    """Put every agent of ``agent_type`` back on its own built-in login.
-
-    Named by agent, not by wire: which agents a connection reaches is its
-    scope, so no protocol stands for an agent. The active connection covering
-    this type is switched off as a unit — its single ``is_active`` flag is
-    all-or-nothing — so it is also de-projected from the other types it reached.
-    """
+    """Put the agent of ``agent_type`` back on its own built-in login: remove
+    Coffer's keys from its native config and clear its connection. Idempotent,
+    and only this agent changes."""
     agents = await service._agents.list()
-    previous: Resource | None = None
-    deprojected = await deproject_connection(service, agents, agent_type, actor=actor)
-    for r in await service.list():
-        rc = service._cfg(r)
-        compat = service._compat(r, agents)
-        if not rc.is_active or agent_type not in compat:
-            continue
-        for at in compat:
-            if at is not agent_type:
-                await deproject_connection(service, agents, at, actor=actor, connection=r)
-        await service._set_active(r, active=False, actor=actor)
-        previous = r
+    agent = agent_of_type(agents, agent_type)
+    if agent is None:
+        return DeactivateResult(agent_type=agent_type.value, deprojected=[], previous=None)
+    chosen = AgentConfig.model_validate(agent.config).connection_uid
+    # The connection the record named, even one that no longer reaches the agent
+    # or is gone: the trail says what the agent was on.
+    named = next((r for r in await service.list() if r.uid == chosen), None)
 
-    if previous is not None or deprojected:
+    priors: Priors = {}
+    try:
+        deprojected = await deproject_connection(
+            service, agents, agent_type, actor=actor, connection=named, priors=priors
+        )
+        if chosen is not None:
+            await service._agents.set_connection(agent.uid, None, actor=actor)
+    except Exception:
+        service._projector.restore(priors)
+        raise
+
+    if named is not None or deprojected:
         # Filed under the connection that was switched off, or under no resource
         # at all when there was none — which is the honest answer for "the agent
         # was already on its built-in login and Coffer's leftover keys were
-        # removed". The old code invented a ref naming the WIRE there, which
-        # read like a resource and was not one.
+        # removed".
         await service._audit.record(
             AuditEventType.PROVIDER_SWITCHED.value,
-            resource=previous,
+            resource=named,
             actor=actor,
             details={
-                "from": previous.name if previous is not None else None,
+                "from": named.name if named is not None else None,
                 "to": None,
                 "agent_type": agent_type.value,
                 "agents": deprojected,
@@ -134,8 +159,8 @@ async def deactivate(
     return DeactivateResult(
         agent_type=agent_type.value,
         deprojected=deprojected,
-        previous=previous.name if previous is not None else None,
+        previous=named.name if named is not None else None,
     )
 
 
-__all__ = ["activate", "deactivate"]
+__all__ = ["activate", "agent_of_type", "deactivate"]

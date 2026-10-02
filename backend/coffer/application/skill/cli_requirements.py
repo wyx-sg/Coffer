@@ -36,6 +36,7 @@ from coffer.domain.skill.cli_errors import CliNotRequired
 from coffer.domain.skill.cli_status import (
     STATUS_ORDER,
     CliStatus,
+    LoginState,
     ProbeResult,
     RequiredCommand,
     ServerLauncher,
@@ -204,7 +205,11 @@ class CliRequirementService:
         todo = [r for r in rows if force or self._stale(r)]
         if not todo:
             return
-        results = await asyncio.gather(*(asyncio.to_thread(self._probe_one, r) for r in todo))
+        # A login check runs a program with arguments a skill chose, so only an
+        # explicit Check runs one — never the read the attention poll makes.
+        results = await asyncio.gather(
+            *(asyncio.to_thread(self._probe_one, r, run_login=force) for r in todo)
+        )
         for row, result in zip(todo, results, strict=True):
             self._cache[row.command] = result
 
@@ -212,15 +217,18 @@ class CliRequirementService:
         cached = self._cache.get(row.command)
         return cached is None or cached.login_check != row.login_check
 
-    def _probe_one(self, row: RequiredCommand) -> ProbeResult:
+    def _probe_one(self, row: RequiredCommand, *, run_login: bool) -> ProbeResult:
         path = self._probe.locate(row.command)
         if path is None:
             return ProbeResult(None, None, None, self._clock(), row.login_check)
         version = self._probe.version(path)
-        ok: bool | None = None
-        if row.login_check is not None:
-            # The located file runs, not whatever else the name resolves to.
-            ok = self._probe.login_ok([path, *row.login_check[1:]])
+        if row.login_check is None:
+            return ProbeResult(path, version, LoginState.NOT_NEEDED, self._clock(), None)
+        if not run_login:
+            # Declared but not run: not logged out, just not known yet.
+            return ProbeResult(path, version, None, self._clock(), row.login_check)
+        # The located file runs, not whatever else the name resolves to.
+        ok = self._probe.login_ok([path, *row.login_check[1:]])
         login = login_state(row.login_check, ok)
         return ProbeResult(path, version, login, self._clock(), row.login_check)
 

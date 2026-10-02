@@ -108,7 +108,7 @@ def _place_out(view: ChannelPlaceView) -> ChannelPlaceOut:
 def _mirror_out(view: MirrorView) -> ChannelMirrorOut:
     return ChannelMirrorOut(
         deliverable=view.deliverable,
-        platform=view.platform,
+        platform=view.platform,  # type: ignore[arg-type]
         target=view.target,
         reason=view.reason,
         undelivered=[
@@ -135,7 +135,7 @@ def _conv_out(
             channel_uid=conv.channel_uid,
             channel=channel.name if channel is not None else None,
             chat_id=conv.peer_chat_id or "",
-            platform=channel.platform if channel is not None else None,
+            platform=channel.platform if channel is not None else None,  # type: ignore[arg-type]
             place=_place_out(place) if place is not None else None,
             mirror=_mirror_out(mirror) if mirror is not None else None,
         )

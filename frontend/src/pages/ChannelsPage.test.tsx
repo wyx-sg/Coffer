@@ -3,7 +3,7 @@
 // channels from the Channels page and the CLI"): the list's groups, the first
 // channel opened at `/channels`, the first-run page, the header each state
 // puts a channel in (status word, banner, primary action), the tabs in the
-// path, and the commands — reconnect (off and on again), send test, re-pair,
+// path, and the commands — reconnect (a restart request), send test, re-pair,
 // delete. Only the network boundary is mocked: the api client, the channel
 // status/pairing/notify requests, and the machine and agent registries.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -21,7 +21,7 @@ import {
   makeStatus,
   renderChannelsPage,
   where,
-} from "@/components/channel/channelTestKit";
+} from "@/test/channelKit";
 
 const h = vi.hoisted(() => ({
   channels: [] as unknown[],
@@ -29,7 +29,10 @@ const h = vi.hoisted(() => ({
   client: {} as Record<string, ReturnType<typeof import("vitest").vi.fn>>,
 }));
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: () => h.client }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: () => h.client,
+}));
 vi.mock("@/lib/api/channels", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/channels")>()),
   getChannelStatus: vi.fn(async (uid: string) => {
@@ -43,6 +46,7 @@ vi.mock("@/lib/api/channels", async (orig) => ({
     pair_url: "",
   })),
   notifyChannel: vi.fn(async () => ({ sent: true })),
+  restartChannel: vi.fn(async () => ({ running: true })),
 }));
 vi.mock("@/lib/hooks/useMachines", () => ({
   useMachines: () => ({ data: { machines: REGISTRY } }),
@@ -55,7 +59,7 @@ vi.mock("@/lib/hooks/useScope", () => ({
   useUpdateResourceScope: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
-const { issuePairingCode, notifyChannel } = await import("@/lib/api/channels");
+const { issuePairingCode, notifyChannel, restartChannel } = await import("@/lib/api/channels");
 
 const TEAM = makeChannel();
 const KICKED = makeChannel({ uid: "u-kick0001", name: "kicked-bot" });
@@ -315,7 +319,7 @@ acceptance("channels", "a channel links to its conversations instead of showing 
   expect(screen.queryByRole("table")).toBeNull();
 });
 
-test("reconnect turns the channel off and on again", async () => {
+test("reconnect asks the daemon to restart the channel's adapter", async () => {
   serve([
     [KICKED, makeStatus(KICKED, { inbound: { websocket_state: "kicked", websocket_error: null } })],
   ]);
@@ -325,13 +329,9 @@ test("reconnect turns the channel off and on again", async () => {
       name: /take it back/i,
     }),
   );
-  await waitFor(() =>
-    expect(h.client.POST.mock.calls.map((c) => c[0])).toEqual([
-      "/resources/{uid}/disable",
-      "/resources/{uid}/enable",
-    ]),
-  );
-  expect(h.client.POST.mock.calls[0][1]).toEqual({ params: { path: { uid: KICKED.uid } } });
+  await waitFor(() => expect(restartChannel).toHaveBeenCalledWith(KICKED.uid));
+  // One request, addressed to the channel; no off-and-on through enable/disable.
+  expect(h.client.POST).not.toHaveBeenCalled();
 });
 
 test("send test goes to the owner's direct chat with the editable message", async () => {

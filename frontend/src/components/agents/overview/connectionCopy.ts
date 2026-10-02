@@ -3,7 +3,7 @@
 // Pure: the card's title/body keys and its part rows are derived from the
 // agent's row state, the connection's parts and Coffer's hook health, so the
 // sentence always names the part that is actually off.
-import type { StatusTone } from "@/components/status/statusTone";
+import type { StatusTone } from "@/lib/statusTone";
 import type { AgentRowState } from "@/lib/agents/rowState";
 import type { CofferConnection, CofferHook } from "@/lib/api/agents";
 

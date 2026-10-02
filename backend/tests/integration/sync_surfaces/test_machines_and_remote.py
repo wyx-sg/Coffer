@@ -216,6 +216,28 @@ def test_a_remote_is_checked_set_and_cleared(tmp_path: Path) -> None:
 
 
 @pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="an ordinary round on a machine without a pointer still detects the join",
+)
+def test_a_remote_that_shares_history_is_still_joined_explicitly(tmp_path: Path) -> None:
+    (mac,) = joined(tmp_path, "Mac")
+    mirror = str(tmp_path / "mirror.git")
+    subprocess.run(["git", "clone", "--bare", "-q", mac.url, mirror], check=True)
+    mac.put("knowledge/team/local-only.md", "not on the mirror yet\n")
+    mac.run(mac.service.set_remote(SyncRemote(url=mirror)))
+    assert not mac.state.joined()
+    got = mac.round()
+    assert got.status is RoundStatus.JOIN_REQUIRED
+    listing = subprocess.run(
+        ["git", "--git-dir", mirror, "ls-tree", "-r", "--name-only", "main"],
+        capture_output=True,
+        check=True,
+    ).stdout.decode()
+    assert "local-only.md" not in listing
+    assert not mac.state.joined()
+
+
+@pytest.mark.acceptance(
     spec="vault-sync", scenario="a token waiting for approval is a sign-in problem"
 )
 def test_a_token_waiting_for_approval_is_a_recorded_sign_in_problem(tmp_path: Path) -> None:

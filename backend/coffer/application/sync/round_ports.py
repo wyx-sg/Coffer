@@ -94,6 +94,11 @@ class RoundHistoryPort(Protocol):
 class TokenPort(Protocol):
     async def token_for(self, remote: SyncRemote) -> str | None: ...
 
+    async def bind(self, remote: SyncRemote, *, actor: str) -> None:
+        """Evaluate the remote's token against its URL now that a person named
+        both: a token supplied with the remote is approved with it."""
+        ...
+
 
 class ScratchPort(Protocol):
     """``derived/sync-conflicts/``: the marked-up copies a person edits to

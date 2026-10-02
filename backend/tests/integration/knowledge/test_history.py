@@ -101,6 +101,11 @@ class _Model:
         return type("C", (), {"model": "fake-model"})()
 
 
+class _NoModel:
+    async def get_default(self) -> Any:
+        return None
+
+
 class _Loop:
     """An agentic loop scripted to make a fixed sequence of tool calls."""
 
@@ -305,6 +310,43 @@ async def test_undoing_a_pass_puts_every_document_back(world: _World) -> None:
     # Put back exactly as curation last left them, so the sweep does not read
     # the undo as a person's edit and redo the pass.
     assert pending_items("shopee") == ()
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="undoing a pass that promoted an item puts the item back"
+)
+async def test_undoing_a_no_model_pass_puts_the_item_back_in_the_inbox(world: _World) -> None:
+    await world.knowledge.create_collection("shopee", actor=ACTOR_USER)
+    world.can_merge = True  # the item waits in the inbox until the pass runs
+    item = await world.knowledge.submit(
+        collection="shopee",
+        title="News",
+        description="d",
+        body="Gateway facts.",
+        actor_kind=ACTOR_USER,
+        actor=ACTOR_USER,
+    )
+    held = inbox.read_material("shopee", item.pending).body
+    outcome = await run_curation(
+        world.knowledge,
+        "uid-shopee",
+        item=None,
+        agent=_Loop([]),
+        models=_NoModel(),
+        secret_resolver=lambda ref: "key",
+    )
+    assert outcome["status"] == "no_model"
+    [promoted] = outcome["promoted"]
+    assert paths.resolve(promoted).exists()
+    assert inbox.inbox_items("shopee") == ()
+    [pass_] = [c for c in (await world.histories.changes()).changes if c.meta.operation == "pass"]
+
+    await world.histories.undo(pass_.version, actor=ACTOR_USER)
+
+    # The document is gone, and what it was made from is waiting again.
+    assert not paths.resolve(promoted).exists()
+    assert inbox.inbox_items("shopee") == (item.pending,)
+    assert inbox.read_material("shopee", item.pending).body == held
 
 
 @pytest.mark.acceptance(

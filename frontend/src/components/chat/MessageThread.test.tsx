@@ -355,6 +355,29 @@ describe("MessageThread", () => {
     expect(screen.queryByText(/thinking/i)).not.toBeInTheDocument();
   });
 
+  acceptance("chat", "a held queue is resumed from the page, not retried", async () => {
+    chatApiMock.listMessages.mockResolvedValue({
+      messages: [
+        makeMsg({ role: "user", content: [contentBlock({ type: "text", text: "older prompt" })] }),
+      ],
+    });
+    const onResume = vi.fn();
+    const onResend = vi.fn();
+    renderThread({
+      turnError: new Error("agent could not start"),
+      queueHeld: true,
+      pending: ["queued prompt"],
+      onResumeQueue: onResume,
+      onResend,
+    });
+    await waitFor(() => expect(screen.getByText("older prompt")).toBeInTheDocument());
+    expect(screen.getByRole("alert")).toHaveTextContent(/queue is on hold/i);
+    expect(screen.queryByRole("button", { name: /^retry$/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /resume queue/i }));
+    expect(onResume).toHaveBeenCalledOnce();
+    expect(onResend).not.toHaveBeenCalled();
+  });
+
   acceptance("chat", "a failed turn offers a retry in the thread", async () => {
     chatApiMock.listMessages.mockResolvedValue({
       messages: [

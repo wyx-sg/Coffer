@@ -26,7 +26,7 @@ import { useTranslation } from "react-i18next";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { sortAgents } from "@/components/agent/agentOrder";
-import { WARNING_CLASS, type PickableAgent } from "@/components/reach/reachState";
+import { WARNING_CLASS, type PickableAgent } from "@/lib/reach/reachState";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 

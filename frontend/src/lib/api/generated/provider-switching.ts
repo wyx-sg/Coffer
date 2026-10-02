@@ -4,26 +4,6 @@
  */
 
 export interface paths {
-    "/api/v1/models/detect-protocol": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Detect Protocol
-         * @description Classify the endpoint's wire so the dialog needs no manual type selector.
-         */
-        post: operations["detect_protocol_api_v1_models_detect_protocol_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/models/list-models": {
         parameters: {
             query?: never;
@@ -174,9 +154,9 @@ export interface paths {
         put?: never;
         /**
          * Use Builtin Provider
-         * @description Switch every agent of this type back to its OWN built-in login: remove
-         *     Coffer's projection from the native config and clear the active connection
-         *     covering it. Idempotent — a no-op when the agent already runs built-in.
+         * @description Switch the agent of this type back to its OWN built-in login: remove
+         *     Coffer's projection from its native config and clear its connection. Only
+         *     this agent changes. Idempotent — a no-op when it already runs built-in.
          */
         post: operations["use_builtin_provider_api_v1_providers_use_builtin__agent_type__post"];
         delete?: never;
@@ -224,7 +204,10 @@ export interface paths {
         put?: never;
         /**
          * Activate Provider
-         * @description Switch: make this profile active for its wire format and project it.
+         * @description Switch one agent onto this connection: project it into that agent's
+         *     native config and record it on the agent. Nothing else changes (409
+         *     ``PROVIDER_DOES_NOT_REACH_AGENT`` when the connection or agent is off or the
+         *     scope does not name the agent).
          */
         post: operations["activate_provider_api_v1_providers__uid__activate_post"];
         delete?: never;
@@ -314,7 +297,7 @@ export interface paths {
         };
         /**
          * Proxy Route
-         * @description The agent's provider and its fallbacks, as the proxy is serving them.
+         * @description The agent's provider and its fallbacks, as the proxy would be served now.
          */
         get: operations["proxy_route_api_v1_proxy_routes__agent_uid__get"];
         put?: never;
@@ -514,17 +497,25 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * ActivateIn
+         * @description Which agent to switch onto the connection. There is one agent per type
+         *     (spec agent-registry "Keep one agent per type, named by it"), so the type
+         *     names it; the switch changes that agent and no other.
+         */
+        ActivateIn: {
+            agent_type: components["schemas"]["AgentType"];
+        };
+        /**
          * ActivateOut
-         * @description Result of a switch — which agents were written, which wire had none.
+         * @description Result of switching one agent onto a connection.
          */
         ActivateOut: {
             /** Activated */
             activated: string;
-            /** Projected */
-            projected: string[];
+            /** Agent */
+            agent: string;
+            agent_type: components["schemas"]["AgentType"];
             protocol: components["schemas"]["Protocol"];
-            /** Skipped */
-            skipped: string[];
         };
         /** AgentQuotaOut */
         AgentQuotaOut: {
@@ -593,20 +584,6 @@ export interface components {
             /** Found */
             found: components["schemas"]["LocalRuntimeOut"][];
             handoff: components["schemas"]["HandoffOut"] | null;
-        };
-        /** DetectProtocolIn */
-        DetectProtocolIn: {
-            /** Base Url */
-            base_url?: string | null;
-            /** Secret Ref */
-            secret_ref?: string | null;
-            /** Secret Value */
-            secret_value?: string | null;
-        };
-        /** DetectProtocolOut */
-        DetectProtocolOut: {
-            /** Protocol */
-            protocol: string;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -890,9 +867,9 @@ export interface components {
          *     dropdown never offers an embedding or image model. ``internal_default``
          *     marks the connection Coffer's internal engine uses (at most one globally),
          *     ``transcribe_default`` the one it transcribes speech on — a separate flag
-         *     because they are separate models and neither falls back to the other; and
-         *     ``is_active`` marks the one currently projected. A connection may carry any
-         *     combination.
+         *     because they are separate models and neither falls back to the other. A
+         *     connection may carry either, both or neither. Which agents run on it is not a
+         *     field here: it is each agent's ``connection_uid``.
          *
          *     ``uid`` is the connection's identity and what every route here takes; the
          *     ``name`` beside it is the label, free to change through
@@ -900,7 +877,7 @@ export interface components {
          *     is the whole reason this kind no longer owns a rename operation of its own:
          *     nothing Coffer projects into an agent's config names the connection (the
          *     ``apiKeyHelper`` prints the agent's local proxy token), so a rename rewrites
-         *     nothing (ADR resource-identity-is-an-immutable-uid).
+         *     nothing (ADR identity-is-the-uid-inside-the-file).
          */
         ProviderOut: {
             /** Base Url */
@@ -923,8 +900,6 @@ export interface components {
             fallback: boolean;
             /** Internal Default */
             internal_default: boolean;
-            /** Is Active */
-            is_active: boolean;
             local_runtime: components["schemas"]["LocalRuntime"] | null;
             /** Models */
             models: components["schemas"]["ProviderModel"][];
@@ -952,13 +927,13 @@ export interface components {
          *     can be wrong, so it is corrected in place rather than by re-entering the
          *     connection, key and all.
          *
-         *     The wire DOES decide one thing, though, so that correction is refused with
-         *     409 ``PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`` while the connection is
-         *     ``is_active``: an ``ollama`` connection covers no agent whatever its scope
-         *     says. Moving the wire under a live projection would leave the native config
-         *     already written with nothing that would ever take it off. Revert the agents to their
-         *     built-in login, patch, then re-activate. An inactive connection patches
-         *     freely.
+         *     The wire DOES decide one thing, though: an ``ollama`` connection covers no
+         *     agent whatever its scope says. So the correction is refused with 409
+         *     ``PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`` while an agent runs on the
+         *     connection — moving the wire under a live projection would leave the native
+         *     config already written with nothing that would ever take it off. Revert those
+         *     agents to their built-in login, patch, then switch them back. A connection no
+         *     agent runs on patches freely.
          *
          *     Re-targeting which agents the connection projects into is a scope edit, not
          *     a patch field (re-target then re-activate to re-project). ``models``
@@ -1282,50 +1257,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    detect_protocol_api_v1_models_detect_protocol_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DetectProtocolIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DetectProtocolOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     list_provider_models_api_v1_models_list_models_post: {
         parameters: {
             query?: never;
@@ -1857,7 +1788,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivateIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import contextlib
 import pathlib
+import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -51,15 +52,19 @@ class LinkWrite:
     removed: pathlib.Path | None = None
 
 
-def _backup_path(link: pathlib.Path) -> pathlib.Path:
-    """``<link>.coffer-backup-<µs>`` — with a counter, so two backups in the
-    same microsecond (or a pre-existing one) never clobber each other."""
+def _backup_path(service: SkillService, agent: Resource, link: pathlib.Path) -> pathlib.Path:
+    """``<backup root>/<agent>/<link name>.coffer-backup-<µs>`` — outside the
+    agent's skills directory, where a set-aside folder would be loaded as a
+    second skill of the same name. A counter keeps two backups in the same
+    microsecond (or a pre-existing one) from clobbering each other."""
     stamp = int(datetime.now(tz=UTC).timestamp() * 1_000_000)
-    backup = link.with_name(f"{link.name}.coffer-backup-{stamp}")
+    root = pathlib.Path(service._store.backup_root) / agent.name
+    root.mkdir(parents=True, exist_ok=True)
+    backup = root / f"{link.name}.coffer-backup-{stamp}"
     counter = 0
     while backup.exists() or backup.is_symlink():
         counter += 1
-        backup = link.with_name(f"{link.name}.coffer-backup-{stamp}-{counter}")
+        backup = root / f"{link.name}.coffer-backup-{stamp}-{counter}"
     return backup
 
 
@@ -104,7 +109,8 @@ async def deliver(
 
     A correct link already at ``link`` is adopted as it is (only the row is
     written). ``back_up_existing`` renames whatever else sits there aside to
-    ``<link>.coffer-backup-<ts>`` first — the tampered-link repair; without it
+    ``<backup root>/<agent>/<name>.coffer-backup-<ts>`` first — the
+    tampered-link repair; without it
     an occupied path raises ``FileExistsError`` and nothing is written.
     """
     master = service._store.paths_for(skill.name).folder
@@ -115,14 +121,14 @@ async def deliver(
         return LinkWrite(skill, agent, prior, mode=mode)
     backup: pathlib.Path | None = None
     if (link.exists() or link.is_symlink()) and back_up_existing:
-        backup = _backup_path(link)
-        link.rename(backup)
+        backup = _backup_path(service, agent, link)
+        shutil.move(str(link), str(backup))
     link.parent.mkdir(parents=True, exist_ok=True)
     try:
         mode = service._sync.make_directory_link(target=master, link=link)
     except Exception:
         if backup is not None:
-            backup.rename(link)
+            shutil.move(str(backup), str(link))
         raise
     written = LinkWrite(
         skill, agent, prior, created=link, mode=mode, backup=backup, backed_up_from=link
@@ -187,7 +193,7 @@ async def undo(service: SkillService, write: LinkWrite) -> None:
         with contextlib.suppress(OSError):
             service._sync.remove_directory_link(write.created, link_mode=write.mode)
     if write.backup is not None and write.backed_up_from is not None:
-        write.backup.rename(write.backed_up_from)
+        shutil.move(str(write.backup), str(write.backed_up_from))
     if write.removed is not None and not (write.removed.exists() or write.removed.is_symlink()):
         master = service._store.paths_for(write.skill.name).folder
         with contextlib.suppress(OSError):

@@ -152,12 +152,6 @@ coverage/
 playwright-report/
 test-results/
 
-# --- Q01 perf gate generated artifacts ---
-# Per-run NDJSON / JSON results are gitignored; the .gitkeep keeps the
-# directory shape so the runner can write into it on a fresh clone.
-backend/tests/perf/results/*
-!backend/tests/perf/results/.gitkeep
-
 # --- Misc ---
 .cache/
 /tmp/
@@ -179,9 +173,6 @@ backend/tests/perf/results/*
 .claude/loop-history.md
 .claude/scheduled_tasks.lock
 .claude/worktrees/
-
-# stray worktree dir created by tooling typo (.claire, not .claude)
-.claire/
 
 # Superpowers / AI planning artifacts — never committed to the repo
 docs/superpowers/

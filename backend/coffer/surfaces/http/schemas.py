@@ -254,16 +254,21 @@ class CapabilityListOut(BaseModel):
 # --- Secrets ---
 
 
+#: A ref: slash-separated segments of ``[A-Za-z0-9_.-]``, none made only of dots
+#: (``.`` and ``..`` name no file, and would escape the store's directory).
+_REF_PATTERN = r"^\.*[A-Za-z0-9_-][A-Za-z0-9_.-]*(/\.*[A-Za-z0-9_-][A-Za-z0-9_.-]*)*$"
+
+
 class SecretSetIn(BaseModel):
     """Request body for storing a secret in the secret store.
 
-    Secrets are Fernet-encrypted into the coffer DB; only ciphertext is
+    Secrets are Fernet-encrypted into the vault; only ciphertext is
     persisted; audit rows carry the ref only.
     """
 
     ref: str = Field(
         min_length=1,
-        pattern=r"^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$",
+        pattern=_REF_PATTERN,
         description=(
             "Reference key the secret is stored under. Slash-separated "
             "segments are allowed (e.g. channel/tg/bot-token)."

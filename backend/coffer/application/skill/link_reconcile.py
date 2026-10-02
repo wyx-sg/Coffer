@@ -26,7 +26,7 @@ a write that would fail. Master folders no row claims are observed-only
 ``orphan:<name>`` items.
 
 **Direction policy.** Missing and tampered links are repaired (a tampered one
-is renamed aside to ``<path>.coffer-backup-<ts>`` first); a delivery whose
+is moved aside to ``<backup root>/<agent>/<name>.coffer-backup-<ts>`` first); a delivery whose
 agent's config dir moved is relinked; one no longer wanted is reclaimed.
 Foreign content is never clobbered, under any trigger, and a missing master
 has nothing to link to: both are blocked. An orphan master is only reported.
@@ -77,6 +77,10 @@ class _World:
     #: Agent uid → its skills directory, for agents whose config parses.
     skill_dirs: dict[str, pathlib.Path]
     bindings: list[BindingState]
+    #: Enabled agents whose config does not parse right now. What they want is
+    #: unknown, not "nothing": their links are left alone until the config reads
+    #: again, instead of being reclaimed as no longer wanted.
+    unreadable: frozenset[str] = frozenset()
 
     def wanted(self) -> dict[str, tuple[Resource, Resource, pathlib.Path]]:
         """``key → (skill, agent, link)`` for every delivery the rule grants,
@@ -134,12 +138,16 @@ class SkillLinkTarget:
         skills = {s.uid: s for s in await rs.list(kind="skill")}
         agents = {a.uid: a for a in await rs.list(kind="agent")}
         skill_dirs: dict[str, pathlib.Path] = {}
+        unreadable: set[str] = set()
         for agent in agents.values():
             try:
                 skill_dirs[agent.uid] = self._svc._resolve_agent_skill_dir(agent)
-            except Exception:  # a config that does not parse delivers nothing
-                continue
-        return _World(skills, agents, skill_dirs, await self._svc._bindings.list_all())
+            except Exception:  # a config that does not parse: unknown, not "wants nothing"
+                if agent.enabled:
+                    unreadable.add(agent.uid)
+        return _World(
+            skills, agents, skill_dirs, await self._svc._bindings.list_all(), frozenset(unreadable)
+        )
 
     def _master(self, skill: Resource) -> pathlib.Path:
         return pathlib.Path(self._svc._store.paths_for(skill.name).folder)
@@ -170,7 +178,7 @@ class SkillLinkTarget:
         for b in world.bindings:
             skill = world.skills.get(b.skill_uid)
             agent = world.agents.get(b.agent_uid)
-            if not b.enabled or skill is None or agent is None:
+            if not b.enabled or skill is None or agent is None or agent.uid in world.unreadable:
                 continue
             key = key_for(skill, agent)
             master = self._master(skill)

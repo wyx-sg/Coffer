@@ -1,7 +1,6 @@
 // src/components/mcp/server/McpServerListRow.tsx — one server in the MCP servers list (design 4.1.01).
 //
-// A state dot, the server's name (its title when set, its fixed name in mono
-// otherwise), a second line — the reason when it needs the user ("Connection
+// A state dot, the server's fixed name in mono, a second line — the reason when it needs the user ("Connection
 // refused · since 14:02", "Secret missing · LINEAR_API_KEY", "uvx is not
 // installed"), else its transport and tool count — and its reach on the
 // right: Off, All agents, or the badges of the agents it is limited to. The
@@ -18,9 +17,9 @@ import type { ResourceOut } from "@/lib/api/resources";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import type { ToolTiering } from "@/lib/hooks/useMcpServerPage";
 import { toneTextClass } from "@/lib/statusColors";
-import { STATUS_TONE } from "@/components/status/statusTone";
+import { STATUS_TONE } from "@/lib/statusTone";
 import { cn } from "@/lib/utils";
-import { serverState, shortTime, transportOf, type ServerState, secretLabel } from "./serverState";
+import { serverState, shortTime, transportOf, type ServerState, secretLabel } from "@/lib/mcp/serverState";
 
 interface Props {
   resource: ResourceOut;
@@ -114,7 +113,7 @@ export function McpServerListRow({
 }: Props) {
   const { t } = useTranslation();
   const state = serverState(resource, detail);
-  const label = resource.title || resource.name;
+  const label = resource.name;
   return (
     <li
       className={cn(
@@ -134,7 +133,7 @@ export function McpServerListRow({
       >
         <StatusDot tone={state.tone} />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className={cn("truncate text-xs font-label", resource.title ? "" : "font-mono")}>
+          <span className={"truncate font-mono text-xs font-label"}>
             {label}
           </span>
           <Subline state={state} resource={resource} detail={detail} tiering={tiering} />

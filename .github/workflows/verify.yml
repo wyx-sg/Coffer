@@ -368,11 +368,15 @@ jobs:
         working-directory: e2e
         run: npx playwright install --with-deps chromium
       # Screenshot baseline (e2e/playwright.visual.config.ts): every route, light
-      # and dark. Under CI a platform with no committed baseline yet is written
-      # rather than failed, so the artifact below is where linux baselines come
-      # from: download it, commit e2e/visual/specs/__screenshots__/linux/, and
-      # from then on this step compares against them.
+      # and dark. REPORT-ONLY today: only the darwin baseline is committed, so on
+      # linux Playwright writes the missing images and passes — nothing is
+      # compared. `continue-on-error` makes that explicit rather than letting a
+      # green check read as "no visual regression". The artifact below carries the
+      # written linux images; to make this a real gate, commit them under
+      # e2e/visual/specs/__screenshots__/linux/, set `updateSnapshots: "none"` in
+      # the config for CI, and remove `continue-on-error`.
       - name: make verify-visual
+        continue-on-error: true
         run: make verify-visual
       - name: Upload visual baseline and diffs
         if: ${{ !cancelled() }}

@@ -39,6 +39,12 @@ class PrunableTable:
     ``retention_policies`` row of its own (never seeded, never listed, never
     set), and it is pruned with the named policy's window whenever that policy
     is — the per-request usage detail follows the MCP-calls window this way.
+
+    ``also_older_column`` is a safety net on a ``delete`` entry: a row is removed
+    only when that second timestamp is ALSO past the window. The delete sibling of
+    a two-stage lifecycle keys on the archive stamp, but an archived row can still
+    be written to (a chat thread resumed from a phone); without the second check it
+    would be deleted mid-use, ``archive_set_column`` days after it was stamped.
     """
 
     name: str
@@ -50,6 +56,7 @@ class PrunableTable:
     target_table: str | None = None
     archive_set_column: str | None = None
     policy_name: str | None = None
+    also_older_column: str | None = None
 
     @property
     def policy_key(self) -> str:

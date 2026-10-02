@@ -72,6 +72,7 @@ from coffer.application.mcp.ports import (
     MCPCapabilityPreferenceRepoPort,
     MCPInvocationRepoPort,
 )
+from coffer.application.mcp.saved_tools import saved_hidden_count
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.mcp.tiering_config import TieringConfig, load_tiering_config
 from coffer.application.resource_service import ResourceService
@@ -114,31 +115,23 @@ class MCPGatewaySession:
         self._invocations = invocations
         self._downstream_sink = downstream_sink
         self._clock = clock or (lambda: datetime.now(tz=UTC))
-        # Per-agent scope: the session's bound agent identity — the agent
-        # resource's **uid**, set from the shim's self-reported
-        # ``--agent-uid`` on the ``initialize`` handshake
-        # (params._meta["coffer/agent-uid"], see handle_initialize). The uid and
-        # not the name because a ``scope`` holds uids, and the two sides of that
-        # comparison have to speak one vocabulary (ADR
-        # resource-identity-is-an-immutable-uid). None when the shim reported
-        # nothing — an unidentified session, which then sees only unscoped
-        # servers.
+        # Per-agent scope: the session's bound agent **uid** (a ``scope`` holds
+        # uids; ADR identity-is-the-uid-inside-the-file), from the shim's
+        # ``--agent-uid`` on ``initialize`` (params._meta["coffer/agent-uid"]).
+        # None when it reported nothing: such a session sees only unscoped servers.
         self._session_agent_uid: str | None = None
         # Called once on dispose so the composition root drops this session's
         # supervisor from its registry (else dead ones accumulate).
         self._on_dispose = on_dispose
-        # ``is not None``, not ``or``: the registry has a ``__len__``, so one whose
-        # every tool is switched off is falsy, and ``or`` would swap it for an
-        # empty one that names no directory either.
+        # ``is not None``, not ``or``: a registry with every tool off is falsy.
         self._builtin = builtin_tools if builtin_tools is not None else BuiltinToolRegistry()
         # Tool tiering: how much of the aggregated catalogue this session lists.
         # Resolved once per session; None means "read the environment".
         self._tiering = tiering or load_tiering_config()
-        # Upstream tools left unlisted by the most recent tools/list, read by
-        # handle_initialize's instructions text. 0 until the client has listed
-        # once — the honest value, since nothing has been hidden yet.
+        # Upstream tools left unlisted by tiering, for the instructions text:
+        # estimated from the saved tool lists at ``initialize`` and replaced by
+        # the real count at every ``tools/list``.
         self.last_hidden_count = 0
-        self._initialized = False
         # The agent's launch cwd from the shim's handshake (params._meta["coffer/cwd"]),
         # threaded into built-in tool calls; no spec states it any more (its
         # requirement went with the per-project store), the shim still stamps it.
@@ -184,12 +177,20 @@ class MCPGatewaySession:
         # The identity scope is evaluated against: the shim's self-reported
         # agent uid, when it stamped one (params._meta["coffer/agent-uid"]).
         self._session_agent_uid = _extract_agent_uid(params)
-        self._initialized = True
-        # Tool tiering: the instructions field is the only channel into the client's
-        # system prompt. On the first handshake nothing has been listed yet, so
-        # hidden_count is 0 and the tiering paragraph is omitted. It names only
-        # the built-ins the tool list carries now: a switched-off feature's
-        # tools are neither listed nor advertised.
+        # Tool tiering: the instructions field is the only channel into the
+        # client's system prompt, and it is read before the first tools/list, so
+        # the count comes from the tool lists discovery saved. It names only the
+        # built-ins the tool list carries now: a switched-off feature's tools
+        # are neither listed nor advertised.
+        self.last_hidden_count = await saved_hidden_count(
+            self._resources,
+            self._session_agent_uid,
+            self._tool_reach,
+            prefs=self._prefs,
+            invocations=self._invocations,
+            config=self._tiering,
+            clock=self._clock,
+        )
         return build_initialize_result(
             hidden_count=self.last_hidden_count,
             tools=[tool.name for tool in self._builtin.list()],
@@ -391,7 +392,6 @@ class MCPGatewaySession:
         await self._degraded.dispose()
         await self._supervisor.dispose()
         self._notification_subscriptions.clear()
-        self._initialized = False
         # Let the composition root drop its registry entry last, after
         # the supervisor is fully disposed.
         if self._on_dispose is not None:

@@ -71,13 +71,8 @@ def _label(index: int) -> str:
 
 def _scan(service: SkillService, agent: Resource) -> list[tuple[str, UnmanagedSkill]]:
     """(location_label, UnmanagedSkill) pairs across the agent's locations."""
-    # Narrow the optional deps for the type checker; callers go through
-    # SkillService._require_unmanaged_deps first, so this never trips.
-    resolver = service._resolve_agent_scan_locations
     scanner = service._workspace_scan
-    if resolver is None or scanner is None:  # pragma: no cover — guarded upstream
-        raise RuntimeError("workspace scan dependencies are not wired")
-    locations = resolver(agent)
+    locations = service._resolve_agent_scan_locations(agent)
     master_root = service._store.root
     # Coffer's own skill is derived output under the store's derived root; a
     # link to it is as managed as a link into the master store.

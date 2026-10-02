@@ -193,7 +193,9 @@ async def test_a_parallel_thread_carries_its_mark(
 ) -> None:
     resource, adapter = await _seatalk(env)
     await _opened_by(env, resource, adapter)
-    await env.processor.on_message(inbound(resource.name, "owner", "/thread deploy check"))
+    await env.processor.on_message(
+        inbound(resource.name, "owner", "/thread deploy check", sender_id="owner-1")
+    )
     parallel = await env.active_conversation(resource, "owner", "t1")
     assert parallel is not None
 

@@ -6,7 +6,10 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { acceptance } from "@/test/acceptance";
 
 const post = vi.fn();
-vi.mock("@/lib/api/client", () => ({ getApiClient: () => ({ POST: post }) }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: () => ({ POST: post }),
+}));
 vi.mock("@/lib/auth", () => ({ getCofferBaseUrl: () => "http://127.0.0.1:8000/api/v1" }));
 
 const { restartFromBrowser, RestartTimedOut, RESTART_READY_TIMEOUT_MS, restartErrorText } =

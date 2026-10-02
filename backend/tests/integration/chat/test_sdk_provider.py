@@ -109,7 +109,7 @@ async def _repo(tmp_path) -> tuple[ConversationRepo, Any]:  # type: ignore[no-un
 
 
 #: The channel a bridged conversation points at. A uid, because that is what the
-#: row stores (ADR resource-identity-is-an-immutable-uid) — the name reaches the
+#: row stores (ADR identity-is-the-uid-inside-the-file) — the name reaches the
 #: prompt only through the resolver the provider is handed.
 _TELEGRAM_UID = "0b9d2f1a4c7e4b6a8d3f5c1e7a9b2d40"
 
@@ -656,4 +656,35 @@ async def test_a_channel_turn_sends_the_notes_its_prompt_names(tmp_path) -> None
     assert sessions[1].connected_prompt == "why does make verify fail"
     assert calls == [("claude_code", str(tmp_path), "why does make verify fail", channel.id)]
 
+    await engine.dispose()
+
+
+@pytest.mark.acceptance(
+    spec="chat", scenario="an unmanaged agent type is not offered and runs no turn"
+)
+@pytest.mark.asyncio
+async def test_an_unmanaged_type_is_not_available_and_runs_no_turn(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from coffer.domain.chat.errors import AgentConfigRejected
+
+    repo, engine = await _repo(tmp_path)
+    managed = False
+
+    async def _is_managed() -> bool:
+        return managed
+
+    provider = ClaudeSdkProvider(
+        conversations=repo, which=lambda _b: "/usr/bin/claude", is_managed=_is_managed
+    )
+    conv = await repo.create(_conv())
+    await provider.init_conversation(conv.id, {})
+
+    # The binary is there, but no enabled agent of the type is registered.
+    assert await provider.availability() is False
+    with pytest.raises(AgentConfigRejected) as refused:
+        await provider.build_adapter(conv.id)
+    assert refused.value.reason == "agent_not_managed"
+
+    managed = True
+    assert await provider.availability() is True
+    await provider.build_adapter(conv.id)
     await engine.dispose()

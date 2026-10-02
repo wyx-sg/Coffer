@@ -15,8 +15,7 @@ and test fixtures. It was write-only for its whole life.
 ## Why a field nobody reads still had to go
 
 Because "nobody reads it" stopped being the end of the story when renaming
-arrived. Before [Resource Identity Is an Immutable
-`uid`](../../../../../../docs/decisions/resource-identity-is-an-immutable-uid.md)
+arrived. Before ADR identity-is-the-uid-inside-the-file
 a skill could not be renamed at all, so the two copies could not drift and the
 duplication was merely untidy. Renaming is a ``PATCH`` field for every kind
 now, and the skill kind's ``on_rename`` hook has to carry the name onto disk —

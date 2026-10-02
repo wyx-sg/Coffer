@@ -5,9 +5,9 @@
 // say "All answering" beside a "Needs you" row about the same server.
 import type { TFunction } from "i18next";
 
-import type { FeatureKey } from "@/lib/hooks/useFeatures";
+import type { FeatureKey } from "@/lib/features";
 import type { AttentionItem } from "@/lib/hooks/useAttention";
-import type { StatusTone } from "@/components/status/statusTone";
+import type { StatusTone } from "@/lib/statusTone";
 
 type AreaId =
   | "agents"
@@ -40,15 +40,15 @@ export const AREAS: readonly Area[] = [
   { id: "agents", to: "/agents", kinds: ["agent"] },
   { id: "mcpServers", to: "/mcp-servers", kinds: ["mcp_server"] },
   { id: "skills", to: "/skills", kinds: ["skill"] },
-  { id: "knowledge", to: "/knowledge", kinds: ["knowledge"] },
-  { id: "memory", to: "/memory", kinds: ["memory"] },
-  { id: "providers", to: "/model-providers", kinds: ["provider"] },
+  { id: "knowledge", to: "/knowledge", kinds: ["knowledge"], feature: "knowledge" },
+  { id: "memory", to: "/memory", kinds: ["memory"], feature: "memory" },
+  { id: "providers", to: "/model-providers", kinds: ["provider"], feature: "models" },
   { id: "channels", to: "/channels", kinds: ["channel"] },
-  { id: "sync", to: "/sync", kinds: ["sync"] },
+  { id: "sync", to: "/sync", kinds: ["sync"], feature: "sync" },
   { id: "customTools", to: "/custom-tools", kinds: ["custom_tool"] },
   { id: "clis", to: "/clis", kinds: ["cli"] },
   { id: "secrets", to: "/secrets", kinds: [] },
-  { id: "usage", to: "/usage", kinds: [] },
+  { id: "usage", to: "/usage", kinds: [], feature: "models" },
 ];
 
 /** Agent items that are only about connecting — the rest (a hook changed by

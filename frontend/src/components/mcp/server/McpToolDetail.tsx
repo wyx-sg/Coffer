@@ -1,7 +1,7 @@
 // src/components/mcp/server/McpToolDetail.tsx — one tool opened in the tool table: what it does, its input, the name agents see, its last call (design 4.1.02).
 import { useTranslation } from "react-i18next";
 
-import { relativeTime } from "./serverState";
+import { relativeTime } from "@/lib/mcp/serverState";
 import type { ToolRow } from "./toolRows";
 
 interface Props {

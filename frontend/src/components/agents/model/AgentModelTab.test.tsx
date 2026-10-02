@@ -2,27 +2,24 @@
 //
 // The agent's Model tab: provider cards, the model picker (fixed list, text
 // models only), Effort from the catalogue, Model per tier, test → confirm, and
-// the stale-file refusal. Only the network boundary (`call`) is faked; every
+// the stale-file refusal. Only the network boundary (the daemon, via `fakeApi`) is faked; every
 // hook and the query cache are real. Connection uids are `u-`-prefixed and
 // differ from names, so a request that carried a name would fail loudly.
 import type { PropsWithChildren } from "react";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 import { acceptance } from "@/test/acceptance";
+import { fakeApi } from "@/test/fakeApi";
 import { ApiError } from "@/lib/api/errors";
 import type { AgentOut } from "@/lib/api/agents";
 import type { AgentModel } from "@/lib/api/agentModels";
 import type { Provider, ProviderModel } from "@/lib/api/providers";
 import { AgentModelTab } from "./AgentModelTab";
 
-const call = vi.fn();
-vi.mock("@/lib/api/call", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api/call")>();
-  return { ...actual, call: (...args: unknown[]) => call(...args) };
-});
+const call = fakeApi();
 
 const CLAUDE: AgentOut = {
   uid: "a-claude",
@@ -33,9 +30,9 @@ const CLAUDE: AgentOut = {
   model: null,
   effort: null,
   tier_models: null,
-  wire_api: null,
   version: null,
   install_handoff: null,
+  connection_uid: null,
   state: "installed_active",
   created_at: "",
   updated_at: "",
@@ -51,7 +48,6 @@ function conn(name: string, over: Partial<Provider> = {}): Provider {
     protocol: "anthropic",
     base_url: "https://api.example.com",
     secret_ref: "ref",
-    is_active: false,
     title: null,
     internal_default: false,
     transcribe_default: false,
@@ -133,7 +129,7 @@ beforeEach(() => {
 describe("AgentModelTab", () => {
   acceptance("provider-switching", "the Model tab says which provider is tried next", async () => {
     serve({
-      providers: [conn("official", { is_active: true })],
+      providers: [conn("official", {})],
       listed: text("claude-opus-4-8"),
       route: {
         agent_uid: CLAUDE.uid,
@@ -142,7 +138,7 @@ describe("AgentModelTab", () => {
         fallbacks: [{ connection_uid: "u-gw", name: "Company gateway", local: false }],
       },
     });
-    renderTab({ ...CLAUDE, model: "claude-opus-4-8" });
+    renderTab({ ...CLAUDE, model: "claude-opus-4-8", connection_uid: "u-official" });
     expect(
       await screen.findByText(
         "If official fails: Company gateway — it also offers claude-opus-4-8",
@@ -157,7 +153,7 @@ describe("AgentModelTab", () => {
 
   test("no fallback, and nothing at all on the built-in login", async () => {
     serve({
-      providers: [conn("official", { is_active: true })],
+      providers: [conn("official", {})],
       route: {
         agent_uid: CLAUDE.uid,
         model: null,
@@ -165,7 +161,7 @@ describe("AgentModelTab", () => {
         fallbacks: [],
       },
     });
-    const view = renderTab();
+    const view = renderTab({ ...CLAUDE, connection_uid: "u-official" });
     expect(await screen.findByText("If official fails: No fallback")).toBeInTheDocument();
     view.unmount();
     serve({ providers: [] });
@@ -179,10 +175,10 @@ describe("AgentModelTab", () => {
     "the agent's model picker offers a fixed list without free-form entry",
     async () => {
       serve({
-        providers: [conn("official", { is_active: true })],
+        providers: [conn("official", {})],
         listed: text("claude-opus-4-8", "claude-haiku-4-5"),
       });
-      renderTab({ ...CLAUDE, model: "claude-opus-4-8" });
+      renderTab({ ...CLAUDE, model: "claude-opus-4-8", connection_uid: "u-official" });
       await screen.findByRole("combobox", { name: /^model$/i });
       const opts = await options(/^model$/i, "claude-haiku-4-5");
       // The connection's INTROSPECTED models; an id is chosen, never typed.
@@ -199,7 +195,6 @@ describe("AgentModelTab", () => {
       serve({
         providers: [
           conn("agnes", {
-            is_active: true,
             models: [
               { id: "agnes-2.0", modality: "text" },
               { id: "agnes-embed-3", modality: "embedding" },
@@ -207,7 +202,12 @@ describe("AgentModelTab", () => {
           }),
         ],
       });
-      renderTab({ ...CLAUDE, model: "agnes-2.0", tier_models: { opus: "agnes-2.0" } });
+      renderTab({
+        ...CLAUDE,
+        model: "agnes-2.0",
+        tier_models: { opus: "agnes-2.0" },
+        connection_uid: "u-agnes",
+      });
       await screen.findByRole("combobox", { name: /^model$/i });
       // Every chat slot — the Model and each tier — offers the text id only,
       // and a curated connection is never probed.
@@ -332,7 +332,6 @@ describe("AgentModelTab", () => {
     serve({
       providers: [
         conn("openai", {
-          is_active: true,
           protocol: "openai",
           compatible_agents: ["codex"],
           models: text("gpt-5"),
@@ -348,7 +347,7 @@ describe("AgentModelTab", () => {
         },
       ],
     });
-    renderTab({ ...CODEX, model: "gpt-5" });
+    renderTab({ ...CODEX, model: "gpt-5", connection_uid: "u-openai" });
     const effort = await screen.findByRole("radiogroup", { name: "Effort" });
     expect(
       within(effort)
@@ -360,8 +359,8 @@ describe("AgentModelTab", () => {
   });
 
   test("a model that reports no levels hides Effort", async () => {
-    serve({ providers: [conn("official", { is_active: true, models: text("m1") })] });
-    renderTab({ ...CLAUDE, model: "m1" });
+    serve({ providers: [conn("official", { models: text("m1") })] });
+    renderTab({ ...CLAUDE, model: "m1", connection_uid: "u-official" });
     expect(
       await screen.findByText("Effort is hidden: this model reports no levels."),
     ).toBeInTheDocument();
@@ -369,8 +368,8 @@ describe("AgentModelTab", () => {
   });
 
   test("switching to the built-in login confirms without a test", async () => {
-    serve({ providers: [conn("official", { is_active: true, models: text("m1") })] });
-    renderTab({ ...CLAUDE, model: "m1" });
+    serve({ providers: [conn("official", { models: text("m1") })] });
+    renderTab({ ...CLAUDE, model: "m1", connection_uid: "u-official" });
     await card(/official/);
     fireEvent.click(await card(/built-in login/i));
     const review = screen.getByRole("region", { name: /review the switch/i });
@@ -424,12 +423,11 @@ describe("AgentModelTab", () => {
       serve({
         providers: [
           conn("kimi", {
-            is_active: true,
             models: [{ id: "kimi-k3", modality: "text", effort_levels: ["low", "high"] }],
           }),
         ],
       });
-      const claude = renderTab({ ...CLAUDE, model: "kimi-k3" });
+      const claude = renderTab({ ...CLAUDE, model: "kimi-k3", connection_uid: "u-kimi" });
       expect(await screen.findByRole("radio", { name: /kimi/ })).toHaveAttribute(
         "aria-checked",
         "true",
@@ -443,14 +441,13 @@ describe("AgentModelTab", () => {
       serve({
         providers: [
           conn("openai", {
-            is_active: true,
             protocol: "openai",
             compatible_agents: ["codex"],
             models: text("gpt-oss"),
           }),
         ],
       });
-      renderTab({ ...CODEX, model: "gpt-oss" });
+      renderTab({ ...CODEX, model: "gpt-oss", connection_uid: "u-openai" });
       expect(await screen.findByRole("radio", { name: /openai/ })).toHaveAttribute(
         "aria-checked",
         "true",

@@ -12,7 +12,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { acceptance } from "@/test/acceptance";
 import { SidebarFooter } from "./SidebarFooter";
 
-vi.mock("@/lib/api/client", () => ({
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: () => ({ GET: () => new Promise(() => {}) }),
 }));
 

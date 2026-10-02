@@ -45,6 +45,8 @@ class CodexParseState:
     """Mutable state threaded through Codex notification mapping for one turn."""
 
     session_id: str | None = None
+    #: The model the thread runs on, as the app-server reported it.
+    model: str | None = None
     turn_id: str | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
@@ -60,6 +62,7 @@ def map_codex_notification(
         tid = thread.get("id")
         if tid:
             state.session_id = tid
+        state.model = thread.get("model") or params.get("model") or state.model
         return []
     if method == "turn/started":
         turn = params.get("turn") or {}

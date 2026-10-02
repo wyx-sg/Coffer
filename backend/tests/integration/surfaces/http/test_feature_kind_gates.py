@@ -6,8 +6,8 @@ resources are out of reach of the kind-agnostic resource routes, and the
 handshake instructions name only the tools the tool list carries.
 
 Boots ``create_app`` under a throwaway HOME, with the fixtures and helpers of
-``test_feature_gates``; the feature is a test-only one, since nothing is
-experimental right now.
+``test_feature_gates``; the kinds are exercised on the shipped features, the
+tool mechanism on a test-only one registered beside them.
 """
 
 from __future__ import annotations
@@ -27,7 +27,6 @@ from tests.integration.surfaces.http import test_feature_gates as gates
 from tests.support.features import FAKE_FEATURE
 
 home = gates.home
-owns_knowledge = gates.owns_knowledge
 fake_tool = gates.fake_tool
 _assert_disabled = gates._assert_disabled
 _client = gates._client
@@ -60,27 +59,25 @@ def _collection(c: TestClient, name: str) -> str:
     spec="experimental-features",
     scenario="a switched-off feature's resources are out of reach of the resource routes",
 )
-def test_a_switched_off_features_resources_are_out_of_reach(
-    home: pathlib.Path, owns_knowledge: None
-) -> None:
+def test_a_switched_off_features_resources_are_out_of_reach(home: pathlib.Path) -> None:
     with _client() as c:
         uid = _collection(c, "research")
         folder = knowledge_root() / "research"
         assert folder.is_dir()
 
-        _switch(c, FAKE_FEATURE, False)
+        _switch(c, "knowledge", False)
         base = f"/api/v1/resources/{uid}"
-        _assert_disabled(c.get("/api/v1/resources", params={"kind": "knowledge"}), FAKE_FEATURE)
-        _assert_disabled(c.get(base), FAKE_FEATURE)
-        _assert_disabled(c.patch(base, json={"description": "x"}), FAKE_FEATURE)
-        _assert_disabled(c.delete(base), FAKE_FEATURE)
-        _assert_disabled(c.post(f"{base}/enable"), FAKE_FEATURE)
-        _assert_disabled(c.post(f"{base}/disable"), FAKE_FEATURE)
-        _assert_disabled(c.get(f"{base}/scope"), FAKE_FEATURE)
-        _assert_disabled(c.put(f"{base}/scope", json={"scope": None}), FAKE_FEATURE)
+        _assert_disabled(c.get("/api/v1/resources", params={"kind": "knowledge"}), "knowledge")
+        _assert_disabled(c.get(base), "knowledge")
+        _assert_disabled(c.patch(base, json={"description": "x"}), "knowledge")
+        _assert_disabled(c.delete(base), "knowledge")
+        _assert_disabled(c.post(f"{base}/enable"), "knowledge")
+        _assert_disabled(c.post(f"{base}/disable"), "knowledge")
+        _assert_disabled(c.get(f"{base}/scope"), "knowledge")
+        _assert_disabled(c.put(f"{base}/scope", json={"scope": None}), "knowledge")
         _assert_disabled(
             c.post("/api/v1/resources", json={"kind": "knowledge", "name": "x", "config": {}}),
-            FAKE_FEATURE,
+            "knowledge",
         )
         listed = c.get("/api/v1/resources").json()["resources"]
         assert all(r["kind"] != "knowledge" for r in listed)
@@ -89,13 +86,13 @@ def test_a_switched_off_features_resources_are_out_of_reach(
         # Nothing the refused delete touched: the folder is where it was.
         assert folder.is_dir()
 
-        _switch(c, FAKE_FEATURE, True)
+        _switch(c, "knowledge", True)
         assert c.get(base).status_code == 200
         assert any(r["uid"] == uid for r in c.get("/api/v1/resources").json()["resources"])
 
 
-def test_an_unknown_uid_is_still_not_found(home: pathlib.Path, owns_knowledge: None) -> None:
-    daemon_config.write_feature_setting(FAKE_FEATURE, False)
+def test_an_unknown_uid_is_still_not_found(home: pathlib.Path) -> None:
+    daemon_config.write_feature_setting("knowledge", False)
     with _client() as c:
         r = c.get("/api/v1/resources/no-such-uid")
     assert r.status_code == 404

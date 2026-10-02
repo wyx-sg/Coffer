@@ -21,7 +21,7 @@ from .conftest import ChannelEnv, FakeChannelAdapter, inbound, wait_until
 async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     adapter = env.bind(resource)
-    code, _expires = env.pairing.issue("tg")
+    code, _expires = env.pairing.issue(resource.uid)
 
     await env.processor.on_message(inbound("tg", "chat-1", code, sender_display="Alice"))
 
@@ -40,7 +40,11 @@ async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: Channe
 
     entries = await env.audit_entries("channel_paired", resource)
     assert len(entries) == 1
-    assert entries[0].details == {"chat_id": "chat-1", "display_name": "Alice"}
+    assert entries[0].details == {
+        "chat_id": "chat-1",
+        "sender_id": "chat-1",
+        "display_name": "Alice",
+    }
 
     # The code was consumed: the same code from another chat does not re-pair.
     await env.processor.on_message(inbound("tg", "chat-2", code))
@@ -68,7 +72,7 @@ async def test_message_from_a_different_chat_is_silently_ignored(env: ChannelEnv
 async def test_wrong_guesses_get_no_reply_and_exhaust_the_code(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     adapter = env.bind(resource)
-    code, _expires = env.pairing.issue("tg")
+    code, _expires = env.pairing.issue(resource.uid)
 
     # Burn every attempt with wrong guesses: no reply, no peer row.
     for _ in range(10):
@@ -80,7 +84,7 @@ async def test_wrong_guesses_get_no_reply_and_exhaust_the_code(env: ChannelEnv) 
     await env.processor.on_message(inbound("tg", "chat-1", code))
     assert await env.peers.owner_peer(resource.uid) is None
     assert adapter.sent == []
-    assert env.pairing.pending("tg") is False
+    assert env.pairing.pending(resource.uid) is False
 
 
 async def _pair_owner_with_a_group(env: ChannelEnv) -> tuple[Resource, FakeChannelAdapter]:
@@ -89,8 +93,8 @@ async def _pair_owner_with_a_group(env: ChannelEnv) -> tuple[Resource, FakeChann
     resource = await env.register_channel("tg")
     adapter = env.bind(resource)
     # Report ``adapter`` as the live one, which is what ``notify`` reads.
-    env.runtime._running[resource.name] = SimpleNamespace(adapter=adapter)
-    code, _ = env.pairing.issue("tg")
+    env.runtime._running[resource.uid] = SimpleNamespace(adapter=adapter)
+    code, _ = env.pairing.issue(resource.uid)
     await env.processor.on_message(inbound("tg", "old-dm", code, sender_id="old-1"))
     await env.processor.on_message(
         inbound(
@@ -115,7 +119,7 @@ async def test_pairing_from_another_account_replaces_the_owner(env: ChannelEnv) 
     Every trace of the previous owner's authority goes; the new owner gets all of
     it — DM gate, notify default target, group owner gate."""
     resource, adapter = await _pair_owner_with_a_group(env)
-    code, _ = env.pairing.issue("tg")
+    code, _ = env.pairing.issue(resource.uid)
     await env.processor.on_message(inbound("tg", "new-dm", code, sender_id="new-1"))
 
     peers = await env.peers.list_by_resource(resource.uid)
@@ -163,7 +167,7 @@ async def test_re_pairing_from_the_same_account_keeps_its_groups(env: ChannelEnv
     not an ownership change: the new chat pairs and nothing the owner already
     had — DM, groups, group gate — is dropped."""
     resource, adapter = await _pair_owner_with_a_group(env)
-    code, _ = env.pairing.issue("tg")
+    code, _ = env.pairing.issue(resource.uid)
     await env.processor.on_message(inbound("tg", "old-dm-2", code, sender_id="old-1"))
 
     assert adapter.sent[-2][0] == "old-dm-2"
@@ -178,26 +182,22 @@ async def test_re_pairing_from_the_same_account_keeps_its_groups(env: ChannelEnv
     assert len(await env.audit_entries("channel_paired", resource)) == 2
 
 
-async def test_re_pairing_keeps_the_same_persons_legacy_dm(env: ChannelEnv) -> None:
-    """A DM paired before the gate learned sender ids has no ``sender_id``, but
-    a DM's chat id IS its person's id (Telegram private chat id = user id,
-    SeaTalk DM chat id = employee_code). That person re-pairing from another
-    chat is a rebind: their old DM stays. Another person's legacy DM and a
-    legacy row that proves nobody's identity (a group) are still dropped."""
+@pytest.mark.acceptance(spec="channels", scenario="a pairing code sent with no sender binds nobody")
+async def test_a_claim_from_a_message_with_no_sender_pairs_nobody(env: ChannelEnv) -> None:
+    """A pairing binds a person and the owner gate compares sender ids, so a code
+    sent in a message whose sender the transport could not name binds nobody — and
+    leaves the code, and its attempt budget, untouched."""
     resource = await env.register_channel("tg")
     adapter = env.bind(resource)
-    await env.pair(resource, "old-1", sender_id=None)  # the claimant's own legacy DM
-    await env.pair(resource, "someone-else", sender_id=None)  # another person's legacy DM
-    await env.pair(resource, "grp-legacy", sender_id=None)  # legacy group: no identity
-    code, _ = env.pairing.issue("tg")
-    await env.processor.on_message(inbound("tg", "new-chat", code, sender_id="old-1"))
+    code, _ = env.pairing.issue(resource.uid)
 
-    assert adapter.sent[-1][0] == "new-chat"
-    peers = await env.peers.list_by_resource(resource.uid)
-    assert sorted((p.chat_id, p.sender_id) for p in peers) == [
-        ("new-chat", "old-1"),
-        ("old-1", None),
-    ]
+    await env.processor.on_message(inbound("tg", "chat-1", code, sender_id=""))
+
+    assert await env.peers.owner_peer(resource.uid) is None
+    assert adapter.sent == []
+    assert env.pairing.pending(resource.uid) is True
+    await env.processor.on_message(inbound("tg", "chat-1", code))
+    assert await env.peers.owner_peer(resource.uid) is not None
 
 
 async def test_a_failed_owner_swap_leaves_the_previous_owner_in_place(
@@ -210,7 +210,7 @@ async def test_a_failed_owner_swap_leaves_the_previous_owner_in_place(
     before = sorted(
         (p.chat_id, p.sender_id) for p in await env.peers.list_by_resource(resource.uid)
     )
-    code, _ = env.pairing.issue("tg")
+    code, _ = env.pairing.issue(resource.uid)
 
     def _refuse_write(self: Transaction, *_args: object, **_kwargs: object) -> None:
         raise RuntimeError("disk full")

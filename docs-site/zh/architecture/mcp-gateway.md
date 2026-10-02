@@ -57,12 +57,12 @@ flowchart LR
 
 守护进程在 `127.0.0.1:<port>` 的根上挂载 `/mcp`。每个请求都必须在 `X-Coffer-Token` 里带上守护进程令牌（与 REST API 是同一个令牌）。令牌错误或缺失得到 `401`。回环 `Host` 守卫在这里和在其他路由上一样生效。
 
-- **`POST /mcp`** 接收一个 JSON-RPC 信封。第一个不带 `Mcp-Session-Id` 头的请求到来时，守护进程分配一个 UUID，并在这个头里返回。之后每个请求都带上它。处理方式取决于信封：
+- **`POST /mcp`** 接收一个 JSON-RPC 信封。第一个不带 `Mcp-Session-Id` 头的请求到来时，守护进程分配一个 UUID，并在这个头里返回。之后每个请求都带上它。守护进程不认识的会话 ID（空闲回收器丢掉了该会话，或守护进程重启过）对除 `initialize` 之外的请求都回答 `404`，让客户端重新握手，新会话带着那次握手里的智能体身份；以 `__` 开头的 ID 永远不会被当作会话 ID。处理方式取决于信封：
   - `initialize` 由网关会话自己回答，`ping` 返回 `{}`。
   - 没有 `id` 的消息是通知，返回 `202`，没有响应体。
   - 有 `id` 但没有 `method` 的消息，是客户端对服务器发起的请求（`sampling/createMessage` 或 `roots/list`）的回复。它会被匹配到正在等待它的那个服务器请求，并以不带响应体的 `202` 确认。
   - 批量请求（顶层是数组）以 `-32600` 拒绝。
-- **`GET /mcp`** 打开一条 Server-Sent Events 流，用于服务器到客户端的消息。它要求带 `Mcp-Session-Id`。消息在一个按会话的队列里等待，上限 1000 条。队列满时丢掉最旧的消息。
+- **`GET /mcp`** 打开一条 Server-Sent Events 流，用于服务器到客户端的消息。它要求带一个存活会话的 `Mcp-Session-Id`（否则 `404`）。打开着的流会让其会话不被空闲回收器回收。消息在一个按会话的队列里等待，上限 1000 条。队列满时丢掉最旧的消息。
 
 SSE 流关闭时会话仍然保持打开，因为 shim 会经常重连。会话有三种结束方式：空闲回收、守护进程关闭或被销毁。回收器每 60 秒醒来一次，丢掉 30 分钟内既没有 POST 也没有上游流量的会话。两个值都可以用 `COFFER_MCP_SESSION_REAPER_INTERVAL_S` 和 `COFFER_MCP_SESSION_IDLE_S` 修改。销毁会话之前，回收器会最多等约 5 秒让进行中的 POST 完成，所以正在运行的请求永远不会碰到一个销毁了一半的会话。
 
@@ -74,7 +74,7 @@ SSE 流关闭时会话仍然保持打开，因为 shim 会经常重连。会话�
 2. **在握手上盖章。** 在 `initialize` 信封里，shim 写入 `params._meta["coffer/cwd"]`（它的启动目录）。如果它是以 `--agent-uid <uid>` 启动的，还会写入 `params._meta["coffer/agent-uid"]`。它会缓存这个信封以便之后重放。
 3. **泵送 stdin。** 每一行 stdin 都作为一个独立任务 POST 出去。所以一个慢的 `tools/call` 不会把后面的 `ping` 堵住。单行上限 64 MiB。
 4. **排空 SSE。** shim 一直保持 `GET /mcp` 打开，把每个 `data:` 载荷写到 stdout。如果流断了，它会带退避重连，从 0.5 秒开始，最多增长到 5 秒。
-5. **从守护进程重启中恢复。** 如果一次 POST 在传输层失败，shim 会重新读取 `daemon.json`。如果现在有一个活着的守护进程在不同端口或用不同令牌应答，shim 会重新绑定，重放缓存的 `initialize`（不转发第二次的回复），并重试这次调用一次。来自旧守护进程的 401（在同一端口重启会轮换令牌）也按同样方式处理。重试从不会让一个工具跑两次：只有在连接被拒绝或超时时，也就是旧守护进程根本没看到这个请求时，才会重发 `tools/call`。如果 POST 是在请求发出之后失败的（读超时、响应途中被重置、协议错误），旧守护进程可能已经跑过这个工具了。shim 仍然会重新绑定，让后续调用能正常工作，但会用一个 `-32603` 错误回答这个请求，说明守护进程在调用中途重启了，这次调用可能跑了也可能没跑。其他所有方法都会重发，因为它们没有副作用。
+5. **从守护进程重启中恢复。** 如果一次 POST 在传输层失败，shim 会重新读取 `daemon.json`。如果现在有一个活着的守护进程在不同端口或用不同令牌应答，shim 会重新绑定，重放缓存的 `initialize`（不转发第二次的回复），并重试这次调用一次。来自旧守护进程的 401（在同一端口重启会轮换令牌）也按同样方式处理，守护进程已丢掉会话时的 `404` 也一样：shim 重放缓存的 `initialize`，再重发那次没有运行过的调用。重试从不会让一个工具跑两次：只有在连接被拒绝或超时时，也就是旧守护进程根本没看到这个请求时，才会重发 `tools/call`。如果 POST 是在请求发出之后失败的（读超时、响应途中被重置、协议错误），旧守护进程可能已经跑过这个工具了。shim 仍然会重新绑定，让后续调用能正常工作，但会用一个 `-32603` 错误回答这个请求，说明守护进程在调用中途重启了，这次调用可能跑了也可能没跑。其他所有方法都会重发，因为它们没有副作用。
 
 stdout 就是 MCP 的传输线，所以 shim 在写入之前会校验每一个回复。HTTP 错误或非 JSON 响应体会变成针对该请求 id、代码为 `-32603` 的合成 JSON-RPC 错误。诊断信息写到 `~/.coffer/logs/shim-<pid>-<epoch>.log`，从不写到 stdout。
 
@@ -146,7 +146,7 @@ flowchart TD
 3. 否则，按过去一段窗口（默认 90 天，`COFFER_TOOL_TIERING_WINDOW_DAYS`）内的调用次数从高到低给上游工具排序。并列时保持目录顺序：服务器按列出顺序，每个服务器的工具按它自己的 `tools/list` 顺序。
 4. 沿着排序走，取每个服务器的第一个（排名最高的）工具，这样每个可见服务器至少保留一个被列出的工具。如果服务器比预算名额还多，预算优先，这一部分覆盖尽可能多的服务器。
 5. 剩余名额按排序依次填满。
-6. 按原始目录顺序输出选中的工具。被排除的数量会被记下，由下一次 `initialize` 的说明文字报告。
+6. 按原始目录顺序输出选中的工具。被排除的数量由 `initialize` 的说明文字报告：握手时根据发现流程最近保存的工具列表估算，紧随其后的列表会用真实数量替换这个估算值。
 
 用量来自对调用日志（`mcp_invocations`）里窗口起点以来的工具调用做的一次分组查询，按 uid 关联到资源表，所以计数归属于注册的服务器，而不是调用时带的随便什么名字。所有状态的调用都算。出错的调用仍然说明智能体想用那个工具。
 
@@ -189,7 +189,7 @@ coffer__search_tools(query: string, top_k?: integer = 5, 1..20)
 | `coffer__write` | 知识模块 |
 | `coffer__search_tools` | 网关自己（网关自有） |
 
-目前没有内置工具属于某个实验功能。对于属于实验功能的工具，注册表每次读取时都会检查该功能：功能关闭时，它的工具不会出现在 `tools/list` 和 `initialize` 文字里。对它的调用会落到上游路由，并像一个未知工具那样失败。见 [实验功能](/zh/guides/experimental-features)。
+`coffer__write` 属于 `knowledge` 实验功能；`coffer__search_tools` 由网关自己持有，始终存在。对于属于某个功能的工具，注册表每次读取时都会检查该功能：功能关闭时，它的工具不会出现在 `tools/list` 和 `initialize` 文字里。对它的调用会落到上游路由，并像一个未知工具那样失败。见 [实验功能](/zh/guides/experimental-features)。
 
 内置工具的处理函数运行之前，网关会按上面所说设置 `agent`。当工具的 schema 声明了 `cwd` 属性而客户端没填时，它还会填上 `cwd`。处理函数的返回值被包装成一个 MCP 工具结果：`content` 里是 JSON 文本，`structuredContent` 里是同一个对象，`isError: false`。处理函数内部的异常会变成带内的 `isError: true` 结果，而不是 JSON-RPC 错误，这样模型能读到它并自我纠正。文本会显示 Coffer 编写的错误和无效值错误的消息，其他异常只显示异常的类型名。工具的具体行为见 [MCP 工具](/zh/reference/mcp-tools)。
 
@@ -277,7 +277,7 @@ stateDiagram-v2
 - **并发。** 每个 supervisor 同时最多跑 4 个冷启动（`COFFER_MCP_MAX_CONCURRENT_SPAWNS`）。名额只在构建和 initialize 期间占用，退避睡眠期间从不占用。
 - **逐出。** 逐出不拿锁。它把代数计数器加一，并关闭当前连接。在逐出之后才完成的拉起会看到代数变了，于是关闭它的新连接并抛出异常。因此删除、停用或编辑一个服务器从不需要等一条慢吞吞的阶梯。这个类型的删除、停用和配置编辑 Hook 会把服务器从每个活动会话的 supervisor 中逐出，也从支撑管理路由的进程级 supervisor 中逐出。配置编辑之后，下一次调用会用新的命令、URL 或密钥引用拉起服务器；重新启用什么都不用做，因为下一次调用会重新拉起。
 - **崩溃恢复。** 在传输层失败的 `tools/call` 会逐出连接，下一次调用会重新拉起服务器。传输失败指任何不是 MCP 协议错误的异常，或说明连接已关闭的 MCP 错误。其他格式正确的 MCP 错误说明上游应答了，所以连接保留。超时也不逐出，一开始就没拿到连接的失败也不逐出。
-- **拆除。** stdio 关闭时最多等 10 秒让 SDK 自己关停，SDK 会从 SIGTERM 升级到 SIGKILL。然后 shim 杀掉为这个连接记录的每个 PID 及其所有后代。每次拉起都会在 `~/.coffer/upstream-pids/` 下记录一个 PID 文件，以服务器的 uid 为键。启动时，守护进程会清扫崩溃遗留的文件。
+- **拆除。** stdio 关闭时最多等 10 秒让 SDK 自己关停，SDK 会从 SIGTERM 升级到 SIGKILL。连接自己的生命周期任务先关闭进程及其管道，然后连接杀掉为它记录的每个 PID 及其所有后代。每次拉起都会在 `~/.coffer/upstream-pids/` 下记录一个 PID 文件（PID 取自 SDK 创建的那个进程，而不是靠比对守护进程的其他子进程来猜），以服务器的 uid 为键。启动时，守护进程会清扫崩溃遗留的文件。
 - **日志。** 每个 stdio 上游的 stderr 写到它自己的文件 `~/.coffer/logs/upstream/<name>.log`，而不是 `daemon.log`。
 
 守护进程还为管理路由运行一个进程级的 supervisor 和发现模块：`GET …/capabilities`、`POST …/refresh` 以及能力开关。范围从不限制这些路由，所以你总能测试一个没有任何会话被允许看到的服务器。
@@ -301,7 +301,7 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 
 - `notifications/tools/list_changed`、`resources/list_changed` 和 `prompts/list_changed` 会使会话缓存里对应的部分失效，并转发给下游。
 - `notifications/resources/updated` 在把 URI 改写为 `coffer://<server>/…` 后转发。
-- `notifications/message` 和 `notifications/progress` 被丢掉。长时间的工具调用仍然受保护：它发送时带一个读超时，每个进度事件都会重置这个超时。
+- `notifications/message` 和 `notifications/progress` 被丢掉。工具调用受该服务器的请求超时约束；Coffer 不向上游索要进度，所以没有什么会延长这个超时。
 - 上游发来的 `sampling/createMessage` 和 `roots/list` 通过 SSE 转给这个会话自己的客户端，并按 id 与客户端的回复匹配，超时 30 秒。只有客户端在 `initialize` 时声明了 `sampling`，才会转发采样请求。
 
 ## 调用日志 {#invocation-logging}
@@ -396,5 +396,5 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 ## 相关 {#related}
 
 - 规格：[mcp-gateway](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md)，以及 [resource-framework](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) 里的范围契约
-- 决策：[One Upstream Subprocess Set Per Session](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/session-subprocess-model.md)、[Tool Overload: List a Usage-Ranked Slice, Search the Rest](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md)、[Capability State Model](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/capability-state-model.md)、[Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md)、[Envelope-Encrypted Secrets](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
+- 决策：[One Upstream Subprocess Set Per Session](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/session-subprocess-model.md)、[Tool Overload: List a Usage-Ranked Slice, Search the Rest](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md)、[MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md)、[Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md)、[The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
 - 页面：[守护进程与进程](/zh/architecture/daemon)、[资源框架](/zh/architecture/resource-framework)、[安全模型](/zh/architecture/security)、[可观测性](/zh/architecture/observability)、[MCP 服务器](/zh/guides/mcp-servers)、[连接客户端](/zh/guides/connect-a-client)、[MCP 工具](/zh/reference/mcp-tools)

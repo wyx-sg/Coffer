@@ -18,7 +18,7 @@ import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import type { InvocationSummary, ToolTiering } from "@/lib/hooks/useMcpServerPage";
 import { McpToolTable } from "./McpToolTable";
 import { NoTools } from "./McpTopTools";
-import type { ServerState } from "./serverState";
+import type { ServerState } from "@/lib/mcp/serverState";
 import { cacheNote, countsUsage, toolRows } from "./toolRows";
 
 type CapabilityListOut = components["schemas"]["CapabilityListOut"];

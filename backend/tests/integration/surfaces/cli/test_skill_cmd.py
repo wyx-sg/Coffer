@@ -14,7 +14,7 @@ daemon uses, then route ``_cli_client.client_or_exit`` to a Starlette
 Booting the *whole* app is what keeps these tests working now that every verb
 resolves the name it was given through ``GET /resources?kind=&name=`` before it
 addresses ``/skills/{uid}`` or ``/agents/{uid}/...``
-(ADR resource-identity-is-an-immutable-uid): an app mounting only the skill and
+(ADR identity-is-the-uid-inside-the-file): an app mounting only the skill and
 agent routers could no longer answer the first of those two requests. The verbs
 still TAKE names — that is the point of resolving here rather than asking a
 person to type a uid — so nothing below passes one.
@@ -216,7 +216,7 @@ def test_skill_scope_prints_agent_names_while_storing_uids(skill_cli_daemon, mon
 
     This is the whole reason ``skill_cmd._agent_names`` fetches the agent
     listing at all. A scope holds uids because that is what a cross-resource
-    reference is now (ADR resource-identity-is-an-immutable-uid), and a uid is
+    reference is now (ADR identity-is-the-uid-inside-the-file), and a uid is
     an address, not information: if the translation silently regressed, both
     ``list`` and ``show`` would print a column of hex that matches nothing the
     user ever typed, and no other test would notice. So the assertion is made

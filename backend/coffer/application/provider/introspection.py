@@ -111,23 +111,3 @@ class ModelIntrospectionService:
         except Exception as e:
             return TestResult(ok=False, message=str(e))
         return TestResult(ok=True, message="connection ok")
-
-    async def detect_protocol(
-        self,
-        *,
-        base_url: str | None,
-        secret_ref: str | None,
-        secret_value: str | None = None,
-    ) -> str:
-        # Classify the endpoint's wire. The add-connection dialog asks for the
-        # protocol instead of calling this (spec provider-switching "Offer every
-        # connection operation on REST, CLI and web"). Never raises: a failed or
-        # inconclusive probe degrades to 'unknown', and a connection whose
-        # protocol is 'unknown' starts scoped to EVERY agent for the user to
-        # narrow (see ``domain.provider.config.Protocol``) — the conservative
-        # answer is "ask", not "guess".
-        try:
-            key = self._key_for("", secret_ref, secret_value)
-            return await self._port.detect_protocol(base_url=base_url, api_key=key)
-        except Exception:
-            return "unknown"

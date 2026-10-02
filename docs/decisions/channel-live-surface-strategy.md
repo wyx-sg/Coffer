@@ -160,8 +160,9 @@ Rules a future change must respect:
 
 - A new platform chooses its surface and pace inside its adapter and declares
   `supports_live_text` / `live_text_persists`; the renderer needs no change.
-- `supports_edit` and `supports_live_text` are separate capabilities and must
-  stay separate: SeaTalk streams but cannot edit.
+- The core asks for a live surface (`supports_live_text`), never for "can a
+  delivered text message be rewritten": SeaTalk streams but cannot edit, and no
+  capability flag says otherwise.
 - Clients too old for a platform's streaming (SeaTalk before 3.67) see only
   the final message, which is the same reply.
 - Enforced by: `ChannelCapabilities` in `domain/channel/envelopes.py`;

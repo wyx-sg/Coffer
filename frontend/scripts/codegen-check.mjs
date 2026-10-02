@@ -6,8 +6,8 @@
 //      `src/lib/api/generated/`, naming each file that drifted — a contract
 //      regenerated without `npm run codegen`, or a generated file edited by
 //      hand.
-//   2. `check-wire-types.mjs`: no wire type in `src/lib/api/` is written by
-//      hand, beyond the allow-list the UI rebuild is emptying.
+//   2. `check-wire-types.mjs`: no wire type in `src/lib/api/` or `src/lib/hooks/`
+//      is written by hand (`@ui-only` is the one exemption).
 //
 // Everything here works in spec ids, which may be nested paths
 // (`channels/telegram` → `generated/channels/telegram.ts`), so the walk below
@@ -67,11 +67,11 @@ if (drifted.length > 0) {
   for (const line of drifted) console.error(`  - ${line}`);
 }
 if (wire.problems.length > 0) {
-  console.error("codegen:check — hand-written wire types in src/lib/api/:");
+  console.error("codegen:check — hand-written wire types in src/lib/api/ or src/lib/hooks/:");
   for (const line of wire.problems) console.error(`  - ${line}`);
 }
 if (drifted.length > 0 || wire.problems.length > 0) process.exit(1);
 console.log(
   `codegen:check — ${CONTRACTS.length} generated modules match their contracts; ` +
-    `no new hand-written wire type (${wire.allowed} allow-listed for the UI rebuild).`,
+    `no hand-written wire type in ${wire.scanned} scanned lib modules.`,
 );

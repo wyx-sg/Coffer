@@ -28,6 +28,7 @@ from coffer.application.memory.context import MemoryPort, compose_context
 from coffer.application.memory.hook_service import MOMENT_PROMPT, MOMENT_SESSION_START
 from coffer.application.memory.retrieval import RetrievalService
 from coffer.domain.agent.config import AgentConfig
+from coffer.domain.memory.delivery import DELIVERY_CEILING_BYTES
 from coffer.domain.resource import Resource
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,11 @@ class TurnRetrieval:
         self._memory = memory
 
     async def _agent_uid(self, agent_key: str) -> str | None:
+        """The agent a fire is audited against: of the registered agents of this
+        type, an enabled one — a disabled agent is not the one answering."""
         for row in await self._agents.list():
+            if not row.enabled:
+                continue
             try:
                 cfg = AgentConfig.model_validate(row.config)
             except ValueError:
@@ -87,9 +92,13 @@ class TurnRetrieval:
     async def index_for_turn(self, *, agent_key: str, cwd: str, conversation_id: str) -> str | None:
         """The index for this turn's system prompt, or ``None`` for nothing —
         an empty memory header is worse than none."""
-        composed = await compose_context(self._memory, cwd=cwd)
-        if not composed.text:
-            return None
+        # The hook's own ceiling: this is the same payload, and a turn must not carry
+        # more than an agent's hook would be allowed to.
+        composed = await compose_context(
+            self._memory, cwd=cwd, ceiling_bytes=DELIVERY_CEILING_BYTES
+        )
+        # A session start is audited whether or not there was anything to deliver,
+        # exactly as the hook records it ("Audit every delivery fire").
         await self._record(
             agent_key,
             {
@@ -97,7 +106,7 @@ class TurnRetrieval:
                 "session_id": conversation_session(conversation_id),
             },
         )
-        return composed.text
+        return composed.text or None
 
     async def for_turn(
         self, *, agent_key: str, cwd: str, prompt: str, conversation_id: str

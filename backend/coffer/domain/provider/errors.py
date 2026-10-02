@@ -18,17 +18,17 @@ class ProviderSecretSourceInvalid(CofferError):  # noqa: N818
 
 
 class ProviderProtocolLockedWhileActive(CofferError):  # noqa: N818
-    """A connection's wire may be corrected, but not while it is switched on.
+    """A connection's wire may be corrected, but not while an agent runs on it.
 
     The wire is not inert: an ``ollama`` connection covers no agent whatever its
     scope says (``application.provider.targets.scoped_targets``). Moving the
-    wire of a connection that is currently projected would therefore leave the
+    wire of a connection an agent currently runs on would therefore leave the
     native config Coffer already wrote standing with nothing left that would
     ever take it off again.
 
     Refusing is the fix rather than de-projecting silently: the user asked to
     change a field, not to take their agents off a gateway. Maps to 409 — the
-    request is well-formed and will succeed once the connection is off.
+    request is well-formed and will succeed once no agent runs on the connection.
     """
 
     code = "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE"
@@ -38,10 +38,10 @@ class ProviderProtocolLockedWhileActive(CofferError):  # noqa: N818
             "`coffer provider builtin <agent_type>`"
         )
         super().__init__(
-            f"connection {name!r} is switched on, so its wire format cannot change — "
-            f"put its agents back on their built-in login first "
+            f"connection {name!r} has agents running on it, so its wire format cannot change — "
+            f"put those agents back on their built-in login first "
             f"({how}), then edit the wire, "
-            f"then switch the connection on again"
+            f"then switch them onto the connection again"
         )
         self.name = name
         self.protocol = protocol
@@ -51,8 +51,8 @@ class ProviderInternalOnly(CofferError):  # noqa: N818
     """An ``ollama`` connection cannot be switched on for an agent.
 
     It is internal-only: it has no key to project and reaches no agent whatever
-    its scope says (``application.provider.targets.scoped_targets``), so it is
-    never ``is_active`` and activating it writes nothing. Refused rather than
+    its scope says (``application.provider.targets.scoped_targets``), so no
+    agent ever runs on it and switching one onto it writes nothing. Refused rather than
     answered with a switch that did not happen. Maps to 409.
     """
 
@@ -66,16 +66,22 @@ class ProviderInternalOnly(CofferError):  # noqa: N818
         self.name = name
 
 
-class NoActiveProvider(CofferError):  # noqa: N818
-    """A connection has no secret to hand the local model proxy — raised
-    by the service's key lookup, which the proxy's membership check treats as
-    "not a member". Maps to 404."""
+class ProviderDoesNotReachAgent(CofferError):  # noqa: N818
+    """A connection cannot be switched onto an agent it does not reach.
 
-    code = "NO_ACTIVE_PROVIDER"
+    Reach is the connection's per-agent scope, narrowed by its ``enabled``
+    switch; and Coffer never writes into an agent the user switched off. The
+    ``reason`` says which of the three it was. Maps to 409: the request is
+    well-formed and succeeds once the connection or agent is switched on, or the
+    scope names the agent.
+    """
 
-    def __init__(self, protocol: str) -> None:
-        super().__init__(f"no active provider profile for protocol {protocol!r}")
-        self.protocol = protocol
+    code = "PROVIDER_DOES_NOT_REACH_AGENT"
+
+    def __init__(self, name: str, agent_type: str, reason: str) -> None:
+        super().__init__(f"connection {name!r} cannot be switched on for {agent_type}: {reason}")
+        self.name = name
+        self.agent_type = agent_type
 
 
 class ProviderInternalDefaultTaken(CofferError):  # noqa: N818
@@ -86,7 +92,7 @@ class ProviderInternalDefaultTaken(CofferError):  # noqa: N818
     move it is ``set_internal_default``, which clears the holder first. Any
     other write that sets the flag while a different connection holds it — the
     kind-agnostic resource PATCH or POST — is refused here rather than left to
-    the database's unique index. Maps to 409: the body is well-formed, and the
+    the vault's exclusive-flag rule. Maps to 409: the body is well-formed, and the
     dedicated route moves the flag.
     """
 
@@ -97,5 +103,24 @@ class ProviderInternalDefaultTaken(CofferError):  # noqa: N818
             f"connection {holder!r} is already Coffer's internal-engine default — "
             f"move the flag with `coffer config set engine.provider <name>` "
             f"(POST /api/v1/providers/{{uid}}/internal-default) instead"
+        )
+        self.holder = holder
+
+
+class ProviderTranscribeDefaultTaken(CofferError):  # noqa: N818
+    """A write would flag a second connection as the speech-to-text default.
+
+    The twin of :class:`ProviderInternalDefaultTaken`: at most one connection
+    carries ``transcribe_default``, and the one write that may move it is
+    ``set_transcribe_default``. Maps to 409.
+    """
+
+    code = "PROVIDER_TRANSCRIBE_DEFAULT_TAKEN"
+
+    def __init__(self, holder: str) -> None:
+        super().__init__(
+            f"connection {holder!r} is already Coffer's speech-to-text default — "
+            f"move the flag with `coffer config set transcribe.provider <name>` "
+            f"(POST /api/v1/providers/{{uid}}/transcribe-default) instead"
         )
         self.holder = holder

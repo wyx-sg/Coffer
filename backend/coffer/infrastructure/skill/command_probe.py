@@ -10,11 +10,13 @@ and none of it is read, kept, logged or returned — only the exit status is.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import pathlib
 import shutil
 import subprocess
+import threading
 from collections.abc import Callable, Sequence
 
 from coffer.domain.versions import parse_version
@@ -24,6 +26,8 @@ _log = logging.getLogger(__name__)
 
 VERSION_TIMEOUT_SECONDS = 5.0
 LOGIN_TIMEOUT_SECONDS = 10.0
+#: The most of a ``--version`` answer that is read.
+MAX_VERSION_OUTPUT = 64 * 1024
 
 
 class CommandProbe:
@@ -51,21 +55,34 @@ class CommandProbe:
             return None
 
     def version(self, path: str) -> str | None:
+        """What ``<path> --version`` prints, read up to ``MAX_VERSION_OUTPUT``
+        bytes: a command that never stops printing cannot fill the daemon's memory."""
         try:
-            result = subprocess.run(
+            proc = subprocess.Popen(
                 [path, "--version"],
-                capture_output=True,
-                text=True,
-                errors="replace",
-                timeout=self._version_timeout,
                 stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 env=self._env(),
-                check=False,
             )
-        except (OSError, subprocess.SubprocessError):
+        except OSError:
             _log.debug("skill.command_probe.version_failed path=%s", path, exc_info=True)
             return None
-        return parse_version(result.stdout) or parse_version(result.stderr)
+        timer = threading.Timer(self._version_timeout, proc.kill)
+        timer.start()
+        try:
+            assert proc.stdout is not None
+            raw = proc.stdout.read(MAX_VERSION_OUTPUT)
+        except (OSError, ValueError):
+            return None
+        finally:
+            timer.cancel()
+            proc.kill()
+            with contextlib.suppress(OSError, subprocess.SubprocessError):
+                proc.wait(timeout=2)
+            if proc.stdout is not None:
+                proc.stdout.close()
+        return parse_version(raw.decode("utf-8", errors="replace"))
 
     def login_ok(self, argv: Sequence[str]) -> bool | None:
         """``True`` when the login check exits 0, ``False`` on any other exit,
@@ -92,4 +109,4 @@ class CommandProbe:
         return {**os.environ, "PATH": self._user_path()}
 
 
-__all__ = ["LOGIN_TIMEOUT_SECONDS", "VERSION_TIMEOUT_SECONDS", "CommandProbe"]
+__all__ = ["LOGIN_TIMEOUT_SECONDS", "MAX_VERSION_OUTPUT", "VERSION_TIMEOUT_SECONDS", "CommandProbe"]

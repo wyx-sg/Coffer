@@ -212,7 +212,29 @@ async def test_a_failover_names_the_provider_that_answered(sm, tmp_path: Path) -
     assert rows["req_2"].connection_uid == "conn-b" and rows["req_2"].cost_usd is not None
     assert rows["req_1"].cost_usd is None
 
-    # A replayed file logs nothing twice.
-    write_spool(spool, "a.jsonl", [record(1, relay_id="rel-1", failed_over=True)])
-    await svc.ingest_once()
-    assert len(log.events) == 1
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a failover whose logging was lost is logged when the spool file is replayed",
+)
+async def test_a_replayed_file_hands_its_failovers_to_the_log(sm, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    spool = tmp_path / "spool"
+    lines = [record(1, relay_id="rel-1", connection_uid="conn-a", status=503, failed_over=True)]
+    write_spool(spool, "a.jsonl", lines)
+    # The daemon commits the rows and dies before logging: no log was wired.
+    await _service(sm, spool).ingest_once()
+
+    # The file comes back after the restart, with the log in place.
+    write_spool(spool, "a.jsonl", lines)
+    log = _Failovers()
+    svc = UsageIngestService(
+        repo=SqlAlchemyUsageRepo(sm),
+        spool=FileSpoolReader(spool),
+        prices=FakePrices(),
+        failovers=log,
+        tz=UTC,
+    )
+    result = await svc.ingest_once()
+
+    assert (result.inserted, result.duplicates) == (0, 1)
+    assert [e.from_uid for e in log.events] == ["conn-a"]

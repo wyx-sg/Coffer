@@ -2,7 +2,7 @@
 
 The proxy never opens the database — the daemon is its only writer (ADR
 usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota). It
-appends one JSON object per line to ``<spool dir>/<pid>-<seq>.jsonl.part`` and
+appends one JSON object per line to ``<spool dir>/<pid>-<start>-<seq>.jsonl.part`` and
 renames the file to ``.jsonl`` once it will not grow: when it holds records and
 either two seconds have passed since its first record or it reached 500, and
 at shutdown. The rename is atomic, so the daemon only ever reads whole files.
@@ -76,7 +76,11 @@ class _Flush:
 
 
 class UsageSpool:
-    """One writer of ``<pid>-<seq>.jsonl`` files in :func:`spool_dir`."""
+    """One writer of ``<pid>-<start>-<seq>.jsonl`` files in :func:`spool_dir`.
+
+    ``<start>`` is the writer's start time, so a later proxy that is handed the
+    same pid never overwrites a finished file the daemon has not ingested yet.
+    """
 
     def __init__(
         self,
@@ -90,6 +94,7 @@ class UsageSpool:
         self._max_age = max_age
         self._max_records = max_records
         self._pid = os.getpid() if pid is None else pid
+        self._start_ns = time.time_ns()
         self._seq = 0
         self._queue: asyncio.Queue[UsageRecord | _Flush | None] | None = None
         self._task: asyncio.Task[None] | None = None
@@ -189,7 +194,9 @@ class UsageSpool:
     def _append_lines(self, lines: str, n: int) -> None:
         if self._part is None:
             self._seq += 1
-            self._part = self.directory / f"{self._pid}-{self._seq:06d}{PART_SUFFIX}"
+            self._part = (
+                self.directory / f"{self._pid}-{self._start_ns}-{self._seq:06d}{PART_SUFFIX}"
+            )
             self._count = 0
             self._opened_at = time.monotonic()
         fd = os.open(self._part, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)

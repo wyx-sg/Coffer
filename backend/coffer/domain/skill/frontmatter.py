@@ -26,10 +26,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # hyphens.
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
-#: A top-level ``name`` key in the frontmatter block — column 0, so a nested
-#: mapping's own ``name`` is never mistaken for the skill's.
-_NAME_KEY_RE = re.compile(r"^name[ \t]*:")
-
 # agentskills.io caps the description at 1024 chars. Aligning the cap turns an
 # over-long description into a clean ``SkillValidationError`` (422) at validate
 # time instead of silently letting an out-of-spec skill into the master store.
@@ -61,41 +57,6 @@ def validate_frontmatter_name(name: str) -> None:
             f"invalid skill name {name!r}: must match {_NAME_RE.pattern} "
             "(lowercase letters, digits, hyphen)"
         )
-
-
-def rewrite_name(text: str, new_name: str) -> str | None:
-    """Return ``text`` with the frontmatter's ``name:`` set to ``new_name``.
-
-    Returns ``None`` when there is no frontmatter block, or no top-level
-    ``name`` key inside it, to rewrite — the caller decides what that means.
-
-    Surgical on purpose: exactly one line changes and every other byte of the
-    document survives, including its line endings, the key order, comments,
-    and any field this model does not model. Re-serialising the parsed
-    frontmatter would be far shorter and would silently reflow a file the user
-    writes by hand and edits in Coffer's own editor — dropping their comments
-    and reordering their keys as a side effect of a rename.
-
-    ``parse_frontmatter`` in the validator cannot be reused: it hands back
-    parsed YAML, and this needs to know WHICH LINE to touch.
-
-    ``new_name`` is assumed to have passed :func:`validate_frontmatter_name`,
-    which is what makes plain ``name: <value>`` safe to emit without quoting.
-    """
-    lines = text.splitlines(keepends=True)
-    if not lines or lines[0].strip() != "---":
-        return None
-    for i in range(1, len(lines)):
-        stripped = lines[i].strip()
-        if stripped == "---":
-            return None  # reached the end of the block without finding `name`
-        # A top-level key starts at column 0; an indented `name:` belongs to
-        # some nested mapping and is not the skill's own name.
-        if _NAME_KEY_RE.match(lines[i]):
-            ending = lines[i][len(lines[i].rstrip("\r\n")) :]
-            lines[i] = f"name: {new_name}{ending}"
-            return "".join(lines)
-    return None
 
 
 class SkillFrontmatter(BaseModel):

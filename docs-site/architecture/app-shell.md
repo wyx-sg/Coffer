@@ -37,7 +37,7 @@ The alternatives — keeping the role groups, one big Resources group, a flat li
 
 ### Experimental entries
 
-An entry can belong to an [experimental feature](/guides/experimental-features). The sidebar does not decide whether one is on; it asks the feature switch and follows it. A switched-off feature's entry is left out entirely rather than greyed, a group left with no entries drops its heading, and a switched-on one carries an **Experimental** label so its status is never a surprise. No entry belongs to one right now: Knowledge, Memory and Sync graduated at 1.0 and are ordinary entries.
+An entry can belong to an [experimental feature](/guides/experimental-features). The sidebar does not decide whether one is on; it asks the feature switch and follows it. A switched-off feature's entry is left out entirely rather than greyed, a group left with no entries drops its heading, and a switched-on one carries an **Experimental** label so its status is never a surprise. Knowledge belongs to `knowledge`, Memory to `memory`, Sync to `sync`, and Model providers and Usage to `models`; every other entry, Conversations and Channels included, is always there. A deep link into a switched-off feature's page lands on the not-found page, and its sections inside other pages are left out the same way, with no notice and no switch-on button. Settings has a tab of its own for the switches, **Features**, in every build.
 
 ## One list of names and routes
 
@@ -107,7 +107,7 @@ Which identifier fills `<id>` depends on whether the kind can be renamed:
 - **Skills and MCP servers** are addressed by their **name**, because the name is fixed once registered and is what you already recognise — `/mcp-servers/github/tools`.
 - **Kinds you can rename** — model providers, channels, knowledge collections, memory partitions — are addressed by their immutable **uid**, so renaming never breaks a link.
 
-An unknown tab segment falls back to the bare address. A knowledge collection's pane is addressed the same way — `/knowledge/<uid>/history?file=<document>` for a document's History, `/knowledge/<uid>/inbox` for its Inbox — and a memory partition's Delivered tab is `/memory/<uid>/delivered`. Pages not yet rebuilt, such as Sync, still carry their tab as `?tab=` until their turn comes.
+An unknown tab segment falls back to the bare address. A knowledge collection's pane is addressed the same way — `/knowledge/<uid>/history?file=<document>` for a document's History, `/knowledge/<uid>/inbox` for its Inbox — and a memory partition's Delivered tab is `/memory/<uid>/delivered`. A list page with no detail to nest under, such as Sync or Activity, carries its tab as `?tab=` instead; the default tab is the bare address.
 
 A list's filters are query parameters too, because a filtered list is something you link to. The Conversations list is the one that needs it most: `/conversations?source=seatalk&agent=codex` narrows it by source and agent, and a channel links to its own conversations as `/conversations?channel=<uid>`. The filters stay on the address when a conversation opens beside the list (`/conversations/<id>?channel=<uid>`), and the draft that **New conversation** opens is `/conversations/new` — a place, but not yet a conversation: the first send creates the row and moves the address to its id.
 

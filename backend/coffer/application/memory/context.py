@@ -59,6 +59,7 @@ from coffer.domain.memory.budget import estimate_tokens
 from coffer.domain.memory.note import Note
 from coffer.domain.memory.partition import GLOBAL_PARTITION
 from coffer.infrastructure.memory import paths as memory_paths
+from coffer.infrastructure.memory.repository import resolve_repository
 
 #: The ceiling on a composed payload, sized **for an index** rather than for a
 #: handful of lines (see "Bound delivery and prefer the current repository"). Three real
@@ -92,6 +93,9 @@ class PartitionView(Protocol):
     def name(self) -> str: ...
 
     @property
+    def repository_key(self) -> str: ...
+
+    @property
     def repository_path(self) -> str: ...
 
 
@@ -112,7 +116,9 @@ class MemoryPort(Protocol):
 
     async def list_notes(self, partition: str) -> Sequence[Note]: ...
 
-    async def list_partitions(self) -> Sequence[PartitionView]: ...
+    async def placements(self) -> Sequence[PartitionView]:
+        """Each partition's name and repository, from its row alone: asked on every fire."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -168,16 +174,18 @@ def _trim_notice(dropped: int, notes_path: str) -> str:
 
 def _resolve_cwd_partition(partitions: Sequence[PartitionView], cwd: str) -> str:
     """Map ``cwd`` to its partition the way aggregation named it: by the
-    absolute **repository** path recorded on the partition's own Resource,
-    never recomputed here.
+    repository **identity** recorded on the partition's own Resource (its
+    ``repository_key``), with the recorded absolute path as the fallback.
 
     Matching on the repository rather than on a working directory is what
     makes a worktree and a second clone resolve to the partition their main
     checkout contributes to (see "Identify a partition by its repository") — a session opened in
-    ``repo/.claude/worktrees/x`` is a session about ``repo``.
+    ``repo/.claude/worktrees/x`` is a session about ``repo``, and so is one
+    opened in a second clone of it somewhere else on the disk, whose path no
+    partition records but whose remote is the same.
 
-    The longest matching repository wins, so a repository nested inside
-    another checked-out one resolves to the inner one. An unknown, blank or
+    Where only the path can answer, the longest matching repository wins, so a
+    repository nested inside another checked-out one resolves to the inner one. An unknown, blank or
     unresolvable ``cwd`` — including one under no recorded repository —
     yields ``global``, which the spec treats as a normal answer, not an
     error: a directory that is not a repository gets no partition (see "Create no partition for a
@@ -190,6 +198,12 @@ def _resolve_cwd_partition(partitions: Sequence[PartitionView], cwd: str) -> str
         target = pathlib.Path(stripped).expanduser().resolve()
     except (OSError, RuntimeError, ValueError):
         return GLOBAL_PARTITION
+
+    repository = resolve_repository(target)
+    if repository is not None and repository.key:
+        for summary in partitions:
+            if summary.name != GLOBAL_PARTITION and summary.repository_key == repository.key:
+                return summary.name
 
     best_name: str | None = None
     best_depth = -1
@@ -210,8 +224,7 @@ def _resolve_cwd_partition(partitions: Sequence[PartitionView], cwd: str) -> str
 
 
 def resolve_cwd_partition(partitions: Sequence[PartitionView], cwd: str) -> str:
-    """The partition a session opened in ``cwd`` is about — the same answer
-    session start gives, for prompt-time retrieval and the guard."""
+    """The partition a session opened in ``cwd`` is about (retrieval and the guard)."""
     return _resolve_cwd_partition(partitions, cwd)
 
 
@@ -252,11 +265,8 @@ class _Ceiling:
 
 
 def _take(notes: Sequence[Note], ceiling: _Ceiling) -> list[str]:
-    """As many lines as fit, newest first, stopping at the first that does not.
-
-    Stopping rather than skipping is the point: the delivery bound drops **the oldest**
-    lines, so what survives is a contiguous prefix of a newest-first list.
-    """
+    """As many lines as fit, newest first, stopping at the first that does not: the
+    delivery bound drops **the oldest** lines, so a contiguous newest-first prefix survives."""
     taken: list[str] = []
     for note in notes:
         line = index_line(note)
@@ -299,7 +309,7 @@ async def compose_context(
     empty memory header is worse than none.
     """
     served = set(await memory.served_partitions())
-    partitions = await memory.list_partitions()
+    partitions = await memory.placements()
     project_partition = _resolve_cwd_partition(partitions, cwd)
 
     global_notes: Sequence[Note] = ()

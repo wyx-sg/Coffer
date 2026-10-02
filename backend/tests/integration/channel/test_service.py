@@ -13,7 +13,8 @@ import pytest
 
 from coffer.application.channel.store_ports import ChannelPeer
 from coffer.domain.channel.errors import ChannelNotPaired
-from coffer.domain.errors import ResourceNotFound, SecretMissing
+from coffer.domain.errors import ResourceNotFound
+from coffer.domain.secret_errors import SecretMissing
 
 from .conftest import ChannelEnv
 
@@ -71,7 +72,7 @@ async def test_issue_pairing_code_returns_code_with_expiry_and_audits(env: Chann
     # The documented unambiguous alphabet (no 0/O/1/I).
     assert set(code) <= set("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
     assert expires_at > datetime.now(tz=UTC)
-    assert env.pairing.pending("tg") is True
+    assert env.pairing.pending(resource.uid) is True
 
     entries = await env.audit_entries("channel_pairing_issued", resource)
     assert len(entries) == 1

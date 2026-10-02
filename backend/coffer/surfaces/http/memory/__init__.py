@@ -2,8 +2,9 @@
 management on REST and the CLI").
 
 List partitions, notes and retirements, show one note with the entries behind
-it, walk a partition's own directory and read a file out of it, run a sync, run
-a distil pass, and answer a fire of the memory hook. Whether an agent carries the
+it, walk a partition's own directory and read a file out of it, run a sync (an
+aggregation, then a distil pass over each partition with something to distil),
+and answer a fire of the memory hook. Whether an agent carries the
 delivery hook is managed with the agent's Coffer connection (spec agent-registry
 "Connect an agent to Coffer in one action"), not here. Partition deletion goes
 through the kind-agnostic Resource route (``DELETE /api/v1/resources/{uid}``),
@@ -15,7 +16,7 @@ the agent that fired the hook. The partition's *name* is still what
 its directory under the memory root is called, so every handler reads it off
 the row ``lookup.require_partition`` hands back — resolved once, from the
 identity, rather than taken from the caller (ADR
-resource-identity-is-an-immutable-uid). The only name a caller supplies is
+identity-is-the-uid-inside-the-file). The only name a caller supplies is
 ``path``, inside an already-identified partition, which is a filesystem path
 and nothing else.
 
@@ -27,8 +28,7 @@ caller is an agent rather than a person,
 ``trigger_routes`` holds the authored guards, and ``stats_routes`` the two
 delivery views of the Memory page, and ``reading_routes`` when the agents' memory
 was last read. Each declares the same prefix, tags and token
-dependency — as ``surfaces/http/mcp/``'s modules do — so each one's prefix
-alone tells ``routing`` which experimental feature gates it.
+dependency — as ``surfaces/http/mcp/``'s modules do.
 """
 
 from fastapi import APIRouter

@@ -1,5 +1,6 @@
 """Parsing SKILL.md ``requires:`` leniently: what is understood is kept, the
-rest is skipped with a warning naming why."""
+rest is skipped with a warning naming why (spec skill-manager "Show the
+commands a skill declares it needs")."""
 
 from __future__ import annotations
 
@@ -150,3 +151,100 @@ def test_an_unknown_key_under_the_mapping_is_refused_with_a_warning() -> None:
     assert parsed.warnings == (
         "requires: unknown key(s) env, tools refused; only commands and secrets are read",
     )
+
+
+def _req(command: str, min_version: str | None = None) -> CommandRequirement:
+    return CommandRequirement(command=command, min_version=min_version)
+
+
+def _commands(value: object) -> list[CommandRequirement]:
+    return list(parse_requires(value).requirements)
+
+
+def _md_commands(text: str) -> list[CommandRequirement]:
+    return list(requirements_from_skill_md(text).requirements)
+
+
+def test_a_list_of_names_and_versioned_names_is_read_in_order() -> None:
+    assert _commands(["jq", "gh>=2.40"]) == [
+        _req("jq"),
+        _req("gh", "2.40"),
+    ]
+
+
+def test_a_mapping_reads_its_commands_key() -> None:
+    assert _commands({"commands": ["rg", "fd"]}) == [
+        _req("rg"),
+        _req("fd"),
+    ]
+
+
+def test_a_mapping_without_commands_declares_nothing() -> None:
+    assert _commands({"tools": ["rg"]}) == []
+
+
+@pytest.mark.parametrize(
+    ("entry", "expected"),
+    [
+        ({"command": "gh", "version": ">=2.40"}, _req("gh", "2.40")),
+        ({"command": "gh", "version": 2}, _req("gh", "2")),
+        ({"name": "jq", "min_version": "1.6"}, _req("jq", "1.6")),
+        ({"command": " kubectl "}, _req("kubectl")),
+        ("node == 20.1", _req("node", "20.1")),
+        ("python3~=3.12", _req("python3", "3.12")),
+    ],
+)
+def test_each_entry_spelling_is_one_requirement(
+    entry: object, expected: CommandRequirement
+) -> None:
+    assert _commands([entry]) == [expected]
+
+
+def test_a_single_string_is_one_requirement() -> None:
+    assert _commands("jq") == [_req("jq")]
+
+
+@pytest.mark.parametrize(
+    "junk",
+    [
+        42,
+        None,
+        ["a", "b"],
+        {"version": "1"},
+        {"command": 3},
+        "has space",
+        "/usr/bin/jq",
+        "",
+        "-rf",
+    ],
+)
+def test_an_entry_naming_no_command_is_dropped(junk: object) -> None:
+    assert _commands([junk, "jq"]) == [_req("jq")]
+
+
+def test_a_value_that_is_not_a_list_declares_nothing() -> None:
+    assert _commands(7) == []
+    assert _commands(None) == []
+
+
+def test_skill_md_frontmatter_is_read() -> None:
+    text = '---\nname: x\ndescription: d\nrequires: [jq, "gh>=2.40"]\n---\nbody\n'
+    assert _md_commands(text) == [
+        _req("jq"),
+        _req("gh", "2.40"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "no frontmatter at all\n",
+        "",
+        "---\nname: x\n",  # never closed
+        "---\n: [unbalanced\n---\n",  # not YAML
+        "---\n- a list\n---\n",  # not a mapping
+        "---\nname: x\n---\n",  # no requires
+    ],
+)
+def test_skill_md_without_a_readable_requires_declares_nothing(text: str) -> None:
+    assert _md_commands(text) == []

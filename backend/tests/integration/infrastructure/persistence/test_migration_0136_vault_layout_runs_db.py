@@ -10,8 +10,8 @@ import sqlite3
 import pytest
 from alembic import command
 
+from coffer.infrastructure.persistence import migrations_runner
 from coffer.infrastructure.vault.migration.errors import PreVaultDatabase
-from coffer.surfaces.http import migrations_runner
 from tests.integration.infrastructure.persistence.test_migrations_roundtrip import (
     _alembic_config,
 )
@@ -136,5 +136,5 @@ def test_a_fresh_database_goes_straight_to_head(tmp_path) -> None:  # type: igno
     db_path = tmp_path / "runs.db"
     migrations_runner.run_migrations(f"sqlite+aiosqlite:///{db_path}")
     with sqlite3.connect(db_path) as conn:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0137",)
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0138",)
         assert "resources" not in _tables(conn)

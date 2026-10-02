@@ -154,12 +154,12 @@ sequenceDiagram
 只有在 lifespan 返回之后，uvicorn 才开始在 socket 上监听、报告 `started`，并让入口释放拉起锁。因此竞争的拉起在整个启动过程中都被锁挡着，从不会去探测一个已绑定但还不应答的 socket。锁打开时，那个拉起的探测会找到一个正在服务的守护进程，然后干净地退出。在真实的保险库上启动要好几秒（迁移、密钥存储、上游预热），所以探测超时给得很宽裕。
 
 ::: info 启动期间的状态
-`GET /api/v1/daemon/status` 报告的 `status` 阶段是 `ready` 或 `draining`。没有「启动中」阶段：socket 只在 lifespan 完成之后才开始监听，所以客户端在启动期间看到的是连接被拒绝，然后是 `ready`，关闭时是 `draining`。因此刚拉起守护进程的客户端会在限定时间内等待探测应答，而不是把连接被拒绝当成失败。
+`GET /api/v1/daemon/status` 报告的 `status` 阶段是 `ready` 或 `draining`。没有「启动中」阶段：socket 只在 lifespan 完成之后才开始监听，所以客户端在启动期间看到的是连接被拒绝，然后是 `ready`。关闭开始时，守护进程自己的 uvicorn 服务器（入口里的一个小子类）把阶段切成 `draining`，并让监听 socket 再开着约一秒才关闭，这样轮询的一方真的能看到这个阶段。入口也会在 uvicorn 拿到自己的 dup 之后立刻关掉自己那一份监听 socket，所以关闭过程中端口不会停在没人 accept 的 LISTEN 状态。之后连接会被拒绝。因此刚拉起守护进程的客户端会在限定时间内等待探测应答，而不是把连接被拒绝当成失败。
 :::
 
 ## 检测或拉起 {#detect-or-spawn}
 
-有三个界面可以启动守护进程，三者拉起的方式相同：都经过同一个共享的拉起助手，它解析出命令并以脱离方式启动：POSIX 上开一个新会话，stdin 来自 `/dev/null`，stdout 和 stderr 追加到 `~/.coffer/logs/daemon.log`。拒绝启动的守护进程（比如因为端口被占）会在这个文件里说明原因，而每条错误消息都会指向这个文件。
+有三个界面可以启动守护进程，三者拉起的方式相同：都经过同一个共享的拉起助手，它解析出命令并以脱离方式启动：POSIX 上开一个新会话，stdin 来自 `/dev/null`，stdout 和 stderr 追加到 `~/.coffer/logs/daemon.log`。拒绝启动的守护进程（比如因为端口被占）会在这个文件里说明原因，而每条错误消息都会指向这个文件。这个文件在 10 MB 时轮转（保留三份备份）。因为脱离运行的守护进程自己的 stdout 和 stderr 就是指向它的描述符，轮转处理器在每次滚动之后会把这些描述符移到新文件上；否则直接写到 stderr 的回溯会落进一份没人读的、已被轮转走的副本。uvicorn 启动时关掉了它自己的日志配置，所以它的记录和其他一切一样走同一个 JSON 处理器。
 
 守护进程命令按以下顺序解析：
 
@@ -195,7 +195,7 @@ sequenceDiagram
 | 界面 | 探测 | 拉起等待 | 失败时 |
 | --- | --- | --- | --- |
 | `coffer …`（除 `coffer daemon status` 之外的任何命令） | 共享的存活探测（状态调用） | 10 s | 杀掉启动了一半的进程，打印 `daemon failed to start within 10s; check ~/.coffer/logs/daemon.log`，以 3 退出 |
-| `coffer daemon start` | 共享的存活探测，然后试绑定计划使用的端口 | 等 `daemon.json` 10 s | 在拉起之前打印端口冲突消息，或者打印超时消息，以 1 退出 |
+| `coffer daemon start` | 共享的存活探测，然后试绑定计划使用的端口 | 等新守护进程应答状态调用 30 s（只有 `daemon.json` 不算） | 在拉起之前打印端口冲突消息；子进程先退出（保险库迁移被拒、git 太旧）则打印 `daemon exited at startup (code N); check daemon.log`；或者打印超时消息，以 1 退出 |
 | `coffer-mcp-shim` | 轮询 1 s | 10 s | 向 stderr 写 `daemon did not come up within 10s`，以 3 退出 |
 | 桌面壳 | 它查找链的第 1 步 | 90 s | 显示离线横幅并附上原因 |
 
@@ -254,7 +254,7 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.0 (/Users/you/.coffe
 
 ## 后台工作 {#background-work}
 
-不属于某一种类型的周期性后台任务在一个地方启动：HTTP 界面的后台任务启动器。拥有循环的类型在自己的装配代码里启动它，lifespan 和入口点还直接拥有几个任务。每个后台任务先跑一次补课或等一段启动延迟，然后按间隔循环。失败的一轮会记日志，从不会杀掉它的循环。属于实验功能的后台任务在每一轮开头读取开关，功能关闭时跳过这一轮；目前没有这样的任务。
+不属于某一种类型的周期性后台任务在一个地方启动：HTTP 界面的后台任务启动器。拥有循环的类型在自己的装配代码里启动它，lifespan 和入口点还直接拥有几个任务。每个后台任务先跑一次补课或等一段启动延迟，然后按间隔循环。失败的一轮会记日志，从不会杀掉它的循环。属于实验功能的后台任务在每一轮开头读取开关，功能关闭时跳过这一轮：整理、提炼和聚合、用量采集和价格刷新、同步收敛任务都是这样。
 
 | 后台任务 | 节奏 | 做什么 |
 | --- | --- | --- |
@@ -302,7 +302,7 @@ stateDiagram-v2
 
 只有一条退出路径。`SIGTERM` 和 `SIGINT` 都走它。`POST /api/v1/daemon/shutdown`（需令牌）应答 `204`，然后给自己的进程发 `SIGTERM`，所以通过 API 停止和通过信号停止不可能走岔。`coffer daemon stop` 先确认 `daemon.json` 里的 pid 仍是一个 Coffer 守护进程。如果不是，它删掉这个过期文件，而不是给一个陌生进程发信号。否则它发送 `SIGTERM`，并最多等 5 s 让 `daemon.json` 消失。
 
-然后 uvicorn 优雅关闭，对打开的连接设 10 s 上限。没有这个上限，一条永远不会自己结束的 `/mcp` SSE 流会让守护进程永远关不掉。lifespan 的清理把阶段设为 `draining`，并按一个至关重要的顺序执行：
+然后 uvicorn 优雅关闭，对打开的连接设 10 s 上限。没有这个上限，一条永远不会自己结束的 `/mcp` SSE 流会让守护进程永远关不掉。lifespan 的清理按一个至关重要的顺序执行：
 
 1. 先取消调和器的循环，因为一轮调和会写智能体的配置文件，不能在其他部分关闭时开始；然后取消待处理事项监视。
 2. 停止后台任务：保留策略、同步、整理、提炼、聚合、对话记录预热，以及技能更新检查（它还会删除暂存的来源）。
@@ -337,7 +337,7 @@ stateDiagram-v2
 | Program | `~/.coffer/bin/coffer-daemon` 符号链接 | 固定到某个版本目录的路径，在两次升级后那个目录被清理时就失效了。 |
 | `StandardOutPath` / `StandardErrorPath` | `~/.coffer/logs/daemon.log` | 所有写入者共用一个日志。 |
 
-安装和卸载在没有守护进程运行时也能用，也可以通过 Web 界面的常驻设置（`PUT /api/v1/daemon/residency`）完成。两者都不会把已加载的任务 bootout 掉。一旦 launchd 启动了守护进程，守护进程*就是*那个任务，而 `launchctl bootout` 会杀掉正在应答这个设置请求的进程本身。写入或删除 plist 就足以决定下次登录时发生什么，移除服务也会让正在运行的守护进程继续运行。
+安装和卸载在没有守护进程运行时也能用，也可以通过 Web 界面的常驻设置（`PUT /api/v1/daemon/residency`）完成。卸载会删除 plist，然后把任务 bootout 掉，只有一个例外，用来保住当前这次请求。一旦 launchd 启动了守护进程，守护进程*就是*那个任务，而 `launchctl bootout` 会杀掉正在应答这个设置请求的进程本身。所以当任务下面有进程在运行时，卸载让它继续运行，由守护进程在退出时（入口的最后一步）自己把任务 bootout 掉。否则用户把「登录时启动」关掉之后，launchd 仍会按它手里的定义在守护进程崩溃后重启它。任务已加载但下面没有进程时，会立即 bootout。
 
 ## 取舍与备选方案 {#trade-offs-and-alternatives}
 

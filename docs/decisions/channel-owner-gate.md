@@ -5,7 +5,7 @@
 **Deciders**: Yuxing Wu
 **Related**: spec channels ("Pair exactly one owner with a single-use code", "Gate inbound traffic on sender identity", "Act in a group only on an addressed message from the owner", "Treat an addressed group chat as its own peer", "Configure when the bot answers in a group", "Limit the agents a channel may drive to its scope", "Pair by a one-tap start link");
 [Channels Are Thin Transport Adapters](channel-adapter-framework.md), [Managed Agents Run With Full Permissions](managed-agents-run-with-full-permissions.md),
-[Per-Agent Resource Scope](per-agent-resource-scope.md), [Resource Identity Is an Immutable UID](resource-identity-is-an-immutable-uid.md);
+[Per-Agent Resource Scope](per-agent-resource-scope.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md);
 PRs #59, #245, #266, #380
 
 ## Context
@@ -67,7 +67,8 @@ whose sender id differs from the stored one is ignored silently too.
    peer row, inheriting the owner's sender id, so the group has its own
    conversations separate from the owner's DM.
 
-(`application/channel/inbound.py`, `on_message`.)
+(`on_message` in `application/channel/inbound.py`; the checks themselves in
+`application/channel/inbound_gate.py`.)
 
 **Scope, read inverted.** For every other kind, a resource's per-agent scope
 says which agents it is delivered to; for a channel it says which agents the
@@ -80,7 +81,9 @@ inside a non-empty scope — both the config write path and the scope write path
 them — and a channel that can drive nothing (no default agent, an empty
 allow-list, or a default agent not registered here) is not started at all
 (`application/channel/wanted.py`), so it never accepts a message only to
-refuse it.
+refuse it. Scope only narrows: an agent that is unmanaged or disabled is
+never offered or run, whatever a scope says ([Managed Agents Run With Full
+Permissions](managed-agents-run-with-full-permissions.md)).
 
 Pros: the code proves both that the owner controls the account and that the
 transport round-trip works, in one step. A mistyped id cannot bind the wrong
@@ -191,5 +194,6 @@ Rules a future change must respect:
 - Pairing and code issuance are the channel events that audit; a turn does not
   ([Audit and Retention](audit-and-retention.md)).
 - Enforced by: `application/channel/pairing.py`, `application/channel/inbound.py`,
+  `application/channel/inbound_gate.py`,
   `application/channel/agent_routing.py`, `application/channel/wanted.py`,
   `application/channel/kind.py`.

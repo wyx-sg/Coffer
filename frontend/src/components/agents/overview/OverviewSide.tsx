@@ -17,7 +17,9 @@ import { useAgentTranscripts } from "@/lib/hooks/useAgentTranscripts";
 import { cn, formatDateTime } from "@/lib/utils";
 
 import { formatAgo } from "./age";
-import { InfoRow, OverviewSection } from "./OverviewSection";
+import { Section } from "@/components/Section";
+import { InfoRow } from "./OverviewParts";
+import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { useProviderLabel } from "./useProviderLabel";
 
 const K = "agents.overviewTab";
@@ -40,16 +42,25 @@ function capitalize(word: string): string {
 
 export function OverviewModel({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
-  const provider = useProviderLabel(agent.type);
+  // The Provider line and the link to the Model tab belong to the Models
+  // feature; with it off they are not shown.
+  const models = useFeatureEnabled("models") === true;
+  const provider = useProviderLabel(agent);
   return (
-    <OverviewSection
+    <Section
       title={t(`${K}.model.heading`)}
-      aside={<SideLink to={agentTabPath(agent.type, "model")}>{t(`${K}.model.change`)}</SideLink>}
+      actions={
+        models ? (
+          <SideLink to={agentTabPath(agent.type, "model")}>{t(`${K}.model.change`)}</SideLink>
+        ) : undefined
+      }
     >
       <dl className="flex flex-col">
-        <InfoRow label={t(`${K}.model.provider`)}>
-          {provider ?? <Skeleton className="h-4 w-40" />}
-        </InfoRow>
+        {models ? (
+          <InfoRow label={t(`${K}.model.provider`)}>
+            {provider ?? <Skeleton className="h-4 w-40" />}
+          </InfoRow>
+        ) : null}
         <InfoRow label={t(`${K}.model.model`)} mono={!!agent.model}>
           {agent.model ?? t(`${K}.model.perConversation`)}
         </InfoRow>
@@ -57,14 +68,14 @@ export function OverviewModel({ agent }: { agent: AgentOut }) {
           {agent.effort ? capitalize(agent.effort) : t(`${K}.model.defaultEffort`)}
         </InfoRow>
       </dl>
-    </OverviewSection>
+    </Section>
   );
 }
 
 export function OverviewDetails({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
   return (
-    <OverviewSection title={t(`${K}.details.heading`)}>
+    <Section title={t(`${K}.details.heading`)}>
       <dl className="flex flex-col">
         <InfoRow label={t("agents.type")}>{agentTypeLabel(agent.type)}</InfoRow>
         <InfoRow label={t("agents.configDir")} mono>
@@ -77,7 +88,7 @@ export function OverviewDetails({ agent }: { agent: AgentOut }) {
           {formatDateTime(agent.created_at).slice(0, 10)}
         </InfoRow>
       </dl>
-    </OverviewSection>
+    </Section>
   );
 }
 
@@ -87,9 +98,9 @@ export function OverviewRecentSessions({ agent }: { agent: AgentOut }) {
   const sessions = list.data?.sessions ?? [];
   if (sessions.length === 0) return null;
   return (
-    <OverviewSection
+    <Section
       title={t(`${K}.sessions.heading`)}
-      aside={
+      actions={
         <SideLink to={agentTabPath(agent.type, "sessions")}>
           {t(`${K}.sessions.all`, { count: list.data?.total ?? sessions.length })}
         </SideLink>
@@ -123,6 +134,6 @@ export function OverviewRecentSessions({ agent }: { agent: AgentOut }) {
           );
         })}
       </ul>
-    </OverviewSection>
+    </Section>
   );
 }

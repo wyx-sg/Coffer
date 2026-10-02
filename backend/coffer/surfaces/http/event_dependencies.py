@@ -27,12 +27,30 @@ def get_event_broker() -> EventBroker:
     return _broker
 
 
+def announce_change(kind: str, uid: str | None) -> None:
+    """Announce that something under ``kind`` changed outside a resource write.
+
+    For the files a kind owns — a collection's inbox and documents, a partition's
+    notes — which change without touching the resource row, so the resource hint
+    never fires for them. An invalidation only (the page refetches); a daemon whose
+    stream is not up yet, or a failure, announces nothing and costs the page one
+    refetch it would otherwise have missed.
+    """
+    if _broker is None:
+        return
+    try:
+        _broker.publish(kind, uid)
+    except Exception:  # pragma: no cover - publish only appends and offers
+        return
+
+
 def get_heartbeat_seconds() -> float:
     return HEARTBEAT_SECONDS
 
 
 __all__ = [
     "HEARTBEAT_SECONDS",
+    "announce_change",
     "get_event_broker",
     "get_heartbeat_seconds",
     "set_event_broker",

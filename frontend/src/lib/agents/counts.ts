@@ -3,13 +3,8 @@
 // The numbers behind the detail page's tab counts, the Overview summary rows
 // and the Agents list's Skills / MCP / Plugins columns. Pure: the hook in
 // lib/hooks/useAgentCounts.ts feeds it the lists it already reads.
-import type {
-  AgentHooksOut,
-  CofferHook,
-  McpEntryOut,
-  PluginOut,
-  UnmanagedSkillOut,
-} from "@/lib/api/agents";
+import type { AgentHooksOut, CofferHook } from "@/lib/api/agents";
+import type { McpEntryOut, PluginOut, UnmanagedSkillOut } from "@/lib/api/agents-workspace";
 import type { Scope } from "@/lib/hooks/useScope";
 
 export interface OwnerSplit {

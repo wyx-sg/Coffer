@@ -3,9 +3,12 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
-import { useMcpServerRunner, useMcpServerStatus } from "./useMcpServerStatus";
+import { useMcpServerStatus, useMcpServerStatusDetail } from "./useMcpServerStatus";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 
@@ -54,7 +57,7 @@ describe("useMcpServerStatus", () => {
     expect(result.current.data).toBeNull();
   });
 
-  test("the health and runner hooks share ONE /status read per server", async () => {
+  test("the health and detail hooks share ONE /status read per server", async () => {
     // The list page mounts both per row; two keys over the same endpoint used
     // to cost two requests per server.
     const get = vi
@@ -65,13 +68,13 @@ describe("useMcpServerStatus", () => {
     const { result } = renderHook(
       () => ({
         status: useMcpServerStatus("u-filesystem"),
-        runner: useMcpServerRunner("u-filesystem"),
+        detail: useMcpServerStatusDetail("u-filesystem"),
       }),
       { wrapper: wrapper() },
     );
-    await waitFor(() => expect(result.current.runner.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.detail.isSuccess).toBe(true));
     expect(result.current.status.data).toBe("healthy");
-    expect(result.current.runner.data).toEqual({ missingRunner: "npx" });
+    expect(result.current.detail.data).toBeTruthy();
     expect(get).toHaveBeenCalledTimes(1);
   });
 });

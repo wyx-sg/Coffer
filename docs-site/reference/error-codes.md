@@ -77,7 +77,7 @@ give the status each code is actually sent with.
 | `MASTER_KEY_PASSPHRASE_WRONG` | 422 | A passphrase-protected key backup (`.cfk`) was imported with a wrong passphrase, or none. | Type the passphrase set when the key was exported on the other Mac. |
 | `MASTER_KEY_PASSPHRASE_TOO_SHORT` | 422 | A key backup was asked for with a passphrase under eight characters. Nothing was written. | Choose a longer passphrase. |
 | `SECRET_BINDING_PENDING` | 409 | A secret would go to a destination, or a target, no person has approved. Nothing was sent. `details.approval_ids` names the waiting approvals. | Approve it in the Coffer desktop app, or reject it with `coffer secret reject <id>`. See [Secrets → Approvals](/guides/secrets#approvals). |
-| `APPROVAL_PENDING` | 202 | The change was saved as a pending approval instead of being applied: a replaced value that is in use, or switching the protection off. | Approve it in the Coffer desktop app. |
+| `SECRET_BINDING_REJECTED` | 409 | A person refused this secret for this destination and target, and nothing waits. Nothing was sent. `details.approval_ids` names the refused approvals. | Change the destination, or ask again from the Secrets page (`POST /api/v1/secrets/approvals/{id}/ask-again`). See [Secrets → Approvals](/guides/secrets#approvals). |
 | `APPROVAL_NOT_FOUND` | 404 | No approval has that id. | List them with `coffer secret approvals --all`. |
 | `APPROVAL_NOT_PENDING` | 409 | The approval was already approved, rejected or superseded. | Nothing to do; a new change raises a new approval. |
 | `PRESENCE_GRANT_INVALID` | 403 | A reveal, key backup or approval came without a valid presence grant: missing, expired, already used, for another operation or target, or not signed by the desktop app. | Do it in the Coffer desktop app, which runs the presence check and signs the grant. |
@@ -114,7 +114,7 @@ give the status each code is actually sent with.
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
-| `AGENT_TYPE_REGISTERED` | 409 | An agent of this type is already registered. A machine has one agent per type, named by it. The message names the existing agent's uid. | Use the existing agent. To point it at another directory, run `coffer agent edit <type> --config-dir <dir>`. |
+| `AGENT_TYPE_REGISTERED` | 409 | An agent of this type is already registered. A machine has one agent per type, named by it. The message names the existing agent's uid. | Use the existing agent. To point it at another directory, run `coffer agent edit <name> --config-dir <dir>`. |
 | `AGENT_CONFIG_DIR_REGISTERED` | 409 | An agent is already registered for this config directory. | Use the existing agent, or choose a different config directory. |
 | `AGENT_CONFIG_DIR_MISSING` | 409 | The agent's config directory does not exist on this machine. Raised while applying a synced agent. | Install the agent on this machine, or ignore it here. |
 | `PRIVILEGED_PATH` | 422 | The path is a system location Coffer refuses to manage. | Choose a path in your home directory. |
@@ -129,6 +129,7 @@ give the status each code is actually sent with.
 | `MCP_ENTRY_PROTECTED` | 422 | The entry is Coffer's own gateway entry. | Use the install and uninstall actions instead of editing it. |
 | `MCP_ENTRY_SOURCE_AMBIGUOUS` | 422 | The entry exists in more than one config file. | Name the source file. |
 | `ADOPT_SECRET_UNRESOLVED` | 422 | Adopting an MCP entry found secret-like environment keys with no secret mapping. | Map each listed key to a secret ref when adopting. |
+| `ADOPT_SECRET_REF_EXISTS` | 409 | Adopting an MCP entry mapped a secret key to a ref that already holds a value, or to a standalone `secret/<name>`. Adopting only creates refs. Nothing was written. | Map the key to a new ref, or delete the existing secret first if nothing uses it. |
 | `PLUGIN_NOT_FOUND` | 404 | No installed plugin has that identifier. | Refresh the plugin list. |
 | `PLUGIN_TOGGLE_UNSUPPORTED` | 422 | This agent type's plugins cannot be enabled or disabled through Coffer. | Use the agent's own tooling. |
 | `PLUGIN_UNINSTALL_UNSUPPORTED` | 422 | This agent type's plugins must be uninstalled with the agent's own tooling. | Use the agent's own tooling. |
@@ -141,7 +142,6 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `SKILL_INVALID` | 422 | The skill folder is not a valid skill (for example a missing or malformed `SKILL.md`). | Fix the folder and import again. |
-| `TARGET_CONFLICT` | 409 | Delivering a skill would overwrite something at the target path that Coffer did not put there. | Move the conflicting file or folder, then run `coffer skill verify --fix`. |
 | `SKILL_FILE_STALE` | 409 | A skill file changed on disk after you read it. | Reload and reapply your edit. |
 | `UNMANAGED_SKILL_NOT_FOUND` | 404 | No skill by that name was found in the agent's own skills folders. | Refresh the agent's skills list. |
 | `UNMANAGED_SKILL_INVALID` | 422 | An agent's own skill cannot be adopted because its folder is invalid. | Fix its `SKILL.md`, then adopt. |
@@ -165,8 +165,7 @@ give the status each code is actually sent with.
 | `KNOWLEDGE_PATH_UNSAFE` | 400 | The path escapes the knowledge root, names a hidden entry, or cannot name a document. | Use a relative path to a Markdown document inside the collection. |
 | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 | The upload exceeds the size limit named in the message. | Split the document or upload a smaller file. |
 | `INGEST_REJECTED` | 400 | The upload cannot be converted. `details.reason` is `unsupported_type`, `scanned_pdf` (a PDF with no text layer) or `empty_conversion`; `details.doc_type` names the type. | Convert to a supported format; run OCR on a scanned PDF. |
-| `KNOWLEDGE_TOPIC_REFERENCES_FILE` | 400 | A curated document refers to another knowledge file by its file name. | Name the subject instead of the file. |
-| `KNOWLEDGE_CURATION_BOUND` | 400 | A curation pass tried to write more files than one pass may. | Submit smaller material. |
+| `KNOWLEDGE_CURATION_HELD` | 409 | Curate now was refused because a sync round is waiting for you (a conflict or a confirmation). | Resolve it in Sync, then run Curate now again. |
 | `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 | Knowledge history is not recorded on this machine, usually because git is not installed. Writes still work. | Install git; history starts with the next write. |
 | `KNOWLEDGE_VERSION_NOT_FOUND` | 404 | No version by that id in the knowledge history, or none for that document. | List versions with `coffer knowledge history <path>` or `coffer knowledge changes`. |
 | `KNOWLEDGE_NOT_A_PASS` | 400 | Only a curation pass can be undone, and this version is another kind of change. | Restore the document's earlier version with `coffer knowledge restore`. |
@@ -183,7 +182,6 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `MEMORY_NOTE_NOT_FOUND` | 404 | No note with that slug in the partition. | List notes on the partition's page. |
 | `MEMORY_RAW_ENTRY_NOT_FOUND` | 404 | No raw entry with that id in the partition. | Refresh; the entry may have been distilled and removed. |
-| `MEMORY_FILE_NOT_FOUND` | 404 | No readable file at that path inside the partition. | Browse the partition's files. |
 | `MEMORY_UNSAFE_PATH` | 400 | A path segment is hidden, all dots, or otherwise unsafe. | Use a path inside the partition. |
 | `MEMORY_UNREADABLE` | 422 | An agent's native memory file cannot be parsed. | Repair the file the message names. |
 | `MEMORY_DELIVERY_UNSUPPORTED` | 422 | This agent type has no memory hook Coffer can install. | None; that agent reads memory notes from the memory root (`coffer path memory`) with its own file tools. |
@@ -196,9 +194,8 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `CONVERSATION_NOT_FOUND` | 404 | No conversation with that id. | Refresh the conversation list. |
-| `TURN_IN_PROGRESS` | 409 | The conversation already has a turn running. | Wait, or interrupt the running turn. |
 | `UNKNOWN_AGENT` | 400 | No agent provider is registered for the conversation's agent. | Choose an agent from `GET /api/v1/agent-providers`. |
-| `AGENT_CONFIG_REJECTED` | 400 | The agent rejected the conversation's config, for example an unknown model. `details.reason` is a short token such as `model_not_found`. | Pick a model the agent offers. |
+| `AGENT_CONFIG_REJECTED` | 400 | The agent rejected the conversation's config, for example an unknown model, or no enabled agent of that type is managed by Coffer. `details.reason` is a short token such as `model_not_found` or `agent_not_managed`. | Pick a model the agent offers, or add or enable the agent on the Agents page. |
 | `MESSAGE_NOT_FOUND` | 404 | A resend named no user message of that conversation. | Refresh the conversation; retry the message shown there. |
 | `ATTACHMENT_EXPIRED` | 410 | A message being sent again (Retry) carried a file the 30-day media sweep has since deleted; nothing was sent. | Attach the file again and send a new message. |
 | `ATTACHMENT_NOT_FOUND` | 422 | A message names an attachment no upload stored: it was never uploaded, or its file was pruned. Nothing was sent. | Upload the file again. |
@@ -213,10 +210,11 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `PROVIDER_SECRET_SOURCE_INVALID` | 422 | A new connection must supply exactly one of a secret value or a secret ref. | Pass `--secret` or `--secret-ref`, not both. |
-| `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | A connection's wire format cannot change while it is switched on. | Run `coffer provider builtin <wire>`, edit, then switch again. |
+| `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | A connection's wire format cannot change while an agent runs on it. | Run `coffer provider builtin <agent_type>` for each agent running on it, edit, then switch again. |
+| `PROVIDER_DOES_NOT_REACH_AGENT` | 409 | A connection cannot be switched on for an agent it does not reach: the connection or the agent is switched off, or the connection's scope does not name the agent. | Switch the connection on, or add the agent to its scope, then switch again. |
 | `PROVIDER_INTERNAL_ONLY` | 409 | An `ollama` connection is for Coffer's internal engine only and cannot be switched on for an agent. | Use it as the internal-engine default instead. |
 | `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | Another connection is already the internal-engine default. | Move the flag with `coffer config set engine.provider <name>`. |
-| `NO_ACTIVE_PROVIDER` | 404 | No connection is active for the requested wire format. | Switch one on with `coffer provider switch <name>`. |
+| `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN` | 409 | Another connection is already the speech-to-text default. | Move the flag with `coffer config set transcribe.provider <name>`. |
 
 ## The vault
 
@@ -257,7 +255,7 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `FEATURE_DISABLED` | 404 | The route or resource belongs to an experimental feature that is switched off on this machine. `details.feature` names it. | `coffer config set feature.<feature> on`. See [Experimental features](/guides/experimental-features). |
-| `FEATURE_UNKNOWN` | 404 | The key is not an experimental feature, for example a feature that has graduated. | List keys with `coffer config list feature.`. |
+| `FEATURE_UNKNOWN` | 404 | The key is not an experimental feature. The keys are `knowledge`, `memory`, `sync` and `models`. | List keys with `coffer config list feature.`. |
 | `FEATURE_PINNED` | 409 | `COFFER_FEATURES` pins this feature for the daemon's lifetime. | Change `COFFER_FEATURES` and restart the daemon. |
 
 ## Startup errors

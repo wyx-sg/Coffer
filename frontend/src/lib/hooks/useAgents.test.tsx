@@ -1,8 +1,8 @@
 // frontend/src/lib/hooks/useAgents.test.tsx
 //
-// TanStack Query bindings for /agents. The `agentsApi` calls raw fetch
+// TanStack Query bindings for /agents. The `agentsApi` goes through the typed client, which calls fetch
 // against `${getCofferBaseUrl()}/agents/*`, so we stub `globalThis.fetch`
-// rather than the typed `getApiClient` used elsewhere.
+// and the typed client reads it afresh for each test (see `resetApiClient`).
 //
 // Every route below is addressed by the agent's `uid`, never by its name, so
 // the fixtures carry both and deliberately disagree: the uid is `u-cur` and
@@ -12,6 +12,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, renderHook, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { resetApiClient } from "@/lib/api/client";
 import type { PropsWithChildren } from "react";
 import { ToastProvider } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api/errors";
@@ -34,6 +35,9 @@ import {
   useTogglePlugin,
   useUninstallPlugin,
 } from "./useAgents";
+
+// The typed client keeps the `fetch` it was built with; each test stubs its own.
+beforeEach(() => resetApiClient());
 
 function wrapper() {
   const qc = new QueryClient({
@@ -85,7 +89,7 @@ describe("useAgents", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toHaveLength(1);
     expect(result.current.data?.[0].name).toBe("codex");
-    const calledUrl = String(fetchMock.mock.calls[0][0]);
+    const calledUrl = (fetchMock.mock.calls[0][0] as Request).url;
     expect(calledUrl).toMatch(/\/agents$/);
   });
 
@@ -128,9 +132,10 @@ describe("useRegisterAgent", () => {
       config_dir: "/home/u/.codex",
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
+    const request = fetchMock.mock.calls[0][0] as Request;
+    const url = request.url;
     expect(String(url)).toMatch(/\/agents$/);
-    expect((init as RequestInit).method).toBe("POST");
+    expect(request.method).toBe("POST");
   });
 });
 
@@ -145,9 +150,10 @@ describe("useRemoveAgent", () => {
     });
     await result.current.mutateAsync("u-cur");
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
+    const request = fetchMock.mock.calls[0][0] as Request;
+    const url = request.url;
     expect(String(url)).toMatch(/\/agents\/u-cur$/);
-    expect((init as RequestInit).method).toBe("DELETE");
+    expect(request.method).toBe("DELETE");
   });
 });
 
@@ -171,7 +177,7 @@ describe("useAgent", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     // The request went to the uid; what came back is read by its name.
     expect(result.current.data?.name).toBe("codex");
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/u-cur$/);
+    expect((fetchMock.mock.calls[0][0] as Request).url).toMatch(/\/agents\/u-cur$/);
   });
 
   test("does not fetch when the uid is empty", () => {
@@ -200,10 +206,11 @@ describe("usePatchAgent", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => usePatchAgent(), { wrapper: wrapper() });
     await result.current.mutateAsync({ uid: "u-cur", body: { config_dir: "/home/u/.codex2" } });
-    const [url, init] = fetchMock.mock.calls[0];
+    const request = fetchMock.mock.calls[0][0] as Request;
+    const url = request.url;
     expect(String(url)).toMatch(/\/agents\/u-cur$/);
-    expect((init as RequestInit).method).toBe("PATCH");
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+    expect(request.method).toBe("PATCH");
+    expect(await request.clone().json()).toEqual({
       config_dir: "/home/u/.codex2",
     });
   });
@@ -222,7 +229,7 @@ describe("useAgentConfigFiles / useAgentConfigFile", () => {
     const { result } = renderHook(() => useAgentConfigFiles("u-cur"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.[0].key).toBe("settings.json");
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/u-cur\/config-files$/);
+    expect((fetchMock.mock.calls[0][0] as Request).url).toMatch(/\/agents\/u-cur\/config-files$/);
   });
 
   test("GETs a single config file when a key is selected, not before", async () => {
@@ -239,7 +246,7 @@ describe("useAgentConfigFiles / useAgentConfigFile", () => {
 
     rerender({ key: "settings.json" });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(
+    expect((fetchMock.mock.calls[0][0] as Request).url).toMatch(
       /\/agents\/u-cur\/config-files\/settings.json$/,
     );
   });
@@ -255,9 +262,10 @@ describe("useAgentConnection / useAgentConnect", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useAgentConnection("u-cur"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    const [url, init] = fetchMock.mock.calls[0];
+    const request = fetchMock.mock.calls[0][0] as Request;
+    const url = request.url;
     expect(String(url)).toMatch(/\/agents\/u-cur\/coffer-connection$/);
-    expect((init as RequestInit).method).toBe("GET");
+    expect(request.method).toBe("GET");
   });
 
   test("POSTs to connect and DELETEs to disconnect", async () => {
@@ -270,11 +278,13 @@ describe("useAgentConnection / useAgentConnect", () => {
     const { result } = renderHook(() => useAgentConnect("u-cur"), { wrapper: wrapper() });
 
     await result.current.mutateAsync(true);
-    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe("POST");
+    expect((fetchMock.mock.calls[0][0] as Request).method).toBe("POST");
 
     await result.current.mutateAsync(false);
-    expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBe("DELETE");
-    expect(String(fetchMock.mock.calls[1][0])).toMatch(/\/agents\/u-cur\/coffer-connection$/);
+    expect((fetchMock.mock.calls[1][0] as Request).method).toBe("DELETE");
+    expect((fetchMock.mock.calls[1][0] as Request).url).toMatch(
+      /\/agents\/u-cur\/coffer-connection$/,
+    );
   });
 });
 
@@ -287,7 +297,7 @@ describe("useAgentTypes", () => {
     const { result } = renderHook(() => useAgentTypes(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual([]);
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/types$/);
+    expect((fetchMock.mock.calls[0][0] as Request).url).toMatch(/\/agents\/types$/);
   });
 });
 
@@ -303,9 +313,10 @@ describe("useAgentMcpEntries", () => {
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual(payload);
-    const [url, init] = fetchMock.mock.calls[0];
+    const request = fetchMock.mock.calls[0][0] as Request;
+    const url = request.url;
     expect(String(url)).toMatch(/\/agents\/u-my-agent\/mcp-entries$/);
-    expect((init as RequestInit).method).toBe("GET");
+    expect(request.method).toBe("GET");
   });
 });
 
@@ -328,9 +339,10 @@ describe("useAdoptMcpEntry", () => {
     });
     await result.current.mutateAsync({ entry: "my-server", body: {} });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
+    const request = fetchMock.mock.calls[0][0] as Request;
+    const url = request.url;
     expect(String(url)).toMatch(/\/agents\/u-my-agent\/mcp-entries\/my-server\/adopt$/);
-    expect((init as RequestInit).method).toBe("POST");
+    expect(request.method).toBe("POST");
   });
 });
 
@@ -346,10 +358,11 @@ describe("useTogglePlugin", () => {
     });
     await result.current.mutateAsync({ id: "plugin-1", enabled: true });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
+    const request = fetchMock.mock.calls[0][0] as Request;
+    const url = request.url;
     expect(String(url)).toMatch(/\/agents\/u-my-agent\/plugins\/plugin-1$/);
-    expect((init as RequestInit).method).toBe("PATCH");
-    expect(JSON.parse(String((init as RequestInit).body))).toEqual({ enabled: true });
+    expect(request.method).toBe("PATCH");
+    expect(await request.clone().json()).toEqual({ enabled: true });
   });
 });
 
@@ -364,9 +377,10 @@ describe("useUninstallPlugin", () => {
       wrapper: wrapper(),
     });
     await result.current.mutateAsync({ id: "plugin-1" });
-    const [url, init] = fetchMock.mock.calls[0];
+    const request = fetchMock.mock.calls[0][0] as Request;
+    const url = request.url;
     expect(String(url)).toMatch(/\/agents\/u-my-agent\/plugins\/plugin-1$/);
-    expect((init as RequestInit).method).toBe("DELETE");
+    expect(request.method).toBe("DELETE");
   });
 });
 
@@ -385,9 +399,10 @@ describe("useAdoptUnmanagedSkill", () => {
     });
     await result.current.mutateAsync({ skill: "my-skill", location: "global" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
+    const request = fetchMock.mock.calls[0][0] as Request;
+    const url = request.url;
     expect(String(url)).toMatch(/\/agents\/u-my-agent\/unmanaged-skills\/my-skill\/adopt$/);
-    expect((init as RequestInit).method).toBe("POST");
+    expect(request.method).toBe("POST");
   });
 });
 

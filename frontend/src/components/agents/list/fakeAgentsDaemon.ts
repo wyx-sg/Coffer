@@ -1,10 +1,8 @@
-// src/components/agents/list/fakeAgentsDaemon.ts — test-only: an in-memory daemon behind `call` and `getApiClient`.
+// src/components/agents/list/fakeAgentsDaemon.ts — test-only: an in-memory daemon behind the typed client.
 //
 // The Agents list, its dialogs and the connection change read a dozen routes;
 // tests mock only the network boundary and let the real hooks run against
 // this fake, which keeps registrations and connections as the daemon would.
-import { vi } from "vitest";
-
 import type { AgentProviderInfo } from "@/lib/api/agentProviders";
 import type { AgentTypeOut, CofferConnection } from "@/lib/api/agents";
 import { ApiError } from "@/lib/api/errors";
@@ -84,14 +82,22 @@ function connected(d: FakeDaemon, uid: string, on: boolean): CofferConnection {
   return next;
 }
 
-/** The `call` stand-in: routes each request to the fake's state. */
+/** The request handler for `fakeApi()`: routes each request to the fake's state. */
 export function fakeCallFor(d: FakeDaemon) {
-  return vi.fn(async (path: string, opts: { method?: string; body?: unknown } = {}) => {
+  return async (path: string, opts: { method?: string; body?: unknown } = {}) => {
     const method = opts.method ?? "GET";
     const req = { method, path, body: opts.body };
     d.calls.push(req);
     const failure = d.fail?.(req);
     if (failure) throw failure;
+    if (path === "/daemon/status") return { features: {} };
+    const resource = path.match(/^\/resources\/([^/?]+)(?:\/(enable|disable))?$/);
+    if (resource) {
+      const uid = decodeURIComponent(resource[1]);
+      if (resource[2] === "enable") d.disabled = d.disabled.filter((u) => u !== uid);
+      if (resource[2] === "disable") d.disabled.push(uid);
+      return { uid, enabled: !d.disabled.includes(uid) };
+    }
     if (path === "/fs/pick-folder") return d.pick;
     if (path.startsWith("/fs/browse")) {
       const at = decodeURIComponent(path.split("?path=")[1] ?? "");
@@ -129,30 +135,6 @@ export function fakeCallFor(d: FakeDaemon) {
     }
     if (path.endsWith("/hooks")) return { coffer_hook: null, items: [], parse_errors: [] };
     // Every list a count reads: nothing in it.
-    return { items: [], total: 0, candidates: [] };
-  });
-}
-
-/** The `getApiClient()` stand-in: resources (enabled flags) and daemon status. */
-export function fakeClientFor(d: FakeDaemon) {
-  const ok = (data: unknown) => Promise.resolve({ data, error: undefined });
-  return {
-    GET: vi.fn((path: string, init?: { params?: { path?: { uid?: string } } }) => {
-      if (path === "/daemon/status") return ok({ features: {} });
-      if (path === "/resources/{uid}") {
-        const uid = init?.params?.path?.uid ?? "";
-        return ok({ uid, enabled: !d.disabled.includes(uid) });
-      }
-      return ok({ resources: [] });
-    }),
-    POST: vi.fn((path: string, init?: { params?: { path?: { uid?: string } } }) => {
-      const uid = init?.params?.path?.uid ?? "";
-      d.calls.push({ method: "POST", path: path.replace("{uid}", uid) });
-      if (path === "/resources/{uid}/enable") d.disabled = d.disabled.filter((u) => u !== uid);
-      if (path === "/resources/{uid}/disable") d.disabled.push(uid);
-      return ok(undefined);
-    }),
-    PATCH: vi.fn(() => ok(undefined)),
-    DELETE: vi.fn(() => ok(undefined)),
+    return { items: [], total: 0, candidates: [], resources: [] };
   };
 }

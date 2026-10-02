@@ -173,8 +173,11 @@ class FileBoundaryStore:
         ]
         return [_approval(r) for r in rows[:limit]]
 
-    def decide(self, approval_id: str, status: str, *, by: str, at: str) -> bool:
-        """Move a PENDING approval to ``status``; False when it was not pending.
+    def decide(
+        self, approval_id: str, status: str, *, by: str, at: str, only_from: str = "pending"
+    ) -> bool:
+        """Move an approval that is ``only_from`` (pending by default) to
+        ``status``; False when it was not in that state.
 
         Compare-and-set on the status under the file's lock, so two answers to
         one approval cannot both take effect. A decided approval drops any
@@ -185,7 +188,7 @@ class FileBoundaryStore:
         def settle(doc: dict[str, Any]) -> None:
             nonlocal moved
             for row in doc.get(_APPROVALS, []):
-                if row["id"] == approval_id and row["status"] == "pending":
+                if row["id"] == approval_id and row["status"] == only_from:
                     row.update(status=status, decided_at=at, decided_by=by)
                     row[_PENDING] = None
                     moved = True

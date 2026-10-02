@@ -1,6 +1,6 @@
 // frontend/src/components/skills/SkillLibrary.tsx
 // The left pane of the Skills page: the library of managed skills. A filter
-// field (name + description), the All / On / Off switch, Check copies, then
+// field (name + description), the Reach filter, Check copies, then
 // "Library N" over one row per skill (SkillLibraryRow). While rows are ticked
 // the selection bar (SkillsBulkBar) sits under the filter and every row shows
 // its checkbox; otherwise a row shows it on hover. Only managed skills are
@@ -9,18 +9,17 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
 
+import { ReachFilter } from "@/components/reach/ReachFilter";
 import { SearchInput } from "@/components/SearchInput";
 import { SkillLibraryRow } from "@/components/skills/SkillLibraryRow";
 import { SkillOrphanList } from "@/components/skills/SkillOrphanList";
-import { SkillSegmented } from "@/components/skills/SkillSegmented";
 import { SkillsBulkBar } from "@/components/skills/SkillsBulkBar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useClis } from "@/lib/hooks/useClis";
-
-type Filter = "all" | "on" | "off";
+import { matchesReach, type ReachFilterValue } from "@/lib/reachFilter";
 
 interface Props {
   skills: SkillOut[];
@@ -61,13 +60,12 @@ export function SkillLibrary({
   const { data: agents = [] } = useAgents();
   const clis = useClis().data?.items ?? [];
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<ReachFilterValue>("all");
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return skills.filter((s) => {
-      if (filter === "on" && !s.enabled) return false;
-      if (filter === "off" && s.enabled) return false;
+      if (!matchesReach(filter, s)) return false;
       return !q || `${s.name} ${s.description}`.toLowerCase().includes(q);
     });
   }, [skills, query, filter]);
@@ -89,16 +87,7 @@ export function SkillLibrary({
           ariaLabel={t("skills.searchPlaceholder")}
         />
         <div className="flex items-center gap-2">
-          <SkillSegmented
-            label={t("skills.filter.label")}
-            value={filter}
-            onChange={setFilter}
-            options={[
-              { value: "all", label: t("skills.filter.all") },
-              { value: "on", label: t("skills.filter.on") },
-              { value: "off", label: t("skills.filter.off") },
-            ]}
-          />
+          <ReachFilter value={filter} onChange={setFilter} />
           <Button
             variant="ghost"
             size="sm"

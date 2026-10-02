@@ -12,7 +12,7 @@ provider APIs accept (spec mcp-gateway "Flag tools whose client-visible name is
 too long"). The flag only informs: the tool stays enabled and listed.
 
 Like the rest of ``coffer mcp``, these take the server's NAME and resolve it to a
-uid once per command (ADR resource-identity-is-an-immutable-uid).
+uid once per command (ADR identity-is-the-uid-inside-the-file).
 """
 
 from __future__ import annotations
@@ -46,8 +46,7 @@ CLIENT_DROP_LIMIT = 60
 
 
 def _too_long(row: dict[str, Any]) -> bool | None:
-    """Over the provider limit; ``None`` when the daemon did not say (a row
-    type with no client-visible name, or a daemon that predates the field)."""
+    """Over the provider limit; ``None`` for a row type with no client-visible name."""
     length = row.get("client_name_length")
     return None if length is None else int(length) > CLIENT_NAME_LIMIT
 

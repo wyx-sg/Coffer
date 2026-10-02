@@ -1,11 +1,11 @@
 ---
 title: Distribution and releases
-description: How Coffer is built into frozen binaries, released as a CLI archive and a desktop .dmg, signed and notarised when the secrets exist, updated in place by the desktop app, installed into versioned directories under ~/.coffer/bin, stamped with a release channel, and gated by experimental features.
+description: How Coffer is built into frozen binaries, released as a CLI archive and a desktop .dmg, signed and notarised when the secrets exist, updated in place by the desktop app, installed into versioned directories under ~/.coffer/bin, stamped with a commit and hardened for tagged releases, and gated by experimental features.
 ---
 
 # Distribution and releases
 
-This page explains how Coffer's Python code reaches a machine with no Python on it: the three frozen binaries, the release workflow that produces them, how a release is signed and notarised, how the desktop app updates itself, the two download tiers, how a new build is installed beside the old one, and how the release channel decides which experimental features are on. It is for contributors who build or release Coffer and for anyone who wants to know what is actually on their disk.
+This page explains how Coffer's Python code reaches a machine with no Python on it: the three frozen binaries, the release workflow that produces them, how a release is signed and notarised, how the desktop app updates itself, the two download tiers, how a new build is installed beside the old one, and how experimental features are switched on, one machine at a time. It is for contributors who build or release Coffer and for anyone who wants to know what is actually on their disk.
 
 ## The problem
 
@@ -25,7 +25,8 @@ Coffer is a Python program, but its users are people running AI coding agents, n
 | Ship three binaries, always together | The shim and the CLI find `coffer-daemon` as a sibling, so co-location is the discovery mechanism. |
 | Two download tiers built in one job from the same binaries | The desktop app cannot drift from the CLI archive it wraps. |
 | The daemon deploys its siblings into versioned directories under `~/.coffer/bin` and flips symlinks | A deploy never overwrites a binary that may be running, and the previous build stays for a manual rollback. |
-| A release channel (`stable` or `dev`) stamped into the build | Experimental features default off for tagged releases and on for everything else, without a release branch. |
+| One build for everyone, every experimental feature off until a person switches it on | There is no release branch and no second build: the owner tests exactly what users run. |
+| A build stamp: the commit, and a `stable` mark on tagged releases | A tagged release ignores the development environment switches for host and CORS checks. Nothing a person sees changes. |
 | Experimental features gated at request time, per machine | Switching a feature takes effect without a restart and never deletes what it holds. |
 | Sign, notarise and publish the updater feed only when the credentials are present | The same workflow builds a signed release for the owner and an unsigned one everywhere else, and stays green in both. |
 | The desktop app updates from a minisign-signed manifest on GitHub Releases | The update is verified against a key compiled into the app, so neither GitHub nor the network is trusted with what gets installed. |
@@ -64,7 +65,7 @@ flowchart TD
     T["push tag v*"] --> I["uv sync --frozen, npm ci"]
     I --> F["build frontend (codegen + vite build)"]
     F --> P["release plan: which secrets are present"]
-    P --> S["stamp channel stable (+ access group when signing)"]
+    P --> S["stamp build (+ access group when signing)"]
     S --> B["build binaries (PyInstaller x3, signed when possible)"]
     B --> K["smoke test (+ verify signatures, notarise)"]
     K --> A["coffer-cli-aarch64-apple-darwin.tar.gz"]
@@ -80,7 +81,7 @@ flowchart TD
 1. Install the backend from its lockfile (`uv.lock`) with `uv sync --frozen`, so the tagged build uses exactly the locked dependency set.
 2. Build the frontend (`npm run codegen`, `npm run build`). The daemon spec picks up `frontend/dist` as the served web UI.
 3. Decide which signing steps can run (see [Signing, notarisation and updates](#signing-notarisation-and-updates)). When a Developer ID is present, import it into a temporary keychain and stamp the keychain access group.
-4. On a tag, stamp the channel `stable` (see [Release channels](#release-channels)).
+4. Stamp the build: the commit always, and the `stable` mark on a tag (see [The build stamp](#the-build-stamp)).
 5. Freeze the three binaries — signed with the Developer ID when there is one — and run the smoke test against `dist/`. A signed build then has its signatures verified and the binaries notarised.
 6. Package `coffer`, `coffer-daemon` and `coffer-mcp-shim` into `coffer-cli-<triple>.tar.gz`.
 7. Stage the same three files in the desktop crate as `<name>-<triple>` and run `tauri build`, producing the `.dmg` — `Coffer-<triple>.dmg` when signed (then notarised and stapled), `Coffer-unsigned-<triple>.dmg` otherwise — and, with the updater key, the signed updater archive and `latest.json`.
@@ -162,28 +163,34 @@ Before running database migrations, the daemon also copies `runs.db` (and its `-
 `install.sh` installs plain files into `~/.coffer/bin`, each renamed over its public name, so a symlink left by an earlier deploy is replaced rather than written through and the version directories stay intact. A daemon running from `~/.coffer/bin` itself skips the deploy, so an installer-only machine has no version directories until a build from another location (such as the desktop app) starts a daemon.
 :::
 
-## Release channels
+## The build stamp
 
-Every build carries a channel, `stable` or `dev`, recorded in a single constant in the backend package. The repository always says `dev`. On a tag, the release workflow rewrites it to `stable` before PyInstaller runs, so only a tagged release is `stable`. Whether the binary is frozen is not the signal: the owner's own testing build is frozen too and stays `dev`. The channel is reported as `channel` by `/api/v1/daemon/status`, and its only effect is the default state of experimental features.
+Every build carries one internal stamp in the backend package: the commit it was built from, and a mark that says whether it is a tagged release. The repository always says `dev`; on a tag, the release workflow rewrites the mark to `stable` before PyInstaller runs. Whether the binary is frozen is not the signal: the owner's own testing build is frozen too and stays `dev`.
+
+The mark is a security detail and nothing else. A tagged release ignores the development environment switches `COFFER_ALLOWED_HOSTS`, `COFFER_CORS_ORIGINS` and `COFFER_DEV_CORS`, so a stray variable cannot widen the Host and Origin checks of a shipped build (see [Security model](/architecture/security#the-host-and-origin-checks)). It changes no default, no screen and no report: a build from source and a release behave identically, and nothing in the daemon status, the CLI or Settings names a channel.
 
 ## Experimental features
 
-An experimental feature is a capability that ships in every build but is switched off by default on `stable`. The feature registry in the domain layer is the one list; anything not in it is always on. Each entry names a key, the REST prefixes the feature owns and the resource kinds it owns.
+An experimental feature is a capability that ships in every build but is off until you switch it on. The feature registry in the domain layer is the one list; anything not in it is always on. Each entry names a key, the REST prefixes the feature owns and the resource kinds it owns.
 
-The registry is empty right now. Sync (`vault_sync`), Knowledge (`knowledge`) and Memory (`memory`) were its entries before 1.0 and graduated at 1.0: their entries and every gate that named them were deleted, and a migration stripped their stored switches from `daemon-config.json`. A stored key the registry no longer declares is ignored, so a leftover one is harmless.
+The registry holds four entries, in this order: `knowledge`, `memory`, `sync` (vault sync) and `models` (model providers, the local model proxy and Usage). Conversations and Channels are always on. An earlier design also had `run` and `context` entries; they are gone, and `context` split into `knowledge` and `memory`. Settings stored under a key the registry does not declare are ignored, so a leftover one is harmless, and nothing is migrated.
+
+No feature hard-depends on another. A switched-off feature simply leaves its part out of whatever else shows it: with `knowledge` off the `coffer-guide` skill has no knowledge sections and a channel's `/kb` says Knowledge is off; with `memory` off channel turns carry no memory; with `models` off the internal engine's chosen connection still resolves.
 
 A feature's state is resolved on every read, highest precedence first:
 
 1. a pin from the `COFFER_FEATURES` environment variable (`key=on|off`, comma-separated), fixed for the daemon's lifetime;
 2. the machine's own setting, stored in `~/.coffer/daemon-config.json`;
-3. the channel default — on for `dev`, off for `stable`.
+3. the default, which is off for every feature in every build.
+
+The status reports which of the three decided: `pin`, `setting` or `default`.
 
 ```mermaid
 flowchart LR
     Q["request under a feature's prefix"] --> G{"feature gate (key)"}
     G -->|pin?| P["COFFER_FEATURES"]
     G -->|setting?| S["daemon-config.json"]
-    G -->|else| C["channel default"]
+    G -->|else| C["default: off"]
     G -->|on| R["route runs"]
     G -->|off| X["404 FEATURE_DISABLED"]
 ```
@@ -192,9 +199,11 @@ The gates are request-time:
 
 - Every router whose prefix falls under a feature's prefix is mounted with a feature-gate dependency that checks the feature's state. The routes stay registered, so the OpenAPI document never changes with the switch, and a switch takes effect on the next request.
 - The kind-agnostic `/api/v1/resources` routes refuse a resource whose kind a switched-off feature owns, and leave such resources out of lists.
-- The MCP gateway drops the feature's builtin tools from the tool list and answers a call to one as an unknown tool; the handshake instructions stop naming them.
+- The MCP gateway drops the feature's builtin tools from the tool list (`coffer__write` goes with `knowledge`) and answers a call to one as an unknown tool; the handshake instructions stop naming them.
 - CLI commands reach the daemon over the gated routes and print one line naming `coffer config set feature.<key> on`, then exit 1.
-- Background passes owned by the feature skip their rounds.
+- Background passes owned by the feature skip their rounds: curation while `knowledge` is off, distil and aggregate while `memory` is off, the usage ingest and price refresh while `models` is off, and the converge worker while `sync` is off.
+- Whatever a feature put in front of agents is withdrawn and returns on switch-on: the memory delivery hook and the memory root named in the guide (`memory`), the knowledge sections of the `coffer-guide` skill (`knowledge`), and the provider projection into each agent's own config plus an empty model-proxy state (`models`).
+- The web UI reads the state off the daemon status, and a switched-off feature looks absent: its sidebar entry, palette entries, Overview figures and page sections are gone, and a link into its page lands on the not-found page. There is no notice and no switch-on button on the page itself. **Settings → Features** is the one place to switch a feature on, and it exists in every build.
 
 Switching a feature off never deletes, moves or rewrites what it holds; switching it back on resumes from the same state. Features change with `coffer config set feature.<key> on|off` or `PUT /api/v1/daemon/features/{key}`; a pinned feature refuses the change with `409 FEATURE_PINNED`. A feature joins by adding one registry entry and gating its surfaces through it; it leaves (graduates) once it is ready, by deleting its entry, every gate that names it, and, through a migration, its stored switch. See [Experimental features](/guides/experimental-features).
 
@@ -246,7 +255,7 @@ Without a Developer ID, macOS quarantines a downloaded archive or `.dmg`. Clear 
 
 **Size and start-up.** A frozen binary is large (tens of megabytes each) and starts slower than a system interpreter. The daemon starts once and stays up, and the shim excludes the server stack to keep its start-up short, so the cost is paid rarely.
 
-**A release branch for unfinished work.** Keeping experimental work on a branch would keep `stable` clean, but every fix would need to land twice and the owner would not be testing what users run. The channel stamp plus per-machine switches gives one codebase with different defaults.
+**A release branch for unfinished work.** Keeping experimental work on a branch would keep `stable` clean, but every fix would need to land twice and the owner would not be testing what users run. Per-machine switches, all off by default, give one codebase and one build.
 
 **Overwriting binaries in place.** Simpler, but a deploy could replace a file a running process is about to `exec`, and a bad build would leave nothing to return to. Versioned directories cost one extra copy on disk.
 
@@ -261,7 +270,7 @@ Without a Developer ID, macOS quarantines a downloaded archive or `.dmg`. Clear 
 | Directory | What it holds |
 | --- | --- |
 | `backend/` | the three PyInstaller specs |
-| `scripts/` | building, smoke-testing, spec checking, channel and build-identity stamping, release planning and signing, the update manifest, version bumping |
+| `scripts/` | building, smoke-testing, spec checking, build and build-identity stamping, release planning and signing, the update manifest, version bumping |
 | `.github/workflows/` | the release workflow and the `desktop` check workflow |
 | `desktop/` | the Tauri shell: bundle configuration, entitlements, daemon resolution order, the updater |
 | `docs-site/public/` | the one-line installer |
@@ -273,5 +282,5 @@ Without a Developer ID, macOS quarantines a downloaded archive or `.dmg`. Clear 
 - Reference: [Files and directories](/reference/filesystem), [Configuration](/reference/configuration)
 - Architecture: [Daemon and processes](/architecture/daemon), [Security model](/architecture/security), [Persistence](/architecture/persistence)
 - Checklist: [RELEASING.md](https://github.com/wyx-sg/Coffer/blob/main/RELEASING.md)
-- Decision records: [The Master Key Lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md), [Distribution — PyInstaller-Bundled Daemon, Shim, and CLI](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md), [Daemon Detect-or-Spawn Pattern](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-detect-or-spawn.md), [The Desktop Shell Returns, Owning Only What a Browser Cannot Do](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/desktop-shell-over-a-shared-frontend.md), [Experimental Features Instead of a Release Branch](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md), [Envelope-Encrypted Credential Store](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
+- Decision records: [The Master Key Lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md), [Distribution — PyInstaller-Bundled Daemon, Shim, and CLI](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md), [Daemon Detect-or-Spawn Pattern](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-detect-or-spawn.md), [The Desktop Shell Returns, Owning Only What a Browser Cannot Do](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/desktop-shell-over-a-shared-frontend.md), [Experimental Features Instead of a Release Branch](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
 - Specs: [daemon](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md), [desktop-app](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md), [experimental-features](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md)

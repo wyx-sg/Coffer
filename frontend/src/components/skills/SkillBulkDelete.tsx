@@ -10,9 +10,8 @@ import { Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { skillsKey } from "@/lib/api/queryKeys";
-import { skillsApi, type SkillOut } from "@/lib/api/skills";
-import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
+import type { SkillOut } from "@/lib/api/skills";
+import { useBulkRemoveSkills } from "@/lib/hooks/useSkills";
 import { joinNames } from "@/lib/skills/names";
 
 interface Props {
@@ -25,7 +24,7 @@ interface Props {
 export function SkillBulkDelete({ skills, onDone, label }: Props) {
   const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
-  const bulk = useBulkMutate({ invalidate: [skillsKey] });
+  const bulk = useBulkRemoveSkills();
 
   return (
     <>
@@ -45,7 +44,7 @@ export function SkillBulkDelete({ skills, onDone, label }: Props) {
         confirmLabel={t("skills.bulk.deleteConfirm", { count: skills.length })}
         pending={bulk.isPending}
         onConfirm={async () => {
-          await bulk.run(skills, (s) => skillsApi.remove(s.uid));
+          await bulk.run(skills);
           onDone();
         }}
       />

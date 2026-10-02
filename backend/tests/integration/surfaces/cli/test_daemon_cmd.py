@@ -287,7 +287,7 @@ def test_the_command_line_changes_residency_with_no_daemon_running(
     assert installed["value"] is False
 
     # No daemon, so no database and no audit table was ever reached.
-    assert not (home / ".coffer" / "coffer.db").exists()
+    assert not (home / ".coffer" / "runs.db").exists()
 
     res = runner.invoke(app, ["daemon", "idle", "show"])
     assert res.exit_code != 0

@@ -29,8 +29,9 @@ from __future__ import annotations
 from typing import Any
 
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
-from coffer.application.knowledge.service import KnowledgeService, Submission
-from coffer.domain.knowledge.entry import KnowledgeFile
+from coffer.application.knowledge.service import KnowledgeService
+from coffer.domain.features import KNOWLEDGE
+from coffer.domain.knowledge.entry import KnowledgeFile, Submission
 from coffer.domain.knowledge.errors import CollectionNotFound
 
 #: Audit actor for an agent-side write when the session reported no identity.
@@ -171,5 +172,6 @@ def register_knowledge_builtin_tools(
                 "required": ["collection", "title", "description"],
             },
             handler=write,
+            feature=KNOWLEDGE,
         )
     )

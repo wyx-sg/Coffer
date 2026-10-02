@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { BOUNDS, type Timeouts } from "./serverTimeouts";
+import { BOUNDS, type Timeouts } from "@/lib/mcp/serverTimeouts";
 
 interface Props {
   value: Timeouts;

@@ -5,10 +5,10 @@ memory delivered and what was read").
 
 :func:`boot` starts ``create_app`` with every root Coffer writes under pointed
 into ``tmp_path`` (``HOME`` included, so the triggers land in the fake
-``~/.coffer/vault/memory-triggers``), and both of the CLI's ways to reach a
-daemon routed at one ``TestClient``: the person-facing commands through
-``client_or_exit``, and ``coffer memory hook`` — which only ever calls
-``live_daemon`` and ``httpx.post`` — through those two names.
+``~/.coffer/vault/memory-triggers``), the ``memory`` feature on, and both of the
+CLI's ways to reach a daemon routed at one ``TestClient``: the person-facing
+commands through ``client_or_exit``, and ``coffer memory hook`` — which only
+ever calls ``live_daemon`` and ``httpx.post`` — through those two names.
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ from coffer.surfaces.http import feature_dependencies
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 from tests.integration.memory.conftest import claude_code_config, init_repository
+from tests.support.features import enable_all_in_config
 from tests.unit.memory._delivery_corpus import filler_notes, node20_note
 
 TOKEN = "test-token-memory-hook"
@@ -97,6 +98,7 @@ def boot(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Ho
     (home / ".claude").mkdir(parents=True, exist_ok=True)
     (home / ".codex").mkdir(parents=True, exist_ok=True)
     prior_features = feature_dependencies._feature_service
+    enable_all_in_config()
 
     app = create_app()
     set_active_token(TOKEN)

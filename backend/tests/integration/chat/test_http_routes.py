@@ -7,7 +7,6 @@ Tests the routes through a real FastAPI app wired with:
 Coverage:
 - Conversation CRUD round-trip (create, get, list, rename/model, delete).
 - SSE turn endpoint streaming turn_start … turn_done events.
-- TurnInProgress → 409 JSON (not SSE).
 - A build-adapter domain error → mapped JSON status (not SSE).
 - ConversationNotFound on send_message → 404 JSON.
 - ConversationNotFound on GET / PATCH / DELETE → 404.
@@ -16,7 +15,6 @@ Coverage:
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -25,7 +23,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from coffer.application.chat.service import ChatService
-from coffer.application.chat.turn_orchestrator import TurnOrchestrator, clear_active_turns
+from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.domain.chat.errors import AgentConfigRejected
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
@@ -90,14 +88,6 @@ def _make_services(
     """Create fully-wired in-memory chat services (registry-backed)."""
     chat_svc, orchestrator, _registry = make_chat_services(events, provider=provider)
     return chat_svc, orchestrator
-
-
-@pytest.fixture(autouse=True)
-def _reset_turns() -> Generator[None, None, None]:
-    """Clear any lingering active turns between tests."""
-    clear_active_turns()
-    yield
-    clear_active_turns()
 
 
 # ---------------------------------------------------------------------------
@@ -310,7 +300,6 @@ def test_unauthenticated_request_returns_401() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="chat", scenario="model selection is recorded")
 def test_agent_config_set_and_get_model_roundtrip() -> None:
     chat_svc, orchestrator = _make_services()
     app = _build_app(chat_svc, orchestrator)
@@ -537,7 +526,7 @@ def test_send_message_conversation_not_found_returns_404_json(monkeypatch) -> No
     async def _raise_not_found(*args: object, **kwargs: object) -> None:  # type: ignore[misc]
         raise ConversationNotFound("no-such-conv")
 
-    monkeypatch.setattr(orchestrator, "start_turn", _raise_not_found)
+    monkeypatch.setattr(orchestrator, "enqueue_message", _raise_not_found)
 
     with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
         resp = client.post(

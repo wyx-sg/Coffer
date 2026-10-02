@@ -16,11 +16,13 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { AgentMcpEntryPage } from "./AgentMcpEntryPage";
 import { AgentMcpServersTab } from "@/components/agents/AgentMcpServersTab";
-import type { AgentOut, McpEntryDetailOut } from "@/lib/api/agents";
+import type { AgentOut } from "@/lib/api/agents";
+import type { McpEntryDetailOut } from "@/lib/api/agents-workspace";
 import { acceptance } from "@/test/acceptance";
 
 // The MCP servers tab also lists Coffer's registered servers; none here.
-vi.mock("@/lib/api/client", () => ({
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: () => ({
     GET: vi.fn(() => Promise.resolve({ data: { resources: [] }, error: undefined })),
   }),
@@ -55,9 +57,9 @@ const AGENT: AgentOut = {
   model: null,
   effort: null,
   tier_models: null,
-  wire_api: null,
   version: null,
   install_handoff: null,
+  connection_uid: null,
   state: "installed_active",
   created_at: "2026-05-22T00:00:00Z",
   updated_at: "2026-05-22T00:00:00Z",

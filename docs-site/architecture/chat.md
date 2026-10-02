@@ -39,7 +39,6 @@ A conversation is not a [resource](/architecture/resource-framework). It is a ro
 | `title` | Starts as a placeholder. It is replaced by the first user message's text unless the owner has already renamed the conversation. |
 | `archived_at` | `null` while the conversation is active. |
 | `channel_uid`, `peer_chat_id` | The optional channel binding: the return address for relaying output to an IM chat. It stores the channel's immutable uid, so it survives a rename. |
-| `owner` | `null` for the developer's own conversations. A conversation that another surface owns carries that surface's name and is left out of the Chat list. It can still be read by id. |
 
 A message stores its `role`, an ordered list of content blocks (`text`, `tool_use`, `tool_result`, `attachment`), a `status` (`streaming`, `complete` or `failed`), and, for assistant messages, the `model_id` and token usage when the agent reports them.
 
@@ -55,7 +54,7 @@ If the agent no longer recognises a stored session id, the turn is retried **onc
 
 ### Which agent configuration a turn runs against
 
-A turn runs against the config directory of the one registered agent of its type. This is the same agent whose models the pickers offer. When that directory is not the type's standard location, the spawned process gets `CLAUDE_CONFIG_DIR=<config_dir>` (Claude Code) or `CODEX_HOME=<config_dir>` (Codex), merged with the daemon's own environment and any key a [model provider](/guides/providers) projects. For the standard location, the environment is left untouched, so the process behaves exactly as when you run the CLI yourself. This matters because Coffer delivers skills and installs its MCP entry into that directory. A turn that read a different directory would not see them.
+A turn runs against the config directory of the one registered agent of its type. This is the same agent whose models the pickers offer. When that directory is not the type's standard location, the spawned process gets `CLAUDE_CONFIG_DIR=<config_dir>` (Claude Code) or `CODEX_HOME=<config_dir>` (Codex), merged with the daemon's own environment. No provider key rides the environment: a [model provider](/guides/providers) connection that uses an API key is reached through Coffer's model proxy. For the standard location, the environment is left untouched, so the process behaves exactly as when you run the CLI yourself. This matters because Coffer delivers skills and installs its MCP entry into that directory. A turn that read a different directory would not see them.
 
 ## The turn orchestrator
 
@@ -72,7 +71,7 @@ Per-conversation state lives in one record: the event bus, the in-flight turn, t
 
 Starting a turn reserves the conversation's slot synchronously, before the orchestrator yields to anything else, so two concurrent sends cannot both start a turn. It then asks the registry for the conversation's provider, has it build an adapter, commits the user message (a text block plus references to its attachments) and spawns the detached turn task. When that task finishes, the orchestrator pops the head of the queue and starts its turn.
 
-A queued turn that fails to **start** is neither lost nor retried in a loop. The message goes back to the head of the queue, the queue is paused, and a `turn_error` is published. For a channel message, the orchestrator also hands the channel's renderer a stream that carries the failure and then ends, because a phone has no queue chips to look at.
+A queued turn that fails to **start** is neither lost nor retried in a loop. The message goes back to the head of the queue, the queue is paused, and a `turn_error` is published to the subscribers attached at that moment. The error belongs to no turn, so it is not kept in the replay buffer: a page opened or reconnected later sees the held queue, not a failure it cannot act on. For a channel message, the orchestrator also hands the channel's renderer a stream that carries the failure and then ends, because a phone has no queue chips to look at.
 
 ### Interrupt, delete and shutdown
 
@@ -123,7 +122,7 @@ sequenceDiagram
 
 What the task guarantees:
 
-- **A placeholder row before the first event.** An assistant row with status `streaming` is written before the adapter produces anything and is finalised in place when the turn ends: one row, never a duplicate. When the daemon starts, a sweep flips every lingering `streaming` row to `failed`. No conversation reopens showing a reply that will never arrive.
+- **A placeholder row before the first event.** An assistant row with status `streaming` is written before the adapter produces anything and is finalised in place when the turn ends: one row, never a duplicate. When the daemon starts, a sweep flips every lingering `streaming` row (created before this daemon started, so a turn begun after it came up is never touched) to `failed`. No conversation reopens showing a reply that will never arrive.
 - **Throttled partial saves.** The accumulated blocks are written onto the `streaming` row at most once per second. If an event is skipped by the throttle, a trailing write is scheduled for when the interval is up. So text streamed just before a long tool run is on disk within about a second. A daemon killed outright keeps what was streamed up to the last save.
 - **An idle watchdog.** An agent can wedge without dying: a hung tool, or a CLI waiting on a prompt nobody will answer. If no event arrives for `COFFER_TURN_IDLE_TIMEOUT_SECONDS` (default `300`; `0` disables it), the wait is cancelled inside the adapter's event stream. This runs the adapter's own cancellation path, which interrupts and terminates the subprocess. The turn then ends with `turn_error` `turn_timeout`.
 - **No silent completion.** If the adapter's stream ends without `turn_done` or `turn_error`, the task emits `turn_error` `stream_ended` itself. It does not rely on the adapter to do so, because a tick on a reply cut mid-sentence would be a lie.
@@ -170,7 +169,7 @@ The conversation bus fans each event out to every subscriber queue and keeps two
 
 When a client subscribes, the buffer and snapshot are enqueued synchronously before its queue joins the subscriber set. Because a concurrent publish can only run on a later event-loop tick, no live event can arrive ahead of the replay.
 
-The SSE route stays open across turns. With no turn running, it holds the connection open and delivers the next turn from whichever surface starts it. It ends when the conversation is deleted (the bus sends an end-of-stream marker) or the client disconnects. The web client reconnects only when a turn was mid-flight, with linear backoff and a lifetime cap of five reconnects. After that it surfaces the error rather than hammering the endpoint.
+The SSE route stays open across turns. With no turn running, it holds the connection open and delivers the next turn from whichever surface starts it. It ends when the conversation is deleted (the bus sends an end-of-stream marker) or the client disconnects. The web client re-subscribes whenever the stream drops, whether the connection closed cleanly or a read or fetch threw, and whether or not a turn was mid-flight, with linear backoff and a bounded number of attempts. After that it surfaces the error rather than hammering the endpoint.
 
 ### Routes
 
@@ -194,8 +193,8 @@ Coffer has no `coffer chat` command group. Conversations are reachable over REST
 
 The platform seam is two contracts:
 
-- An **agent provider**, one per agent type. It validates and stores a new conversation's `agent_config`, builds a configured adapter for one turn, tears down agent state when a conversation is deleted, and reports availability: whether the agent's binary resolves on the daemon's `PATH`. An unavailable agent is listed but cannot be selected.
-- An **agent adapter**, one per turn. Given the history and the attachments, it produces an asynchronous stream of events. The adapter must end with a terminal event and must clean up and re-raise on cancellation. It may report a `model_id`, which the turn task records on the assistant message.
+- An **agent provider**, one per agent type. It validates and stores a new conversation's `agent_config`, builds a configured adapter for one turn, tears down agent state when a conversation is deleted, and reports availability: whether the agent's binary resolves on the user's `PATH` (the login shell's `PATH` merged with the daemon's inherited one) **and** an enabled agent of that type is registered with Coffer. Chat talks to managed agents only, so an unavailable agent is listed but cannot be selected, and a turn for a type with no enabled agent is refused (`AGENT_CONFIG_REJECTED`, reason `agent_not_managed`) rather than run against the CLI's default config directory.
+- An **agent adapter**, one per turn. Given the history and the attachments, it produces an asynchronous stream of events. The adapter must end with a terminal event and must clean up and re-raise on cancellation. It may expose a `model_id`, which it learns while the turn streams (the Claude CLI names it on its assistant messages, the Codex app-server in its thread result). The turn task reads it when it finalises the reply and records it on the assistant message.
 
 A registry holds the providers. They are registered at the composition root. No surface names a provider directly.
 
@@ -285,7 +284,7 @@ Both transports drop redelivered events with a bounded in-memory set of recently
 
 ### Supervision
 
-The channel runtime is a reconciler that ticks every two seconds. On each tick it computes the wanted set by asking three gates in order: the channel is `enabled`, `runs_on` names this machine, and its scope leaves at least one agent to drive. It then starts, stops or restarts adapters to match. REST, CLI and UI never start or stop an adapter directly, which keeps the reported status truthful. Runtime state is keyed by channel uid, so renaming a channel moves nothing that is running. The wanted-set computation is also the one place where the channel's agent uids become the turn platform's agent keys.
+The channel runtime is a reconciler that ticks every two seconds. On each tick it computes the wanted set by asking three gates in order: the channel is `enabled`, `runs_on` names this machine, and its scope leaves at least one agent to drive. It then starts, stops or restarts adapters to match. REST, CLI and UI never start or stop an adapter themselves, which keeps the reported status truthful; the one explicit request, `POST /channels/{uid}/restart`, asks the runtime to stop and rebuild a channel's adapter now, serialised with the tick. An adapter reads its secret once, when it is built, so the tick also compares a stamp of each secret the channel cites and rebuilds the adapter when a secret is replaced under the same ref. Runtime state is keyed by channel uid, so renaming a channel moves nothing that is running. The wanted-set computation is also the one place where the channel's agent uids become the turn platform's agent keys.
 
 ### The inbound pipeline
 
@@ -356,11 +355,11 @@ The web page watches the same turn on the bus at the same time. This is how the 
 
 ## Concurrency rules
 
-- **One turn per conversation.** The slot is reserved synchronously when a turn begins. Every further message queues. A second entry point, used where a caller needs a turn now or not at all, refuses with a turn-in-progress error instead of queuing.
+- **One turn per conversation.** The slot is reserved synchronously when a turn begins. Every further message queues; a message is never refused because a turn is running.
 - **Many conversations in parallel.** Turns on different conversations, including different threads of one group, run concurrently as independent tasks.
 - **Single daemon.** Turn state, queues and buses are in-process. There is no cross-process fan-out, and the pending queue is lost on restart. That is consistent with an in-flight turn being marked failed on restart: an uncommitted message was never a row.
 - **Ownership-checked release.** A finishing turn clears only its own in-flight record, so a start that raced it is never evicted.
-- **Retention.** The framework's [retention worker](/architecture/observability#retention) archives conversations idle for 7 days (`conversations_archive`) and deletes archived conversations with their messages 30 days after archiving (`conversations`). Both windows are tunable like any other retained table.
+- **Retention.** The framework's [retention worker](/architecture/observability#retention) archives conversations idle for 7 days (`conversations_archive`) and deletes archived conversations with their messages 30 days after archiving (`conversations`), unless the conversation has been written to within that window (an archived thread resumed from a phone is not deleted mid-use). Both windows are tunable like any other retained table.
 
 ## Trade-offs and alternatives
 

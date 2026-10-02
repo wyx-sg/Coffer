@@ -53,7 +53,7 @@ class _CommonChannelFields(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # The **uid** of the agent resource this channel drives by default (ADR
-    # resource-identity-is-an-immutable-uid). It is a cross-resource reference,
+    # identity-is-the-uid-inside-the-file). It is a cross-resource reference,
     # so it holds the one thing about that agent the owner cannot change: not
     # its registry name, and not the turn platform's agent key either. The key
     # is derived from this at the one place the turn platform needs it (the
@@ -88,6 +88,11 @@ class _CommonChannelFields(BaseModel):
     # seconds ends with one short completion line where its answer would not
     # notify on its own. 0 turns the ping off.
     notify_after_seconds: float = Field(default=90.0, ge=0, le=3600)
+    # "Open a new conversation after an idle period": a chat whose active
+    # conversation has been idle longer than this many hours opens a NEW
+    # conversation on the owner's next message (the old one stays in the list).
+    # 0 never rolls a conversation over.
+    new_conversation_after_idle_hours: float = Field(default=24.0, ge=0, le=8760)
     # The working directories `/dir` may switch a conversation into (spec
     # channels "Choose the working directory from chat"): absolute paths, each
     # also admitting the directories beneath it. Empty means the channel's

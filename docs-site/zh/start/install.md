@@ -71,12 +71,12 @@ coffer agent connect claude-code
 | 变量 | 默认值 | 作用 |
 | --- | --- | --- |
 | `COFFER_INSTALL_DIR` | `~/.coffer/bin` | 三个二进制复制到哪里。 |
-| `COFFER_VERSION` | 最新发布版本 | 安装指定的标签，比如 `v0.1.0`。不带开头 `v` 的版本号也可以。 |
+| `COFFER_VERSION` | 最新发布版本 | 安装指定的标签，比如 `v<version>`。不带开头 `v` 的版本号也可以。 |
 | `COFFER_NO_MODIFY_PATH` | 未设置 | 设为 `1` 则不改动你的 shell 配置文件，脚本会改为打印需要添加的那一行。 |
 
 ```sh
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh \
-  | COFFER_VERSION=v0.1.0 COFFER_NO_MODIFY_PATH=1 sh
+  | COFFER_VERSION=v<version> COFFER_NO_MODIFY_PATH=1 sh
 ```
 
 用 `curl` 安装的二进制不会被加上隔离标记，所以 macOS Gatekeeper 不会拦它。
@@ -171,13 +171,12 @@ coffer daemon status
 
 ```text
 status:  ready
-version: 0.1.1
-channel: dev
+version: 0.2.0
 port:    8000
 pid:     48213
 ```
 
-你的版本号和 PID 会不一样。发布构建的 `channel` 是 `stable`，其他情况是 `dev`。然后打开界面：
+你的版本号和 PID 会不一样。然后打开界面：
 
 ```sh
 coffer open
@@ -248,9 +247,9 @@ coffer daemon restart
 `~/.coffer` 里有你的数据库、知识集、技能库和密钥的主密钥。删除它会销毁所有已保存的密钥，以及只存在于那里的所有文档。如果以后可能还要用，先把它复制到别处。
 :::
 
-## 发布渠道 {#release-channel}
+## 实验功能 {#experimental-features}
 
-每个构建都有一个**渠道**（channel）。打过标签的发布版本标记为 `stable`。源码运行、`make desktop` 和 `make bundle-binaries` 的产物是 `dev`。渠道只决定实验功能的默认值：`stable` 上默认关，`dev` 上默认开。目前没有任何功能处于实验状态；同步、知识和记忆已在 1.0 转正，始终开启。见[实验功能](/zh/guides/experimental-features)。
+每个构建都带有同样的能力。其中四项属于实验功能——知识、记忆、同步和模型提供商——无论稳定版还是源码构建，一开始都是关闭的。在设置 → 功能中，或用 `coffer config set feature.<key> on` 开启。见[实验功能](/zh/guides/experimental-features)。
 
 ## 下一步 {#next-steps}
 

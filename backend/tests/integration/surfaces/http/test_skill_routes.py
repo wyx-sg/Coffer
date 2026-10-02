@@ -1,7 +1,7 @@
 """End-to-end HTTP coverage for /api/v1/skills/* (spec agent-registry).
 
 Every route that addresses one skill takes its ``uid`` — the immutable identity
-the daemon minted — never its name (ADR resource-identity-is-an-immutable-uid).
+the daemon minted — never its name (ADR identity-is-the-uid-inside-the-file).
 So these tests read the uid off the response that created the resource (import,
 or agent registration) and address it with that from then on. The one place a
 name may still find a resource is ``GET /api/v1/resources?kind=...&name=...``,

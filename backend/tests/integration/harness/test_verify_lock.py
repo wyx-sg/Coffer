@@ -25,6 +25,14 @@ def _env(cache: Path, **extra: str) -> dict[str, str]:
     return env
 
 
+def _wait_for_file(path: Path, timeout: float = 30.0) -> None:
+    """Block until the lock holder's child says it is running (so it holds the lock)."""
+    deadline = time.monotonic() + timeout
+    while not path.exists():
+        assert time.monotonic() < deadline, f"{path.name} never appeared"
+        time.sleep(0.02)
+
+
 def _run(cache: Path, *command: str, **extra: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(_SCRIPT), "--", *command],
@@ -44,6 +52,7 @@ def test_the_command_runs_and_its_exit_code_comes_back(tmp_path: Path) -> None:
 
 def test_a_second_run_waits_for_the_first(tmp_path: Path) -> None:
     marker = tmp_path / "first-done"
+    holding = tmp_path / "first-holding"
     first = subprocess.Popen(
         [
             sys.executable,
@@ -51,14 +60,15 @@ def test_a_second_run_waits_for_the_first(tmp_path: Path) -> None:
             "--",
             sys.executable,
             "-c",
-            f"import time, pathlib; time.sleep(2); pathlib.Path({str(marker)!r}).write_text('x')",
+            f"import time, pathlib; pathlib.Path({str(holding)!r}).write_text('x'); "
+            f"time.sleep(2); pathlib.Path({str(marker)!r}).write_text('x')",
         ],
         env=_env(tmp_path),
         stderr=subprocess.PIPE,
         text=True,
     )
     try:
-        time.sleep(0.5)  # let the first run take the lock
+        _wait_for_file(holding)  # the first run holds the lock
         second = _run(
             tmp_path,
             sys.executable,
@@ -73,11 +83,19 @@ def test_a_second_run_waits_for_the_first(tmp_path: Path) -> None:
 
 
 def test_a_holder_that_dies_releases_the_lock(tmp_path: Path) -> None:
+    holding = tmp_path / "holder-holding"
     holder = subprocess.Popen(
-        [sys.executable, str(_SCRIPT), "--", sys.executable, "-c", "import time; time.sleep(5)"],
+        [
+            sys.executable,
+            str(_SCRIPT),
+            "--",
+            sys.executable,
+            "-c",
+            f"import time, pathlib; pathlib.Path({str(holding)!r}).write_text('x'); time.sleep(5)",
+        ],
         env=_env(tmp_path),
     )
-    time.sleep(0.5)
+    _wait_for_file(holding)
     holder.kill()  # the wrapper itself dies without cleaning up
     holder.wait(timeout=10)
     started = time.monotonic()

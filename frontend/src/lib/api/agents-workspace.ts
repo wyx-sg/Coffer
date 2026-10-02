@@ -1,6 +1,6 @@
 // frontend/src/lib/api/agents-workspace.ts — wire types for the agent workspace
 // surfaces (MCP entries, plugins, unmanaged skills). Split out of agents.ts for
-// the file-size budget; re-exported there so existing import paths keep working.
+// the file-size budget; importers take these types from here.
 //
 // Every shape here is an alias of a generated schema under the name the hooks
 // already import: MCP entries and plugins come from the agent-registry
@@ -10,7 +10,6 @@
 // with no schema of its own to alias, so it stays written out below.
 import type { components } from "@/lib/api/generated/agent-registry";
 import type { components as SkillManager } from "@/lib/api/generated/skill-manager";
-import type { components as SkillManagerWire } from "@/lib/api/generated/skill-manager";
 
 type Schemas = components["schemas"];
 
@@ -30,10 +29,6 @@ export type AdoptMcpEntryBody = Schemas["McpEntryAdopt"];
  *  being called — after a `new_name` override those are not the same answer,
  *  which is why both travel. */
 export type AdoptedResource = Schemas["AdoptedOut"];
-
-/** What adopting an unmanaged skill folder created: the new skill's uid and the
- *  label it was adopted under. Same two answers, same reason. */
-export type SkillRefOut = SkillManager["schemas"]["SkillRefOut"];
 
 /** `version` … `mcp_servers`: best-effort detail read from the plugin's
  * install dir (Claude only today; null / empty otherwise). */
@@ -60,5 +55,3 @@ export type UnmanagedSkillOut = SkillManager["schemas"]["UnmanagedSkillOut"];
 /** One unmanaged skill for its read-only detail page: the list entry plus the
  *  SKILL.md `description` (null when the folder does not validate). */
 export type UnmanagedSkillDetailOut = SkillManager["schemas"]["UnmanagedSkillDetailOut"];
-
-export type UnmanagedSkillsResponse = SkillManagerWire["schemas"]["UnmanagedListOut"];

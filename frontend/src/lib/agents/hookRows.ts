@@ -9,7 +9,7 @@
 // one row per event, and never the events joined into one string. A MISSING
 // Coffer hook — which no file declares any more — becomes a row of its own so the
 // tab can say so and offer Repair.
-import type { StatusTone } from "@/components/status/statusTone";
+import type { StatusTone } from "@/lib/statusTone";
 import type { Owner } from "@/lib/agents/owner";
 import type { AgentHooksOut, CofferHook, NativeHook } from "@/lib/api/agents";
 

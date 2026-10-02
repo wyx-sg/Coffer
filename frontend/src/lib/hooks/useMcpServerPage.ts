@@ -6,32 +6,18 @@
 // state only, so opening a server never spawns it.
 import { useQueries, useQuery } from "@tanstack/react-query";
 
-import { getApiClient } from "@/lib/api/client";
-import { ApiError, throwApiError } from "@/lib/api/errors";
+import { mcpServersApi, type InvocationSummary, type ToolTiering } from "@/lib/api/mcpServers";
 import { mcpLogKey, mcpStatusKey, mcpSummaryKey, mcpTieringKey } from "@/lib/api/queryKeys";
-import type { components } from "@/lib/api/types";
 import { readServerStatus, type McpStatusDetail } from "./useMcpServerStatus";
 
-export type InvocationSummary = components["schemas"]["InvocationSummaryOut"];
-export type McpServerLog = components["schemas"]["McpServerLogOut"];
-export type ToolTiering = components["schemas"]["ToolTieringOut"];
-
-const path = (uid: string) => ({ params: { path: { uid } } });
+export type { InvocationSummary, ToolTiering };
 
 /** Calls since 24 hours ago — the page's "Last 24 hours". */
 export function useMcpInvocationSummary(uid: string) {
   return useQuery({
     queryKey: mcpSummaryKey(uid),
     enabled: uid.length > 0,
-    queryFn: async (): Promise<InvocationSummary> => {
-      const { data, error } = await getApiClient().GET(
-        "/resources/mcp_server/{uid}/invocations/summary",
-        path(uid),
-      );
-      if (error) throwApiError(error, "INTERNAL_ERROR", "summary failed");
-      if (!data) throw new ApiError("INTERNAL_ERROR", "empty summary response");
-      return data;
-    },
+    queryFn: () => mcpServersApi.summary(uid),
   });
 }
 
@@ -40,24 +26,8 @@ export function useMcpServerLog(uid: string, enabled: boolean) {
   return useQuery({
     queryKey: mcpLogKey(uid),
     enabled: enabled && uid.length > 0,
-    queryFn: async (): Promise<McpServerLog> => {
-      const { data, error } = await getApiClient().GET("/resources/mcp_server/{uid}/log", {
-        params: { path: { uid }, query: { limit: 300 } },
-      });
-      if (error) throwApiError(error, "INTERNAL_ERROR", "log failed");
-      if (!data) throw new ApiError("INTERNAL_ERROR", "empty log response");
-      return data;
-    },
+    queryFn: () => mcpServersApi.log(uid, 300),
   });
-}
-
-/** The tiering split, or null when it could not be read (the list then shows no count). */
-async function readToolTiering(uid: string): Promise<ToolTiering | null> {
-  const { data, error } = await getApiClient().GET(
-    "/resources/mcp_server/{uid}/tiering",
-    path(uid),
-  );
-  return error || !data ? null : data;
 }
 
 /** Which of the server's tools are listed to agents and which are behind search. */
@@ -65,7 +35,7 @@ export function useMcpToolTiering(uid: string) {
   return useQuery({
     queryKey: mcpTieringKey(uid),
     enabled: uid.length > 0,
-    queryFn: () => readToolTiering(uid),
+    queryFn: () => mcpServersApi.tiering(uid),
   });
 }
 
@@ -81,7 +51,7 @@ export function useMcpServerListReads(uids: readonly string[]) {
   const tierings = useQueries({
     queries: uids.map((uid) => ({
       queryKey: mcpTieringKey(uid),
-      queryFn: () => readToolTiering(uid),
+      queryFn: () => mcpServersApi.tiering(uid),
     })),
   });
   const details = new Map<string, McpStatusDetail | null | undefined>();

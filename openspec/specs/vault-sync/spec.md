@@ -11,7 +11,7 @@ there — is a chore nobody performs often enough for the two to stay alike. A
 background worker commits what this vault holds, lets git three-way-merge it
 against what the remote holds, and applies the resulting difference back —
 deletions included. Background and alternatives in
-[Vault Sync](../../../docs/decisions/vault-sync.md).
+[Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](../../../docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md).
 
 **This spec also owns machine identity.** The name says "sync", but
 `machine_id` — how it is derived, that it survives a reinstall, what travels in
@@ -51,6 +51,8 @@ Out of scope:
   is not supported and is not wanted: reach is machine-local (see "Keep reach
   machine-local"), so each machine already answers that question for itself by
   holding its own scope.
+
+While the `sync` feature is switched off (spec [experimental-features](../experimental-features/spec.md) "Close the sync feature's surfaces"), the sync routes are closed and the convergence worker skips its rounds; the configured remote and the history stay untouched, and curation treats the vault as single-machine. Requirements below describe the feature while it is on.
 
 ## Requirements
 
@@ -542,6 +544,7 @@ another URL or branch since — MUST apply and push nothing and end
 - **GIVEN** a machine with a remote it has not joined, and a machine whose remote was just set to another URL
 - **WHEN** an ordinary round runs on each
 - **THEN** each ends `join_required` and nothing is applied or pushed
+- **AND** a remote that shares history with the vault (a mirror, a renamed repository) is no different: sharing history is not consent, and the machine joins only through the join
 
 ### Requirement: Apply knowledge, skill and memory-trigger file changes
 What a round applies MUST be a checkout of the merged tree: an added or modified file
@@ -1265,12 +1268,15 @@ deliveries. After a round that applied files here, one reconcile pass SHALL run
 with the import's warrant (see [resource-framework](../resource-framework/spec.md)
 "Converge what Coffer writes outside its database with one reconciler"); a round
 that applied nothing MUST NOT run one. A failed pass is logged and the round
-stands.
+stands. The round MUST hold the reconciler from its first git call to the end of
+that pass, so a pass its own checkout hinted cannot judge the vault before the
+import pass and undo what another machine changed (a provider switch).
 
 #### Scenario: a round that applied changes runs one reconcile pass
 - **GIVEN** a joined machine and another machine that pushed a knowledge document
 - **WHEN** this machine's round pulls it, and a further round has nothing to do
 - **THEN** exactly one reconcile pass ran, after the first round
+- **AND** with the real reconciler running, no hinted pass ran before the import pass
 
 ### Requirement: Converge resources as their own files
 `mcp_server`, `skill`, `channel`, `provider` and `knowledge` resources MUST

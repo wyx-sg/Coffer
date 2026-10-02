@@ -38,6 +38,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/channels/{uid}/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restart Channel
+         * @description Stop and rebuild the channel's adapter, reading its secret afresh.
+         */
+        post: operations["restart_channel_api_v1_channels__uid__restart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/channels/{uid}/status": {
         parameters: {
             query?: never;
@@ -82,8 +102,11 @@ export interface components {
         };
         /** ChannelStatusOut */
         ChannelStatusOut: {
-            /** Channel Type */
-            channel_type: string;
+            /**
+             * Channel Type
+             * @enum {string}
+             */
+            channel_type: "telegram" | "seatalk";
             /**
              * Diagnostics
              * @default []
@@ -107,6 +130,8 @@ export interface components {
             runs_here: boolean;
             /** Runs On */
             runs_on: string | null;
+            /** Settings */
+            settings: (components["schemas"]["TelegramChannelConfig"] | components["schemas"]["SeaTalkChannelConfig"]) | null;
             /** Title */
             title: string | null;
             /** Uid */
@@ -182,6 +207,123 @@ export interface components {
              * @default
              */
             pair_url: string;
+        };
+        /** RestartOut */
+        RestartOut: {
+            /** Running */
+            running: boolean;
+        };
+        /** SeaTalkChannelConfig */
+        SeaTalkChannelConfig: {
+            /** App Id */
+            app_id: string;
+            /** App Secret Ref */
+            app_secret_ref: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            channel_type: "seatalk";
+            /** Default Agent */
+            default_agent: string | null;
+            /** Default Agent Config */
+            default_agent_config: {
+                [key: string]: unknown;
+            } | null;
+            /** Directories */
+            directories: string[];
+            /**
+             * Ignore Other Mentions
+             * @default false
+             */
+            ignore_other_mentions: boolean;
+            /**
+             * New Conversation After Idle Hours
+             * @default 24
+             */
+            new_conversation_after_idle_hours: number;
+            /**
+             * Notify After Seconds
+             * @default 90
+             */
+            notify_after_seconds: number;
+            /**
+             * Require Mention
+             * @default true
+             */
+            require_mention: boolean;
+            /** Runs On */
+            runs_on: string | null;
+            /**
+             * Show Steps
+             * @default true
+             */
+            show_steps: boolean;
+            /**
+             * Wait After Forward Seconds
+             * @default 5
+             */
+            wait_after_forward_seconds: number;
+            /**
+             * Wait After Text Seconds
+             * @default 1.5
+             */
+            wait_after_text_seconds: number;
+        };
+        /** TelegramChannelConfig */
+        TelegramChannelConfig: {
+            /** Bot Token Ref */
+            bot_token_ref: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            channel_type: "telegram";
+            /** Default Agent */
+            default_agent: string | null;
+            /** Default Agent Config */
+            default_agent_config: {
+                [key: string]: unknown;
+            } | null;
+            /** Directories */
+            directories: string[];
+            /**
+             * Ignore Other Mentions
+             * @default false
+             */
+            ignore_other_mentions: boolean;
+            /**
+             * New Conversation After Idle Hours
+             * @default 24
+             */
+            new_conversation_after_idle_hours: number;
+            /**
+             * Notify After Seconds
+             * @default 90
+             */
+            notify_after_seconds: number;
+            /**
+             * Require Mention
+             * @default true
+             */
+            require_mention: boolean;
+            /** Runs On */
+            runs_on: string | null;
+            /**
+             * Show Steps
+             * @default true
+             */
+            show_steps: boolean;
+            /**
+             * Wait After Forward Seconds
+             * @default 5
+             */
+            wait_after_forward_seconds: number;
+            /**
+             * Wait After Text Seconds
+             * @default 1.5
+             */
+            wait_after_text_seconds: number;
         };
     };
     responses: never;
@@ -260,6 +402,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PairingCodeOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restart_channel_api_v1_channels__uid__restart_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestartOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

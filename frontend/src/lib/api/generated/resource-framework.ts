@@ -448,7 +448,7 @@ export interface components {
          * @description The data of a `change` event: something changed; refetch what shows it.
          *
          *     Sent once per resource write through the framework, and once per change in
-         *     what the attention list reports (`kind` `attention`, no `id`, no `rev`).
+         *     what the attention list reports (`kind` `attention`, no `id`).
          *     The event's SSE id is `seq`, so a reconnecting client resumes with
          *     `Last-Event-ID`.
          */
@@ -469,11 +469,6 @@ export interface components {
              * @enum {string}
              */
             op: "upsert" | "delete";
-            /**
-             * Rev
-             * @description The revision the write produced (a delete: the last one plus one); null for `attention`.
-             */
-            rev: number | null;
             /**
              * Seq
              * @description Grows by one per event across this daemon run; the first is 1.

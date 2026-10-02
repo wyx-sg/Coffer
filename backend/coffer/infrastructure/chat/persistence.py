@@ -76,7 +76,6 @@ class ConversationRepo:
             archived_at=_tz(row.archived_at) if row.archived_at else None,
             channel_uid=row.channel_uid,
             peer_chat_id=row.peer_chat_id,
-            owner=row.owner,
         )
 
     async def create(self, conversation: Conversation) -> Conversation:
@@ -89,7 +88,6 @@ class ConversationRepo:
                 updated_at=conversation.updated_at,
                 channel_uid=conversation.channel_uid,
                 peer_chat_id=conversation.peer_chat_id,
-                owner=conversation.owner,
             )
             session.add(row)
             await session.commit()
@@ -109,13 +107,11 @@ class ConversationRepo:
         limit: int | None = None,
         after: tuple[datetime, str] | None = None,
     ) -> list[Conversation]:
-        """The developer's OWN conversations, newest activity first with the id
-        breaking ties — an owned one is never listed (see
-        ``ConversationModel.owner``). ``archived=False`` is the active threads,
+        """Conversations newest activity first with the id breaking ties.
+        ``archived=False`` is the active threads,
         ``archived=True`` the archived ones. ``after`` (the previous page's last
         ``(updated_at, id)``) and ``limit`` cut one page of that order; without
-        them the whole listing comes back. Reading one by id is untouched: a
-        task's page opens the conversation it owns.
+        them the whole listing comes back.
         """
         async with self._sm() as session:
             stmt = select(ConversationModel).order_by(
@@ -126,7 +122,6 @@ class ConversationRepo:
                 if archived
                 else ConversationModel.archived_at.is_(None)
             )
-            stmt = stmt.where(ConversationModel.owner.is_(None))
             if after is not None:
                 stmt = stmt.where(
                     newest_first_after(ConversationModel.updated_at, ConversationModel.id, after)
@@ -259,25 +254,26 @@ class MessageRepo:
         *,
         content: list[ContentBlock],
         status: str,
+        model_id: str | None,
         prompt_tokens: int | None,
         completion_tokens: int | None,
     ) -> None:
         """Update an existing (streaming) message with its final content/status.
 
         Used to finalize the streaming placeholder written at turn start, so a
-        completed turn occupies exactly one row.
+        completed turn occupies exactly one row. ``model_id`` is the model the
+        adapter reported while the turn ran; ``None`` leaves the column as it is.
         """
+        values: dict[str, Any] = {
+            "content": _encode_content(content),
+            "status": status,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+        }
+        if model_id is not None:
+            values["model_id"] = model_id
         async with self._sm() as session:
-            stmt = (
-                update(MessageModel)
-                .where(MessageModel.id == message_id)
-                .values(
-                    content=_encode_content(content),
-                    status=status,
-                    prompt_tokens=prompt_tokens,
-                    completion_tokens=completion_tokens,
-                )
-            )
+            stmt = update(MessageModel).where(MessageModel.id == message_id).values(**values)
             await session.execute(stmt)
             await session.commit()
 
@@ -371,11 +367,12 @@ class MessageRepo:
             await session.execute(stmt)
             await session.commit()
 
-    async def sweep_streaming(self) -> int:
-        """Flip all ``status='streaming'`` rows to ``'failed'``.
+    async def sweep_streaming(self, *, before: datetime | None = None) -> int:
+        """Flip ``status='streaming'`` rows to ``'failed'``.
 
-        Called once at startup to recover from a prior crash.
-        Returns the number of rows updated.
+        Called once at startup to recover from a prior crash; ``before`` limits it
+        to rows created earlier than the daemon's own start. Returns the number of
+        rows updated.
         """
         async with self._sm() as session:
             stmt = (
@@ -383,6 +380,8 @@ class MessageRepo:
                 .where(MessageModel.status == "streaming")
                 .values(status="failed")
             )
+            if before is not None:
+                stmt = stmt.where(MessageModel.created_at < before)
             result = await session.execute(stmt)
             await session.commit()
             return result.rowcount or 0

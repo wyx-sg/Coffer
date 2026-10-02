@@ -56,7 +56,7 @@ export function EditProviderDialog({ open, provider, use, onClose, onSaved }: Pr
   const update = useUpdateProvider();
   const rename = useRenameResource();
   const test = useEndpointTest(t);
-  const lockedBy = useLockedBy(provider, use);
+  const lockedBy = useLockedBy(use);
   const form = useForm<EditValues>({ resolver: zodResolver(editSchema(t)) });
   const { register, control, handleSubmit, reset, getValues, formState } = form;
 

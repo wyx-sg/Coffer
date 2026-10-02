@@ -78,7 +78,7 @@ export function useChannelMirror(conversation: Conversation, messages: Message[]
     : null;
   const owed = useMemo(() => undeliveredMessageIds(mirror, messages), [mirror, messages]);
   const notDeliveredTo = (messageId: string) =>
-    mirror && owed.has(messageId) ? platformName(mirror.platform) : undefined;
+    mirror && owed.has(messageId) ? platformName(mirror.platform ?? "") : undefined;
   return { mirror, notDeliveredTo };
 }
 
@@ -103,7 +103,7 @@ export function useCreateConversation() {
   // No onError toast here: ChatPage renders a contextual create-error banner
   // next to the draft composer, so a toast would double-surface the same failure.
   return useMutation({
-    mutationFn: (body: ConversationCreate | undefined) => chatApi.createConversation(body),
+    mutationFn: (body: ConversationCreate) => chatApi.createConversation(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
     },

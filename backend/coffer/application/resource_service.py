@@ -1,7 +1,7 @@
 """Kind-agnostic Resource CRUD service.
 
 Every resource is addressed by its **uid** — opaque, immutable, and the same
-value on every machine that holds it (ADR resource-identity-is-an-immutable-uid).
+value on every machine that holds it (ADR identity-is-the-uid-inside-the-file).
 ``get_by_name`` is the one exception and exists for one job: resolving a label a
 human supplied, at the surface they supplied it to. Nothing inside the daemon
 should reach for it.
@@ -37,16 +37,17 @@ from coffer.application import resource_kind_ops
 from coffer.application.audit_service import AuditService
 from coffer.application.repos import ResourceRepo
 from coffer.application.resource_actor import acting_as
+from coffer.application.resource_bindings import BindingSettlerPort, settle_bindings
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
     ConfigValidationError,
     GenericCreateNotAllowed,
     ResourceNotFound,
-    SecretMissing,
     UnknownKind,
 )
 from coffer.domain.resource import Kind, Resource
 from coffer.domain.scope import Scope
+from coffer.domain.secret_errors import SecretMissing
 from coffer.domain.vault.layout import StorageClass
 
 _logger = logging.getLogger(__name__)
@@ -75,20 +76,28 @@ class ResourceService:
         repo: ResourceRepo,
         audit: AuditService,
         secrets: _SecretStorePort | None = None,
+        bindings: BindingSettlerPort | None = None,
     ) -> None:
         self._kinds = kinds
         self._repo = repo
         self._audit = audit
         self._secrets = secrets
+        self._bindings = bindings
+
+    def set_binding_settler(self, settler: BindingSettlerPort | None) -> None:
+        """Install the post-register seam, once every kind has declared where
+        its secrets go (spec secret "Approve a secret's binding when its
+        destination is registered")."""
+        self._bindings = settler
 
     async def _probe_secrets(self, kind_def: Kind, config: dict[str, Any]) -> None:
         """Raise SecretMissing if any cited secret_ref is absent from the secret store.
 
         Called BEFORE persisting a Resource so a missing secret never
         leaves a partial resource file behind. Skipped if no secret
-        store is wired (back-compat for tests that don't need secret checks).
+        store is wired (tests that need no secret checks).
 
-        The store's ``get`` is a blocking SQLite read, so it runs in a worker
+        The store's ``get`` is a blocking file read, so it runs in a worker
         thread: on the loop it would stall every other request for as long as
         the read (and any lock it waits on) takes.
         """
@@ -121,10 +130,6 @@ class ResourceService:
         """Whether the kind's resources carry an enabled switch at all."""
         return self._require_kind(kind).toggleable
 
-    def titled(self, kind: str) -> bool:
-        """Whether the kind's resources carry a display title (``Kind.titled``)."""
-        return self._require_kind(kind).titled
-
     def _validate_config(self, kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]:
         try:
             validated = kind_def.config_schema.model_validate(config)
@@ -144,17 +149,12 @@ class ResourceService:
         description: str | None = None,
         *,
         allow_lifecycle_kind: bool = False,
-        uid: str | None = None,
         title: str | None = None,
     ) -> Resource:
-        """Create a resource and mint its identity.
-
-        ``uid`` is supplied by exactly one caller — the sync applier, putting a
-        resource this vault has not seen before at the identity the other
-        machine already gave it. Every other path leaves it ``None`` and gets a
-        fresh random one, because minting a uid from anything a user can change
-        is what this whole design removed.
-        """
+        """Create a resource and mint its identity: a fresh random uid, because
+        minting one from anything a user can change is what this whole design
+        removed. A resource that arrives from another machine arrives as a file
+        carrying its uid, never through here."""
         kind_def = self._require_kind(kind)
         # spec resource-framework "Keep creation a per-kind seam": a kind that
         # owns creation invariants beyond config (skill master folder, agent
@@ -181,8 +181,8 @@ class ResourceService:
                     await check
             except ValueError as e:
                 raise ConfigValidationError(str(e)) from e
-        # Probe before any DB write — a missing secret must not leave a
-        # half-created resource row behind. Spec mcp-gateway "Manage MCP
+        # Probe before any write — a missing secret must not leave a
+        # half-created resource file behind. Spec mcp-gateway "Manage MCP
         # servers as resources" requires registration to fail naming the missing ref.
         await self._probe_secrets(kind_def, validated)
         now = datetime.now(tz=UTC)
@@ -191,7 +191,7 @@ class ResourceService:
                 Resource(
                     # The identity, minted here so it is decided before anything
                     # is written; the store files it inside the resource's file.
-                    uid=uid or uuid.uuid4().hex,
+                    uid=uuid.uuid4().hex,
                     kind=kind,
                     name=name,
                     description=description,
@@ -218,6 +218,7 @@ class ResourceService:
             actor=actor,
             details={"config": resource_kind_ops.audit_safe_config(kind_def, validated)},
         )
+        await settle_bindings(self._bindings, created, actor)
         return created
 
     async def list(
@@ -284,7 +285,7 @@ class ResourceService:
             raise GenericCreateNotAllowed(before.kind)
         validated = self._validate_config(kind_def, new_config)
         # Same register-time invariant: if the update introduces a secret
-        # ref that does not exist in the secret store, fail before the DB write.
+        # ref that does not exist in the secret store, fail before the write.
         await self._probe_secrets(kind_def, validated)
         # Per-kind pre-write hook. Only ``channel`` supplies one: it
         # re-validates ``default_agent`` against the live agent registry and
@@ -305,6 +306,7 @@ class ResourceService:
                 "after": resource_kind_ops.audit_safe_config(kind_def, validated),
             },
         )
+        await settle_bindings(self._bindings, updated, actor)
         return updated
 
     async def set_enabled(self, uid: str, enabled: bool, actor: str) -> Resource:
@@ -365,10 +367,13 @@ class ResourceService:
             # Pre-write guard: refuses BEFORE on_delete tears anything down,
             # so a refused delete leaves the resource exactly as it was.
             kind_def.validate_delete(snapshot)
+        # A file that cannot be removed now (read-only, or an unsettled edit)
+        # is refused before the kind's hook tears its on-disk half down.
+        await self._repo.ensure_writable(uid)
         if kind_def.on_delete is not None:
             # Await an async on_delete hook so side effects (e.g.
             # evicting live upstream connections, tearing down skill symlinks)
-            # COMPLETE before the row is removed. A sync hook still runs
+            # COMPLETE before the file is removed. A sync hook still runs
             # synchronously. A hook that raises aborts the deletion (propagates
             # to the caller). Otherwise a follow-up read inside the hook would
             # hit ResourceNotFound and the cleanup would be silently dropped.

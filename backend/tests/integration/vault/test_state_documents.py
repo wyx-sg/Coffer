@@ -1,4 +1,4 @@
-"""A kind's state as vault documents (plan D13; spec vault-storage): MCP
+"""A kind's state as vault documents (spec vault-storage): MCP
 capability switches, channel pairings and the engine's settings, each read at
 ``HEAD`` and following its owner's rename and delete in the owner's commit."""
 

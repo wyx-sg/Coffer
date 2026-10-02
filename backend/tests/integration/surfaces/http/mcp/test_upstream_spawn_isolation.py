@@ -24,6 +24,7 @@ async def test_a_spawned_upstream_does_not_inherit_the_daemons_environment(
     """
     from coffer.domain.errors import UpstreamUnavailable
     from coffer.domain.mcp.server_config import StdioTransport
+    from coffer.infrastructure.mcp import stdio_spawn
     from coffer.infrastructure.mcp import subprocess as sp
 
     monkeypatch.setenv("COFFER_DAEMON_SECRET", "super-secret-value")
@@ -43,7 +44,7 @@ async def test_a_spawned_upstream_does_not_inherit_the_daemons_environment(
         captured["env"] = dict(getattr(params, "env", None) or {})
         return _StopCtx()
 
-    monkeypatch.setattr(sp, "stdio_client", _fake_stdio_client)
+    monkeypatch.setattr(stdio_spawn, "stdio_client", _fake_stdio_client)
 
     conn = sp.StdioUpstreamConnection(
         transport=StdioTransport(command="/bin/true", args=[], env={"MY_STATIC": "x"}),
@@ -70,6 +71,7 @@ async def test_a_failed_spawn_reports_the_exception_type_and_not_its_text(
     """
     from coffer.domain.errors import UpstreamUnavailable
     from coffer.domain.mcp.server_config import StdioTransport
+    from coffer.infrastructure.mcp import stdio_spawn
     from coffer.infrastructure.mcp import subprocess as sp
 
     secret = "token=SECRET-abc123"
@@ -77,7 +79,7 @@ async def test_a_failed_spawn_reports_the_exception_type_and_not_its_text(
     def _boom(params: object, **_kwargs: object) -> object:
         raise ValueError(f"connect failed https://host/?{secret}")
 
-    monkeypatch.setattr(sp, "stdio_client", _boom)
+    monkeypatch.setattr(stdio_spawn, "stdio_client", _boom)
     conn = sp.StdioUpstreamConnection(
         transport=StdioTransport(command="/bin/true", args=[]),
         env_overlay={},

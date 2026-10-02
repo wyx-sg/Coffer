@@ -51,7 +51,6 @@ from coffer.domain.memory.hook_entries import (
     find_command,
     find_installed,
     install_entries,
-    install_entry,
     is_installed,
     is_marked,
     remove_entry,
@@ -142,7 +141,7 @@ def hook_invocation(agent_uid: str, *, cli: str = "coffer") -> str:
     cannot locate its own CLI.
 
     The agent is named by its **uid**, not by its registry name (ADR
-    resource-identity-is-an-immutable-uid). An installed hook is a string
+    identity-is-the-uid-inside-the-file). An installed hook is a string
     sitting in somebody else's settings file for months; a name is a label the
     user may edit in that time, and the hook would then report an agent that no
     longer answers to anything.
@@ -318,7 +317,6 @@ __all__ = [
     "find_installed",
     "hook_invocation",
     "install_entries",
-    "install_entry",
     "is_installed",
     "is_marked",
     "remove_entry",

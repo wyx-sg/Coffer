@@ -1,6 +1,6 @@
 // src/components/skills/skillSourceHelpers.ts
 // Pure helpers for the skill source surfaces: path cleaning, archive names, the found step's choice rules, commit and repository labels, unified-diff rows.
-import type { ChangeOp, DiffLine } from "@/components/change-preview/changeCounts";
+import type { ChangeOp, DiffLine } from "@/lib/changePreview/changeCounts";
 import type { SkillFileChange, SkillStaging, StagedSkill } from "@/lib/api/skills";
 
 /** A pasted path often carries quotes (a shell's "Copy as path") or a trailing newline. */

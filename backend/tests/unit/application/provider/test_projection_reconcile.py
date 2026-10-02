@@ -1,12 +1,13 @@
 """The provider projection target's direction policy, over in-memory fakes.
 
-Ported from the boot heal it replaced. The motivating machine: an
-``is_active`` connection routed to Claude Code, and ``settings.json`` carrying
-no Coffer keys at all — the agent had been on its built-in login the whole
-time, while every surface answered from the flag. What these pin down is the
-DIRECTION: on a pass with no warrant Coffer corrects its own record and never
-rewrites the agent's config, because a leftover flag is no warrant to re-route
-somebody's agent.
+Ported from the boot heal it replaced. The motivating machine: an agent whose
+record names a connection, and ``settings.json`` carrying no Coffer keys at all
+— the agent had been on its built-in login the whole time, while every surface
+answered from the record. What these pin down is the DIRECTION and its reach:
+on a pass with no warrant Coffer corrects its own record — that one agent's,
+no other — and never rewrites the agent's config, because a leftover choice is
+no warrant to re-route somebody's agent. The cases over real files and a real
+database are in ``tests/integration/providers/test_projection_reconcile.py``.
 """
 
 from __future__ import annotations
@@ -19,7 +20,6 @@ from typing import Any
 from coffer.application.provider.projection_reconcile import TARGET, ProviderProjectionTarget
 from coffer.application.provider.projector import ProviderProjector
 from coffer.application.reconcile.reconciler import Reconciler
-from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.api_key_helper import proxy_token_helper
 from coffer.domain.provider.projection import (
     apply_anthropic_settings,
@@ -60,26 +60,30 @@ def _resource(
     )
 
 
-def _agent(config_dir: pathlib.Path, *, enabled: bool = True) -> Resource:
+def _agent(
+    config_dir: pathlib.Path,
+    *,
+    enabled: bool = True,
+    connection_uid: str | None = _CONNECTION_UID,
+) -> Resource:
     return _resource(
         "agent",
         "claude-code",
-        {"type": "claude_code", "config_dir": str(config_dir)},
+        {
+            "type": "claude_code",
+            "config_dir": str(config_dir),
+            "connection_uid": connection_uid,
+        },
         uid=_AGENT_UID,
         enabled=enabled,
     )
 
 
-def _connection(*, is_active: bool = True) -> Resource:
+def _connection() -> Resource:
     return _resource(
         "provider",
         "agnes",
-        {
-            "protocol": "openai",
-            "base_url": _BASE_URL,
-            "secret_ref": "agnes-key",
-            "is_active": is_active,
-        },
+        {"protocol": "openai", "base_url": _BASE_URL, "secret_ref": "agnes-key"},
         uid=_CONNECTION_UID,
         # The shape that surfaced this: an openai endpoint routed to Claude
         # Code by its per-agent scope, which names the agent by uid.
@@ -142,7 +146,6 @@ def _projected_settings(helper: str | None = None) -> str:
         base_url=_PROXY_URL,
         model=None,
         api_key_helper=helper or proxy_token_helper(_AGENT_UID, coffer_cli=_CLI),
-        loopback_proxy=True,
     )
 
 
@@ -152,14 +155,14 @@ async def _run(
     providers: list[Resource],
     *,
     trigger: Trigger = Trigger.BOOT,
-    fail_deactivate: bool = False,
-) -> tuple[list[ItemResult], list[AgentType]]:
-    calls: list[AgentType] = []
+    fail_clear: bool = False,
+) -> tuple[list[ItemResult], list[str]]:
+    calls: list[str] = []
 
-    async def deactivate(agent_type: AgentType) -> object:
-        if fail_deactivate:
+    async def clear_choice(agent_uid: str) -> object:
+        if fail_clear:
             raise RuntimeError("registry is busy")
-        calls.append(agent_type)
+        calls.append(agent_uid)
         return None
 
     reconciler = Reconciler(audit=_Audit())  # type: ignore[arg-type]
@@ -169,7 +172,7 @@ async def _run(
             agents=_Lister(agents),
             projector=ProviderProjector(store, agents=agent_catalog(), cli_resolver=lambda: _CLI),
             store=store,
-            deactivate=deactivate,
+            clear_choice=clear_choice,
         )
     )
     report = await reconciler.run(trigger=trigger)
@@ -177,16 +180,42 @@ async def _run(
     return [r for r in report.results if r.change.difference.target == TARGET], calls
 
 
-async def test_a_flag_the_agent_config_denies_is_cleared(tmp_path: pathlib.Path) -> None:
-    # settings.json exists and is perfectly valid — it simply has none of
-    # Coffer's keys in it, which is exactly what was found in the wild.
-    store = _Store({_settings(tmp_path): json.dumps({"env": {}, "theme": "dark"})})
-    results, calls = await _run(store, [_agent(tmp_path)], [_connection()])
+async def test_a_contradicted_choice_clears_only_that_agents_record(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The choice is one field of one agent: Claude Code's file lost Coffer's
+    keys, so ITS record is cleared; a Codex agent beside it is judged on its own
+    (here it runs on no connection and its file carries keys, which is only
+    reported), and no file is written to clear a choice."""
+    codex_dir = tmp_path / "codex"
+    codex_dir.mkdir()
+    codex = _resource(
+        "agent",
+        "codex",
+        {"type": "codex", "config_dir": str(codex_dir), "connection_uid": None},
+        uid="c" * 32,
+    )
+    connection = _resource(
+        "provider",
+        "agnes",
+        {"protocol": "openai", "base_url": _BASE_URL, "secret_ref": "k"},
+        uid=_CONNECTION_UID,
+    )
+    store = _Store(
+        {
+            _settings(tmp_path): json.dumps({"theme": "dark"}),
+            codex_dir / "config.toml": '[model_providers.coffer]\nname = "x"\n',
+        }
+    )
+    results, calls = await _run(
+        store, [_agent(tmp_path), codex], [connection], trigger=Trigger.PERIOD
+    )
 
-    assert calls == [AgentType.CLAUDE_CODE], "the agent type must be put back on its built-in login"
-    assert [r.change.decision.reason_code for r in results] == ["flag_contradicted"]
+    assert calls == [_AGENT_UID]
+    assert "choice_contradicted" in [r.change.decision.reason_code for r in results]
     assert "built-in login" in results[0].change.decision.reason
-    assert store.writes == 0, "the agent's config is never written on a stale flag"
+    assert json.loads(store.files[_settings(tmp_path)]) == {"theme": "dark"}
+    assert store.writes == 0, "no agent's file is written to clear a choice"
 
 
 async def test_a_flag_the_agent_config_confirms_is_left_alone(tmp_path: pathlib.Path) -> None:
@@ -197,20 +226,15 @@ async def test_a_flag_the_agent_config_confirms_is_left_alone(tmp_path: pathlib.
     assert calls == []
 
 
-async def test_an_inactive_connection_is_not_touched(tmp_path: pathlib.Path) -> None:
+async def test_an_agent_on_no_connection_is_not_touched(tmp_path: pathlib.Path) -> None:
     store = _Store({_settings(tmp_path): "{}"})
-    results, calls = await _run(store, [_agent(tmp_path)], [_connection(is_active=False)])
+    results, calls = await _run(store, [_agent(tmp_path, connection_uid=None)], [_connection()])
 
     assert results == []
     assert calls == []
 
 
-async def test_no_registered_agent_of_that_type_means_another_machine(
-    tmp_path: pathlib.Path,
-) -> None:
-    """The flag rides the synced row. With no Claude Code registered here it
-    describes some other machine's agents, and clearing it would undo a switch
-    the user made there."""
+async def test_a_connection_no_registered_agent_runs_on_judges_nothing() -> None:
     results, calls = await _run(_Store(), [], [_connection()])
 
     assert results == []
@@ -226,7 +250,7 @@ async def test_a_disabled_agent_is_not_judged(tmp_path: pathlib.Path) -> None:
 
 
 async def test_an_unreadable_config_is_never_guessed_absent(tmp_path: pathlib.Path) -> None:
-    """Guessing "absent" from a file we could not read would clear a flag on no
+    """Guessing "absent" from a file we could not read would clear a choice on no
     evidence — the worse of the two mistakes."""
     results, calls = await _run(_UnreadableStore(), [_agent(tmp_path)], [_connection()])
 
@@ -234,32 +258,21 @@ async def test_an_unreadable_config_is_never_guessed_absent(tmp_path: pathlib.Pa
     assert calls == []
 
 
-async def test_a_failing_deactivate_fails_the_item_not_the_pass(tmp_path: pathlib.Path) -> None:
+async def test_a_failing_clear_fails_the_item_not_the_pass(tmp_path: pathlib.Path) -> None:
     store = _Store({_settings(tmp_path): "{}"})
-    results, _ = await _run(store, [_agent(tmp_path)], [_connection()], fail_deactivate=True)
+    results, _ = await _run(store, [_agent(tmp_path)], [_connection()], fail_clear=True)
 
     assert [r.outcome for r in results] == [Outcome.FAILED]
     assert "registry is busy" in (results[0].error or "")
 
 
-async def test_keys_without_an_active_connection_are_reported(tmp_path: pathlib.Path) -> None:
-    store = _Store({_settings(tmp_path): _projected_settings()})
-    results, calls = await _run(
-        store, [_agent(tmp_path)], [_connection(is_active=False)], trigger=Trigger.PERIOD
-    )
-
-    assert [r.change.decision.reason_code for r in results] == ["projection_unclaimed"]
-    assert results[0].outcome is Outcome.PLANNED
-    assert store.writes == 0 and calls == []
-
-
-async def test_an_import_removes_keys_no_active_connection_claims(tmp_path: pathlib.Path) -> None:
-    """A switch made on another machine reaches this one's agents: after an
-    import a type with no active connection is de-projected (spec
-    provider-switching "Converge connections across machines")."""
+async def test_an_import_removes_keys_no_connection_claims(tmp_path: pathlib.Path) -> None:
+    """After a sync round's import an agent that runs on no connection is
+    de-projected (spec provider-switching "Converge connections across
+    machines")."""
     store = _Store({_settings(tmp_path): _projected_settings()})
     results, _ = await _run(
-        store, [_agent(tmp_path)], [_connection(is_active=False)], trigger=Trigger.IMPORT
+        store, [_agent(tmp_path, connection_uid=None)], [_connection()], trigger=Trigger.IMPORT
     )
 
     assert [r.outcome for r in results] == [Outcome.APPLIED]

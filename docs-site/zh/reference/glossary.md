@@ -40,13 +40,9 @@ Coffer 在界面、CLI、API 和文档中使用的术语，按英文字母顺序
 
 [技能](#skill)与它被投递到的智能体之间的联系。Coffer 投递技能的方式，是在智能体的技能目录里放一个指向[主存储](#master-store)中该技能目录的符号链接；`coffer skill verify` 会报告任何偏移。见[技能](/zh/guides/skills)。
 
-### 构建渠道（Build channel） {#build-channel}
-
-构建是 `stable`（打了标签的正式版）还是 `dev`（其他一切，包括从源码运行）。渠道决定每个[实验功能](#experimental-feature)的默认状态。见[分发与发布](/zh/architecture/distribution#release-channels)。
-
 ### 自带登录（Built-in login） {#built-in-login}
 
-智能体自己的认证方式，即 Coffer 把某个[连接](#connection)[投影](#projection)进去之前的状态。`coffer provider builtin <wire>` 会让智能体回到它。见[模型提供商](/zh/guides/providers)。
+智能体自己的认证方式，即 Coffer 把某个[连接](#connection)[投影](#projection)进去之前的状态。`coffer provider builtin <agent_type>` 会让智能体回到它。见[模型提供商](/zh/guides/providers)。
 
 ### 内置工具（Built-in tool） {#built-in-tool}
 
@@ -80,7 +76,7 @@ Coffer 自带并自行维护的技能。它是 Coffer 给智能体的说明书�
 
 ### 一轮整理（Curation pass） {#curation-pass}
 
-[内部引擎](#internal-engine)对一个[知识集](#collection)做的一次有边界的改写：取一个待处理项（来自[收件箱](#inbox)的新[材料](#material)，或自上次整理以来被编辑过的文档），把它合并进知识集的文档，最多写八个文件。它按定时器运行，也可按需运行（`coffer knowledge curate`）。见[知识](/zh/architecture/knowledge#the-curation-pass)。
+[内部引擎](#internal-engine)对一个[知识集](#collection)做的一次有边界的改写：取一个待处理项（来自[收件箱](#inbox)的新[材料](#material)，或自上次整理以来被编辑过的文档），把它整理进知识集的文档，最多写八个文件。它按定时器运行，也可按需运行（`coffer knowledge curate`）。见[知识](/zh/architecture/knowledge#the-curation-pass)。
 
 ## D {#d}
 
@@ -116,7 +112,7 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 ### 实验功能（Experimental feature） {#experimental-feature}
 
-在 stable 构建中默认关闭、可按机器开启的能力。目前没有实验功能：同步、知识和记忆已在 1.0 转正，始终开启。功能关闭期间，它的路由返回 `404 FEATURE_DISABLED`，它的工具从 MCP 工具列表中消失，它的界面被隐藏；数据会保留。见[实验功能](/zh/guides/experimental-features)和[配置](/zh/reference/configuration#experimental-features)。
+默认关闭、可按机器开启的能力。目前有四个：`knowledge`（知识）、`memory`（记忆）、`sync`（保险库同步）和 `models`（模型提供商、代理和用量）。功能关闭期间，它的路由返回 `404 FEATURE_DISABLED`，它的工具从 MCP 工具列表中消失，它的界面看起来就像不存在；数据会保留。见[实验功能](/zh/guides/experimental-features)和[配置](/zh/reference/configuration#experimental-features)。
 
 ## I {#i}
 
@@ -160,7 +156,7 @@ Coffer 自己对语言模型的使用，用于它的[维护任务](#upkeep-pass)
 
 ### 材料（Material） {#material}
 
-提交给知识集的新知识，来自 `coffer__write`、`coffer knowledge write`、上传或消息渠道。材料在[收件箱](#inbox)里等待，直到[一轮整理](#curation-pass)把它合并进文档。见[知识](/zh/guides/knowledge)。
+提交给知识集的新知识，来自 `coffer__write`、`coffer knowledge write`、上传或消息渠道。材料在[收件箱](#inbox)里等待，直到[一轮整理](#curation-pass)把它整理进文档。见[知识](/zh/guides/knowledge)。
 
 ### MCP 网关（MCP gateway） {#mcp-gateway}
 

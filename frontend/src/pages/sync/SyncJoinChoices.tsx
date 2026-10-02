@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast";
-import { fsApi } from "@/lib/api/fs";
+import { useFsActions } from "@/lib/fsActions";
 import type { ConflictFile } from "@/lib/api/sync";
 import { useSyncStatus } from "@/lib/hooks/useSync";
 import { useChooseJoin, useJoinChoices } from "@/lib/hooks/useSyncStop";
@@ -38,6 +38,7 @@ function edited(t: ReturnType<typeof useTranslation>["t"], file: ConflictFile, l
 export function SyncJoinChoices() {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
+  const fs = useFsActions();
   const { data } = useJoinChoices(true);
   const vault = useSyncStatus().data?.vault_path ?? null;
   const choose = useChooseJoin();
@@ -103,7 +104,7 @@ export function SyncJoinChoices() {
                   size="icon-sm"
                   aria-label={t("sync.joinChoices.open", { path: file.path })}
                   onClick={() =>
-                    void fsApi
+                    void fs
                       .open(`${vault}/${file.path}`)
                       .catch(() => toast.error(t("fileActions.openFailed")))
                   }

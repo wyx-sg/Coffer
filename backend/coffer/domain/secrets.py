@@ -30,7 +30,8 @@ SECRET_NAMESPACE = "secret/"
 SECRET_URI_PREFIX = "coffer://secret/"
 #: One ref segment, at most 64 characters: the name is quoted in files Coffer
 #: cannot see, so it is fixed after creation.
-_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+# One segment of ``[A-Za-z0-9_.-]``, never only dots: ``.`` and ``..`` name no file.
+_NAME_RE = re.compile(r"^(?!\.+$)[A-Za-z0-9_.-]{1,64}$")
 _URI_RE = re.compile(r"coffer://secret/([A-Za-z0-9_.-]{1,64})")
 
 #: What a pending approval asks the person to allow.
@@ -38,7 +39,6 @@ ApprovalOp = Literal["bind", "add_secret", "replace_value", "disable_protection"
 ApprovalStatus = Literal["pending", "approved", "rejected", "superseded"]
 
 #: What a presence grant may authorise. Each is one operation on one target.
-GrantOp = Literal["reveal", "approve", "export_master_key"]
 GRANT_OPS: tuple[str, ...] = ("reveal", "approve", "export_master_key")
 
 

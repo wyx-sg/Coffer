@@ -326,7 +326,6 @@ class AgentService:
         clear_effort: bool = False,
         tier_models: dict[str, str] | None = None,
         clear_tiers: bool = False,
-        wire_api: str | None = None,
         actor: str = "api",
     ) -> Resource:
         """Persist this agent's per-agent model binding (spec agent-registry
@@ -350,8 +349,6 @@ class AgentService:
             overrides["tier_models"] = None
         elif tier_models is not None:
             overrides["tier_models"] = tier_models
-        if wire_api is not None:
-            overrides["wire_api"] = wire_api
         if not overrides:
             return existing
         try:
@@ -363,6 +360,26 @@ class AgentService:
             new_config=new_cfg.model_dump(mode="json"),
             actor=actor,
             allow_lifecycle_kind=True,  # creation seam: value-level binding change only
+        )
+
+    async def set_connection(
+        self, uid: str, connection_uid: str | None, *, actor: str = "api"
+    ) -> Resource:
+        """Record the provider connection this agent runs on (spec agent-registry
+        "Carry the connection an agent runs on on the agent record"), or ``None``
+        for its own built-in login. Writes the record only: the native config
+        file is the provider switch's business (``ProviderService.activate``),
+        which calls this after it has projected."""
+        existing = await self.get(uid)
+        cfg = AgentConfig.model_validate(existing.config)
+        if cfg.connection_uid == connection_uid:
+            return existing
+        new_cfg = AgentConfig.model_validate(cfg.model_dump() | {"connection_uid": connection_uid})
+        return await self._rs.update_config(
+            uid,
+            new_config=new_cfg.model_dump(mode="json"),
+            actor=actor,
+            allow_lifecycle_kind=True,  # value-level change only; no directory moves
         )
 
     async def remove(self, *, uid: str, actor: str = "api") -> None:

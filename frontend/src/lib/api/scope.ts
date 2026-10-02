@@ -3,14 +3,13 @@
 // Request functions for the framework-level per-agent activation scope
 // (ADR per-agent-resource-scope): GET/PUT /resources/{uid}/scope, served by
 // resource_routes.py for every kind rather than by a per-kind endpoint.
-// Hand-written like the sibling modules, because the generated client does not
-// cover these sub-routes; transport via the shared `call` (.agents/frontend.md §4).
+// Transport via the typed client (.agents/frontend.md §4).
 //
 // They live here rather than inside useScope.ts because the bulk reach bar
 // writes scope for a whole selection through useBulkMutate, which takes a plain
 // promise-returning function, never a toasting mutation hook (one summary toast,
 // not one per row).
-import { call, enc } from "@/lib/api/call";
+import { getApiClient, unwrap } from "@/lib/api/client";
 import type { components } from "@/lib/api/types";
 import type { components as ResourceFrameworkWire } from "@/lib/api/generated/resource-framework";
 
@@ -41,14 +40,13 @@ export type ResourceScope = ResourceFrameworkWire["schemas"]["ResourceScopeOut"]
 
 type ResourceOut = components["schemas"]["ResourceOut"];
 
-function scopePath(uid: string): string {
-  return `/resources/${enc(uid)}/scope`;
-}
-
 export const scopeApi = {
-  get: (uid: string): Promise<ResourceScope> => call<ResourceScope>(scopePath(uid)),
+  get: (uid: string): Promise<ResourceScope> =>
+    unwrap(getApiClient().GET("/resources/{uid}/scope", { params: { path: { uid } } })),
 
   /** Replace the scope; `null` clears it back to unscoped — every agent. */
   put: (uid: string, scope: Scope | null): Promise<ResourceOut> =>
-    call<ResourceOut>(scopePath(uid), { method: "PUT", body: { scope } }),
+    unwrap(
+      getApiClient().PUT("/resources/{uid}/scope", { params: { path: { uid } }, body: { scope } }),
+    ),
 };

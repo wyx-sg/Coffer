@@ -10,6 +10,7 @@ import pytest
 from coffer.domain.usage.pricing import ModelPrice
 from coffer.infrastructure.provider.reported_prices import shared_store
 from tests.integration.surfaces.http.test_provider_routes import (
+    _activate,
     _agent_dir,
     _anthropic_body,
     _app,
@@ -37,7 +38,7 @@ def test_fallbacks_follow_the_list_order(tmp_path, monkeypatch):
         primary = _new(c, _offering("a-primary", "sk-a"))
         zed = _new(c, _offering("z-second", "sk-z"))
         mid = _new(c, _offering("m-third", "sk-m"))
-        assert c.post(f"/api/v1/providers/{primary}/activate").status_code == 200
+        assert _activate(c, primary).status_code == 200
         # Nobody has placed them: alphabetical, as before.
         assert [u for u, _ in _route_keys(c)[cc]] == [primary, mid, zed]
 
@@ -82,7 +83,7 @@ def test_a_provider_switched_off_as_fallback_is_left_out(tmp_path, monkeypatch):
         primary = _new(c, _offering("a-primary", "sk-a"))
         spare = _new(c, _offering("b-spare", "sk-b"))
         assert c.get(f"/api/v1/providers/{spare}").json()["fallback"] is True
-        assert c.post(f"/api/v1/providers/{primary}/activate").status_code == 200
+        assert _activate(c, primary).status_code == 200
         assert [u for u, _ in _route_keys(c)[cc]] == [primary, spare]
 
         r = c.patch(f"/api/v1/providers/{spare}", json={"fallback": False})

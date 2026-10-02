@@ -22,7 +22,6 @@ import os
 import re
 import tempfile
 from collections.abc import Mapping
-from pathlib import Path
 
 from coffer.domain.vault.errors import VaultFileStale
 from coffer.domain.vault.trees import ConflictEntry, MergeResult, TreeChange
@@ -138,10 +137,6 @@ def renames(repo: VaultRepository, a: str, b: str) -> list[tuple[str, str]]:
     return out
 
 
-def ls_tree(repo: VaultRepository, tree: str, prefix: str = "") -> dict[str, str]:
-    return repo.tree(tree, prefix)
-
-
 def hash_blob(repo: VaultRepository, data: bytes) -> str:
     """Write ``data`` as a blob into the object store; answer its id."""
     return git.text(git.run(repo.root, "hash-object", "-w", "--stdin", stdin=data)).strip()
@@ -251,10 +246,6 @@ def delete_tag(repo: VaultRepository, name: str) -> None:
     git.run(repo.root, "tag", "-d", name, check=False)
 
 
-def path_exists(root: Path, path: str) -> bool:
-    return (root / path).exists()
-
-
 __all__ = [
     "MIN_GIT",
     "ConflictEntry",
@@ -268,7 +259,6 @@ __all__ = [
     "git_version",
     "hash_blob",
     "is_ancestor",
-    "ls_tree",
     "merge_base",
     "merge_trees",
     "renames",

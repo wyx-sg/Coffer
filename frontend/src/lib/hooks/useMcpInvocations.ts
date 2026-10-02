@@ -1,12 +1,8 @@
 // frontend/src/lib/hooks/useMcpInvocations.ts
 import { useQuery } from "@tanstack/react-query";
-import { getApiClient } from "@/lib/api/client";
-import { ApiError, throwApiError } from "@/lib/api/errors";
-import type { components } from "@/lib/api/types";
 import { fetchCallPage } from "@/lib/api/activity";
+import { mcpServersApi } from "@/lib/api/mcpServers";
 import { mcpInvocationsKey } from "@/lib/api/queryKeys";
-
-type InvocationListOut = components["schemas"]["InvocationListOut"];
 
 export type InvocationStatusFilter = "ok" | "error" | "timeout" | "denied";
 
@@ -31,22 +27,10 @@ export function useMcpInvocations({
 }: UseMcpInvocationsArgs) {
   return useQuery({
     queryKey: mcpInvocationsKey(serverUid, { limit, status, since }),
-    queryFn: async (): Promise<InvocationListOut> => {
-      if (builtin) return fetchCallPage({ uid: serverUid, status, since }, limit);
-      const client = getApiClient();
-      const query: Record<string, string | number> = { limit };
-      if (status) query.status = status;
-      if (since) query.since = since;
-      const { data, error } = await client.GET("/resources/mcp_server/{uid}/invocations", {
-        params: {
-          path: { uid: serverUid },
-          query: query as never,
-        },
-      });
-      if (error) throwApiError(error, "INTERNAL_ERROR", "list invocations failed");
-      if (!data) throw new ApiError("INTERNAL_ERROR", "empty invocations response");
-      return data;
-    },
+    queryFn: () =>
+      builtin
+        ? fetchCallPage({ uid: serverUid, status, since }, limit)
+        : mcpServersApi.invocations(serverUid, { limit, status, since }),
     enabled,
     // Invocation history is append-only audit data, not a live console, so a
     // slower poll suffices.

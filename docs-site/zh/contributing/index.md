@@ -37,7 +37,7 @@ Coffer 的大部分代码是用 AI 编程智能体写的，主要是 Claude Code
 
 ### 只有一条开发主线 {#one-line-of-development}
 
-所有东西都进 `main`，发布就是给 `main` 打一个标签。还没准备好给用户的工作也进 `main`，由实验功能注册表（`backend/coffer/domain/features.py`）里的一个条目把关。这类工作在 `stable` 构建里是关的，在每个 `dev` 构建里（包括你本地的）是开的。这项工作新增的每一个入口都要通过这一个条目来把关。功能准备好之后，用一个 pull request 让它转正：从注册表里删掉它，删掉所有提到它的把关代码，并加一条 migration，把它存下的开关从 `daemon-config.json` 里剥掉。不要维护长期存在的旁支。把关机制的具体表现见[实验功能](/zh/guides/experimental-features)。
+所有东西都进 `main`，发布就是给 `main` 打一个标签。还没准备好给用户的工作也进 `main`，由实验功能注册表（`backend/coffer/domain/features.py`）里的一个条目把关。这类工作在每个构建里（包括你本地的）默认都是关的，由人在设置 → 功能里为自己的机器开启（或用 `COFFER_FEATURES` 固定）。这项工作新增的每一个入口都要通过这一个条目来把关。功能准备好之后，用一个 pull request 让它转正：从注册表里删掉它，删掉所有提到它的把关代码，并加一条 migration，把它存下的开关从 `daemon-config.json` 里剥掉。不要维护长期存在的旁支。把关机制的具体表现见[实验功能](/zh/guides/experimental-features)。
 
 ### Conventional Commits，每个 pull request 一个提交 {#conventional-commits-one-commit-per-pull-request}
 

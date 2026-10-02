@@ -71,7 +71,7 @@ HTTP API 只绑定 `127.0.0.1`，别无其他。每个读取或修改保险库�
 
 ### 访问用户提供的 URL 的出站请求要经过 SSRF 防护 {#outbound-requests-to-user-supplied-urls-go-through-the-ssrf-guard}
 
-`coffer.infrastructure.net.ssrf_guard.check_url` 解析 URL 的主机，并拒绝回环、私有、链路本地和运营商级 NAT 目标。提供商编辑器在保存任何东西之前运行的探测（列出模型、测试连接、检测协议）都用它校验 base URL。用户自己配置的端点（HTTP MCP 上游、模型和转写调用、IM 平台、同步远端）在 Coffer 使用它们时不受此限制，因为在那里回环或局域网端点是合法目标（[原则 → 网络默认值](/zh/architecture/principles)）。当你添加让守护进程获取用户提供的 URL 的代码时，先用 `check_url` 校验它。这道防护不会把解析出的地址一直固定到 HTTP 客户端，所以一个做 DNS rebinding 的主机可能先通过校验，之后再解析到别处。对于一个单用户、只监听回环地址、URL 都来自自己用户的守护进程，这个残余风险是可以接受的。
+`coffer.infrastructure.net.ssrf_guard.check_url` 解析 URL 的主机，并拒绝回环、私有、链路本地和运营商级 NAT 目标。提供商编辑器在保存任何东西之前运行的探测（列出模型、测试连接）都用它校验 base URL。用户自己配置的端点（HTTP MCP 上游、模型和转写调用、IM 平台、同步远端）在 Coffer 使用它们时不受此限制，因为在那里回环或局域网端点是合法目标（[原则 → 网络默认值](/zh/architecture/principles)）。当你添加让守护进程获取用户提供的 URL 的代码时，先用 `check_url` 校验它。这道防护不会把解析出的地址一直固定到 HTTP 客户端，所以一个做 DNS rebinding 的主机可能先通过校验，之后再解析到别处。对于一个单用户、只监听回环地址、URL 都来自自己用户的守护进程，这个残余风险是可以接受的。
 
 ### 用户内容留在本机 {#user-content-stays-on-the-machine}
 

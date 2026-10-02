@@ -9,6 +9,8 @@ and Telegram refuses it.
 
 from __future__ import annotations
 
+from coffer.application.channel.turn_status import LIVE_SEPARATOR, split_snapshot
+
 _MARKER = "…"  # one BMP code point = one UTF-16 unit
 
 
@@ -29,7 +31,20 @@ def clip_tail_utf16(text: str, limit: int) -> str:
     return _MARKER + units.decode("utf-16-le")
 
 
-__all__ = ["clip_tail_utf16", "utf16_len"]
+def clip_snapshot_utf16(text: str, limit: int) -> str:
+    """Fit a live snapshot to ``limit`` UTF-16 units, clipping the ANSWER before
+    the status block so the header stays visible on a long reply; a snapshot with
+    no answer under its header, or too little room for one, keeps its tail."""
+    if utf16_len(text) <= limit:
+        return text
+    block, answer = split_snapshot(text)
+    head = f"{block}\n{LIVE_SEPARATOR}\n"
+    if answer and utf16_len(head) < limit - 1:
+        return head + clip_tail_utf16(answer, limit - utf16_len(head))
+    return clip_tail_utf16(text, limit)
+
+
+__all__ = ["clip_snapshot_utf16", "clip_tail_utf16", "utf16_len"]
 
 
 #: "Mention the asker in a group answer": Telegram's inline mention is a link to

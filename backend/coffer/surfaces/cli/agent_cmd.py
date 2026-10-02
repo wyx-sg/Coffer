@@ -17,7 +17,7 @@ There is one agent per type and it is named by the type (spec agent-registry
 "Keep one agent per type, named by it"), so every command takes the TYPE —
 ``claude-code`` or ``codex`` (``claude_code`` also reads) — and resolves it
 once, through ``_resolve``, to the uid the routes address (ADR
-resource-identity-is-an-immutable-uid). A uid is accepted too.
+identity-is-the-uid-inside-the-file). A uid is accepted too.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ from coffer.surfaces.cli._resolve import resolve_ref
 app = typer.Typer(help="Manage registered AI agents")
 _console = Console()
 
-_NAME = typer.Argument(..., metavar="TYPE", help="Agent type (claude-code | codex) or uid")
+_NAME = typer.Argument(..., metavar="NAME", help="Agent name (claude-code | codex) or uid")
 
 
 def _record(resource: dict[str, Any], agent: dict[str, Any]) -> dict[str, Any]:
@@ -96,7 +96,7 @@ def add(
 
     Without ``--config-dir`` it is registered at the type's standard
     directory; an agent installed but never run gets that directory created.
-    To move a registered agent, use ``coffer agent edit TYPE --config-dir``.
+    To move a registered agent, use ``coffer agent edit NAME --config-dir``.
     """
     verbose = verbose_of(ctx)
     body: dict[str, Any] = {"type": agent_type.replace("-", "_"), "config_dir": config_dir}
@@ -149,7 +149,7 @@ def show(
     typer.echo(f"enabled: {'yes' if data['enabled'] else 'no'}")
     # "(unbound)" is a real state, not a missing value: an unbound agent runs
     # on its own default model.
-    for k in ("model", "effort", "wire_api"):
+    for k in ("model", "effort"):
         typer.echo(f"{k}: {data.get(k) or '(unbound)'}")
     tiers = data.get("tier_models") or {}
     typer.echo(
@@ -211,9 +211,6 @@ def edit(
         help="Claude Code tier pin <tier>=<model> (opus, sonnet, haiku, fable); repeatable",
     ),
     clear_tiers: bool = typer.Option(False, "--clear-tiers", help="Unbind every tier pin"),
-    wire_api: str | None = typer.Option(
-        None, "--wire-api", help="Codex wire api; `responses` is the only value it still loads"
-    ),
 ) -> None:
     """Change an agent's config directory or model binding.
 
@@ -221,7 +218,7 @@ def edit(
     these are the whole of what can change. The model binding lives on the
     agent, not on the connection: an unbound agent projects no model and runs
     on its own default. A change here takes effect on disk the next time that
-    agent's connection is activated (`coffer provider switch <name>`), which is
+    agent is switched onto its connection (`coffer provider switch <name> --agent <type>`), which is
     what re-projects the config.
 
     \f
@@ -248,7 +245,6 @@ def edit(
             ("config_dir", config_dir),
             ("model", model),
             ("effort", effort),
-            ("wire_api", wire_api),
         )
         if v is not None
     }

@@ -89,6 +89,3 @@ export type VersionDiffOut = Schemas["VersionDiffOut"];
 
 /** A document's body as one version left it. */
 export type VersionBodyOut = Schemas["VersionBodyOut"];
-
-/** Who wrote a change: `user`, `agent`, `curation`, `sync` or `disk`. */
-export type ChangeWriter = ChangeOut["writer"];

@@ -6,8 +6,8 @@ But the vault has other writers: a person's hand edit that the scanner settles,
 a sync round's checkout, a restore, a join's "take the other version". Each of
 them reaches the vault writer's listeners with the paths it changed, and the
 resource store answers each such commit here: it re-reads the effective
-resources and emits one ``Changed`` per resource whose file moved — an upsert
-at the resource's new revision, or a delete at its last revision plus one — so
+resources and emits one ``Changed`` per resource whose file moved — an upsert,
+or a delete — so
 the reconciler and the event stream see them exactly as they see an API write.
 
 The store's own commits are marked (:meth:`ChangeAnnouncer.own`) and skipped:
@@ -43,7 +43,6 @@ class Known:
 
     uid: str
     kind: str
-    rev: int
 
 
 class ChangeAnnouncer:
@@ -117,13 +116,11 @@ class ChangeAnnouncer:
             now = after.get(path)
             if now is not None and (now.uid, "upsert") not in seen:
                 seen.add((now.uid, "upsert"))
-                current = resources.get(now.uid)
-                rev = current.rev if current is not None else now.rev
-                self.emit(Changed(now.kind, now.uid, rev, "upsert"))
+                self.emit(Changed(now.kind, now.uid, "upsert"))
             old = before.get(path)
             if old is not None and old.uid not in resources and (old.uid, "delete") not in seen:
                 seen.add((old.uid, "delete"))
-                self.emit(Changed(old.kind, old.uid, old.rev + 1, "delete"))
+                self.emit(Changed(old.kind, old.uid, "delete"))
 
 
 __all__ = ["ChangeAnnouncer", "Known", "Sink"]

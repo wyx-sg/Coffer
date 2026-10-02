@@ -350,7 +350,7 @@ class _FakeSession:
         self.get_prompt_sentinel = object()
         self.call_sentinel = object()
 
-    async def list_tools(self) -> object:
+    async def list_tools(self, *, params=None) -> object:
         self.calls.append(("list_tools", (), {}))
         return self.tools_sentinel
 
@@ -360,7 +360,7 @@ class _FakeSession:
         self.calls.append(("call_tool", (name,), {"arguments": arguments}))
         return self.call_sentinel
 
-    async def list_resources(self) -> object:
+    async def list_resources(self, *, params=None) -> object:
         self.calls.append(("list_resources", (), {}))
         return self.resources_sentinel
 
@@ -368,7 +368,7 @@ class _FakeSession:
         self.calls.append(("read_resource", (uri,), {}))
         return self.read_sentinel
 
-    async def list_prompts(self) -> object:
+    async def list_prompts(self, *, params=None) -> object:
         self.calls.append(("list_prompts", (), {}))
         return self.prompts_sentinel
 
@@ -541,7 +541,7 @@ async def test_request_timeout_wraps_as_upstream_timeout() -> None:
     )
 
     class _SlowSession:
-        async def list_tools(self) -> object:
+        async def list_tools(self, *, params=None) -> object:
             await asyncio.sleep(1)
             return object()
 

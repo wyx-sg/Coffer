@@ -4,8 +4,8 @@
     python scripts/stamp_channel.py stable [--commit 3909da95]
 
 The release workflow runs this before the binaries are built, so a tagged
-release is ``stable`` and every other build keeps the repository's ``dev``
-(spec experimental-features "Stamp every build with a release channel").
+release is ``stable`` — it ignores the development environment switches — and
+every other build keeps the repository's ``dev``.
 ``--commit`` also stamps the short hash of the commit being built, which
 Settings > About shows beside the version. Stdlib only; each edit is anchored
 on its one assignment (``CHANNEL``, ``COMMIT``).

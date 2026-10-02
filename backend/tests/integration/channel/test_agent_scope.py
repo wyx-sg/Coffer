@@ -26,6 +26,7 @@ from .conftest import (
     Resource,
     inbound,
     tap_event,
+    uid_of,
     wait_until,
 )
 
@@ -105,7 +106,7 @@ async def test_a_sticky_agent_narrowed_out_falls_back_to_the_channel_default(
     assert await env.thread_preferred_agent(resource) == "codex"
 
     # The runtime rebinds the channel with the narrowed scope.
-    env.processor.unbind(resource.name)
+    env.processor.unbind(resource.uid)
     env.bind(resource, FakeChannelAdapter(), agent_scope=Scope(agents=["builtin"]))
 
     await env.processor.on_message(inbound("tg", "owner", "/new"))
@@ -124,7 +125,7 @@ async def test_a_channel_scoped_to_no_agent_is_never_started(env: ChannelEnv) ->
 
     await env.runtime.reconcile_once()
 
-    assert env.runtime.is_running("tg") is False
+    assert env.runtime.is_running(uid_of("tg")) is False
     assert env.created_adapters == []
 
 
@@ -137,14 +138,14 @@ async def test_narrowing_a_scope_past_the_default_agent_never_reaches_the_runtim
     offline by a scope edit that looked like it succeeded."""
     resource = await env.register_channel("tg")
     await env.runtime.reconcile_once()
-    assert env.runtime.is_running("tg") is True
+    assert env.runtime.is_running(uid_of("tg")) is True
 
     other = await env.agent_uid("codex")
     with pytest.raises(ScopeInvalidError, match="unable to drive anything"):
         await env.resources.update_scope(resource.uid, Scope(agents=[other]), actor="test")
 
     await env.runtime.reconcile_once()
-    assert env.runtime.is_running("tg") is True
+    assert env.runtime.is_running(uid_of("tg")) is True
     assert (await env.resources.get(resource.uid)).scope is None
 
 
@@ -155,12 +156,12 @@ async def test_widening_a_scope_rebinds_without_a_daemon_restart(env: ChannelEnv
     resource = await env.register_channel("tg")
     await env.resources.update_scope(resource.uid, Scope(agents=[]), actor="test")
     await env.runtime.reconcile_once()
-    assert env.runtime.is_running("tg") is False
+    assert env.runtime.is_running(uid_of("tg")) is False
 
     await env.resources.update_scope(resource.uid, None, actor="test")
     await env.runtime.reconcile_once()
 
-    assert env.runtime.is_running("tg") is True
+    assert env.runtime.is_running(uid_of("tg")) is True
 
 
 @pytest.mark.acceptance(
@@ -183,15 +184,15 @@ async def test_narrowing_to_the_channels_own_agent_is_accepted(env: ChannelEnv) 
     mine = await env.agent_uid(DEFAULT_AGENT_KEY)
     resource = await env.register_channel("tg")
     await env.runtime.reconcile_once()
-    assert env.runtime.is_running("tg") is True
+    assert env.runtime.is_running(uid_of("tg")) is True
 
     await env.resources.update_scope(resource.uid, Scope(agents=[mine]), actor="test")
     await env.runtime.reconcile_once()
 
-    assert env.runtime.is_running("tg") is True
+    assert env.runtime.is_running(uid_of("tg")) is True
     # ...and the binding carries it in the vocabulary everything below the gate
     # reads — `/new <agent>` and the routing of a chosen key.
-    binding = env.processor.binding("tg")
+    binding = env.processor.binding(uid_of("tg"))
     assert binding is not None
     assert binding.agent_scope == Scope(agents=[DEFAULT_AGENT_KEY])
 
@@ -256,5 +257,5 @@ async def test_a_channel_bound_to_no_agent_never_starts(env: ChannelEnv) -> None
 
     await env.runtime.reconcile_once()
 
-    assert env.runtime.is_running("tg") is False
+    assert env.runtime.is_running(uid_of("tg")) is False
     assert env.created_adapters == []

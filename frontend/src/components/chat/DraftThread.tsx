@@ -99,12 +99,15 @@ export function DraftThread({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {agents.map((a) => (
-              <SelectItem key={a.agent_key} value={a.agent_key} disabled={!a.available}>
-                {a.display_name}
-                {a.available ? "" : ` (${t("conversations.newConversation.unavailable")})`}
-              </SelectItem>
-            ))}
+            {/* Only agents that can run are offered (spec chat "Create the
+                conversation on the first send"): an unmanaged one cannot start. */}
+            {agents
+              .filter((a) => a.available)
+              .map((a) => (
+                <SelectItem key={a.agent_key} value={a.agent_key}>
+                  {a.display_name}
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
         {/* Offered with or without a connection: with none, the agent's built-in

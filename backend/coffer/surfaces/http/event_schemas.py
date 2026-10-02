@@ -20,7 +20,7 @@ class ChangeEventOut(BaseModel):
     """The data of a `change` event: something changed; refetch what shows it.
 
     Sent once per resource write through the framework, and once per change in
-    what the attention list reports (`kind` `attention`, no `id`, no `rev`).
+    what the attention list reports (`kind` `attention`, no `id`).
     The event's SSE id is `seq`, so a reconnecting client resumes with
     `Last-Event-ID`.
     """
@@ -28,10 +28,6 @@ class ChangeEventOut(BaseModel):
     seq: int = Field(description="Grows by one per event across this daemon run; the first is 1.")
     kind: str = Field(description="The resource kind, or `attention`.")
     id: str | None = Field(description="The resource's uid; null for `attention`.")
-    rev: int | None = Field(
-        description="The revision the write produced (a delete: the last one plus one); "
-        "null for `attention`."
-    )
     op: Literal["upsert", "delete"] = Field(
         description="`upsert`: the resource exists with new content. `delete`: it is gone."
     )
@@ -67,9 +63,7 @@ class EventStreamMessage(RootModel[ChangeEventOut | ResyncEventOut | HeartbeatEv
 
 
 def change_out(envelope: Envelope) -> ChangeEventOut:
-    return ChangeEventOut(
-        seq=envelope.seq, kind=envelope.kind, id=envelope.id, rev=envelope.rev, op=envelope.op
-    )
+    return ChangeEventOut(seq=envelope.seq, kind=envelope.kind, id=envelope.id, op=envelope.op)
 
 
 __all__ = [

@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { PanelLeftOpen, Settings as SettingsIcon } from "lucide-react";
 
 import { StatusDot } from "@/components/status/StatusDot";
-import type { StatusTone } from "@/components/status/statusTone";
+import type { StatusTone } from "@/lib/statusTone";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useOpenSettings, useSettingsOpen } from "@/lib/settingsModal";
 import { shortcutLabel } from "@/lib/shortcuts";

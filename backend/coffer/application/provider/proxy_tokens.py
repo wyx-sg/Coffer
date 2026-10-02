@@ -56,14 +56,19 @@ class ProxyTokenService:
 
     async def token_for(self, agent_uid: str) -> str:
         """The agent's token, minted on first ask."""
+        return (await self.issue(agent_uid))[0]
+
+    async def issue(self, agent_uid: str) -> tuple[str, bool]:
+        """The agent's token, and whether this call minted it — the proxy needs
+        a state push only then."""
         async with self._lock:
             ref = token_ref(agent_uid)
             existing = await asyncio.to_thread(self._secrets.get, ref)
             if existing:
-                return existing
+                return existing, False
             token = new_token()
             await asyncio.to_thread(self._secrets.set, ref, token)
-            return token
+            return token, True
 
     async def rotate(self, agent_uid: str) -> str:
         """Replace the agent's token. The old one stops working at the next

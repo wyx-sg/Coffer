@@ -8,7 +8,7 @@ this machine converges with is a fact about this machine.
 ``secret_ref`` names a secret in the credential store; the secret itself
 is never on this object, so a remote can be logged or returned by the API
 without redaction. ``include_secret`` decides whether ``secret/``
-is committed at all (ADR credentials-across-machines).
+is committed at all (ADR secrets-cross-machines-only-as-ciphertext).
 """
 
 from __future__ import annotations
@@ -91,10 +91,10 @@ class SyncRemote:
                 "username must be a non-blank name without spaces, ':', '@' or '/'"
             )
         object.__setattr__(self, "username", name)
-        if self.interval_seconds <= 0:
-            raise SyncRemoteInvalid("interval_seconds must be positive")
         if self.interval_seconds < MIN_INTERVAL_SECONDS:
-            object.__setattr__(self, "interval_seconds", MIN_INTERVAL_SECONDS)
+            raise SyncRemoteInvalid(
+                f"interval_seconds must be at least {MIN_INTERVAL_SECONDS} seconds"
+            )
 
     def to_json(self) -> dict[str, Any]:
         return dataclasses.asdict(self)

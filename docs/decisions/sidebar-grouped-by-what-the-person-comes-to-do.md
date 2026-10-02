@@ -1,10 +1,9 @@
 # The Sidebar Is Grouped by What the Person Comes to Do: Agents, Run, Capabilities, Context, System
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: supersedes [The Sidebar Is Grouped by Role: Agents, Resources, System](sidebar-grouped-by-role.md) once accepted,
-[Resource Framework Upfront](resource-framework-upfront.md),
+**Related**: [Resource Framework Upfront](resource-framework-upfront.md),
 [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md),
 [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md),
 [The Engine Owns Its Model; Its Endpoint Is Borrowed From a Flagged Connection](internal-engine-settings.md),
@@ -22,21 +21,29 @@ spec web-ui "Call a surface by one name everywhere",
 spec web-ui "Manage stored secrets on the Secrets page",
 spec web-ui "Open Settings as a modal from the sidebar footer",
 spec chat "Show every conversation on the Conversations page",
-research note `conversations-ia-research.md` (rearchitecture working notes, 2026-09-30),
 spec provider-switching "Offer every connection operation on REST, CLI and web",
 spec secret "Refuse to delete a secret still in use",
-the change `openspec/changes/revise-web-ui-ia/`
+spec web-ui "Show what needs the user and each area's health on Overview",
+spec chat "Mirror a web reply into the channel it came from",
+the change `openspec/changes/archive/2026-10-01-revise-web-ui-ia/`
 
 ## Context
 
-The sidebar today holds eleven entries in three role groups — Agents (Agents, Chat), Resources
-(MCP servers, Skills, Knowledge, Memory, Model providers, Channels), System (Activity, Sync,
-Settings) — decided in [The Sidebar Is Grouped by Role](sidebar-grouped-by-role.md). The role
-axis was chosen so that "a new asset kind is one more Resources row and never a new group".
+The backend models every managed asset as a resource of some kind on one kind-agnostic
+framework ([Resource Framework Upfront](resource-framework-upfront.md)); the web UI has to decide
+how those kinds, plus things that are not resources at all (the activity record, sync, secrets,
+settings), appear in navigation. The navigation should not be re-argued every time something
+ships, it should read as what the product does today, and the grouping has to survive the one
+entity that does not behave like the others: an agent *uses* the vault rather than living in it.
 
-The rebuild makes that promise expensive. Five entries arrive with it: **Overview**, the landing
+The sidebar this decision replaced held eleven entries in three role groups — Agents (Agents,
+Chat), Resources (MCP servers, Skills, Knowledge, Memory, Model providers, Channels), System
+(Activity, Sync, Settings) — chosen so that "a new asset kind is one more Resources row and never
+a new group".
+
+The rebuild of the UI makes that promise expensive. Five entries arrive with it: **Overview**, the landing
 page; **Secrets**, a page that lists every stored secret with what uses it, which the
-credential store has never had
+secret store has never had
 ([Standalone Secrets Are Named `coffer://secret/` References](standalone-secrets-are-named-references-injected-into-one-child.md)
 makes every stored secret listable with its reference count); and **Usage**, token use metered
 at the model proxy and the official remaining quota of subscription agents, which is in 1.0;
@@ -84,10 +91,12 @@ Settings as a modal) → *at ~18* (with Workflows, Rules and Sources). Overview 
 reason given under the Decision, and Settings is a modal in every option, for the reason given
 under the placement questions.
 
-### Option A — role groups, as today: Agents, Resources, System
+### Option A — role groups, as the eleven-entry sidebar had them: Agents, Resources, System
 
-Keep [The Sidebar Is Grouped by Role](sidebar-grouped-by-role.md) and add the new entries where
-its rule puts them: Secrets, Custom tools and CLIs as Resources rows, Usage under System,
+Keep the three role groups of the eleven-entry sidebar — **Agents** (the consumers), **Resources**
+(the assets agents draw on, exactly one entry per resource kind with a list surface; a channel sits
+here as a credentialed transport the vault owns, a model provider as a vendor endpoint and its key)
+and **System** (cross-cutting tooling) — and add the new entries where its rule puts them: Secrets, Custom tools and CLIs as Resources rows, Usage under System,
 Workflows under Agents (a thing done with agents), Rules and Sources under Resources.
 
 | Group | 1.0 | At ~18 |
@@ -97,7 +106,8 @@ Workflows under Agents (a thing done with agents), Rules and Sources under Resou
 | System | Activity, Usage, Sync (3) | 3 |
 
 Pros: no migration of the user's mental map; the rule that places an entry is one question
-("consumer, asset or tooling?") and has never been hard to answer. Cons: it fails the criterion
+("consumer, asset or tooling?") and has never been hard to answer; a new asset kind is one more
+Resources row and never a new group; the consumer/asset distinction stays visible. Cons: it fails the criterion
 already at 1.0 — nine Resources rows — and reaches eleven, more than half the sidebar under one
 heading. "Resource" is the framework's word, not the user's: nobody comes to Coffer to "manage
 resources"; they come to give an agent a tool, to tell it something, or to wire up a bot. The
@@ -120,10 +130,10 @@ servers, Custom tools, Skills, CLIs, Knowledge, Memory, Secrets.
 Pros: Conversations and Channels sit together, where a user looks for "talking to an agent"; three
 headings stay easy to learn. Cons: it moves the problem rather than solving it — Resources is
 nine, then eleven — and it puts Agents, the subject of the whole product, in the middle of
-a list of the things agents use, the mislabelling the role ADR rejected as its own Option B.
+a list of the things agents use, the mislabelling a single-axis grouping (everything is a resource kind) was rejected for.
 **Loses** on the criterion for the same reason as A.
 
-### Option C' — five intent groups: Agents, Run, Capabilities, Context, System (chosen)
+### Option C — five intent groups: Agents, Run, Capabilities, Context, System (chosen)
 
 Split the configured nouns by what the user comes to do with them, so every group is one
 intent:
@@ -153,9 +163,9 @@ sidebar carries more headings than it strictly needs until the planned entries l
 Capabilities is the fullest group and is the one to split or trim when Rules and Sources arrive; the line
 between Capabilities and Context ("can do" against "knows") has to be learnt once, and a future
 kind that is both — a skill that is mostly reference text — is filed by its kind, not its
-content. A user of today's sidebar has to relearn where Model providers and Channels live.
+content.
 **Wins**: it is the only grouping that meets the criterion at 1.0 and stays within one entry of it at eighteen while keeping every
-heading a single intent; the cost is a few lines of heading today, paid back as the groups fill.
+heading a single intent; the cost is a few lines of heading until the groups fill.
 
 ### Option D — one flat list, ordered by how often each entry is used
 
@@ -167,8 +177,8 @@ servers, …), Sync last.
 | (none) | 15 | 18 |
 
 Pros: fewest pixels, no taxonomy to learn, the daily entries at the top. Cons: eighteen
-undifferentiated rows is well past what a person scans at a glance — the reason the role ADR's
-own flat option lost at eleven. "Most used" differs per person (a channel operator lives on
+undifferentiated rows is well past what a person scans at a glance — the reason a flat list already
+stops being scannable at eleven. "Most used" differs per person (a channel operator lives on
 Channels; most people open it once) and shifts as features ship, so the order would either be
 re-argued with every entry or silently wrong for most users. A flat list also hides the
 distinctions the UI depends on: an agent is a consumer, a secret is shared infrastructure.
@@ -178,7 +188,7 @@ change adds. **Loses**: the criterion is failed by construction — one group of
 ### Option E — fewer entries, each a page with tabs
 
 Collapse the sidebar to six entries — Overview, Agents, Run, Capabilities, Context, System —
-each a page whose tabs are today's entries (Capabilities › MCP servers | Custom tools | Skills |
+each a page whose tabs are the entries (Capabilities › MCP servers | Custom tools | Skills |
 CLIs; System › Secrets | Activity | Usage | Sync).
 
 | Group | 1.0 | At ~18 |
@@ -195,7 +205,7 @@ without giving up the screen it needs. It also merges pages with nothing in comm
 (Secrets and Usage) under one page header. **Loses**: it meets the size criterion only by
 moving the groups one level down, where they cost more to use.
 
-### Placement questions, answered under C'
+### Placement questions, answered under C
 
 **Conversations and Channels are two entries, and history lives in Conversations.** Conversations
 is the daily page: every conversation Coffer runs — from SeaTalk, Telegram and Coffer's own UI,
@@ -203,9 +213,9 @@ which is modelled as a built-in "Coffer" source — in one list with a source ba
 opening on its full exchange with a reply box that continues it (spec chat "Show every
 conversation on the Conversations page"). Channels is setup only: pairing a bot, choosing its
 default agent, checking its connection — done once per bot and revisited rarely — with a link to
-Conversations filtered to that channel. The research behind this (`conversations-ia-research.md`,
-a survey of OpenClaw, Hermes Agent, cc-connect, claude-code-telegram, kimaki, Claude Code Channels,
-Happy, Omnara, Botpress and Chatwoot, 2026-09-30) found that no product puts conversation history
+Conversations filtered to that channel. A survey made while the rebuild was designed (OpenClaw,
+Hermes Agent, cc-connect, claude-code-telegram, kimaki, Claude Code Channels, Happy, Omnara,
+Botpress and Chatwoot) found that no product puts conversation history
 inside its channel or config page: history is one global list with a channel badge and filter,
 the channel page holds only configuration and connection status (Hermes, Chatwoot), and every
 product with a UI lets the user send from it, with its own web chat modelled as just another
@@ -213,9 +223,9 @@ channel (OpenClaw's WebChat, Botpress's Webchat, Chatwoot's live chat). A separa
 beside a channel history (Hermes's split) was the weaker pattern, because it puts history in two
 places; so the entry is named Conversations, not Chat, and Coffer's own UI is a source, not a
 second kind of conversation. They share a group because both are how work with an agent happens;
-they are two entries because the user comes to each for a different reason. Whether a reply sent
-from Coffer into a channel-opened conversation is also delivered back to that channel is left
-open (see the change's design).
+they are two entries because the user comes to each for a different reason. A reply sent from
+Coffer into a channel-opened conversation is also delivered back to that channel (spec chat
+"Mirror a web reply into the channel it came from").
 
 **Model providers belongs with Agents.** A provider is the endpoint and key an agent's model is
 served from, and a connection and model are chosen per agent, on that agent's page (spec
@@ -228,7 +238,7 @@ connection's detail page and switched only on the agent's own Model tab. Coffer'
 not on it — it configures Coffer rather than an agent, so it is a section of Settings › General
 that picks a provider and then its model ([The Engine Owns Its Model](internal-engine-settings.md)). Filed under Capabilities
 it would read as a tool the agent calls; filed under System it would read as a Coffer
-preference, the placement the role ADR already rejected.
+preference, which a provider is not.
 
 **Secrets is its own entry, in System.** A stored secret is shared infrastructure data: one key
 can be cited by an MCP server, a model provider, a channel and a skill at once
@@ -272,33 +282,22 @@ sit under Capabilities, because both are about what agents can do.
 
 ## Decision
 
-The sidebar is grouped by what the person comes to do, with Overview above the groups under no
-heading:
+The sidebar is grouped by what the person comes to do:
 
-```
-  Overview                 总览
- AGENTS                   智能体
-  Agents                   智能体
-  Model providers          模型提供商
- RUN                      运行
-  Conversations            对话
-  Channels                 消息渠道
- CAPABILITIES             能力
-  MCP servers              MCP 服务器
-  Custom tools             自定义工具
-  Skills                   技能
-  CLIs                     命令行工具
- CONTEXT                  上下文
-  Knowledge                知识
-  Memory                   记忆
- SYSTEM                   系统
-  Secrets                  密钥
-  Activity                 活动
-  Usage                    用量
-  Sync                     同步
- ──────────────────────────
-  daemon status · ⚙ Settings (modal, ⌘,)   设置
-```
+- **Overview**, above the groups, under no heading.
+- **Agents** — set up the agents and the models they run on: Agents, Model providers.
+- **Run** — put an agent to work, directly or through an IM bot: Conversations, Channels.
+- **Capabilities** — give agents things they can do: MCP servers, Custom tools, Skills, CLIs.
+- **Context** — give agents things they know: Knowledge, Memory.
+- **System** — look after Coffer and what every part shares: Secrets, Activity, Usage, Sync.
+- A labelled Settings row in the sidebar footer, above the daemon status, opens Settings as a
+  modal (also on ⌘,); it is in no group.
+
+Fifteen entries with every experimental feature on; spec web-ui "Keep the sidebar to its fifteen
+entries" owns the list and the routes, and `NAV_GROUPS` in `frontend/src/lib/navigation.ts` is the
+one list the sidebar, the command palette and the Settings modal read. An entry whose experimental
+feature is switched off is left out; the four experimental features own Model providers, Usage,
+Knowledge, Memory and Sync, and Conversations and Channels are always there.
 
 Overview is ungrouped because it summarises every group; filing it under one would misname it,
 and a heading over one entry groups nothing. In Chinese, "agent" is **智能体** everywhere in the
@@ -322,24 +321,27 @@ Rules a future change must respect:
 ## Consequences
 
 - The entry set and groups are pinned by spec web-ui "Keep the sidebar to its fifteen entries"
-  and "Group the sidebar by what the user comes to do"; changing either is a spec change.
-- The old rule of one Resources entry per listed resource kind becomes one sidebar entry per
-  listed resource kind, filed by intent (spec web-ui "Give each listed resource kind one sidebar
-  entry"). The backend's resource framework is unchanged: "resource" stays the storage word and
-  stops being a navigation word.
-- Secrets becomes a page of its own (spec web-ui "Manage stored secrets on the Secrets page"),
-  and Settings › Security narrows to machine-level items; the credential store's behaviour behind
-  the page is specified by its own change.
-- A user of the eleven-entry sidebar finds Model providers under Agents, Chat renamed
-  Conversations (`/chat` redirects) and Channels under Run, and Settings in a labelled row at the sidebar's foot. Routes do not move, so no bookmark breaks.
+  and "Group the sidebar by what the user comes to do"; changing either is a spec change. The
+  groups and entries are implemented in `frontend/src/lib/navigation.ts` (`NAV_GROUPS`) and
+  rendered by `frontend/src/components/SidebarNav.tsx`; the Settings modal is
+  `frontend/src/pages/settings/SettingsModal.tsx`.
+- One sidebar entry per listed resource kind, filed by intent (spec web-ui "Give each listed
+  resource kind one sidebar entry"). The backend's resource framework is unaffected: "resource"
+  stays the storage word and is not a navigation word.
+- Secrets is a page of its own (spec web-ui "Manage stored secrets on the Secrets page"), and
+  Settings › Security carries only machine-level items.
 - The router carries a background location so the Settings modal can be opened over any page
   and closed back to it; that is the price of keeping every Settings tab linkable.
+- With experimental features switched off, whole groups can leave the sidebar (a group with every
+  entry left out leaves its heading too).
 - Three headings hold two entries each until the planned entries land; that is the accepted price
   of groups that do not have to be reshuffled when they do.
-- Capabilities holds four entries at 1.0 and would hold six with Rules and Sources, so the change
+- Capabilities holds four entries and would hold six with Rules and Sources, so the change
   that adds the second of them has to revisit Capabilities rather than append to it.
-- Custom tools and CLIs each get a page of their own (spec web-ui "Manage custom tools on their own
-  page", "Show every CLI a skill requires on the CLIs page"); the MCP servers Add dialog adds
+- Not built yet: the Workflows, Rules and Sources entries. Each is placed (Run, Capabilities,
+  Capabilities) but ships with its feature.
+- Custom tools and CLIs each have a page of their own (spec web-ui "Manage custom tools on their
+  own page", "Show every CLI a skill requires on the CLIs page"); the MCP servers Add dialog adds
   servers only.
-- The zh locale's label for agent changes from "Agent" to 智能体 across the UI, and the en/zh
-  glossary in the frontend conventions records every group and entry label.
+- In Chinese, "agent" is 智能体 everywhere in the UI, and the en/zh glossary in the frontend
+  conventions records every group and entry label.

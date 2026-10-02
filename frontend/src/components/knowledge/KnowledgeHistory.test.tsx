@@ -10,7 +10,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
-import { answerFromFixtures, renderKnowledge } from "./knowledgeTestHarness";
+import { answerFromFixtures, renderKnowledge } from "@/test/knowledgeHarness";
 import { EDIT, GATEWAY, NAME, OTHER, PASS, UID } from "./knowledgeTestData";
 import { ApiError } from "@/lib/api/errors";
 import { acceptance } from "@/test/acceptance";

@@ -63,7 +63,8 @@ relevant, and appends confirmed cases tagged `"source": "captured"` (PR #81).
 
 **Gate.** `.github/workflows/evals.yml` runs `make eval` — the harness's own
 tests and the `tool_search` suite — on pushes and PRs that touch `evals/`, the
-MCP application or domain code, or knowledge and memory application code. It
+MCP domain code (`backend/coffer/domain/mcp/`, where the ranker lives), the
+backend lockfile or the workflow itself. It
 fails on regression against the baseline (PR #83). `make eval-routing` runs the
 routing suite on demand and stays out of CI. A deliberate improvement is
 recorded with `python -m evals.run --update-baseline`.

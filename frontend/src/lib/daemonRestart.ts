@@ -14,8 +14,11 @@
 // Host guard lets it through). Knows nothing about the desktop shell: that
 // host restarts through `lib/tauri.ts`.
 import { getCofferBaseUrl } from "@/lib/auth";
-import { getApiClient } from "@/lib/api/client";
-import { ApiError, throwApiError, translateApiError } from "@/lib/api/errors";
+import { requestDaemonRestart } from "@/lib/api/daemonRestartRequest";
+import { translateApiError } from "@/lib/api/errors";
+import type { components } from "@/lib/api/generated/daemon";
+
+type DaemonStatusOut = components["schemas"]["DaemonStatusOut"];
 
 /** How long the page waits for the successor — the shell's readiness ceiling. */
 export const RESTART_READY_TIMEOUT_MS = 90_000;
@@ -57,7 +60,7 @@ async function startedAt(fetchFn: typeof fetch, origin: string): Promise<string 
   try {
     const r = await fetchFn(`${origin}/api/v1/daemon/status`, { cache: "no-store" });
     if (!r.ok) return null;
-    const body = (await r.json()) as { started_at?: string };
+    const body = (await r.json()) as Partial<Pick<DaemonStatusOut, "started_at">>;
     return body.started_at ?? null;
   } catch {
     return null;
@@ -79,9 +82,7 @@ export async function restartFromBrowser(deps: RestartDeps = defaultDeps()): Pro
   const daemon = new URL(getCofferBaseUrl() ?? location.origin).origin;
   const before = await startedAt(fetchFn, daemon);
 
-  const { data, error } = await getApiClient().POST("/daemon/restart");
-  if (error) throwApiError(error, "INTERNAL_ERROR", "restart failed");
-  if (!data) throw new ApiError("INTERNAL_ERROR", "empty restart response");
+  const data = await requestDaemonRestart();
 
   const next = new URL(daemon);
   next.port = String(data.port);

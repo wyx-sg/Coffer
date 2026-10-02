@@ -145,7 +145,6 @@ def apply_anthropic_settings(
     replace_builtin_picker: bool = False,
     local_context_window: int | None = None,
     local: bool = False,
-    loopback_proxy: bool = False,
 ) -> str:
     """Return new ``settings.json`` text with Coffer's keys.
 
@@ -183,10 +182,7 @@ def apply_anthropic_settings(
         env[_MAX_CONTEXT] = str(local_context_window)
     else:
         env.pop(_MAX_CONTEXT, None)
-    if loopback_proxy:
-        _add_no_proxy(env)
-    else:
-        _drop_no_proxy(env)
+    _add_no_proxy(env)
     return _dump(data)
 
 
@@ -196,7 +192,10 @@ def remove_anthropic_settings(
     """Inverse of :func:`apply_anthropic_settings` — strip every key Coffer
     wrote so Claude Code falls back to its OWN login ("use built-in").
 
-    ``apiKeyHelper`` goes only when it is Coffer's (:func:`is_managed_api_key_helper`),
+    ``apiKeyHelper`` goes only when it is Coffer's (:func:`is_managed_api_key_helper`);
+    the ``env`` keys (base URL, tier pins, the local-runtime pair, the
+    loopback ``NO_PROXY`` tail) go only while that helper was there — with a
+    helper the user wrote or none at all they are the user's own and stay;
     ``modelPicker`` only when every option carries :data:`PICKER_MARKER`, and
     the top-level ``model`` / ``effortLevel`` only while they still hold what
     Coffer projected (``managed_model`` / ``managed_effort``, the agent's
@@ -207,7 +206,10 @@ def remove_anthropic_settings(
     if not isinstance(raw, dict):
         return "{}\n"
     data: dict[str, Any] = raw
-    if is_managed_api_key_helper(data.get("apiKeyHelper")):
+    # The ownership marker for the ``env`` keys: they carry no mark of their
+    # own, so they are Coffer's only while Coffer's helper is in the file.
+    owned = is_managed_api_key_helper(data.get("apiKeyHelper"))
+    if owned:
         data.pop("apiKeyHelper", None)
     if _is_managed_picker(data.get("modelPicker")):
         data.pop("modelPicker", None)
@@ -216,7 +218,7 @@ def remove_anthropic_settings(
     if managed_effort is not None and data.get("effortLevel") == managed_effort:
         data.pop("effortLevel", None)
     env = data.get("env")
-    if isinstance(env, dict):
+    if owned and isinstance(env, dict):
         for key in (_BASE_URL, _DISABLE_BETAS, _MAX_CONTEXT):
             env.pop(key, None)
         for tier in CLAUDE_TIERS:

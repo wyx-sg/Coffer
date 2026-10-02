@@ -7,7 +7,7 @@ Fernet-encrypted secret store (the same store the composition root wires),
 then greps every persistable surface for the sentinel. Zero plaintext
 occurrences are required — any hit fails the test with a precise pointer to the
 surface where the leak was found. Because the secret lives encrypted in its
-own file under ``~/.coffer/vault/secrets/``, the grep over every file
+own file under ``~/.coffer/vault/secret/``, the grep over every file
 under ``~/.coffer`` is REAL coverage: it proves the ciphertext file never
 exposes plaintext while the value still round-trips.
 """
@@ -100,7 +100,7 @@ async def test_secret_value_never_in_db_or_logs(
 
     # Write the sentinel through the Fernet-encrypted store — exactly the path
     # the composition root uses. The plaintext is encrypted into its file
-    # under ~/.coffer/vault/secrets/; only the in-memory decrypt below ever
+    # under ~/.coffer/vault/secret/; only the in-memory decrypt below ever
     # sees it as cleartext, so the file grep further down is real coverage.
     secret_store = EncryptedSecretStore(Fernet.generate_key())
     secret_store.set("leak-test-ref", sentinel)

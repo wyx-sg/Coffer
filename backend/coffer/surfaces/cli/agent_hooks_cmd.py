@@ -38,7 +38,7 @@ def _line(hook: dict[str, Any]) -> str:
 
 def hooks(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
+    name: str = typer.Argument(..., metavar="NAME", help="Agent name or uid"),
     output_json: bool = typer.Option(False, "--json", help="JSON output"),
 ) -> None:
     """List every hook the agent will run; Coffer's own is marked with *."""

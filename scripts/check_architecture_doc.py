@@ -25,6 +25,7 @@ Stdlib only. Exits non-zero with one line per drift.
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -41,6 +42,21 @@ _TOOL_DECL = re.compile(r"BuiltinTool\(\s*name=\"([a-z_]+)\"")
 _TREE_CELL = re.compile(r"(?:│   |    |├── |└── )")
 
 
+def _has_tracked_python(package: Path) -> bool:
+    """Whether git knows a (tracked or new, non-ignored) `.py` file under `package`.
+
+    A directory left behind with only `__pycache__` (a deleted package whose
+    bytecode survived) is not a package; walking the disk would count it.
+    """
+    out = subprocess.run(
+        ["git", "-C", str(package), "ls-files", "-co", "--exclude-standard", "--", "*.py"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    return bool(out.strip())
+
+
 def packages_on_disk() -> dict[str, set[str]]:
     found: dict[str, set[str]] = {}
     for layer in LAYERS:
@@ -50,6 +66,7 @@ def packages_on_disk() -> dict[str, set[str]]:
             if child.is_dir()
             and child.name not in _SKIP_DIRS
             and not child.name.startswith(".")
+            and _has_tracked_python(child)
         }
     return found
 

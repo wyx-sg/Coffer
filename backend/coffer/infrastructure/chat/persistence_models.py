@@ -48,22 +48,16 @@ class ConversationModel(Base):
     #
     # The channel resource's uid, not its name. This is a cross-resource
     # reference and the name is a mutable label (ADR
-    # resource-identity-is-an-immutable-uid) — storing the label would leave
+    # identity-is-the-uid-inside-the-file) — storing the label would leave
     # every row written before a rename pointing at a channel that no longer
     # answers to it. The name the user and the agent read is resolved from this
     # uid at read time.
     channel_uid: Mapped[str | None] = mapped_column(String, nullable=True)
     peer_chat_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    # Whose conversation this is. NULL is the developer's own — the only kind
-    # the chat list shows — and a name is the surface that owns it. Chat needs
-    # no idea what any such name means: it lists the unowned ones, and
-    # everything else belongs to whoever put a name here.
-    owner: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
         Index("idx_conversations_updated", "updated_at"),
         Index("idx_conversations_archived", "archived_at"),
-        Index("idx_conversations_owner", "owner"),
     )
 
 

@@ -1,5 +1,5 @@
 """The remote's push token, resolved for the one round that needs it
-(ADR credentials-across-machines; spec secret "Hold a secret for a new
+(ADR secrets-cross-machines-only-as-ciphertext; spec secret "Hold a secret for a new
 destination until a person approves it").
 
 The remote names its token by ``secret_ref``; the value is materialised
@@ -26,6 +26,13 @@ class BoundaryToken:
 
     def __init__(self, resolver: SecretResolver) -> None:
         self._resolver = resolver
+
+    async def bind(self, remote: SyncRemote, *, actor: str) -> None:
+        if not remote.secret_ref:
+            return
+        await self._resolver.bind_async(
+            {_SLOT: remote.secret_ref}, sync_remote_destination(remote.url), actor=actor
+        )
 
     async def token_for(self, remote: SyncRemote) -> str | None:
         if not remote.secret_ref:

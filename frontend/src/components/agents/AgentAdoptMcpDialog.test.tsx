@@ -12,7 +12,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { AgentAdoptMcpDialog } from "./AgentAdoptMcpDialog";
-import type { McpEntryOut } from "@/lib/api/agents";
+import type { McpEntryOut } from "@/lib/api/agents-workspace";
 import { ApiError } from "@/lib/api/errors";
 
 vi.mock("@/lib/api/agents", () => ({ agentsApi: { adoptMcpEntry: vi.fn() } }));

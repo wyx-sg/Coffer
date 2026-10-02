@@ -42,7 +42,6 @@ const AGENT = {
   model: null,
   effort: null,
   tier_models: null,
-  wire_api: null,
   version: null,
   state: "installed_active",
   created_at: "2026-05-29T00:00:00Z",

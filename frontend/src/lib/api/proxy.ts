@@ -1,16 +1,7 @@
 // frontend/src/lib/api/proxy.ts — request helpers for /api/v1/proxy/* (the local model proxy).
 //
 // Types alias the provider-switching contract's generated schemas.
-import { call, enc } from "@/lib/api/call";
-import type { components } from "@/lib/api/generated/provider-switching";
-
-type Schemas = components["schemas"];
-
-/** An agent's provider and the providers tried next, in list order. */
-export type ProxyRoute = Schemas["ProxyRouteOut"];
-export type ProxyTokenHint = Schemas["ProxyTokenHintOut"];
-
-export type ProxyStatus = Schemas["ProxyStatusOut"];
+import { getApiClient, unwrap } from "@/lib/api/client";
 
 /** The proxy's loopback address the agents are pointed at. */
 export const proxyAddress = (port: number | undefined) => `127.0.0.1:${port ?? 8001}`;
@@ -22,14 +13,23 @@ export const proxyStatusKey = ["proxy", "status"] as const;
 export const proxyTokenHintKey = (agentUid: string) => ["proxy", "token", agentUid] as const;
 
 export const proxyApi = {
-  status: () => call<ProxyStatus>("/proxy/status"),
+  status: () => unwrap(getApiClient().GET("/proxy/status")),
   route: (agentUid: string, model: string | null) =>
-    call<ProxyRoute>(
-      `/proxy/routes/${enc(agentUid)}${model ? `?model=${encodeURIComponent(model)}` : ""}`,
+    unwrap(
+      getApiClient().GET("/proxy/routes/{agent_uid}", {
+        params: { path: { agent_uid: agentUid }, query: model ? { model } : {} },
+      }),
     ),
-  tokenHint: (agentUid: string) => call<ProxyTokenHint>(`/proxy/tokens/${enc(agentUid)}/hint`),
+  tokenHint: (agentUid: string) =>
+    unwrap(
+      getApiClient().GET("/proxy/tokens/{agent_uid}/hint", {
+        params: { path: { agent_uid: agentUid } },
+      }),
+    ),
   rotateToken: (agentUid: string) =>
-    call<{ agent_uid: string; rotated: boolean }>(`/proxy/tokens/${enc(agentUid)}/rotate`, {
-      method: "POST",
-    }),
+    unwrap(
+      getApiClient().POST("/proxy/tokens/{agent_uid}/rotate", {
+        params: { path: { agent_uid: agentUid } },
+      }),
+    ),
 };

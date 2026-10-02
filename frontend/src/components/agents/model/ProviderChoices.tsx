@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
 
 import { HelpTip } from "@/components/HelpTip";
+import { Section } from "@/components/Section";
 import { Button } from "@/components/ui/button";
 import type { AgentType } from "@/lib/api/agents";
 import { modelIds, type Provider } from "@/lib/api/providers";
@@ -83,15 +84,17 @@ export function ProviderChoices({
   };
 
   return (
-    <section className="flex min-w-0 flex-col gap-2.5">
-      <div className="flex min-h-[26px] items-center gap-2">
-        <h3 className="text-sm font-semibold text-text">{t("agents.modelTab.provider.title")}</h3>
+    <Section
+      title={t("agents.modelTab.provider.title")}
+      className="min-w-0"
+      aside={
         <HelpTip label={t("agents.modelTab.provider.helpLabel")}>
           <p className="text-xs">
             {t(`agents.modelTab.provider.helpByType.${agentType}`, { agent })}
           </p>
         </HelpTip>
-      </div>
+      }
+    >
       <div
         role="radiogroup"
         aria-label={t("agents.modelTab.provider.title")}
@@ -165,6 +168,6 @@ export function ProviderChoices({
           {t("agents.modelTab.provider.manage")}
         </Link>
       </div>
-    </section>
+    </Section>
   );
 }

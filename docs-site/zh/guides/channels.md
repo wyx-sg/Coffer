@@ -78,6 +78,8 @@ Channels → Add channel
 
 用另一个账号再次配对会替换所有者。原所有者的私聊和群组配对都会被移除。
 
+由旧版 Coffer 在配对尚不记录所有者身份之前配成的私聊会自行补全：你在那里发的第一条消息会被认出是你的（私聊里聊天 id 就是你自己的 id），机器人照常回答。如果某条消息无法这样对上，机器人会请你用新的配对码重新配对。
+
 ## 和智能体对话 {#talk-to-an-agent}
 
 给机器人发一条消息。第一条消息会在消息渠道的默认智能体上打开一个对话，工作目录是 Coffer 管理的 `~/.coffer/content/workspace`，之后的每条消息都接着这个对话。你可以用[命令](#commands)把聊天切换到另一个智能体、模型或目录。
@@ -99,7 +101,7 @@ Channels → Add channel
   `💬` 那一行是智能体在调用工具前最后说的话；回答在分隔线下面逐渐变长。最终回复保留智能体写下的全部内容，每段连续文字一段。
 
   私聊里的步骤行会附上智能体自己写的一句话描述或文件名，从不显示原始命令。群组里只写工具名（`⏳ Bash`），因为群里每个人都看得到。
-- 失败、被停止或达到工具迭代上限的轮次，最后会有一行总结：结果、工具调用次数、耗时和 token 数。成功的轮次不发总结，回复本身就是信号。
+- 失败或被停止的轮次，最后会有一行总结：结果、工具调用次数、耗时和 token 数。成功的轮次不发总结，回复本身就是信号。
 
 ### 回复的样子 {#what-the-reply-looks-like}
 
@@ -127,6 +129,14 @@ Coffer 会告诉智能体它在哪个平台、哪种聊天里，以及那里能�
 两个停顿时长都按消息渠道设置：在消息渠道的**设置**标签页**消息合并**下，或者用 `coffer channel edit <name> --wait-after-text <seconds> --wait-after-forward <seconds>`。取值 0 到 60 秒；设为 0 表示每条这类消息都单独回答。
 
 轮次运行期间你发的消息会在对话的队列里等待，按顺序运行，和对话页面显示的是同一个队列。轮次期间连发的一串消息作为一项进入队列。每条等待的消息都会收到「⏳ Queued (n)」的回复，n 是当前等待的数量。最多可以有 10 条在等；已有 10 条等待时再发的消息会被丢弃，机器人会说明这一点和原因。
+
+### 聊天安静了一阵之后 {#when-a-chat-has-been-quiet}
+
+一天没人碰过的对话，往往不是你想接着聊的那个。你的下一条消息到达一个聊天，而它的对话闲置超过了消息渠道设定的闲置时长（默认 24 小时）时，Coffer 会新开一个对话，而不是接着旧的，并在回答之前用一行说明：`🆕 Started a new conversation after 24 h idle.`。旧对话原样保留在对话列表里。聊天的智能体、模型、推理强度和目录会沿用，和 `/new` 之后一样。这条规则适用于消息渠道保存的每一个对话：私聊的对话，以及群里每个话题、每个并行话题各自的对话。
+
+在消息渠道的**设置**标签页的**对话**下设置时长（**闲置多久后开新对话**，单位小时；0 表示不自动开新对话），或者用 CLI：`coffer channel add`、`coffer channel edit <name> --new-conversation-after-idle-hours <hours>`。`coffer channel show` 会以 `idle:` 一行显示它。
+
+你在对话页面归档的对话，不会被聊天里的消息接着用：下一条消息会新开一个对话，不会多说一行，被归档的那个仍然是归档状态。
 
 ### 并行对话 {#parallel-conversations}
 
@@ -207,7 +217,7 @@ Telegram 的 start 链接会发送 `/start`，它的回答和 `/help` 一样。`
 
 对话通常在 Coffer 管理的工作目录 `~/.coffer/content/workspace` 里运行。`/dir` 可以把聊天移到另一个目录，但只能是消息渠道允许的目录。之所以有这份允许列表，是因为任何拿到你手机的人，或者一次手滑，都不应该能让一个拥有完整权限的智能体指向你机器上任意一个文件夹；这些地方由你事先在电脑前决定。
 
-两者都在消息渠道的**设置**标签页**工作目录**下。**默认**是新对话开始的位置（不设则用智能体自己的）；**/dir 可用的目录**列出 `/dir` 可以切换进去的文件夹：用**添加目录…**添加，用**移除**删掉，默认目录那一行标着 *default*。一个都不允许时，`/dir` 关闭。也可以用 CLI：
+两者都在消息渠道的**设置**标签页**工作目录**下。**默认**是新对话开始的位置（不设则用 Coffer 工作区）；**/dir 可用的目录**列出 `/dir` 可以切换进去的文件夹：用**添加目录…**添加，用**移除**删掉，默认目录那一行标着 *default*。一个都不允许时，`/dir` 关闭。也可以用 CLI：
 
 ```sh
 coffer channel edit my-telegram --default-dir ~/src/coffer              # where new conversations start
@@ -215,7 +225,7 @@ coffer channel edit my-telegram --dir ~/src/coffer --dir ~/src/notes   # replace
 coffer channel edit my-telegram --no-dirs                              # allows none
 ```
 
-`--dir` 可以重复，相对路径会被转成绝对路径。每个允许的目录也允许它下面的子目录。
+`--dir` 可以重复。路径必须是绝对路径（`~` 由 shell 展开）；相对路径会被拒绝，什么都不保存。每个允许的目录也允许它下面的子目录。
 
 - `/dir <path>` 接受一个允许的路径或它下面的路径；`/dir <name>` 接受某个允许路径的最后一级目录名（`/dir coffer`）。目录必须存在。
 - 切换会在那里开一个新对话，并为这个聊天记住该目录。
@@ -258,10 +268,6 @@ Telegram 会显示命令菜单；Coffer 用帮助和错拼检查所用的同一�
 在支持按钮的平台上，不带参数的 `/model`、`/dir`、`/resume`，以及不带知识集的 `/kb`，会回复一张选择卡片。一张卡片最多六个按钮；更长的列表会分页，每页四个选项，加上 **← Prev** 和 **Next →**。翻页不改变任何东西，只有点选项才会。点过之后，卡片会原地重写，勾移到你的新选择上。
 
 按钮点击和消息一样接受检查：只有所有者的点击才算数。如果平台拒绝了卡片，命令会改用纯文本回答。
-
-::: info 与早期版本相比的变化
-`/new <agent>` 取代了 `/agent`，`/model <level>` 取代了 `/effort`，`/status` 列出原来 `/threads` 列出的并行话题，`/kb` 取代了 `/save`。旧的词不再保留：`/threads` 会被纠正为 `/thread`，其余的作为文字送到智能体。
-:::
 
 ## 默认智能体和生效范围 {#default-agent-and-scope}
 
@@ -314,7 +320,7 @@ coffer channel bind my-telegram <machine_id> # bind to another machine
 把机器人加进一个群组，就能在群里用它。
 
 - 机器人只处理发给它的消息：@ 提及它，或者回复它。群里其他消息都被忽略。
-- 只有所有者能驱动它。其他人发给它的消息会收到一句简短的「not authorized」回复，不会开始轮次。
+- 只有所有者能驱动它。其他人 @ 它的消息会收到一句简短的「not authorized」回复，不会开始轮次；其他人发的、没有指向机器人的消息（关掉 **Require @mention** 时才可能出现）会被悄悄丢弃，不回复。
 - 在群主聊天里，回答会放进以你那条消息为根的话题里，从不发在主聊天。在话题里，机器人就在那个话题里回复。
 - 每个话题是一个独立的对话，有自己的智能体、历史和队列，所以多个话题可以并行运行。
 - 群组里的回答挂在提问的那条消息上：在 Telegram 上，它作为对那条消息的回复发送；在 SeaTalk 上，以那条消息为根的话题就是挂载点，回答会 @ 你。
@@ -388,7 +394,7 @@ coffer channel notify my-telegram "deploy done" --chat -1001234567890
 
 消息渠道列表在打开的消息渠道旁边。它按需要你做什么来分组：**需要处理**（正在重连、被踢下线、无法启动、未配对、没绑定机器或绑定到 Coffer 不认识的机器）、**已连接**、**在其他机器**（由另一台机器运行），以及有的话还有**已关闭**。**筛选**按名称或平台缩小列表。消息渠道按 uid 寻址：`/channels/<uid>` 是它的**总览**，`/channels/<uid>/settings` 是它的**设置**，所以改名不会让链接失效。
 
-页头写着消息渠道名、状态和运行位置（`SeaTalk app 8231 · WebSocket · runs on this machine`），带一个当前状态所需的操作：**发送测试**、**立即重连**、**拿回连接**、**重试**、**更换密钥**或**更换 token**、**在本机运行…**；还有一个 **⋯** 菜单：**发送测试消息**、**重新连接**、**更换机器…**、**更换密钥**（或**更换 token**）和**删除消息渠道**。只要有问题，页头下方就有一条横幅说明原因和修复办法：连接断开正在重连、另一个进程抢走了 SeaTalk 连接、缺少 SeaTalk SDK、平台拒绝了连接、适配器停止了（常见原因是令牌被吊销或密钥被重新生成）、状态读取失败、消息渠道按设计在另一台机器运行，或者没有绑定机器、绑定到未知机器。**重新连接**会重启消息渠道的适配器。
+页头写着消息渠道名、状态和运行位置（`SeaTalk app 8231 · WebSocket · runs on this machine`），带一个当前状态所需的操作：**发送测试**、**立即重连**、**拿回连接**、**重试**、**更换密钥**或**更换 token**、**在本机运行…**；还有一个 **⋯** 菜单：**发送测试消息**、**重新连接**、**更换机器…**、**更换密钥**（或**更换 token**）和**删除消息渠道**。只要有问题，页头下方就有一条横幅说明原因和修复办法：连接断开正在重连、另一个进程抢走了 SeaTalk 连接、缺少 SeaTalk SDK、平台拒绝了连接、适配器停止了（常见原因是令牌被吊销或密钥被重新生成）、状态读取失败、消息渠道按设计在另一台机器运行，或者没有绑定机器、绑定到未知机器。**重新连接**会重启消息渠道的适配器：守护进程停掉它和它的连接，按已保存的配置重新启动，并读取此刻的密钥；正在等待失败重试的消息渠道会立刻重试。在 CLI 里是 `coffer channel restart <name>`；对应的 REST 接口是 `POST /api/v1/channels/{uid}/restart`。
 
 **总览**包含：
 
@@ -396,7 +402,7 @@ coffer channel notify my-telegram "deploy done" --chat -1001234567890
 - **智能体**：**默认智能体**（选中即保存）和**可驱动的智能体**，即消息渠道的生效范围（见[默认智能体和生效范围](#default-agent-and-scope)）。
 - **Conversations from this channel**。
 
-**设置**每改一处就保存一处：数字或路径在你停止输入且合法时保存，开关立即保存；顶部会显示**保存中…**、**已保存**或**保存失败**。它包含消息渠道的标题、**群聊中**、**消息合并**、**回复**、**Directories for /dir**、**密钥**（SeaTalk 的 App ID，以及打码显示的密钥或令牌，带**更换**）、**运行在**和**删除…**。更换的密钥写在消息渠道已经在用的那个引用下，适配器用新密钥重启，所以轮换密钥不会影响配对和绑定。删除消息渠道会停掉机器人并移除配对；它的对话仍保留在对话页面上。
+**设置**每改一处就保存一处：数字或路径在你停止输入且合法时保存，开关立即保存；顶部会显示**保存中…**、**已保存**或**保存失败**。它包含消息渠道的标题、**群聊中**、**消息合并**、**回复**、**对话**、**Directories for /dir**、**密钥**（SeaTalk 的 App ID，以及打码显示的密钥或令牌，带**更换**）、**运行在**和**删除…**。每个字段都从守护进程报告的该消息渠道设置（含默认值）开始。更换的密钥写在消息渠道已经在用的那个引用下，守护进程会发现新值并自行用它重启适配器（用 `coffer secret set` 更换时同样如此），所以轮换密钥不会影响配对和绑定。删除消息渠道会停掉机器人并移除配对；它的对话仍保留在对话页面上。
 
 用 CLI：
 
@@ -405,6 +411,7 @@ coffer channel list
 coffer channel show my-telegram
 coffer channel disable my-telegram   # stop the adapter
 coffer channel enable my-telegram    # start it again
+coffer channel restart my-telegram   # stop the adapter and start it afresh
 coffer channel rm my-telegram        # stop it and remove the pairing
 printf %s "$NEW_TOKEN" | coffer secret set channel/tg/bot-token   # rotate
 ```
@@ -414,6 +421,7 @@ channel:  my-telegram (telegram)
 uid:      9b2e…
 agent:    claude-code
 gating:   require_mention=on  ignore_other_mentions=off
+idle:     new conversation after 24 h idle
 secret:   bot_token_ref = channel/tg/bot-token
 enabled:  True    running: True
 runs on:  3f9c… (this machine)

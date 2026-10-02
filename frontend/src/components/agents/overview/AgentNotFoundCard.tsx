@@ -13,7 +13,8 @@ import type { OverviewActions } from "../AgentOverviewTab";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 
 import { FixWay, LastKnownRows, ProblemBanner } from "./FixParts";
-import { InlineCode, OverviewSection } from "./OverviewSection";
+import { Section } from "@/components/Section";
+import { InlineCode } from "./OverviewParts";
 import { useDetectionCheck } from "./useDetectionCheck";
 import { mainConfigPath } from "./paths";
 
@@ -44,7 +45,7 @@ export function AgentNotFoundCard({ agent, actions }: Props) {
             components={{ code: <InlineCode /> }}
           />
         </ProblemBanner>
-        <OverviewSection title={t(`${K}.waysToFix`)}>
+        <Section title={t(`${K}.waysToFix`)}>
           <ul className="flex flex-col">
             <FixWay title={t(`${K}.reinstall.title`, { name })} body={t(`${K}.reinstall.body`)}>
               {agent.install_handoff ? (
@@ -62,14 +63,14 @@ export function AgentNotFoundCard({ agent, actions }: Props) {
               </Button>
             </FixWay>
           </ul>
-        </OverviewSection>
+        </Section>
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-[22px]">
-        <OverviewSection title={t(`${K}.lastKnown`)}>
+        <Section title={t(`${K}.lastKnown`)}>
           <dl className="flex flex-col">
             <LastKnownRows agent={agent} />
           </dl>
-        </OverviewSection>
+        </Section>
       </div>
     </div>
   );

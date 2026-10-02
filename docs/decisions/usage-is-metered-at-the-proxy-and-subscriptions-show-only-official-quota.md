@@ -1,13 +1,13 @@
 # Usage Is Metered at the Proxy; Subscription Agents Show Only Their Official Remaining Quota
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Control-Plane State Is One SQLite File, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](sqlite-alembic-persistence.md), [Coffer Drives Claude Code Through the Agent SDK and Codex Through `codex app-server`](driving-agents-through-sdk-and-app-server.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale](agent-hook-installation.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [The Model Catalogue Is Read Back From the Installed Agent](model-catalogue-read-from-the-agent.md), [principles](../../docs-site/architecture/principles.md) (Local-First; Single SQLite writer), research note [credentials and secrets](../research/credentials-secrets.md), research note [provider switching](../research/provider-switching.md)
+**Related**: [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), [Coffer Drives Claude Code Through the Agent SDK and Codex Through `codex app-server`](driving-agents-through-sdk-and-app-server.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale](agent-hook-installation.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [The Model Catalogue Is Read Back From the Installed Agent](model-catalogue-read-from-the-agent.md), [principles](../../docs-site/architecture/principles.md) (Local-First; Single SQLite writer), research note [credentials and secrets](../research/credentials-secrets.md), research note [provider switching](../research/provider-switching.md), spec provider-switching "Meter every proxied request", spec provider-switching "Show a subscription's official quota as of when it was seen", spec provider-switching "Offer an opt-in statusline wrapper"
 
 ## Context
 
-The 1.0 Usage page answers two different questions for two kinds of agent:
+The Usage page answers two different questions for two kinds of agent:
 
 - An agent on an **API-key connection** pays per token. The question is how
   many tokens of which kind it used and what they cost, and since
@@ -130,10 +130,10 @@ modifiers are kept. A stream cut before its terminal event is recorded with
 usage **unknown**, never dropped and never guessed.
 
 **One writer.** The proxy does not open a database. It appends records to a
-spool of JSON-lines files, part of the runs class of
-[Storage Is Five Classes by Nature](storage-is-five-classes-by-nature.md),
-and the daemon ingests them into `runs.db` (until that migration lands, the
-daemon's database), keeping the single-writer rule. Each row carries
+spool of JSON-lines files under `~/.coffer/proxy-usage/`, part of the runs class
+of [Storage Is Five Classes by Nature](storage-is-five-classes-by-nature.md),
+and the daemon ingests them into `runs.db` (`usage_requests`, `usage_daily` and
+`quota_snapshots`), keeping the single-writer rule. Each row carries
 `source = "proxy"` and a de-duplication key — the upstream's request id
 (`request-id` / `x-request-id`), or the proxy's own attempt id when the
 upstream never answered — so an ingest that repeats after a crash writes
@@ -141,14 +141,16 @@ nothing twice, and a later source (a transcript importer, another proxy) can
 coexist through the same two columns. Ingest deletes a spool file only after
 its rows are committed.
 
-**Cost.** A versioned price snapshot ships with each release: per model, per
-category (input, output, each cache write, cache read) plus modifiers (batch,
-fast mode, geography, per-request server-tool prices), seeded from a public
-catalogue and pinned. A connection may override prices, because relays and
-resellers price differently. Cost is computed at ingest and stored with the
-snapshot version and override used, so a later table never rewrites history;
-the page labels it "estimated", and an unknown model is flagged rather than
-priced at zero.
+**Cost.** A price is resolved per model and per category (input, output, each
+cache write, cache read) plus modifiers (batch, fast mode, geography,
+per-request server-tool prices), in this order: the price the user set on the
+connection's curated model, a local runtime's, the provider's own API, and a
+versioned snapshot bundled with each release (kept fresh by a background
+refresh), because relays and resellers price differently from the vendor. A
+cache category an override leaves out is charged at its input rate. Cost is
+computed at ingest and stored with the label of the price used, so a later table
+never rewrites history; the page labels it "estimated", and an unknown model is
+flagged rather than priced at zero.
 
 **Subscription quota.** Only the vendor's own remaining allowance, from the
 feeds the agent itself publishes:
@@ -158,19 +160,20 @@ feeds the agent itself publishes:
   background no more often than every five minutes (a short-lived app-server
   when no session is live). `account/rateLimits/updated` notifications from
   live Coffer-driven sessions update it between reads. Each window is shown as
-  its `used_percent`, labelled by `window_duration_mins`, with `resets_at`.
+  its `used_percent`, labelled by `window_duration_mins`, with `resets_at`. The background read runs only while a Codex agent is on its own
+  login, and a manual refresh is floored at 30 seconds.
 - **Claude Code.** `rate_limit_event` from every session Coffer drives,
   reading the both-windows field when present and the top-level window
   otherwise, so its `@internal` status degrades to less detail, not to a
   failure. An **opt-in** statusline integration covers the user's own
-  terminal sessions: Coffer installs, through the shared native-config writer
-  and marked like its hooks, a `statusLine` command that forwards the
+  terminal sessions: `coffer usage statusline -- <command>` forwards the
   documented `rate_limits` object to the daemon and then runs the user's
   original `statusLine` command with the same input, printing its output — it
   chains, never replaces, and runs the original even when the daemon is down.
-  The experimental `get_usage` request may serve a manual refresh behind a
-  capability probe, cached and never sent more than once per five minutes;
-  it is never the only source.
+  Coffer never installs it: the edit is to a setting of Claude Code's that
+  differs per person, so it is handed to the person's agent as a prompt that
+  asks for no credential and no quota endpoint.
+  The experimental `get_usage` request is not used.
 - Every value is shown "as of <time>" from the moment its source produced it.
   With no fresh value there is no number: the page says when the last one
   was seen, or that none has been.
@@ -198,13 +201,14 @@ tokens extracted by per-wire rules (the final `message_delta` overriding
 `message_start`; the terminal Responses event) and normalised into disjoint
 categories; the proxy spools the records and the daemon, the only writer,
 ingests them into `runs.db` with a `source` and a de-duplication key. Cost is
-computed at ingest from a versioned per-model, per-category price snapshot
-with per-connection overrides, and stored with the version used.
+computed at ingest from per-model, per-category prices (a connection's own
+override first, a bundled versioned snapshot last), and stored with the label
+of the price used.
 
 A subscription agent shows only its official remaining quota: for Codex from
 app-server's `account/rateLimits/read` and its `updated` notification; for
 Claude Code from `rate_limit_event` on Coffer-driven sessions and an opt-in
-statusline wrapper that forwards `rate_limits` and chains the user's own
+opt-in statusline wrapper that forwards `rate_limits` and chains the user's own
 command; always labelled "as of <time>".
 
 Rules a future change must respect:
@@ -214,39 +218,26 @@ Rules a future change must respect:
   and never calls an undocumented quota endpoint.
 - A usage row without a `source` and a de-duplication key is a defect; an
   incomplete stream is recorded as unknown, not zero.
-- Stored cost always names the price snapshot and override it used.
-
-## Implementation notes (2026-09-30)
-
-- The usage tables (`usage_requests`, `usage_daily`, `quota_snapshots`) are in
-  the daemon's database (migration 0111) until `runs.db` exists, as the
-  decision allowed. Per-request rows follow the MCP invocation retention
-  policy; daily totals are kept for 365 days.
-- The bundled price snapshot (`2026-09-25`) carries Anthropic's first-party
-  rates only; other vendors' models are unpriced until the user sets a price on
-  the connection's curated model. A cache category an override leaves out is
-  charged at its input rate.
-- Codex's background read runs only while a Codex agent is on its own login;
-  a manual refresh is floored at 30 seconds.
-- The statusline wrapper is `coffer usage statusline -- <command>`, documented
-  and never installed by Coffer; the experimental `get_usage` request is not
-  used.
+- Stored cost always names the price it used.
 
 ## Consequences
 
-- **Storage.** `runs.db` gains usage records and the quota snapshots; the
-  spool is a runs-class directory the daemon empties; retention prunes usage
-  like the other run tables ([Audit Every Change With Its Actor](audit-and-retention.md)).
-- **Agents.** The Codex app-server client gains one request and one
-  notification; the Claude SDK mapping surfaces `rate_limit_event` instead of
-  dropping it; the statusline wrapper is a new Coffer-managed entry in
-  `~/.claude/settings.json`, repaired and removed like the hooks.
-- **Tests first.** Parser golden files (a `message_delta` overriding
-  `message_start`, server-tool iterations, Responses cached and reasoning
-  tokens, a truncated stream); an ingest replay that writes nothing twice; a
-  statusline test that the user's original command still runs with the
-  daemon down.
-- **Obligations.** A usage requirement set in the provider-switching spec
-  (or its own capability), the Usage page in the web-ui spec, and docs-site
-  pages that say where each number comes from and why a subscription number
-  can be missing.
+- **Storage.** `runs.db` holds the usage records (`usage_requests`, per-request
+  detail kept for the MCP invocation log's retention window) and daily totals
+  (`usage_daily`, kept 365 days), and the quota snapshots; the spool is a
+  runs-class directory the daemon empties; retention prunes usage like the other
+  run tables ([Audit Every Change With Its Actor](audit-and-retention.md)).
+- **Agents.** The Codex app-server client has one request and one notification;
+  the Claude SDK mapping surfaces `rate_limit_event` instead of dropping it;
+  the statusline wrapper is a command the user opts into, never a Coffer-managed
+  entry in `~/.claude/settings.json`.
+- **Prices.** The bundled snapshot carries Anthropic's first-party rates only;
+  other vendors' models are unpriced until the user sets a price on the
+  connection's curated model or the provider's API supplies one.
+- **Tests.** Parser golden files (a `message_delta` overriding `message_start`,
+  server-tool iterations, Responses cached and reasoning tokens, a truncated
+  stream); an ingest replay that writes nothing twice; a statusline test that the
+  user's original command still runs with the daemon down.
+- The architecture page [The local model proxy](../../docs-site/architecture/model-proxy.md)
+  and the Usage guide say where each number comes from and why a subscription
+  number can be missing.

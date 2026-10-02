@@ -68,6 +68,18 @@ class _Agents:
     async def list(self) -> list[Resource]:
         return await self._resources.list(kind="agent")
 
+    async def set_connection(
+        self, uid: str, connection_uid: str | None, *, actor: str = "api"
+    ) -> Resource:
+        """What the agent kind does for a switch: write the field on the record."""
+        row = await self._resources.get(uid)
+        return await self._resources.update_config(
+            uid,
+            {**row.config, "connection_uid": connection_uid},
+            actor,
+            allow_lifecycle_kind=True,
+        )
+
 
 @dataclass
 class _Env:
@@ -76,6 +88,9 @@ class _Env:
     audit: AuditService
     agent: FakeAgentDir
     connection_uid: str
+    agent_type: AgentType
+    agent_uid: str
+    agents: _Agents
 
     @property
     def settings(self) -> pathlib.Path:
@@ -87,8 +102,15 @@ class _Env:
         )
         return [(r.event_type, r.actor) for r in rows]
 
-    async def is_active(self) -> bool:
-        return bool((await self.providers.get(self.connection_uid)).config["is_active"])
+    async def switch(self) -> None:
+        """Switch the agent onto the connection."""
+        await self.providers.activate(self.connection_uid, self.agent_type)
+
+    async def agent_connection(self) -> str | None:
+        """The connection uid the agent's record names."""
+        (row,) = await self.agents.list()
+        value = row.config.get("connection_uid")
+        return str(value) if value is not None else None
 
 
 async def _build(
@@ -111,7 +133,7 @@ async def _build(
         audit=audit,
         secrets=store,
     )
-    await resources.register(
+    registered = await resources.register(
         kind="agent",
         name=agent_type.default_name(),
         config={"type": agent_type.value, "config_dir": str(agent.config_dir)},
@@ -136,13 +158,16 @@ async def _build(
             agents=agents,
             projector=ProviderProjector(ConfigFileStore(), agents=catalog),
             store=ConfigFileStore(),
-            deactivate=providers.deactivate,
+            clear_choice=providers.clear_agent_connection,
         )
     )
     conn_row = await providers.create(
         "acme", protocol=protocol, base_url=_BASE_URL, secret_value="sk-test-only", models=models
     )
-    return _Env(providers, reconciler, audit, agent, conn_row.uid), engine
+    return (
+        _Env(providers, reconciler, audit, agent, conn_row.uid, agent_type, registered.uid, agents),
+        engine,
+    )
 
 
 @pytest.fixture()
@@ -198,7 +223,7 @@ def _edit_settings(path: pathlib.Path, **changes: object) -> None:
 async def test_a_projection_whose_parameters_drifted_is_repaired(
     env: _Env, edit: dict[str, object], param: str
 ) -> None:
-    await env.providers.activate(env.connection_uid)
+    await env.switch()
     projected = env.settings.read_text(encoding="utf-8")
     _edit_settings(env.settings, **edit)
 
@@ -217,34 +242,37 @@ async def test_a_projection_whose_parameters_drifted_is_repaired(
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="boot clears an active flag the agent's config does not carry",
+    scenario="boot clears a connection the agent's config does not carry",
 )
 @pytest.mark.parametrize("trigger", [Trigger.BOOT, Trigger.PERIOD])
-async def test_a_flag_the_agent_config_denies_is_cleared_and_the_file_untouched(
+async def test_a_connection_the_agent_config_denies_is_cleared_and_the_file_untouched(
     env: _Env, trigger: Trigger
 ) -> None:
-    await env.providers.activate(env.connection_uid)
+    await env.switch()
     user_owned = json.dumps({"theme": "dark", "env": {"OTHER": "1"}}, indent=2) + "\n"
     env.settings.write_text(user_owned, encoding="utf-8")
 
     report = await env.reconciler.run(trigger=trigger)
 
     result = _only(report)
-    assert result.change.decision.reason_code == "flag_contradicted"
-    # Completes through ProviderService.deactivate, which takes the
+    assert result.change.decision.reason_code == "choice_contradicted"
+    # Completes through ProviderService.clear_agent_connection, which takes the
     # reconciler's hold — re-entrant inside the pass, so no deadlock.
     assert result.outcome is Outcome.APPLIED
-    assert await env.is_active() is False
+    assert await env.agent_connection() is None
     assert env.settings.read_text(encoding="utf-8") == user_owned
-    assert await env.repairs() == []  # the switch audits itself
+    # The pass audits its own repair, as the system, not as an API caller.
+    assert await env.repairs() == [(AuditEventType.PROVIDER_PROJECTION_REPAIRED.value, "system")]
 
 
 @pytest.mark.acceptance(
-    spec="provider-switching", scenario="an import projects a switch made on another machine"
+    spec="provider-switching",
+    scenario="an import re-projects an edited connection into the agent that runs on it",
 )
 async def test_the_same_state_under_an_import_is_projected(env: _Env) -> None:
-    """An import carried the user's explicit switch from another machine."""
-    await env.providers.activate(env.connection_uid)
+    """A sync round's import warrants re-projecting an agent that runs on a
+    connection: the keys gone from its file are written back."""
+    await env.switch()
     env.settings.write_text("{}\n", encoding="utf-8")
 
     report = await env.reconciler.run(trigger=Trigger.IMPORT)
@@ -252,7 +280,7 @@ async def test_the_same_state_under_an_import_is_projected(env: _Env) -> None:
     result = _only(report)
     assert result.change.decision.reason_code == "projection_missing"
     assert result.outcome is Outcome.APPLIED
-    assert await env.is_active() is True
+    assert await env.agent_connection() == env.connection_uid
     doc = json.loads(env.settings.read_text(encoding="utf-8"))
     # The agent is pointed at the local proxy with its own token helper; the
     # connection's endpoint stays with the proxy.
@@ -262,14 +290,13 @@ async def test_the_same_state_under_an_import_is_projected(env: _Env) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="provider-switching", scenario="keys no active connection claims are reported, not removed"
+    spec="provider-switching", scenario="keys no connection claims are reported, not removed"
 )
-async def test_keys_nothing_active_claims_are_reported_until_a_person_asks(env: _Env) -> None:
-    await env.providers.activate(env.connection_uid)
+async def test_keys_no_connection_claims_are_reported_until_a_person_asks(env: _Env) -> None:
+    await env.switch()
     projected = env.settings.read_text(encoding="utf-8")
-    # The flag goes, the keys stay (another tool restored the file, say).
-    row = await env.providers.get(env.connection_uid)
-    await env.providers._set_active(row, active=False, actor="test")
+    # The choice goes, the keys stay (another tool restored the file, say).
+    await env.providers.clear_agent_connection(env.agent_uid, actor="test")
 
     report = await env.reconciler.run(trigger=Trigger.PERIOD)
 
@@ -289,7 +316,7 @@ async def test_keys_nothing_active_claims_are_reported_until_a_person_asks(env: 
 
 
 async def test_a_dry_run_writes_nothing(env: _Env) -> None:
-    await env.providers.activate(env.connection_uid)
+    await env.switch()
     _edit_settings(env.settings, env__ANTHROPIC_BASE_URL="https://elsewhere.example/v1")
     drifted = env.settings.read_text(encoding="utf-8")
 
@@ -299,28 +326,28 @@ async def test_a_dry_run_writes_nothing(env: _Env) -> None:
     assert _only(report).outcome is Outcome.PLANNED
     assert env.settings.read_text(encoding="utf-8") == drifted
     assert await env.repairs() == []
-    assert await env.is_active() is True
+    assert await env.agent_connection() == env.connection_uid
 
 
 async def test_a_file_that_does_not_parse_is_left_alone(env: _Env) -> None:
-    await env.providers.activate(env.connection_uid)
+    await env.switch()
     env.settings.write_text("{ not json", encoding="utf-8")
 
     report = await env.reconciler.run(trigger=Trigger.PERIOD)
 
     assert [r for r in report.results if r.change.difference.target == TARGET] == []
     assert env.settings.read_text(encoding="utf-8") == "{ not json"
-    assert await env.is_active() is True
+    assert await env.agent_connection() == env.connection_uid
 
 
 async def test_a_projection_in_step_is_no_difference(env: _Env) -> None:
-    await env.providers.activate(env.connection_uid)
+    await env.switch()
 
     assert (await env.reconciler.plan(trigger=Trigger.PERIOD)).results == ()
 
 
 async def test_a_missing_model_catalogue_is_drift_and_is_rewritten(codex: _Env) -> None:
-    await codex.providers.activate(codex.connection_uid)
+    await codex.switch()
     catalog = codex.agent.config_dir / CODEX_MODEL_CATALOG_FILENAME
     written = catalog.read_text(encoding="utf-8")
     catalog.unlink()
@@ -336,7 +363,7 @@ async def test_a_missing_model_catalogue_is_drift_and_is_rewritten(codex: _Env) 
 async def test_a_repair_whose_audit_fails_is_undone(
     env: _Env, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    await env.providers.activate(env.connection_uid)
+    await env.switch()
     _edit_settings(env.settings, env__ANTHROPIC_BASE_URL="https://elsewhere.example/v1")
     drifted = env.settings.read_text(encoding="utf-8")
 
@@ -351,6 +378,6 @@ async def test_a_repair_whose_audit_fails_is_undone(
 
 
 async def test_a_codex_projection_in_step_is_no_difference(codex: _Env) -> None:
-    await codex.providers.activate(codex.connection_uid)
+    await codex.switch()
 
     assert (await codex.reconciler.plan(trigger=Trigger.PERIOD)).results == ()

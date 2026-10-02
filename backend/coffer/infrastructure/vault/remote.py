@@ -1,5 +1,6 @@
 """Fetching from and pushing to the one user-owned remote
-(ADR sync-applies-clean-merges-and-stops-on-any-conflict, ADR credentials-across-machines).
+(ADR sync-applies-clean-merges-and-stops-on-any-conflict,
+ADR secrets-cross-machines-only-as-ciphertext).
 
 Sync only adds a remote to a repository that already exists: ``origin``,
 whose URL is the user's and carries no secret. The push token reaches git per

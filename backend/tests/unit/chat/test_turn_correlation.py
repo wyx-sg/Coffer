@@ -21,6 +21,7 @@ from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.runtime import correlation
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone
 from coffer.domain.chat.message import Message
+from tests.support.chat_turns import start_turn
 
 from .conftest import FakeAuditRepo, FakeConversationRepo, FakeMessageRepo, make_registry
 
@@ -47,7 +48,7 @@ class _AuditingAdapter:
 
 
 async def _run_one_turn(orchestrator: TurnOrchestrator, conversation_id: str) -> None:
-    queue = await orchestrator.start_turn(conversation_id, "hi")
+    queue = await start_turn(orchestrator, conversation_id, "hi")
     while await asyncio.wait_for(queue.get(), timeout=5.0) is not None:
         pass
 

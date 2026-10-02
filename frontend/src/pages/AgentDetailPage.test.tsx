@@ -33,6 +33,9 @@ vi.mock("@/lib/hooks/useAgents", async (importOriginal) => ({
   useAgentConnection: () => ({ data: undefined }),
 }));
 vi.mock("@/components/agents/list/useAgentRowActions", () => ({ useAgentRowActions: vi.fn() }));
+// The Models feature decides whether the Model tab exists.
+let modelsOn: boolean | undefined = true;
+vi.mock("@/lib/hooks/useFeatures", () => ({ useFeatureEnabled: () => modelsOn }));
 // No managed agent to ask: a hand-off offers Copy prompt only.
 vi.mock("@/lib/hooks/useAgentProviders", () => ({ useAgentProviders: () => ({ data: [] }) }));
 
@@ -73,7 +76,6 @@ const AGENT = {
   model: "claude-opus-5-5",
   effort: null,
   tier_models: null,
-  wire_api: null,
   state: "installed_active" as const,
   version: "2.1.281",
   created_at: "2026-06-12T00:00:00Z",
@@ -117,7 +119,10 @@ function renderAt(path = "/agents/claude_code") {
   );
 }
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  modelsOn = true;
+});
 
 describe("AgentDetailPage", () => {
   // Tabs and paths here; Overview's summary rows and Config files' instructions
@@ -144,6 +149,17 @@ describe("AgentDetailPage", () => {
     expect(screen.getByTestId("where")).toHaveTextContent("/agents/claude_code/hooks");
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Overview" }));
     expect(screen.getByTestId("where")).toHaveTextContent(/^\/agents\/claude_code$/);
+  });
+
+  test("with Models off the Model tab is absent and its address opens Overview", () => {
+    modelsOn = false;
+    mockRoute();
+    renderAt("/agents/claude_code/model");
+    const tabs = screen.getAllByRole("tab").map((tab) => tab.textContent);
+    expect(tabs).not.toContain("Model");
+    expect(tabs).toHaveLength(8);
+    expect(screen.getByTestId("where")).toHaveTextContent(/^\/agents\/claude_code$/);
+    expect(screen.getByTestId("tab-body")).toHaveTextContent("overview");
   });
 
   test("the header names the agent by its type, with its fixed name, version, directory and model", () => {

@@ -12,9 +12,8 @@ from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import (
     TurnOrchestrator,
     active_turns,
-    clear_active_turns,
 )
-from coffer.domain.chat.errors import AgentConfigRejected, TurnInProgress
+from coffer.domain.chat.errors import AgentConfigRejected
 from coffer.domain.chat.events import (
     AgentEvent,
     TextDelta,
@@ -25,6 +24,7 @@ from coffer.domain.chat.events import (
     TurnStarted,
 )
 from coffer.domain.chat.message import Role, TextBlock
+from tests.support.chat_turns import start_turn
 
 from .conftest import (
     FakeAgentAdapter,
@@ -89,14 +89,6 @@ class _BlockingAdapter:
         return gen()
 
 
-@pytest.fixture(autouse=True)
-def clear_turns() -> Any:
-    """Ensure the per-conversation turn state is clean before and after each test."""
-    clear_active_turns()
-    yield
-    clear_active_turns()
-
-
 # ---------------------------------------------------------------------------
 # Happy path
 # ---------------------------------------------------------------------------
@@ -113,7 +105,7 @@ async def test_happy_path_collects_events() -> None:
     orchestrator, _conv, _msg, _prov = make_orchestrator(scripted)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "Hi there")
+    queue = await start_turn(orchestrator, conv.id, "Hi there")
     events = await drain_queue(queue)
 
     assert any(isinstance(e, TextDelta) for e in events)
@@ -129,7 +121,7 @@ async def test_happy_path_persists_assistant_message() -> None:
     orchestrator, _, msg_repo, _ = make_orchestrator(scripted)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "What is the capital of France?")
+    queue = await start_turn(orchestrator, conv.id, "What is the capital of France?")
     await drain_queue(queue)
 
     messages = msg_repo.all_messages()
@@ -158,7 +150,7 @@ async def test_persisted_reply_keeps_text_and_tool_calls_in_the_order_the_turn_e
     orchestrator, _, msg_repo, _ = make_orchestrator(scripted)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    await drain_queue(await orchestrator.start_turn(conv.id, "read a"))
+    await drain_queue(await start_turn(orchestrator, conv.id, "read a"))
 
     assistant = msg_repo.all_messages()[1]
     assert [
@@ -182,7 +174,7 @@ async def test_completed_turn_records_token_usage() -> None:
     orchestrator, _, msg_repo, _ = make_orchestrator(scripted)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "ping")
+    queue = await start_turn(orchestrator, conv.id, "ping")
     await drain_queue(queue)
 
     assistant = msg_repo.all_messages()[1]
@@ -198,7 +190,7 @@ async def test_history_passed_to_adapter_includes_the_user_message() -> None:
     orchestrator, _, _, _ = make_orchestrator(adapter=adapter)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "remember this")
+    queue = await start_turn(orchestrator, conv.id, "remember this")
     await drain_queue(queue)
 
     assert len(adapter.recorded_histories) == 1
@@ -227,7 +219,7 @@ async def test_only_the_most_recent_two_hundred_messages_reach_the_adapter() -> 
     for i in range(HISTORY_LIMIT + 20):
         await msg_repo.append(make_message(i, f"old {i}", conversation_id=conv.id))
 
-    queue = await orchestrator.start_turn(conv.id, "the newest thing")
+    queue = await start_turn(orchestrator, conv.id, "the newest thing")
     await drain_queue(queue)
 
     history = adapter.recorded_histories[0]
@@ -249,28 +241,42 @@ async def test_model_id_recorded_from_adapter() -> None:
     orchestrator, _, msg_repo, _ = make_orchestrator(adapter=adapter)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     await drain_queue(queue)
 
     assistant = next(m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT)
     assert assistant.model_id == "m-xyz"
 
 
-# ---------------------------------------------------------------------------
-# TurnInProgress + build_adapter errors
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
-async def test_turn_in_progress_raises_on_second_start() -> None:
-    orchestrator, _, _, _ = make_orchestrator(adapter=_BlockingAdapter([]))
+async def test_model_learned_mid_turn_is_recorded_at_finalize() -> None:
+    """A real adapter only learns its model once the stream is under way (the SDK's
+    first assistant message, the app-server's thread result): it is read when the
+    reply is finalised, not before the turn starts."""
+
+    class _LateModelAdapter:
+        model_id: str | None = None
+
+        async def run_turn(self, *, history: Any, **_: object) -> AsyncIterator[AgentEvent]:
+            async def gen() -> AsyncIterator[AgentEvent]:
+                yield TurnStarted()
+                self.model_id = "learned-mid-turn"
+                yield TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn")
+
+            return gen()
+
+    orchestrator, _, msg_repo, _ = make_orchestrator(adapter=_LateModelAdapter())
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    await orchestrator.start_turn(conv.id, "first message")
-    with pytest.raises(TurnInProgress):
-        await orchestrator.start_turn(conv.id, "second message")
+    await drain_queue(await start_turn(orchestrator, conv.id, "hi"))
 
-    orchestrator.cancel_turn(conv.id)  # cleanup
+    assistant = next(m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT)
+    assert assistant.model_id == "learned-mid-turn"
+
+
+# ---------------------------------------------------------------------------
+# build_adapter errors
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -281,7 +287,7 @@ async def test_build_adapter_error_propagates_and_releases_slot() -> None:
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     with pytest.raises(AgentConfigRejected):
-        await orchestrator.start_turn(conv.id, "hi")
+        await start_turn(orchestrator, conv.id, "hi")
 
     # The reservation was rolled back — a retry is possible.
     assert conv.id not in active_turns()
@@ -301,7 +307,7 @@ async def test_turn_error_persists_failed_message() -> None:
     orchestrator, _, msg_repo, _ = make_orchestrator(scripted)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "test")
+    queue = await start_turn(orchestrator, conv.id, "test")
     await drain_queue(queue)
 
     assistants = [m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT]
@@ -321,7 +327,7 @@ async def test_turn_error_is_logged_server_side(caplog: pytest.LogCaptureFixture
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
     with caplog.at_level("WARNING", logger="coffer.application.chat.turn_orchestrator"):
-        queue = await orchestrator.start_turn(conv.id, "test")
+        queue = await start_turn(orchestrator, conv.id, "test")
         await drain_queue(queue)
 
     records = [r for r in caplog.records if "PROVIDER_ERROR" in r.getMessage()]
@@ -354,7 +360,7 @@ async def test_unexpected_adapter_error_yields_internal_error_and_failed_message
     orchestrator, _, msg_repo, _ = make_orchestrator(adapter=_RaisingAdapter())
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     events = await drain_queue(queue)
 
     errors = [e for e in events if isinstance(e, TurnError)]
@@ -373,7 +379,7 @@ async def test_cancel_turn_discards_the_partial_turn() -> None:
     )
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     first = await asyncio.wait_for(queue.get(), timeout=5.0)
     assert isinstance(first, TextDelta)
 
@@ -404,7 +410,7 @@ async def test_interrupt_persists_the_partial_message() -> None:
     )
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     first = await asyncio.wait_for(queue.get(), timeout=5.0)
     assert isinstance(first, TextDelta)
 
@@ -441,7 +447,7 @@ async def test_active_turns_cleared_after_completion() -> None:
     orchestrator, _, _, _ = make_orchestrator(scripted)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     await drain_queue(queue)
 
     assert conv.id not in active_turns()
@@ -475,7 +481,7 @@ async def test_placeholder_write_failure_still_persists_failed_message() -> None
     orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry)
     conv = await chat_svc.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     events = await drain_queue(queue)
 
     # The client sees a TurnError…
@@ -514,7 +520,7 @@ async def test_interrupt_during_placeholder_append_leaves_no_orphan_streaming_ro
     orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry)
     conv = await chat_svc.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     await asyncio.sleep(0)  # let the task reach the parked append
 
     orchestrator.interrupt_turn(conv.id)
@@ -537,7 +543,7 @@ async def test_turn_completion_bumps_conversation_updated_at() -> None:
     )
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     # First event means the placeholder row (and its touch) already happened.
     first = await asyncio.wait_for(queue.get(), timeout=5.0)
     assert isinstance(first, TextDelta)
@@ -568,7 +574,7 @@ async def test_in_flight_turn_leaves_a_streaming_assistant_row() -> None:
     )
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     first = await asyncio.wait_for(queue.get(), timeout=5.0)
     assert isinstance(first, TextDelta)
 
@@ -591,7 +597,7 @@ async def test_completed_turn_finalizes_the_same_row_not_a_duplicate() -> None:
     orchestrator, _, msg_repo, _ = make_orchestrator(scripted)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     await drain_queue(queue)
 
     assistants = [m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT]

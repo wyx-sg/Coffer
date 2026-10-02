@@ -18,7 +18,7 @@ Rules:
 
 - Kebab-case throughout.
 - The short name typically mirrors (or describes) the affected spec folder (`openspec/specs/mcp-gateway/` → `feature/mcp-gateway-...`).
-- Branch from up-to-date `main`: `git checkout main && git pull --ff-only && git checkout -b <prefix>/<name>`.
+- Branch from up-to-date `main`: `git checkout main && git pull --ff-only && git checkout -b <prefix>/<name>`. Work for the 1.0 rework branches from the integration branch `feature/rearch` instead, until it merges into `main`.
 - Squash merge is the convention (the repository also permits merge commits and rebase merges, and does not delete merged branches). Delete the branch as you merge — `gh pr merge --squash --delete-branch` — or right afterwards.
 
 ## Commits
@@ -103,7 +103,7 @@ When NOT to use:
 
 ### Standard Flow
 
-1. Open PR from feature branch to `main`.
+1. Open PR from feature branch to `main` (to `feature/rearch` for 1.0 rework work).
 2. PR title follows Conventional Commits, under the same limits as a commit subject (≤ 120 chars of subject, ≤ 150 for the whole header) — no case constraint. The `pr-title` workflow lints it with the very same `.commitlintrc.yaml`, so the two can't drift.
 3. PR description:
    - **What** changed.
@@ -195,10 +195,11 @@ NEVER force-push to `main` to "undo" a merge.
 Coffer runs **Dependabot security updates only**. There is no
 `.github/dependabot.yml`, so no routine version-bump PRs are opened.
 
-Why: the repository requires branches to be up to date before merging and does
-not allow auto-merge, so every bot PR costs a manual branch update, a full CI
-round, and a merge — and merging any one of them invalidates the rest, forcing
-them through strictly serially. For a single-maintainer, local-first tool, that
+Why: every bot PR still costs a full CI round and a review, and each one that
+merges moves `main` under the rest, so they queue through CI one after another.
+(The repository allows auto-merge, has no merge queue, and no longer requires a
+branch to be up to date before it merges, so the cost is CI time and attention,
+not a manual branch update.) For a single-maintainer, local-first tool, that
 recurring cost is not repaid by patch and minor bumps. Major upgrades that
 actually matter (the mcp 2.x SDK, for instance) are done by hand against the
 changelog anyway.

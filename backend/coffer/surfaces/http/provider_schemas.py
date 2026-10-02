@@ -78,13 +78,13 @@ class ProviderPatch(BaseModel):
     can be wrong, so it is corrected in place rather than by re-entering the
     connection, key and all.
 
-    The wire DOES decide one thing, though, so that correction is refused with
-    409 ``PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`` while the connection is
-    ``is_active``: an ``ollama`` connection covers no agent whatever its scope
-    says. Moving the wire under a live projection would leave the native config
-    already written with nothing that would ever take it off. Revert the agents to their
-    built-in login, patch, then re-activate. An inactive connection patches
-    freely.
+    The wire DOES decide one thing, though: an ``ollama`` connection covers no
+    agent whatever its scope says. So the correction is refused with 409
+    ``PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`` while an agent runs on the
+    connection — moving the wire under a live projection would leave the native
+    config already written with nothing that would ever take it off. Revert those
+    agents to their built-in login, patch, then switch them back. A connection no
+    agent runs on patches freely.
 
     Re-targeting which agents the connection projects into is a scope edit, not
     a patch field (re-target then re-activate to re-project). ``models``
@@ -117,9 +117,9 @@ class ProviderOut(BaseModel):
     dropdown never offers an embedding or image model. ``internal_default``
     marks the connection Coffer's internal engine uses (at most one globally),
     ``transcribe_default`` the one it transcribes speech on — a separate flag
-    because they are separate models and neither falls back to the other; and
-    ``is_active`` marks the one currently projected. A connection may carry any
-    combination.
+    because they are separate models and neither falls back to the other. A
+    connection may carry either, both or neither. Which agents run on it is not a
+    field here: it is each agent's ``connection_uid``.
 
     ``uid`` is the connection's identity and what every route here takes; the
     ``name`` beside it is the label, free to change through
@@ -127,7 +127,7 @@ class ProviderOut(BaseModel):
     is the whole reason this kind no longer owns a rename operation of its own:
     nothing Coffer projects into an agent's config names the connection (the
     ``apiKeyHelper`` prints the agent's local proxy token), so a rename rewrites
-    nothing (ADR resource-identity-is-an-immutable-uid).
+    nothing (ADR identity-is-the-uid-inside-the-file).
     """
 
     uid: str
@@ -141,7 +141,6 @@ class ProviderOut(BaseModel):
     secret_ref: str | None
     compatible_agents: list[AgentType]
     models: list[ProviderModel]
-    is_active: bool
     internal_default: bool
     transcribe_default: bool
     enabled: bool
@@ -224,13 +223,22 @@ class PriceListIn(BaseModel):
     refresh: bool
 
 
+class ActivateIn(BaseModel):
+    """Which agent to switch onto the connection. There is one agent per type
+    (spec agent-registry "Keep one agent per type, named by it"), so the type
+    names it; the switch changes that agent and no other."""
+
+    agent_type: AgentType
+
+
 class ActivateOut(BaseModel):
-    """Result of a switch — which agents were written, which wire had none."""
+    """Result of switching one agent onto a connection."""
 
     activated: str
     protocol: Protocol
-    projected: list[str]
-    skipped: list[str]
+    agent_type: AgentType
+    #: The agent's name.
+    agent: str
 
 
 class DeactivateOut(BaseModel):
@@ -263,16 +271,6 @@ class ListModelsIn(BaseModel):
     secret_ref: str | None = None
     secret_value: str | None = None  # inline secret to fetch before saving
     base_url: str | None = None
-
-
-class DetectProtocolIn(BaseModel):
-    base_url: str | None = None
-    secret_ref: str | None = None
-    secret_value: str | None = None  # inline secret to probe before saving
-
-
-class DetectProtocolOut(BaseModel):
-    protocol: str  # "anthropic" | "openai" | "ollama" | "unknown"
 
 
 class TestResultOut(BaseModel):

@@ -462,23 +462,6 @@ def test_codex_toggle_writes_only_the_plugins_enabled_field(tmp_path, monkeypatc
 
 
 @pytest.mark.acceptance(
-    spec="agent-registry/codex", scenario="reject a wire_api other than responses"
-)
-def test_codex_wire_api_other_than_responses_is_422(tmp_path, monkeypatch):
-    (tmp_path / ".codex").mkdir()
-    app = _app(tmp_path, monkeypatch, 61270)
-    with _client(app) as c:
-        uid = _register(c, "codex", "cx")
-        ok = c.patch(f"/api/v1/agents/{uid}", json={"wire_api": "responses"})
-        assert ok.status_code == 200, ok.text
-
-        r = c.patch(f"/api/v1/agents/{uid}", json={"wire_api": "chat"})
-
-        assert r.status_code == 422, r.text
-        assert c.get(f"/api/v1/agents/{uid}").json()["wire_api"] == "responses"
-
-
-@pytest.mark.acceptance(
     spec="agent-registry/codex", scenario="list Codex sessions from the sessions directory"
 )
 def test_codex_transcripts_come_from_the_sessions_directory(tmp_path, monkeypatch):

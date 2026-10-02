@@ -172,7 +172,7 @@ sequenceDiagram
 | 资源 | `resource_created`、`resource_updated`、`resource_enabled`、`resource_disabled`、`resource_deleted`、`resource_renamed`、`resource_scope_updated` |
 | MCP 能力 | `capability_enabled`、`capability_disabled` |
 | 守护进程 | `token_rotated`、`daemon_residency_updated`、`daemon_restarted`、`retention_updated`、`internal_engine_model_set` |
-| 密钥 | `secret_set`、`secret_revealed`、`secret_deleted`、`secret_migrated`、`master_key_relocated`、`secret_resolved`、`secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected`、`secret_imported` |
+| 密钥 | `secret_set`、`secret_revealed`、`secret_deleted`、`master_key_relocated`、`secret_resolved`、`secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected`、`secret_imported` |
 | 智能体 | `agent_config_file_written`、`agent_config_file_deleted`、`agent_mcp_installed`、`agent_mcp_uninstalled`、`agent_mcp_entry_removed`、`agent_mcp_entry_adopted`、`agent_plugin_toggled`、`agent_plugin_uninstalled` |
 | 技能 | `skill_imported`、`skill_updated`、`skill_update_merged`、`skill_bound`、`skill_unbound`、`skill_relinked`、`skill_drift_remediated`、`skill_adopted`、`skill_unmanaged_deleted` |
 | 知识 | `knowledge_written`、`knowledge_edited`、`knowledge_deleted`、`knowledge_curated` |
@@ -190,7 +190,7 @@ sequenceDiagram
 - `secret_imported`——`coffer secret import` 把一个明文密钥从文件移进了存储。
 - `master_key_exported`——桌面应用在经过在场验证后写出了一份密钥备份。没有任何命令或路由能导出密钥。
 
-旧的明文读取路由记录的 `secret_read` 不再写入：那个路由已经没了。为启动上游而解密密钥不是审计事件。
+为启动上游而解密密钥不是审计事件。
 
 你可以在「活动」页的「变更」标签页、用 `coffer log audit`（`--kind`、`--name`、`--event-type`、`--since`、`--limit`、`--json`），或通过 `GET /api/v1/audit` 读取审计日志。见[活动与审计](/zh/guides/activity)。
 
@@ -201,7 +201,7 @@ sequenceDiagram
 | 列 | 含义 |
 | --- | --- |
 | `timestamp` | 调用开始的时间 |
-| `resource_uid` | MCP 服务器的 uid；内置的 `coffer__*` 工具为 `coffer`；之后被删除的服务器为 `deleted:…` |
+| `resource_uid` | MCP 服务器的 uid；内置的 `coffer__*` 工具为 `coffer`；之后被删除的服务器保留其 uid，没有名字 |
 | `capability_type`、`capability_key` | `tool` / `resource` / `prompt`，以及上游给它起的名字 |
 | `duration_ms` | 上游请求的实际耗时 |
 | `status` | `ok`、`error`、`timeout` 或 `denied` |
@@ -355,5 +355,5 @@ flowchart LR
 - 指南：[活动与审计](/zh/guides/activity)、[故障排查](/zh/guides/troubleshooting)、[运行守护进程](/zh/guides/daemon)
 - 参考：[MCP 工具](/zh/reference/mcp-tools)、[文件与目录](/zh/reference/filesystem)、[配置](/zh/reference/configuration)、[错误码](/zh/reference/error-codes)
 - 架构：[MCP 网关](/zh/architecture/mcp-gateway)、[安全模型](/zh/architecture/security)、[持久化](/zh/architecture/persistence)
-- 决策记录：[后台工作受监督运行，每条记录带同一个关联 id](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/background-work-runs-supervised-and-correlated.md)、[评测：可选开启的采集、人工整理与确定性回归门禁](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/eval-capture-and-regression-gate.md)、[智能体控制层指南](https://github.com/wyx-sg/Coffer/blob/main/.agents/harness.md)、[资源身份是不可变的 UID](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md)
+- 决策记录：[后台工作受监督运行，每条记录带同一个关联 id](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/background-work-runs-supervised-and-correlated.md)、[评测：可选开启的采集、人工整理与确定性回归门禁](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/eval-capture-and-regression-gate.md)、[智能体控制层指南](https://github.com/wyx-sg/Coffer/blob/main/.agents/harness.md)、[A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/identity-is-the-uid-inside-the-file.md)
 - 规格：[daemon](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md)、[mcp-gateway](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md)、[resource-framework](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md)

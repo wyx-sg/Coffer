@@ -154,12 +154,12 @@ Step by step (two arguments skip all of it: `--version` prints the package versi
 Only after the lifespan returns does uvicorn start listening on the socket, report `started`, and let the entry point release the spawn lock. A racing spawn is therefore blocked on the lock for the whole boot, never probing a socket that is bound but not yet answering. When the lock opens, that spawn's probe finds a serving daemon and it exits cleanly. Boot takes several seconds on a real vault (migrations, secret store, upstream warm-up), which is why the probe timeouts are generous.
 
 ::: info Status during boot
-`GET /api/v1/daemon/status` reports a `status` phase of `ready` or `draining`. There is no starting phase: the socket starts listening only after the lifespan has finished, so a client sees a refused connection during boot, then `ready`, then `draining` during teardown. A client that has just spawned a daemon therefore waits a bounded time for the probe to answer instead of reading a refused connection as a failure.
+`GET /api/v1/daemon/status` reports a `status` phase of `ready` or `draining`. There is no starting phase: the socket starts listening only after the lifespan has finished, so a client sees a refused connection during boot, then `ready`. When shutdown begins, the daemon's own uvicorn server (a small subclass in the entry point) flips the phase to `draining` and keeps its listener open for about a second before closing it, so a poller can actually observe the phase. The entry point also closes its own copy of the listening socket as soon as uvicorn has its dup, so the port never stays in LISTEN with nobody accepting through the teardown. After that a connection is refused. A client that has just spawned a daemon therefore waits a bounded time for the probe to answer instead of reading a refused connection as a failure.
 :::
 
 ## Detect-or-spawn
 
-Three surfaces can start a daemon, and all three spawn the same way, through one shared spawn helper that resolves the command and starts it detached: a new session on POSIX, stdin from `/dev/null`, and stdout and stderr appended to `~/.coffer/logs/daemon.log`. A daemon that refuses to start, for example because its port is taken, explains why in the file every error message points you to.
+Three surfaces can start a daemon, and all three spawn the same way, through one shared spawn helper that resolves the command and starts it detached: a new session on POSIX, stdin from `/dev/null`, and stdout and stderr appended to `~/.coffer/logs/daemon.log`. A daemon that refuses to start, for example because its port is taken, explains why in the file every error message points you to. That file is rotated at 10 MB (three backups kept). Because the detached daemon's own stdout and stderr are descriptors on it, the rotating handler moves those descriptors to the new file after each rollover; otherwise a traceback written straight to stderr would end up in a rotated-away copy that nothing reads. uvicorn is started with its own logging configuration switched off, so its records go through the same JSON handler as everything else.
 
 The daemon command is resolved in this order:
 
@@ -195,7 +195,7 @@ The surfaces differ only in their budgets and in what they do when the spawn fai
 | Surface | Probe | Spawn wait | On failure |
 | --- | --- | --- | --- |
 | `coffer …` (any command except `coffer daemon status`) | The shared liveness probe (status call) | 10 s | Kills the half-started process, prints `daemon failed to start within 10s; check ~/.coffer/logs/daemon.log`, exits 3 |
-| `coffer daemon start` | The shared liveness probe, then a trial bind of the planned port | 10 s for `daemon.json` | Prints the port-conflict message before spawning, or the timeout message, and exits 1 |
+| `coffer daemon start` | The shared liveness probe, then a trial bind of the planned port | 30 s for the new daemon to answer its status call (`daemon.json` alone does not count) | Prints the port-conflict message before spawning, `daemon exited at startup (code N); check daemon.log` if the child ends first (a refused vault migration, git too old), or the timeout message, and exits 1 |
 | `coffer-mcp-shim` | Polls for 1 s | 10 s | Writes `daemon did not come up within 10s` to stderr, exits 3 |
 | Desktop shell | Step 1 of its chain | 90 s | Shows the offline banner with the reason |
 
@@ -254,7 +254,7 @@ The CLI prints it on stderr before every command. The shim writes it to stderr a
 
 ## Background work
 
-The periodic workers that belong to no single kind start in one place, the HTTP surface's background-worker launcher. A kind that owns a loop starts it in its own wiring, and the lifespan and entry point own a few tasks directly. Each worker runs a catch-up pass or a start delay, then loops on an interval. A failing pass is logged and never kills its loop. A worker that belongs to an experimental feature reads its switch at the top of every round and skips the round while the feature is off; none does right now.
+The periodic workers that belong to no single kind start in one place, the HTTP surface's background-worker launcher. A kind that owns a loop starts it in its own wiring, and the lifespan and entry point own a few tasks directly. Each worker runs a catch-up pass or a start delay, then loops on an interval. A failing pass is logged and never kills its loop. A worker that belongs to an experimental feature reads its switch at the top of every round and skips the round while the feature is off: curation, distil and aggregate, usage ingest and price refresh, and the sync converge worker each do.
 
 | Worker | Cadence | What it does |
 | --- | --- | --- |
@@ -302,7 +302,7 @@ stateDiagram-v2
 
 There is one exit path. `SIGTERM` and `SIGINT` run it. `POST /api/v1/daemon/shutdown` (token-gated) answers `204` and then sends `SIGTERM` to its own process, so an API stop and a signal stop cannot diverge. `coffer daemon stop` first confirms the pid in `daemon.json` is still a Coffer daemon. If it is not, it removes the stale file instead of signalling a stranger. Otherwise it sends `SIGTERM` and waits up to 5 s for `daemon.json` to disappear.
 
-Uvicorn then shuts down gracefully with a 10 s bound on open connections. Without that bound, a `/mcp` SSE stream, which never ends on its own, would hold the daemon open forever. The lifespan teardown sets the phase to `draining` and runs in an order that is load-bearing:
+Uvicorn then shuts down gracefully with a 10 s bound on open connections. Without that bound, a `/mcp` SSE stream, which never ends on its own, would hold the daemon open forever. The lifespan teardown runs in an order that is load-bearing:
 
 1. Cancel the reconciler's loop first, because a pass writes into agents' config files and must not start while the rest goes down, then the attention watch.
 2. Stop the workers: retention, sync, curation, distil, aggregation, transcript warm, and the skill update check (which also removes staged sources).
@@ -337,7 +337,7 @@ On macOS, `coffer daemon service install` writes a per-user launchd agent, `~/Li
 | Program | `~/.coffer/bin/coffer-daemon` symlink | A path pinned to a version directory stops working two upgrades later, when that directory is pruned. |
 | `StandardOutPath` / `StandardErrorPath` | `~/.coffer/logs/daemon.log` | One log for every writer. |
 
-Install and uninstall work with no daemon running, and are also reachable from the web UI's residency setting (`PUT /api/v1/daemon/residency`). Neither boots a loaded job out. Once launchd has started the daemon, the daemon *is* the job, and `launchctl bootout` would kill the very process answering the settings request. Writing or deleting the plist is enough to decide what happens at the next login, and removing the service leaves a running daemon running.
+Install and uninstall work with no daemon running, and are also reachable from the web UI's residency setting (`PUT /api/v1/daemon/residency`). Uninstall deletes the plist and then boots the job out, with one exception that keeps the request alive. Once launchd has started the daemon, the daemon *is* the job, and `launchctl bootout` would kill the very process answering the settings request. So when a process is running under the job, the uninstall leaves it running and the daemon boots its own job out as it exits (the last step of the entry point). Without that, launchd would go on restarting a crashed daemon from the definition it still holds after the user switched Start at login off. A loaded job with nothing running under it is booted out at once.
 
 ## Trade-offs and alternatives
 

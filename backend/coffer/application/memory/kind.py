@@ -40,7 +40,7 @@ also the *only* answer to an unresolvable one (see "Report unresolvable partitio
 which is why it stays reachable rather than being hidden behind the pass.
 
 ``on_rename`` moves that same directory, because the row's name is the
-directory's name (ADR resource-identity-is-an-immutable-uid). It is the only
+directory's name (ADR identity-is-the-uid-inside-the-file). It is the only
 hook here that can *refuse*, and it refuses twice: ``global`` is not renameable
 at all, and a directory already sitting under the new name is a collision
 rather than something to merge into. See the hook itself for why each of those

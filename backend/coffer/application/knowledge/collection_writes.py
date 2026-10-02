@@ -20,6 +20,7 @@ overwritten when the document, or a collection of that name, exists again.
 from __future__ import annotations
 
 import asyncio
+import shutil
 
 from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.recording import recording
@@ -41,6 +42,7 @@ from coffer.domain.knowledge.history import (
     WRITER_USER,
     Change,
 )
+from coffer.domain.resource import Resource
 from coffer.domain.vault.writers import CommitMeta
 from coffer.infrastructure.knowledge import catalogue, collection_files, paths
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
@@ -93,14 +95,16 @@ async def restore_deleted(
     if not removed:
         raise KnowledgeVersionNotFound(change.version)
     before = f"{change.version}^"
-    if operation == OP_REMOVE:
+    new_collection = operation == OP_REMOVE
+    if new_collection:
         name = change.meta.collection or change.collections[0]
         if name in await knowledge.collection_names() or paths.collection_dir(name).exists():
             raise CollectionExists(name)
-        row = await knowledge.register_row(name, actor=actor)
         summary = f"Restore collection {name}"
+        existing: Resource | None = None
     else:
-        row = await knowledge.require_collection(removed[0])
+        name = removed[0].split("/", 1)[0]
+        existing = await knowledge.require_collection(removed[0])
         for relpath in removed:
             if paths.resolve(relpath).exists():
                 raise KnowledgeRestoreConflict(change.version, relpath)
@@ -110,19 +114,30 @@ async def restore_deleted(
         OP_RESTORE,
         summary,
         actor=actor,
-        collection=row.name,
+        collection=name,
         restored_from=change.version,
     )
+    row = existing
     async with recording(history, meta) as tx:
-        if operation == OP_REMOVE:
-            tx.touch(row.name)
-            await asyncio.to_thread(paths.collection_dir(row.name).mkdir, parents=True)
-        for relpath in removed:
-            raw = await asyncio.to_thread(history.show, before, relpath)
-            if raw is None:
-                continue
-            tx.touch(relpath)
-            await asyncio.to_thread(collection_files.restore_file, relpath, raw)
+        try:
+            if new_collection:
+                tx.touch(name)
+                await asyncio.to_thread(paths.collection_dir(name).mkdir, parents=True)
+            for relpath in removed:
+                raw = await asyncio.to_thread(history.show, before, relpath)
+                if raw is None:
+                    continue
+                tx.touch(relpath)
+                await asyncio.to_thread(collection_files.restore_file, relpath, raw)
+            if new_collection:
+                # The row goes last: a collection without files must never be
+                # registered, and a failed restore must be retryable.
+                row = await knowledge.register_row(name, actor=actor)
+        except BaseException:
+            if new_collection:
+                await asyncio.to_thread(shutil.rmtree, paths.collection_dir(name), True)
+            raise
+    assert row is not None
     await audit.record(
         AuditEventType.KNOWLEDGE_EDITED.value,
         resource=row,

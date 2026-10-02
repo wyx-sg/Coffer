@@ -5,7 +5,7 @@ import { StatusPill } from "@/components/status/StatusPill";
 import type { ResourceOut } from "@/lib/api/resources";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import { formatDateTime } from "@/lib/utils";
-import { secretLabel, transportOf } from "./serverState";
+import { secretLabel, transportOf } from "@/lib/mcp/serverState";
 
 interface Props {
   resource: ResourceOut;

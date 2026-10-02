@@ -59,6 +59,9 @@ def test_home_is_redirected_away_from_the_real_one() -> None:
         "COFFER_QUOTA_POLL",
         # ... and from fetching the model price list over the network.
         "COFFER_PRICE_REFRESH",
+        # ... and every experimental feature is switched on (the features are
+        # off until switched on, and almost every test drives one).
+        "COFFER_FEATURES",
         real_home_guard.REAL_HOME_ENV,
     }
     leaked = {

@@ -1,7 +1,7 @@
 """MCP-specific capability list/enable/disable/refresh routes.
 
 Every route here addresses its server by the resource's immutable ``uid``
-(ADR resource-identity-is-an-immutable-uid) and resolves it to the row once,
+(ADR identity-is-the-uid-inside-the-file) and resolves it to the row once,
 through ``require_mcp_server``. The NAME the row carries is then what goes to
 capability discovery, which is keyed on it because the wire namespace
 ``<server>__<tool>`` is built from the label.

@@ -11,6 +11,7 @@ import { isAgentType } from "@/lib/agents/routes";
 import type { AgentOut, AgentType, AgentTypeOut } from "@/lib/api/agents";
 import { useAgent, useAgentTypes } from "@/lib/hooks/useAgents";
 
+/** @ui-only hook result; never crosses the wire. */
 export interface AgentRoute {
   /** The type the address names, or null when the segment is not a type. */
   type: AgentType | null;

@@ -18,7 +18,7 @@ import { AddChannelDialog } from "@/components/channel/AddChannelDialog";
 import { ChannelDetailPane } from "@/components/channel/ChannelDetailPane";
 import { ChannelFirstRun } from "@/components/channel/ChannelFirstRun";
 import { ChannelList } from "@/components/channel/ChannelList";
-import { CHANNEL_GROUPS } from "@/components/channel/channelState";
+import { CHANNEL_GROUPS } from "@/lib/channels/channelState";
 import { Button } from "@/components/ui/button";
 import type { ChannelType } from "@/lib/api/channels";
 import { translateApiError } from "@/lib/api/errors";
@@ -54,7 +54,6 @@ export function ChannelsPage() {
   );
   const header = (
     <PageHeader
-      icon={Radio}
       title={t("channels.title")}
       badges={
         channels.length > 0 ? (

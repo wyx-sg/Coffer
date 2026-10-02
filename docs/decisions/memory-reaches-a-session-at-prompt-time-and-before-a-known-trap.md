@@ -1,6 +1,6 @@
 # Memory Reaches a Session at Three Moments: an Index at Start, Retrieval per Prompt, and a Guard Before a Known Trap
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-09-30
 **Deciders**: Yuxing Wu
 **Related**: [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md), [Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale](agent-hook-installation.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md), [Coffer Drives Claude Code Through the Agent SDK and Codex Through `codex app-server`](driving-agents-through-sdk-and-app-server.md), [principles](../../docs-site/architecture/principles.md) (Persistence), design principle [Pull, not push](../../docs-site/architecture/design-principles.md#pull-not-push), research note [agent memory](../research/agent-memory.md), spec memory "Deliver the index and the notes path at session start", spec memory "Bound delivery and prefer the current repository", spec memory "Deliver to channel turns through the system prompt", spec memory "Install delivery hooks explicitly and removably", spec memory "Audit every delivery fire", spec memory "Expose no memory tool and name the memory root at session start", spec memory "Keep the memory tree derived and local"
@@ -10,11 +10,13 @@
 Coffer's memory layer reads what Claude Code and Codex learned, distils it into
 notes of its own, and hands them back
 ([Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md)).
-The handing back has been one thing: the **whole index at session start**,
-through a hook the user installs per agent, as the single declared exception to
-the design principle [Pull, not push](../../docs-site/architecture/design-principles.md#pull-not-push).
-Nothing reaches a session after its first moment. This ADR decides when memory
-reaches a session, and on what evidence.
+The first design handed back one thing: the **whole index at session start**,
+through a hook the user installs per agent, with nothing reaching a session
+after its first moment. This ADR decides when memory reaches a session, and on
+what evidence; the design principle
+[Pull, not push](../../docs-site/architecture/design-principles.md#pull-not-push)
+is the frame it works inside (every delivery goes through an installed,
+removable, audited hook).
 
 The evidence is an eval set built on 2026-09-29 from the maintainer's real
 transcripts (read only; 131 Claude Code sessions, 225 canonical Codex
@@ -56,7 +58,7 @@ the traps live on (`make verify`, `gh pr merge`, `sed`).
 - Claude Code keeps a hook's output inline only up to ~10,000 characters, for
   every event and both output formats; past that the model sees a ~2 KB
   preview. Coffer's index was 30–45 KB, so the model saw the newest six
-  `global` lines. The cap is now 9,500 UTF-8 bytes (shipped).
+  `global` lines. The cap is 9,500 UTF-8 bytes (`DELIVERY_CEILING_BYTES` in `domain/memory/delivery.py`).
 - Claude Code's `PreToolUse` `additionalContext` arrives **after** the command
   has run, with its result: a reminder there can fix recovery, never the first
   attempt. Only `permissionDecision: "deny"` stops the first attempt.
@@ -67,7 +69,7 @@ the traps live on (`make verify`, `gh pr merge`, `sed`).
   skipped silently. It honours `deny` and shows the model "Command blocked by
   PreToolUse hook: <reason>". Coffer's Codex hook had never run at all — never
   trusted, `coffer` not on the hook's `PATH`, a once-per-session guard keyed on
-  `$PPID` — and was fixed on 2026-09-30.
+  `$PPID` — and has since been fixed.
 
 **Live compliance**, Claude Code on sonnet, six scenarios where the trap bit
 (Node 20 before `make verify`, cleanup after `gh pr merge`, Coffer's MCP for
@@ -102,14 +104,15 @@ Codex delivery path is verified against a fake model, including `deny`.
 
 ### Option A — Three moments: a bounded index at start, lexical retrieval per prompt, and a once-per-session guard on authored triggers (chosen)
 
-1. **Session start: the bounded index.** As shipped: `global`'s index and the
+1. **Session start: the bounded index.** `global`'s index and the
    current repository's, repository lines preferred, at most 9,500 UTF-8
    bytes, naming the memory root and the notes directory. It covers the rules a
    user would otherwise restate in the first message.
 2. **Each prompt: lexical retrieval.** A `UserPromptSubmit` hook asks the
    daemon to rank every partition's notes — title, description, search terms
    and body — against the prompt with BM25 (CJK text as bigrams), and injects
-   the top **k = 3** as each note's index line and path, at most **1.5 KB**,
+   the top **k = 3** (`TOP_K` in `domain/memory/retrieval.py`) as each note's index
+   line and path, at most **1.5 KB** (`RETRIEVAL_CEILING_BYTES`),
    only above a **relevance floor**. Prompts under three words ("continue",
    "继续") trigger nothing, and a note already injected in the session is not
    injected again. The ranking index is held in memory, rebuilt from the note
@@ -148,7 +151,7 @@ Codex delivery path is verified against a fake model, including `deny`.
 7. **Fail open, audit every fire.** A hook that cannot reach the daemon in
    time injects nothing and blocks nothing; memory never stops a prompt or a
    command because Coffer is down. Every injection, denial and context fire is
-   an audit event naming the note, as every delivery fire is today.
+   an audit event naming the note, like every other delivery fire.
 
 - **Pros.** It is the combination the evidence supports: 18/18 against 1/18 on
   the first attempt, at ~320 tokens a run instead of ~11k emitted. Each layer
@@ -164,7 +167,7 @@ Codex delivery path is verified against a fake model, including `deny`.
 - **Why it wins.** Every other option leaves one of the two failure halves
   untouched.
 
-### Option B — The session-start index alone, bounded (the design this replaces)
+### Option B — The session-start index alone, bounded (the design this replaced)
 
 - **Pros.** One hook fire per session; nothing is added mid-session; the
   "pull, not push" principle keeps a single exception.
@@ -273,25 +276,29 @@ Rules a future change must respect:
 
 ## Consequences
 
-- **Reverses** the design principle "Pull, not push" for memory: Coffer now
-  delivers memory at the prompt and before a command, not only at session
-  start. Knowledge stays pull: documents are not in the retrieval corpus, and
-  adding them is a separate decision the replay can already inform.
-- **Revises, on acceptance,** [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md)
-  in its delivery rules (items 5 and 6), which move here; its rule never to
-  write an agent's native memory stands and is why per-turn rules are left to
-  the user's own instructions.
-- **Principles** (an amendment proposed in its own change). The Persistence clause's "nothing indexes, chunks or embeds
-  them" admits the derived, in-memory lexical index this delivery ranks with,
-  and a clause records the delivery model.
-- **Specs.** memory gains requirements for prompt-time retrieval, authored
-  triggers and the once-per-session denial; "Deliver the index and the notes
-  path at session start" and "Bound delivery and prefer the current
-  repository" stay; "Expose no memory tool and name the memory root at session
-  start" stays. vault-sync learns `vault/memory-triggers/`. web-ui gains the
-  trigger editor on a note and the proposed-trigger review.
-- **Before acceptance.** The Codex compliance runs — the six scenarios at n ≥ 1
-  — are added to this ADR's Context.
+- **Delivery is no longer only at session start.** Coffer delivers memory at
+  the prompt and before a command as well, which is why "Pull, not push" is
+  stated as "nothing reaches a session except through an installed, removable,
+  audited hook". Knowledge stays pull: documents are not in the retrieval
+  corpus, and adding them is a separate decision the replay can already
+  inform.
+- **Builds on the delivery rules** of [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md):
+  the index at session start is the first of the three moments; that ADR's
+  rule never to write an agent's native memory stands and is why per-turn rules
+  are left to the user's own instructions.
+- **Specs.** memory carries the requirements "Retrieve the notes a prompt
+  names", "Guard a known trap once per session", "Keep triggers in the vault,
+  armed only by a person", "Fail open when Coffer cannot answer", "Word
+  delivered notes as provenance plus fact" and "Retrieve the notes a prompt
+  names for a channel turn"; vault-sync carries `vault/memory-triggers/`; the
+  trigger editor and the proposed-trigger review are on the memory detail
+  page.
+- **Not built yet:** the persistence clause of the principles still says
+  "nothing indexes, chunks or embeds" the files; the derived in-memory lexical
+  ranker is not yet named there.
+- **Not decided:** Codex compliance runs (the six scenarios at n >= 1) have
+  not been made, so the guard's effect on Codex rests on the fake-model
+  verification of its delivery path.
 - **Costs.** A daemon round-trip on every prompt and every shell command; a
   per-note authoring step for traps; up to ~1.5 KB per prompt.
 - **Measurement.** The 107-case set stays the regression check for any change

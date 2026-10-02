@@ -3,7 +3,7 @@
 Implements ``application.mcp.custom_tool_ports.ToolReachRepoPort``. A custom
 tool may narrow its group's reach to some agents (spec mcp-gateway "Switch off
 or narrow one custom tool"); like every reach it is a fact about this machine
-(ADR reach-is-a-machine-local-predicate-over-a-context), so it is local state
+(ADR reach-is-machine-local-stored-by-uid-never-synced), so it is local state
 beside ``local/reach.json`` and never in the group's vault file::
 
     {"<group uid>": {"<tool name>": ["<agent uid>", ...]}}

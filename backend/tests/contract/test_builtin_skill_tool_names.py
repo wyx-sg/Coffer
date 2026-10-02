@@ -117,9 +117,7 @@ def _assert_names_exist(text: str, *, where: str) -> None:
 
 def test_rendered_skill_names_only_tools_that_exist() -> None:
     """What an agent receives must not promise a tool the gateway lacks."""
-    rendered = guide_render.render(
-        "~/.coffer/knowledge", _catalogue(), memory_root="~/.coffer/memory"
-    )
+    rendered = guide_render.render("~/.coffer/knowledge", _catalogue())
     _assert_names_exist(rendered, where="the rendered coffer-guide skill")
 
 
@@ -143,9 +141,7 @@ def test_rendered_skill_names_every_tool_that_exists() -> None:
     agent gets, so "some subset" is not good enough — a tool added to the
     registry and left out of the manual is invisible in practice.
     """
-    rendered = guide_render.render(
-        "~/.coffer/knowledge", _catalogue(), memory_root="~/.coffer/memory"
-    )
+    rendered = guide_render.render("~/.coffer/knowledge", _catalogue())
     named = set(_TOOL_TOKEN.findall(rendered))
     registered = {f"coffer__{name}" for name in _registered_tool_names()}
 
@@ -160,9 +156,7 @@ def test_handshake_and_skill_agree_on_the_tool_set() -> None:
     """The two always-delivered texts must not describe different Coffers."""
     from coffer.application.mcp.gateway_instructions import NAMED_TOOLS
 
-    rendered = guide_render.render(
-        "~/.coffer/knowledge", _catalogue(), memory_root="~/.coffer/memory"
-    )
+    rendered = guide_render.render("~/.coffer/knowledge", _catalogue())
     named = {token.removeprefix("coffer__") for token in _TOOL_TOKEN.findall(rendered)}
 
     assert named == set(NAMED_TOOLS), (

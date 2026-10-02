@@ -6,11 +6,9 @@ directories of ADR storage-is-five-classes-by-nature, resolved from ``HOME``
 through ``infrastructure.vault.home`` like every other reader of them:
 
 - **vault** — the vault repository (``vault/``), always a git repository, so
-  its commit count is the number of versions, and its newest commit names
-  when and by whom the vault last changed (ADR
+  its commit count is the number of versions (ADR
   every-vault-write-is-a-validated-commit-naming-its-writer); its size is
-  the working tree and ``.git`` together; whether a sync remote is set is
-  read from ``local/sync/remote.json``;
+  the working tree and ``.git`` together;
 - **local content** — chat uploads and channel media under ``content/``,
   which never sync;
 - **history** — ``runs.db`` (with its WAL), or the database ``COFFER_DB_URL``

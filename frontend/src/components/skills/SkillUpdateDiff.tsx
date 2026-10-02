@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import { LineCounts } from "@/components/change-preview/LineCounts";
 import { OpChip } from "@/components/change-preview/OpChip";
-import type { DiffLine } from "@/components/change-preview/changeCounts";
+import type { DiffLine } from "@/lib/changePreview/changeCounts";
 import type { SkillFileChange } from "@/lib/api/skills";
 import { cn } from "@/lib/utils";
 import { CHANGE_OP, parseUnifiedDiff } from "./skillSourceHelpers";

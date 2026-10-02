@@ -8,9 +8,9 @@
 import type { TFunction } from "i18next";
 
 import type { McpConfigTestIn } from "@/lib/api/mcpTestConfig";
-import { configTextFrom, type TransportForm } from "../editMcpServerSave";
-import type { Timeouts } from "../serverTimeouts";
-import { secretPlanOf } from "./rowsModel";
+import { configTextFrom, type TransportForm } from "@/lib/mcp/editMcpServerSave";
+import type { Timeouts } from "@/lib/mcp/serverTimeouts";
+import { secretPlanOf } from "@/lib/mcp/envRows";
 
 export function configTestBodyOf(
   name: string,

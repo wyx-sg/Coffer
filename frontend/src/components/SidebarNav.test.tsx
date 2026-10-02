@@ -17,49 +17,37 @@ import { appRoutes } from "@/router";
 // The Sync entry carries an attention dot, which asks the daemon for the
 // vault's last round. Stub it; the dot's own rules live in
 // `lib/hooks/useSyncAttention`.
-const syncStatus = vi.fn(() => ({ data: undefined, isError: false }));
+const syncStatus = vi.fn<(enabled?: boolean) => { data: unknown; isError: boolean }>(() => ({
+  data: undefined,
+  isError: false,
+}));
 vi.mock("@/lib/hooks/useSync", () => ({
-  useSyncStatus: () => syncStatus(),
+  useSyncStatus: (enabled?: boolean) => syncStatus(enabled),
 }));
 
-// No real entry carries an experimental feature, so the tests of the feature
-// gates add test-only ones: `/fake` in the System group, and a group of its own
-// whose one entry is flagged. Both features are off unless a test says
-// otherwise, so every other assertion here is about the real fifteen entries.
-vi.mock("@/lib/navigation", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@/lib/navigation")>();
-  const { FlaskConical } = await import("lucide-react");
-  const groups = real.NAV_GROUPS.map((g) =>
-    g.labelKey === "nav.group.system"
-      ? {
-          ...g,
-          entries: [
-            ...g.entries,
-            { to: "/fake", labelKey: "Fake", icon: FlaskConical, feature: "fake_feature" },
-          ],
-        }
-      : g,
-  );
-  groups.push({
-    labelKey: "Fake group",
-    entries: [
-      { to: "/fake-group", labelKey: "Fake grouped", icon: FlaskConical, feature: "fake_group" },
-    ],
-  });
-  return { ...real, NAV_GROUPS: groups, NAV_ENTRIES: groups.flatMap((g) => g.entries) };
-});
-
-const ALL_OFF = { fake_feature: false, fake_group: false };
-const features = vi.fn((): Record<string, boolean> | null => ALL_OFF);
+// The four experimental features (knowledge, memory, sync, models) own five of
+// the fifteen entries. All are on unless a test says otherwise, so every other
+// assertion here is about the full fifteen.
+const ALL_ON: Record<string, boolean> = {
+  knowledge: true,
+  memory: true,
+  sync: true,
+  models: true,
+};
+const features = vi.fn((): Record<string, boolean> | null => ALL_ON);
 vi.mock("@/lib/hooks/useFeatures", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/hooks/useFeatures")>()),
   useFeatureMap: () => features(),
+  useFeatureEnabled: (key: string) => {
+    const map = features();
+    return map === null ? undefined : map[key] === true;
+  },
 }));
 
 afterEach(() => {
   syncStatus.mockReset();
   syncStatus.mockReturnValue({ data: undefined, isError: false });
-  features.mockReturnValue(ALL_OFF);
+  features.mockReturnValue(ALL_ON);
   localStorage.clear();
 });
 
@@ -320,6 +308,18 @@ describe("the Sync attention dot", () => {
     await waitFor(() => expect(elsewhere.queryByTestId("nav-dot-sync")).toBeNull());
   });
 
+  test("is not read at all while Sync is switched off", () => {
+    features.mockReturnValue({ ...ALL_ON, sync: false });
+    syncStatus.mockReturnValue({
+      data: { ...ON, held: 3, last_round: HELD },
+      isError: false,
+    } as never);
+    const { queryByTestId } = renderNav();
+    // The hook is asked only to stand down, and a cached round raises nothing.
+    expect(syncStatus.mock.calls.every(([enabled]) => enabled === false)).toBe(true);
+    expect(queryByTestId("nav-dot-sync")).toBeNull();
+  });
+
   test("a daemon that cannot answer raises no sync dot", () => {
     // That is the offline banner's job, and a stale cached round must not
     // outlive it into a second claim on the same screen.
@@ -341,58 +341,79 @@ describe("the Sync attention dot", () => {
   });
 });
 
-// --- experimental features (spec experimental-features "Close every surface
-// of a switched-off feature") ---
+// --- experimental features (spec experimental-features "Make a switched-off
+// feature look absent in the UI") ---
+
+/** Every sidebar link's address. */
+const hrefs = () =>
+  Array.from(document.querySelectorAll("nav a")).map((a) => a.getAttribute("href"));
+
+/** Which addresses each feature owns. */
+const OWNED: Record<string, string[]> = {
+  models: ["/model-providers", "/usage"],
+  knowledge: ["/knowledge"],
+  memory: ["/memory"],
+  sync: ["/sync"],
+};
 
 describe("a switched-off experimental feature", () => {
+  acceptance(
+    "experimental-features",
+    "a switched-off feature is absent from the navigation",
+    () => {
+      for (const [feature, owned] of Object.entries(OWNED)) {
+        features.mockReturnValue({ ...ALL_ON, [feature]: false });
+        const view = renderNav();
+
+        const shown = hrefs();
+        for (const to of owned) expect(shown).not.toContain(to);
+        // The other features' entries stay.
+        for (const [other, entries] of Object.entries(OWNED)) {
+          if (other !== feature) for (const to of entries) expect(shown).toContain(to);
+        }
+        expect(shown).toHaveLength(15 - owned.length);
+        view.unmount();
+      }
+    },
+  );
+
   acceptance("web-ui", "a switched-off feature leaves the sidebar", () => {
-    features.mockReturnValue({ fake_feature: false, fake_group: true });
+    features.mockReturnValue({ knowledge: false, memory: false, models: false, sync: false });
     renderNav();
 
-    expect(group("System").map(([name]) => name)).toEqual(["Secrets", "Activity", "Usage", "Sync"]);
-    const hrefs = Array.from(document.querySelectorAll("nav a")).map((a) => a.getAttribute("href"));
-    expect(hrefs).not.toContain("/fake");
-    expect(hrefs).toContain("/fake-group");
-  });
-
-  test("a switched-on feature's entry is listed", () => {
-    features.mockReturnValue({ fake_feature: true, fake_group: false });
-    renderNav();
-
-    expect(group("System").map(([name]) => name)).toEqual([
-      "Secrets",
-      "Activity",
-      "Usage",
-      "Sync",
-      "Fake",
+    expect(hrefs()).toEqual([
+      "/",
+      "/agents",
+      "/conversations",
+      "/channels",
+      "/mcp-servers",
+      "/custom-tools",
+      "/skills",
+      "/clis",
+      "/secrets",
+      "/activity",
     ]);
   });
 
   acceptance("web-ui", "a group with every entry switched off leaves the sidebar", () => {
-    features.mockReturnValue({ fake_feature: true, fake_group: false });
+    features.mockReturnValue({ ...ALL_ON, knowledge: false, memory: false });
     renderNav();
 
-    expect(groupLabels()).toEqual(["Agents", "Run", "Capabilities", "Context", "System"]);
-    expect(groupLabels()).not.toContain("Fake group");
-    // The other headings keep their entries.
-    expect(group("Context").map(([name]) => name)).toEqual(["Knowledge", "Memory"]);
-    expect(group("System").map(([name]) => name)).toEqual([
-      "Secrets",
-      "Activity",
-      "Usage",
-      "Sync",
-      "Fake",
-    ]);
+    // Context holds only Knowledge and Memory: its heading goes with them.
+    expect(groupLabels()).toEqual(["Agents", "Run", "Capabilities", "System"]);
+    // A group with an entry left keeps its heading, even when one of its two is off.
+    features.mockReturnValue({ ...ALL_ON, knowledge: false });
+    const one = renderNav();
+    expect(group("Context").map(([name]) => name)).toEqual(["Memory"]);
+    one.unmount();
   });
 
   test("an entry whose feature is not known yet is left out rather than flashed in", () => {
     features.mockReturnValue(null);
     renderNav();
 
-    const hrefs = Array.from(document.querySelectorAll("nav a")).map((a) => a.getAttribute("href"));
-    expect(hrefs).not.toContain("/fake");
-    expect(hrefs).not.toContain("/fake-group");
-    expect(hrefs).toHaveLength(15);
+    expect(hrefs()).toHaveLength(10);
+    expect(hrefs()).not.toContain("/knowledge");
   });
 });
 
@@ -403,20 +424,21 @@ describe("an experimental feature's entry", () => {
     "experimental-features",
     "a switched-on feature's entry says it is experimental",
     () => {
-      features.mockReturnValue({ fake_feature: true, fake_group: false });
       const { getByTestId, queryByTestId } = renderNav();
 
-      expect(getByTestId("nav-experimental-fake")).toHaveTextContent("Experimental");
+      for (const id of ["model-providers", "usage", "knowledge", "memory", "sync"]) {
+        expect(getByTestId(`nav-experimental-${id}`)).toHaveTextContent("Experimental");
+      }
+      // An entry no feature owns carries no marker.
       for (const id of [
         "overview",
         "agents",
         "conversations",
+        "channels",
         "mcp-servers",
         "skills",
-        "channels",
-        "knowledge",
-        "memory",
-        "sync",
+        "secrets",
+        "activity",
       ]) {
         expect(queryByTestId(`nav-experimental-${id}`)).toBeNull();
       }
@@ -424,10 +446,9 @@ describe("an experimental feature's entry", () => {
   );
 
   test("a collapsed rail leaves the marker to the tooltip, as it does the label", () => {
-    features.mockReturnValue({ fake_feature: true, fake_group: false });
     const { queryByTestId, getByRole } = renderNav("/", true);
 
-    expect(queryByTestId("nav-experimental-fake")).toBeNull();
-    expect(getByRole("link", { name: "Fake" })).toBeInTheDocument();
+    expect(queryByTestId("nav-experimental-knowledge")).toBeNull();
+    expect(getByRole("link", { name: "Knowledge" })).toBeInTheDocument();
   });
 });

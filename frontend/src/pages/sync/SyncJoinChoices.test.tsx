@@ -82,7 +82,7 @@ describe("SyncJoinChoices", () => {
   test("a file opens from the vault on this Mac", () => {
     render(<SyncJoinChoices />);
     fireEvent.click(row("knowledge/a.md").getByRole("button", { name: "Open knowledge/a.md" }));
-    expect(fsApi.open).toHaveBeenCalledWith("/Users/me/.coffer/vault/knowledge/a.md");
+    expect(fsApi.open).toHaveBeenCalledWith("/Users/me/.coffer/vault/knowledge/a.md", undefined);
   });
 
   test("a long list shows four and a way to the rest", () => {

@@ -94,8 +94,12 @@ async def proxy_token(
     """The agent's local proxy token, minted on first ask. 404 for an agent
     this machine does not have, so a stale helper fails closed."""
     await _known(facade, agent_uid)
-    token = await facade.tokens.token_for(agent_uid)
-    await facade.refresh()
+    token, minted = await facade.tokens.issue(agent_uid)
+    if minted:
+        # The proxy learns a token's digest from a state push; a token that was
+        # already there is already known, so a plain read (every helper call)
+        # pushes nothing.
+        await facade.refresh()
     return ProxyTokenOut(agent_uid=agent_uid, token=token)
 
 
@@ -116,7 +120,7 @@ async def proxy_route(
     model: str | None = None,
     facade: ProxyFacade = Depends(get_proxy_facade),  # noqa: B008
 ) -> ProxyRouteOut:
-    """The agent's provider and its fallbacks, as the proxy is serving them."""
+    """The agent's provider and its fallbacks, as the proxy would be served now."""
     await _known(facade, agent_uid)
     state = await facade.state()
     route = next((r for r in state.routes if r.agent_uid == agent_uid), None)

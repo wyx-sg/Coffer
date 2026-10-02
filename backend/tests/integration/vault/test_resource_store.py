@@ -114,7 +114,7 @@ async def test_crud_round_trip_and_ordering() -> None:
     a = await svc.register("widget", "a", {"colour": "green"}, actor="user")
     assert [r.name for r in await svc.list(kind="widget")] == ["a", "b"]
     updated = await svc.update_config(b.uid, {"colour": "pink"}, actor="user", description="bee")
-    assert updated.config == {"colour": "pink", "path": ""} and updated.rev == b.rev + 1
+    assert updated.config == {"colour": "pink", "path": ""}
     titled = await svc.set_title(a.uid, "Aye", actor="user")
     assert titled.title == "Aye"
     with pytest.raises(ResourceAlreadyExists):
@@ -154,7 +154,7 @@ async def test_reach_is_local_and_never_committed() -> None:
     r = await svc.register("widget", "w", {"colour": "blue"}, actor="user")
     head = vault_repository().head()
     off = await svc.set_enabled(r.uid, False, actor="user")
-    assert off.enabled is False and off.rev == r.rev + 1
+    assert off.enabled is False
     assert vault_repository().head() == head
     reach = json.loads((local_root() / "reach.json").read_text())
     assert reach[r.uid] == {"enabled": False, "agents": None, "projects": None}

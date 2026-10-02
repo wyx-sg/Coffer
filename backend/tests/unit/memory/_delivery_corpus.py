@@ -173,6 +173,7 @@ class PartitionRow:
 
     name: str
     repository_path: str = ""
+    repository_key: str = ""
 
 
 @dataclass
@@ -200,7 +201,7 @@ class FakeMemory:
         self.list_calls += 1
         return list(self.notes.get(partition, []))
 
-    async def list_partitions(self) -> Sequence[PartitionRow]:
+    async def placements(self) -> Sequence[PartitionRow]:
         return [PartitionRow(n, self.repositories.get(n, "")) for n in self.notes]
 
 

@@ -71,12 +71,12 @@ Set these environment variables for the `sh` process:
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `COFFER_INSTALL_DIR` | `~/.coffer/bin` | Where the three binaries are copied. |
-| `COFFER_VERSION` | latest release | Install a specific tag, such as `v0.1.0`. A version without the leading `v` also works. |
+| `COFFER_VERSION` | latest release | Install a specific tag, such as `v<version>`. A version without the leading `v` also works. |
 | `COFFER_NO_MODIFY_PATH` | unset | Set to `1` to leave your shell profile alone. The script prints the line to add instead. |
 
 ```sh
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh \
-  | COFFER_VERSION=v0.1.0 COFFER_NO_MODIFY_PATH=1 sh
+  | COFFER_VERSION=v<version> COFFER_NO_MODIFY_PATH=1 sh
 ```
 
 A binary installed by `curl` is not quarantined, so macOS Gatekeeper does not block it.
@@ -171,13 +171,12 @@ coffer daemon status
 
 ```text
 status:  ready
-version: 0.1.1
-channel: dev
+version: 0.2.0
 port:    8000
 pid:     48213
 ```
 
-Your version and PID will differ. `channel` is `stable` for a release build and `dev` for anything else. Then open the UI:
+Your version and PID will differ. Then open the UI:
 
 ```sh
 coffer open
@@ -248,9 +247,9 @@ Restarting matters because a daemon that is already running keeps running the ol
 `~/.coffer` holds your database, knowledge collections, skill library and secret master key. Deleting it destroys every stored secret and every document that exists only there. Copy it somewhere first if you might want it back.
 :::
 
-## Release channel
+## Experimental features
 
-Every build has a **channel**. A tagged release is stamped `stable`. Source runs, `make desktop` and `make bundle-binaries` are `dev`. The channel sets only the default of an experimental feature: off on `stable`, on on `dev`. No feature is experimental right now; Sync, Knowledge and Memory graduated at 1.0 and are always on. See [Experimental features](/guides/experimental-features).
+Every build carries the same capabilities. Four of them are experimental — Knowledge, Memory, Sync and Model providers — and start switched off, in a stable release and a source build alike. Switch one on from Settings → Features or with `coffer config set feature.<key> on`. See [Experimental features](/guides/experimental-features).
 
 ## Next steps
 

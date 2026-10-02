@@ -84,7 +84,7 @@ coffer agent add codex            # register the codex agent at ~/.codex
 
 `coffer scan` 打印的命令是 `coffer agent add <type>`，只有当找到的目录不是该类型的标准目录时才会加上 `--config-dir`。
 
-在该类型的程序找不到时，`coffer agent prompt <type>` 会打印智能体页面复制的那段安装或重装提示词（`--json` 把它放在 `handoff` 下）；程序找得到时，它会说没有需要交接的内容，并以退出码 5 结束。对于程序已经不在的已注册智能体，`coffer agent show <type>` 会提示你用它。
+在该类型的程序找不到时，`coffer agent prompt <type>` 会打印智能体页面复制的那段安装或重装提示词（`--json` 把它放在 `handoff` 下）；程序找得到时，它会说没有需要交接的内容，并以退出码 5 结束。对于程序已经不在的已注册智能体，`coffer agent show <name>` 会提示你用它。
 
 ### 使用其他配置目录 {#use-a-different-config-directory}
 
@@ -376,17 +376,17 @@ coffer agent models claude_code
 # sonnet  Sonnet 5  efforts: low, medium, high, xhigh, max
 ```
 
-`coffer agent models` 接受智能体的类型。当一个启用中的[模型提供商](/zh/guides/providers)为该智能体整理了模型列表时，选择器会改为提供那份列表。
+`coffer agent models` 接受智能体的类型。当智能体所在的[模型提供商](/zh/guides/providers)整理了模型列表时，选择器会改为提供那份列表。
 
 智能体记录保存着提供商投射写入智能体配置的模型绑定：
 
 ```sh
 coffer agent edit claude-code --model sonnet --effort high --tier haiku=haiku
 coffer agent edit claude-code --clear-tiers
-coffer agent edit codex --model gpt-5.5 --wire-api responses
+coffer agent edit codex --model gpt-5.5
 ```
 
-对 Codex，`--wire-api` 只接受 `responses`；Codex 拒绝加载写了其他值的 `config.toml`。改动会在下次切换该智能体的提供商时写到磁盘上。
+改动会在下次切换该智能体的提供商时写到磁盘上。
 
 ## Web 界面中的模型、原生记忆和会话 {#model-native-memory-and-sessions-in-the-web-ui}
 
@@ -429,7 +429,7 @@ coffer agent transcript claude-code <session_id> --limit 50
 | **Availability** 显示**未找到** | 智能体的 CLI（`claude` 或 `codex`）不在守护进程的 `PATH` 上 | 安装 CLI，或让守护进程能看到它。 |
 | 智能体显示**未安装** | 它的程序不在你登录 shell 的 `PATH` 上；只剩配置目录 | 重装智能体，或把它的程序放到 `PATH` 上。 |
 | 检测为**已安装，未运行过** | 程序已安装，但从没创建过配置目录 | 照样添加：在标准目录注册会创建它。 |
-| 添加被拒绝，返回 `AGENT_TYPE_REGISTERED` | 该类型已有注册的智能体；每种类型只有一个 | 要换目录，改用 `coffer agent edit <type> --config-dir <dir>`。 |
+| 添加被拒绝，返回 `AGENT_TYPE_REGISTERED` | 该类型已有注册的智能体；每种类型只有一个 | 要换目录，改用 `coffer agent edit <name> --config-dir <dir>`。 |
 | 保存失败，返回 `CONFIG_FILE_STALE` | 打开之后文件变了 | 重新打开文件再保存。 |
 | 插件卸载不见了 | `claude` 不在 `PATH` 上 | 自己运行 `claude plugin uninstall <id>`。 |
 

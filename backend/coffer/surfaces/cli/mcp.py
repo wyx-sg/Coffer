@@ -5,7 +5,7 @@ The lifecycle verbs (``list``, ``show``, ``edit``, ``rm``, ``enable``,
 ``_kind_verbs`` from the ``mcp_server`` descriptor. What is left here is what
 only an MCP server has: ``add`` (the transport is parsed from ``--stdio`` or
 ``--http``; ``edit`` takes the same transport flags, from ``_mcp_edit``),
-``test`` (re-query the capabilities, then report health), ``prompt`` (the
+``test`` (re-query the capabilities, then report health), ``handoff`` (the
 hand-off prompt a server's page offers) and the ``cap`` group
 (``_mcp_caps.py``).
 
@@ -16,7 +16,7 @@ title: its name and its description are all it carries.
 
 Every command takes the server's NAME, because that is what a person knows; the
 uid the daemon addresses it by is looked up once per command through
-``_resolve`` (ADR resource-identity-is-an-immutable-uid).
+``_resolve`` (ADR identity-is-the-uid-inside-the-file).
 """
 
 from __future__ import annotations

@@ -452,6 +452,7 @@ describe("SyncStatusTab — Rounds", () => {
     seedRuns([], { error: new Error("Not Found") });
     renderTab(makeStatus());
     expect(screen.getByText("Not Found")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 
   acceptance("vault-sync", "consecutive quiet rounds fold into one counted row", () => {

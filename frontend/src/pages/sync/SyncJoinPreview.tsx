@@ -1,21 +1,20 @@
 // frontend/src/pages/sync/SyncJoinPreview.tsx — first join, preview (6.5.18).
 //
 // A machine meets the remote for the first time by JOINING it (spec
-// vault-sync "Report a join before applying it"), and a join is explicit:
-// until this Mac joins, rounds move nothing. This asks the daemon what joining
+// vault-sync "Report a join before applying it"), and a join is explicit: until
+// this Mac joins, rounds move nothing. This asks the daemon what joining
 // would do — applying nothing — and states it before the button: what comes
 // down, by area; how many files are already the same; which differ (left here
 // until a person chooses, never overwritten or pushed); what goes up; and that
-// nothing is deleted. A refused join (another layout, not a vault) shows the
-// daemon's reason and offers no Join button.
+// nothing is deleted. A refused join (another layout, not a vault) shows the daemon's reason, no Join button.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowDown } from "lucide-react";
 
+import { LoadError } from "@/components/LoadError";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { translateApiError } from "@/lib/api/errors";
 import type { JoinPreview } from "@/lib/api/sync";
 import { useJoin, useJoinPreview } from "@/lib/hooks/useSyncStop";
 import { cn } from "@/lib/utils";
@@ -162,9 +161,11 @@ export function SyncJoinPreview({
             <Skeleton className="h-8 w-full" />
           </div>
         ) : preview.error ? (
-          <p className="py-2 text-sm text-danger" role="alert">
-            {translateApiError(t, preview.error)}
-          </p>
+          <LoadError
+            className="py-2"
+            error={preview.error}
+            onRetry={() => void preview.refetch()}
+          />
         ) : data ? (
           <Lines preview={data} />
         ) : null}

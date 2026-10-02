@@ -20,10 +20,6 @@ from collections.abc import Sequence
 #: The tier names, in the order the Model tab shows them.
 CLAUDE_TIERS: tuple[str, ...] = ("opus", "sonnet", "haiku", "fable")
 
-#: The tiers pinned whatever the connection lists; ``fable`` only when the
-#: connection lists a Fable model.
-ALWAYS_PINNED: tuple[str, ...] = ("opus", "sonnet", "haiku")
-
 
 def tier_env_key(tier: str) -> str:
     """The Claude Code environment variable that pins ``tier``."""
@@ -64,7 +60,6 @@ def suggest_tier_models(
 
 
 __all__ = [
-    "ALWAYS_PINNED",
     "CLAUDE_TIERS",
     "is_claude_model_id",
     "suggest_tier_models",

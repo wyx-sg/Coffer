@@ -1,7 +1,7 @@
 // src/components/palette/CommandPalette.test.tsx — the palette's scenarios (spec web-ui "Jump to any page or object from a command palette").
 //
 // Only the network boundary is mocked: `getApiClient()` (resources, daemon
-// status) and `call()` (agents, skills, providers, knowledge, memory). The
+// status, and the list routes of agents, skills, providers, knowledge, memory). The
 // list hooks, the query cache, the router and the Settings opener are real.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -15,22 +15,13 @@ import { ApiError } from "@/lib/api/errors";
 import { CommandPalette } from "./CommandPalette";
 
 let api: ApiClientMock;
-vi.mock("@/lib/api/client", () => ({ getApiClient: () => api }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: () => api,
+}));
 
+/** Every list route the palette reads through the client, by path (see `callAnswers`). */
 const call = vi.fn();
-vi.mock("@/lib/api/call", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api/call")>();
-  return { ...actual, call: (...args: unknown[]) => call(...args) };
-});
-
-// No real page carries an experimental feature, so the gate is tested on a
-// test-only entry flagged with one; it is off unless a test says otherwise.
-vi.mock("@/lib/navigation", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@/lib/navigation")>();
-  const { FlaskConical } = await import("lucide-react");
-  const fake = { to: "/fake", labelKey: "Fake page", icon: FlaskConical, feature: "fake_feature" };
-  return { ...real, NAV_ENTRIES: [...real.NAV_ENTRIES, fake] };
-});
 
 type Row = { uid: string; name: string; title: string | null };
 
@@ -38,9 +29,11 @@ const MCP: Row[] = [{ uid: "u-gh", name: "github-mcp", title: "Octo bridge" }];
 const SKILLS: Row[] = [{ uid: "s-pdf", name: "pdf", title: null }];
 const COLLECTIONS: Row[] = [{ uid: "k-notes", name: "team-notes", title: null }];
 
+const ALL_ON = { knowledge: true, memory: true, sync: true, models: true };
+const ALL_OFF = { knowledge: false, memory: false, sync: false, models: false };
 let features: Record<string, boolean>;
 let daemonUp: boolean;
-/** Per path: what `call()` answers. A function lets a test hang or reject. */
+/** Per path: what the list route answers. A function lets a test hang or reject. */
 let callAnswers: Record<string, () => Promise<unknown>>;
 
 function never(): Promise<unknown> {
@@ -50,7 +43,7 @@ function never(): Promise<unknown> {
 beforeEach(() => {
   // The Recent group is remembered per browser; every test starts without one.
   localStorage.clear();
-  features = { fake_feature: false };
+  features = ALL_ON;
   daemonUp = true;
   callAnswers = {
     "/agents": async () => ({ items: [] }),
@@ -59,12 +52,14 @@ beforeEach(() => {
     "/knowledge/collections": async () => ({ collections: COLLECTIONS }),
     "/memory/partitions": async () => ({ partitions: [] }),
   };
-  call.mockImplementation((path: string) => {
+  call.mockImplementation(async (path: string) => {
     const answer = callAnswers[path];
-    return answer ? answer() : Promise.reject(new Error(`unexpected ${path}`));
+    if (!answer) throw new Error(`unexpected ${path}`);
+    return { data: await answer(), error: undefined };
   });
   api = mockApiClient({
     GET: vi.fn(async (path: string, init?: unknown) => {
+      if (path in callAnswers) return call(path, init);
       if (path === "/daemon/status") {
         return daemonUp
           ? { data: { features }, error: undefined }
@@ -161,9 +156,9 @@ describe("CommandPalette", () => {
     renderPalette();
     await settled();
     const pages = () => within(group("Pages")).getAllByRole("option");
-    // An empty query lists every page: 15 sidebar entries + 5 Settings tabs.
+    // An empty query lists every page: 15 sidebar entries + 6 Settings tabs.
     const count = pages().length;
-    expect(count).toBe(20);
+    expect(count).toBe(21);
     const seen: string[] = [];
     for (let i = 0; i < count; i += 1) {
       fireEvent.click(screen.getByText("reopen"));
@@ -187,25 +182,47 @@ describe("CommandPalette", () => {
     expect(api.POST).not.toHaveBeenCalled();
     expect(api.PATCH).not.toHaveBeenCalled();
     expect(api.DELETE).not.toHaveBeenCalled();
-    for (const [, options] of call.mock.calls) {
-      expect((options as { method?: string } | undefined)?.method ?? "GET").toBe("GET");
-    }
   });
 
-  acceptance("web-ui", "the palette leaves out switched-off features", async () => {
-    renderPalette();
-    await settled();
-    type("fake page");
-    expect(options()).toEqual([]);
-  });
+  acceptance(
+    "web-ui",
+    "the palette leaves out switched-off features",
+    async () => {
+      features = ALL_OFF;
+      renderPalette();
+      await settled();
+      // Their pages are not listed, and nothing of theirs is asked for: no
+      // provider, knowledge, memory, sync or usage list is read.
+      for (const name of ["Model providers", "Usage", "Knowledge", "Memory", "Sync"]) {
+        type(name);
+        expect(options()).toEqual([]);
+      }
+      const asked = call.mock.calls.map(([path]) => path as string);
+      expect(asked.filter((p) => /^\/(providers|knowledge|memory|sync|usage)/.test(p))).toEqual([]);
+      const kinds = api.GET.mock.calls
+        .filter(([path]) => path === "/resources")
+        .map(([, init]) => (init as { params: { query: { kind?: string } } }).params.query.kind);
+      expect(kinds).not.toContain("provider");
+      // The always-on pages stay: Activity, Conversations, Channels and the MCP server list.
+      type("activity");
+      expect(options()).toEqual(["Activity"]);
+      type("channels");
+      expect(options()).toEqual(["Channels"]);
+      type("conversations");
+      expect(options()).toEqual(["Conversations"]);
+    },
+  );
 
-  // The scenario's other half: switched on, the page is listed.
-  acceptance("web-ui", "the palette leaves out switched-off features", async () => {
-    features = { fake_feature: true };
+  // The other half: switched on, the pages are listed.
+  test("switched on, a feature's pages and objects are listed", async () => {
+    features = ALL_ON;
     renderPalette();
     await settled();
-    type("fake page");
-    expect(options()).toEqual(["Fake page"]);
+    type("knowledge");
+    expect(options()).toContain("Knowledge");
+    type("providers");
+    expect(options()).toContain("Model providers");
+    expect(call.mock.calls.map(([path]) => path)).toContain("/providers");
   });
 
   acceptance("web-ui", "the palette lists pages while objects load", async () => {
@@ -222,7 +239,7 @@ describe("CommandPalette", () => {
     callAnswers["/skills"] = () => Promise.reject(new ApiError("INTERNAL_ERROR", "boom"));
     renderPalette();
     await settled();
-    expect(within(group("Pages")).getAllByRole("option")).toHaveLength(20);
+    expect(within(group("Pages")).getAllByRole("option")).toHaveLength(21);
     type("o");
     expect(within(group("Skills")).getByText("Skill: couldn't load the list")).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /pdf/ })).not.toBeInTheDocument();
@@ -290,7 +307,7 @@ describe("CommandPalette", () => {
       "Usage",
       "Octo bridge",
     ]);
-    expect(within(group("Pages")).getAllByRole("option")).toHaveLength(20);
+    expect(within(group("Pages")).getAllByRole("option")).toHaveLength(21);
   });
 
   test("Escape closes the palette and focus returns where it was", async () => {

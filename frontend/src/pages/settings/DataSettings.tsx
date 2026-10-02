@@ -12,6 +12,7 @@
 import { useTranslation } from "react-i18next";
 import { FolderOpen } from "lucide-react";
 
+import { LoadError } from "@/components/LoadError";
 import { CacheBlock } from "@/components/settings/storage/CacheBlock";
 import { DataBlock } from "@/components/settings/storage/DataBlock";
 import { HistoryBlock } from "@/components/settings/storage/HistoryBlock";
@@ -19,7 +20,7 @@ import { SettingRow } from "@/components/settings/SettingsLayout";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { abbreviateHomePath } from "@/lib/agents/display";
-import { fsApi } from "@/lib/api/fs";
+import { useFsActions } from "@/lib/fsActions";
 import { translateApiError } from "@/lib/api/errors";
 import { useStorageSummary } from "@/lib/hooks/useStorage";
 import { formatBytes } from "@/lib/utils";
@@ -31,11 +32,12 @@ function Location({ path }: { path: string }) {
 export function DataSettings() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const fs = useFsActions();
   const storage = useStorageSummary();
   const data = storage.data;
 
   const open = (path: string, reveal = false) => {
-    (reveal ? fsApi.reveal(path) : fsApi.open(path)).catch((err: unknown) =>
+    (reveal ? fs.reveal(path) : fs.open(path)).catch((err: unknown) =>
       toast.error(translateApiError(t, err)),
     );
   };
@@ -59,9 +61,7 @@ export function DataSettings() {
     <div className="flex flex-col gap-5">
       <p className="text-sm text-text-muted">{t("settings.data.intro")}</p>
       {storage.error ? (
-        <p className="text-xs text-danger" role="alert">
-          {translateApiError(t, storage.error)}
-        </p>
+        <LoadError error={storage.error} onRetry={() => void storage.refetch()} />
       ) : null}
       <div className="flex flex-col gap-7">
         <DataBlock

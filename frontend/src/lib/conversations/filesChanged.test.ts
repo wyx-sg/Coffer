@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ContentBlock } from "@/lib/api/chat";
 import { contentBlock } from "@/lib/chat/contentBlock";
+import { acceptance } from "@/test/acceptance";
 import { filesChanged } from "./filesChanged";
 
 const use = (id: string, tool_name: string, tool_input: Record<string, unknown>): ContentBlock =>
@@ -21,7 +22,7 @@ describe("filesChanged", () => {
     ]);
   });
 
-  it("sums repeated edits to one file into one row", () => {
+  acceptance("chat", "a reply's file edits are summed into one row per file", () => {
     const blocks = [
       use("1", "Edit", { file_path: "a.py", old_string: "x", new_string: "y" }),
       use("2", "MultiEdit", {

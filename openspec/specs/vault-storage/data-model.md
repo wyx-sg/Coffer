@@ -51,7 +51,6 @@ with no per-tree override, and `coffer path` prints them).
     backup/skills/                         folders set aside from an agent's link path
   derived/
     derived.db                             mcp_server_health, mcp_capability_seen, skill_agent_bindings
-    index/resources.json                   the uid index and revision counters
     resources/memory/<name>.json  resources/skill/coffer-guide.json
     memory/  skills/coffer-guide/  cache/agent/  sync-conflicts/
     reported-prices.json  genai-prices.json
@@ -135,9 +134,9 @@ triggers are carried as bytes, not parsed as vault documents.
 | `config` | yes | an object; the kind's own schema. Strings under the writing machine's home are `${HOME}/...` |
 | `created_at` | — | ISO time |
 
-`enabled` and scope are **not** in the file: reach is `local/reach.json`. The
-revision counter and `updated_at` are `derived/index/resources.json`. The fields
-and both stores are spec resource-framework's data model.
+`enabled` and scope are **not** in the file: reach is `local/reach.json`.
+`updated_at` is the file's modification time on this machine; no revision counter
+and no uid index is kept. The fields and both stores are spec resource-framework's data model.
 
 **Identity is the uid inside the file.** Nothing keys on the path: a person may
 move or rename the file and it is the same resource. A file without a `uid`
@@ -302,9 +301,6 @@ renames `coffer.db` to `runs.db` and upgrades it to 0136.
 | `memory` | `derived/memory` |
 | `chat-media`, `channel-media`, `workspace` | `content/…` |
 | `cache/agent` | `derived/cache/agent` |
-
-The old sync working tree `~/.coffer/sync` is left where it was, unused, and
-named in the report.
 
 ### `local/migration.json`
 

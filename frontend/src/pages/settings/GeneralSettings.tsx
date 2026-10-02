@@ -6,10 +6,9 @@
 // own engine runs on and speech to text; spec web-ui "Choose Coffer's model in
 // Settings › General", built by its own work item and mounted unchanged here),
 // and Tables and files (the default rows per page every list table seeds from,
-// and the editor Coffer opens managed files with). Last come the experimental
-// features, a section that renders only while the daemon registers at least
-// one (spec experimental-features "List and switch the features on the General
-// tab"). Everything saves as it changes; there is no Save button.
+// and the editor Coffer opens managed files with). Everything saves as it
+// changes; there is no Save button. (The experimental features are switched on
+// the dev-only Features tab, not here.)
 //
 // The editor picker lists "system default" plus the editors the daemon
 // detected as installed, and a "Custom…" entry that reveals a text field for
@@ -39,7 +38,6 @@ import {
 } from "@/lib/preferences";
 import { useSetThemePreference, useThemePreference, type ThemePreference } from "@/lib/theme";
 import { EngineSettings } from "./EngineSettings";
-import { ExperimentalFeaturesSettings } from "./ExperimentalFeaturesSettings";
 
 /** Design order: the two fixed looks, then following the OS. */
 const THEME_ORDER: readonly ThemePreference[] = ["light", "dark", "system"];
@@ -185,7 +183,6 @@ export function GeneralSettings() {
             <EditorPicker />
           </SettingRow>
         </SettingsSection>
-        <ExperimentalFeaturesSettings />
       </div>
     </div>
   );

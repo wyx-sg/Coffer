@@ -63,6 +63,7 @@ channel:  my-telegram (telegram)
 uid:      9b2e…
 agent:    claude-code
 gating:   require_mention=on  ignore_other_mentions=off
+idle:     new conversation after 24 h idle
 secret:   bot_token_ref = channel/tg/bot-token
 enabled:  True    running: True
 runs on:  3f9c… (this machine)
@@ -199,6 +200,7 @@ coffer secret set channel/tg/bot-token   # paste the new token
 - `running: False`：消息渠道被禁用、处于休眠（它的生效范围里没有任何智能体）、没有可用的默认智能体，或者绑定在另一台机器上。状态和消息渠道页面会说明是哪种。
 - `peer: not paired`：先配对。未配对的机器人不回复任何人。
 - `runs on: … (another machine)`：只有那台机器在轮询这个机器人。用 `coffer channel bind my-telegram` 重新绑定。
+- `runs on: … (UNKNOWN MACHINE …)`：消息渠道绑定的机器已经不在这个保险库里，所以它哪里都不运行。用 `coffer channel bind my-telegram` 重新绑定。
 
 **机器人回复了别人，或者在配置第二台机器后不再回复。**
 有两个消费者在轮询同一个机器人。同一个令牌被登记了两次（在两个消息渠道名下，或者在两个保险库里）时就会这样。只保留一个登记。

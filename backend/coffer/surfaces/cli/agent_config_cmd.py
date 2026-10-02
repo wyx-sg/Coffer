@@ -17,7 +17,7 @@ stale config-file writes by fingerprint").
 Its own module for the backend 400-line file cap; ``agent_cmd`` calls
 :func:`attach`. Like every command in the agent tree it takes the agent's NAME
 and resolves it once to the uid the routes address
-(ADR resource-identity-is-an-immutable-uid).
+(ADR identity-is-the-uid-inside-the-file).
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ def _read_source(from_file: str) -> str:
 
 def config_edit(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
+    name: str = typer.Argument(..., metavar="NAME", help="Agent name or uid"),
     target: str = typer.Argument(..., metavar="KEY[/CHILD]", help=_TARGET_HELP),
     from_file: str | None = typer.Option(
         None,
@@ -132,7 +132,7 @@ def config_edit(
 
 def config_rm(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
+    name: str = typer.Argument(..., metavar="NAME", help="Agent name or uid"),
     target: str = typer.Argument(
         ..., metavar="KEY/CHILD", help="One file inside a directory entry (e.g. subagents/x.md)"
     ),

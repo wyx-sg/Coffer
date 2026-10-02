@@ -159,11 +159,15 @@ class MemoryHookService:
     async def _fire(
         self, agent_uid: str, ev: HookEvent, trigger: Trigger, moment: str
     ) -> str | None:
+        # Claimed before the first await: a second fire of this session arriving while
+        # the note is being read must find it spent, not race it ("once per session").
+        if not self._ledger.claim_fire(ev.session_id, trigger.id):
+            return None
         reason = await self._reason(trigger)
         if reason is None:
+            self._ledger.release_fire(ev.session_id, trigger.id)
             logger.warning("memory.trigger.note_missing; trigger=%s", trigger.id)
             return None
-        self._ledger.mark_fired(ev.session_id, trigger.id)
         await self._delivery.record_fired(
             agent_uid,
             {

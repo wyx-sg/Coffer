@@ -110,7 +110,7 @@ def register_history_commands(
         version: str = typer.Argument(
             "", help="Show this change in full, with each document's diff"
         ),
-        collection: str = typer.Option("", "--in", help="Only this collection"),
+        collection: str = typer.Option("", "--collection", help="Only this collection"),
         limit: int = typer.Option(20, "--limit", help="How many changes"),
         output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
     ) -> None:

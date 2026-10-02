@@ -89,7 +89,14 @@ class ClaudeCodeMemoryReader:
 
     agent_type = "claude_code"
 
+    def __init__(self) -> None:
+        # A project's real directory, per project directory, for one pass: every
+        # fact file of a project asks the same question, and answering it scans
+        # that project's session transcripts. Cleared when a pass lists its sources.
+        self._roots: dict[pathlib.Path, str | None] = {}
+
     def sources(self, config_dir: str) -> tuple[SourceFile, ...]:
+        self._roots.clear()
         projects_dir = pathlib.Path(config_dir) / "projects"
         if not projects_dir.is_dir():
             return ()
@@ -137,9 +144,7 @@ class ClaudeCodeMemoryReader:
 
         entry_type = _TYPE_MAP.get(raw_type, TYPE_PROJECT)
         project_dir = path.parent.parent
-        project_root = cwd_from_transcripts(project_dir, encode_slug)
-        if project_root is None:
-            _, project_root = resolve_project_slug(project_dir.name, _list_dirs)
+        project_root = self._project_root(project_dir)
         return (
             RawEntry(
                 title=name,
@@ -150,6 +155,18 @@ class ClaudeCodeMemoryReader:
                 project_root=project_root or "",
             ),
         )
+
+    def _project_root(self, project_dir: pathlib.Path) -> str | None:
+        """The directory a project slug names: the ``cwd`` its own session
+        transcripts recorded when one matches, else the slug decoded against the
+        filesystem. Asked once per project per pass."""
+        if project_dir in self._roots:
+            return self._roots[project_dir]
+        root = cwd_from_transcripts(project_dir, encode_slug)
+        if root is None:
+            _, root = resolve_project_slug(project_dir.name, _list_dirs)
+        self._roots[project_dir] = root
+        return root
 
 
 def _digest(path: pathlib.Path) -> str:

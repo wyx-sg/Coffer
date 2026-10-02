@@ -10,7 +10,7 @@
 // Nothing here reaches the network. `planChannel` (schema.ts) turns the values
 // this validates into the resource config and the secret writes; the
 // dialog is what sequences them.
-import { addChannelFormSchema, type AddChannelFormValues } from "./schema";
+import { addChannelFormSchema, type AddChannelFormValues } from "@/lib/channels/schema";
 import type { ChannelFieldErrors, ChannelSecretDraft } from "./AddChannelSecretFields";
 import type { ChannelType } from "@/lib/api/channels";
 

@@ -65,6 +65,7 @@ class ChannelCommands:
         model_suggestions: ModelSuggestionPort,
         collections: CollectionCatalogPort,
         ingest: IngestPort,
+        knowledge_enabled: Callable[[], bool] = lambda: True,
         running_in: Callable[[str, str, str], str | None] = lambda *_: None,
         running_in_chat: Callable[[str, str], list[str]] = lambda *_: [],
     ) -> None:
@@ -81,6 +82,8 @@ class ChannelCommands:
         self._model_suggestions = model_suggestions
         self._collections = collections
         self._ingest = ingest
+        #: Whether the knowledge feature is on right now; `/kb` and `/help` read it.
+        self._knowledge_enabled = knowledge_enabled
 
     async def handle(
         self,
@@ -188,7 +191,7 @@ class ChannelCommands:
         """The titles of the conversations running a turn anywhere in this chat."""
         return [
             await self._title(conversation_id)
-            for conversation_id in self.running_in_chat(binding.resource.name, peer.chat_id)
+            for conversation_id in self.running_in_chat(binding.resource.uid, peer.chat_id)
         ]
 
     async def _title(self, conversation_id: str) -> str:
@@ -200,7 +203,7 @@ class ChannelCommands:
 
     async def _stop_group(self, ctx: CommandContext) -> None:
         """`/stop` in a SeaTalk group's main chat: every turn in the group."""
-        running = self.running_in_chat(ctx.binding.resource.name, ctx.chat_id)
+        running = self.running_in_chat(ctx.binding.resource.uid, ctx.chat_id)
         if not running:
             await ctx.say("Nothing is running in this group.")
             return

@@ -25,6 +25,8 @@ specification, and misbehaving ones are handled as faults. Coffer does not bundl
 knowledge and secret ciphertext — to a remote the user owns (media under `content/`, the history in `runs.db`
 and machine-local state do not travel), and a byte copy is `cp -r ~/.coffer/` with the daemon stopped.
 
+While the `knowledge` feature is switched off, the built-in `coffer__write` tool is absent from the tool list (spec [experimental-features](../experimental-features/spec.md) "Close the knowledge feature's surfaces").
+
 ## Requirements
 
 ### Requirement: Present Coffer as one MCP server
@@ -98,7 +100,9 @@ list-changed notifications) between clients and upstream MCP servers.
   `COFFER_TOOL_TIERING=off`, or any failure of the usage query, lists everything. The split is reported per server on its page, through `GET /api/v1/resources/mcp_server/{uid}/tiering`: which of that server's tools are listed and which are reached through search, computed with the same policy over the tool lists discovery last saved for every enabled server on this machine, never by spawning one.
 - **`initialize` instructions.** The `initialize` response MUST carry an MCP `instructions` string stating
   what Coffer is and that `coffer__search_tools` reaches whatever tiering left unlisted. It is capped (~800
-  characters) and omits the tiering sentence when nothing is actually hidden.
+  characters) and omits the tiering sentence when nothing is actually hidden. At `initialize` the count of
+  hidden tools comes from the tool lists discovery last saved for the servers the session can see, because the
+  handshake precedes the first `tools/list`; each `tools/list` then replaces that estimate with the real count.
 - **Degraded upstream discovery.** When a server misses the per-server discovery budget its tools are left
   out of that listing, but the server MUST be **named**, retried in the background, and on recovery the
   gateway MUST emit `notifications/tools/list_changed` so the client re-lists.
@@ -166,7 +170,7 @@ in the invocation log.
 ### Requirement: Manage MCP servers as resources
 Users MUST be able to register, list, view, update, enable, disable and delete MCP servers as
 resources addressed by the immutable `uid` the framework mints for them
-([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md));
+([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md));
 the per-server routes are `/api/v1/resources/mcp_server/{uid}/…`.
 Validating that registration against the kind's schema, rejecting a duplicate name within the kind, and
 persisting nothing on a validation failure are [resource-framework](../resource-framework/spec.md) "Validate every registration and persist nothing on failure", which every kind inherits; this
@@ -179,8 +183,8 @@ fixed: once registered it MUST NOT change, and a changed name MUST be refused wi
 carries no title: its fixed name and its description — a note the user keeps for themselves — are all it has
 ([resource-framework](../resource-framework/spec.md) "Carry an optional editable title on the kinds that have one"),
 and `coffer mcp add` and `coffer mcp edit` offer no `--title`.
-The name MUST be at most 24 characters, in addition to the existing name pattern and the ban on `__`,
-wherever the framework validates it — registration here and a server arriving from another machine alike.
+The name MUST be at most 24 characters and MUST NOT be `coffer` (the name of Coffer's own gateway), in addition to
+the existing name pattern and the ban on `__`, wherever the framework validates it — registration here and a server arriving from another machine alike.
 
 - Registering a server whose upstream is unreachable MUST still succeed (the config is saved); discovery and
   health report the failure, the server is marked unhealthy until reachable, and there MUST be no silent
@@ -223,6 +227,11 @@ wherever the framework validates it — registration here and a server arriving 
 - **GIVEN** the coffer daemon is running
 - **WHEN** the user registers a new server whose name is 25 characters long, and then one whose name is 24 characters long
 - **THEN** the first is refused as a validation error naming the 24-character limit, with nothing persisted, and the second is registered
+
+#### Scenario: a server cannot take the name of Coffer's own gateway
+- **GIVEN** the coffer daemon is running
+- **WHEN** the user registers a server named `coffer`
+- **THEN** it is refused as a validation error saying the name is reserved, with nothing persisted, so no upstream tool can be mistaken for a built-in or shadow `coffer__write` or `coffer__search_tools`
 
 #### Scenario: test re-queries capabilities before reporting health
 - **GIVEN** a registered server whose upstream has gained a tool since Coffer last discovered it
@@ -310,7 +319,7 @@ every log-writing kind inherits — not this spec's own rule. This spec contribu
 registry with a 30-day default. The record is read per server
 (`GET /api/v1/resources/mcp_server/{uid}/invocations`, `coffer log mcp --server <server>`) or across every
 server (`GET /api/v1/mcp/invocations`, `coffer log mcp` with no server), the cross-server read
-including Coffer's own built-in calls (`coffer`) and deleted servers' rows (`deleted:<name>`). Both HTTP reads
+including Coffer's own built-in calls (`coffer`) and the rows of servers since deleted (their uid, with no name). Both HTTP reads
 can be narrowed to one agent's calls with `agent_uid`. Both reads
 page newest first by cursor ([resource-framework](../resource-framework/spec.md) "Page growing lists by an opaque cursor"),
 and both CLI forms take `--status`, `--since`, `--limit`, `--cursor` and `--json`. One server's calls since a moment
@@ -327,7 +336,7 @@ did not end `ok`) and the last call's time, per calling agent and per tool.
 - **GIVEN** a running daemon that has recorded invocations on two servers, on a Coffer built-in tool and on a deleted server
 - **WHEN** the user runs `coffer log mcp --server <server>` and then `coffer log mcp --status error --json`
 - **THEN** the first prints only that server's calls, newest first
-- **AND** the second prints, under `invocations`, only failed calls across every server, each naming its server, including `coffer` and `deleted:<name>` rows
+- **AND** the second prints, under `invocations`, only failed calls across every server, each naming its server, including `coffer` and the rows of a deleted server
 
 #### Scenario: the invocation log pages by cursor
 - **GIVEN** a server with three recorded invocations
@@ -420,6 +429,11 @@ the uid rather than the name, because the entry is written once into a file Coff
 goes stale on the first rename. A session's reported identity is carried for the life of that connection and
 used for every subsequent list and call.
 
+- A session id the daemon does not know — its idle session was dropped, or the daemon restarted — MUST be
+  answered `404` for every method but `initialize` (and for a notification stream), never silently rebuilt as
+  a session that lost the handshake's identity and scope; the shim MUST then replay its cached `initialize` and
+  resend the call. A session id that starts with `__` MUST NOT be taken as a client's session id. An open
+  notification stream MUST keep its session from being reaped as idle.
 - A `_meta` carrying only a name-based `coffer/agent` key MUST be treated as reporting no identity rather than
   resolved by name.
 - A session with no reported identity (a hand-configured shim invocation, or any client that omits
@@ -434,6 +448,11 @@ used for every subsequent list and call.
   MUST overwrite any `agent` the client put in the call's arguments with the session's, and MUST drop the
   argument entirely when the session reported none — so a client cannot pick a different identity per call,
   and no built-in tool advertises `agent` in its input schema.
+
+#### Scenario: a dropped session is answered 404 and the client handshakes again
+- **GIVEN** a session whose handshake reported an agent's uid and that the idle reaper has since dropped,
+- **WHEN** the client sends `tools/list` on its old session id,
+- **THEN** the answer is `404` and no session is created; an `initialize` carrying the identity then opens a new one, and the shim does both and resends the call
 
 #### Scenario: a name-only handshake is treated as unidentified
 - **GIVEN** one server scoped to a single agent's uid and one unscoped server,

@@ -14,6 +14,7 @@ import { McpServersBulkBar } from "./McpServersBulkBar";
 vi.mock("@/lib/hooks/useScope", () => ({
   useResourceScope: vi.fn(() => ({ data: undefined })),
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useBulkReach: vi.fn(() => ({ disable: vi.fn(), enable: vi.fn(), isPending: false })),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgents: vi.fn(() => ({
@@ -32,6 +33,7 @@ vi.mock("@/lib/hooks/useResourceMutations", () => {
     useEnableResource: vi.fn(stub),
     useDisableResource: vi.fn(stub),
     useDeleteResource: vi.fn(stub),
+    useBulkDeleteResources: vi.fn(() => ({ run: vi.fn(), isPending: false })),
   };
 });
 

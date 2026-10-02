@@ -1,7 +1,7 @@
 """HTTP coverage for /api/v1/agents/{uid}/config-files.
 
 The route family hangs off the agent's immutable ``uid``, never its name
-(ADR resource-identity-is-an-immutable-uid). ``_register_claude`` therefore
+(ADR identity-is-the-uid-inside-the-file). ``_register_claude`` therefore
 hands back the uid its own ``POST /api/v1/agents`` response carried, and every
 test addresses the agent by that — no second request, and no place where a
 label could be mistaken for an identity.

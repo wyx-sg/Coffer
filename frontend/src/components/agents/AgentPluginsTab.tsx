@@ -25,7 +25,8 @@ import { Switch } from "@/components/ui/switch";
 import { agentTypeLabel } from "@/lib/agents/display";
 import type { Owner } from "@/lib/agents/owner";
 import { agentPluginPath } from "@/lib/agents/routes";
-import type { AgentOut, PluginOut } from "@/lib/api/agents";
+import type { AgentOut } from "@/lib/api/agents";
+import type { PluginOut } from "@/lib/api/agents-workspace";
 import { useAgentPlugins, useTogglePlugin, useUninstallPlugin } from "@/lib/hooks/useAgents";
 
 type PluginRow = PluginOut & { owner: Owner };

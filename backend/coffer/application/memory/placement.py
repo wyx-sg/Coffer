@@ -10,6 +10,7 @@ source produced.
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import pathlib
 from collections.abc import Sequence
@@ -105,6 +106,13 @@ class Placer:
             return GLOBAL_PLACEMENT
         known = self._by_key.get(repository.key)
         if known is not None:
+            recorded = known.repository_path
+            if recorded != repository.root and not (recorded and pathlib.Path(recorded).is_dir()):
+                # The checkout the partition recorded is gone and this clone is the
+                # same repository: record the one that exists, or the partition stays
+                # unresolvable from every directory ("Report unresolvable partitions").
+                known = dataclasses.replace(known, repository_path=repository.root)
+                self._by_key[repository.key] = known
             return known
         placement = self._mint(repository)
         self._by_key[repository.key] = placement

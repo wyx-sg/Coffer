@@ -1,55 +1,39 @@
 // A page of a switched-off experimental feature (spec experimental-features
-// "Close every surface of a switched-off feature"): the route renders a notice
-// that says so, with a Switch on button (the same write as Settings → General)
-// and a way to open Settings; a pinned feature explains the pin instead. The
-// page itself never mounts until the feature is on. No real feature is
-// registered, so the gate guards a test-only `fake_feature`, which has no
-// translated name and so is named by its key.
+// "Make a switched-off feature look absent in the UI"): the route renders the
+// app's not-found page — no notice that the feature is off and no switch-on
+// button. The page itself never mounts until the feature is on, and nothing is
+// claimed while the daemon has not answered. The gate here guards `knowledge`;
+// the route-table tests prove every feature's pages sit behind their gate.
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, matchRoutes } from "react-router-dom";
 
 import { acceptance } from "@/test/acceptance";
 
+import { isValidElement } from "react";
+
+import { appRoutes } from "@/router";
+import { NotFoundPage } from "@/pages/NotFoundPage";
 import { FeatureGate } from "./FeatureGate";
 
 const getMock = vi.fn();
-const putMock = vi.fn();
-vi.mock("@/lib/api/client", () => ({
-  getApiClient: () => ({ GET: getMock, PUT: putMock }),
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: () => ({ GET: getMock }),
   resetApiClient: vi.fn(),
 }));
 
-type Source = "pin" | "setting" | "channel";
-
-function daemon(features: Record<string, boolean> | undefined, source: Source = "channel") {
-  // Replaced, never mutated: the query cache holds the object it was handed.
-  let state: Record<string, boolean> = { ...features };
-  getMock.mockImplementation(async (path: string) => {
-    if (path === "/daemon/features") {
-      return {
-        data: {
-          channel: "stable",
-          features: Object.entries(state).map(([key, enabled]) => ({ key, enabled, source })),
-        },
-      };
-    }
-    return {
-      data: {
-        status: "ready",
-        version: "0.0.0",
-        executable: "/x",
-        started_at: "2026-01-01T00:00:00Z",
-        port: 1,
-        channel: "stable",
-        features: features === undefined ? undefined : state,
-      },
-    };
-  });
-  putMock.mockImplementation(async (_path: string, init: { params: { path: { key: string } } }) => {
-    state = { ...state, [init.params.path.key]: true };
-    return { data: { key: init.params.path.key, enabled: true, source: "setting" } };
+function daemon(features: Record<string, boolean>) {
+  getMock.mockResolvedValue({
+    data: {
+      status: "ready",
+      version: "0.0.0",
+      executable: "/x",
+      started_at: "2026-01-01T00:00:00Z",
+      port: 1,
+      features,
+    },
   });
 }
 
@@ -58,7 +42,7 @@ function renderGate() {
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <FeatureGate feature="fake_feature">
+        <FeatureGate feature="knowledge" notFound={<p>the not-found page</p>}>
           <p>the fake page</p>
         </FeatureGate>
       </MemoryRouter>
@@ -68,70 +52,25 @@ function renderGate() {
 
 beforeEach(() => {
   getMock.mockReset();
-  putMock.mockReset();
 });
 
 describe("FeatureGate", () => {
-  acceptance(
-    "experimental-features",
-    "a switched-off feature's page says it is switched off",
-    async () => {
-      daemon({ fake_feature: false, other_feature: true });
-      renderGate();
-
-      expect(await screen.findByText("fake_feature is switched off")).toBeInTheDocument();
-      expect(screen.queryByText(/coffer config set/)).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Open Settings" })).toBeInTheDocument();
-      expect(screen.queryByText("the fake page")).not.toBeInTheDocument();
-    },
-  );
-
-  acceptance(
-    "experimental-features",
-    "a switched-off feature's page switches it on in place",
-    async () => {
-      daemon({ fake_feature: false });
-      renderGate();
-
-      const button = await screen.findByRole("button", { name: "Switch on" });
-      await waitFor(() => expect(button).toBeEnabled());
-      fireEvent.click(button);
-      await waitFor(() => expect(putMock).toHaveBeenCalled());
-
-      expect(await screen.findByText("the fake page")).toBeInTheDocument();
-      expect(putMock).toHaveBeenCalledTimes(1);
-      expect(putMock.mock.calls[0][1]).toMatchObject({
-        params: { path: { key: "fake_feature" } },
-        body: { enabled: true },
-      });
-    },
-  );
-
-  acceptance(
-    "experimental-features",
-    "a pinned feature's page explains the pin instead of switching",
-    async () => {
-      daemon({ fake_feature: false }, "pin");
-      renderGate();
-
-      expect(await screen.findByText(/held off by COFFER_FEATURES/)).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: "Switch on" })).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Open Settings" })).toBeInTheDocument();
-    },
-  );
-
-  test("a switched-on feature's page renders", async () => {
-    daemon({ fake_feature: true, other_feature: true });
+  acceptance("experimental-features", "a switched-off feature's page is not found", async () => {
+    daemon({ knowledge: false, models: true });
     renderGate();
 
-    expect(await screen.findByText("the fake page")).toBeInTheDocument();
+    expect(await screen.findByText("the not-found page")).toBeInTheDocument();
+    expect(screen.queryByText("the fake page")).not.toBeInTheDocument();
+    expect(screen.queryByText(/switched off/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /switch on|open settings/i })).toBeNull();
   });
 
-  test("a daemon that predates the gates serves everything", async () => {
-    daemon(undefined);
+  test("a switched-on feature's page renders", async () => {
+    daemon({ knowledge: true, models: false });
     renderGate();
 
     expect(await screen.findByText("the fake page")).toBeInTheDocument();
+    expect(screen.queryByText("the not-found page")).not.toBeInTheDocument();
   });
 
   test("nothing is claimed before the daemon answers", async () => {
@@ -141,9 +80,63 @@ describe("FeatureGate", () => {
 
     expect(screen.getByRole("status")).toBeInTheDocument();
     expect(screen.queryByText("the fake page")).not.toBeInTheDocument();
-    expect(screen.queryByText(/switched off/)).not.toBeInTheDocument();
+    expect(screen.queryByText("the not-found page")).not.toBeInTheDocument();
 
-    answer({ data: { status: "ready", features: { fake_feature: true } } });
+    answer({ data: { status: "ready", features: { knowledge: true } } });
     expect(await screen.findByText("the fake page")).toBeInTheDocument();
+  });
+});
+
+// Every page of a feature is behind its gate, through the `feature` the
+// sidebar entry carries: a deep link lands on the not-found page, not on the page.
+describe("the route table", () => {
+  const GATED: Record<string, string[]> = {
+    models: ["/model-providers", "/model-providers/abc", "/usage"],
+    knowledge: ["/knowledge", "/knowledge/abc/history"],
+    memory: ["/memory", "/memory/abc/delivered"],
+    sync: ["/sync", "/sync/conflicts", "/sync/deletions"],
+  };
+
+  acceptance("web-ui", "a switched-off feature's address is not found", () => {
+    for (const paths of Object.values(GATED)) {
+      for (const path of paths) {
+        const matches = matchRoutes(appRoutes, path) ?? [];
+        const element = matches[matches.length - 1]?.route.element;
+        const props = (element as { props: { notFound: { type: unknown } } }).props;
+        expect(props.notFound.type, path).toBe(NotFoundPage);
+      }
+    }
+  });
+
+  for (const [feature, paths] of Object.entries(GATED)) {
+    test(`every ${feature} page is wrapped in its gate`, () => {
+      for (const path of paths) {
+        const matches = matchRoutes(appRoutes, path) ?? [];
+        const element = matches[matches.length - 1]?.route.element;
+        expect(isValidElement(element) && element.type === FeatureGate, path).toBe(true);
+        const props = (element as { props: { feature: string; notFound: { type: unknown } } })
+          .props;
+        expect(props.feature).toBe(feature);
+        // A switched-off feature's page is the app's standard not-found page.
+        expect(props.notFound.type).toBe(NotFoundPage);
+      }
+    });
+  }
+
+  test("an always-on page is not gated", () => {
+    for (const path of [
+      "/agents",
+      "/skills",
+      "/mcp-servers",
+      "/secrets",
+      "/activity",
+      "/conversations",
+      "/channels",
+      "/",
+    ]) {
+      const matches = matchRoutes(appRoutes, path) ?? [];
+      const element = matches[matches.length - 1]?.route.element;
+      expect(isValidElement(element) && element.type === FeatureGate, path).toBe(false);
+    }
   });
 });

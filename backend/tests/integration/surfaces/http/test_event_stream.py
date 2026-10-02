@@ -22,7 +22,6 @@ from httpx import ASGITransport, AsyncClient
 from coffer.surfaces.http import event_wiring
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.event_dependencies import get_event_broker, get_heartbeat_seconds
 from tests.integration.surfaces.http._sse import SseEvent, SseStream
 
@@ -30,7 +29,7 @@ pytestmark = pytest.mark.asyncio
 
 _TOKEN = "test-token-events"
 _AUTH = {"X-Coffer-Token": _TOKEN}
-_ENVELOPE_FIELDS = {"seq", "kind", "id", "rev", "op"}
+_ENVELOPE_FIELDS = {"seq", "kind", "id", "op"}
 
 
 @dataclass
@@ -91,8 +90,6 @@ async def test_a_disable_then_a_delete_are_two_consecutive_hints(daemon: _Daemon
     try:
         r = await daemon.client.post(f"/api/v1/resources/{server['uid']}/disable")
         assert r.status_code == 200, r.text
-        # The wire resource carries no revision; the row does.
-        disabled_rev = (await get_resource_service().get(server["uid"])).rev
         r = await daemon.client.delete(f"/api/v1/resources/{server['uid']}")
         assert r.status_code == 204, r.text
 
@@ -105,18 +102,16 @@ async def test_a_disable_then_a_delete_are_two_consecutive_hints(daemon: _Daemon
         "seq": upsert.data["seq"],
         "kind": "mcp_server",
         "id": server["uid"],
-        "rev": disabled_rev,
         "op": "upsert",
     }
     assert delete.data == {
         "seq": upsert.data["seq"] + 1,
         "kind": "mcp_server",
         "id": server["uid"],
-        "rev": disabled_rev + 1,
         "op": "delete",
     }
     # The SSE id names this run and the seq; nothing of the resource beyond
-    # kind/uid/rev travels.
+    # kind and uid travels.
     run = get_event_broker().run
     assert (upsert.id, delete.id) == (f"{run}.{upsert.data['seq']}", f"{run}.{delete.data['seq']}")
     assert set(upsert.data) == set(delete.data) == _ENVELOPE_FIELDS
@@ -215,7 +210,6 @@ async def test_an_item_joining_the_attention_list_is_one_attention_hint(daemon: 
         "seq": announced.data["seq"],
         "kind": "attention",
         "id": None,
-        "rev": None,
         "op": "upsert",
     }
     r = await daemon.client.get("/api/v1/attention")

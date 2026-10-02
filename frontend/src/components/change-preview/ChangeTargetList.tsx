@@ -8,7 +8,7 @@ import { agentTypeLabel } from "@/lib/agents/display";
 import { cn } from "@/lib/utils";
 import { LineCounts } from "./LineCounts";
 import { OpChip } from "./OpChip";
-import { groupByAgent, looksLikeFolder, type ChangeItem, type ChangeStatus } from "./changeCounts";
+import { groupByAgent, looksLikeFolder, type ChangeItem, type ChangeStatus } from "@/lib/changePreview/changeCounts";
 
 interface Props {
   items: readonly ChangeItem[];

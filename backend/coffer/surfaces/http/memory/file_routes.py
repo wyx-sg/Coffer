@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pathlib
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 
 from coffer.application.resource_service import ResourceService
 from coffer.infrastructure.memory import files as memory_files
@@ -21,7 +21,7 @@ from coffer.infrastructure.memory import paths as memory_paths
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.memory.lookup import require_partition
-from coffer.surfaces.http.memory.schemas import FileContentOut, FileNodeOut, FileTreeOut
+from coffer.surfaces.http.memory.schemas import FileNodeOut, FileTreeOut
 
 router = APIRouter(
     prefix="/api/v1/memory",
@@ -56,19 +56,6 @@ def _node_out(node: memory_files.FileNode, root: pathlib.Path) -> FileNodeOut:
     )
 
 
-def _content_out(content: memory_files.FileContent, root: pathlib.Path) -> FileContentOut:
-    abs_path, folder_abs_path = _abs_paths(root, content.path)
-    return FileContentOut(
-        path=content.path,
-        abs_path=abs_path,
-        folder_abs_path=folder_abs_path,
-        content=content.content,
-        truncated=content.truncated,
-        binary=content.binary,
-        size=content.size,
-    )
-
-
 @router.get("/partitions/{uid}/files", response_model=FileTreeOut)
 async def list_partition_files(
     uid: str,
@@ -81,24 +68,3 @@ async def list_partition_files(
     # label is where its files are.
     root = memory_paths.partition_dir(partition.name)
     return FileTreeOut(root=_node_out(memory_files.build_tree(root), root))
-
-
-@router.get("/partitions/{uid}/files/content", response_model=FileContentOut)
-async def read_partition_file(
-    uid: str,
-    #: A path INSIDE the already-identified partition — ``notes/foo.md``. A
-    #: filesystem path, so it is a name and stays one: there is no identity
-    #: below the partition to address a file by.
-    path: str = Query(min_length=1),
-    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
-) -> FileContentOut:
-    """One file out of the partition's directory.
-
-    ``UnsafeMemoryPath`` (400) and ``MemoryFileNotFound`` (404) both propagate
-    to the app-wide handler in ``surfaces/http/errors.py``, which already maps
-    every ``CofferError`` — the same way knowledge's own file read reports an
-    escape or a miss, rather than each route inventing an ``HTTPException``.
-    """
-    partition = await require_partition(uid, resources)
-    root = memory_paths.partition_dir(partition.name)
-    return _content_out(memory_files.read_file(partition.name, root, path), root)

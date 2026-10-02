@@ -81,7 +81,6 @@ def test_the_provider_projection_round_trips_and_keeps_user_keys(
         key_helper=proxy_token_helper("a" * 32, coffer_cli="/opt/coffer/bin/coffer"),
         codex_auth=CodexAuthCommand("/opt/coffer/bin/coffer", proxy_token_args("a" * 32)),
         binding=ModelBinding(),
-        wire_api=None,
         models=(ProjectedModel(id="m-1"),),
     )
     plan = facet.apply(original, request, path)

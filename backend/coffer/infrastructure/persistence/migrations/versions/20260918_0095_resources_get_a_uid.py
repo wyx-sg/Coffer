@@ -1,8 +1,7 @@
 """every resource gets a ``uid`` — the identity its name used to pretend to be
 
 The column added here is what replaces ``(kind, name)`` as a resource's
-identity everywhere outside the database ([Resource Identity Is an Immutable
-`uid`](../../../../../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
+identity everywhere outside the database (ADR identity-is-the-uid-inside-the-file).
 The integer ``id`` is untouched and stays what it always was: the surrogate
 primary key four kind-owned tables hold a foreign key to.
 

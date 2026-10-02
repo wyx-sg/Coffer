@@ -28,10 +28,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
-import { skillsApi } from "@/lib/api/skills";
 import { useFsActions } from "@/lib/fsActions";
 import { useFileDraft } from "@/lib/hooks/useFileDraft";
-import { useSkillFileContent } from "@/lib/hooks/useSkills";
+import { useSkillFileContent, useWriteSkillFile } from "@/lib/hooks/useSkills";
 import { usePreferredEditor } from "@/lib/preferences";
 import { formatBytes } from "@/lib/utils";
 
@@ -58,12 +57,13 @@ export function SkillFileViewer({ uid, path, builtin = false, onDirtyChange }: P
   const editor = usePreferredEditor();
   const fs = useFsActions();
   const content = useSkillFileContent(uid, path);
+  const write = useWriteSkillFile(uid);
   const [view, setView] = useState<"preview" | "source">("preview");
   const draft = useFileDraft({
     loaded: content.data?.content,
     fingerprint: content.data?.fingerprint,
     save: async (text, expectedFingerprint) => {
-      const saved = await skillsApi.writeFileContent(uid, {
+      const saved = await write.mutateAsync({
         path,
         content: text,
         // Every vault write compares; with no fingerprint to state, the empty

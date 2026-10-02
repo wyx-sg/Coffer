@@ -3,12 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
-import {
-  agentsApi,
-  type AdoptMcpEntryBody,
-  type AgentCreate,
-  type AgentPatch,
-} from "@/lib/api/agents";
+import { agentsApi, type AgentCreate, type AgentPatch } from "@/lib/api/agents";
+import type { AdoptMcpEntryBody } from "@/lib/api/agents-workspace";
 import { translateApiError } from "@/lib/api/errors";
 import {
   agentTypesKey,

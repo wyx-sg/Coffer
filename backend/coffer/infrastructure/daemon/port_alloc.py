@@ -2,7 +2,7 @@
 
 :func:`bind_fixed_socket` is how the daemon binds — the port the user pinned,
 or :data:`~coffer.infrastructure.daemon.config.DEFAULT_PORT` when they pinned
-none. :func:`bind_free_socket` and :func:`allocate` are the scan, kept for the
+none. :func:`bind_free_socket` is the scan, kept for the
 ``COFFER_PORT_RANGE_*`` override the test suite pins so concurrent test daemons
 cannot collide on 8000. No user-facing start reaches the scan.
 """
@@ -160,24 +160,6 @@ def _new_socket(*, reuse_addr: bool) -> socket.socket:
     if reuse_addr:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     return sock
-
-
-def allocate(
-    start: int = daemon_config.DEFAULT_PORT, end: int = daemon_config.DEFAULT_PORT + 9
-) -> int:
-    """Return the first available 127.0.0.1 port in [start, end] inclusive.
-
-    Part of the override path only (see the module docstring): a normal start
-    binds one port and refuses to move. Note also that this probe-and-close
-    form has an inherent TOCTOU window — the port can be taken between the
-    close here and a later bind — so even within that path the daemon uses
-    :func:`bind_free_socket`, which keeps ownership of the port.
-    """
-    sock = bind_free_socket(start, end)
-    try:
-        return sock.getsockname()[1]  # type: ignore[no-any-return]
-    finally:
-        sock.close()
 
 
 def bind_free_socket(

@@ -13,18 +13,19 @@ import { daemonContinuation, describeDaemonRecord } from "@/lib/activity/activit
 import type { ActivityRecord } from "@/lib/activity/records";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import { translateApiError } from "@/lib/api/errors";
-import { fsApi } from "@/lib/api/fs";
+import { useFsActions } from "@/lib/fsActions";
 
 export function OpenLogFile({ path }: { path: string | undefined }) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const fs = useFsActions();
   return (
     <Button
       variant="ghost"
       size="sm"
       disabled={!path}
       onClick={() => {
-        if (path) fsApi.open(path).catch((e: unknown) => toast.error(translateApiError(t, e)));
+        if (path) fs.open(path).catch((e: unknown) => toast.error(translateApiError(t, e)));
       }}
     >
       <FileText />

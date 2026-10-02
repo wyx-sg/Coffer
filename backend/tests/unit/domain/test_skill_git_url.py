@@ -69,6 +69,25 @@ def test_a_transport_git_would_misread_is_refused(url: str) -> None:
         parse_git_location(url)
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://user:ghp_secret@github.com/acme/skills.git",
+        "https://ghp_secret@github.com/acme/skills.git",
+        "http://token@example.com/r.git",
+        "ssh://git:hunter2@example.com/r.git",
+    ],
+)
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="a repository URL carrying a credential is refused"
+)
+def test_a_url_carrying_a_credential_is_refused(url: str) -> None:
+    """The source URL is stored in the vault (which syncs), the skill's own
+    metadata and API answers, so no secret may ride in it."""
+    with pytest.raises(GitLocationError, match="user name or password"):
+        parse_git_location(url)
+
+
 @pytest.mark.parametrize("ref", ["-x", "--upload-pack=x", "has space", "a;b"])
 def test_a_ref_that_is_an_option_or_not_a_name_is_refused(ref: str) -> None:
     with pytest.raises(GitLocationError):

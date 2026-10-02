@@ -1,9 +1,9 @@
 # Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Knowledge Curation Merges New Material Into the Documents](knowledge-curation.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), spec knowledge "Keep direct file edits a complete way to change knowledge", spec knowledge "Save a document edited in the web UI", spec knowledge "Let newer statements win and a person's edit stand", spec skill-manager "Save an existing skill file conditionally", spec vault-sync "Snapshot before checking out and roll a round back from it"
+**Related**: [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Knowledge Curation Merges New Material Into the Documents](knowledge-curation.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), spec knowledge "Keep direct file edits a complete way to change knowledge", spec knowledge "Save a document edited in the web UI", spec knowledge "Let newer statements win and a person's edit stand", spec skill-manager "Save an existing skill file conditionally", spec vault-storage "Admit every vault write through one compare-and-swap path", spec vault-storage "Show, compare and restore any version of a vault file", spec vault-sync "Snapshot before checking out and roll a round back from it"
 
 ## Context
 
@@ -17,25 +17,24 @@ three kinds of writer change it, and none of them waits for the others:
   pass, a uid minted for a hand-made file, a layout commit;
 - **sync** — a round bringing another machine's changes in.
 
-How the code protects one writer from another today is uneven, and in two
-places it is decided by modification time:
+Before the vault was one repository, the code protected one writer from another
+unevenly, and in two places by modification time. A web UI save of a knowledge
+document compared a fingerprint of the bytes the editor loaded, but the check
+and the replace were not under one lock. A skill file save took the same
+fingerprint as an optional argument, with an unconditional last-writer-wins
+write when it was omitted. A sync apply wrote nothing conditionally: it
+truncated and rewrote the file in place, so a person's edit made between the
+round's serialize and its apply was overwritten and a reader could see a
+half-written file. And curation decided what a person had edited by comparing a
+file's mtime with a stamp, with a realignment of mtime after Coffer's own write
+so it was not mistaken for a person's; a file written by a sync apply got a
+fresh mtime and so read as a person's edit.
 
-| Writer | Code | Protection |
-| --- | --- | --- |
-| Web UI saves a knowledge document | `infrastructure/knowledge/fs.py` `save_body` | compares a SHA-256 `fingerprint` of the bytes the editor loaded (line 217), then replaces — the check and the replace are not under one lock |
-| API saves a skill file | `application/skill/content_ops.py` | the same fingerprint, **optional**: "omitting `expected_fingerprint` keeps the unconditional last-writer-wins write" (line 45) |
-| Sync applies a file | `application/sync/appliers.py` `_copy_in` (lines 91–101) | none: `dst.write_bytes(...)` truncates and rewrites in place, so a person's edit made between the round's serialize and its apply is overwritten, and a reader can see a half-written file |
-| Curation decides what a person edited | `infrastructure/knowledge/fs.py:292-294` | **mtime** against the `coffer_curated_at` stamp, with `_align_mtime` (line 231) setting a file's mtime after Coffer's own write so it is not mistaken for a person's; a file written by a sync apply gets a fresh mtime and so reads as a person's edit |
-
-Nothing watches the vault trees (no file-watching library is imported
-anywhere in `backend/coffer/`); changes are found by sweeps. And nothing
-keeps history: an edit leaves an audit row (`knowledge_edited`,
-`skill_updated`) naming who and when, but the previous content is gone. The
-only way back is the sync working tree's own history — a whole-vault restore
-to a revision (spec vault-sync "Restore to a revision without discarding later work")
-or one of ten pre-apply snapshot tags (`SNAPSHOTS_KEPT`,
-`application/sync/convergence_ops.py:257`) — and only while sync is on, at the
-granularity of an hourly round.
+Nothing watched the vault trees, so changes were found by sweeps. And nothing
+kept history: an edit left an audit row naming who and when, but the previous
+content was gone. The only way back was the sync working tree's own history, a
+whole-vault restore to a revision or one of a few pre-apply snapshot tags, and
+only while sync was on, at the granularity of an hourly round.
 
 The reconciler ADR set the audit rule for files outside the vault: write, then
 record the audit event in the same call, and restore the prior content if
@@ -55,9 +54,15 @@ and how a write is admitted — and each is argued on its own.
 `~/.coffer/vault/` is a local git repository from the moment it exists,
 whether or not a sync remote is configured; configuring sync only adds a
 remote. Every write that passes validation lands as a commit whose author
-names the writer (`Coffer (human edit)`, `Coffer (daemon)`, `Coffer (sync)`)
-and whose trailers carry `Coffer-Writer: human|daemon|sync`, `Coffer-Actor:`
-(the audit actor) and `Coffer-Machine:` (the machine id).
+names the writer (`Coffer (disk)`, `Coffer (daemon)`, `Coffer (sync)`) and
+whose trailers carry `Coffer-Writer`, `Coffer-Operation`, `Coffer-Actor` (the
+audit actor) and `Coffer-Machine` (the machine id). The writer vocabulary is six
+words (`domain/vault/writers.py`): `user` (a person through a Coffer surface),
+`disk` (a change found in the working tree that no Coffer operation made — an
+editor, a shell, an agent's own file tools, a person's own `git commit`),
+`agent`, `daemon`, `curation` and `sync`. `disk` stands for a person's hand edit
+because the scanner cannot tell a person's editor from an agent's file tool; a
+commit without trailers reads as `disk`.
 
 - **Pros.** Per-file history, diff and restore exist for every user, not only
   for those who sync; git is already how the vault converges, so the history a
@@ -67,9 +72,11 @@ and whose trailers carry `Coffer-Writer: human|daemon|sync`, `Coffer-Actor:`
   ([Sync Only Pulls and Pushes the Vault Repository](sync-applies-clean-merges-and-stops-on-any-conflict.md)).
   The first consumer is a skill's History tab — versions with their writer, a
   diff, and restore — at no storage cost beyond git's.
-- **Cons.** Coffer requires git for every user, not only for sync users: on
-  macOS without the Command Line Tools, `/usr/bin/git` is a stub that asks to
-  install them, which becomes a first-run step. The repository grows with
+- **Cons.** Coffer requires git (2.40 or newer, because every sync round uses
+  `merge-tree --write-tree`) for every user, not only for sync users: on macOS
+  without the Command Line Tools, `/usr/bin/git` is a stub that asks to install
+  them, so the daemon fails at startup with an error that carries the install
+  hand-off for the person's agent. The repository grows with
   every edit, including any large binary a skill carries. A person running
   `git` by hand in the vault is a writer Coffer must tolerate (below).
 - **Why it wins.** It is the only option in which "restore last Tuesday's
@@ -103,7 +110,7 @@ Keep previous versions in a table in `runs.db`, or content-addressed copies in
 - **Why it loses.** Git is already on the critical path of the vault; a second
   history is cost with no capability git lacks.
 
-#### Option A4 — No history (today)
+#### Option A4 — No history (the design this replaced)
 
 Audit rows say who changed what; content history exists only in sync
 snapshots.
@@ -121,13 +128,12 @@ snapshots.
   file it read. Under the vault's single write lock it re-reads the file,
   compares hashes, writes a sibling temp file and renames it into place, stages
   and commits. A mismatch is `VAULT_FILE_STALE` (409) and the caller re-reads;
-  there is no "unconditional" mode, so the optional fingerprint of the skill
-  API becomes mandatory.
-- **Human edits are found, not intercepted.** File-system events (through the
-  platform port's file-watching entry,
-  [Platform Differences Live Behind One Platform Port](platform-differences-live-behind-one-platform-port.md))
-  are a hint, debounced until the changed paths have been quiet for a second,
-  so an editor's temp-file-and-rename save is one change. A periodic scan and
+  there is no "unconditional" mode, so the skill API's fingerprint is
+  mandatory, not optional.
+- **Human edits are found, not intercepted.** File-system events (the
+  `watchfiles` library, read in `infrastructure/vault/scanner.py`) are a hint,
+  debounced until the changed paths have been quiet for a second, so an
+  editor's temp-file-and-rename save is one change. A scan every 60 seconds and
   the boot scan are the truth: they ask git which working-tree files differ
   from `HEAD`. Git's stat cache may say "look again"; only content says
   "changed". Edits made while the daemon was down are found at boot.
@@ -135,9 +141,10 @@ snapshots.
   the daemon's, a merge's — passes one validator before it is committed: the
   kind's schema and validators, the uid rules
   ([A Resource's Identity Is the `uid` Inside Its File](identity-is-the-uid-inside-the-file.md)),
-  the format-version rules
-  ([Every Vault File Carries Its Own Format Version](every-vault-file-carries-its-format-version.md))
-  and the secret scan
+  and the format-version rules
+  ([Every Vault File Carries Its Own Format Version](every-vault-file-carries-its-format-version.md)).
+  A plain-text secret is not this validator's to find: the sync round scans
+  every blob it is about to publish and stops before pushing one
   ([Standalone Secrets](standalone-secrets-are-named-references-injected-into-one-child.md)).
   A file that fails stays in the working tree, uncommitted, and is flagged on
   its resource with the reason; the effective version is the one at `HEAD` —
@@ -149,19 +156,18 @@ snapshots.
   many files it touches. A person's edits are one commit per debounce settle. A
   sync round's merge is its merge commit. Writers are never mixed in one
   commit.
-- **Audit follows the commit, in the same call.** After the commit, the audit
-  row is recorded with the commit id. Unlike a file outside the vault, the
-  commit is itself a durable record of writer, actor and content, so if the
-  audit row cannot be written the change is not rolled back: the boot scan
-  finds commits with no audit row and backfills them, marked as backfilled.
-  Human edits are audited when detected, as `vault_file_edited` with actor
-  `human`.
+- **Audit follows the commit.** The operation records its audit row after
+  the commit. Unlike a file outside the vault, the commit is itself a durable
+  record of writer, actor and content, so if the audit row cannot be written the
+  change is not rolled back: the failure is logged and the commit stands. A
+  hand edit found by the scanner is audited when it is committed, as
+  `vault_file_edited` with actor `human`, one row per file.
 - **Restore is a write.** Restoring a version writes that version's content
   through this same protocol — expected hash, validation, a new commit naming
   the writer and `Coffer-Restored-From: <commit>`. History is never rewritten
   by Coffer.
 - **A person's own git.** A commit a person makes by hand in the vault is a
-  human write: the daemon sees `HEAD` move, validates the new tree, and flags
+  `disk` write: the daemon sees `HEAD` move, validates the new tree, and flags
   what fails. A person who rewrites history that has already been pushed is told
   the next round must rejoin the remote.
 - **Secrets when not carried.** With `include_secret` off,
@@ -172,12 +178,12 @@ snapshots.
   thing rotation exists to retire — and a Fernet key read once would open all
   of it. Rolling a secret back is re-entering it. With `include_secret`
   on, ciphertext is committed because it must be pushed, and its history is the
-  remote's, as today. Stripping ciphertext from commits only at push time is
+  remote's. Stripping ciphertext from commits only at push time is
   not possible without rewriting the commits, which would break `HEAD` as the
   pointer and every merge base.
 - **What stays out.** Derived output is under `derived/`, never in the
   repository; the deletion breaker and snapshot tags keep working on the
-  committed history (a local mass deletion is committed as a human write,
+  committed history (a local mass deletion is committed as a `disk` write,
   recoverable in one restore, and held at push by the outgoing breaker).
 
 Pros: every writer is subject to the same check and the same validator; a
@@ -188,9 +194,11 @@ backup tool touching timestamps cannot fake an edit.
 Cons: an external editor can still save in the microseconds between the
 daemon's compare and its rename — no portable lock stops another process —
 and the next scan then sees the daemon's bytes, not the person's; the person's
-editor usually reports the file changed underneath it. The curation pass needs
-a new way to find what a person edited (the commits whose writer is `human`
-since its last pass), replacing the mtime stamp.
+editor usually reports the file changed underneath it. The curation pass finds
+what a person edited by content rather than by mtime: `local/curation.json`
+records the blob each document had when curation last settled it, and a
+document is pending when its blob at `HEAD` differs and the newest commit that
+touched it was not written by `curation` or `sync`.
 
 It wins because it replaces four different protections, two of them
 mtime-based, with one that every writer passes through.
@@ -200,7 +208,7 @@ mtime-based, with one that every writer passes through.
 Write unconditionally; the most recent writer's bytes stand.
 
 - **Pros.** Simplest; no conflict ever surfaces.
-- **Cons.** It is the sync apply's behaviour today, and it loses a person's
+- **Cons.** It was the sync apply's behaviour, and it loses a person's
   edit whenever a round or a curation pass lands on the same file.
 - **Why it loses.** A lost edit is the one outcome with no recovery short of
   history, and history should be for mistakes, not for the normal case.
@@ -208,12 +216,12 @@ Write unconditionally; the most recent writer's bytes stand.
 #### Option B3 — Decide by modification time
 
 Treat a file whose mtime is newer than Coffer's last write as a person's edit,
-as the curation sweep does today.
+as the curation sweep did.
 
 - **Pros.** One `stat` per file, no hashing, no repository.
 - **Cons.** A checkout, a restore, a backup tool or a clock change moves
-  mtime; Coffer's own write must realign it (`_align_mtime`) to avoid reading
-  itself as a person; sync writes read as edits. Two machines' clocks mean
+  mtime; Coffer's own write had to realign it to avoid reading itself as a
+  person; sync writes read as edits. Two machines' clocks mean
   nothing to each other.
 - **Why it loses.** mtime records when bytes were written, not who wrote them
   or whether they changed.
@@ -241,46 +249,30 @@ operation whose author and trailers name the writer. A change that fails
 validation stays uncommitted and flagged, and the last valid version at `HEAD`
 stays in effect. Human edits are detected by debounced watching as a hint and
 by content-comparing scans as the truth; mtime never decides staleness. The
-audit row follows the commit in the same call and is backfilled from history
-if it could not be written. Restore is an ordinary write of old content, never
-a history rewrite. Credential ciphertext is committed only when the remote
-carries credentials.
+audit row follows the commit, and a commit stands if its audit row cannot be
+written. Restore is an ordinary write of old content, never a history rewrite.
+Secret ciphertext is committed only when the remote carries secrets.
 
 ## Consequences
 
 - The sync round loses its serialize step and its pointer table; the
   reconciler reads the committed tree
   ([Sync Only Pulls and Pushes the Vault Repository](sync-applies-clean-merges-and-stops-on-any-conflict.md)).
-- Every vault-writing API takes an expected hash; the skill content route's
-  unconditional mode and the knowledge save's unlocked check are replaced by
-  the shared protocol. `_align_mtime` and the curated-at mtime comparison are
-  deleted with the curation sweep's move to commit history.
-- **Obligations.** A vault-writer module that owns the lock, the CAS, the
-  validator call, the commit and the audit; a first-boot check for git with a
-  clear setup step; the per-commit cost measured under `perf/` against an
-  editor saving on every keystroke; tests that a concurrent person's edit is
-  refused rather than lost, that an invalid edit leaves `HEAD` in effect, and
-  that a restore produces a new commit with the restored bytes; the skill
-  History tab (versions, writer, diff, restore) as the first UI consumer.
-
-## Implementation notes (2026-09-30)
-
-Where the adopting change departs from the text above, and why:
-
-- **The writer vocabulary is six words**, written as `Coffer-Writer` and as the
-  author `Coffer (<writer>)`: `user` (a person through a Coffer surface),
-  `disk` (a change found in the working tree that no Coffer operation made — an
-  editor, a shell, an agent's own file tools, a person's own `git commit`),
-  `agent`, `daemon`, `curation` and `sync`. `disk` replaces `human`, because the
-  scanner cannot tell a person's editor from an agent's file tool; the audit
-  row for such a change keeps the actor `human` (`vault_file_edited`, one row
-  per file). A commit without trailers reads as `disk`.
-- **`rev` stays an integer counter** kept in the derived index, not a field of
-  the file (see [A Resource's Identity Is the `uid` Inside Its File](identity-is-the-uid-inside-the-file.md)).
-- **The fingerprint is mandatory** on every content write surface — saving a
-  skill file, saving a knowledge document, restoring a version. There is no
-  unconditional mode; a stale fingerprint is `VAULT_FILE_STALE` (409), which the
-  skill and knowledge surfaces report under their own codes.
-- **The audit backfill is not built.** When the audit row cannot be written,
-  the failure is logged and the commit stands, as decided; commits without an
-  audit row are not yet found and backfilled at boot.
+- Every vault-writing API takes an expected hash: saving a skill file, saving
+  a knowledge document and restoring a version all require the fingerprint, and
+  there is no unconditional mode. A stale fingerprint is `VAULT_FILE_STALE`
+  (409), which the skill and knowledge surfaces report under their own codes.
+- Curation no longer reads modification times; it compares content against what
+  it last settled, kept in the machine-local `local/curation.json`.
+- Coffer requires git (2.40 or newer) on every machine, not only those that
+  sync; the daemon refuses to start without it.
+- The vault writer (`infrastructure/vault/writer.py`) owns the lock, the
+  compare, the validator call and the commit; history, diff and restore
+  (`application/vault/history_service.py`) and the skill History tab are its
+  first consumers.
+- Not built yet: the boot-time backfill of audit rows for commits that have
+  none. A failed audit write is logged and the commit stands, but nothing finds
+  such a commit afterwards.
+- Not built yet: a measurement of the per-commit cost against an editor saving
+  on every keystroke. There is no performance suite for it; the debounce (one
+  commit per settle) is the mitigation, not a measured bound.

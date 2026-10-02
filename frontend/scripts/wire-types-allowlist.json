@@ -1,4 +1,0 @@
-{
-  "$comment": "Hand-written wire types in src/lib/api/ that predate the generated contracts, as \"<module>.ts:<TypeName>\". The UI rebuild removes each one as its page moves to the generated types; never add an entry — alias the generated schema instead (fix the backend model if the contract is not what the wire carries). check-wire-types.mjs fails on an entry that is no longer hand-written, so this list only shrinks.",
-  "entries": []
-}

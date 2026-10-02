@@ -73,8 +73,7 @@ async def test_group_threads_are_independent_conversations(env: ChannelEnv) -> N
     await env.processor.on_message(_group_msg("th-A"))
     await env.processor.on_message(_group_msg("th-B"))
     # Both turns enter concurrently. If the two threads shared one conversation,
-    # the second start_turn would raise TurnInProgress and the bot would post the
-    # "a turn is already running" notice instead of running the turn.
+    # the second message would queue behind the first instead of running at once.
     await wait_until(lambda: len(gated.runs) >= 2)
 
     conv_a = await env.active_conversation(resource, "grp-1", "th-A")

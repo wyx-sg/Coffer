@@ -30,7 +30,7 @@ def _collection_uid(client: TestClient, name: str) -> str:
     The curate route is addressed by identity and the upkeep-runs key is that
     same uid — a pass takes minutes, and the two writers can only collide if
     both spell the collection the way that cannot be edited between them
-    reading it (ADR resource-identity-is-an-immutable-uid).
+    reading it (ADR identity-is-the-uid-inside-the-file).
     """
     r = client.get("/api/v1/resources", params={"kind": "knowledge", "name": name})
     assert r.status_code == 200, r.text

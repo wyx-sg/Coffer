@@ -28,7 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
-import type { AdoptedResource, AdoptMcpEntryBody, McpEntryOut } from "@/lib/api/agents";
+import type { AdoptedResource, AdoptMcpEntryBody, McpEntryOut } from "@/lib/api/agents-workspace";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import { useAdoptMcpEntry } from "@/lib/hooks/useAgents";
 

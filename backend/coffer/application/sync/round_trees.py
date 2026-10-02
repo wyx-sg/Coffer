@@ -5,7 +5,7 @@ tree:
 
 - settle **credential** conflicts by the ciphertexts' own encryption time —
   decidable without the key, and a person shown two opaque blobs could not
-  choose (ADR credentials-across-machines);
+  choose (ADR secrets-cross-machines-only-as-ciphertext);
 - find the **identity** conflicts git cannot see: one uid at two paths (a
   rename git failed to pair), and two resources of one kind with the same
   name but different uids (ADR identity-is-the-uid-inside-the-file; the user's

@@ -72,11 +72,6 @@ def runs_db_path(home: Path | None = None) -> Path:
     return coffer_home(home) / "runs.db"
 
 
-def legacy_db_path(home: Path | None = None) -> Path:
-    """The single database every build before the vault layout wrote."""
-    return coffer_home(home) / "coffer.db"
-
-
 def daemon_json_path(home: Path | None = None) -> Path:
     """The running daemon's rendezvous file: port, pid and bearer token."""
     return coffer_home(home) / "daemon.json"
@@ -149,7 +144,6 @@ __all__ = [
     "daemon_lock_path",
     "derived_root",
     "eval_capture_path",
-    "legacy_db_path",
     "legacy_secrets_dir",
     "local_root",
     "logs_dir",

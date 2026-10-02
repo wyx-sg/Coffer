@@ -32,5 +32,5 @@
 
 ## 5. Close
 
-- [ ] 5.1 Run `make verify`
-- [ ] 5.2 Archive the change
+- [x] 5.1 Run `make verify`
+- [x] 5.2 Archive the change

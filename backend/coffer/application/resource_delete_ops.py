@@ -47,12 +47,9 @@ async def release_orphaned_secrets(
         if is_standalone_ref(cred_ref):
             continue
         try:
-            # Off the loop thread: the store is a blocking SQLite writer, and
-            # calling it inline competes with the connection this coroutine is
-            # already holding — the delete then fails with "database is locked",
-            # gets swallowed by the except below, and the secret silently
-            # lingers. Every other secret write in the codebase already
-            # goes through a thread for exactly this reason.
+            # Off the loop thread: the store does file IO and, for a vault ref,
+            # a git commit under the vault's write lock. The store's removal
+            # hook forgets the ref's approved destinations.
             if not await asyncio.to_thread(service._secrets.exists, cred_ref):
                 continue
             if await service.find_secret_citations(cred_ref):

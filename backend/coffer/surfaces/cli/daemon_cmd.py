@@ -28,13 +28,27 @@ app = typer.Typer(help="Daemon lifecycle")
 app.add_typer(daemon_service_cmd.app, name="service")
 
 
-def _wait_for_daemon_json(path: Path, timeout: float = 10.0) -> bool:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if path.exists():
-            return True
-        time.sleep(0.1)
-    return False
+START_TIMEOUT_SECONDS = 30.0
+
+
+def _wait_until_serving(proc: Any, timeout: float = START_TIMEOUT_SECONDS) -> str:
+    """Wait for the spawned daemon to answer its status call.
+
+    Returns ``"serving"``, ``"exited"`` (the child ended first — it refused to
+    start, e.g. a vault migration is required or git is too old) or
+    ``"timeout"``. ``daemon.json`` is no evidence of either: the daemon
+    publishes it before uvicorn and the lifespan run, and a file left by a
+    crash is there before the child has done anything.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        if bootstrap.live_daemon() is not None:
+            return "serving"
+        if proc.poll() is not None:
+            return "exited"
+        if time.monotonic() >= deadline:
+            return "timeout"
+        time.sleep(0.2)
 
 
 def _wait_for_daemon_json_gone(path: Path, timeout: float = 5.0) -> bool:
@@ -90,8 +104,6 @@ def _refuse_if_the_port_is_taken() -> None:
 
 def _start_daemon() -> None:
     """Body of ``start``, shared with ``restart``."""
-    daemon_json = daemon_json_path()
-
     # Spec daemon "Manage the daemon from the command line": key off
     # live_daemon() (a real status probe), NOT mere file presence. A stale
     # daemon.json left by a crashed daemon must trigger a respawn, not a false
@@ -110,9 +122,16 @@ def _start_daemon() -> None:
         typer.echo(f"failed to spawn daemon: {exc}", err=True)
         raise typer.Exit(1) from None
 
-    if not _wait_for_daemon_json(daemon_json, timeout=10.0):
+    outcome = _wait_until_serving(proc)
+    if outcome == "exited":
+        typer.echo(f"daemon exited at startup (code {proc.returncode}); check daemon.log", err=True)
+        raise typer.Exit(1)
+    if outcome == "timeout":
         proc.kill()
-        typer.echo("daemon failed to start within 10s; check daemon.log", err=True)
+        typer.echo(
+            f"daemon did not answer within {START_TIMEOUT_SECONDS:.0f}s; check daemon.log",
+            err=True,
+        )
         raise typer.Exit(1)
 
     typer.echo(f"daemon started (pid={proc.pid})")
@@ -185,7 +204,7 @@ def status(
 ) -> None:
     """Show whether the daemon is running, and the passes it is running right now.
 
-    Reports its version, channel, port and pid, the event loop's lag (p99 and
+    Reports its version, port and pid, the event loop's lag (p99 and
     maximum over the last few minutes), how many background tasks are running
     and how many have crashed, and the long passes in flight (kind, target,
     start time), oldest first.
@@ -223,9 +242,6 @@ def status(
         return
     typer.echo(f"status:  {data['status']}")
     typer.echo(f"version: {data['version']}")
-    # A daemon older than this CLI reports no channel; say so rather than fail.
-    channel = data.get("channel") or f"unknown — {_cli_client.OUTDATED_DAEMON}"
-    typer.echo(f"channel: {channel}")
     typer.echo(f"port:    {info.port}")
     typer.echo(f"pid:     {info.pid}")
     for line in _runtime_lines(data.get("runtime")):

@@ -173,9 +173,6 @@ class TaskSupervisor:
             last_crash=self._recent[-1] if self._recent else None,
         )
 
-    def recent_crashes(self) -> list[Crash]:
-        return list(self._recent)
-
     def running_names(self) -> list[str]:
         return sorted(t.get_name() for t in self._tasks if not t.done())
 

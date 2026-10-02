@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-09
 **Deciders**: Yuxing Wu
-**Related**: [Capability State Model](capability-state-model.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), [Coffer's Own Model Is an Internal Engine](coffer-model-is-an-internal-engine.md), [Coffer Ships Its Own Skill](coffer-ships-its-own-skill.md), [Eval Capture and Regression Gate](eval-capture-and-regression-gate.md), [Session Subprocess Model](session-subprocess-model.md), spec mcp-gateway "Forward tools, resources and prompts", spec mcp-gateway "Toggle individual capabilities", spec mcp-gateway "Gate server exposure by scope per session", spec mcp-gateway "Record invocations without content", research note [MCP gateways](../research/mcp-gateways.md), PR #76, PR #310
+**Related**: [MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), [Coffer's Own Model Is an Internal Engine](coffer-model-is-an-internal-engine.md), [Coffer Ships Its Own Skill](coffer-ships-its-own-skill.md), [Eval Capture and Regression Gate](eval-capture-and-regression-gate.md), [Session Subprocess Model](session-subprocess-model.md), spec mcp-gateway "Forward tools, resources and prompts", spec mcp-gateway "Toggle individual capabilities", spec mcp-gateway "Gate server exposure by scope per session", spec mcp-gateway "Record invocations without content", research note [MCP gateways](../research/mcp-gateways.md), PR #76, PR #310
 
 ## Context
 
@@ -145,7 +145,7 @@ Pros: exact control. Cons: it does nothing until configured, and the
 unconfigured default is where the overload happens. An earlier per-agent MCP
 scoping design was built and reverted as over-complex. Server-level scope
 ([Per-Agent Resource Scope](per-agent-resource-scope.md)) and per-tool
-enable/disable ([Capability State Model](capability-state-model.md)) remain
+enable/disable ([MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md)) remain
 and compose with tiering: scope decides which servers a session sees, the
 preference decides what may be called, and tiering decides which of the rest
 are listed.

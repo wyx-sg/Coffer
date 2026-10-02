@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { StatusWord } from "@/components/status/StatusWord";
-import type { StatusTone } from "@/components/status/statusTone";
+import type { StatusTone } from "@/lib/statusTone";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, translateApiError } from "@/lib/api/errors";

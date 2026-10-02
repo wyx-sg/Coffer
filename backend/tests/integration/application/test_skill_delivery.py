@@ -60,7 +60,7 @@ async def _by_name(skill_svc: SkillService, name: str) -> Resource:
     """Resolve a skill LABEL to its row.
 
     The one-shot resolution a surface does at its front door
-    (ADR resource-identity-is-an-immutable-uid): a test states what it means in
+    (ADR identity-is-the-uid-inside-the-file): a test states what it means in
     the name a person would type, and converts once.
     """
     return await skill_svc._rs.get_by_name("skill", name)
@@ -135,7 +135,7 @@ async def test_import_delivers_only_where_scope_grants(tmp_path):
     # Import, then narrow the scope to a1 only.
     only_a1 = await _import_skill(skill_svc, tmp_path, "only-a1")
     # A scope names agents by UID: the identity a rename cannot move out from
-    # under the reference (ADR resource-identity-is-an-immutable-uid).
+    # under the reference (ADR identity-is-the-uid-inside-the-file).
     await skill_svc._rs.update_scope(only_a1.uid, Scope(agents=[a1.uid]), actor="cli")
     assert (dir1 / "only-a1").is_symlink()
     assert not (dir2 / "only-a1").exists()

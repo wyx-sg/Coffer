@@ -158,3 +158,26 @@ def test_an_upload_past_the_cap_is_refused_while_saved(tmp_path: pathlib.Path) -
     assert info.value.reason == "archive_too_large"
     assert save_upload(io.BytesIO(b"z" * CAP), dest, cap_bytes=CAP) == CAP
     assert dest.read_bytes() == b"z" * CAP
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="a script from an archive stays executable")
+def test_a_script_keeps_its_executable_bit_and_nothing_else_of_the_mode(
+    tmp_path: pathlib.Path,
+) -> None:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("review/SKILL.md", skill_md("review"))
+        run = zipfile.ZipInfo("review/scripts/run.sh")
+        run.external_attr = (0o4777 | 0o100000) << 16  # setuid + world-writable + executable
+        zf.writestr(run, "echo hi\n")
+        data = zipfile.ZipInfo("review/data.txt")
+        data.external_attr = (0o644 | 0o100000) << 16
+        zf.writestr(data, "x")
+    dest = tmp_path / "tree"
+
+    extract_archive(_archive(tmp_path, buf.getvalue()), dest, cap_bytes=CAP)
+
+    run_mode = (dest / "review/scripts/run.sh").stat().st_mode & 0o7777
+    assert run_mode & 0o111 == 0o111
+    assert not run_mode & 0o4000 and not run_mode & 0o002
+    assert not (dest / "review/data.txt").stat().st_mode & 0o111

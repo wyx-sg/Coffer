@@ -96,3 +96,23 @@ def test_cli_check_exit_codes(repo: Path) -> None:
         ["python3", str(_SCRIPT), "check"], cwd=str(repo), capture_output=True, text=True
     )
     assert stale.returncode == 1
+
+
+def test_unstaged_deletion_does_not_crash(repo: Path) -> None:
+    """`git ls-files -co` still lists a deleted tracked file; the digest skips it."""
+    vs = _load()
+    (repo / "other.py").write_text("y = 1\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-m", "second")
+    (repo / "other.py").unlink()
+    vs.write_stamp(repo)
+    assert vs.is_fresh(repo) is True
+
+
+@pytest.mark.parametrize("name", ["a.css", "b.mjs", "c.sh", "d.spec", "e.yaml", "f.json"])
+def test_gated_file_types_are_fingerprinted(repo: Path, name: str) -> None:
+    vs = _load()
+    (repo / name).write_text("one\n")
+    vs.write_stamp(repo)
+    (repo / name).write_text("two\n")
+    assert vs.is_fresh(repo) is False

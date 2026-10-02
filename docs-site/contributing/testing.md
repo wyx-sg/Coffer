@@ -108,9 +108,10 @@ Every `#### Scenario:` in `openspec/specs/**/spec.md` needs at least one coverin
 
 ```python [pytest]
 @pytest.mark.acceptance(
-    spec="experimental-features", scenario="a source build reports the dev channel"
+    spec="experimental-features",
+    scenario="a stored setting for a feature the registry does not name is ignored",
 )
-async def test_status_reports_the_dev_channel_and_every_feature_unauthenticated(client): ...
+def test_a_stored_setting_for_a_retired_feature_is_ignored(home): ...
 ```
 
 ```ts [Vitest]
@@ -225,6 +226,7 @@ Only one integration run happens on a machine at a time. `make verify-integratio
 | `scripts/check_agent_type_branches.py` | No code outside the agent descriptor and its facets branches on an agent type. See [Agent facets](/architecture/agent-facets) |
 | `scripts/check_frontend_colors.py` | No colour literal in the frontend outside `src/index.css`; every colour is a theme token |
 | `scripts/check_ignored_sources.py` | No `.gitignore` rule hides a file in a source tree, and no unanchored pattern names a common source-folder word such as `lib/` or `env/`, which would hide that folder at any depth |
+| `scripts/check_bare_tasks.py` | No module under `backend/coffer/` starts a bare `asyncio.create_task` or `ensure_future` beyond its listed allowance. Background work goes through the supervisor, which names a task, logs its crash and cancels it at shutdown. A task that is awaited in place is listed in the script with its reason |
 | `ruff check`, `ruff format --check` | Lint and formatting over `backend/` and `evals/`, under the rules in `backend/pyproject.toml` |
 | `mypy` | Type-checks the whole `coffer` package under `backend/pyproject.toml`, which sets `strict = true` |
 | `lint-imports` | Import-linter contracts: the layer direction (`surfaces` → `application` → `domain`), a pure `domain`, `keyring` confined to the secrets code, no cross-kind imports between kinds, and specific libraries confined to their adapters |
@@ -245,11 +247,11 @@ The pre-commit hooks from `make hooks` add fast checks at commit time: trailing 
 
 | Workflow | Trigger | What it runs |
 | --- | --- | --- |
-| `verify.yml` | Pull requests to `main`, pushes to `main` | Parallel jobs, each running one Makefile target: `lint` (`make lint`), `test-unit`, `test-integration`, `test-contract`, `test-benchmark`, `test-e2e`, `test-visual` (`make verify-<tier>`), `audit-acceptance` (`make verify-acceptance`) and `secrets-scan` (gitleaks over the full history, as `make verify-secrets` runs it locally). The integration tier is split into four shards that run side by side, balanced by how long each test took last time it was measured, with one final check that passes only when every shard passed. A pull request that changes only documentation no test reads skips the test jobs; the gates that check documentation still run, and the skipped checks count as passed |
-| `ci.yml` | Pushes to `main` and `feature/**`, weekly schedule | One `make verify` job. The scheduled run is the **latest-deps canary**: it installs with `uv sync --upgrade` instead of the lockfile, so an upstream release that breaks Coffer shows up on a schedule |
+| `verify.yml` | Pull requests to `main` and `feature/rearch`, pushes to `main` | Parallel jobs, each running one Makefile target: `lint` (`make lint`), `test-unit`, `test-integration`, `test-contract`, `test-benchmark`, `test-e2e`, `test-visual` (`make verify-<tier>`; the visual job is report-only, `continue-on-error`, until baselines are committed), `audit-acceptance` (`make verify-acceptance`) and `secrets-scan` (gitleaks over the full history, as `make verify-secrets` runs it locally). The integration tier is split into four shards that run side by side, balanced by how long each test took last time it was measured, with one final check that passes only when every shard passed. A pull request that changes only documentation no test reads skips the test jobs; the gates that check documentation still run, and the skipped checks count as passed |
+| `ci.yml` | Pushes to `main` and `feature/**`, manual dispatch (`workflow_dispatch`), weekly schedule | One `make verify` job. The scheduled run is the **latest-deps canary**: it installs with `uv sync --upgrade` instead of the lockfile, so an upstream release that breaks Coffer shows up on a schedule |
 | `pr-title.yml` | Pull request opened or edited | The title against `.commitlintrc.yaml` |
-| `desktop.yml` | Changes to `desktop/**` or the `Makefile` | `make desktop-lint` and `make desktop-test` |
-| `evals.yml` | Changes to `evals/` or to the MCP, knowledge or memory code | `make eval`: the deterministic eval suites, gated on regression against the committed baseline |
+| `desktop.yml` | Changes to `desktop/**` or the `Makefile`, on `main` and `feature/rearch` | `make desktop-lint` and `make desktop-test` |
+| `evals.yml` | Changes to `evals/`, to the MCP domain code (`backend/coffer/domain/mcp/`) or to the lockfile, on `main` and `feature/rearch` | `make eval`: the deterministic eval suites, gated on regression against the committed baseline |
 | `pages.yml` | Changes to `docs-site/**` | Builds this site, and deploys it from `main` |
 | `release.yml` | A `v*` tag | Frozen binaries, the CLI archive and the desktop `.dmg` for macOS on Apple Silicon, then a GitHub Release |
 

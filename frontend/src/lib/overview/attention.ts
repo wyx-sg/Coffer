@@ -6,7 +6,7 @@
 // the person can act on it. The action's `method`/`path` name a daemon route,
 // not a page, so the page is chosen here from the item's kind and reason.
 import type { AttentionItem } from "@/lib/hooks/useAttention";
-import type { StatusTone } from "@/components/status/statusTone";
+import type { StatusTone } from "@/lib/statusTone";
 
 type Severity = AttentionItem["severity"];
 

@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronRight } from "lucide-react";
 
 import { AgentBadgeGroup } from "@/components/agent/AgentBadgeGroup";
-import { pickableAgents } from "@/components/reach/reachState";
+import { pickableAgents } from "@/lib/reach/reachState";
 import { StatusDot } from "@/components/status/StatusDot";
 import type { CustomToolGroup } from "@/lib/api/customTools";
 import { healthTone, hostOf } from "@/lib/customTools/groups";

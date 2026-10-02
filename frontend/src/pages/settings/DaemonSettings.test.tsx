@@ -15,7 +15,11 @@ vi.mock("@/lib/tauri", async (orig) => ({
   daemonVersionMatches: async () => true,
   restartDaemon: vi.fn(),
 }));
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn(), resetApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+  resetApiClient: vi.fn(),
+}));
 // The browser's restart (the daemon restarts itself, then the page reloads) is
 // lib/daemonRestart.test.ts; here it only has to be the one the button runs.
 const browserRestart = vi.hoisted(() => vi.fn(() => new Promise<void>(() => {})));

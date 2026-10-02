@@ -226,6 +226,9 @@ class SeaTalkAdapter:
                     platform_message_id=str(event.get("message_id", "")),
                     chat_kind="group" if group_id else "direct",
                     thread_id=str(event.get("thread_id", "")),
+                    sender_display=str(sender.get("email", "") or sender.get("seatalk_id", "")),
+                    sender_mention_id=str(sender.get("seatalk_id", "")),
+                    sender_mention_email=str(sender.get("email", "")),
                 )
             )
 
@@ -292,11 +295,6 @@ class SeaTalkAdapter:
             char_limit=self.capabilities.max_message_chars,
             byte_limit=_BYTE_LIMIT,
         )
-
-    async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
-        # No SeaTalk API rewrites a delivered TEXT message: live progress goes
-        # through open_live_text, a delivered CARD through update_card below.
-        raise ChannelSendFailed(self._name, "seatalk cannot edit messages")
 
     async def update_card(
         self,

@@ -12,6 +12,7 @@ import {
 } from "@/lib/api/providers";
 import { useToast } from "@/components/ui/toast";
 import {
+  agentsKey,
   endpointModelsKey,
   localRuntimesKey,
   pendingApprovalsKey,
@@ -26,10 +27,13 @@ function useProviderToastError() {
   return (error: unknown) => toast.error(translateApiError(t, error));
 }
 
-export function useProviders() {
+/** The connections. `enabled` is false while the Models feature is off: a
+ *  surface that is always on reads them only when the route answers. */
+export function useProviders(enabled = true) {
   return useQuery({
     queryKey: providersKey,
     queryFn: async () => (await providersApi.list()).providers,
+    enabled,
   });
 }
 
@@ -64,6 +68,9 @@ export function useCreateProvider() {
     mutationFn: (body: ProviderCreate) => providersApi.create(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: providersKey });
+      // The key goes only to an approved URL: a binding the registration could
+      // not approve waits from now, so the approvals are read now.
+      qc.invalidateQueries({ queryKey: pendingApprovalsKey });
     },
   });
 }
@@ -76,6 +83,8 @@ export function useUpdateProvider() {
       providersApi.update(vars.uid, vars.patch),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: providersKey });
+      // A moved base URL asks again from the save.
+      qc.invalidateQueries({ queryKey: pendingApprovalsKey });
     },
     onError,
   });
@@ -126,19 +135,22 @@ export function useDeleteProvider() {
 export function useActivateProvider() {
   const qc = useQueryClient();
   // Switching writes native config; a failure (e.g. unwritable config dir)
-  // must surface rather than silently leave the old provider active.
+  // must surface rather than silently leave the agent on its old connection.
   const onError = useProviderToastError();
   return useMutation({
-    mutationFn: (uid: string) => providersApi.activate(uid),
+    mutationFn: ({ uid, agentType }: { uid: string; agentType: AgentType }) =>
+      providersApi.activate(uid, agentType),
     onSuccess: () => {
+      // The agent's record names its connection, so it changes with the switch.
       qc.invalidateQueries({ queryKey: providersKey });
+      qc.invalidateQueries({ queryKey: agentsKey });
     },
     onError,
   });
 }
 
-/** Switch an agent type back to its own built-in login (clears the connection
- * active for it + removes Coffer's projection). */
+/** Switch an agent type back to its own built-in login (clears its connection
+ * + removes Coffer's projection). */
 export function useUseBuiltinProvider() {
   const qc = useQueryClient();
   const onError = useProviderToastError();

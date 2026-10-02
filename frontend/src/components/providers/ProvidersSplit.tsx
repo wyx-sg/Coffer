@@ -68,8 +68,7 @@ export function ProvidersSplit({ uid }: { uid?: string }) {
 
   const header = (
     <PageHeader
-      icon={Boxes}
-      title={t("settings.connections.title")}
+      title={t("providers.title")}
       actions={
         <Button onClick={() => setAdding("anthropic")}>
           <Plus aria-hidden /> {t("providers.add.open")}

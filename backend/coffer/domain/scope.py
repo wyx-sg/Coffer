@@ -7,7 +7,7 @@ A resource's ``scope`` names the agents it activates for, **by their uid**:
 - ``{"agents": []}``            — dormant (an empty list matches nothing)
 
 Uids rather than names because a scope is a reference to another resource, and
-a name is a label its owner may change (ADR resource-identity-is-an-immutable-uid).
+a name is a label its owner may change (ADR identity-is-the-uid-inside-the-file).
 While this list held names, renaming an agent silently emptied every scope that
 named it, and the channel kind had to carry a whole module translating between
 the two names an agent answered to. Neither is reachable now: one vocabulary,

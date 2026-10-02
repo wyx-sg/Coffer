@@ -65,7 +65,6 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => {
     secret_ref: "provider/acme/key",
     local_runtime: null,
     compatible_agents: ["codex"],
-    is_active: false,
     title: null,
     internal_default: false,
     transcribe_default: false,

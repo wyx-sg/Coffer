@@ -19,8 +19,11 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
+import { RotateCcw } from "lucide-react";
 
+import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
@@ -42,7 +45,7 @@ function isSyncTab(value: string | null): value is SyncTab {
 export function SyncPage() {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
-  const { data: status, error, isPending } = useSyncStatus();
+  const { data: status, error, isPending, refetch } = useSyncStatus();
   const run = useRunSync();
   // When this page asked for a round, until the status says one is running.
   const [startedAt, setStartedAt] = useState<string | null>(null);
@@ -67,9 +70,16 @@ export function SyncPage() {
         {isPending ? (
           <Skeleton className="h-40 w-full" />
         ) : (
-          <p className="text-sm text-danger" role="alert">
-            {translateApiError(t, error)}
-          </p>
+          <EmptyState
+            tone="error"
+            title={t("sync.loadFailed")}
+            description={translateApiError(t, error)}
+            action={
+              <Button variant="outline" onClick={() => void refetch()}>
+                <RotateCcw aria-hidden /> {t("common.retry")}
+              </Button>
+            }
+          />
         )}
       </div>
     );

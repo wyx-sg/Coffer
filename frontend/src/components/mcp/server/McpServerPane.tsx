@@ -38,7 +38,7 @@ import { McpStatusCallout } from "./McpStatusCallout";
 import { McpToolsTab } from "./McpToolsTab";
 import { McpTopTools } from "./McpTopTools";
 import { reachedAgents } from "./reachWords";
-import { joinNames, serverState } from "./serverState";
+import { joinNames, serverState } from "@/lib/mcp/serverState";
 import { failedTest, type TestResult } from "./testResult";
 
 interface Props {

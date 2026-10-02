@@ -209,8 +209,36 @@ async def test_a_git_older_than_2_40_is_a_startup_error(monkeypatch: pytest.Monk
     monkeypatch.setattr(vault_composition, "git_version", lambda _repo: (2, 30))
     with pytest.raises(RuntimeError, match=r"git 2\.40 or later and found 2\.30") as caught:
         await vault_composition.build_vault_stores({})
+    # Refused before the vault was opened: no repository, no first commit.
+    assert not (vault_root() / ".git").exists()
     message = str(caught.value)
     # The refusal names no installer; it hands the chore to the person's agent.
     assert "xcode-select" not in message and "brew" not in message
     assert "Please update git on this machine to version 2.40 or later." in message
     assert "run `git --version`" in message
+
+
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="a secret written before the first sync round is committed"
+)
+async def test_a_remote_that_carries_secrets_is_known_before_the_vault_opens() -> None:
+    """``secret/`` is committed from the first write after a restart when the
+    stored remote carries secrets, not only once a sync round has run."""
+    import json
+
+    from coffer.infrastructure.vault.home import local_root
+    from coffer.surfaces.http import vault_composition
+
+    remote_json = local_root() / "sync" / "remote.json"
+    remote_json.parent.mkdir(parents=True, exist_ok=True)
+    remote_json.write_text(
+        json.dumps({"url": "https://example.invalid/vault.git", "include_secret": True})
+    )
+    vault_repository().set_carry_secret(False)  # a fresh process starts here
+    stores = await vault_composition.build_vault_stores({})
+    try:
+        assert vault_repository().carries_secret is True
+        exclude = (vault_root() / ".git" / "info" / "exclude").read_text()
+        assert "/secret/" not in exclude
+    finally:
+        await stores.derived_engine.dispose()

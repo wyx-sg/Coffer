@@ -1310,7 +1310,7 @@ components:
         The data of a `change` event: something changed; refetch what shows it.
 
         Sent once per resource write through the framework, and once per change in
-        what the attention list reports (`kind` `attention`, no `id`, no `rev`).
+        what the attention list reports (`kind` `attention`, no `id`).
         The event's SSE id is `seq`, so a reconnecting client resumes with
         `Last-Event-ID`.
       properties:
@@ -1331,12 +1331,6 @@ components:
           - delete
           title: Op
           type: string
-        rev:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          description: 'The revision the write produced (a delete: the last one plus one); null for `attention`.'
-          title: Rev
         seq:
           description: Grows by one per event across this daemon run; the first is 1.
           title: Seq
@@ -1345,7 +1339,6 @@ components:
       - seq
       - kind
       - id
-      - rev
       - op
       title: ChangeEventOut
       type: object

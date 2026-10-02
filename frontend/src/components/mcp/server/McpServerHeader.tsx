@@ -24,8 +24,8 @@ import { Button } from "@/components/ui/button";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import type { ResourceOut } from "@/lib/api/resources";
 import { cn } from "@/lib/utils";
-import type { ServerState } from "./serverState";
-import { transportOf } from "./serverState";
+import type { ServerState } from "@/lib/mcp/serverState";
+import { transportOf } from "@/lib/mcp/serverState";
 
 /** The tile's glyph and tint per state (design 4.1.01–4.1.05). */
 function tileOf(kind: ServerState["kind"]): { icon: LucideIcon; className: string } {
@@ -122,15 +122,8 @@ export function McpServerHeader({
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex min-w-0 items-center gap-2">
-          {/* Its title when set, its fixed name (mono) otherwise. */}
-          <h1
-            className={cn(
-              "min-w-0 truncate text-lg font-semibold",
-              resource.title ? "" : "font-mono",
-            )}
-          >
-            {resource.title || resource.name}
-          </h1>
+          {/* A server carries no title: its fixed name, in mono. */}
+          <h1 className="min-w-0 truncate font-mono text-lg font-semibold">{resource.name}</h1>
           <StatusPill tone={state.tone}>{t(`mcp.page.state.${state.kind}`)}</StatusPill>
         </div>
         <p

@@ -20,6 +20,7 @@ import {
 } from "@/lib/chat/echoes";
 import { messagesKey } from "@/lib/api/queryKeys";
 import { contentBlock } from "@/lib/chat/contentBlock";
+import { ev } from "@/test/chatEvents";
 
 const T0 = Date.parse("2026-01-01T12:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -220,7 +221,7 @@ describe("handleEvent settles echoes", () => {
     // echo, so the turn settling must.
     const qc = new QueryClient();
     const { ctx, echoes } = makeCtx(qc);
-    await handleEvent({ event: "turn_done", data: { stop_reason: "end_turn" } }, ctx);
+    await handleEvent(ev("turn_done", { stop_reason: "end_turn" }), ctx);
     expect(echoes).toEqual([[]]);
   });
 
@@ -228,7 +229,7 @@ describe("handleEvent settles echoes", () => {
     // (d) Stop mid-turn: the turn settles with an interrupted stop reason.
     const qc = new QueryClient();
     const { ctx, echoes } = makeCtx(qc);
-    await handleEvent({ event: "turn_done", data: { stop_reason: "interrupted" } }, ctx);
+    await handleEvent(ev("turn_done", { stop_reason: "interrupted" }), ctx);
     expect(echoes).toEqual([[]]);
   });
 
@@ -236,7 +237,7 @@ describe("handleEvent settles echoes", () => {
     // (d) A failed turn: the persisted user row + failed reply replace the echo.
     const qc = new QueryClient();
     const { ctx, echoes } = makeCtx(qc);
-    await handleEvent({ event: "turn_error", data: { code: "MODEL_ERROR", message: "x" } }, ctx);
+    await handleEvent(ev("turn_error", { code: "MODEL_ERROR", message: "x" }), ctx);
     expect(echoes).toEqual([[]]);
     expect(ctx.setLiveMessage).toHaveBeenCalledWith(null);
   });
@@ -244,7 +245,7 @@ describe("handleEvent settles echoes", () => {
   test("turn_start leaves the echoes alone (the refetch it triggers retires them)", async () => {
     const qc = new QueryClient();
     const { ctx } = makeCtx(qc);
-    await handleEvent({ event: "turn_start", data: {} }, ctx);
+    await handleEvent(ev("turn_start"), ctx);
     expect(ctx.setEchoes).not.toHaveBeenCalled();
   });
 
@@ -252,7 +253,7 @@ describe("handleEvent settles echoes", () => {
     const qc = new QueryClient();
     const { ctx } = makeCtx(qc);
     ctx.isCancelled = () => true;
-    await handleEvent({ event: "turn_done", data: { stop_reason: "end_turn" } }, ctx);
+    await handleEvent(ev("turn_done", { stop_reason: "end_turn" }), ctx);
     expect(ctx.setEchoes).not.toHaveBeenCalled();
   });
 });
@@ -275,23 +276,22 @@ describe("handleEvent folds a turn into the live bubble in emission order", () =
       isCancelled: () => false,
     };
 
-    await handleEvent({ event: "text_delta", data: { text: "Let me " } }, ctx);
-    await handleEvent({ event: "text_delta", data: { text: "look." } }, ctx);
+    await handleEvent(ev("text_delta", { text: "Let me " }), ctx);
+    await handleEvent(ev("text_delta", { text: "look." }), ctx);
     await handleEvent(
-      {
-        event: "tool_call",
-        data: { tool_use_id: "tu-1", tool_name: "read_file", tool_input: { path: "a" } },
-      },
+      ev("tool_call", { tool_use_id: "tu-1", tool_name: "read_file", tool_input: { path: "a" } }),
       ctx,
     );
     await handleEvent(
-      {
-        event: "tool_result",
-        data: { tool_use_id: "tu-1", tool_name: "read_file", output: { ok: 1 }, error: null },
-      },
+      ev("tool_result", {
+        tool_use_id: "tu-1",
+        tool_name: "read_file",
+        output: { ok: 1 },
+        error: null,
+      }),
       ctx,
     );
-    await handleEvent({ event: "text_delta", data: { text: "It says hi." } }, ctx);
+    await handleEvent(ev("text_delta", { text: "It says hi." }), ctx);
 
     expect(live!.blocks.map((b) => [b.type, b.text ?? b.tool_use_id])).toEqual([
       ["text", "Let me look."],

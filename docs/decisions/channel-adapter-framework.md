@@ -51,15 +51,15 @@ The forces:
 ### Option A — Thin transport adapters declaring capabilities, one shared core, in-daemon reconciler (chosen)
 
 - **Channels are a resource kind** (`channel`), riding the generic lifecycle,
-  audit and credential-reference machinery; secrets live in the credential
-  store and config carries refs, probed at registration.
+  audit and secret-reference machinery; secrets live in the secret store
+  and config carries refs, probed at registration.
 - **An adapter is transport only**: start/stop, outbound send/edit/stream,
   normalising inbound platform payloads into the envelopes in
   `domain/channel/envelopes.py` (`InboundMessage`, `InboundCallback`,
   `InboundLifecycle`), and a `ChannelCapabilities` declaration —
-  `supports_edit`, `supports_live_text`, `live_text_persists`,
+  `supports_live_text`, `live_text_persists`,
   `supports_typing`, `supports_reactions`, `supports_buttons`,
-  `supports_card_update`, `supports_media`, `supports_groups`,
+  `supports_card_update`, `supports_media`,
   `supports_history_fetch`, `max_message_chars`, mention templates.
 - **The core** (`application/channel/`) owns pairing and the owner gate,
   commands, conversation mapping, queueing, rendering strategy and turn

@@ -64,7 +64,7 @@ _STATUS: dict[str, int] = {
     # somewhere-new): a destination nobody approved yet is a state that waits
     # for a person, not a bad request; a grant that does not verify is refused.
     "SECRET_BINDING_PENDING": 409,
-    "APPROVAL_PENDING": 202,
+    "SECRET_BINDING_REJECTED": 409,
     "PRESENCE_GRANT_INVALID": 403,
     "APPROVAL_NOT_FOUND": 404,
     "APPROVAL_NOT_PENDING": 409,
@@ -98,7 +98,6 @@ _STATUS: dict[str, int] = {
     "FORBIDDEN": 403,
     # spec skill-manager
     "SKILL_INVALID": 422,
-    "TARGET_CONFLICT": 409,
     "RESOURCE_PROTECTED": 409,
     # A kind with no enabled switch (knowledge, memory) asked to flip it.
     "RESOURCE_NOT_TOGGLEABLE": 409,
@@ -128,6 +127,7 @@ _STATUS: dict[str, int] = {
     "MCP_ENTRY_PROTECTED": 422,
     "MCP_ENTRY_SOURCE_AMBIGUOUS": 422,
     "ADOPT_SECRET_UNRESOLVED": 422,
+    "ADOPT_SECRET_REF_EXISTS": 409,
     "AGENT_CONFIG_PARSE_ERROR": 422,
     "PLUGIN_UNINSTALL_UNSUPPORTED": 422,
     "PLUGIN_UNINSTALL_FAILED": 422,
@@ -147,7 +147,6 @@ _STATUS: dict[str, int] = {
     # spec memory
     "MEMORY_NOTE_NOT_FOUND": 404,
     "MEMORY_RAW_ENTRY_NOT_FOUND": 404,
-    "MEMORY_FILE_NOT_FOUND": 404,
     "MEMORY_UNSAFE_PATH": 400,
     "MEMORY_UNREADABLE": 422,
     "MEMORY_DELIVERY_UNSUPPORTED": 422,
@@ -156,7 +155,6 @@ _STATUS: dict[str, int] = {
     "MEMORY_TRIGGER_NOT_FOUND": 404,
     # agent turns (spec chat)
     "CONVERSATION_NOT_FOUND": 404,
-    "TURN_IN_PROGRESS": 409,
     "UNKNOWN_AGENT": 400,
     "AGENT_CONFIG_REJECTED": 400,
     # web composer uploads (spec chat "Upload a file for a web message",
@@ -182,9 +180,12 @@ _STATUS: dict[str, int] = {
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": 409,
     # An ollama connection is internal-only and never switched on for an agent.
     "PROVIDER_INTERNAL_ONLY": 409,
+    # The connection or the agent is switched off, or the scope does not name the agent.
+    "PROVIDER_DOES_NOT_REACH_AGENT": 409,
     # A second internal-engine default outside the route that moves the flag.
     "PROVIDER_INTERNAL_DEFAULT_TAKEN": 409,
-    "NO_ACTIVE_PROVIDER": 404,
+    # A second speech-to-text default outside the route that moves the flag.
+    "PROVIDER_TRANSCRIBE_DEFAULT_TAKEN": 409,
     # knowledge (spec knowledge). A collection an agent is not authorized for
     # is NOT FOUND rather than FORBIDDEN: telling an unauthorized caller that
     # the name exists is itself a disclosure, and the layer treats "not visible
@@ -220,8 +221,7 @@ _STATUS: dict[str, int] = {
     # like KNOWLEDGE_PATH_UNSAFE above: a topic naming another knowledge file
     # is a link that rots, and a pass past its write bound is one source trying
     # to rewrite the corpus. Neither is retryable unchanged.
-    "KNOWLEDGE_TOPIC_REFERENCES_FILE": 400,
-    "KNOWLEDGE_CURATION_BOUND": 400,
+    "KNOWLEDGE_CURATION_HELD": 409,
     "KNOWLEDGE_ERROR": 400,
     # Upkeep passes (memory organise, knowledge curation). A second pass over a
     # target one is already rewriting is refused, not queued — the surface

@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { toneClass } from "@/lib/statusColors";
 import { StatusDot } from "./StatusDot";
-import { STATUS_TONE, type StatusTone } from "./statusTone";
+import { STATUS_TONE, type StatusTone } from "@/lib/statusTone";
 
 interface StatusPillProps {
   tone: StatusTone;

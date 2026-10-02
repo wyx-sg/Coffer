@@ -11,7 +11,7 @@ import pytest
 
 from coffer.application.mcp.discovery import DiscoveredTool
 from coffer.application.mcp.gateway_aggregate_lists import list_tools_across
-from coffer.domain.errors import SecretLocked, SecretMissing
+from coffer.domain.secret_errors import SecretLocked, SecretMissing
 
 
 def _tool(server: str, name: str) -> DiscoveredTool:

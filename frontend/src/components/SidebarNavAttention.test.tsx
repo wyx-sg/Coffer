@@ -32,7 +32,8 @@ const { clisApi } = await import("@/lib/api/clis");
 
 vi.mock("@/lib/hooks/useFeatures", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/hooks/useFeatures")>()),
-  useFeatureMap: () => ({}),
+  useFeatureMap: () => ({ knowledge: true, memory: true, sync: true, models: true }),
+  useFeatureEnabled: () => true,
 }));
 
 /** A joined, switched-on remote whose last round is held for confirmation. */

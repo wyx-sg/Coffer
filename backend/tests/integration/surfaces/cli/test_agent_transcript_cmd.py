@@ -11,7 +11,7 @@ The listing tests stub the HTTP layer (below); the one-session read runs
 against the real app, over transcript files written into ``tmp_path``.
 
 The verb still TAKES a name; the route is addressed by uid
-(ADR resource-identity-is-an-immutable-uid). So every invocation is now two
+(ADR identity-is-the-uid-inside-the-file). So every invocation is now two
 requests, in this order: ``GET /resources?kind=agent&name=<name>`` to turn what
 the user typed into a uid, then the transcript route under that uid. The fake
 client below serves the first from a ``name -> uid`` registry and the second

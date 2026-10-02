@@ -7,7 +7,7 @@ import { AgentBadge } from "@/components/agent/AgentBadge";
 import { cn } from "@/lib/utils";
 import { LineCounts } from "./LineCounts";
 import { OpChip } from "./OpChip";
-import type { ChangeItem, DiffLine } from "./changeCounts";
+import type { ChangeItem, DiffLine } from "@/lib/changePreview/changeCounts";
 
 const ROW_TONE: Record<DiffLine["kind"], string> = {
   context: "",

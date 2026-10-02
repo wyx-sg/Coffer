@@ -17,7 +17,7 @@ import { agentTypeLabel } from "@/lib/agents/display";
 import { agentTabPath } from "@/lib/agents/routes";
 import type { ProviderUse } from "@/lib/providers/usedBy";
 import { useOpenSettings } from "@/lib/settingsModal";
-import { Section } from "./Section";
+import { Section } from "@/components/Section";
 
 const ROW =
   "grid min-h-12 grid-cols-[minmax(0,1fr)_150px_200px_16px] items-center gap-3 text-left text-text no-underline outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-focus-ring [&+&]:border-t [&+&]:border-border-subtle";

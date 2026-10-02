@@ -87,8 +87,8 @@ async def test_a_settled_hand_edit_is_hinted_like_an_api_write() -> None:
     _recolour("resources/widget/w.json", "red")
     vault_writer().settle()
     found = await repo.find(r.uid)
-    assert found is not None and found.config["colour"] == "red" and found.rev == r.rev + 1
-    assert hints == [Changed("widget", r.uid, found.rev, "upsert")]
+    assert found is not None and found.config["colour"] == "red"
+    assert hints == [Changed("widget", r.uid, "upsert")]
 
 
 async def test_a_file_removed_by_hand_is_hinted_as_a_delete() -> None:
@@ -97,7 +97,7 @@ async def test_a_file_removed_by_hand_is_hinted_as_a_delete() -> None:
     _file("resources/widget/w.json").unlink()
     vault_writer().settle()
     assert await repo.find(r.uid) is None
-    assert hints == [Changed("widget", r.uid, r.rev + 1, "delete")]
+    assert hints == [Changed("widget", r.uid, "delete")]
 
 
 async def test_a_commit_from_another_thread_reaches_the_loop() -> None:

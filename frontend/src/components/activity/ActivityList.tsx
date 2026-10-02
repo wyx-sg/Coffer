@@ -141,7 +141,7 @@ export function ActivityList({
         aria-label={t(`activity.tabs.${tab}`)}
       >
         <thead>
-          <tr className="h-[30px] border-b border-border-subtle">
+          <tr className="h-control-md border-b border-border-subtle">
             {columns.map((c) => (
               <th
                 key={c.key}

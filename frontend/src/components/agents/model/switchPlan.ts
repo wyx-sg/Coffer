@@ -13,7 +13,7 @@ import type { AgentOut } from "@/lib/api/agents";
 import { modelIds } from "@/lib/api/providers";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import type { ConnectionDraft, Tier } from "@/lib/hooks/useAgentConnectionDraft";
-import type { DiffLine } from "@/components/change-preview/changeCounts";
+import type { DiffLine } from "@/lib/changePreview/changeCounts";
 
 interface SwitchPlan {
   path: string;

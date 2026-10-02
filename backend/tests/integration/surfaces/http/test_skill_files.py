@@ -14,7 +14,7 @@ Imports a skill with a nested folder, then exercises the endpoints:
   the file on disk behind the API — exactly what an external editor does.
 
 The skill is addressed by its ``uid``, taken straight off the import response
-(ADR resource-identity-is-an-immutable-uid). Its NAME still appears in the
+(ADR identity-is-the-uid-inside-the-file). Its NAME still appears in the
 assertions, because the master folder on disk is ``~/.coffer/vault/skills/<name>/``:
 the uid finds the row, the row's current name says where its bytes are, and the
 ``path`` parameter — still relative, still guarded by ``file_ops`` — says which

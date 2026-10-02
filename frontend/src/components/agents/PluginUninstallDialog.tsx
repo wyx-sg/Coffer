@@ -9,7 +9,7 @@
 import { useTranslation } from "react-i18next";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import type { PluginOut } from "@/lib/api/agents";
+import type { PluginOut } from "@/lib/api/agents-workspace";
 
 interface Props {
   agentType: string;

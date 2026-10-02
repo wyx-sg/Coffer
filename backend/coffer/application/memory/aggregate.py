@@ -42,6 +42,7 @@ Three decisions live here, and each one is a named past failure:
 
 from __future__ import annotations
 
+import pathlib
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -49,7 +50,7 @@ from datetime import UTC, datetime
 
 from coffer.application.memory.placement import GLOBAL_PLACEMENT, Placement, Placer
 from coffer.domain.memory.errors import UnreadableMemory
-from coffer.domain.memory.reader import MemoryReader
+from coffer.domain.memory.reader import MemoryReader, SourceFile
 from coffer.domain.resource import Resource
 from coffer.infrastructure.memory import raw_store, source_state, store
 from coffer.infrastructure.memory.raw_store import StoredRawEntry
@@ -180,6 +181,32 @@ def _entries_by_source() -> dict[str, tuple[StoredRawEntry, ...]]:
     return {path: tuple(entries) for path, entries in found.items()}
 
 
+def _prune_vanished_sources(
+    agent_source: AgentSource,
+    listed: Sequence[SourceFile],
+    standing_by_source: Mapping[str, tuple[StoredRawEntry, ...]],
+) -> None:
+    """Drop what this agent's deleted source files once produced.
+
+    A bullet removed from a file is pruned inside the read above; a file deleted
+    outright is never listed, so nothing there would ever notice its entries. They
+    would stay under ``.raw/``, keep a note alive and keep being delivered for good
+    (see "Retire a note whose raw entries are all gone"). Only an agent whose directory
+    is there and listed cleanly is judged: a missing directory lists nothing and says
+    nothing about its sources, and an unlisted agent (disabled, unregistered) keeps what
+    it contributed.
+    """
+    if not listed and not pathlib.Path(agent_source.config_dir).is_dir():
+        return
+    present = {source.path for source in listed}
+    for path, standing in standing_by_source.items():
+        if path in present:
+            continue
+        for stale in standing:
+            if stale.agent == agent_source.agent:
+                raw_store.delete_raw_entry(stale.partition, stale.entry_id)
+
+
 def run_aggregation(
     *,
     agents: Sequence[AgentSource],
@@ -230,7 +257,12 @@ def run_aggregation(
         reader = readers.get(agent_source.agent_type)
         if reader is None:
             continue  # no reader for this agent type: silent
-        for source in reader.sources(agent_source.config_dir):
+        try:
+            listed = reader.sources(agent_source.config_dir)
+        except Exception as exc:
+            failures.append(_source_failure(agent_source.agent, agent_source.config_dir, exc))
+            continue  # an unlistable directory prunes nothing: it says nothing about the sources
+        for source in listed:
             standing = standing_by_source.get(source.path, ())
             if old_state.get(source.path) == source.digest and standing:
                 sources_skipped += 1
@@ -264,6 +296,8 @@ def run_aggregation(
             for stale in standing:
                 if (stale.partition, stale.entry_id) not in written:
                     raw_store.delete_raw_entry(stale.partition, stale.entry_id)
+
+        _prune_vanished_sources(agent_source, listed, standing_by_source)
 
     source_state.save(new_state)
     return AggregationOutcome(

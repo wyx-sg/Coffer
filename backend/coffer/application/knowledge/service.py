@@ -22,7 +22,6 @@ import dataclasses
 import logging
 import pathlib
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 
 from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.recording import recording, writer_of
@@ -35,6 +34,7 @@ from coffer.domain.knowledge.entry import (
     FileEntry,
     GrepOutcome,
     KnowledgeFile,
+    Submission,
 )
 from coffer.domain.knowledge.errors import (
     CollectionExists,
@@ -70,21 +70,6 @@ CatalogueChanged = Callable[[], Awaitable[object]]
 MergeAvailable = Callable[[], Awaitable[bool]]
 
 
-@dataclass(frozen=True)
-class Submission:
-    """What became of one piece of submitted material.
-
-    ``document`` is set when the material was promoted on the spot, and is the
-    document it became; ``pending`` is the inbox item's name when it waits for
-    a pass instead. Exactly one of the two is set.
-    """
-
-    collection: str
-    title: str
-    document: KnowledgeFile | None = None
-    pending: str | None = None
-
-
 KIND_KNOWLEDGE = "knowledge"
 
 
@@ -98,7 +83,10 @@ class KnowledgeService:
         on_catalogue_changed: CatalogueChanged | None = None,
         merge_available: MergeAvailable | None = None,
         history: KnowledgeHistory | None = None,
+        announce: Callable[[str], None] | None = None,
     ) -> None:
+        # Told a collection's uid when its files change outside a resource write.
+        self._announce = announce
         self._merge_available = merge_available
         # Every write below is one commit naming its writer (see "Keep every
         # document's history and undo a pass as a whole"); None records nothing.
@@ -112,15 +100,24 @@ class KnowledgeService:
         # it lives outside this kind.
         self._on_catalogue_changed = on_catalogue_changed
 
+    def announce(self, collection_uid: str) -> None:
+        """Say that a collection's inbox or documents changed."""
+        if self._announce is not None:
+            self._announce(collection_uid)
+
+    @property
+    def audit(self) -> AuditService:
+        """The audit port, for the passes that record what they did."""
+        return self._audit
+
     # ----- collections -------------------------------------------------
 
     async def collection_names(self) -> list[str]:
         """Every registered collection, in name order.
 
         The registry is the authority, not the directory: a folder nobody registered is
-        not a collection (see "Create collections only deliberately"). Whether a row is
-        stored enabled is not consulted — every collection is served (see "Serve every
-        collection to every agent").
+        not a collection (see "Create collections only deliberately"), and every one is
+        served whether or not its row is enabled (see "Serve every collection to every agent").
         """
         return sorted(r.name for r in await self._rows())
 
@@ -333,7 +330,10 @@ class KnowledgeService:
                 "pending": document is None,
             },
         )
+        self.announce(row.uid)
         if document is not None:
+            # A promoted document is a new entry in the catalogue the skill carries.
+            await self.catalogue_changed()
             return Submission(collection=row.name, title=title, document=document)
         return Submission(collection=row.name, title=title, pending=name)
 

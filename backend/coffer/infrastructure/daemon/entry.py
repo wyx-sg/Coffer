@@ -29,7 +29,8 @@ import uvicorn
 
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.agent.descriptor import AGENT_DESCRIPTORS
-from coffer.infrastructure.daemon import bootstrap, self_restart
+from coffer.infrastructure.daemon import bootstrap, login_service, self_restart
+from coffer.infrastructure.daemon.phase import set_daemon_phase
 from coffer.infrastructure.daemon.port_alloc import PortInUse
 from coffer.infrastructure.daemon.unpack_keepalive import keep_unpack_dir_alive
 
@@ -161,6 +162,28 @@ async def _evict_when_superseded(
         return
 
 
+# How long the daemon keeps answering ``/daemon/status`` as ``draining`` once
+# shutdown has begun, before uvicorn closes its listener. Long enough for a
+# poller (the app's footer, a restart's successor) to see the phase; short
+# against the graceful-shutdown bound above.
+_DRAIN_VISIBLE_SECONDS = 1.0
+
+
+class _DaemonServer(uvicorn.Server):
+    """uvicorn that reports ``draining`` while it can still answer.
+
+    uvicorn closes its listener first in ``shutdown`` and runs the lifespan's
+    teardown only afterwards, so a phase flipped from the lifespan is never
+    visible to any client. Flipping it here, then holding the listener open for
+    a moment, is what makes "draining once shutdown has begun" observable.
+    """
+
+    async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
+        set_daemon_phase("draining")
+        await asyncio.sleep(_DRAIN_VISIBLE_SECONDS)
+        await super().shutdown(sockets)
+
+
 def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
     """Serve the app on the pre-bound loopback fd; call ``on_started`` once the
     server is actually serving HTTP (uvicorn ``Server.started``).
@@ -183,8 +206,12 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
         log_level="warning",
         access_log=False,
         timeout_graceful_shutdown=_SHUTDOWN_GRACE_SECONDS,
+        # Every record goes through the one root JSON handler (spec daemon
+        # "Write one bounded daemon log in one format"); uvicorn's own config
+        # would put a second, differently-shaped handler on stderr.
+        log_config=None,
     )
-    server = uvicorn.Server(config)
+    server = _DaemonServer(config)
 
     async def _runner() -> None:
         serve_task = asyncio.ensure_future(server.serve())
@@ -193,6 +220,10 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
                 await asyncio.sleep(_STARTED_POLL_INTERVAL)
         finally:
             on_started()
+        if server.started:
+            # uvicorn took its own dup of the fd; ours would keep the port in
+            # LISTEN, with nobody accepting, through the whole shutdown.
+            sock.close()
         # Only now that the spawn lock is freed can another daemon take
         # daemon.json from us, so the watcher starts here rather than at boot.
         evictor = spawn(_evict_when_superseded(server), name="daemon-orphan-evictor")
@@ -273,6 +304,9 @@ def main() -> None:
         release_lock()
         bootstrap.release()
         sock.close()
+        # Last, because it ends this process: a login service uninstalled while
+        # this daemon was the launchd job is booted out now that it is leaving.
+        login_service.release_job_if_uninstalled()
 
 
 if __name__ == "__main__":

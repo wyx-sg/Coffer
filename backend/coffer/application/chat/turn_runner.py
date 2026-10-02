@@ -3,7 +3,7 @@
 Extracted from ``TurnOrchestrator`` so the orchestrator file stays focused. The
 task publishes every ``AgentEvent`` to the conversation bus (so any number of web
 subscribers observe it) and, when the turn was started with a dedicated queue
-(a channel renderer's, or ``start_turn``'s), to that queue too — ending it with
+(a channel renderer's), to that queue too — ending it with
 a ``None`` sentinel. Every way a turn ends short keeps what it streamed (spec
 chat "Keep partial output when a turn is interrupted or fails"): a user
 interrupt finalises the partial as complete; an adapter stream that stops
@@ -85,7 +85,7 @@ def _attachments_from_history(history: Sequence[Message]) -> list[Attachment]:
     map each of its ``AttachmentBlock`` references back to an ``Attachment`` VO the
     adapter materialises. Reading them back from history (rather than threading a param
     down) means the reference survives a daemon restart and stays consistent with what
-    the web Chat page shows (see "Re-materialise attachments from persisted
+    the web Conversations page shows (see "Re-materialise attachments from persisted
     history")."""
     for msg in reversed(history):
         if msg.role is Role.USER:
@@ -138,13 +138,14 @@ async def run_turn_task(
     flusher = PartialFlusher(chat, content, interval=flush_interval)
     final_done: TurnDone | None = None
     error_event: TurnError | None = None
-    # An adapter may expose the resolved model id so the assistant message can
-    # record it. Other adapters need not; best-effort read.
-    model_id: str | None = getattr(adapter, "model_id", None)
     placeholder_id: str | None = None
     append_task: asyncio.Task[Message] | None = None
 
     async def finalize(done: TurnDone | None, error: TurnError | None) -> None:
+        # An adapter may expose the model it ran on (spec chat "Record the model an
+        # adapter reports"). It learns that while the turn streams, so it is read
+        # now, at finalize time, never before the turn starts. Best-effort.
+        model_id: str | None = getattr(adapter, "model_id", None)
         await finalize_assistant_message(
             chat=chat,
             conversation_id=conversation_id,
@@ -171,7 +172,6 @@ async def run_turn_task(
                 role=Role.ASSISTANT,
                 content=[],
                 status="streaming",
-                model_id=model_id,
             )
         )
         placeholder_id = (await asyncio.shield(append_task)).id

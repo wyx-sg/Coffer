@@ -7,11 +7,11 @@ builds the vault's stores, wires services, and starts the background workers.
 
 Every wiring step below RETURNS what it built, and the next step takes it as
 a parameter: the order the lifespan reads in is the dependency order, and a
-step cannot run before what it needs exists. ``app.state`` carries only two
-final results that routes and tests read (``kinds``, ``mcp_session_supervisors``).
-
+step cannot run before what it needs exists. ``app.state`` carries only what
+routes, wiring and tests read: ``kinds``, ``feature_service``,
+``mcp_session_supervisors``, ``background_workers``.
 In-process tests can call `create_app()` directly and override
-`set_active_token(...)` manually if they want authenticated calls.
+`set_active_token(...)` for authenticated calls.
 
 MCP-specific composition (upstream factory, session supervisors,
 prunable registry, reaper env knobs) lives in
@@ -48,6 +48,7 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
+from coffer.infrastructure.persistence.migrations_runner import run_migrations
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.infrastructure.platform import HostPlatform
 from coffer.infrastructure.vault.home import runs_db_path
@@ -82,8 +83,10 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     start_session_reaper,
 )
 from coffer.surfaces.http.memory_turn_wiring import memory_context_composer, memory_turn_retriever
-from coffer.surfaces.http.memory_wiring import register_delivery_hook_target
-from coffer.surfaces.http.migrations_runner import run_migrations
+from coffer.surfaces.http.memory_wiring import (
+    follow_memory_switch,
+    register_delivery_hook_target,
+)
 from coffer.surfaces.http.openapi_route import include_openapi_route
 from coffer.surfaces.http.reconcile_wiring import (
     build_reconciler,
@@ -226,8 +229,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         kinds.agent_skill.agent_service,
         resource_svc,
         agent_catalog,
-        compose_memory_context=memory_context_composer(kinds.memory.turn_retrieval),
-        retrieve_memory=memory_turn_retriever(kinds.memory.turn_retrieval),
+        compose_memory_context=memory_context_composer(
+            kinds.memory.turn_retrieval, features.is_enabled
+        ),
+        retrieve_memory=memory_turn_retriever(kinds.memory.turn_retrieval, features.is_enabled),
         observe_quota=kinds.usage.quota.observe_agent_event,
     )
     # Kept on app.state: an integration test asserts the registry's contents.
@@ -256,13 +261,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         kinds.agent_skill.agent_service,
         kinds.agent_skill.mcp_service,
         kinds.memory.delivery_service,
+        features,
     )
     register_delivery_hook_target(
-        reconciler, kinds.memory.delivery_service, connection.connected_agents
+        reconciler, kinds.memory.delivery_service, features, connection.connected_agents
     )
     # The boot pass converges every target at once — MCP entries, skill links,
     # provider projections, delivery hooks — before the daemon reports ready.
     await run_boot_pass(reconciler)
+    follow_memory_switch(reconciler, kinds.guide, features)
     # Coffer's own skill, re-rendered from this build and the corpus every boot
     # (cheap when nothing moved; heals an edited master; upgrades old renders).
     await run_builtin_guide_refresh(kinds.guide)
@@ -291,6 +298,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         sm=sm,
         secret_store=secret_store,
         master_key=secrets.master_key,
+        features=features,
         platform=platform,
     )
     # Published like ``app.state.kinds``: a test asserting the lifespan started

@@ -54,8 +54,7 @@ Pydantic v2 `BaseModel`. It carries no copy of the skill's name: the name comes
 from the SKILL.md frontmatter at import and is stored once, as `Resource.name`.
 A `skill_md_name` key mirrored it until migration 0098 stripped it — one fact
 written twice, with nothing reading the second copy and two places to disagree
-once renaming arrived ([Resource Identity Is an Immutable
-`uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
+once renaming arrived ([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md)).
 
 | Field                        | Type               | Notes                                               |
 | ---------------------------- | ------------------ | --------------------------------------------------- |
@@ -244,7 +243,7 @@ them.
 `application/skill/link_reconcile.py` holds the skill-link target of the
 unified reconciler (spec resource-framework "Converge what Coffer writes outside
 its database with one reconciler"). A scope's `agents` list holds agent uids
-([ADR resource-identity-is-an-immutable-uid](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)),
+([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md)),
 so the reconciler computes
 
 ```
@@ -548,10 +547,12 @@ Pure function `validate_skill_folder(folder, *, size_limit_bytes=50 MiB)`:
 returns `ValidationOk(frontmatter, total_size_bytes, skill_md_sha256)` or
 `ValidationFailure(reason, details)`. Checks: the folder exists and is a
 directory, `SKILL.md` exists, its frontmatter is present and parses as
-`SkillFrontmatter`, no path-escape symlinks within the folder, total size
-within the limit. Reason codes: `folder_missing`, `not_a_directory`,
+`SkillFrontmatter`, no path-escape symlinks and no symlink to a folder within
+the folder, total size within the limit (a link to a file counts as the file's
+bytes, because the master copy turns it into one). Reason codes: `folder_missing`, `not_a_directory`,
 `skill_md_missing`, `skill_md_frontmatter_missing`,
-`skill_md_frontmatter_invalid`, `path_escape_symlinks`, `size_limit_exceeded`
+`skill_md_frontmatter_invalid`, `path_escape_symlinks`, `directory_symlinks`,
+`size_limit_exceeded`
 (details `{total_bytes, limit_bytes}`). A failure becomes
 `SkillValidationError` (422 `SKILL_INVALID`, `details.reason` naming the
 reason).

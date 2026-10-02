@@ -32,7 +32,7 @@ const BINDING = {
   channel: "st",
   channel_uid: "u-st",
   chat_id: "g-1",
-  platform: "seatalk",
+  platform: "seatalk" as const,
   place: null,
 };
 

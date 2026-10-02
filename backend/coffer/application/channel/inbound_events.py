@@ -24,10 +24,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from coffer.application.channel.commands import ChannelCommands, SafeSend
+from coffer.application.channel.inbound_burst import InboundBurst
 from coffer.application.channel.needs_you import reply_text
 from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.store_ports import ChannelPeerRepoPort
 from coffer.application.channel.turn_driver import SessionAccessor
+from coffer.domain.channel.commands import command_name
 from coffer.domain.channel.envelopes import (
     ChoiceButton,
     InboundCallback,
@@ -65,6 +67,10 @@ class InboundEvents:
     #: only for a ``collection:`` choice (spec channels "Save a sent document into a
     #: collection"): the pending document a `/kb` tap saves lives there.
     session: SessionAccessor
+    #: The processor's burst buffer: a command button runs exactly what typing the
+    #: command runs, which settles whatever the chat is still holding first
+    #: (``inbound_commands.route_slash``).
+    burst: InboundBurst
     #: Sends an answer tapped on a question's button into the conversation as the
     #: owner's own message (see "Turn a question for the owner into buttons") —
     #: the processor's ordinary inbound path, so it is gated and queued like any
@@ -106,18 +112,28 @@ class InboundEvents:
             peer = await self.peers.get_by_chat(binding.resource.uid, cb.chat_id)
             if peer is None:
                 return
-            if peer.sender_id is not None and cb.sender_id and peer.sender_id != cb.sender_id:
+            if not cb.sender_id or peer.sender_id != cb.sender_id:
                 return
         answer = reply_text(cb.data)
         if answer is not None:
             await self._answer(binding, cb, answer)
             return
+        kind, _, value = cb.data.partition(":")
+        name = command_name(f"/{value}") if kind == "cmd" and value else None
+        if name is not None:
+            # A tap on a command button is that command typed: held messages are
+            # released ahead of it, or — for Stop — discarded.
+            key = (binding.resource.uid, cb.chat_id, cb.thread_id)
+            if name == "stop":
+                await self.burst.drop(key)
+            else:
+                await self.burst.flush(key)
         await self.commands.dispatch_callback(
             binding,
             peer,
             cb.data,
             self.safe_send,
-            session=self.session(binding.resource.name, cb.chat_id, conversation_thread_id),
+            session=self.session(binding.resource.uid, cb.chat_id, conversation_thread_id),
             chat_kind=cb.chat_kind,
             thread_id=cb.thread_id,
             conversation_thread_id=conversation_thread_id,
@@ -168,7 +184,7 @@ class InboundEvents:
         # way ``unbind`` stops a whole channel's. Deliberately silent on the
         # platform: a goodbye message would just be a failed send into a group
         # the bot has already left. The owner sees it in the daemon log.
-        self.stop_chat_sessions(binding.resource.name, event.chat_id)
+        self.stop_chat_sessions(binding.resource.uid, event.chat_id)
         _logger.warning(
             "channel.group.removed",
             extra={

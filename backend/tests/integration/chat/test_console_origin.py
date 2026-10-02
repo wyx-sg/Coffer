@@ -7,7 +7,7 @@ A conversation the owner also drives from an IM channel carries a channel bindin
 the desktop can badge and observe it. A desktop-only conversation has no binding.
 
 The row stores the channel's uid, not its name (ADR
-resource-identity-is-an-immutable-uid) — a binding has to keep naming the same
+identity-is-the-uid-inside-the-file) — a binding has to keep naming the same
 channel after a rename. The name the console badge shows is resolved from that
 uid by the mapper.
 """

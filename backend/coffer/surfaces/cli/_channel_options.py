@@ -48,6 +48,14 @@ _NOTIFY_AFTER = typer.Option(
     max=3600,
     help="Ping the chat when a turn runs at least this many seconds (default: 90; 0 = never)",
 )
+# "Open a new conversation after an idle period".
+_NEW_CONVERSATION_AFTER_IDLE = typer.Option(
+    None,
+    "--new-conversation-after-idle-hours",
+    min=0,
+    max=8760,
+    help="Open a new conversation when a chat was idle this many hours (default: 24; 0 = never)",
+)
 _WAIT_AFTER_FORWARD = typer.Option(
     None,
     "--wait-after-forward",
@@ -76,36 +84,49 @@ _NO_DIRS = typer.Option(
 _DEFAULT_DIR = typer.Option(
     None,
     "--default-dir",
-    help="The directory new conversations start in (default: the agent's own)",
+    help="The absolute directory new conversations start in (default: ~/.coffer/content/workspace)",
 )
 _NO_DEFAULT_DIR = typer.Option(
-    False, "--no-default-dir", help="Clear the default directory (the agent's own applies)"
+    False, "--no-default-dir", help="Clear the default directory (the Coffer workspace applies)"
 )
+
+
+def _absolute(option: str, path: str) -> str:
+    """``path`` with ``~`` expanded; refused when it is still relative."""
+    expanded = os.path.expanduser(path)
+    if not os.path.isabs(expanded):
+        raise typer.BadParameter(
+            f"{path!r} is relative — give an absolute directory", param_hint=option
+        )
+    return expanded
 
 
 def with_default_dir(
     agent_config: dict[str, Any] | None, default_dir: str | None, no_default_dir: bool
 ) -> dict[str, Any] | None:
-    """``agent_config`` with its ``cwd`` set to ``default_dir`` (made absolute), or
-    removed for ``no_default_dir``; ``None`` when neither was passed."""
+    """``agent_config`` with its ``cwd`` set to ``default_dir``, or removed for
+    ``no_default_dir``; ``None`` when neither was passed. A relative directory is
+    refused, nothing saved."""
     if not no_default_dir and default_dir is None:
         return None
     merged = dict(agent_config or {})
     if no_default_dir:
         merged.pop("cwd", None)
     else:
-        merged["cwd"] = os.path.abspath(os.path.expanduser(str(default_dir)))
+        merged["cwd"] = _absolute("--default-dir", str(default_dir))
     return merged
 
 
 def directories(dirs: list[str] | None, no_dirs: bool) -> list[str] | None:
-    """The allow-list the user passed, or ``None`` when they passed none. Relative
-    paths are made absolute against the current directory, as a shell user means."""
+    """The allow-list the user passed, or ``None`` when they passed none. A
+    relative directory is refused (spec channels "Choose the working directory
+    from chat": a channel's directories are absolute), nothing saved: the daemon
+    that uses it does not share this shell's current directory."""
     if no_dirs:
         return []
     if not dirs:
         return None
-    return [os.path.abspath(os.path.expanduser(d)) for d in dirs]
+    return [_absolute("--dir", d) for d in dirs]
 
 
 def _settings(
@@ -115,6 +136,7 @@ def _settings(
     wait_after_forward: float | None = None,
     show_steps: bool | None = None,
     notify_after: float | None = None,
+    new_conversation_after_idle_hours: float | None = None,
 ) -> dict[str, bool | float]:
     """The config keys the user actually passed: group gating ("Configure when the
     bot answers in a group"), the quiet windows ("Take a burst of messages as
@@ -127,6 +149,7 @@ def _settings(
         "wait_after_forward_seconds": wait_after_forward,
         "show_steps": show_steps,
         "notify_after_seconds": notify_after,
+        "new_conversation_after_idle_hours": new_conversation_after_idle_hours,
     }
     return {key: value for key, value in passed.items() if value is not None}
 
@@ -141,6 +164,7 @@ def settings_config(resource: dict[str, Any], values: dict[str, Any]) -> dict[st
             values.get("wait_after_forward"),
             values.get("show_steps"),
             values.get("notify_after"),
+            values.get("new_conversation_after_idle_hours"),
         )
     )
     dirs = directories(values.get("dirs"), bool(values.get("no_dirs")))

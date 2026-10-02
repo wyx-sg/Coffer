@@ -15,16 +15,16 @@ afterEach(() => {
 
 test("a change block parses into its envelope and SSE id", () => {
   const frame = parseSseBlock(
-    'event: change\nid: run1.7\ndata: {"seq":7,"kind":"attention","id":null,"rev":null,"op":"upsert"}',
+    'event: change\nid: run1.7\ndata: {"seq":7,"kind":"attention","id":null,"op":"upsert"}',
   );
   expect(frame).toEqual({
     event: "change",
     id: "run1.7",
-    data: '{"seq":7,"kind":"attention","id":null,"rev":null,"op":"upsert"}',
+    data: '{"seq":7,"kind":"attention","id":null,"op":"upsert"}',
   });
   expect(frameToMessage(frame!)).toEqual({
     type: "change",
-    change: { seq: 7, kind: "attention", id: null, rev: null, op: "upsert" },
+    change: { seq: 7, kind: "attention", id: null, op: "upsert" },
   });
 });
 
@@ -59,7 +59,7 @@ test("a reconnect sends the last change's id as Last-Event-ID", async () => {
     .fn()
     .mockResolvedValueOnce(
       streamOf(
-        'event: change\nid: r.4\ndata: {"seq":4,"kind":"mcp_server","id":"u","rev":2,"op":"upsert"}\n\n',
+        'event: change\nid: r.4\ndata: {"seq":4,"kind":"mcp_server","id":"u","op":"upsert"}\n\n',
       ),
     )
     .mockImplementationOnce(async (_url: string, init: RequestInit) => {

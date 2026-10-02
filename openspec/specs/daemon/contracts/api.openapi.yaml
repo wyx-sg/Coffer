@@ -45,7 +45,7 @@ paths:
   /api/v1/daemon/features/{key}:
     delete:
       description: |-
-        Remove this machine's setting, so the feature follows the channel default.
+        Remove this machine's setting, so the feature is off again.
 
         Answers with the feature's state after the removal. The same refusals as
         the switch: 404 ``FEATURE_UNKNOWN``, 409 ``FEATURE_PINNED``.
@@ -976,12 +976,6 @@ components:
       type: object
     DaemonStatusOut:
       properties:
-        channel:
-          enum:
-          - stable
-          - dev
-          title: Channel
-          type: string
         commit:
           anyOf:
           - type: string
@@ -1045,7 +1039,6 @@ components:
       - started_at
       - port
       - upstream_summary
-      - channel
       - features
       - machine_id
       - machine_name
@@ -1118,19 +1111,12 @@ components:
       type: object
     FeatureListOut:
       properties:
-        channel:
-          enum:
-          - stable
-          - dev
-          title: Channel
-          type: string
         features:
           items:
             $ref: '#/components/schemas/FeatureOut'
           title: Features
           type: array
       required:
-      - channel
       - features
       title: FeatureListOut
       type: object
@@ -1147,7 +1133,7 @@ components:
           enum:
           - pin
           - setting
-          - channel
+          - default
           title: Source
           type: string
       required:

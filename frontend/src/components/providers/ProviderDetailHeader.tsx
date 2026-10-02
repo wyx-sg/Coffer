@@ -10,7 +10,7 @@ import { Pencil, Plug } from "lucide-react";
 
 import { ScopeControl } from "@/components/ScopeControl";
 import { StatusPill } from "@/components/status/StatusPill";
-import type { StatusTone } from "@/components/status/statusTone";
+import type { StatusTone } from "@/lib/statusTone";
 import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/ui/menu";
 import type { Provider } from "@/lib/api/providers";

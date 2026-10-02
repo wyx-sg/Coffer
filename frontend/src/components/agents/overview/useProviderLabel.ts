@@ -1,20 +1,25 @@
 // src/components/agents/overview/useProviderLabel.ts — the "Provider" line: which connection this agent type runs on.
 //
-// The active connection is the enabled one routed to this agent type that is
-// marked active (the same test the Model tab's picker makes); with none, the
-// agent runs on its own built-in login. `undefined` while the list loads.
+// The connection is the one the agent's record names, if it is still enabled
+// and reaches the agent (the same test the Model tab makes); with none, the
+// agent runs on its own built-in login. `undefined` while the list loads, and
+// while the Models feature is off.
 import { useTranslation } from "react-i18next";
 
-import type { AgentType } from "@/lib/api/agents";
+import type { AgentOut } from "@/lib/api/agents";
+import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { useProviders } from "@/lib/hooks/useProviders";
+import { activeProviderFor } from "@/lib/providers/usedBy";
 import { displayName } from "@/lib/resourceTitle";
 
-export function useProviderLabel(type: AgentType): string | undefined {
+export function useProviderLabel(agent: AgentOut): string | undefined {
   const { t } = useTranslation();
-  const providers = useProviders();
+  // Only a surface that shows the Provider line (it is shown while the Models
+  // feature is on) reads this; the providers route is not asked otherwise.
+  const models = useFeatureEnabled("models") === true;
+  const providers = useProviders(models);
+  if (!models) return undefined;
   if (!providers.data) return providers.isError ? t("common.emptyValue") : undefined;
-  const active = providers.data.find(
-    (p) => p.enabled && p.is_active && (p.compatible_agents ?? []).includes(type),
-  );
-  return active ? displayName(active) : t(`agents.overviewTab.model.builtin.${type}`);
+  const active = activeProviderFor(agent, providers.data);
+  return active ? displayName(active) : t(`agents.overviewTab.model.builtin.${agent.type}`);
 }

@@ -345,12 +345,15 @@ def _err_app():
 )
 def test_each_coffer_error_maps_to_status_and_code(exc_factory, expected_status, expected_code):
     """Every CofferError subclass maps to its declared HTTP status + envelope code."""
+    from types import SimpleNamespace
+
     from starlette.testclient import TestClient
 
     from coffer.domain import errors as domain_errors
+    from coffer.domain import secret_errors
 
     app = _err_app()
-    exc = exc_factory(domain_errors)
+    exc = exc_factory(SimpleNamespace(**{**vars(domain_errors), **vars(secret_errors)}))
 
     @app.get("/boom")
     async def _boom():
@@ -383,6 +386,8 @@ def test_every_domain_error_code_has_a_status():
 
     # Only the product's own errors: test suites define throwaway subclasses
     # (a fake gate refusal, say) that are never meant to reach a response.
+    from coffer.domain import secret_errors  # noqa: F401  (registers its subclasses)
+
     codes = {
         c.code for c in _subclasses(domain_errors.CofferError) if c.__module__.startswith("coffer.")
     }

@@ -65,7 +65,7 @@
 import { useTranslation } from "react-i18next";
 
 import { ReachControl } from "@/components/reach/ReachControl";
-import { reachModeOf, type ReachMode } from "@/components/reach/reachState";
+import { reachModeOf, type ReachMode } from "@/lib/reach/reachState";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
 import { useResourceScope, useUpdateResourceScope, type Scope } from "@/lib/hooks/useScope";

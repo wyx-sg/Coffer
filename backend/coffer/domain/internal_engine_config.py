@@ -16,9 +16,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-#: The fixed primary key of the singleton ``internal_engine_config`` row.
-SINGLETON_ID = 1
-
 
 class CurationOwner(StrEnum):
     """What ``curate_owner_machine_id`` IS, from this machine's point of view.

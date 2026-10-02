@@ -367,8 +367,6 @@ holds the first group:
 | `KnowledgeFileConflict` | `KNOWLEDGE_FILE_CONFLICT` | 409 |
 | `UnsafeKnowledgePath` | `KNOWLEDGE_PATH_UNSAFE` | 400 |
 | `UploadTooLarge` | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 |
-| `TopicReferencesFile` | `KNOWLEDGE_TOPIC_REFERENCES_FILE` | 400 |
-| `CurationBoundExceeded` | `KNOWLEDGE_CURATION_BOUND` | 400 |
 | `KnowledgeHistoryUnavailable` | `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 |
 | `KnowledgeVersionNotFound` | `KNOWLEDGE_VERSION_NOT_FOUND` | 404 |
 | `KnowledgeNotAPass` | `KNOWLEDGE_NOT_A_PASS` | 400 |
@@ -389,15 +387,12 @@ collection's `README.md` and a path aimed at `../etc/passwd` are both a caller
 asking for something it may not reach, and a single guard is one that cannot be
 forgotten by one surface.
 
-The two curation errors are refusals of a *model's* write rather than a user's,
-which is why they exist as codes at all: a pass reports what it was stopped from
-doing. `TopicReferencesFile` (the name predates the one-tree layout; the code is
-unchanged) is "Refuse file-name references in documents" enforced at
-`write_document` — a document naming another knowledge file is the mechanism
-that produced 343 broken links, so it is refused rather than discouraged in a
-prompt. `CurationBoundExceeded` is the bound of "Bound a pass to eight writes":
-the eight-write ceiling, which is what keeps one item from triggering a
-corpus-wide rewrite however confident the model is.
+The two curation refusals (a document naming another knowledge file, "Refuse
+file-name references in documents", and the eight-write ceiling, "Bound a pass to
+eight writes") are not errors: they are enforced in the curation tools
+(`application/knowledge/curate_tools.py`) and returned to the model as tool
+results, so a pass reports what it was stopped from doing without an error
+code.
 
 `domain/kb_errors.py` holds two more, re-exported through `domain/errors.py`:
 

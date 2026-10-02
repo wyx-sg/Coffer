@@ -100,6 +100,12 @@ class BoundaryDaemon:
         assert r.status_code == 200, r.text
         return list(r.json()["entries"])
 
+    def audit_all(self) -> list[dict[str, Any]]:
+        """Every audit entry, whatever its type."""
+        r = self.client.get("/api/v1/audit", params={"limit": 500})
+        assert r.status_code == 200, r.text
+        return list(r.json()["entries"])
+
     def local_secrets(self, name: str) -> dict[str, Any]:
         """One of the boundary's machine-local files (``bindings``,
         ``approvals``, ``settings``) as it is on disk."""

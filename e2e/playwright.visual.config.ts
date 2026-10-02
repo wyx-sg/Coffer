@@ -24,8 +24,8 @@ const VITE_ORIGIN = `http://localhost:${VISUAL_VITE_PORT}`;
 export default defineConfig({
   testDir: "./visual/specs",
   // Not the default ./test-results: Playwright empties its outputDir on start,
-  // and CI runs this suite right after the functional one, whose failure
-  // traces must survive for the artifact upload.
+  // and the functional suite's failure traces (./test-results) must survive
+  // for the artifact upload when both run on one machine (`make verify-all`).
   outputDir: "./visual/test-results",
   // {platform} keeps darwin and linux baselines side by side: font rasterising
   // differs between them, so one platform's image can never pass on the other.
@@ -37,9 +37,10 @@ export default defineConfig({
   retries: 0,
   reporter: [["list"]],
   // Locally a missing baseline fails (record it deliberately with
-  // `make visual-update`). In CI a platform with no baseline yet — linux,
-  // until someone commits it — is WRITTEN and uploaded as an artifact
-  // instead of failing; once the images are committed they are compared.
+  // `make visual-update`). In CI a platform with no baseline yet — linux, until
+  // someone commits it — is WRITTEN and uploaded as an artifact instead of
+  // failing, so nothing is compared there (the CI job is report-only for that
+  // reason); once the images are committed they are compared.
   updateSnapshots: process.env.CI ? "missing" : "none",
 
   expect: {

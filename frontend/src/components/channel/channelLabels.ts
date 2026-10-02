@@ -9,8 +9,8 @@ import type { ResourceOut } from "@/lib/api/resources";
 import { useMachines, useThisMachineId } from "@/lib/hooks/useMachines";
 import { machineOptionFor } from "@/lib/machineBinding";
 import { displayName } from "@/lib/resourceTitle";
-import type { ChannelView } from "./channelState";
-import { channelPlatform } from "./channelState";
+import type { ChannelView } from "@/lib/channels/channelState";
+import { channelPlatform } from "@/lib/channels/channelState";
 import { platformLabel } from "./PlatformMark";
 
 /** "SeaTalk · Team bot" — the platform, then the name the person chose. */

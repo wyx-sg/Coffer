@@ -29,7 +29,7 @@ const SIDEBAR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../l
 const TITLE_KEY_BY_ROUTE: Record<string, string> = {
   "/": "overview.title",
   "/agents": "agents.title",
-  "/model-providers": "settings.connections.title",
+  "/model-providers": "providers.title",
   "/conversations": "conversations.title",
   "/channels": "channels.title",
   "/mcp-servers": "resources.title",

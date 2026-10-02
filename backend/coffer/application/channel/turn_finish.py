@@ -89,7 +89,7 @@ class TurnEnd:
 
     @property
     def outcome(self) -> TurnOutcome:
-        if self.error is not None or self.stop_reason == "max_iterations":
+        if self.error is not None:
             return "failed"
         if self.stop_reason == "interrupted":
             return "stopped"
@@ -110,8 +110,6 @@ def summary_line(end: TurnEnd) -> str:
         return f"⚠️ failed · {detail}"
     if end.stop_reason == "interrupted":
         return f"⏹ stopped · {detail}"
-    if end.stop_reason == "max_iterations":
-        return f"⚠️ tool-limit · {detail}"
     return f"✅ done · {detail}"
 
 
@@ -145,8 +143,6 @@ def ping_line(end: TurnEnd, body: str, question: Question | None = None) -> str:
     detail = " · ".join(facts)
     if end.error is not None:
         return f"⚠️ Failed · {detail} — {end.error.message}"
-    if end.stop_reason == "max_iterations":
-        return f"⚠️ Tool limit · {detail}"
     return f"⏹ Stopped · {detail}"
 
 
@@ -229,8 +225,6 @@ async def deliver_reply(
         return Delivered()
     else:
         body = text or "(the agent returned no text)"
-        if end.stop_reason == "max_iterations":
-            body += "\n\n⚠️ Stopped at the tool-iteration limit."
     was_open = surface.is_open
     mentioned = mention(body)
     leftover = await surface.close(mentioned)

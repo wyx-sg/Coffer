@@ -204,7 +204,7 @@ def test_history_rows_are_in_runs_db_keyed_to_uids(legacy: LegacyHome) -> None:
     _migrate(legacy)
     assert not legacy.db.exists()
     with sqlite3.connect(legacy.coffer / "runs.db") as conn:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0137",)
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0138",)
         assert conn.execute("SELECT id, resource_uid FROM audit_log ORDER BY id").fetchall() == [
             (1, UIDS["github"]),
             (2, UIDS["tg"]),
@@ -262,10 +262,10 @@ def test_stamps_are_stripped_and_settled_documents_recorded(legacy: LegacyHome) 
     assert set(curation) == {"notes/team/on-call.md"}, "the edited runbook is still pending"
 
 
-def test_the_report_names_links_the_old_sync_tree_and_the_remote(legacy: LegacyHome) -> None:
+def test_the_report_names_links_and_the_remote(legacy: LegacyHome) -> None:
     report = _migrate(legacy)
     notes = "\n".join(report.notices)
     assert ".claude/projects/p/memory" in notes
-    assert "sync working tree" in notes and "empty branch" in notes
-    assert (legacy.coffer / "sync" / "resources" / "skill" / "x.yaml").is_file()
+    assert "empty branch" in notes
+    assert "sync/" not in notes
     assert (legacy.home / ".claude/projects/p/memory").is_symlink()

@@ -201,41 +201,31 @@ lint:
 # config is frontend/package.json's "knip" key, and the script is
 # `npx --yes knip@<pinned>`: the same on-demand pattern `make desktop` uses for
 # the Tauri CLI, so it needs no entry in the lockfile.
-	@if [ -d $(FRONTEND)/node_modules ]; then \
-		PYTHONPATH=$(BACKEND) $(PY) scripts/dump_i18n_backend_keys.py --check && \
-		cd $(FRONTEND) && npm run lint && npm run typecheck && npm run knip; \
-	else \
-		echo "lint: $(FRONTEND)/node_modules missing — skipping frontend"; \
+# A missing node_modules fails (it does not skip): a skipped frontend leg would
+# still let `make verify` record a fresh stamp for a tree whose frontend was
+# never checked.
+	@if [ ! -d $(FRONTEND)/node_modules ]; then \
+		echo "lint: $(FRONTEND)/node_modules missing — run 'make install' first"; exit 1; \
 	fi
+	PYTHONPATH=$(BACKEND) $(PY) scripts/dump_i18n_backend_keys.py --check
+	cd $(FRONTEND) && npm run lint && npm run typecheck && npm run knip
 
 verify-unit:
 	$(PY) scripts/check_unit_purity.py
-	@if [ -d $(BACKEND)/tests/unit ]; then \
-		$(PY) -m pytest $(PYTEST_XDIST) $(PYTEST_ARGS) $(BACKEND)/tests/unit; \
-	else \
-		echo "verify-unit: $(BACKEND)/tests/unit/ does not exist yet — skipping backend"; \
+	$(PY) -m pytest $(PYTEST_XDIST) $(PYTEST_ARGS) $(BACKEND)/tests/unit
+	@if [ ! -d $(FRONTEND)/node_modules ]; then \
+		echo "verify-unit: $(FRONTEND)/node_modules missing — run 'make install' first"; exit 1; \
 	fi
-	@if [ -d $(FRONTEND)/node_modules ]; then \
-		cd $(FRONTEND) && npx vitest run src; \
-	else \
-		echo "verify-unit: $(FRONTEND)/node_modules missing — skipping frontend"; \
-	fi
+	cd $(FRONTEND) && npx vitest run src
 
 # Backend-only, as .agents/testing.md documents. The frontend has no
 # tier-by-directory layout: its tests are co-located `*.test.tsx` beside the
 # module they cover and all of them run in `verify-unit`'s `vitest run src`.
-# A `frontend/tests/integration` leg used to sit here; that directory was the
-# first scaffold's shape, deleted when the real web shell landed, and the guard
-# it left behind could only ever print its own skip message.
 # One integration run per machine: scripts/verify_lock.py queues a second run
 # (another worktree or session) until the first finishes, because two runs at
 # once slow each other until time-based tests fail. COFFER_VERIFY_LOCK=off skips it.
 verify-integration:
-	@if [ -d $(BACKEND)/tests/integration ]; then \
-		$(PY) scripts/verify_lock.py -- $(PY) -m pytest $(PYTEST_XDIST) --timeout=$(PYTEST_TIMEOUT) $(PYTEST_ARGS) $(BACKEND)/tests/integration; \
-	else \
-		echo "verify-integration: $(BACKEND)/tests/integration/ does not exist yet — skipping backend"; \
-	fi
+	$(PY) scripts/verify_lock.py -- $(PY) -m pytest $(PYTEST_XDIST) --timeout=$(PYTEST_TIMEOUT) $(PYTEST_ARGS) $(BACKEND)/tests/integration
 
 # Re-measure the per-test durations CI's integration shards are balanced by
 # (pytest-split, .github/workflows/verify.yml). Serial on purpose: under xdist
@@ -261,20 +251,13 @@ verify-secrets:
 
 # Backend-only, as .agents/testing.md documents. The one frontend contract test
 # (`frontend/src/bootstrap.contract.test.ts`) is co-located and runs in
-# `verify-unit`; `frontend/tests/contract/` has never existed, so the leg that
-# used to guard on it only ever printed a skip.
+# `verify-unit`.
 verify-contract:
-	@if [ -d $(BACKEND)/tests/contract ]; then \
-		$(PY) -m pytest $(BACKEND)/tests/contract; \
-	else \
-		echo "verify-contract: $(BACKEND)/tests/contract/ does not exist yet — skipping backend"; \
-	fi
+	$(PY) -m pytest $(BACKEND)/tests/contract
 
 # `npx playwright test` runs BOTH projects in e2e/playwright.config.ts: `web`
 # (browser specs under e2e/web/specs/) and `mcp` (cross-process shim+daemon
-# specs under e2e/mcp/specs/, no browser). A pytest leg used to follow, guarded
-# on `e2e/*.py`; no such file has ever existed in this repo — the MCP shim
-# tests it claimed to skip are the Playwright `mcp` project above.
+# specs under e2e/mcp/specs/, no browser).
 verify-e2e:
 	@if [ ! -f e2e/playwright.config.ts ]; then \
 		echo "verify-e2e: no e2e/playwright.config.ts — skipping"; \
@@ -434,9 +417,9 @@ bundle-binaries:
 # --- Desktop shell (docs/decisions/desktop-shell-over-a-shared-frontend.md) ---
 #
 # Deliberately NOT a prerequisite of `verify`: the Rust toolchain is a
-# prerequisite of `make desktop` only, and no CI workflow installs one for
-# the test gates. `make desktop-test` is how anyone with a toolchain runs
-# the crate's unit tests.
+# prerequisite of `make desktop*` only. The `desktop.yml` workflow installs one
+# and runs `make desktop-lint` and `make desktop-test`; locally, anyone with a
+# toolchain runs the same targets.
 #
 # `desktop` produces an UNSIGNED, un-notarised Coffer.app + .dmg. macOS will
 # refuse a browser-downloaded copy on double-click until a Developer ID

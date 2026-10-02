@@ -6,7 +6,7 @@ Coffer uses four test tiers running in parallel CI jobs. Acceptance scenarios fr
 
 | Tier            | Tests what                                                                                                                                          | Speed budget (per file) | Tools                                                                                                                                                                                                    | Runs in `make verify`?          |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| **Unit**        | Pure functions, single class, domain logic, value objects. No I/O. Fake ports / no real infrastructure. Enforced by `scripts/check_unit_purity.py`. | < 100 ms                | `pytest`                                                                                                                                                                                                 | yes                             |
+| **Unit**        | Pure functions, single class, domain logic, value objects. No network, process or database I/O; a `tmp_path` directory is allowed. Fake ports / no real infrastructure. Enforced by `scripts/check_unit_purity.py`. | < 100 ms                | `pytest`                                                                                                                                                                                                 | yes                             |
 | **Integration** | Multiple modules + real local infrastructure: real SQLite, real subprocess, real filesystem, `keyring` test backend. No network.                    | < 2 s                   | `pytest` + `httpx.AsyncClient` / `fastapi.TestClient`                                                                                                                                                    | yes                             |
 | **Contract**    | What contract freshness cannot see: every served route has an owning capability (`test_contract_coverage.py` over `scripts/gen_contracts.py`'s ownership table), MCP protocol behaviour against the SDK oracle, built-in tool names. The contracts themselves are generated from the Pydantic models and their freshness is a `make lint` step (`scripts/gen_contracts.py --check`), not a test. | < 1 s                   | `pytest` over the app's generated OpenAPI and the MCP SDK. **Future** (add when contract surface grows): `schemathesis` for backend fuzzing.                                                | yes                             |
 | **E2E**         | Full stack via real surfaces, in **two legs**: a browser (Chromium) against the UI the daemon serves, and a real MCP client → `coffer-mcp-shim` (stdio) → daemon (`/mcp` HTTP) → upstream MCP servers → SQLite. | < 30 s                  | `Playwright` (`@playwright/test`) + TypeScript 5.x. The `web` project drives pages against a Vite server pointed at an isolated daemon; the `mcp` project spawns the real shim + daemon as OS subprocesses and drives JSON-RPC across them. | NO (separate `make verify-e2e`) |
@@ -172,7 +172,7 @@ The audit itself is stdlib-only and runs in milliseconds.
 
 `scripts/check_unit_purity.py` AST-scans `backend/tests/unit/**/*.py` and fails if any test imports a known I/O module (`subprocess`, `sqlite3`, `httpx`, `fastapi.testclient`, `socket`, `requests`, `urllib.request`, `aiohttp`, `keyring`). Runs as the first step of `make verify-unit`.
 
-The unit tier's "no I/O" rule (line 1 of the table above) was previously a culture-only constraint. The script makes it mechanical: a test that sneaks in a `from fastapi.testclient import TestClient` gets flagged with the file:line and a message pointing to integration. To add a new banned module, edit the `BANNED` dict in the script.
+The unit tier's "no network, process or database I/O" rule (line 1 of the table above) was previously a culture-only constraint. Reading and writing files under pytest's `tmp_path` is allowed in the unit tier (a file-format parser or a config editor is still a single unit); the script does not police that, and anything that touches a socket, a subprocess or a database belongs in integration. The script makes it mechanical: a test that sneaks in a `from fastapi.testclient import TestClient` gets flagged with the file:line and a message pointing to integration. To add a new banned module, edit the `BANNED` dict in the script.
 
 ## Mocking Philosophy
 
@@ -202,7 +202,7 @@ No test may touch the real user's home. `backend/tests/conftest.py` installs `te
   5. A new Coffer path root (a new `COFFER_*_ROOT` or a new top-level dir under the home) must derive from `$HOME` or be pinned in the root conftest; a new agent config dir goes into `PROTECTED_NAMES`.
 - **Builders** (`tests/support/homes.py`, fixtures in `tests/support/fixtures.py`) — extend these, do not write another `_setup_home`:
   - `isolated_home` / `make_home(path)` — one machine; `.activate(monkeypatch)`, `.env()` for subprocesses.
-  - `two_homes` / `two_machine_homes(base)` — machines `a`, `b` + one bare remote (`bare_remote()`, shared with `integration/sync/harness.py`).
+  - `two_homes` / `two_machine_homes(base)` — machines `a`, `b` + one bare remote (`bare_remote()`, also used by `integration/sync_surfaces/harness.py` and `integration/sync_thin/`).
   - `claude_code_dir`, `codex_dir` / `fake_agent_dir(home, AgentType.X, config_dir=None, files=None)` — agent config tree laid out from the descriptor; `.write(key, text)`, `.add_skill(name)`, `.home_env()`.
   - `fake_channel_adapter` / `tests.support.channel.FakeChannelAdapter` — recording IM transport (re-exported by `integration/channel/conftest.py`).
   - `tests.support.facets.agent_catalog(programs=None)` — the composition root's bound agent catalogue with every dependency probe answering "not installed" unless `programs` says otherwise (`installed(version)`); `put_programs_on_path(monkeypatch, bin_dir, {"codex": "codex-cli 1.0"})` for tests that go through the real probe (assert the state, not the version — the login shell's `PATH` may find the real program first). The shared facet contract, `integration/agent/test_facet_contract.py`, runs against `fake_agent_dir` for every shipped agent.
@@ -234,7 +234,7 @@ A rule that must hold for every input — not for three hand-picked ones — is 
 
 - **Profiles** (`tests/support/hypothesis_profiles.py`, loaded by the root `conftest.py`): `ci` is the default — 100 examples, derandomized (every run draws the same cases), `deadline=None`, no example database. `HYPOTHESIS_PROFILE=thorough` draws 2000 random examples for a local hunt.
 - **No per-example deadline.** A deadline is a wall-clock assertion and fails on a loaded machine; keep it off.
-- **Skip, don't break.** Each property module starts with `pytest.importorskip("hypothesis")`, so a venv synced before the dependency landed skips them instead of failing collection.
+- **A pinned dependency.** `hypothesis` is a locked dev dependency (`uv sync --frozen`); property modules import it plainly, so a venv without it fails collection instead of silently skipping.
 - **A shrunk failure becomes an example test** beside the property, so the case stays pinned whatever the profile draws.
 - **Check the generator reaches every branch.** `event(...)` plus `--hypothesis-show-statistics` shows each outcome's share; a property whose generator never reaches the branch it claims to cover is a vacuous test.
 
@@ -285,12 +285,14 @@ make format              # ruff format + ruff --fix (backend, evals); prettier i
 `scripts/check_docs_locales.py`,
 `scripts/check_removed_commands.py`, `scripts/check_platform_calls.py`,
 `scripts/check_coffer_paths.py`, `scripts/check_agent_type_branches.py`, `scripts/check_frontend_colors.py`,
-`scripts/check_ignored_sources.py`,
+`scripts/check_ignored_sources.py`, `scripts/check_error_codes_reference.py`,
+`scripts/check_bare_tasks.py`,
 `ruff check` and `ruff format --check` (over `backend/` and `evals/`), `mypy`
 (configured in `backend/pyproject.toml` with `strict = true`), `lint-imports`
-(the layering + cross-kind fence), and — when
-`frontend/node_modules` is present — `scripts/dump_i18n_backend_keys.py --check`
+(the layering + cross-kind fence), and `scripts/dump_i18n_backend_keys.py --check`
 plus `npm run lint`, `npm run typecheck` and `npm run knip` in `frontend/`.
+A missing `frontend/node_modules` fails `make lint` and `make verify-unit` (run
+`make install`); the frontend leg is never skipped silently.
 Each script gate has a one-line description in
 [`harness.md` "Gates"](./harness.md#gates).
 
@@ -306,8 +308,8 @@ Two consequences worth internalising:
   `docs-site/architecture/layering.md` and the builtin-tool roster in
   `docs-site/architecture/` to the code; `check_removed_commands.py` rejects any
   `coffer` command or `coffer__` tool the CLI/MCP reshape removed wherever it is
-  quoted under `docs-site/`, `README.md`, `AGENTS.md`, `CONTRIBUTING.md`,
-  `.agents/`, `openspec/specs/`, the shipped skill bodies
+  quoted under `docs-site/`, `README.md`, `README.zh-CN.md`, `AGENTS.md`, `CONTRIBUTING.md`,
+  `.agents/`, `docs/` (except the ADRs), `openspec/specs/`, `desktop/`, the shipped skill bodies
   (`backend/coffer/**/skill_assets/`), `frontend/src/` or `e2e/` (a line that
   names one on purpose is listed in the script's `ALLOWED`). Run `make lint`
   after touching markdown, not just after touching code.
@@ -372,14 +374,10 @@ up here as an image diff.
 | `secrets-scan`                    | `gitleaks` over the full history (`fetch-depth: 0`) through gitleaks-action — the scan `make verify-secrets` runs locally. A committed secret fails the PR even if the final tree is clean. Always runs. |
 | `test-contract`                   | `make verify-contract`                                                                                                     |
 | `test-e2e`                        | `make verify-e2e` (installs Chromium; runs the `web` and `mcp` projects)                                                   |
-| `test-visual`                     | `make verify-visual`, uploading the linux baselines and diffs as the `visual-baseline-linux` artifact                      |
+| `test-visual`                     | `make verify-visual`, uploading the linux baselines and diffs as the `visual-baseline-linux` artifact. Report-only (`continue-on-error`): a failure is reported, not blocking, until the baselines are committed |
 
 The test jobs are skipped only on an explicit `code=false`: if `changes` itself fails they run anyway. A job skipped by its condition reports success, which is how a docs-only PR still shows every required check green.
 
 **Shard balance.** A test missing from `backend/.test_durations` is weighed at the average, so a stale file only unbalances the shards — it never drops a test. When one shard runs clearly longer than the others, run `make test-durations` (serial, ~15 min) and commit the file. Changing the shard count means editing both the `shard` matrix and `--splits`.
 
 `.github/workflows/ci.yml` runs one full `make verify` on every push to `main` and `feature/**` and on manual dispatch; it inherits the xdist default from the Makefile. The same workflow runs a weekly latest-dependencies canary (Mondays 06:00 UTC) that re-resolves the `>=` floors instead of the frozen lock, so an upstream release that breaks Coffer shows up on a schedule.
-
-## When a Tier is Empty
-
-A tier with no tests yet runs trivially green (pytest collects 0 tests). The Makefile checks for tier directories and skips silently if absent — don't gate `make verify` on tiers that don't exist.

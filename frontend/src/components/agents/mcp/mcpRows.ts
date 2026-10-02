@@ -8,7 +8,7 @@
 // server (`matches_resource`), or sits in a file that failed to parse and is
 // then read-only.
 import { reachesAgent } from "@/lib/agents/counts";
-import type { McpEntryOut } from "@/lib/api/agents";
+import type { McpEntryOut } from "@/lib/api/agents-workspace";
 import type { Scope } from "@/lib/hooks/useScope";
 
 /** The fields of a registered MCP server the tab reads. */

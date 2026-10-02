@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 
 import { LineCounts } from "@/components/change-preview/LineCounts";
 import { OpChip } from "@/components/change-preview/OpChip";
-import type { DiffLine } from "@/components/change-preview/changeCounts";
+import type { DiffLine } from "@/lib/changePreview/changeCounts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { useFileVersions } from "@/lib/hooks/useSyncStop";

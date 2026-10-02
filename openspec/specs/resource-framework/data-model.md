@@ -11,8 +11,7 @@ carries are spec vault-storage's ([data-model](../vault-storage/data-model.md)).
 
 A resource is **a file**, not a row: one JSON document filed by its kind's
 storage class (`FileResourceRepo`, `infrastructure/vault/resource_store.py`).
-Its reach is machine-local JSON beside it, its revision counter a derived
-index, and its audit trail rows in `runs.db` keyed by its uid. There is no
+Its reach is machine-local JSON beside it, and its audit trail rows in `runs.db` keyed by its uid. There is no
 integer resource id: the uid inside the file is the identity. In the one-time
 upgrade to the vault layout (`coffer migrate`) every `resources` row became a
 resource file and its `enabled`/`scope_json` a record in `local/reach.json`;
@@ -28,7 +27,7 @@ plain string, and the `<kind>:<name>` string form that `ResourceRef` used to
 carry is **deleted** rather than demoted to a label — leaving it as "the label"
 would have kept two spellings of identity in the codebase and an obvious place
 for the next reader to reach for the wrong one
-([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
+([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md)).
 
 `validate_resource_name(name)` is the framework's one name rule, raising
 `InvalidResourceNameError`. It is applied by registration AND by rename, from a
@@ -52,10 +51,9 @@ Plain Python dataclass; **not** a Pydantic model (domain stays pure).
 | `description` | `str \| None`    | optional free text                                                         |
 | `config`      | `dict[str, Any]` | kind-specific config, already validated against the kind's `config_schema` |
 | `enabled`     | `bool`           | user-controlled enable/disable flag. Reach, so machine-local: `local/reach.json`, never in the file; a resource with no record there is enabled |
-| `created_at`  | `datetime`       | UTC, the file's `created_at` key, written at creation and never updated; a file without one reads as when this machine first saw its uid (`first_seen` in the uid index) |
-| `updated_at`  | `datetime`       | UTC, when the file's bytes or this machine's reach for it last changed, from the derived uid index (`derived/index/resources.json`); not in the file |
+| `created_at`  | `datetime`       | UTC, the file's `created_at` key, written at creation and never updated; a file without one reads as the file's modification time |
+| `updated_at`  | `datetime`       | UTC, the modification time of the file on this machine; not in the file |
 | `title`       | `str \| None`    | optional display text, at most 80 characters, that surfaces show in place of `name`; `None` = none. Editable through `ResourceService.set_title` on a kind that carries one (`Kind.titled`); always `None` for `agent`, `mcp_server`, `skill` and `knowledge` (a collection is named by its folder); the file's `title` key, present only when set (spec resource-framework "Carry an optional editable title on the kinds that have one") |
-| `rev`         | `int`            | monotonic revision: a derived per-uid counter in `derived/index/resources.json`, 1 when the uid is first seen, grown by one whenever the file's blob id or this machine's reach for it changes (a person's hand edit and a sync round's checkout included); every change emits an in-process `Changed(kind, uid, rev)` hint that brings the next reconcile pass forward (spec resource-framework "Carry a monotonic revision on every resource"). Not in the file or the API; deleting `derived/` restarts every counter at 1, which only the in-process dedupe of hints reads |
 | `scope`       | `Scope \| None`  | framework-level per-agent activation scope ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)); `None` = unscoped (active for every agent). Interpreted via `domain/scope.py`; only kinds whose `Kind.supports_scope` is True may set it. Machine-local: the `agents` of the resource's record in `local/reach.json`, never in the file. A resource with no record has its kind's `default_scope` |
 
 There is no derived `ref`: a resource carries its `uid`, its `kind` and its
@@ -232,7 +230,7 @@ newline, unknown keys kept in place; spec vault-storage) at
 | `config`         | required; the kind's config. A string under this machine's home is written as `${HOME}/...` and expanded on read; top-level keys the kind's schema does not declare are put back from the file on every write |
 | `created_at`     | ISO time, written at creation                                                                                                                                |
 
-`enabled`, `scope`, `rev` and `updated_at` are not in the file. The file name
+`enabled`, `scope` and `updated_at` are not in the file. The file name
 only follows the name: nothing keys on the path, a person may move the file,
 and a rename writes `<new name>.json` (or `<name>-<uid[:8]>.json` when that
 name is taken by an unrelated file) and removes the old one in the same commit.
@@ -247,13 +245,6 @@ name is taken by an unrelated file) and removes the old one in the same commit.
 always `null`. A resource with no record has `enabled: true` and its kind's
 `default_scope`. `set_enabled` and `update_scope` write only this file and make
 no commit.
-
-### Revision index — `~/.coffer/derived/index/resources.json`
-
-`{uid: {path, blob, reach, rev, updated_at, first_seen}}`: where the uid was
-last found (`<class>/<path>`), the blob id of its bytes, a fingerprint of its
-reach, the counter and the two times. A full read drops every uid it no longer
-finds. Deleting the file is safe.
 
 ### Audit log — `runs.db`
 
@@ -294,7 +285,7 @@ only a table and a timestamp column in the allowlist built from the registry.
 | Action               | Effect |
 | -------------------- | ------ |
 | create               | refused (`ResourceAlreadyExists`) when the uid, or the kind + name, is already held by a resource file of any class. A vault resource is written expecting its path absent, in one commit |
-| delete               | removes the file (one commit for a vault resource), its reach record and its index row; every state document that follows its owner (spec mcp-gateway's capability switches, spec channels' pairings) goes in the same commit. Does **not** touch `audit_log` or any kind's invocation log — history outlives the resource it describes |
+| delete               | removes the file (one commit for a vault resource), and its reach record; every state document that follows its owner (spec mcp-gateway's capability switches, spec channels' pairings) goes in the same commit. Does **not** touch `audit_log` or any kind's invocation log — history outlives the resource it describes |
 | change `kind`        | never — the application layer never rewrites `kind` |
 | change `name`        | through `ResourceService.rename` only (`PATCH /api/v1/resources/{uid}`): one commit moves the file and every following state document, and `resource_renamed` is recorded. Nothing else is repointed, because nothing else holds the name: cross-resource references and the audit trail hold the uid. A kind with an on-disk artifact named after the resource moves it in its `on_rename` hook |
 | change `uid`         | never — minted once, kept inside the file wherever it moves |

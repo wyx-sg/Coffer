@@ -38,7 +38,7 @@ from coffer.domain.resource import Resource
 # message and the upstream's own stderr file are titled with — a uid there would
 # make every diagnostic unreadable — while the UID is what the spawned process's
 # PID file is recorded under, since that file has to name the same server after a
-# rename (ADR resource-identity-is-an-immutable-uid).
+# rename (ADR identity-is-the-uid-inside-the-file).
 UpstreamFactory = Callable[
     [
         AnyTransport,
@@ -92,8 +92,6 @@ class _UpstreamEntry:
     state: UpstreamHealth = UpstreamHealth.UNHEALTHY  # not yet attempted
     consecutive_failures: int = 0
     cooldown_until: datetime | None = None
-    last_success_at: datetime | None = None
-    last_failure_at: datetime | None = None
     spawn_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     #: Bumped by every eviction. A spawn reads it before starting and again
     #: when it finishes; a change means the connection it just built is for a
@@ -219,7 +217,15 @@ class SubprocessSupervisor:
                 try:
                     async with self._spawn_slots:
                         conn = await self._build_connection(resource, config)
-                        await conn.spawn_and_initialize()
+                        try:
+                            await conn.spawn_and_initialize()
+                        except BaseException:
+                            # Cancelled (the listing budget, a shutdown) or
+                            # failed: the half-open child, its pipes and its pid
+                            # file must not outlive the attempt.
+                            with suppress(Exception):
+                                await conn.close()
+                            raise
                     if entry.generation != generation:
                         # Evicted while we were starting. Caching this would
                         # hand out a live subprocess for a server that has
@@ -233,7 +239,6 @@ class SubprocessSupervisor:
                     entry.connection = conn
                     entry.state = UpstreamHealth.HEALTHY
                     entry.consecutive_failures = 0
-                    entry.last_success_at = self._now()
                     return conn
                 except (
                     UpstreamUnavailable,
@@ -244,7 +249,6 @@ class SubprocessSupervisor:
                 ) as e:
                     last_error = e
                     entry.consecutive_failures += 1
-                    entry.last_failure_at = self._now()
                     _logger.warning(
                         "mcp.upstream.spawn_failed",
                         extra={
@@ -269,7 +273,7 @@ class SubprocessSupervisor:
         self, resource: Resource, config: MCPServerConfig
     ) -> UpstreamConnectionPort:
         # materialize() is a synchronous, potentially-blocking store read
-        # (sqlite, or the OS keychain in legacy setups). Offload to a thread
+        # (the encrypted store). Offload to a thread
         # so a slow read can't freeze the whole event loop and stall every
         # other concurrent session. Named destination: the boundary injects
         # nothing into a target nobody approved (spec secret "Hold a
@@ -289,7 +293,7 @@ class SubprocessSupervisor:
         )
 
     async def evict(self, server_name: str) -> None:
-        """Drop this server's connection — after a crash, a delete, or a rename.
+        """Drop this server's connection — after a crash, a delete or an edit.
 
         Deliberately takes **no lock**. ``get_or_spawn`` holds ``spawn_lock``
         across its whole retry ladder, which for a command that cannot speak

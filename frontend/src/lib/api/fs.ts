@@ -6,29 +6,31 @@
 // back the read-only file viewers' "open in editor" / "reveal in file manager".
 //
 // Wire types from the daemon contract (where the `/fs/*` routes live);
-// transport via the shared `call` (.agents/frontend.md §4).
+// transport via the typed client (.agents/frontend.md §4).
 
-import { call, enc } from "@/lib/api/call";
+import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type { components } from "@/lib/api/generated/daemon";
 
 type Schemas = components["schemas"];
 
 export type FsBrowseOut = Schemas["FsBrowseOut"];
 
-/** A GUI editor detected as installed (preferred-editor picker, spec web-ui/004). */
+/** A GUI editor detected as installed (preferred-editor picker, spec web-ui "Let the user choose an external editor"). */
 export type EditorOption = Schemas["EditorOptionOut"];
 
 export const fsApi = {
   browse: (path?: string | null): Promise<FsBrowseOut> =>
-    call<FsBrowseOut>(`/fs/browse${path ? `?path=${enc(path)}` : ""}`),
+    unwrap(getApiClient().GET("/fs/browse", { params: { query: path ? { path } : {} } })),
 
   /** Open `path` in the preferred editor (`withApp`) or the OS default app. */
   open: (path: string, withApp?: string): Promise<void> =>
-    call<void>("/fs/open", { method: "POST", body: withApp ? { path, with: withApp } : { path } }),
+    unwrapVoid(
+      getApiClient().POST("/fs/open", { body: withApp ? { path, with: withApp } : { path } }),
+    ),
 
   /** Select / reveal `path` in the OS file manager. */
   reveal: (path: string): Promise<void> =>
-    call<void>("/fs/reveal", { method: "POST", body: { path } }),
+    unwrapVoid(getApiClient().POST("/fs/reveal", { body: { path } })),
 
   /**
    * Open the host's native folder dialog (via the daemon) and return the chosen
@@ -37,14 +39,11 @@ export const fsApi = {
    * `available: true` means the user cancelled.
    */
   pickFolder: (start?: string | null): Promise<Schemas["FsPickFolderOut"]> =>
-    call<Schemas["FsPickFolderOut"]>("/fs/pick-folder", {
-      method: "POST",
-      body: { start: start ?? null },
-    }),
+    unwrap(getApiClient().POST("/fs/pick-folder", { body: { start: start ?? null } })),
 
   /** List GUI editors detected as installed, for the preferred-editor picker. */
   listEditors: async (): Promise<EditorOption[]> => {
-    const out = await call<Partial<Schemas["FsEditorsOut"]> | null>("/fs/editors");
-    return out?.editors ?? [];
+    const out = await unwrap(getApiClient().GET("/fs/editors"));
+    return out.editors;
   },
 };

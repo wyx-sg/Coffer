@@ -131,7 +131,7 @@ def render(frontmatter: dict[str, Any], body: str) -> str:
     `tags:` or `reviewed_by:` from a document.
     """
     ordered = {k: frontmatter[k] for k in _ORDERED_KEYS if frontmatter.get(k)}
-    extra = {k: v for k, v in frontmatter.items() if k not in _ORDERED_KEYS and v}
+    extra = {k: v for k, v in frontmatter.items() if k not in _ORDERED_KEYS and v is not None}
     return render_frontmatter({**ordered, **extra}, body)
 
 
@@ -159,12 +159,16 @@ def write_file(
     """
     now = timestamp()
     created = now
+    carried: dict[str, Any] = {}
     if relpath is not None:
         paths.require_document(relpath)
         target = paths.resolve(relpath)
         if target.is_file():
             existing, _ = split_frontmatter(target.read_text(encoding="utf-8", errors="replace"))
             created = str(existing.get("created_at") or now)
+            # A person's own keys (`tags:`, `reviewed_by:`, `draft: false`)
+            # outlive a rewrite; only the keys Coffer owns are replaced.
+            carried = {k: v for k, v in existing.items() if k not in _ORDERED_KEYS}
     else:
         parent = paths.resolve(directory)
         parent.mkdir(parents=True, exist_ok=True)
@@ -172,6 +176,7 @@ def write_file(
         target = parent / name
         paths.require_document(paths.relative_of(target))
     frontmatter: dict[str, Any] = {
+        **carried,
         "title": title,
         "description": description,
         "actor": actor,

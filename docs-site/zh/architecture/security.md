@@ -147,11 +147,11 @@ flowchart LR
 
 提供商连接的密钥也按它的基础 URL 走同样的检查：本地模型代理和 Coffer 自己的引擎只会为已批准的 URL 拿到它，替换正在使用的密钥同样要等批准。自定义工具的认证会在自定义工具构建时加入；新的目的地类型会在引入它的那次改动里加进这张表。
 
-每个消费方都在使用时、解析密钥之前询问边界——启动服务器、启动消息渠道适配器、推送一轮同步。已为当前目标批准的密钥会被注入。否则什么都不注入，这次尝试以 `SECRET_BINDING_PENDING` 失败，并为每个目标记录一项待批准；更新的目标会取代旧目标的审批。因为检查发生在使用时，绕过 Coffer 做的改动——手工编辑的保险库文件、另一台机器同步进来的服务器——会在关键的地方被拦下。
+边界会应用两次。资源被注册或配置改变时，所有种类共用的一个环节（MCP 服务器、渠道、提供商连接，以及设置同步远端时的远端）立刻评估这个去处：为它提供的值获批；已在别处使用的 ref 或改变了的目标，会在同一次调用里记下待审批项，于是它就出现在审批列表里，并显示在你保存的地方。此外，每个消费方也都在使用时、解析密钥之前询问边界——启动服务器、启动消息渠道适配器、推送一轮同步。已为当前目标批准的密钥会被注入。否则什么都不注入，这次尝试以 `SECRET_BINDING_PENDING` 失败，并为每个目标记录一项待批准；更新的目标会取代旧目标的审批。因为检查发生在使用时，绕过 Coffer 做的改动——手工编辑的保险库文件、另一台机器同步进来的服务器——会在关键的地方被拦下。
 
 有两种情况无需人来批准绑定：
 
-- **为它提供了值。** 一个从未发送到任何地方、不是独立密钥、且在最近五分钟内存储的引用，会被立即使用。每个「添加」流程都会先存下粘贴的密钥，几秒后再引用它；很久以前存的、已经发往别处的，或者为 `coffer run` 保留的密钥，都不算新鲜。
+- **为它提供了值。** 在注册或修改一个去处时，一个从未发送到任何地方、不是独立密钥、且在最近五分钟内写在这台机器上的引用，会随这次注册一并获批。每个「添加」流程都会先存下粘贴的密钥，再注册引用它的资源，绑定就在这次调用里记下，所以第二个引用同一 ref 的去处需要等待，不论它来得多快。已经发往别处、为 `coffer run` 保留，或只在使用时才遇到的密钥，都不算「为它提供」。
 - **保护已关闭**，而关闭保护本身就要等批准。
 
 还有两种改动会扩大密钥的去处，同样要等批准：
@@ -220,7 +220,7 @@ HTTP/1.1 403 Forbidden
 
 两个变量都在守护进程启动时读取，改了之后要重启它。绝不要把你不掌控的站点放进列表：列出的来源上的任何页面都能调用守护进程。
 
-`COFFER_ALLOWED_HOSTS`（逗号分隔的主机名，或 `*`）会增加 Host 检查接受的名字。它从不放宽 Origin 检查。后端测试套件会设置它，因为它用虚构的主机名在进程内驱动应用。真实安装不需要它。
+`COFFER_ALLOWED_HOSTS`（逗号分隔的主机名，或 `*`）会增加 Host 检查接受的名字。它从不放宽 Origin 检查。后端测试套件会设置它，因为它用虚构的主机名在进程内驱动应用。真实安装不需要它，带标签的正式发布版也不会读取它（`COFFER_CORS_ORIGINS` 和 `COFFER_DEV_CORS` 同样不读），因为命令行会在调用者自己的环境里启动守护进程。
 
 ### 模型代理的监听端 {#the-model-proxy-listener}
 
@@ -234,7 +234,7 @@ HTTP/1.1 403 Forbidden
 
 ### 检查令牌 {#checking-it}
 
-`/api/v1/*` 下的每条路由和 `/mcp` 端点都要求 `X-Coffer-Token` 请求头，并以常数时间与守护进程进程内的令牌比较。缺失或错误的令牌得到 `401`；在守护进程发布令牌之前到达的请求得到 `503`。唯一不需要认证的 API 路由是 `GET /api/v1/daemon/status`，这是命令行和 shim 在拿到令牌之前调用的就绪探针；它返回生命周期阶段、版本、可执行文件、端口、发布渠道、功能开关、机器名和上游健康状况汇总——没有任何密钥。
+`/api/v1/*` 下的每条路由和 `/mcp` 端点都要求 `X-Coffer-Token` 请求头，并以常数时间与守护进程进程内的令牌比较。缺失或错误的令牌得到 `401`；在守护进程发布令牌之前到达的请求得到 `503`。唯一不需要认证的 API 路由是 `GET /api/v1/daemon/status`，这是命令行和 shim 在拿到令牌之前调用的就绪探针；它返回生命周期阶段、版本、可执行文件、端口、功能开关、机器名和上游健康状况汇总——没有任何密钥。
 
 `coffer daemon rotate-token`（或 `POST /api/v1/daemon/rotate-token`）会生成新令牌、重写 `daemon.json`、立即使旧令牌失效，并在审计日志中记录 `token_rotated`。
 
@@ -301,9 +301,9 @@ CORS 只授予 [Origin 表](#origin-requests-from-other-sites)中的跨源条目
 
 SSRF 防护会解析 URL 的主机，只要解析出的任一地址是回环、私有（RFC 1918、`fc00::/7`）、链路本地、运营商级 NAT（`100.64.0.0/10`）、组播、未指定或保留地址，就拒绝它。解析失败的名字按拦截处理。
 
-规则（[原则 → 网络默认值](/zh/architecture/principles)）是：Coffer 根据用户在表单里输入的内容、代表你去探测或获取的 URL 要经过防护，而你配置为自己端点的地址不用。有四条路径会根据输入的内容发起请求。第一条是提供商探测器，位于连接编辑器在保存任何东西之前运行的三个探测之后——`POST /api/v1/models/list-models`、`/test-connection` 和 `/detect-protocol`。每个探测在第一次请求之前检查基础 URL。有两种情况跳过检查：
+规则（[原则 → 网络默认值](/zh/architecture/principles)）是：Coffer 根据用户在表单里输入的内容、代表你去探测或获取的 URL 要经过防护，而你配置为自己端点的地址不用。有四条路径会根据输入的内容发起请求。第一条是提供商探测器，位于连接编辑器在保存任何东西之前运行的三个探测之后——`POST /api/v1/models/list-models`、`/test-connection` 和 `/detect-protocol`。每个探测在第一次请求之前检查基础 URL。已存储的密钥不会单独出行：请求里的 `secret_ref` 只有在某个已保存的提供商连接为同一个基础 URL 持有它、且该连接的密钥已是获批目的地时才被采用；任何其他搭配都会在解密任何东西之前被拒绝。你在对话框里键入的密钥以内联值传递，不会碰任何已存储的密钥。有两种情况跳过检查：
 
-- 协议本来就是本地的连接（`ollama`）从不检查，因为它的 URL 就是回环。
+- 真正是回环的基础 URL 不检查，所以本地模型运行时可以正常使用。豁免取决于 URL 本身，而不是请求声称的协议：把元数据地址或局域网地址标成 `ollama` 并不会跳过防护。
 - `detect-protocol` 会把回环主机（`localhost`、`127.0.0.1`、`::1`、`0.0.0.0`、`host.docker.internal`）直接归类为 `ollama`，不发送任何请求。
 
 [自定义工具](/zh/guides/custom-tools)的 OpenAPI 导入是第二条：在导入表单里输入的规格 URL 会在获取之前检查，它返回的每一次重定向也会检查（获取上限 5 MiB、20 秒）。位于私有主机上的规格改为以文件形式导入。
@@ -352,7 +352,7 @@ Coffer 把它的 MCP 条目装进某个智能体时，写入的是 `coffer-mcp-s
 ## 哪些内容会进入日志和审计 {#what-goes-into-logs-and-audit}
 
 - **日志**（`~/.coffer/logs/`，每行一个 JSON 对象）记录事件、标识符和错误。没有任何代码路径会记录密钥值、令牌或解密后的密钥。
-- **审计**记录每一次生命周期变更及其操作者。密钥事件（`secret_set`、`secret_revealed`、`secret_deleted`、`secret_migrated`、`secret_resolved`、`secret_imported` 以及 `secret_approval_*` 事件）只记录**引用**、密钥的名字或目的地。资源配置先经过该类型的审计脱敏器——MCP 类型会整个剥掉 `transport.env` 和 `transport.headers`——所以即使把值粘贴进了错误的字段，它也到不了审计日志。主密钥事件（`master_key_relocated`、`master_key_exported`、`master_key_imported`）只记录事件发生过，不记录密钥。
+- **审计**记录每一次生命周期变更及其操作者。密钥事件（`secret_set`、`secret_revealed`、`secret_deleted`、`secret_resolved`、`secret_imported` 以及 `secret_approval_*` 事件）只记录**引用**、密钥的名字或目的地。资源配置先经过该类型的审计脱敏器——MCP 类型会整个剥掉 `transport.env` 和 `transport.headers`——所以即使把值粘贴进了错误的字段，它也到不了审计日志。主密钥事件（`master_key_relocated`、`master_key_exported`、`master_key_imported`）只记录事件发生过，不记录密钥。
 - **同步历史**存储远端的提交和错误，推送密钥已被脱敏去除。
 
 ## 同步只携带密文 {#sync-carries-ciphertext-only}
@@ -406,7 +406,7 @@ Coffer 把它的 MCP 条目装进某个智能体时，写入的是 `coffer-mcp-s
 - [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)
 - [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
 - [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md)
-- [Envelope-Encrypted Credential Store](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
+- [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
 - [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-auth-and-origin-guard.md)
 - [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md)
 - [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/managed-agents-run-with-full-permissions.md)

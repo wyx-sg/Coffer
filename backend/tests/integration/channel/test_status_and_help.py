@@ -76,7 +76,7 @@ async def test_help_without_buttons_is_the_roster_as_text(env: ChannelEnv) -> No
 async def test_the_help_card_follows_pairing(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     adapter = env.bind(resource, FakeChannelAdapter(supports_buttons=True))
-    code, _expires = env.pairing.issue("tg")
+    code, _expires = env.pairing.issue(resource.uid)
 
     await env.processor.on_message(inbound("tg", "chat-1", code))
 

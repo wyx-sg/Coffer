@@ -16,6 +16,7 @@ the one place that decides, so the seed, delivery and drift checks all agree.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import pathlib
 import re
@@ -25,6 +26,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from coffer.infrastructure.vault.home import content_root, derived_root, vault_root
+
+_log = logging.getLogger(__name__)
 
 # Defence-in-depth: even if a caller skips the surface-layer name guard, the
 # master store still rejects names that could escape ``self._root``. Path
@@ -123,6 +126,13 @@ class MasterStore:
             meta_json=folder / ".coffer.meta.json",
         )
 
+    def _staging(self, prefix: str) -> tempfile.TemporaryDirectory[str]:
+        """A scratch directory on the same filesystem as the store but outside
+        the vault: a crash mid-copy must not leave a folder in the vault, where
+        it would be reported as an orphan skill and could be committed and synced."""
+        self._derived.mkdir(parents=True, exist_ok=True)
+        return tempfile.TemporaryDirectory(prefix=f".{prefix}", dir=self._derived)
+
     def exists(self, name: str) -> bool:
         return self.paths_for(name).folder.is_dir()
 
@@ -142,7 +152,7 @@ class MasterStore:
         if dst.exists():
             raise FileExistsError(f"master folder already exists: {dst}")
         dst.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="coffer-master-stage-", dir=dst.parent) as tmp:
+        with self._staging("coffer-master-stage-") as tmp:
             staged = pathlib.Path(tmp) / name
             shutil.copytree(src, staged, symlinks=False, ignore=_IGNORE_VCS)
             if meta is not None:
@@ -170,7 +180,7 @@ class MasterStore:
         target = self.paths_for(name).folder
         if not target.is_dir():
             return self.copy_in(src=src, name=name, meta=meta)
-        with tempfile.TemporaryDirectory(prefix="coffer-master-swap-", dir=target.parent) as tmp:
+        with self._staging("coffer-master-swap-") as tmp:
             staged = pathlib.Path(tmp) / name
             shutil.copytree(src, staged, symlinks=False, ignore=_IGNORE_VCS)
             if meta is not None:
@@ -194,12 +204,26 @@ class MasterStore:
             shutil.rmtree(target)
 
     def find_orphans(self, known_names: set[str]) -> list[str]:
-        """Folders on disk that the DB doesn't know about."""
+        """Folders on disk that the DB doesn't know about.
+
+        A folder whose name is not a safe skill name (a stray ``my skill`` or
+        ``.tmp``) is left out: every other operation refuses such a name, and
+        passing it on would make the whole link target (and the orphan list)
+        fail until the folder is renamed. It is logged, not delivered or adopted.
+        """
         if not self._root.is_dir():
             return []
-        return sorted(
-            p.name for p in self._root.iterdir() if p.is_dir() and p.name not in known_names
-        )
+        names: list[str] = []
+        for p in self._root.iterdir():
+            if not p.is_dir() or p.name in known_names:
+                continue
+            try:
+                _ensure_safe_name(p.name)
+            except ValueError:
+                _log.warning("skill.master_store.unsafe_folder", extra={"folder": p.name})
+                continue
+            names.append(p.name)
+        return sorted(names)
 
 
 def _json_default(o: object) -> object:

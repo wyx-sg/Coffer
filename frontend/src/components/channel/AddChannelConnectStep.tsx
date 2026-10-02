@@ -32,7 +32,7 @@ import {
   type ChannelSecretDraft,
 } from "./AddChannelSecretFields";
 import { FieldError } from "./FieldError";
-import { planChannel } from "./schema";
+import { planChannel } from "@/lib/channels/schema";
 
 interface Props {
   platform: ChannelType;

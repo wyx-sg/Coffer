@@ -45,7 +45,7 @@ openspec/
 | [`secret`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/secret/spec.md) | 加密的密钥存储，以及「其他一切只持有引用」这条规则 |
 | [`daemon`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md) | Coffer 进程：每个保险库一个、发现机制、回环 HTTP 防护、提供界面、日志、终端安装 |
 | [`desktop-app`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md) | macOS 桌面壳：窗口、托盘、握手、检测或启动守护进程、`.dmg` |
-| [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md) | 发布渠道、功能注册表、按机器的开关、关闭对应入口 |
+| [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md) | 功能注册表、按机器的开关、关闭对应入口 |
 | [`internal-engine`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md) | Coffer 自己用来思考的模型，以及它无人值守运行的各轮任务 |
 | [`knowledge`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md) | 纯文件的知识集及其整理 |
 | [`mcp-gateway`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md) | 聚合在一个端点之后的上游 MCP 服务器 |
@@ -61,24 +61,21 @@ openspec/
 
 ## 编写需求与场景 {#writing-requirements-and-scenarios}
 
-每条需求都用 **SHALL** 或 **MUST** 陈述规则，并至少拥有一个场景，场景按 GIVEN、WHEN、THEN 和 AND 步骤书写。下面这段摘自 [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md)：
+每条需求都用 **SHALL** 或 **MUST** 陈述规则，并至少拥有一个场景，场景按 GIVEN、WHEN、THEN 和 AND 步骤书写。下面这段节选自 [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md)：
 
 ```markdown
-### Requirement: Stamp every build with a release channel
-Every build MUST carry exactly one release channel: `stable` for a build made by
-the release workflow from a tag, `dev` for every other build, including a local
-`make desktop` and a source install. `GET /api/v1/daemon/status` MUST report the
-channel as `channel`, and `coffer daemon status` MUST print it.
+### Requirement: Declare the experimental features in one registry
+Coffer MUST declare its experimental features in one registry, and every
+surface MUST take the list from it. The registry names exactly four features,
+in this order: `knowledge`, `memory`, `sync` and `models`.
 
-#### Scenario: a source build reports the dev channel
-- **GIVEN** a daemon started from a source checkout
-- **WHEN** the status is requested
-- **THEN** it reports `channel: "dev"`
+A stored setting for a key the registry does not name MUST be ignored by every
+read — logged, never listed — and MUST NOT fail anything.
 
-#### Scenario: the release workflow stamps the stable channel
-- **GIVEN** the channel stamp script run with `stable`
-- **WHEN** the build channel is read
-- **THEN** it is `stable`
+#### Scenario: a stored setting for a feature the registry does not name is ignored
+- **GIVEN** a daemon config whose `features` object holds a key the registry does not name
+- **WHEN** the daemon starts and the features and the daemon status are read
+- **THEN** the daemon starts, neither the features listing nor the status `features` map names the key, and no request fails because of it
 ```
 
 这些规则（`openspec/config.yaml` 也会在 CLI 规划 change 时把它们喂给 CLI）：
@@ -95,7 +92,7 @@ channel as `channel`, and `coffer daemon status` MUST print it.
 因为需求没有编号，引用时要写明它的能力和确切标题。在 Markdown 里，链接到该规格并引用标题。在代码注释里，这样写：
 
 ```python
-# spec experimental-features "Stamp every build with a release channel"
+# spec experimental-features "Declare the experimental features in one registry"
 ```
 
 `scripts/check_spec_citations.py` 在 `make lint` 中运行，扫描每一个被跟踪的文件，包括本站。它把每处引用和 `openspec/specs/` 下的 `### Requirement:` 标题逐一对照。能力或标题不存在的引用会让门禁失败。所以给一条需求改名后，必须等到所有引用旧标题的地方都跟着改掉，门禁才会通过。进行中的 change 新增或改名的标题，在该 change 归档前都视为有效。能力和决策记录都只有名字，从不编号。
@@ -160,11 +157,14 @@ npx openspec archive <change-id> --yes
 
 ```python [pytest]
 @pytest.mark.acceptance(
-    spec="experimental-features", scenario="a source build reports the dev channel"
+    spec="experimental-features",
+    scenario="a stored setting for a feature the registry does not name is ignored",
 )
-async def test_status_reports_the_dev_channel_and_every_feature_unauthenticated(client):
-    r = await client.get("/api/v1/daemon/status", headers={"X-Coffer-Token": ""})
-    assert r.json()["channel"] == "dev"
+def test_a_stored_setting_for_a_retired_feature_is_ignored(home):
+    daemon_config.write_feature_setting("retired_feature", False)
+    with _client() as c:
+        status = c.get("/api/v1/daemon/status").json()
+    assert "retired_feature" not in status["features"]
 ```
 
 ```ts [Vitest / Playwright]

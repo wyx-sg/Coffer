@@ -9,6 +9,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
+import { ToastProvider } from "@/components/ui/toast";
 import type { RemoteCheck, SyncStatus } from "@/lib/api/sync";
 import { SyncSetup } from "./SyncSetup";
 import { idleMutation, makeStatus } from "./syncTestKit";
@@ -147,5 +148,16 @@ describe("SyncSetup", () => {
     expect(screen.getByTestId("sync-join")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(clear).toHaveBeenCalled();
+  });
+
+  test("a refused Back says why instead of leaving the preview unexplained", () => {
+    clear.mockImplementation((_vars, opts) => opts?.onError?.(new Error("daemon said no")));
+    render(
+      <ToastProvider>
+        <SyncSetup status={makeStatus({ joined: false })} />
+      </ToastProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByText("daemon said no")).toBeInTheDocument();
   });
 });

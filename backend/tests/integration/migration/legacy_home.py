@@ -25,7 +25,7 @@ from typing import Any
 from alembic import command
 from cryptography.fernet import Fernet
 
-from coffer.surfaces.http.migrations_runner import _alembic_config
+from coffer.infrastructure.persistence.migrations_runner import _alembic_config
 
 _0135 = importlib.import_module(
     "coffer.infrastructure.persistence.migrations.versions.20260930_0135_secrets"

@@ -2,8 +2,7 @@
 //
 // Visual baseline: each sidebar route, the Settings modal and its tabs, every agent detail tab, one MCP server open and the Knowledge page with a collection, in light and dark, on a fresh
 // daemon, compared against the committed screenshot for this platform.
-// Pages behind an experimental gate render their gate notice — that notice is
-// the baseline for them until the feature is on by default.
+// The visual daemon pins every experimental feature on (`COFFER_FEATURES`), so the pages of all four are the baselines.
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -47,6 +46,7 @@ const ROUTES: RouteCase[] = [
   { name: "settings-data", path: "/settings/data" },
   { name: "settings-daemon", path: "/settings/daemon" },
   { name: "settings-about", path: "/settings/about" },
+  { name: "settings-features", path: "/settings/features" },
 ];
 
 const THEMES: Theme[] = ["light", "dark"];

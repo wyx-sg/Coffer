@@ -142,7 +142,7 @@ Most of Coffer's shape follows from a handful of decisions. Each one below is ar
 | Memory is aggregated read-only from each agent's own files and never written back. | Each agent keeps its own memory loop untouched, and everything Coffer derives can be deleted and rebuilt. | [Memory](/architecture/memory) |
 | The vault is a git repository; sync pulls and pushes it, applies a clean merge and stops on any conflict. | A shared base is the only way to tell "never had it" from "deleted it", and nothing Coffer does on its own ever needs undoing. Your remote stays an ordinary repository you can inspect. | [Vault sync](/architecture/vault-sync) |
 | Secrets are Fernet ciphertext under one master key, kept in a `0600` file by default. | Coffer's builds are unsigned, and macOS re-prompts for every keychain item a new build touches. One key in a file removes the prompts; the keychain stays an opt-in. | [Security model](/architecture/security#the-secret-store) |
-| Unfinished features ship in every build, switched off on `stable`, instead of living on a branch. | One line of development, and the owner tests exactly what users run. Switching a feature off hides it and keeps its data. | [Distribution and releases](/architecture/distribution#experimental-features) |
+| Unfinished features ship in every build, off until you switch them on, instead of living on a branch. | One line of development, and the owner tests exactly what users run. Switching a feature off hides it and keeps its data. | [Distribution and releases](/architecture/distribution#experimental-features) |
 
 ### What Coffer deliberately is not
 

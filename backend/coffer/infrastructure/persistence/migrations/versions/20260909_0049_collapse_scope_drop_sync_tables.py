@@ -4,12 +4,13 @@ Revision ID: 0049
 Revises: 0048
 Create Date: 2026-09-09
 
-The database half of withdrawing continuous multi-machine sync: exporting and
-importing a vault bundle replaces it (ADR vault-sync), so the machine registry, the
-tombstone ledger and the sync run state have nothing left to serve, and the
-machine axis of a resource's activation scope loses the machine ids that gave
-it meaning (ADR per-agent-resource-scope). Two changes, one revision, because they are the same
-removal.
+The database half of withdrawing continuous multi-machine sync (at the time,
+exporting and importing a vault bundle replaced it; the vault has since been
+synced through a git remote, spec vault-sync, which keeps none of these tables):
+the machine registry, the tombstone ledger and the sync run state have nothing
+left to serve, and the machine axis of a resource's activation scope loses the
+machine ids that gave it meaning (ADR per-agent-resource-scope). Two changes,
+one revision, because they are the same removal.
 
 **Scope collapses.** ``resources.scope_json`` keeps its column and its JSON-text
 storage; only the shape inside changes, from a machine -> agents mapping to a

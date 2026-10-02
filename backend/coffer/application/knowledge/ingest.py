@@ -36,7 +36,6 @@ from typing import Protocol, runtime_checkable
 
 from coffer.application.engine_ports import LlmCompletionPort, ModelSelectorPort
 from coffer.application.engine_timeout import (
-    DEFAULT_MODEL_TIMEOUT_S,
     TimeoutReader,
     resolve_timeout,
 )
@@ -70,15 +69,6 @@ class ConverterRegistry(Protocol):
 #: attachment) under one honest ceiling rather than the page silently accepting what a
 #: phone never could.
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
-
-#: A one-line description is a small job (spec knowledge "Fill frontmatter on converted
-#: material"), not an agentic loop; bounded generously so a slow provider cannot hang an
-#: upload, but nowhere near indefinite. Superseded by the operator's own bound (spec
-#: internal-engine "Run every internal model call under the bound"). The twenty seconds
-#: this used to carry was the tightest bound anywhere in Coffer, and a description that
-#: times out costs the catalogue its one line about a document — the line every later
-#: search reads it by.
-_DESCRIPTION_TIMEOUT_SECONDS = DEFAULT_MODEL_TIMEOUT_S
 
 _DESCRIPTION_SYSTEM = (
     "You write the one-line description for a knowledge-base catalogue entry. "

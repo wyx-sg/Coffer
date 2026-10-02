@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { toneTextClass } from "@/lib/statusColors";
 import { StatusDot } from "./StatusDot";
-import { STATUS_TONE, type StatusTone } from "./statusTone";
+import { STATUS_TONE, type StatusTone } from "@/lib/statusTone";
 
 interface StatusWordProps {
   tone: StatusTone;

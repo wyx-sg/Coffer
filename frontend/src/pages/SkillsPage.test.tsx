@@ -46,7 +46,10 @@ vi.mock("@/lib/api/agents", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/agents")>()),
   agentsApi: { list: vi.fn(async () => ({ items: h.agents })) },
 }));
-vi.mock("@/lib/api/client", () => ({ getApiClient: () => h.client }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: () => h.client,
+}));
 
 const { skillsApi } = await import("@/lib/api/skills");
 // The reading pane is a lazy chunk. Its first import transforms the pane's whole
@@ -76,13 +79,39 @@ async function libraryRows() {
   return within(list).queryAllByRole("link");
 }
 
+test("the library's reach filter keeps only the skills in the chosen reach state", async () => {
+  h.skills = [
+    makeSkill({ uid: "sk-1", name: "everywhere-skill" }),
+    makeSkill({ uid: "sk-2", name: "off-skill", enabled: false }),
+    makeSkill({ uid: "sk-3", name: "scoped-skill", scope: { agents: [CC.uid] } }),
+  ];
+  renderSkillsPage("/skills");
+  expect(await libraryRows()).toHaveLength(3);
+
+  const choose = async (name: string) => {
+    const trigger = screen.getByRole("combobox", { name: "Reach" });
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name }));
+  };
+  await choose("Disabled");
+  await waitFor(async () => expect(await libraryRows()).toHaveLength(1));
+  expect((await libraryRows())[0]).toHaveTextContent("off-skill");
+
+  await choose("Only selected agents");
+  await waitFor(async () => expect((await libraryRows())[0]).toHaveTextContent("scoped-skill"));
+
+  await choose("Every agent");
+  await waitFor(async () => expect((await libraryRows())[0]).toHaveTextContent("everywhere-skill"));
+  expect(await libraryRows()).toHaveLength(1);
+});
+
 acceptance("skill-manager", "desktop and CLI cover every operation", async () => {
   renderSkillsPage("/skills");
   expect(screen.getByRole("heading", { name: /^skills$/i })).toBeInTheDocument();
   expect(await screen.findByRole("link", { name: /hello/ })).toBeInTheDocument();
-  // Search, the On / Off filter and Check copies sit over the library.
+  // Search, the Reach filter and Check copies sit over the library.
   expect(screen.getByRole("textbox", { name: "Filter skills" })).toBeInTheDocument();
-  expect(screen.getByRole("group", { name: "Show" })).toBeInTheDocument();
+  expect(screen.getByRole("combobox", { name: "Reach" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Check copies" })).toBeInTheDocument();
 
   // One Add skill action, opening the add dialog.
@@ -216,7 +245,7 @@ describe("SkillsPage library", () => {
     expect(await screen.findByText("Choose a skill")).toBeInTheDocument();
   });
 
-  test("the On / Off filter and the search narrow the library", async () => {
+  test("the Reach filter and the search narrow the library", async () => {
     h.skills = [
       makeSkill({ uid: "a", name: "alpha" }),
       makeSkill({ uid: "b", name: "beta", enabled: false, description: "second" }),
@@ -224,14 +253,17 @@ describe("SkillsPage library", () => {
     renderSkillsPage("/skills");
     expect(await libraryRows()).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole("button", { name: "Off" }));
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Reach" }), { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: "Disabled" }));
+    await waitFor(async () => expect(await libraryRows()).toHaveLength(1));
     let rows = await libraryRows();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toHaveTextContent("beta");
     // An off skill says so where its reach would be.
     expect(rows[0]).toHaveTextContent("Off");
 
-    fireEvent.click(screen.getByRole("button", { name: "All" }));
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Reach" }), { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: "All" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Filter skills" }), {
       target: { value: "alp" },
     });

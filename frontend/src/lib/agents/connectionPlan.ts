@@ -8,7 +8,7 @@
 // installed part carries (its `detail`). A value not known yet (the uid before
 // registration, the shim path before install) is written as the placeholder
 // the caller passes, never invented. Pure: no React, no i18n.
-import type { ChangeItem, DiffLine } from "@/components/change-preview/changeCounts";
+import type { ChangeItem, DiffLine } from "@/lib/changePreview/changeCounts";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import type { AgentTypeOut, CofferConnection } from "@/lib/api/agents";
 

@@ -55,7 +55,7 @@ coffer secret set github/token
 
 注册一个引用了存储中不存在的 ref 的资源会失败，报错里会写出缺少哪个密钥，而且什么都不会保存。
 
-多个资源可以引用同一个 ref，但一个已经发往某处的 ref，要发往第二个地方，必须先在桌面应用里由你批准。存入一个值后五分钟内就引用它，会立即生效，因为值是你刚刚提供的。在新资源里引用一个较早的密钥，或者改变某个资源发送密钥的去处（stdio 服务器的命令、HTTP 服务器的 URL、同步远端的 URL），会保存改动但扣住密钥：命令打印 `waiting for approval in the Coffer app` 并以 `9` 退出。见[密钥 → 审批](/zh/guides/secrets#approvals)。
+多个资源可以引用同一个 ref，但一个已经发往某处的 ref，要发往第二个地方，必须先在桌面应用里由你批准。存入一个值后在注册资源时引用它，会立即生效，因为值是你刚刚提供的。在新资源里引用一个已在使用的密钥，或者改变某个资源发送密钥的去处（stdio 服务器的命令、HTTP 服务器的 URL、同步远端的 URL），会保存改动但扣住密钥：命令打印 `waiting for approval in the Coffer app` 并以 `9` 退出。见[密钥 → 审批](/zh/guides/secrets#approvals)。
 
 ## 列出与查看 {#list-and-inspect}
 
@@ -190,12 +190,12 @@ coffer config set secrets.storage file
    rm ~/coffer-master-key.cfk
    ```
 
-也可以在应用或浏览器中，使用 **设置 › 安全** 上的 **导入主密钥**。导入不需要在场验证——持有文件和口令的人本来就持有主密钥。裸主密钥（开发版的 `master.key`）导入时不需要口令。正在运行的守护进程会立即使用导入的主密钥。**同步** 页面也提供 **导入主密钥**，它的机器列表会显示每台机器是否持有 **同一把主密钥**。导入一把不同的主密钥时，之前那把会作为备份保留在旁边：开发版中是一个带时间戳的 `master.key.bak-*` 文件，签名发行版中是第二个钥匙串条目。
+也可以在应用或浏览器中，使用 **设置 › 安全** 上的 **导入主密钥**。导入不需要在场验证——持有文件和口令的人本来就持有主密钥。裸主密钥（开发版的 `master.key`）导入时不需要口令。正在运行的守护进程会立即使用导入的主密钥。被替换的旧主密钥会先备份到一个 `master.key.bak-*` 文件，无论它原来存放在哪里（开发版里也包括系统钥匙串，导入的主密钥会在那里取代它）。**同步** 页面也提供 **导入主密钥**，它的机器列表会显示每台机器是否持有 **同一把主密钥**。导入一把不同的主密钥时，之前那把会作为备份保留在旁边：开发版中是一个带时间戳的 `master.key.bak-*` 文件，签名发行版中是第二个钥匙串条目。
 
 ## 哪些内容永远不会被记录 {#what-never-gets-logged}
 
 - 密钥的值从不以明文出现在保险库、`runs.db`、日志文件、审计日志或 MCP 调用日志中。
-- 密钥相关的审计事件——`secret_set`、`secret_revealed`、`secret_deleted`、`secret_migrated`、`master_key_relocated`、`master_key_exported`、`secret_resolved`、`secret_imported` 以及各个 `secret_approval_*` 事件——只携带 ref、密钥名称或去处，从不携带值。`secret_revealed` 记录的是在桌面应用中的一次显示或复制；存在性检查（`get`）和列表不记入审计。
+- 密钥相关的审计事件——`secret_set`、`secret_revealed`、`secret_deleted`、`master_key_relocated`、`master_key_exported`、`secret_resolved`、`secret_imported` 以及各个 `secret_approval_*` 事件——只携带 ref、密钥名称或去处，从不携带值。`secret_revealed` 记录的是在桌面应用中的一次显示或复制；存在性检查（`get`）和列表不记入审计。
 - 明文只存在于守护进程的内存中，从解密到使用它的进程启动或 HTTP 请求为止——以及你查看显示出来的值时，桌面应用的窗口里。
 - stdio MCP 服务器只收到它自己的密钥。它不继承守护进程的环境，所以读不到守护进程启动时带的其他密钥。它自己的密钥放在它的环境变量里，以你身份运行的其他程序可以读到；列表会把这类 ref 标为“readable by local processes”（本机进程可读）。
 - HTTP 上游的连接错误只报告异常类型，所以携带密钥的 URL 或请求头不会被回显到错误信息里。
@@ -219,6 +219,6 @@ coffer config set secrets.storage file
 - [模型提供商](/zh/guides/providers)——提供商 Key 与 `apiKeyHelper`
 - [保险库同步](/zh/guides/vault-sync)——在机器之间搬运密文
 - [安全模型](/zh/architecture/security)——这些选择背后的威胁模型
-- [信封加密的凭据存储](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
+- [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
 - [智能体可以配置 Coffer；只有在场的人能看到密钥明文或把它发往新去处](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)
 - 规格：[secret](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/secret/spec.md)

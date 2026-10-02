@@ -42,8 +42,8 @@ async def write_skill_file(
     """Overwrite one existing text file in a skill's master folder, as one
     vault commit.
 
-    The master folder is the source of truth; FOLDER-delivered skills are
-    symlinked to it, so edited content reaches agents without re-delivery. It
+    The master folder is the source of truth; delivered skills are links to
+    it, so edited content reaches agents without re-delivery. It
     is also a folder the user edits directly in their own editor, so every
     write states ``expected_fingerprint`` — the fingerprint of the read that
     seeded the editor buffer — and the vault's one write path compares it
@@ -74,9 +74,8 @@ async def write_skill_file(
             "its files are rewritten from the running build at every start, so "
             "an edit would not last; the correction belongs in Coffer's build",
         )
-    # The master folder is named after the skill's CURRENT label; the uid is
-    # how the caller said which skill it meant. Reading the name off the row
-    # we just resolved is what keeps a rename from stranding an editor.
+    # The master folder is named after the skill's name; the uid is how the
+    # caller said which skill it meant.
     master = pathlib.Path(service.master_path(skill.name))
     # The reader runs the path-containment guard and the existence check, so a
     # path that escapes the folder is refused as an escape, never as stale.

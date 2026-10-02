@@ -130,7 +130,7 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
         {/* First focusable element: lets keyboard users jump past the rail. */}
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-ring"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-toast focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-overlay focus:outline-none focus:ring-2 focus:ring-ring"
         >
           {t("nav.skipToContent")}
         </a>
@@ -140,7 +140,7 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
         <aside
           className={cn(
             "flex shrink-0 flex-col gap-3 bg-surface-sidebar",
-            collapsed ? "w-14 border-r border-border" : null,
+            collapsed ? "w-rail border-r border-border" : null,
           )}
           // The dragged width is state, not a token: the one inline style is
           // this theming-free bridge from the divider to the rail.

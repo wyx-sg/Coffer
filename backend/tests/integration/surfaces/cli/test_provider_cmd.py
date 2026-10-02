@@ -6,7 +6,7 @@ Wires a minimal provider-only in-process daemon and monkeypatches
 
 The daemon registers two ``agent`` rows as well, which it did not need to
 before: a connection's reach is a scope holding agent UIDS
-(ADR resource-identity-is-an-immutable-uid), so both the CLI resolving the name
+(ADR identity-is-the-uid-inside-the-file), so both the CLI resolving the name
 a user typed and ``scoped_targets`` resolving the stored uid back into an agent
 TYPE need the registry to actually contain them.
 """
@@ -82,6 +82,16 @@ class _RegisteredAgents:
 
     async def list(self):
         return await self._resources.list(kind="agent")
+
+    async def set_connection(self, uid, connection_uid, *, actor="api"):
+        """What the agent kind does for a switch: write the field on the record."""
+        row = await self._resources.get(uid)
+        return await self._resources.update_config(
+            uid,
+            {**row.config, "connection_uid": connection_uid},
+            actor,
+            allow_lifecycle_kind=True,
+        )
 
 
 async def _create_tables(engine) -> None:
@@ -195,6 +205,15 @@ def _add(name: str = "acme", *extra: str, protocol: str = "anthropic") -> None:
     assert r.exit_code == 0, r.output
 
 
+def _agent_connection(agent_name: str) -> str | None:
+    """The connection uid the named agent's record carries."""
+    c, _info = _cli_client.client_or_exit()
+    r = c.get("/resources", params={"kind": "agent", "name": agent_name})
+    assert r.status_code == 200, r.text
+    [row] = r.json()["resources"]
+    return row["config"].get("connection_uid")
+
+
 def _show(name: str) -> dict:
     r = _runner.invoke(cli_app, ["provider", "show", name, "--json"])
     assert r.exit_code == 0, r.output
@@ -232,10 +251,20 @@ def test_cli_create_list_switch(provider_daemon):
     assert table.exit_code == 0, table.output
     assert "acme" in table.output and "https://gw/anthropic" in table.output
 
+    # Without --agent every registered agent the connection reaches is switched.
     r = _runner.invoke(cli_app, ["provider", "switch", "acme"])
     assert r.exit_code == 0, r.output
-    assert "switched to acme" in r.output
-    assert _show("acme")["config"]["is_active"] is True
+    assert "switched claude-code to acme" in r.output
+    uid = _show("acme")["uid"]
+    assert _agent_connection("claude-code") == uid
+    assert _agent_connection("codex") == uid
+
+    # `--agent` switches one agent and leaves the other where it is.
+    _add("other")
+    r = _runner.invoke(cli_app, ["provider", "switch", "other", "--agent", "codex"])
+    assert r.exit_code == 0, r.output
+    assert _agent_connection("codex") == _show("other")["uid"]
+    assert _agent_connection("claude-code") == uid
 
 
 def test_cli_add_takes_a_title_and_description(provider_daemon):
@@ -282,13 +311,14 @@ def test_cli_builtin_reverts_an_agent_to_its_own_login(provider_daemon):
     assert reverted.exit_code == 0, reverted.output
     assert "acme" in reverted.output
 
-    # The connection is no longer active for that agent type.
-    assert _show("acme")["config"]["is_active"] is False
+    # The agent no longer names a connection — and only that agent changed.
+    assert _agent_connection("claude-code") is None
+    assert _agent_connection("codex") == _show("acme")["uid"]
 
-    # Idempotent: nothing is active now, and a second revert still succeeds.
+    # Idempotent: the agent is on its own login now, and a second revert still succeeds.
     again = _runner.invoke(cli_app, ["provider", "builtin", "claude_code"])
     assert again.exit_code == 0, again.output
-    assert "nothing was active" in again.output
+    assert "no connection" in again.output
 
 
 def test_cli_builtin_rejects_what_is_not_an_agent_type(provider_daemon):
@@ -342,7 +372,7 @@ def test_cli_edit_rotates_the_key_in_place(provider_daemon):
 )
 def test_cli_edit_refuses_to_move_the_wire_while_the_connection_is_live(provider_daemon):
     """The daemon refuses; the CLI reports the conflict with an exit code of its
-    own and the message naming `coffer provider builtin <wire>` as the way out."""
+    own and the message naming `coffer provider builtin <agent_type>` as the way out."""
     _add("acme")
     assert _runner.invoke(cli_app, ["provider", "switch", "acme"]).exit_code == 0
 
@@ -358,8 +388,10 @@ def test_cli_edit_refuses_to_move_the_wire_while_the_connection_is_live(provider
     assert shown["name"] == "acme"
     assert shown["config"]["protocol"] == "anthropic"
 
-    # The way out works: revert, edit, and the wire moves.
+    # The way out works: revert every agent running on it, edit, and the wire moves.
+    assert "coffer provider builtin codex" in combined, combined
     assert _runner.invoke(cli_app, ["provider", "builtin", "claude_code"]).exit_code == 0
+    assert _runner.invoke(cli_app, ["provider", "builtin", "codex"]).exit_code == 0
     ok = _runner.invoke(cli_app, ["provider", "edit", "acme", "--protocol", "openai"])
     assert ok.exit_code == 0, ok.output
     assert _show("acme")["config"]["protocol"] == "openai"

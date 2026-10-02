@@ -31,5 +31,5 @@ class HostPlatform:
 
 
 def _conforms(p: HostPlatform) -> PlatformPort:
-    """Static check that the adapter satisfies the port (mypy fails here if not)."""
+    """mypy-only conformance check, never called: mypy fails if the port stops being met."""
     return p

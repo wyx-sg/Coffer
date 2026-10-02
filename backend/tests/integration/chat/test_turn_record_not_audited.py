@@ -12,7 +12,7 @@ from sqlalchemy import text
 
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
-from coffer.application.chat.turn_orchestrator import TurnOrchestrator, clear_active_turns
+from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.domain.chat.events import (
     TextDelta,
     ToolCall,
@@ -28,16 +28,10 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 from coffer.infrastructure.persistence.models import AuditLogModel
+from tests.support.chat_turns import start_turn
 from tests.unit.chat.conftest import FakeAgentAdapter, FakeAgentProvider
 
 pytestmark = pytest.mark.asyncio
-
-
-@pytest.fixture(autouse=True)
-def _reset() -> None:
-    clear_active_turns()
-    yield
-    clear_active_turns()
 
 
 @pytest.mark.acceptance(
@@ -70,7 +64,7 @@ async def test_a_turn_is_recorded_in_its_conversation_and_not_in_the_audit_log(t
         orchestrator = TurnOrchestrator(chat_service=chat, registry=registry)
 
         conv = await chat.create_conversation(agent_key="agent")
-        queue = await orchestrator.start_turn(conv.id, "read /a")
+        queue = await start_turn(orchestrator, conv.id, "read /a")
         while await queue.get() is not None:
             pass
 

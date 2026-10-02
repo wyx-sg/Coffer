@@ -53,7 +53,7 @@ async def _repo(tmp_path: Any) -> tuple[ConversationRepo, Any]:
 
 
 #: The channel a bridged conversation points at. The row stores the channel's
-#: uid (ADR resource-identity-is-an-immutable-uid); its name reaches the prompt
+#: uid (ADR identity-is-the-uid-inside-the-file); its name reaches the prompt
 #: only through the resolver the provider is handed.
 _SEATALK_UID = "3c8a17d5e2f04b9188ac6d0f5e2b7a91"
 

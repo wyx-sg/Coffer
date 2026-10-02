@@ -10,7 +10,7 @@ daemon records, and Coffer must not write an identity into any config.
 A remote credential reaches git only through a **credential helper** on the
 command line that reads it from an environment variable — never in the URL,
 never in argv, never in ``.git/config`` — and every captured stderr is
-redacted of it before it is raised (ADR credentials-across-machines).
+redacted of it before it is raised (ADR secrets-cross-machines-only-as-ciphertext).
 
 Synchronous on purpose: local calls take milliseconds and every caller runs
 them off the event loop (``asyncio.to_thread``) or inside a thread already;

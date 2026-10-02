@@ -550,6 +550,8 @@ export interface components {
         AgentOut: {
             /** Config Dir */
             config_dir: string;
+            /** Connection Uid */
+            connection_uid: string | null;
             /**
              * Created At
              * Format: date-time
@@ -579,8 +581,6 @@ export interface components {
             updated_at: string;
             /** Version */
             version: string | null;
-            /** Wire Api */
-            wire_api: string | null;
         };
         /** AgentPatch */
         AgentPatch: {
@@ -594,8 +594,6 @@ export interface components {
             tier_models?: {
                 [key: string]: string;
             } | null;
-            /** Wire Api */
-            wire_api?: string | null;
         };
         /**
          * AgentType

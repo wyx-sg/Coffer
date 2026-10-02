@@ -48,7 +48,7 @@ async def test_spawn_records_pidfile_named_after_child_and_pid(pid_dir: Path) ->
         # The record keys the child by the uid it was spawned under
         # (``record_spawn``'s ``server_uid``): a pidfile outlives the daemon
         # that wrote it, so it must not be titled with a label the user can
-        # change in between (ADR resource-identity-is-an-immutable-uid). The
+        # change in between (ADR identity-is-the-uid-inside-the-file). The
         # assertion is the same one as before — the name this child was spawned
         # under is written down — under the key that now carries it.
         assert recorded["server_uid"] == "unit-child"

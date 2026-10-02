@@ -1,7 +1,7 @@
 """Turning what a human typed into the uid the daemon addresses resources by.
 
 A resource's identity is an opaque uid, and no human is going to type one
-(ADR resource-identity-is-an-immutable-uid). The CLI therefore keeps taking
+(ADR identity-is-the-uid-inside-the-file). The CLI therefore keeps taking
 NAMES, and this module is the one place a name becomes a uid — so the
 translation happens once, at the surface a person is standing at, instead of
 being a thing every command re-invents or, worse, a second identity the daemon

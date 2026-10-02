@@ -55,6 +55,8 @@ class ChannelCommand:
     #: Whether the command is offered in a group's menu (spec channels/telegram
     #: "Register command menus per chat scope and language").
     in_group_menu: bool = False
+    #: Offered only while the ``knowledge`` feature is on.
+    needs_knowledge: bool = False
 
 
 COMMAND_ROSTER: tuple[ChannelCommand, ...] = (
@@ -110,6 +112,7 @@ COMMAND_ROSTER: tuple[ChannelCommand, ...] = (
         "[collection]",
         "Save the document you just sent into a knowledge collection",
         "把刚发送的文档存入知识库集合",
+        needs_knowledge=True,
     ),
     ChannelCommand(
         "help", "", "List the commands", "列出所有命令", group_private=True, in_group_menu=True
@@ -127,18 +130,20 @@ EFFORT_LEVELS: frozenset[str] = frozenset({"minimal", "low", "medium", "high", "
 _HEAD = re.compile(r"^/([A-Za-z0-9_]+)$")
 
 
-def names() -> frozenset[str]:
+def _entries(*, knowledge: bool) -> tuple[ChannelCommand, ...]:
+    return tuple(c for c in COMMAND_ROSTER if knowledge or not c.needs_knowledge)
+
+
+def names(*, knowledge: bool = True) -> frozenset[str]:
     """Every handled command as its typed form (``"/help"``)."""
-    return frozenset(f"/{c.name}" for c in COMMAND_ROSTER)
+    return frozenset(f"/{c.name}" for c in _entries(knowledge=knowledge))
 
 
 def command_name(text: str) -> str | None:
     """The roster name ``text`` invokes (``"/Model opus"`` → ``"model"``), or
     ``None`` when its first word is not a reserved command.
 
-    Hidden aliases resolve to what they stand for (``/start`` → ``help``). The
-    knowledge switch does not change what is reserved: ``/kb`` while knowledge is
-    off is still Coffer's word, answered with why it cannot run.
+    Hidden aliases resolve to what they stand for (``/start`` → ``help``).
     """
     words = text.split()
     if not words:
@@ -204,15 +209,16 @@ def is_group_private(command: str) -> bool:
     return True
 
 
-def menu_entries(*, group: bool) -> tuple[ChannelCommand, ...]:
+def menu_entries(*, group: bool, knowledge: bool) -> tuple[ChannelCommand, ...]:
     """The commands a menu offers: every one in a private chat, the group subset
-    in a group."""
-    return tuple(c for c in COMMAND_ROSTER if c.in_group_menu) if group else COMMAND_ROSTER
+    in a group; ``/kb`` only while knowledge is on."""
+    entries = _entries(knowledge=knowledge)
+    return tuple(c for c in entries if c.in_group_menu) if group else entries
 
 
-def help_text() -> str:
+def help_text(*, knowledge: bool = True) -> str:
     """The ``/help`` body, rendered from the roster: every command with its
     arguments on one line, then what anything else is. The one-line
     descriptions live in the platform's own command menu (Telegram)."""
-    heads = [f"/{c.name} {c.args}".rstrip() for c in COMMAND_ROSTER]
+    heads = [f"/{c.name} {c.args}".rstrip() for c in _entries(knowledge=knowledge)]
     return " · ".join(heads) + "\nAnything else is a message to the agent."

@@ -11,7 +11,6 @@ import { MemoryRouter } from "react-router-dom";
 import { AgentsPage } from "./AgentsPage";
 import {
   fakeCallFor,
-  fakeClientFor,
   fakeDaemon,
   typeRow,
   type FakeDaemon,
@@ -19,21 +18,15 @@ import {
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ApiError } from "@/lib/api/errors";
 import { acceptance } from "@/test/acceptance";
+import { fakeApi } from "@/test/fakeApi";
 
-vi.mock("@/lib/api/call", async (orig) => ({
-  ...(await orig<typeof import("@/lib/api/call")>()),
-  call: vi.fn(),
-}));
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
-const { call } = await import("@/lib/api/call");
-const { getApiClient } = await import("@/lib/api/client");
+const call = fakeApi();
 
 let daemon: FakeDaemon;
 
 function setDaemon(d: FakeDaemon) {
   daemon = d;
-  vi.mocked(call).mockImplementation(fakeCallFor(d) as never);
-  vi.mocked(getApiClient).mockReturnValue(fakeClientFor(d) as never);
+  call.mockImplementation(fakeCallFor(d));
 }
 
 function renderPage() {
@@ -307,7 +300,7 @@ describe("AgentsPage", () => {
   );
 
   test("keeps the header up over skeleton rows while the types load", () => {
-    vi.mocked(call).mockImplementation(() => new Promise(() => {}));
+    call.mockImplementation(() => new Promise(() => {}));
     renderPage();
     expect(screen.getByRole("heading", { name: /agents/i })).toBeInTheDocument();
     expect(screen.getByRole("table")).toHaveAttribute("aria-busy", "true");

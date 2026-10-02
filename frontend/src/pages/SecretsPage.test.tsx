@@ -24,6 +24,8 @@ vi.mock("@/lib/api/secret", () => ({
     pendingApprovals: vi.fn(),
     secretBoundary: vi.fn(),
     rejectApproval: vi.fn(),
+    refusedApprovals: vi.fn(),
+    askAgain: vi.fn(),
   },
 }));
 let inShell = false;
@@ -33,6 +35,12 @@ vi.mock("@/lib/tauri", () => ({
   revealSecret: (ref: string) => revealSecret(ref),
   approvePending: vi.fn(),
   onApprovalsEvent: () => () => {},
+}));
+
+// Whether the page of a citer's kind exists (its feature is on).
+let kindPageOpen = true;
+vi.mock("@/lib/hooks/useFeatures", () => ({
+  useKindPageOpen: () => () => kindPageOpen,
 }));
 
 const { secretsApi } = await import("@/lib/api/secret");
@@ -124,10 +132,14 @@ beforeEach(() => {
   inShell = false;
   api.list.mockResolvedValue({ refs: [GITHUB, OPENAI, SEATALK, OLD] });
   api.pendingApprovals.mockResolvedValue({ approvals: [] });
+  api.refusedApprovals.mockResolvedValue({ approvals: [] });
   api.remove.mockResolvedValue(undefined);
   api.set.mockResolvedValue(undefined);
 });
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  kindPageOpen = true;
+});
 
 describe("SecretsPage", () => {
   acceptance("web-ui", "the secrets page lists each secret with what uses it", async () => {
@@ -143,6 +155,17 @@ describe("SecretsPage", () => {
     expect(await screen.findByText("Model provider")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("link", { name: "OpenAI" }));
     expect(screen.getByTestId("where")).toHaveTextContent("/model-providers/u-oa");
+  });
+
+  test("a citer whose feature is off is named without a link to its missing page", async () => {
+    kindPageOpen = false;
+    renderPage();
+    await screen.findByText(GITHUB.ref);
+    const inUse = screen.getByRole("region", { name: /In use/ });
+    const openaiRow = within(inUse).getByText(OPENAI.ref).closest("tr")!;
+    fireEvent.click(within(openaiRow).getByRole("button", { name: /is used by 1 thing/ }));
+    expect(await screen.findByText("Model provider")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "OpenAI" })).toBeNull();
   });
 
   test("a secret nothing uses is listed apart, never used, as safe to delete", async () => {
@@ -298,6 +321,31 @@ describe("SecretsPage", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(api.set).toHaveBeenCalledWith("secret/npm-publish-token", "npm_x");
   });
+
+  acceptance(
+    "secret",
+    "a refused binding says it was refused and can be asked about again",
+    async () => {
+      const REFUSED = {
+        ...PENDING,
+        id: "apr-refused",
+        op: "bind" as const,
+        status: "rejected" as const,
+        description: "send GITHUB_TOKEN to the MCP server github",
+      };
+      api.refusedApprovals.mockResolvedValueOnce({ approvals: [REFUSED] });
+      api.refusedApprovals.mockResolvedValue({ approvals: [] });
+      api.askAgain.mockResolvedValue({
+        approvals: [{ ...REFUSED, id: "apr-again", status: "pending" }],
+      });
+      renderPage();
+      const row = await screen.findByTestId("refused-approval");
+      expect(row).toHaveTextContent("send GITHUB_TOKEN to the MCP server github");
+      fireEvent.click(within(row).getByRole("button", { name: "Ask again" }));
+      await waitFor(() => expect(api.askAgain).toHaveBeenCalledWith("apr-refused"));
+      await waitFor(() => expect(screen.queryByTestId("refused-approval")).not.toBeInTheDocument());
+    },
+  );
 
   test("a new secret waiting for approval says so, and the banner offers Review", async () => {
     api.set.mockResolvedValueOnce({ approval: PENDING });

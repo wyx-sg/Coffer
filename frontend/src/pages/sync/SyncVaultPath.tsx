@@ -9,7 +9,7 @@ import { AlertTriangle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { fsApi } from "@/lib/api/fs";
+import { useFsActions } from "@/lib/fsActions";
 
 export function SyncVaultPath({
   path,
@@ -20,6 +20,7 @@ export function SyncVaultPath({
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const fs = useFsActions();
 
   return (
     <div className="flex items-center justify-between gap-6 border-t border-border-subtle pt-4">
@@ -45,9 +46,7 @@ export function SyncVaultPath({
       <Button
         type="button"
         variant="outline"
-        onClick={() =>
-          void fsApi.reveal(path).catch(() => toast.error(t("fileActions.revealFailed")))
-        }
+        onClick={() => void fs.reveal(path).catch(() => toast.error(t("fileActions.revealFailed")))}
       >
         {t("sync.remote.reveal")}
       </Button>

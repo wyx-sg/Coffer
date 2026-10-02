@@ -44,11 +44,42 @@ If sources disagree: **principles win.** Flag inconsistency to the user.
 7. open PR — STOP at PR-opened, wait for explicit user merge instruction
 ```
 
+Until the 1.0 release merges, work for the 1.0 rework branches from and targets the integration branch `feature/rearch` instead of `main` (see `CONTRIBUTING.md`).
+
 **Hard stops within a session:**
 
 - 25 substantial messages with no committed checkpoint → stop and triage with the user.
 - Tool failure repeating 3 times → stop, investigate root cause, do not retry blindly.
 - Any conflict with the principles or these rules → stop, ask, do not work around.
+
+### Four-way sync: spec · code · docs · design canvas
+
+Four things describe the product, and **changing one means changing the others in the same work item** — never as a follow-up, never "cleaned up later":
+
+| Surface | Where |
+| --- | --- |
+| Spec | `openspec/specs/**` (requirements, scenarios, `data-model.md`, contracts) |
+| Code | `backend/`, `frontend/`, `desktop/` (and their tests) |
+| Docs, external | `README.md` + `README.zh-CN.md`, `docs-site/**` (English + `zh/`) |
+| Docs, internal | `docs/decisions/` ADRs, `docs/research/`, `docs/skill-library/`, `.agents/*`, `AGENTS.md`, `CONTRIBUTING.md` |
+| Design canvas | the Claude Design canvases listed below (UI boards, kept outside the repo; see `DesignSync`) |
+
+- A UI change (layout, copy, states, navigation, a new or removed screen) redraws the affected canvas boards in the same work item. If the code is the one that is wrong, change the code back to match the board instead.
+- A change that starts in the spec, the docs or the canvas lands in the code too, and the other two.
+- The canvas shows the final product only: no version labels and no planning material. The "Experimental" mark on the four experimental features (knowledge, memory, sync, model switching) is part of the product and is drawn.
+- A work item is not done while any of the four disagrees with the others. Give this rule to subagents explicitly. Report a canvas change you could not make as an open item for the user rather than skipping it silently.
+
+**The canvases** — one Claude Design artifact per module, plus the design system. Read the board you are about to change before you design or change a screen, and reuse its components, spacing, colour and copy so every screen keeps one visual style; the design system canvas and [`.agents/visual-language.md`](./.agents/visual-language.md) are the style source of truth.
+
+| Canvas | Covers | Link |
+| --- | --- | --- |
+| Foundations & Shell | shell, sidebar, overview, foundations | <https://claude.ai/artifact/Jz7f6MqShmdWx4N7YTRm49> |
+| Agents | Agents, model providers | <https://claude.ai/artifact/NdBb9YeJXQSLq3ynUDC2Yr> |
+| Run | Conversations, Channels | <https://claude.ai/artifact/UXVgGBZBtrDx3Uqnc3ke82> |
+| Capabilities | MCP gateway, custom tools, Skills | <https://claude.ai/artifact/5bMJNV8g8TQz3CrvMEBS55> |
+| Context | Knowledge, Memory | <https://claude.ai/artifact/SiJTKEXTJWKxEmT3yNJkcR> |
+| System | Secrets, Activity, Settings, Usage, Sync | <https://claude.ai/artifact/GgTRNb7Ydtk3ZaTyK3vufH> |
+| Design System | tokens and shared components | <https://claude.ai/artifact/78ViLn9YyUszUNWhC8fyJh> |
 
 ## 4. Decide vs Ask
 

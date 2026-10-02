@@ -217,6 +217,7 @@ async def finalize_assistant_message(
                 message_id,
                 content=blocks,
                 status=status,
+                model_id=model_id,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
             )

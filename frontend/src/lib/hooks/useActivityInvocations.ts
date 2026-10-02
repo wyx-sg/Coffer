@@ -7,13 +7,9 @@
 // Activity page's MCP calls tab needs the second without inheriting the
 // first's 30s poll.
 import { useQuery } from "@tanstack/react-query";
-import { getApiClient } from "@/lib/api/client";
-import { ApiError, throwApiError } from "@/lib/api/errors";
-import type { components } from "@/lib/api/types";
+import { fetchCallPage } from "@/lib/api/activity";
 import type { InvocationStatusFilter } from "@/lib/hooks/useMcpInvocations";
 import { mcpAllInvocationsKey } from "@/lib/api/queryKeys";
-
-type InvocationListOut = components["schemas"]["InvocationListOut"];
 
 interface UseActivityInvocationsArgs {
   limit?: number;
@@ -31,18 +27,7 @@ export function useActivityInvocations({
 }: UseActivityInvocationsArgs) {
   return useQuery({
     queryKey: mcpAllInvocationsKey({ limit, status, since }),
-    queryFn: async (): Promise<InvocationListOut> => {
-      const client = getApiClient();
-      const query: Record<string, string | number> = { limit };
-      if (status) query.status = status;
-      if (since) query.since = since;
-      const { data, error } = await client.GET("/mcp/invocations", {
-        params: { query: query as never },
-      });
-      if (error) throwApiError(error, "INTERNAL_ERROR", "list invocations failed");
-      if (!data) throw new ApiError("INTERNAL_ERROR", "empty invocations response");
-      return data;
-    },
+    queryFn: () => fetchCallPage({ status, since }, limit),
     enabled,
   });
 }

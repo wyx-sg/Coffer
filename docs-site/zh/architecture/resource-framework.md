@@ -24,7 +24,7 @@ description: 所有托管实体共享的、与类型无关的核心——资源�
 | 写入前的校验器可以拒绝；写入后的反应不可以。 | 校验器决定改动是否发生。反应是在改动已经持久化并审计之后去跟上它，让它抛异常就等于假装能撤销一件它撤销不了的事。 |
 | 创建是唯一没有通用化的操作。 | 技能需要一个主文件夹，智能体需要一个探测到的配置目录。这类类型不参与通用创建，通过自己的服务注册。创建之后的一切都是通用的。 |
 | 身份是不可变的 `uid`，名字只是标签。 | 同步的保险库需要一个所有机器都认同、改名也破坏不了的身份。 |
-| 被智能体引用的名字是固定的；只有名字可自由修改的类型才带 `title`。 | MCP 服务器的名字是智能体看到的每个工具名的前缀，技能的名字是智能体加载它的文件夹。改这两个名字会破坏 Coffer 看不到的权限规则、技能和笔记，所以这些类型声明名字固定。智能体的名字就是它的类型，每台机器一个。这三种都不带显示标题：在固定名字旁边再加一个标签，只会把人和智能体实际使用的名字藏起来。提供商、消息渠道、知识集和记忆分区保留可选的 `title`。 |
+| 被智能体引用的名字是固定的；只有名字可自由修改的类型才带 `title`。 | MCP 服务器的名字是智能体看到的每个工具名的前缀，技能的名字是智能体加载它的文件夹。改这两个名字会破坏 Coffer 看不到的权限规则、技能和笔记，所以这些类型声明名字固定。智能体的名字就是它的类型，每台机器一个。这三种都不带显示标题：在固定名字旁边再加一个标签，只会把人和智能体实际使用的名字藏起来。知识集也不带，它按文件夹名显示。提供商、消息渠道和记忆分区保留可选的 `title`。 |
 | 框架存储生效范围；类型负责执行。 | 执行应该放在知道是哪个智能体在请求的地方。集中式的闸门必须挂在每种类型的读取路径上。 |
 | 核心用一个假类型来测试。 | 如果核心需要真实类型才能测试，说明它已经泄漏了。一条导入契约让它保持这样。 |
 
@@ -43,9 +43,8 @@ description: 所有托管实体共享的、与类型无关的核心——资源�
 | `description` | 可选的自由文本。 |
 | `config` | 该类型的配置，按类型的 schema 校验。当前构建不认识的字段会保留在文件里，并报告为警告。 |
 | `enabled` | 开关。资源生效范围的一半，存储在 `~/.coffer/local/reach.json` 中，不在文件里。对非 `toggleable` 的类型始终为 true。 |
-| `created_at`、`updated_at` | 时间戳。`updated_at` 来自派生的 uid 索引，不来自文件。 |
+| `created_at`、`updated_at` | 时间戳。`updated_at` 是文件在本机的修改时间，不是文件里的键。 |
 | `scope` | 可选的智能体白名单，生效范围的另一半，同样在 `local/reach.json` 里。未设置表示所有智能体。 |
-| `rev` | 派生索引（`derived/index/resources.json`）中每个 uid 的计数器，文件内容或本机的生效范围改变时递增。事件流和调和器都会携带它。 |
 
 名字仍限定为 `^[a-zA-Z0-9_.-]+$`，最多 64 个字符，因为有三种类型——`skill`、`knowledge` 和 `memory`——会把名字变成目录。类型可以额外加更严格的规则。
 
@@ -68,7 +67,7 @@ description: 所有托管实体共享的、与类型无关的核心——资源�
 | 固定名字 | 否 | 名字注册后是否固定，因为它在 Coffer 之外被引用，或者由配置派生而来。名字不同的 `PATCH` 会被拒绝，返回 `409 NAME_IMMUTABLE`。 |
 | 重新注册会重置什么 | 空 | 删除后重新注册会重置什么，写在 `NAME_IMMUTABLE` 的消息里。 |
 | 由配置派生的名字 | 无 | 由配置派生出的、数据行唯一可用的名字。`agent` 声明了它：智能体按类型命名（`claude_code` → `claude-code`），注册时会拒绝其他名字。 |
-| 标题 | 带 | 该类型的数据行是否带可选的 `title`。`agent`、`mcp_server` 和 `skill` 不带；在这些类型上注册或编辑时给出非空标题会被拒绝，返回 `CONFIG_INVALID`。 |
+| 标题 | 带 | 该类型的数据行是否带可选的 `title`。`agent`、`mcp_server`、`skill` 和 `knowledge` 不带；在这些类型上注册或编辑时给出非空标题会被拒绝，返回 `CONFIG_INVALID`。 |
 
 **写入前的校验器——在持久化之前运行；抛异常即拒绝写入**
 
@@ -106,7 +105,7 @@ description: 所有托管实体共享的、与类型无关的核心——资源�
 | `mcp_server` | 固定名字（名字是智能体看到的每个工具名的前缀）、不带标题、支持范围、命名规则（保留 `__` 作为工具命名空间分隔符，并把名字限制在 24 个字符以内）、审计脱敏（剥掉 `transport.env` 和 `transport.headers`）、密钥引用、配置变更检查（驱逐活跃连接，让下一次调用用新配置启动）、删除清理、启用反应（禁用时驱逐活跃连接） |
 | `agent` | 不参与通用创建、由配置派生的名字和固定名字（每种类型一个智能体，以类型命名）、不带标题、`local` 存储、删除清理、启用反应 |
 | `skill` | 不参与通用创建、支持范围、命名规则（`SKILL.md` frontmatter 规则）、删除守卫（拒绝删除内置的 `coffer-guide`）、逐行存储（把 `coffer-guide` 归为 derived）、固定名字（名字是智能体加载它的文件夹）、不带标题、删除清理、范围反应、启用反应 |
-| `knowledge` | 不参与通用创建、不可切换、改名搬运（移动知识集目录）、删除清理 |
+| `knowledge` | 不参与通用创建、不带标题、不可切换、改名搬运（移动知识集目录）、删除清理 |
 | `memory` | 不参与通用创建、不可切换、`derived` 存储、改名搬运、删除清理 |
 | `channel` | 支持范围（反向的，见下文）、密钥引用、注册检查、配置变更检查、范围检查、删除清理 |
 | `provider` | 支持范围、默认范围、密钥引用、注册检查、配置变更检查 |
@@ -117,7 +116,7 @@ description: 所有托管实体共享的、与类型无关的核心——资源�
 
 | 操作 | 步骤 |
 | --- | --- |
-| 注册 | 类型不允许通用创建且调用方没有显式选择时拒绝 → 框架与类型的命名规则（类型按配置给数据行命名时还有派生名字）→ 标题规则（最多 80 个字符，不带标题的类型不得有标题）→ schema 校验 → 注册检查 → 探测引用的密钥 → 生成 `uid`（或接受同步文档带来的那个）→ 以默认范围插入 → 用脱敏后的配置审计 `resource_created`。 |
+| 注册 | 类型不允许通用创建且调用方没有显式选择时拒绝 → 框架与类型的命名规则（类型按配置给数据行命名时还有派生名字）→ 标题规则（最多 80 个字符，不带标题的类型不得有标题）→ schema 校验 → 注册检查 → 探测引用的密钥 → 生成 `uid` → 以默认范围写入资源文件 → 用脱敏后的配置审计 `resource_created`。 |
 | 编辑配置 | 同样的通用创建闸门 → schema → 密钥探测 → 配置变更检查 → 写入 → 用脱敏后的前后配置审计 `resource_updated`。 |
 | 改名 | 没变化则不操作 → 拒绝固定名字的类型（`NAME_IMMUTABLE`，409，不审计）→ 命名规则 → 冲突检查（`RESOURCE_ALREADY_EXISTS`，409）→ 改名搬运 → 写入 → 带 `from` 和 `to` 审计 `resource_renamed`。 |
 | 设置标题 | 没变化则不操作 → 标题规则（空白即清除；超过 80 个字符，或在不带标题的类型上有任何标题，都是 `CONFIG_INVALID`）→ 写入 → 带标题的 `before` 和 `after` 审计 `resource_updated`。不受通用创建闸门限制。 |
@@ -189,7 +188,7 @@ REST 和命令行是对等的接口，通过同样的服务作答。每一种修
 | --- | --- | --- |
 | `uid` | 全局且永久 | URL（`/api/v1/resources/{uid}`、Web 详情页）、跨资源引用（范围里的智能体列表、消息渠道的 `default_agent`），以及 `runs.db` 和 `derived.db` 中每一条指向资源的数据行。它写在资源文件里面，所以移动或重命名文件，资源不变。 |
 | `name` | 在类型内唯一；可变，除非类型的名字固定 | 人输入的、智能体引用的名字。命令行把名字解析为 uid。智能体的名字就是它的类型。 |
-| `title` | 可选，自由文本，只在带它的类型上有 | 设置后，界面用它代替名字显示。智能体、MCP 服务器和技能没有。 |
+| `title` | 可选，自由文本，只在带它的类型上有 | 设置后，界面用它代替名字显示。智能体、MCP 服务器、技能和知识集没有。 |
 
 新资源总是得到一个随机的 `uid`；从另一台机器来的资源保留那台机器给它的 `uid`，因为 uid 就在文件里。两个文件拥有同一个 uid 时会被拒绝：新来的被标记，原来的继续生效。因为引用和历史数据行存的都是 uid，改名只改变文件的 `name`（并在同一次提交里把它移动到 `<new name>.json`），Coffer 内部不需要重新指向任何东西。uid 保护不了的，是在 Coffer 之外被引用的名字：MCP 服务器的名字是智能体看到的每个工具名的前缀（在 Claude Code 中是 `mcp__coffer__<server>__<tool>`），技能的名字是智能体加载它的目录。这两种类型声明名字固定；要换名字，就删除资源再重新注册，这会重置服务器的能力开关和生效范围，或者技能的绑定。智能体的名字固定则是另一个原因：一台机器上每种类型只有一个智能体，所以类型就是它的名字。MCP 服务器名字限制在 24 个字符以内——在每次注册和改名时，以及对文件的每次改动时，无论是手工还是同步合并——这样工具名才能保持在模型提供商 API 强制的 64 字符限制之内；每条能力数据行都带有 `client_name_length`，**工具**标签页和 `coffer mcp cap list` 会标出超过 64 的行。见 [Names Visible to Agents Are Fixed](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/names-visible-to-agents-are-fixed.md)。
 
@@ -276,7 +275,7 @@ REST 和命令行是对等的接口，通过同样的服务作答。每一种修
 
 - 规格：[resource-framework](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md)
 - [Resource Framework Designed Upfront](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-framework-upfront.md)
-- [Resource Identity Is an Immutable `uid`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md)
+- [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/identity-is-the-uid-inside-the-file.md)
 - [Names Visible to Agents Are Fixed](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/names-visible-to-agents-are-fixed.md)
 - [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md)
 - [The Resource Framework Is Core Domain, Designed Before the Second Kind](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-framework-upfront.md)

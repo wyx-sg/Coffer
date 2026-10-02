@@ -7,11 +7,11 @@ import { Link } from "react-router-dom";
 import { StatusDot } from "@/components/status/StatusDot";
 import type { ResourceOut } from "@/lib/api/resources";
 import { toneTextClass } from "@/lib/statusColors";
-import { STATUS_TONE } from "@/components/status/statusTone";
+import { STATUS_TONE } from "@/lib/statusTone";
 import { cn } from "@/lib/utils";
 import { channelHeading, useChannelStateWords } from "./channelLabels";
-import type { ChannelView } from "./channelState";
-import { channelPlatform } from "./channelState";
+import type { ChannelView } from "@/lib/channels/channelState";
+import { channelPlatform } from "@/lib/channels/channelState";
 import { PlatformMark } from "./PlatformMark";
 
 interface Props {

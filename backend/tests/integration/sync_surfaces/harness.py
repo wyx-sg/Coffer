@@ -124,6 +124,9 @@ class FixedToken:
     def __init__(self) -> None:
         self.error: Exception | None = None
 
+    async def bind(self, remote: SyncRemote, *, actor: str) -> None:
+        return None
+
     async def token_for(self, remote: SyncRemote) -> str | None:
         if self.error is not None:
             raise self.error

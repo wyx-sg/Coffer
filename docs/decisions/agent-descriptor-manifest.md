@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-14
 **Deciders**: Yuxing Wu
-**Related**: [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [Kind Plugin Contract](kind-plugin-contract.md), [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md), [Stdio Shim Bridge](stdio-shim-bridge.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Model Catalogue Read From the Agent](model-catalogue-read-from-the-agent.md), [Driving Agents Through the SDK and App Server](driving-agents-through-sdk-and-app-server.md), [SQLite and Alembic Persistence](sqlite-alembic-persistence.md), spec agent-registry "Support exactly the Claude Code and Codex agent types", spec agent-registry "Define a curated config-file allowlist per type", spec agent-registry "Install Coffer's MCP server into an agent in one action", spec agent-registry "Uninstall a plugin by the type's own strategy", PR #87, PR #309
+**Related**: [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Kind Plugin Contract](kind-plugin-contract.md), [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md), [Stdio Shim Bridge](stdio-shim-bridge.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Model Catalogue Read From the Agent](model-catalogue-read-from-the-agent.md), [Driving Agents Through the SDK and App Server](driving-agents-through-sdk-and-app-server.md), [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), spec agent-registry "Support exactly the Claude Code and Codex agent types", spec agent-registry "Define a curated config-file allowlist per type", spec agent-registry "Install Coffer's MCP server into an agent in one action", spec agent-registry "Uninstall a plugin by the type's own strategy", PR #87, PR #309
 
 ## Context
 
@@ -14,7 +14,7 @@ where skills are delivered, and whether and how plugins can be toggled or
 uninstalled.
 
 Before PR #87 (2026-06-14) those answers were `if agent_type == ...` branches
-spread across `types.py`, the config-file allowlist, the MCP install service and
+spread across the agent type module, the config-file allowlist, the MCP install service and
 auto-detect. PR #87 added four agents at once (Cursor, OpenCode, OpenClaw,
 Hermes), which would have meant touching every one of those sites four times
 over. The answers are static facts about a product, not behaviour that varies at
@@ -62,10 +62,11 @@ through `descriptor_for()`. A record carries:
   inventory is an internal file Coffer never writes).
 
 `AgentType` keeps only the persisted identity and delegates its
-`display_name`, `config_dir()`, `default_skill_dir()` and `detect_marker()` to
-the table. `types.py` and `config_files.py` import the descriptor module lazily,
-inside the functions that need it, so the descriptor module can import their
-primitives (`AgentType`, `ConfigFileSpec`) at top level without an import cycle.
+`display_name`, `config_dir()` and `default_skill_dir()` to the table.
+`domain/agent/types.py` and `domain/agent/config_files.py` import the
+descriptor module lazily, inside the functions that need it, so the descriptor
+module can import their primitives (`AgentType`, `ConfigFileSpec`) at top
+level without an import cycle.
 
 Pros: adding or removing an agent is one record plus its allowlist builder, and
 the record is a readable inventory of what Coffer touches in that product; the
@@ -131,16 +132,17 @@ records, `claude_code` and `codex`. The table is code, not user data.
   describe. Removing one is the reverse plus a data migration, because
   `AgentConfig.model_validate` raises on a stored row whose type left the enum;
   `0048` deletes those rows and leaves files Coffer wrote into the removed
-  agents' directories alone; the daemon names them in its log once at startup
-  (`surfaces/http/removed_agent_notice.py`).
-- The table covers configuration, MCP, skills and plugins. Other per-agent
-  behaviour still branches on `AgentType` in its own module, because it is a
-  mechanism rather than a value: provider projection
-  (`domain/provider/projection.py`), transcript and native-memory readers
-  (`domain/agent/transcripts.py`, `domain/agent/native_memory.py`), the Codex
-  `model/list` RPC (`infrastructure/agent/codex_rpc_models.py`), memory delivery
-  hooks (`application/memory/delivery.py`) and the chat drivers. A new agent has
-  to be threaded through those too; the table does not list them.
+  agents' directories alone.
+- The table covers configuration, MCP, skills and plugins — the *values*.
+  Per-agent *mechanisms* (provider projection, memory delivery hooks,
+  transcript and native-memory readers, the chat drivers, the dependency probe
+  and model catalogue) are optional facets of the same record, bound at the
+  composition root; see
+  [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md).
+- A machine holds one agent per type, named by the type, with no title; the
+  descriptor record is therefore the whole per-agent inventory, and nothing in
+  it varies per registered instance (see
+  [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md)).
 - The allowlist builder is the security boundary for config-file access, so a
   new record's builder decides exactly which files Coffer can read and write in
   that product (see [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md)).

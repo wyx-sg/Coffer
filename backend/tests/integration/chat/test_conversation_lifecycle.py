@@ -384,6 +384,38 @@ async def test_sweep_streaming(tmp_path):  # type: ignore[no-untyped-def]
         await engine.dispose()
 
 
+async def test_sweep_streaming_before_leaves_a_turn_that_began_after_the_daemon(tmp_path):  # type: ignore[no-untyped-def]
+    engine, conv_repo, msg_repo = await _setup(tmp_path)
+    try:
+        c = await conv_repo.create(_conv())
+        started = datetime.now(tz=UTC)
+
+        def _row(seq: int, created_at: datetime) -> Message:
+            return Message(
+                id=uuid.uuid4().hex,
+                conversation_id=c.id,
+                seq=seq,
+                role=Role.ASSISTANT,
+                content=[TextBlock(text="partial")],
+                status="streaming",
+                model_id=None,
+                prompt_tokens=None,
+                completion_tokens=None,
+                created_at=created_at,
+            )
+
+        leftover = await msg_repo.append(_row(0, started - timedelta(minutes=5)))
+        live = await msg_repo.append(_row(1, started + timedelta(seconds=1)))
+
+        assert await msg_repo.sweep_streaming(before=started) == 1
+
+        statuses = {m.id: m.status for m in await msg_repo.list_by_conversation(c.id)}
+        assert statuses[leftover.id] == "failed"
+        assert statuses[live.id] == "streaming"
+    finally:
+        await engine.dispose()
+
+
 # ---------------------------------------------------------------------------
 # Content-block round-trip tests
 # ---------------------------------------------------------------------------

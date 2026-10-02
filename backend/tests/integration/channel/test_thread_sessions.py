@@ -19,7 +19,7 @@ from coffer.application.channel.store_ports import ChannelPeer
 from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.domain.chat.message import Role, TextBlock
 
-from .conftest import ChannelEnv, FakeChannelAdapter, inbound, turn_body, wait_until
+from .conftest import ChannelEnv, FakeChannelAdapter, inbound, turn_body, uid_of, wait_until
 
 
 async def test_dm_reply_defaults_to_direct_chat_kind_and_empty_thread(env: ChannelEnv) -> None:
@@ -59,7 +59,7 @@ async def test_same_chat_different_threads_get_separate_sessions(env: ChannelEnv
     await env.processor.on_message(inbound("tg", "owner", "hi again", thread_id="t2"))
     await wait_until(lambda: len(adapter.texts()) >= 2)
 
-    keys = [key for key in env.processor._sessions if key[0] == "tg" and key[1] == "owner"]
+    keys = [key for key in env.processor._sessions if key[0] == uid_of("tg") and key[1] == "owner"]
     assert len(keys) == 2
     assert {key[2] for key in keys} == {"t1", "t2"}
 
@@ -80,7 +80,7 @@ async def test_ensure_conversation_sets_active_conversation_on_the_matching_thre
     )
     await env.peers.upsert(group)
 
-    binding = env.processor.binding("tg")
+    binding = env.processor.binding(uid_of("tg"))
     assert binding is not None
     conversation_id = await ensure_conversation(env.chat, env.threads, binding, group, "")
 

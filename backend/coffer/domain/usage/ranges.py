@@ -4,8 +4,7 @@ A range is a span of LOCAL calendar days, both ends inclusive, because the
 daily rollup (``usage_daily``) is keyed by the local day an attempt started on:
 "today" is the user's today, not UTC's. :func:`resolve_range` turns a range
 name into those bounds given ``now`` and a time zone, so it is pure and
-testable; :meth:`DateRange.utc_bounds` gives the matching instants for a query
-over the per-request detail.
+testable.
 
 Names: ``today``; ``7d`` and ``30d`` (today and the days before it, 7 or 30 in
 all); ``month`` (the first of this calendar month through today); ``custom``
@@ -15,7 +14,7 @@ all); ``month`` (the first of this calendar month through today); ``custom``
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta, tzinfo
+from datetime import UTC, date, datetime, timedelta, tzinfo
 from enum import StrEnum
 
 
@@ -47,13 +46,6 @@ class DateRange:
     @property
     def end_day(self) -> str:
         return self.end.isoformat()
-
-    def utc_bounds(self) -> tuple[datetime, datetime]:
-        """``[from, to)`` in UTC: local midnight of ``start`` to local
-        midnight after ``end``."""
-        lo = datetime.combine(self.start, time.min, tzinfo=self.tz)
-        hi = datetime.combine(self.end + timedelta(days=1), time.min, tzinfo=self.tz)
-        return lo.astimezone(UTC), hi.astimezone(UTC)
 
 
 def local_day(instant: datetime, tz: tzinfo) -> str:

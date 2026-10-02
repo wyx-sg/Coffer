@@ -1,6 +1,6 @@
 """Pydantic schemas for the chat routes.
 
-Every request/response body the web Chat page's REST + SSE surface serves is
+Every request/response body the web Conversations page's REST + SSE surface serves is
 modelled here; the chat contract is generated from them (``make contracts``).
 """
 
@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from coffer.domain.channel_type import ChannelType
 from coffer.domain.chat.attachment import MAX_ATTACHMENTS_PER_MESSAGE
 
 # ---------------------------------------------------------------------------
@@ -108,7 +109,8 @@ class ChannelMirrorOut(BaseModel):
     shown before sending, e.g. ``SeaTalk · 🧵#1 deploy check``."""
 
     deliverable: bool
-    platform: str
+    #: The channel's type key; null when the channel has since been deleted.
+    platform: ChannelType | None = None
     target: str
     reason: str | None = None
     undelivered: list[UndeliveredReplyOut] = Field(default_factory=list)
@@ -144,7 +146,7 @@ class ChannelBindingOut(BaseModel):
     chat_id: str
     #: The channel's type key (``seatalk`` / ``telegram``); null when the
     #: channel has since been deleted.
-    platform: str | None = None
+    platform: ChannelType | None = None
     #: Which chat and thread of the channel the conversation lives in; null
     #: when that is not known.
     place: ChannelPlaceOut | None = None

@@ -28,7 +28,7 @@ class InboundAttachment:
 class InboundMessage:
     """A message arriving from an IM chat — text and/or downloaded attachments."""
 
-    channel: str  # channel resource name
+    channel: str  # the channel resource's uid (what its adapter is named by)
     chat_id: str  # Telegram chat id / SeaTalk employee_code
     sender_display: str  # best-effort human name at the platform
     text: str
@@ -98,7 +98,7 @@ class ReactionSet:
     received: str = ""  # on receipt, before the turn starts (queued messages keep it)
     working: str = ""  # when the turn starts running
     done: str = ""  # a clean finish (a turn ending on a question for the owner too)
-    failed: str = ""  # an error, or the tool-iteration limit
+    failed: str = ""  # an error
     stopped: str = ""  # interrupted
 
 
@@ -106,33 +106,23 @@ class ReactionSet:
 class ChannelCapabilities:
     """What a transport can do; the core picks strategies from this.
 
-    ``supports_edit`` and ``supports_live_text`` are easy to confuse, so keep
-    the distinction sharp ("Grow a reply in place on one live surface"):
-
-    * ``supports_edit`` is literal — the transport can rewrite a message it
-      already delivered (Telegram ``editMessageText``). ``edit_text`` raises
-      on a transport without it.
-    * ``supports_live_text`` is the question the core actually asks — *is
-      there a surface I can keep updating while a turn runs?* Telegram
-      answers yes by editing; SeaTalk answers yes through its message
-      **streaming** API (``init_stream`` / ``update_stream``), which grows one
-      message in place while being unable to edit anything. The core asks for
-      a live-text handle (``open_live_text``) and never branches on which
-      mechanism is underneath.
-    * ``supports_card_update`` is narrower than either: can an already-delivered
-      *selection card* be rewritten? SeaTalk answers yes here while answering no
-      to ``supports_edit`` — its update API applies to interactive cards only,
-      never to a text message. Without it a card keeps offering the option the
-      user already took.
+    The question the core asks about a reply surface is ``supports_live_text`` —
+    *is there a surface I can keep updating while a turn runs?* ("Grow a reply in
+    place on one live surface"). Telegram answers yes by editing one message;
+    SeaTalk answers yes through its message **streaming** API (``init_stream`` /
+    ``update_stream``). The core asks for a live-text handle (``open_live_text``)
+    and never branches on which mechanism is underneath, so there is no flag for
+    "can rewrite a delivered text message" — nothing would read it.
+    ``supports_card_update`` is the one narrower question: can an already-delivered
+    *selection card* be rewritten? Without it a card keeps offering the option the
+    user already took.
     """
 
-    supports_edit: bool  # can rewrite an already-delivered message (edit_text)
     supports_typing: bool  # typing indicator ack
     max_message_chars: int  # outbound chunk budget
     supports_buttons: bool = False  # interactive selection cards (ADR channel-adapter-framework)
     # An already-delivered selection card can be rewritten in place, so a card
-    # stops advertising the option the user just took. Narrower than
-    # supports_edit: SeaTalk can update a card but not a text message.
+    # stops advertising the option the user just took.
     supports_card_update: bool = False
     # A surface the core can keep updating during a turn — by edit (Telegram)
     # or by streaming (SeaTalk). Drives the progress/reply strategy of "Grow a
@@ -146,7 +136,6 @@ class ChannelCapabilities:
     # opening it early would post something only to remove it again.
     live_text_persists: bool = False
     supports_media: bool = False  # outbound file/photo upload (send_media)
-    supports_groups: bool = False  # group-chat send path exists
     supports_history_fetch: bool = False  # can fetch recent/thread messages for context
     supports_reactions: bool = False  # emoji reaction on a message (set_reaction),
     # used for the progress marks of "Acknowledge receipt and completion by
@@ -215,7 +204,7 @@ class InboundCallback:
     owner-gates it exactly like a message before honoring the switch.
     """
 
-    channel: str  # channel resource name
+    channel: str  # the channel resource's uid (what its adapter is named by)
     chat_id: str  # return address (Telegram chat id / SeaTalk group_id or employee_code)
     sender_id: str  # stable per-sender id for the owner gate ("" when none)
     data: str  # the tapped ChoiceButton.value
@@ -225,6 +214,11 @@ class InboundCallback:
     # group card tap owner-gates and replies in the group, not a DM ("Route
     # group selection-card taps back to the group")
     thread_id: str = ""  # non-empty when the card sits inside a thread/topic
+    # The tapper, as a group answer to their tap must name them ("Mention the
+    # asker in a group answer"): the same three values ``InboundMessage`` carries.
+    sender_display: str = ""
+    sender_mention_id: str = ""
+    sender_mention_email: str = ""
 
 
 @dataclass(frozen=True)
@@ -242,7 +236,7 @@ class InboundLifecycle:
     ``chat_kind`` is already modelled in this module.
     """
 
-    channel: str  # channel resource name
+    channel: str  # the channel resource's uid (what its adapter is named by)
     chat_id: str  # the group the event is about
     kind: str  # "removed_from_group" | "group_became_external"
     actor_display: str = ""  # best-effort human name of who did it (SeaTalk's
@@ -277,7 +271,7 @@ class InboundStop:
     that does not stop anything is worse than none at all.
     """
 
-    channel: str  # channel resource name
+    channel: str  # the channel resource's uid (what its adapter is named by)
     chat_id: str  # the chat whose reply was stopped
     thread_id: str = ""  # the thread it was being generated in, if any
     chat_kind: str = "direct"  # "direct" | "group" — so the acknowledgement

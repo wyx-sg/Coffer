@@ -23,10 +23,6 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-import pytest
-
-pytest.importorskip("hypothesis")
-
 from hypothesis import event, given
 from hypothesis import strategies as st
 

@@ -7,7 +7,7 @@ there because the key is not: it stays in the OS secret store or the
 ``0600`` key file, never in the tree. Whether the files are committed is the
 repository's business, not this store's — ``secret/`` is in the vault's
 ``info/exclude`` until a sync remote carries secrets (ADR
-credentials-across-machines) — so every vault write still goes through the
+secrets-cross-machines-only-as-ciphertext) — so every vault write still goes through the
 process's one vault writer (ADR every-vault-write-is-a-validated-commit-naming-its-writer),
 compare-and-swap against what was just read, and becomes a ``daemon`` commit
 naming the ref when the repository carries secrets.
@@ -40,12 +40,13 @@ import asyncio
 import contextlib
 import os
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 
-from coffer.domain.errors import SecretUnreadable
+from coffer.domain.secret_errors import SecretUnreadable
 from coffer.domain.vault.fernet_time import encrypted_at
 from coffer.domain.vault.layout import SECRET
 from coffer.domain.vault.writers import WRITER_DAEMON, CommitMeta
@@ -79,6 +80,7 @@ class EncryptedSecretStore:
         self._fernet = Fernet(key)
         self._home = home
         self._local_lock = threading.RLock()
+        self._removed_hooks: list[Callable[[str], None]] = []
         self._times = JsonStore(lambda: local_root(self._home) / "secret-boundary" / "times.json")
         self._used = JsonStore(
             lambda: local_root(self._home) / "secret-boundary" / "last-used.json"
@@ -91,6 +93,14 @@ class EncryptedSecretStore:
 
     def _local_dir(self) -> Path:
         return _local_dir(self._home)
+
+    def on_removed(self, hook: Callable[[str], None]) -> None:
+        """Call ``hook(ref)`` after a ref's ciphertext is really removed, by
+        whichever path removed it. The secret boundary uses it to forget where
+        the ref had been approved to go (spec secret "List every stored and cited
+        secret with what uses it": a delete that removes a ref forgets its
+        destinations)."""
+        self._removed_hooks.append(hook)
 
     def use_key(self, key: bytes) -> None:
         """Encrypt and decrypt with ``key`` from now on — an imported master key.
@@ -201,6 +211,9 @@ class EncryptedSecretStore:
 
         self._times.update(forget)
         self._used.update(forget)
+        if removed:
+            for hook in self._removed_hooks:
+                hook(ref)
         return removed
 
     def created_at(self, ref: str) -> datetime | None:

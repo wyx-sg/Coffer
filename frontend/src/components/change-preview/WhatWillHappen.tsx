@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { agentTypeLabel } from "@/lib/agents/display";
-import type { ChangeSummaryLine } from "./changeCounts";
+import type { ChangeSummaryLine } from "@/lib/changePreview/changeCounts";
 
 interface Props {
   summaries: readonly ChangeSummaryLine[];

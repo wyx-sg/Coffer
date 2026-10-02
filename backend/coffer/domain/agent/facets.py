@@ -102,10 +102,6 @@ class AgentProjection:
     - provider: the translation, which also declares the wire protocols the
       agent's native config speaks (possibly none);
     - delivery hook: the hook adapter, which declares its event.
-
-    Provider projection keeps a reserved second mode — pointing the agent at a
-    local proxy instead of writing the endpoint — which is a declared option of
-    this facet and is not implemented.
     """
 
     mcp: McpInjectionSpec | None = None
@@ -133,9 +129,6 @@ class AgentProjection:
 
     def entry(self, asset: AssetType) -> ProjectionEntry | None:
         return next((e for e in self.entries if e.asset is asset), None)
-
-    def accepts(self, asset: AssetType) -> bool:
-        return self.entry(asset) is not None
 
 
 # --- dependency probe -----------------------------------------------------------
@@ -205,17 +198,6 @@ class AgentCatalog:
     def dependency_probe(self, agent_type: AgentType) -> DependencyProbe | None:
         d = self._descriptors.get(agent_type)
         return d.dependency_probe if d is not None else None
-
-    def agents_speaking(self, protocol: str) -> tuple[AgentType, ...]:
-        """The agent types whose provider projection declares ``protocol``, in
-        ``AgentType`` order. Any number, including none."""
-        return tuple(
-            d.type
-            for d in self
-            if d.projection is not None
-            and d.projection.provider is not None
-            and protocol in d.projection.provider.protocols
-        )
 
 
 def _by_type[T](items: Iterable[T], declared: Callable[[T], str], facet: str) -> dict[AgentType, T]:

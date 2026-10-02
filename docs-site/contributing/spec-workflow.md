@@ -45,7 +45,7 @@ A capability is named and never numbered. Its id is its path under `openspec/spe
 | [`secret`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/secret/spec.md) | The encrypted secret store and the rule that everything else holds references |
 | [`daemon`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md) | The Coffer process: one per vault, discovery, the loopback HTTP guard, serving the UI, logs, terminal install |
 | [`desktop-app`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md) | The macOS shell: window, tray, handshake, detect-or-spawn, the `.dmg` |
-| [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md) | Release channels, the feature registry, per-machine switches, closing surfaces |
+| [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md) | The feature registry, per-machine switches, closing surfaces |
 | [`internal-engine`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md) | The model Coffer itself thinks with and its unattended passes |
 | [`knowledge`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md) | Plain-file knowledge collections and curation |
 | [`mcp-gateway`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md) | Upstream MCP servers aggregated behind one endpoint |
@@ -61,24 +61,21 @@ A capability covers one behaviour across every layer and surface that delivers i
 
 ## Writing requirements and scenarios
 
-Every requirement states its rule with **SHALL** or **MUST** and owns at least one scenario, written as GIVEN, WHEN, THEN and AND steps. This excerpt is from [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md):
+Every requirement states its rule with **SHALL** or **MUST** and owns at least one scenario, written as GIVEN, WHEN, THEN and AND steps. This abridged excerpt is from [`experimental-features`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md):
 
 ```markdown
-### Requirement: Stamp every build with a release channel
-Every build MUST carry exactly one release channel: `stable` for a build made by
-the release workflow from a tag, `dev` for every other build, including a local
-`make desktop` and a source install. `GET /api/v1/daemon/status` MUST report the
-channel as `channel`, and `coffer daemon status` MUST print it.
+### Requirement: Declare the experimental features in one registry
+Coffer MUST declare its experimental features in one registry, and every
+surface MUST take the list from it. The registry names exactly four features,
+in this order: `knowledge`, `memory`, `sync` and `models`.
 
-#### Scenario: a source build reports the dev channel
-- **GIVEN** a daemon started from a source checkout
-- **WHEN** the status is requested
-- **THEN** it reports `channel: "dev"`
+A stored setting for a key the registry does not name MUST be ignored by every
+read — logged, never listed — and MUST NOT fail anything.
 
-#### Scenario: the release workflow stamps the stable channel
-- **GIVEN** the channel stamp script run with `stable`
-- **WHEN** the build channel is read
-- **THEN** it is `stable`
+#### Scenario: a stored setting for a feature the registry does not name is ignored
+- **GIVEN** a daemon config whose `features` object holds a key the registry does not name
+- **WHEN** the daemon starts and the features and the daemon status are read
+- **THEN** the daemon starts, neither the features listing nor the status `features` map names the key, and no request fails because of it
 ```
 
 The rules, which `openspec/config.yaml` also feeds to the CLI when it plans a change:
@@ -95,7 +92,7 @@ The rules, which `openspec/config.yaml` also feeds to the CLI when it plans a ch
 Because a requirement has no number, you cite it by its capability and its exact title. From Markdown, link the spec and quote the title. From a code comment, write:
 
 ```python
-# spec experimental-features "Stamp every build with a release channel"
+# spec experimental-features "Declare the experimental features in one registry"
 ```
 
 `scripts/check_spec_citations.py` runs in `make lint` and scans every tracked file, including this site. It resolves each citation against the `### Requirement:` headings under `openspec/specs/`. A citation whose capability or title does not exist fails the gate. So renaming a requirement fails until every citation of the old title follows it. A title that an in-flight change adds or renames is accepted until that change is archived. Capabilities and ADRs are named, never numbered.
@@ -160,11 +157,14 @@ Every scenario must be covered by at least one test, in any tier. The test names
 
 ```python [pytest]
 @pytest.mark.acceptance(
-    spec="experimental-features", scenario="a source build reports the dev channel"
+    spec="experimental-features",
+    scenario="a stored setting for a feature the registry does not name is ignored",
 )
-async def test_status_reports_the_dev_channel_and_every_feature_unauthenticated(client):
-    r = await client.get("/api/v1/daemon/status", headers={"X-Coffer-Token": ""})
-    assert r.json()["channel"] == "dev"
+def test_a_stored_setting_for_a_retired_feature_is_ignored(home):
+    daemon_config.write_feature_setting("retired_feature", False)
+    with _client() as c:
+        status = c.get("/api/v1/daemon/status").json()
+    assert "retired_feature" not in status["features"]
 ```
 
 ```ts [Vitest / Playwright]

@@ -5,7 +5,7 @@
 // an invalid value shows its error and is never sent. Every PATCH carries the
 // whole config back with every secret ref untouched, and two saves a
 // moment apart never undo each other. Replacing a secret writes the new value
-// under the ref the channel already cites, then restarts the adapter.
+// under the ref the channel already cites; the daemon restarts the adapter.
 //
 // The PATCH is addressed to the channel's uid; the fixtures spell uid and
 // name differently so an assertion about the address cannot pass on the label.
@@ -19,9 +19,12 @@ import { acceptance } from "@/test/acceptance";
 import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 import { ChannelReplaceSecretDialog } from "./ChannelReplaceSecretDialog";
 import { ChannelSettingsTab } from "./ChannelSettingsTab";
-import { AGENT, HERE, REGISTRY, makeChannel } from "./channelTestKit";
+import { AGENT, HERE, REGISTRY, makeChannel, makeSettings } from "@/test/channelKit";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 vi.mock("@/lib/hooks/useMachines", () => ({
   useMachines: () => ({ data: { machines: REGISTRY } }),
   useThisMachineId: () => ({ machineId: HERE, isPending: false }),
@@ -59,7 +62,12 @@ function wrap(ui: React.ReactNode) {
 
 function renderSettings(channel: ResourceOut = makeChannel()) {
   return wrap(
-    <ChannelSettingsTab channel={channel} onReplaceSecret={() => {}} onDelete={() => {}} />,
+    <ChannelSettingsTab
+      channel={channel}
+      settings={makeSettings(channel)}
+      onReplaceSecret={() => {}}
+      onDelete={() => {}}
+    />,
   );
 }
 
@@ -139,6 +147,34 @@ describe("replies", () => {
   });
 });
 
+describe("conversations", () => {
+  const idleField = () => screen.getByLabelText(/start a new conversation after/i);
+
+  acceptance("channels", "the idle period comes from the channel's settings", async () => {
+    const api = installApi();
+    renderSettings(makeChannel({ config: { new_conversation_after_idle_hours: 24 } }));
+
+    expect(idleField()).toHaveValue(24);
+    fireEvent.change(idleField(), { target: { value: "6" } });
+
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1), SLOW);
+    expect(patched(api).new_conversation_after_idle_hours).toBe(6);
+    // Zero is a value, not an empty field: it turns the rollover off.
+    fireEvent.change(idleField(), { target: { value: "0" } });
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(2), SLOW);
+    expect(patched(api, 1).new_conversation_after_idle_hours).toBe(0);
+  });
+
+  test("a blank or out-of-range period is refused inline and never sent", async () => {
+    const api = installApi();
+    renderSettings();
+    fireEvent.change(idleField(), { target: { value: "" } });
+    expect(screen.getByRole("alert")).toHaveTextContent(/0 to 8760/);
+    await new Promise((r) => setTimeout(r, 900));
+    expect(api.PATCH).not.toHaveBeenCalled();
+  });
+});
+
 describe("working directories", () => {
   const defaultField = () => screen.getByLabelText(/^default$/i);
 
@@ -212,7 +248,7 @@ acceptance("channels", "rotating a channel secret keeps its refs and pairing", a
   // rotation writes the new value under the ref the channel already cites,
   // then PATCHes the same channel with every ref unchanged — so the binding,
   // the pairing and the synced ciphertext address all stay where they were —
-  // and restarts the adapter on it.
+  // and the daemon restarts the adapter on the replaced secret by itself.
   const api = installApi();
   wrap(<ChannelReplaceSecretDialog channel={TG} open onOpenChange={() => {}} />);
 
@@ -232,12 +268,7 @@ acceptance("channels", "rotating a channel secret keeps its refs and pairing", a
   expect(config.default_agent).toBe(AGENT.uid);
   // Secret first: the PATCHed config must never cite a ref whose value is stale.
   expect(api.POST.mock.invocationCallOrder[0]).toBeLessThan(api.PATCH.mock.invocationCallOrder[0]);
-  // Then the adapter restarts: off and on again.
-  await waitFor(() =>
-    expect(api.POST.mock.calls.map((c) => c[0])).toEqual([
-      "/secrets",
-      "/resources/{uid}/disable",
-      "/resources/{uid}/enable",
-    ]),
-  );
+  // Nothing else is called: no off-and-on, no restart request. The daemon sees
+  // the secret change and restarts the adapter on its own.
+  expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/secrets"]);
 });

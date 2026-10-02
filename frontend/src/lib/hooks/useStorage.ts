@@ -6,33 +6,22 @@
 // and the memory pages, whose trees it emptied.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getApiClient } from "@/lib/api/client";
-import { ApiError, throwApiError } from "@/lib/api/errors";
+import { storageApi, type StorageSummary } from "@/lib/api/storage";
 import { memoryKey, storageKey } from "@/lib/api/queryKeys";
-import type { components } from "@/lib/api/types";
 
-export type StorageSummary = components["schemas"]["StorageSummaryOut"];
+export type { StorageSummary };
 
 export function useStorageSummary() {
   return useQuery({
     queryKey: storageKey,
-    queryFn: async (): Promise<StorageSummary> => {
-      const { data, error } = await getApiClient().GET("/storage");
-      if (error) throwApiError(error, "INTERNAL_ERROR", "storage read failed");
-      if (!data) throw new ApiError("INTERNAL_ERROR", "empty storage response");
-      return data;
-    },
+    queryFn: storageApi.summary,
   });
 }
 
 export function useClearCache() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (): Promise<number> => {
-      const { data, error } = await getApiClient().POST("/storage/cache/clear");
-      if (error) throwApiError(error, "INTERNAL_ERROR", "cache clear failed");
-      return data?.cleared_bytes ?? 0;
-    },
+    mutationFn: storageApi.clearCache,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: storageKey });
       void qc.invalidateQueries({ queryKey: memoryKey });

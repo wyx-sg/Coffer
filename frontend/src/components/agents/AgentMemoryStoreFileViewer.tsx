@@ -12,12 +12,12 @@
 // to change something another process owns — hence no draft and no save.
 import { useTranslation } from "react-i18next";
 
+import { LoadError } from "@/components/LoadError";
 import { FileActions } from "@/components/FileActions";
 import { FILE_PANE_BODY } from "@/components/filePane";
 import { CodeView } from "@/components/preview/CodeView";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import { abbreviateHomePath } from "@/lib/agents/display";
-import { translateApiError } from "@/lib/api/errors";
 import { useNativeMemoryFileContent } from "@/lib/hooks/useAgentNativeMemory";
 
 function isMarkdown(path: string): boolean {
@@ -45,11 +45,7 @@ export function AgentMemoryStoreFileViewer({
     return <p className="text-sm text-text-muted">{t("common.loading")}</p>;
   }
   if (content.error) {
-    return (
-      <p className="text-sm text-danger" role="alert">
-        {translateApiError(t, content.error)}
-      </p>
-    );
+    return <LoadError error={content.error} onRetry={() => void content.refetch()} />;
   }
 
   const data = content.data;

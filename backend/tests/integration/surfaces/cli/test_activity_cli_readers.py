@@ -23,6 +23,9 @@ from tests.integration.surfaces.cli.test_mcp_cmd import (  # noqa: F401  (fixtur
     mcp_daemon,
 )
 
+#: The uid of a server since deleted: its rows stay in the log, under the uid.
+_GONE_UID = "0123456789abcdef0123456789abcdef"
+
 _runner = CliRunner()
 
 
@@ -125,7 +128,7 @@ def test_coffer_log_mcp_without_a_server_reads_every_server(mcp_daemon: Any) -> 
             (fs, "read_file", "ok"),
             (git, "git_log", "error"),
             ("coffer", "coffer__recall", "ok"),
-            ("deleted:old", "gone_tool", "ok"),
+            (_GONE_UID, "gone_tool", "ok"),
         ]
     )
 
@@ -137,7 +140,7 @@ def test_coffer_log_mcp_without_a_server_reads_every_server(mcp_daemon: Any) -> 
         (fs, "read_file"),
         (git, "git_log"),
         ("coffer", "coffer__recall"),
-        ("deleted:old", "gone_tool"),
+        (_GONE_UID, "gone_tool"),
     }
     names = {r["resource_uid"]: r["resource_name"] for r in rows}
     assert names[fs] == "fs" and names[git] == "git" and names["coffer"] is None
@@ -159,7 +162,7 @@ def test_coffer_log_mcp_without_a_server_keeps_its_filters(mcp_daemon: Any) -> N
 
 def test_coffer_log_mcp_table_names_each_rows_server(mcp_daemon: Any) -> None:  # noqa: F811
     fs = _register_server("fs")
-    _seed_rows([(fs, "read_file", "ok"), ("deleted:old", "gone_tool", "ok")])
+    _seed_rows([(fs, "read_file", "ok"), (_GONE_UID, "gone_tool", "ok")])
 
     result = _runner.invoke(app, ["log", "mcp"], env={"COLUMNS": "200"})
 
@@ -167,7 +170,7 @@ def test_coffer_log_mcp_table_names_each_rows_server(mcp_daemon: Any) -> None:  
     fs_line = next(line for line in result.output.splitlines() if "read_file" in line)
     gone_line = next(line for line in result.output.splitlines() if "gone_tool" in line)
     assert "fs" in fs_line.split("read_file")[0]
-    assert "deleted:old" in gone_line
+    assert _GONE_UID in gone_line
 
 
 def test_coffer_log_mcp_with_a_server_stays_on_that_server(mcp_daemon: Any) -> None:  # noqa: F811

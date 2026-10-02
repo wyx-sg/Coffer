@@ -4,7 +4,7 @@
 // restarts at the bottom per conversation, and on a failed turn swaps the live
 // bubble for the error banner with a Retry of the failed message. Rows are
 // chosen by useMessageThread (lib/chat/threadView); the echoes are the turn hook's.
-import { useRef, type ReactNode } from "react";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowDown } from "lucide-react";
 import { useMessageThread } from "@/lib/hooks/useMessageThread";
@@ -12,55 +12,18 @@ import { useFollowScroll } from "@/lib/hooks/useFollowScroll";
 import { useChannelMirror } from "@/lib/hooks/useConversations";
 import { describeTurnError } from "@/lib/chat/turnErrors";
 import { retryTargetFor } from "@/lib/chat/threadView";
-import type { LiveMessage, PendingEcho } from "@/lib/hooks/useChatTurn";
-import type { EchoAttachment } from "@/lib/chat/echoes";
-import type { Conversation } from "@/lib/api/chat";
+import type { PendingEcho } from "@/lib/hooks/useChatTurn";
 import { Button } from "@/components/ui/button";
 import { ChannelMirrorHint } from "./ChannelMirrorHint";
 import { ChatErrorBanner } from "./ChatErrorBanner";
 import { ThreadMessages } from "./ThreadMessages";
 import { Composer, type ComposerHandle } from "./Composer";
-import type { ComposerRestore } from "@/lib/hooks/useComposerRestore";
+import type { MessageThreadProps } from "./messageThreadProps";
 import { PendingQueue } from "./PendingQueue";
 import { ArchivedNotice, StreamLostBanner } from "./ThreadNotices";
 import { FindWidget } from "@/components/preview/FindWidget";
 import { useDomFind } from "@/components/preview/useDomFind";
 import { translateApiError } from "@/lib/api/errors";
-
-interface Props {
-  conversation: Conversation;
-  liveMessage: LiveMessage | null;
-  /** Prompts sent from here whose rows have not landed yet (the turn hook retires them). */
-  pendingEchoes?: PendingEcho[];
-  isStreaming: boolean;
-  /** Error from the latest turn (network, secret, agent error, …), and its dismiss. */
-  turnError?: Error | null;
-  onClearTurnError?: () => void;
-  /** False when turnError is a refused send (it stays in the composer): no Retry. */
-  retryable?: boolean;
-  /** Send a persisted user message again, attachments included (Retry). */
-  onResend?: (messageId: string) => void | Promise<boolean>;
-  onStop?: () => void;
-  /** Send a message with the finished uploads; resolves whether it was accepted. */
-  onSend: (text: string, attachments?: EchoAttachment[]) => void | Promise<boolean>;
-  /** A refused message handed back to the composer (see Composer `restore`). */
-  restore?: ComposerRestore | null;
-  onRestored?: () => void;
-  /** Messages queued behind the in-flight turn, and its replacement (edit / remove). */
-  pending?: string[];
-  onSetPending?: (texts: string[]) => void;
-  /** The conversation's header (title, source, agent / model / effort, menu). */
-  header?: ReactNode;
-  /** Display name of the conversation's agent — the composer's placeholder. */
-  agentLabel?: string;
-  /** The live stream was lost mid-turn after every reconnect: say so, offer Reload. */
-  streamLost?: boolean;
-  onReload?: () => void;
-  /** Archived: read-only, a Restore in place of the composer. */
-  readOnly?: boolean;
-  onRestore?: () => void;
-  restorePending?: boolean;
-}
 
 const NO_ECHOES: PendingEcho[] = [];
 
@@ -79,6 +42,8 @@ export function MessageThread({
   onRestored,
   pending = [],
   onSetPending,
+  queueHeld = false,
+  onResumeQueue,
   header,
   agentLabel,
   streamLost = false,
@@ -86,7 +51,7 @@ export function MessageThread({
   readOnly,
   onRestore,
   restorePending,
-}: Props) {
+}: MessageThreadProps) {
   const { t } = useTranslation();
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -195,17 +160,24 @@ export function MessageThread({
       {turnError && (
         <ChatErrorBanner
           className="border-t"
-          message={describeTurnError(t, turnError)}
+          message={
+            queueHeld && !readOnly
+              ? t("conversations.queueHeld.message", { error: describeTurnError(t, turnError) })
+              : describeTurnError(t, turnError)
+          }
           onDismiss={onClearTurnError}
+          retryLabel={queueHeld && !readOnly ? t("conversations.queueHeld.resume") : undefined}
           onRetry={
-            retry && (retry.kind === "send" || onResend)
-              ? () => {
-                  onClearTurnError?.();
-                  void (retry.kind === "send"
-                    ? onSend(retry.text, retry.attachments)
-                    : onResend?.(retry.messageId));
-                }
-              : undefined
+            queueHeld && !readOnly
+              ? onResumeQueue
+              : retry && (retry.kind === "send" || onResend)
+                ? () => {
+                    onClearTurnError?.();
+                    void (retry.kind === "send"
+                      ? onSend(retry.text, retry.attachments)
+                      : onResend?.(retry.messageId));
+                  }
+                : undefined
           }
         />
       )}

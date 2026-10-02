@@ -25,7 +25,8 @@ vi.mock("./palette/CommandPalette", () => ({
 }));
 // The footer reads the daemon's status probe; an unanswered probe is enough
 // here (the footer's states are tested in shell/SidebarFooter.test.tsx).
-vi.mock("@/lib/api/client", () => ({
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: () => ({ GET: () => new Promise(() => {}) }),
 }));
 
@@ -80,9 +81,7 @@ describe("Layout", () => {
   test("a detail route keeps its list entry highlighted", () => {
     renderShell("/agents/codex");
     expect(screen.getByRole("link", { name: "Agents" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Model providers" })).not.toHaveAttribute(
-      "aria-current",
-    );
+    expect(screen.getByRole("link", { name: "Skills" })).not.toHaveAttribute("aria-current");
     // Overview is the index: it marks itself only.
     expect(screen.getByRole("link", { name: "Overview" })).not.toHaveAttribute("aria-current");
   });

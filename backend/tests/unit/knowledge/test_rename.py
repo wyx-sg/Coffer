@@ -2,7 +2,7 @@
 
 A ``knowledge`` row's name is a path segment under ``~/.coffer/knowledge/``,
 so the rename the framework offers every kind (ADR
-resource-identity-is-an-immutable-uid) is only half a rename here until the
+identity-is-the-uid-inside-the-file) is only half a rename here until the
 folder follows. These tests drive the kind's own ``on_rename`` hook — the same
 callable ``ResourceService.rename`` invokes — rather than a helper written for
 the test, because the hook is the whole of what rename costs this kind and a

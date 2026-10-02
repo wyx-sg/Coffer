@@ -24,6 +24,7 @@ vi.mock("@/lib/api/memory", () => ({
   getReading: vi.fn(),
   sync: vi.fn(),
 }));
+vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => ({ live: false }) }));
 vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
 vi.mock("@/lib/api/internalEngine", () => ({ internalEngineApi: { get: vi.fn() } }));
 vi.mock("@/lib/api/agents", () => ({ agentsApi: { list: vi.fn() } }));
@@ -213,6 +214,15 @@ describe("MemoryPage", () => {
     expect(await screen.findByText("Distilling 2 of 5 partitions")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /updating…/i })).toBeDisabled();
     expect(await screen.findByText("Distilling…")).toBeInTheDocument();
+  });
+
+  test('a run with no done/total yet reads "Reading agents\' memory…"', async () => {
+    stub([GLOBAL, COFFER]);
+    vi.mocked(listUpkeepRuns).mockResolvedValue({
+      runs: [{ kind: "memory", name: "update", started_at: ago(0), done: null, total: null }],
+    });
+    renderPage();
+    expect(await screen.findByText("Reading agents’ memory…")).toBeInTheDocument();
   });
 
   test("partitions are a table with path, sample, sources and distil, and a count above it", async () => {

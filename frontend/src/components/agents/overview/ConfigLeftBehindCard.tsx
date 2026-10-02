@@ -15,7 +15,8 @@ import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 
 import { FixWay, LastKnownRows, ProblemBanner } from "./FixParts";
 import { useDetectionCheck } from "./useDetectionCheck";
-import { InfoRow, InlineCode, OverviewSection } from "./OverviewSection";
+import { Section } from "@/components/Section";
+import { InfoRow, InlineCode } from "./OverviewParts";
 import { baseName } from "./paths";
 
 const K = "agents.overviewTab.problem";
@@ -50,7 +51,7 @@ export function ConfigLeftBehindCard({ agent, typeRow }: Props) {
             components={{ code: <InlineCode /> }}
           />
         </ProblemBanner>
-        <OverviewSection title={t(`${K}.waysToFix`)}>
+        <Section title={t(`${K}.waysToFix`)}>
           <ul className="flex flex-col">
             <FixWay title={t(`${K}.install.title`, { name })} body={t(`${K}.install.body`)}>
               {agent.install_handoff ? (
@@ -58,10 +59,10 @@ export function ConfigLeftBehindCard({ agent, typeRow }: Props) {
               ) : null}
             </FixWay>
           </ul>
-        </OverviewSection>
+        </Section>
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-[22px]">
-        <OverviewSection title={t(`${K}.leftIn`, { dir })}>
+        <Section title={t(`${K}.leftIn`, { dir })}>
           <dl className="flex flex-col">
             <InfoRow label={t(`${K}.files`)} mono={files.length > 0}>
               {files.length > 0 ? files.join(", ") : t("common.emptyValue")}
@@ -71,7 +72,7 @@ export function ConfigLeftBehindCard({ agent, typeRow }: Props) {
             </InfoRow>
             <LastKnownRows agent={agent} />
           </dl>
-        </OverviewSection>
+        </Section>
       </div>
     </div>
   );

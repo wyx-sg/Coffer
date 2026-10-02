@@ -5,7 +5,7 @@ state), SyncEngine (per-OS link helper), and the kind-agnostic ResourceService
 (Resource rows + audit).
 
 Every operation here names a resource by its **uid**
-(ADR resource-identity-is-an-immutable-uid). There is deliberately no by-name
+(ADR identity-is-the-uid-inside-the-file). There is deliberately no by-name
 entry point: a label a human typed is resolved once, at the surface they typed
 it at (``ResourceService.get_by_name``), and what reaches this service is
 already an identity. Names still appear as DATA further in — the master folder
@@ -73,9 +73,9 @@ class SkillService:
         master_store: MasterStorePort,
         sync_engine: SyncEnginePort,
         agent_skill_dir_resolver: AgentSkillDirResolver,
+        workspace_scan: WorkspaceScanPort,
+        agent_scan_locations_resolver: AgentScanLocationsResolver,
         size_limit_bytes: int = 50 * 1024 * 1024,
-        workspace_scan: WorkspaceScanPort | None = None,
-        agent_scan_locations_resolver: AgentScanLocationsResolver | None = None,
         rmtree: Callable[[pathlib.Path], None] = shutil.rmtree,
         reconcile_delivery: DeliveryPass | None = None,
     ) -> None:
@@ -87,9 +87,7 @@ class SkillService:
         self._resolve_agent_skill_dir = agent_skill_dir_resolver
         self._size_limit = size_limit_bytes
         # Unmanaged-skill discovery deps (see "List unmanaged skills in an agent's skill
-        # locations"). Optional only so existing construction sites keep working until
-        # the composition root wires them; the unmanaged_* methods guard against missing
-        # config.
+        # locations").
         self._workspace_scan = workspace_scan
         self._resolve_agent_scan_locations = agent_scan_locations_resolver
         self._rmtree = rmtree
@@ -177,14 +175,6 @@ class SkillService:
 
     # ---------- unmanaged skills ----------
 
-    def _require_unmanaged_deps(self) -> None:
-        if self._workspace_scan is None or self._resolve_agent_scan_locations is None:
-            raise RuntimeError(
-                "SkillService was constructed without workspace_scan / "
-                "agent_scan_locations_resolver — the composition root must "
-                "provide both for unmanaged-skill operations"
-            )
-
     # ``skill_name`` below is an on-disk DIRECTORY name, not a label Coffer
     # issued: an unmanaged skill has no resource row and so no uid to address
     # it by. The agent, which does have a row, is named by uid like everywhere
@@ -192,7 +182,6 @@ class SkillService:
     async def list_unmanaged(self, agent_uid: str) -> list[UnmanagedView]:
         from coffer.application.skill.unmanaged_ops import list_unmanaged
 
-        self._require_unmanaged_deps()
         return await list_unmanaged(service=self, agent_uid=agent_uid)
 
     async def get_unmanaged(
@@ -200,7 +189,6 @@ class SkillService:
     ) -> UnmanagedDetail:
         from coffer.application.skill.unmanaged_ops import get_unmanaged
 
-        self._require_unmanaged_deps()
         return await get_unmanaged(
             service=self, agent_uid=agent_uid, skill_name=skill_name, location=location
         )
@@ -210,7 +198,6 @@ class SkillService:
     ) -> Resource:
         from coffer.application.skill.unmanaged_ops import adopt_unmanaged
 
-        self._require_unmanaged_deps()
         return await adopt_unmanaged(
             service=self,
             agent_uid=agent_uid,
@@ -224,7 +211,6 @@ class SkillService:
     ) -> None:
         from coffer.application.skill.unmanaged_ops import delete_unmanaged
 
-        self._require_unmanaged_deps()
         await delete_unmanaged(
             service=self,
             agent_uid=agent_uid,

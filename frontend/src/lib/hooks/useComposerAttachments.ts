@@ -34,6 +34,7 @@ interface DraftAttachment {
   error?: string;
 }
 
+/** @ui-only hook result; never crosses the wire. */
 export interface ComposerAttachments {
   items: DraftAttachment[];
   add: (files: File[]) => void;

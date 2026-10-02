@@ -17,6 +17,7 @@ converges with anything.
 
 from __future__ import annotations
 
+import hashlib
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
@@ -31,6 +32,7 @@ from coffer.application.channel.prompt_note import ChannelNoteReader
 from coffer.application.channel.runtime import ChannelRuntime
 from coffer.application.channel.service import ChannelService
 from coffer.domain.channel.config import parse_channel_config
+from coffer.domain.features import KNOWLEDGE
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import SecretDestination, channel_destination
 from coffer.infrastructure.channel.persistence import (
@@ -83,6 +85,7 @@ def wire_channel_kind(
     # the life of the daemon — so it is resolved once here rather than on every
     # reconcile tick and every status read.
     machine_id = resolve_identity().machine_id
+    features = app.state.feature_service
 
     async def local_machine_id() -> str:
         return machine_id
@@ -115,6 +118,9 @@ def wire_channel_kind(
         # (import-linter contract 5f).
         collections=knowledge.service,
         ingest=knowledge.ingest_service,
+        # While knowledge is switched off `/kb` answers that and saves
+        # nothing (spec experimental-features).
+        knowledge_enabled=lambda: features.is_enabled(KNOWLEDGE),
     )
 
     # ``materialize_async`` is the resolver's own off-the-loop path;
@@ -122,18 +128,28 @@ def wire_channel_kind(
     materialize = boundary_resolver(secret_store).materialize_async
     register_resource_destination("channel", _channel_secret_destination)
 
-    async def adapter_factory(name: str, config: dict[str, object]) -> ChannelAdapter:
+    async def adapter_factory(uid: str, config: dict[str, object]) -> ChannelAdapter:
         parsed = parse_channel_config(dict(config))
-        # The boundary is keyed by the channel's uid, which a rename keeps.
-        row = await resource_svc.find_by_name("channel", name)
-        uid = row.uid if row is not None else f"name:{name}"
+        # The adapter is named by the channel's uid, which a rename keeps: its
+        # inbound messages carry that in ``channel``. The boundary wants the
+        # label too, so it is read off the row.
+        name = (await resource_svc.get(uid)).name
         if parsed.channel_type == "telegram":
             dest = channel_destination(uid, name, "telegram")
             token = (await materialize({"token": parsed.bot_token_ref}, dest))["token"]
-            return TelegramAdapter(name, token)
+            return TelegramAdapter(uid, token, knowledge_enabled=features.is_enabled(KNOWLEDGE))
         dest = channel_destination(uid, name, "seatalk", parsed.app_id)
         secret = (await materialize({"secret": parsed.app_secret_ref}, dest))["secret"]
-        return SeaTalkAdapter(name, parsed.app_id, secret)
+        return SeaTalkAdapter(uid, parsed.app_id, secret)
+
+    def secret_revision(ref: str) -> str | None:
+        """A stamp of the stored ciphertext, which changes when the secret is
+        replaced; it reads the file and never decrypts it, so no key prompt."""
+        try:
+            data = secret_store.path_of(ref).read_bytes()
+        except OSError:
+            return None
+        return hashlib.sha256(data).hexdigest()[:16]
 
     # A reply typed on the Chat page into a channel's conversation also goes to
     # that chat (spec chat "Mirror a web reply into the channel it came from").
@@ -165,10 +181,20 @@ def wire_channel_kind(
         # this point in the wiring, so it is resolved at call time.
         websockets=SeaTalkWebSocketController(ingest=_ingest_websocket_event),
         materialize=materialize,
+        secret_revision=secret_revision,
         machine_id=local_machine_id,
+        knowledge_enabled=lambda: features.is_enabled(KNOWLEDGE),
         # Each tick delivers what a running channel still owes its chats.
         on_tick=mirror.flush,
     )
+
+    async def _follow_switch(key: str, _enabled: bool) -> None:
+        """Rebuild the adapters when ``knowledge`` is switched, so their command
+        menus follow."""
+        if key == KNOWLEDGE:
+            await runtime.reconcile_once()
+
+    features.subscribe(_follow_switch)
 
     async def on_delete(channel: Resource) -> None:
         await runtime.evict(channel)

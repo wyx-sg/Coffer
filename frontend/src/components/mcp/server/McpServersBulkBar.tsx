@@ -8,9 +8,8 @@ import { useTranslation } from "react-i18next";
 import { BulkReachActions } from "@/components/reach/BulkReachActions";
 import { BulkDeleteButton } from "@/components/table/BulkDeleteButton";
 import { Button } from "@/components/ui/button";
-import { resourcesKey } from "@/lib/api/queryKeys";
-import { resourcesApi, type ResourceOut } from "@/lib/api/resources";
-import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
+import type { ResourceOut } from "@/lib/api/resources";
+import { useBulkDeleteResources } from "@/lib/hooks/useResourceMutations";
 
 interface Props {
   servers: ResourceOut[];
@@ -19,7 +18,7 @@ interface Props {
 
 export function McpServersBulkBar({ servers, onDone }: Props) {
   const { t } = useTranslation();
-  const bulk = useBulkMutate({ invalidate: [resourcesKey] });
+  const bulk = useBulkDeleteResources();
   return (
     <div
       role="region"
@@ -39,7 +38,7 @@ export function McpServersBulkBar({ servers, onDone }: Props) {
           description={t("mcp.page.deleteManyBody")}
           pending={bulk.isPending}
           onConfirm={async () => {
-            await bulk.run(servers, (r) => resourcesApi.remove(r.uid));
+            await bulk.run(servers);
             onDone();
           }}
         />

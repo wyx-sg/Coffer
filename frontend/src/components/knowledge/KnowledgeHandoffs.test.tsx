@@ -8,7 +8,7 @@
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
-import { answerFromFixtures, renderKnowledge } from "./knowledgeTestHarness";
+import { answerFromFixtures, renderKnowledge } from "@/test/knowledgeHarness";
 import { GATEWAY, PASS, UID } from "./knowledgeTestData";
 import { ApiError } from "@/lib/api/errors";
 import { acceptance } from "@/test/acceptance";

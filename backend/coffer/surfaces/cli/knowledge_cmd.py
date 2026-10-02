@@ -20,7 +20,7 @@ with their own tools ("Keep direct file edits a complete way to change
 knowledge").
 
 Every command takes a collection **name** (or a uid) and resolves it once
-through ``_resolve`` (ADR resource-identity-is-an-immutable-uid).
+through ``_resolve`` (ADR identity-is-the-uid-inside-the-file).
 """
 
 from __future__ import annotations
@@ -162,7 +162,7 @@ def submit_material(
     title: str = typer.Option(..., "--title", "-t"),
     description: str = typer.Option(..., "--description", "-d", help="What it is about"),
     body: str = typer.Option("", "--body", "-b"),
-    collection: str = typer.Option(..., "--in", help="Collection to add it to"),
+    collection: str = typer.Option(..., "--collection", help="Collection to add it to"),
 ) -> None:
     """Add new knowledge as an item. Coffer curates it into the documents."""
     payload = {

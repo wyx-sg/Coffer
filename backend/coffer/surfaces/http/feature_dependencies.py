@@ -1,7 +1,7 @@
 """The feature service's FastAPI seams, and the gate a feature's routes carry.
 
 The service is built in ``create_app`` rather than in the lifespan: the
-unauthenticated ``/daemon/status`` reports ``channel`` and ``features``, and it
+unauthenticated ``/daemon/status`` reports ``features``, and it
 must answer during startup, before the lifespan has wired anything. It is kept
 on ``app.state.feature_service`` and published through the ``set_*``/``get_*``
 pair here, like the other kind-agnostic services in ``dependencies``.
@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from coffer import build_channel
 from coffer.application.features import FeatureService
 from coffer.domain.features import FeatureDisabled, feature_for_kind, feature_keys, get_feature
 from coffer.infrastructure.daemon import config as daemon_config
@@ -19,9 +18,8 @@ from coffer.infrastructure.daemon.feature_settings import DaemonConfigFeatureSet
 
 
 def build_feature_service() -> FeatureService:
-    """This build's channel, this machine's settings, this process's pins."""
+    """This machine's settings, this process's pins."""
     return FeatureService(
-        channel=build_channel.CHANNEL,
         settings=DaemonConfigFeatureSettings(),
         pins=daemon_config.read_feature_pins(feature_keys()),
     )

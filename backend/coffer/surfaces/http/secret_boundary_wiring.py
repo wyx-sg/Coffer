@@ -150,7 +150,11 @@ def init_secret_boundary(
         key = manager.current
         return derive_grant_key(key) if key else None
 
-    set_secret_boundary(SecretBoundary(FileBoundaryStore(home), store), PresenceGrants(grant_key))
+    boundary = SecretBoundary(FileBoundaryStore(home), store)
+    # Every path that deletes a ref (the route, a resource's release, a failed
+    # registration's rollback) forgets its approved destinations.
+    store.on_removed(boundary.forget)
+    set_secret_boundary(boundary, PresenceGrants(grant_key))
 
 
 def approval_out(approval: SecretApproval) -> ApprovalOut:
@@ -197,16 +201,39 @@ async def current_destinations(resources: ResourceService, audit: AuditService) 
     return out
 
 
+class ResourceBindingSettler:
+    """The post-register seam (``ResourceService`` calls it after every create
+    and every config change): the destination its kind declared is evaluated
+    against the boundary now. A value supplied for it is approved with the
+    registration; a ref in use elsewhere, or a target that moved, records its
+    pending approval where the person is looking (spec secret "Approve a
+    secret's binding when its destination is registered")."""
+
+    async def settle(self, resource: Resource, actor: str) -> None:
+        describe = _RESOURCE_DESTINATIONS.get(resource.kind)
+        boundary = optional_secret_boundary()
+        if describe is None or boundary is None:
+            return
+        found = describe(resource)
+        if found is None:
+            return
+        dest, refs = found
+        await asyncio.to_thread(boundary.bind, dest, refs, actor=actor)
+
+
 _sources: tuple[ResourceService, AuditService] | None = None
 
 
 def remember_destination_sources(resources: ResourceService, audit: AuditService) -> None:
-    """Remember where destinations are read from, for :func:`refresh_approvals`.
+    """Remember where destinations are read from, for :func:`refresh_approvals`,
+    and install the post-register seam on the resource service.
 
     Called once per start, after every kind has registered its destinations.
     """
     global _sources
     _sources = (resources, audit)
+    # From here on a registration settles its bindings (the post-register seam).
+    resources.set_binding_settler(ResourceBindingSettler())
 
 
 async def refresh_approvals() -> list[SecretApproval]:
@@ -223,6 +250,7 @@ async def refresh_approvals() -> list[SecretApproval]:
 
 
 __all__ = [
+    "ResourceBindingSettler",
     "approval_applied",
     "approval_out",
     "boundary_resolver",

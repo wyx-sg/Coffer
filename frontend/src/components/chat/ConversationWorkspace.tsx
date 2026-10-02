@@ -69,6 +69,8 @@ export function ConversationWorkspace({ c, onNew, agentNames }: Props) {
         onResend={c.turn.resend}
         pending={c.turn.pending}
         onSetPending={(texts) => void c.turn.setPending(texts)}
+        queueHeld={c.turn.queueHeld}
+        onResumeQueue={() => void c.turn.resumeQueue()}
         readOnly={c.activeArchived}
         onRestore={() => c.restoreConversation(conv.id)}
         restorePending={c.restorePending}

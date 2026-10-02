@@ -6,22 +6,23 @@ an endpoint that turns out to speak a different wire than the probe guessed is
 corrected in place rather than deleted and re-entered, key and all.
 
 But the wire is not inert, and saying "nothing keys off it" (as this module and
-``ProviderPatch`` both used to) was wrong: ``targets.scoped_targets`` answers
-``[]`` for ``Protocol.OLLAMA`` BEFORE the resource's scope is consulted, so the
-wire decides whether a connection can cover any agent at all.
+``ProviderPatch`` both used to) was wrong: ``targets.reaches`` answers
+false for ``Protocol.OLLAMA`` BEFORE the resource's scope is consulted, so the
+wire decides whether a connection can serve any agent at all.
 
-Which is why a wire change is REFUSED while the connection is ``is_active``.
+Which is why a wire change is REFUSED while an agent runs on the connection.
 Allowing it would strand the projection: a live anthropic connection moved to
-``ollama`` loses every target while the ``~/.claude/settings.json`` it already
-wrote stays behind, and nothing left would ever de-project it (a revert to the
-built-in login is keyed by agent and reaches only the connection's targets).
-De-projecting silently would be worse than refusing: the user asked to edit a
-field, not to take their agents off a gateway. An inactive connection is unaffected — no projection
-exists to strand. The re-validate below still enforces the other rule the wire
-carries: an ollama connection holds no key.
+``ollama`` reaches no agent any more while the ``~/.claude/settings.json`` it
+already wrote stays behind, and nothing left would ever de-project it (a revert
+to the built-in login is keyed by agent). De-projecting silently would be worse
+than refusing: the user asked to edit a field, not to take their agents off a
+gateway. A connection no agent runs on is unaffected — no projection exists to
+strand. The re-validate below still enforces the other rule the wire carries: an
+ollama connection holds no key.
 
-``is_active`` is read from the STORED config rather than from the patch: the
-flip is ``activate`` / ``deactivate``'s business and never travels in a patch.
+"An agent runs on it" is read from the agents' own records
+(``AgentConfig.connection_uid``), never from the patch: the switch is
+``activate`` / ``deactivate``'s business.
 
 Which agents a connection projects into is NOT patched here: it is the
 framework-level scope on the resource row, edited through the scope surface
@@ -37,6 +38,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coffer.application.provider.secret_gate import write_key
+from coffer.domain.agent.config import AgentConfig
 from coffer.domain.provider.config import Protocol, ProviderConfig
 from coffer.domain.provider.errors import (
     ProviderProtocolLockedWhileActive,
@@ -46,6 +48,19 @@ from coffer.domain.resource import Resource
 
 if TYPE_CHECKING:
     from coffer.application.provider.service import ProviderService, _CuratedModels
+
+
+def _agents_running_on(uid: str, agents: list[Resource]) -> list[str]:
+    """The types of the agents whose record names connection ``uid``."""
+    running: list[str] = []
+    for row in agents:
+        try:
+            cfg = AgentConfig.model_validate(row.config)
+        except ValueError:
+            continue
+        if cfg.connection_uid == uid:
+            running.append(cfg.type.value)
+    return running
 
 
 async def update(
@@ -68,13 +83,13 @@ async def update(
         # wire the connection already has is not a change, so a client that
         # submits a whole form rather than a diff is never told its unchanged
         # dropdown is a conflict.
-        if config.get("is_active"):
+        running = _agents_running_on(uid, await service._agents.list())
+        if running:
             # The connection's NAME in the error, because the message is read
             # by a person looking at a form they just submitted; the uid it was
             # addressed by would tell them nothing.
-            reached = service._compat(current, await service._agents.list())
             raise ProviderProtocolLockedWhileActive(
-                current.name, str(config.get("protocol")), [t.value for t in reached]
+                current.name, str(config.get("protocol")), running
             )
         config["protocol"] = protocol.value
     if base_url is not None:

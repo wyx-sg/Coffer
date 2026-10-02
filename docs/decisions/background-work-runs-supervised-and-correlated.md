@@ -1,6 +1,6 @@
 # Background Work Runs Supervised, and Every Record Carries One Correlation Id
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-10-01
 **Deciders**: Yuxing Wu
 **Related**: [Channels Are Thin Transport Adapters Over One Shared Core, Supervised In-Daemon](channel-adapter-framework.md), [SeaTalk Inbound Is One Outbound WebSocket, Through an Operator-Supplied SDK](seatalk-websocket-inbound.md), [Telegram Inbound Is a Long Poll That Commits the Offset After Dispatch](telegram-long-polling.md), [The Daemon Is Resident: It Never Idles Out, and a Login Service Restarts Only a Crash](daemon-is-a-resident-login-service.md), [Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate](eval-capture-and-regression-gate.md), spec daemon "Supervise every background task the daemon starts", spec daemon "Report event-loop lag and background task crashes on the status", spec resource-framework "Correlate the audit log, the MCP invocation log and the daemon log by one trace id", change archive `openspec/changes/archive/2026-10-01-supervise-background-tasks-and-correlate-records/`

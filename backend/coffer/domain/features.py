@@ -1,4 +1,4 @@
-"""The experimental features, and the release channel that decides their default.
+"""The experimental features.
 
 One registry, and every surface takes the list from it (spec
 experimental-features "Declare the experimental features in one registry"). A
@@ -19,13 +19,10 @@ from typing import Literal
 
 from coffer.domain.error_base import CofferError
 
-#: The release channel a build carries. ``stable`` is stamped by the release
-#: workflow onto a tagged build; every other build is ``dev``.
-Channel = Literal["stable", "dev"]
-
 #: Where a feature's current state was decided, highest precedence first:
-#: a ``COFFER_FEATURES`` pin, the machine's own setting, the channel default.
-FeatureSource = Literal["pin", "setting", "channel"]
+#: a ``COFFER_FEATURES`` pin, the machine's own setting, the built-in default
+#: (off).
+FeatureSource = Literal["pin", "setting", "default"]
 
 
 @dataclass(frozen=True)
@@ -50,13 +47,49 @@ class ExperimentalFeature:
     kinds: tuple[str, ...] = ()
 
 
-#: Empty: no capability is experimental right now. Sync, knowledge and memory
-#: graduated at 1.0 — their entries and every gate that named them were
-#: deleted, and migration 0116 stripped their stored settings. A feature joins
-#: by adding one entry here; it leaves by deleting that entry, every gate that
-#: names it, and its stored settings (spec experimental-features "Declare the
-#: experimental features in one registry").
-EXPERIMENTAL_FEATURES: tuple[ExperimentalFeature, ...] = ()
+#: The four experimental features (spec experimental-features "Declare the
+#: experimental features in one registry"). Everything else — the shell, the
+#: overview, Agents, the MCP gateway and its custom tools, Skills, Secrets,
+#: Activity, Settings, Conversations and Channels — is always on and owns no
+#: entry.
+#:
+#: ``knowledge`` — the knowledge collections. ``memory`` — agent memory.
+#: ``sync`` — vault sync. ``models`` — Model providers, the local model proxy
+#: and Usage. Every one is off until the person switches it on, on this
+#: machine. A feature joins by adding one entry here and tagging its other
+#: surfaces with its key; it leaves by deleting that entry and every gate that
+#: names it (and, once released, a migration that strips its stored setting).
+KNOWLEDGE = "knowledge"
+MEMORY = "memory"
+SYNC = "sync"
+MODELS = "models"
+
+EXPERIMENTAL_FEATURES: tuple[ExperimentalFeature, ...] = (
+    ExperimentalFeature(
+        key=KNOWLEDGE,
+        route_prefixes=("/api/v1/knowledge",),
+        kinds=("knowledge",),
+    ),
+    ExperimentalFeature(
+        key=MEMORY,
+        route_prefixes=("/api/v1/memory",),
+        kinds=("memory",),
+    ),
+    ExperimentalFeature(
+        key=SYNC,
+        route_prefixes=("/api/v1/sync",),
+    ),
+    ExperimentalFeature(
+        key=MODELS,
+        route_prefixes=(
+            "/api/v1/providers",
+            "/api/v1/models",
+            "/api/v1/proxy",
+            "/api/v1/usage",
+        ),
+        kinds=("provider",),
+    ),
+)
 
 
 # The lookups read the registry on every call rather than from an index built
@@ -67,10 +100,6 @@ EXPERIMENTAL_FEATURES: tuple[ExperimentalFeature, ...] = ()
 def feature_keys() -> tuple[str, ...]:
     """Every registered key, in registry order."""
     return tuple(f.key for f in EXPERIMENTAL_FEATURES)
-
-
-def is_registered(key: str) -> bool:
-    return key in feature_keys()
 
 
 def get_feature(key: str) -> ExperimentalFeature:
@@ -97,11 +126,6 @@ def feature_for_path(path: str) -> str | None:
             if path == prefix or path.startswith(prefix + "/"):
                 return feature.key
     return None
-
-
-def channel_default(channel: Channel) -> bool:
-    """A feature's state when nothing pins it and the machine has no setting."""
-    return channel == "dev"
 
 
 class FeatureUnknown(CofferError):  # noqa: N818

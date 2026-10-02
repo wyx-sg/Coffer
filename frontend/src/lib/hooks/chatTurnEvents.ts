@@ -13,6 +13,7 @@ import type { ContentBlock, Message } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
 import { messagesKey } from "@/lib/api/queryKeys";
 
+/** @ui-only live-turn view state; never crosses the wire. */
 export interface LiveMessage {
   /**
    * The turn's text and tool blocks in the order it emitted them — the same
@@ -69,6 +70,7 @@ function completeReplyCount(messages: Message[]): number {
   return messages.filter((m) => m.role === "assistant" && m.status === "complete").length;
 }
 
+/** @ui-only handler context; never crosses the wire. */
 export interface HandlerCtx {
   conversationId: string;
   qc: QueryClient;

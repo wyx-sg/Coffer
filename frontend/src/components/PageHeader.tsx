@@ -5,15 +5,11 @@
 // that sits beside it (a count, a status, "Unsaved changes"), and the page's
 // actions pushed to the right — and an optional subtitle under the row. Detail
 // pages keep one fixed action order: reach → test/refresh → edit → delete.
-import type { LucideIcon } from "lucide-react";
 import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 interface Props {
-  /** Accepted for compatibility; the boards draw no icon beside a page title,
-   *  so it is not rendered (the sidebar entry already carries it). */
-  icon?: LucideIcon;
   title: ReactNode;
   subtitle?: ReactNode;
   /** Right-aligned slot for the page's primary buttons, on the title's row. */

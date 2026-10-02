@@ -2,9 +2,9 @@
 //
 // Every wire type is an alias of the provider-switching contract's generated
 // schemas (`generated/provider-switching.ts`), generated from
-// `provider_schemas.py`. Transport via the shared `call` (agents/frontend.md §4).
+// `provider_schemas.py`. Transport via the typed client (agents/frontend.md §4).
 
-import { call, enc } from "@/lib/api/call";
+import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type { components } from "@/lib/api/generated/provider-switching";
 
 type Schemas = components["schemas"];
@@ -74,15 +74,9 @@ export const WIRE_BY_AGENT: Record<string, Protocol> = {
 
 export type Provider = Schemas["ProviderOut"];
 
-export type ProviderListOut = Schemas["ProviderListOut"];
-
 export type ProviderCreate = Schemas["ProviderCreate"];
 
 export type ProviderPatch = Schemas["ProviderPatch"];
-
-export type ActivateOut = Schemas["ActivateOut"];
-
-export type DeactivateOut = Schemas["DeactivateOut"];
 
 /** One runtime answering at a loopback URL, with the models it serves. */
 export type LocalRuntimeFound = Schemas["LocalRuntimeOut"];
@@ -93,7 +87,6 @@ export type DetectLocalOut = Schemas["DetectLocalOut"];
  *  from: `user` (You set), `provider` (its own API), `bundled` (the price list
  *  shipped with the release), `local` (costs nothing) — or `null`: unknown. */
 export type ModelPrice = Schemas["ModelPriceOut"];
-export type ModelPricesOut = Schemas["ModelPricesOut"];
 /** The price list pricing reads now, and whether its daily refresh is on. */
 export type PriceList = Schemas["PriceListOut"];
 /** Its query key (kept here: queryKeys.ts is at its size limit). */
@@ -101,19 +94,31 @@ export const priceListKey = ["providers", "price-list"] as const;
 /** A price the user sets on a curated model. */
 export type CuratedPrice = NonNullable<ProviderModel["price"]>;
 
+/** What an endpoint is asked with: a wire, URL and the stored key's ref — or an
+ *  inline, not-yet-saved `secret_value` so a dialog can list before saving. */
+export type ListModelsIn = Schemas["ListModelsIn"];
+/** The same plus the one model the minimal probe request names. */
+export type TestConnectionIn = Schemas["TestConnectionIn"];
+/** What an endpoint reports it serves. Each id carries the modality Coffer
+ *  INFERRED from its name (spec provider-switching "Offer only text models to
+ *  chat pickers") — a pre-fill for the connection's model table, never a stored
+ *  fact: once an entry is curated, the modality the user left on it is the truth. */
+export type EndpointModelsOut = Schemas["ProviderModelsOut"];
+
 // ---------------------------------------------------------------------------
 // API object
 // ---------------------------------------------------------------------------
 
 export const providersApi = {
-  list: () => call<ProviderListOut>("/providers"),
+  list: () => unwrap(getApiClient().GET("/providers")),
 
-  get: (uid: string) => call<Provider>(`/providers/${enc(uid)}`),
+  get: (uid: string) =>
+    unwrap(getApiClient().GET("/providers/{uid}", { params: { path: { uid } } })),
 
-  create: (body: ProviderCreate) => call<Provider>("/providers", { method: "POST", body }),
+  create: (body: ProviderCreate) => unwrap(getApiClient().POST("/providers", { body })),
 
   update: (uid: string, body: ProviderPatch) =>
-    call<Provider>(`/providers/${enc(uid)}`, { method: "PATCH", body }),
+    unwrap(getApiClient().PATCH("/providers/{uid}", { params: { path: { uid } }, body })),
 
   // There is no `rename` here. It was a route of this kind's own, and it
   // existed because the connection's name was its identity: the projection
@@ -123,48 +128,82 @@ export const providersApi = {
   // leaves a rename as an ordinary label edit — `resourcesApi.rename`, the same PATCH every other
   // kind uses.
 
-  remove: (uid: string) => call<void>(`/providers/${enc(uid)}`, { method: "DELETE" }),
+  remove: (uid: string) =>
+    unwrapVoid(getApiClient().DELETE("/providers/{uid}", { params: { path: { uid } } })),
 
   /** Put the providers in this order — fallback priority. Every uid once. */
-  reorder: (uids: string[]) =>
-    call<ProviderListOut>("/providers/order", { method: "PUT", body: { uids } }),
+  reorder: (uids: string[]) => unwrap(getApiClient().PUT("/providers/order", { body: { uids } })),
 
   /** The price list in use (bundled or refreshed) and its daily refresh. */
-  priceList: () => call<PriceList>("/providers/price-list"),
+  priceList: () => unwrap(getApiClient().GET("/providers/price-list")),
 
   /** Turn the daily price-list refresh on or off on this machine. */
   setPriceRefresh: (refresh: boolean) =>
-    call<PriceList>("/providers/price-list", { method: "PUT", body: { refresh } }),
+    unwrap(getApiClient().PUT("/providers/price-list", { body: { refresh } })),
 
   /** Each model's price on this provider, with its source. Read-only. */
   prices: (uid: string, models: string[]) =>
-    call<ModelPricesOut>(`/providers/${enc(uid)}/prices`, { method: "POST", body: { models } }),
+    unwrap(
+      getApiClient().POST("/providers/{uid}/prices", {
+        params: { path: { uid } },
+        body: { models },
+      }),
+    ),
 
   /** Which local model runtime answers at a loopback URL — or, with `null`, at
    *  each runtime's default port. Read-only: nothing is pulled or loaded; a
    *  non-loopback URL is refused as 422. */
   detectLocal: (baseUrl: string | null) =>
-    call<DetectLocalOut>("/providers/detect-local", {
-      method: "POST",
-      body: { base_url: baseUrl },
-    }),
+    unwrap(getApiClient().POST("/providers/detect-local", { body: { base_url: baseUrl } })),
 
-  activate: (uid: string) =>
-    call<ActivateOut>(`/providers/${enc(uid)}/activate`, { method: "POST" }),
+  /** Switch ONE agent type onto this connection: writes that agent's native
+   * config and its `connection_uid`, nothing else. */
+  activate: (uid: string, agentType: AgentType) =>
+    unwrap(
+      getApiClient().POST("/providers/{uid}/activate", {
+        params: { path: { uid } },
+        body: { agent_type: agentType },
+      }),
+    ),
 
   /** Switch an agent type back to its own built-in login: remove Coffer's
-   * projection and clear the connection active for it. Idempotent. */
+   * projection and clear the agent's connection. Idempotent. */
   useBuiltin: (agentType: AgentType) =>
-    call<DeactivateOut>(`/providers/use-builtin/${enc(agentType)}`, { method: "POST" }),
+    unwrap(
+      getApiClient().POST("/providers/use-builtin/{agent_type}", {
+        params: { path: { agent_type: agentType } },
+      }),
+    ),
 
   /** Make this connection Coffer's internal-engine default (clears the flag on
    * all others). Returns the updated connection. */
   setInternalDefault: (uid: string) =>
-    call<Provider>(`/providers/${enc(uid)}/internal-default`, { method: "POST" }),
+    unwrap(getApiClient().POST("/providers/{uid}/internal-default", { params: { path: { uid } } })),
 
   /** Make this connection the one Coffer transcribes speech on (clears the flag
    * on all others). The twin of `setInternalDefault`, never a substitute for
    * it: nothing falls back between the two. */
   setTranscribeDefault: (uid: string) =>
-    call<Provider>(`/providers/${enc(uid)}/transcribe-default`, { method: "POST" }),
+    unwrap(
+      getApiClient().POST("/providers/{uid}/transcribe-default", { params: { path: { uid } } }),
+    ),
+};
+
+/** Introspect an endpoint without saving anything (`/models/*`). */
+export const modelProbeApi = {
+  /** List the models an endpoint reports. Empty list + message → the surface shows why. */
+  list: (p: ListModelsIn) =>
+    unwrap(
+      getApiClient().POST("/models/list-models", {
+        body: {
+          provider: p.provider,
+          base_url: p.base_url ?? null,
+          secret_ref: p.secret_ref ?? null,
+          secret_value: p.secret_value ?? null,
+        },
+      }),
+    ),
+  /** Probe a chat provider with a minimal request. */
+  test: (p: TestConnectionIn) =>
+    unwrap(getApiClient().POST("/models/test-connection", { body: p })),
 };

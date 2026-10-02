@@ -19,7 +19,7 @@ Coffer's answer has three parts:
 
 What Claude Code learns in the morning, Codex has in its index when it opens the same repository in the afternoon. Coffer does not write into Codex's memory to make that happen. It hands Codex the index line.
 
-Memory is not [knowledge](/architecture/knowledge). Knowledge is what a person or an agent wrote down about the world, and agents pull it on demand through the `coffer-guide` catalogue. Memory is what agents learned while working, and the whole tree can be rebuilt from the agents' own copies. Memory is handed to a session, through hooks you install per agent, so it is an explicit exception to Coffer's [pull, not push](/architecture/design-principles#pull-not-push) rule rather than a silent one. That exception used to be the index at session start alone. The ADR [Memory Reaches a Session at Three Moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md), still **Proposed**, widens it to each prompt and to a known trap, and proposes revising the principle for memory; the principles pages still state it as it stood, pending that amendment. Knowledge stays pull.
+Memory is not [knowledge](/architecture/knowledge). Knowledge is what a person or an agent wrote down about the world, and agents pull it on demand through the `coffer-guide` catalogue. Memory is what agents learned while working, and the whole tree can be rebuilt from the agents' own copies. Memory is handed to a session, through hooks you install per agent, so it is an explicit exception to Coffer's [pull, not push](/architecture/design-principles#pull-not-push) rule rather than a silent one. That exception used to be the index at session start alone. The ADR [Memory Reaches a Session at Three Moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md), widens it to each prompt and to a known trap; the principle is stated for memory in those terms. Knowledge stays pull.
 
 ## Design decisions
 
@@ -52,7 +52,7 @@ A partition is a top-level directory under `~/.coffer/derived/memory/`:
 | --- | --- | --- |
 | `.raw/` | aggregation only | Faithful. Each agent's own words, one file per entry, stamped with the agent, the native path and the read time. It is the distil pass's input only: the web UI's tree and the partition file routes do not list or read it. |
 | `notes/` | distil only | Useful. Coffer's own prose, one topic per file, with provenance naming every raw entry behind it. |
-| `MEMORY.md` | distil only | Findable. One line per note, grouped by type, newest first. |
+| `MEMORY.md` | distil only | Findable. One line per note, newest first (the same lines and order delivery uses). |
 | `RETIRED.md` | distil only | Makes a retirement stick. The next distil pass reads it as an exclusion list. |
 
 Because each directory has exactly one writer, you can re-run a bad distillation without reading the agents again: `.raw/` still holds everything they said. The rule is checkable in the code: exactly one module writes into `.raw/`, and the distil pass never uses it to write.
@@ -109,7 +109,7 @@ Splitting the two steps is what lets aggregation skip an unchanged file before p
 | Search terms | none, because the format states none | from `## What's in Memory` in the summary, joined to task groups by conservative token coverage |
 | Ignored | the agent's own `MEMORY.md` index | `## General Tips`, the rollout-reference subsections, `raw_memories.md`, `rollout_summaries/` |
 
-Neither reader opens session transcripts or rollouts as a source. Both agents already distil their own sessions, and Coffer starts from that output. The Claude Code reader reads a transcript's recorded `cwd` for one purpose only: finding an entry's project root.
+Neither reader opens session transcripts or rollouts as a source. Both agents already distil their own sessions, and Coffer starts from that output. The Claude Code reader reads a transcript's recorded `cwd` for one purpose only: finding an entry's project root (accepted only when Claude Code's encoding of that `cwd` is exactly the project's folder name, and looked up once per project per pass).
 
 Codex's search-term join is deliberately conservative. Codex rewords a group's title in its summary, so an exact title match finds almost nothing. The reader matches on token coverage instead, and attaches terms only when exactly one group clears the bar *and* exactly one summary topic claims that group. A wrong attribution is worse than none.
 
@@ -149,7 +149,7 @@ The `version` is the version of the filing rules. A digest says a source is unch
 
 ### Stable raw entries
 
-A raw entry's file name is an origin key: the first 16 hex characters of a SHA-256 over `(agent, native_path, anchor)`. The anchor is the entry's position inside its source, such as the fact file's `name`, or a content hash for a Codex bullet. A second read of an unchanged source therefore overwrites the same files rather than adding near-duplicates. When the agent deletes a bullet from its own memory, the re-read no longer produces that entry, and the pass deletes the stale file from `.raw/`.
+A raw entry's file name is an origin key: the first 16 hex characters of a SHA-256 over `(agent, native_path, anchor)`. The anchor is the entry's position inside its source, such as the fact file's `name`, or a content hash for a Codex bullet. A second read of an unchanged source therefore overwrites the same files rather than adding near-duplicates. When the agent deletes a bullet from its own memory, the re-read no longer produces that entry, and the pass deletes the stale file from `.raw/`. When the agent deletes a whole source file, the file is never listed again, so the pass sweeps what an agent's deleted files once produced the same way, but only for a registered, enabled agent whose config directory is still there: an unmounted directory proves nothing about its files, and a disabled agent keeps what it contributed.
 
 Aggregation never compares two agents' entries. Two agents describing one lesson rarely share any phrasing, so a literal comparison would merge nothing. Merging by meaning is the distil pass's job.
 
@@ -237,7 +237,7 @@ flowchart LR
 2. **At each substantive prompt**, the few notes that prompt names, ranked lexically.
 3. **Before a known trap**, the note a person tied to a command, delivered as the reason that command is held once. The same trigger mechanism also adds a note *after* a command whose output shows a known error.
 
-The design, the options weighed and the evidence are in the ADR [Memory Reaches a Session at Three Moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md). Its status is **Proposed**.
+The design, the options weighed and the evidence are in the ADR [Memory Reaches a Session at Three Moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md).
 
 ### Why three moments
 

@@ -85,6 +85,15 @@ def test_parameters_that_would_exhaust_memory_are_refused(key: bytes) -> None:
         key_backup.unwrap(json.dumps(doc), _PASS)
 
 
+def test_parameters_that_each_pass_their_bound_but_need_gigabytes_are_refused(key: bytes) -> None:
+    """scrypt needs 128 * r * N bytes: N=2^20 with r=16 is 2 GiB."""
+    doc = json.loads(key_backup.wrap(key, _PASS))
+    doc["kdf"]["n"], doc["kdf"]["r"] = 2**20, 16
+
+    with pytest.raises(MasterKeyFileInvalid):
+        key_backup.unwrap(json.dumps(doc), _PASS)
+
+
 def test_a_header_fingerprint_that_is_not_the_keys_is_refused(key: bytes) -> None:
     doc = json.loads(key_backup.wrap(key, _PASS))
     doc["fingerprint"] = "0" * 12

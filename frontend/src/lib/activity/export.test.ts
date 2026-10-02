@@ -1,7 +1,10 @@
 // src/lib/activity/export.test.ts — the export writes every matching record through each log's own route.
 import { beforeEach, expect, test, vi } from "vitest";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 
 const { getApiClient } = await import("@/lib/api/client");
 const { collectForExport, toCsv, toJson } = await import("./export");

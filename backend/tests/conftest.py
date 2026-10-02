@@ -61,6 +61,12 @@ os.environ.setdefault("COFFER_QUOTA_POLL", "off")
 # (``infrastructure/usage/price_refresh.REFRESH_ENV``); tests price from the
 # snapshot in the tree.
 os.environ.setdefault("COFFER_PRICE_REFRESH", "off")
+# Every experimental feature is off until switched on, and almost every test
+# drives routes, tools or passes of one of them, so the suite pins all four on
+# (``COFFER_FEATURES``). The tests of the feature mechanism itself, and the
+# gate tests of each feature's off state, replace the pin with
+# ``tests.support.features.pin_features`` / ``monkeypatch``.
+os.environ.setdefault("COFFER_FEATURES", "knowledge=on,memory=on,sync=on,models=on")
 
 
 @pytest.fixture(autouse=True)
@@ -98,6 +104,19 @@ def _no_channel_burst_window(monkeypatch):
     from coffer.application.channel import inbound_burst
 
     monkeypatch.setattr(inbound_burst, "MAX_WINDOW_SECONDS", 0.0)
+
+
+@pytest.fixture(autouse=True)
+def _restore_feature_service() -> Iterator[None]:
+    """``create_app`` publishes the feature service process-wide, and a bare app
+    in a later test reads it (``kind_enabled``): without this, whichever app an
+    earlier test on the worker booted decides which features a test of a bare app
+    sees."""
+    from coffer.surfaces.http import feature_dependencies
+
+    prior = feature_dependencies._feature_service
+    yield
+    feature_dependencies._feature_service = prior
 
 
 # Accept any Host header across the suite. The loopback-Host guard

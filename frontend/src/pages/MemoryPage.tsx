@@ -15,23 +15,23 @@
 // with no hook detail: the hook's state and Repair live only on the agent's
 // page. "Partitions" is the table, or the first-run state while there are
 // none. The audit trail is the Activity page's, not duplicated here.
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Brain } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { MemoryAutomaticPopover } from "@/components/memory/MemoryAutomaticPopover";
 import { MemoryDeliveriesSection } from "@/components/memory/MemoryDeliveriesSection";
-import {
-  MemoryHeaderStatus,
-  useMemoryUpdateRunning,
-} from "@/components/memory/MemoryHeaderStatus";
+import { MemoryHeaderStatus, useMemoryUpdateRunning } from "@/components/memory/MemoryHeaderStatus";
 import { MemoryReadFailures } from "@/components/memory/MemoryReadFailures";
 import { MemoryPartitionsTable } from "@/components/memory/MemoryPartitionsTable";
-import { MemorySection } from "@/components/memory/MemorySection";
+import { Section } from "@/components/Section";
 import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
 import { MemoryWelcomePanel } from "@/components/memory/MemoryWelcomePanel";
 import { PageHeader } from "@/components/PageHeader";
 import { translateApiError } from "@/lib/api/errors";
+import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
+import { memoryKey } from "@/lib/api/queryKeys";
 import { useMemoryPartitions } from "@/lib/hooks/useMemory";
 
 export function MemoryPage() {
@@ -41,11 +41,20 @@ export function MemoryPage() {
   const memories = rows.reduce((sum, p) => sum + p.note_count, 0);
   const firstRun = !isPending && !error && rows.length === 0;
   const updating = useMemoryUpdateRunning();
+  // A distil pass or a read finishing emits a memory change event: refetch
+  // everything read under memoryKey instead of waiting for a window focus.
+  const qc = useQueryClient();
+  useDaemonEvents({
+    onMessage: (m) => {
+      if (m.type === "change" && m.change.kind === "memory") {
+        void qc.invalidateQueries({ queryKey: memoryKey });
+      }
+    },
+  });
 
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={Brain}
         title={t("memory.title")}
         subtitle={t("memory.subtitle")}
         actions={
@@ -68,29 +77,32 @@ export function MemoryPage() {
       {firstRun ? (
         <MemoryWelcomePanel />
       ) : (
-      <MemorySection
-        title={t("memory.partitions.title")}
-        meta={
-          rows.length > 0
-            ? `${t("memory.partitions.count", { count: rows.length })} · ${t(
-                "memory.partitions.memories",
-                { count: memories },
-              )}`
-            : undefined
-        }
-        testId="memory-partitions"
-      >
-        {error ? (
-          <EmptyState
-            icon={Brain}
-            tone="error"
-            title={t("memory.loadFailed")}
-            description={translateApiError(t, error)}
-          />
-        ) : (
-          <MemoryPartitionsTable rows={rows} isLoading={isPending} />
-        )}
-      </MemorySection>
+        <Section
+          as="h2"
+          gap="snug"
+          labelled
+          title={t("memory.partitions.title")}
+          meta={
+            rows.length > 0
+              ? `${t("memory.partitions.count", { count: rows.length })} · ${t(
+                  "memory.partitions.memories",
+                  { count: memories },
+                )}`
+              : undefined
+          }
+          testId="memory-partitions"
+        >
+          {error ? (
+            <EmptyState
+              icon={Brain}
+              tone="error"
+              title={t("memory.loadFailed")}
+              description={translateApiError(t, error)}
+            />
+          ) : (
+            <MemoryPartitionsTable rows={rows} isLoading={isPending} />
+          )}
+        </Section>
       )}
     </div>
   );

@@ -7,9 +7,10 @@ announces itself (``HintingResourceRepo``). Each kind's wiring registers the
 targets it supplies; the lifespan then runs the boot pass, starts the periodic
 loop, and cancels it on shutdown.
 
-A sync round needs no hook of its own: its checkout tells the vault
-writer's listeners what changed, and each changed resource is hinted exactly
-like an API write.
+A sync round's checkout tells the vault writer's listeners what changed, and
+each changed resource is hinted exactly like an API write. The round also
+holds the reconciler (``Reconciler.hold``) from its first git call to its
+import pass, so no pass judges the vault in between.
 """
 
 from __future__ import annotations

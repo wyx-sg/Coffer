@@ -110,7 +110,12 @@ class RetentionService:
         if days <= 0:
             raise ValueError(f"days must be positive, got {days}")
         cutoff = (now or datetime.now(tz=UTC)) - timedelta(days=days)
-        return await self._repo.count_rows(table.sql_table, table.timestamp_column, cutoff)
+        return await self._repo.count_rows(
+            table.sql_table,
+            table.timestamp_column,
+            cutoff,
+            also_older_column=table.also_older_column,
+        )
 
     async def prune(
         self,
@@ -144,7 +149,10 @@ class RetentionService:
                 )
             else:
                 affected = await self._repo.delete_older_than(
-                    table.sql_table, table.timestamp_column, cutoff
+                    table.sql_table,
+                    table.timestamp_column,
+                    cutoff,
+                    also_older_column=table.also_older_column,
                 )
             if table.owns_policy:
                 # A follower's rows are not its leader's: leave the leader's

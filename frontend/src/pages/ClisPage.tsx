@@ -92,7 +92,6 @@ export function ClisPage() {
     <div className="-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">
       <div className="shrink-0 border-b border-border-subtle px-6 py-5 md:px-8">
         <PageHeader
-          icon={SquareTerminal}
           title={t("clis.title")}
           badges={
             <>

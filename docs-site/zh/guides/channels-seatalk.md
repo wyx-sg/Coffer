@@ -86,6 +86,7 @@ channel:  my-seatalk (seatalk)
 uid:      4c7a…
 agent:    claude-code
 gating:   require_mention=on  ignore_other_mentions=off
+idle:     new conversation after 24 h idle
 secret:   app_secret_ref = channel/st/app-secret
 enabled:  True    running: True
 runs on:  3f9c… (this machine)

@@ -207,8 +207,8 @@ name.
 
 ### Requirement: Stream the reply under SeaTalk's streaming contract
 **The SeaTalk streaming constraints are contract, not implementation detail.**
-SeaTalk cannot edit a delivered message at all, yet streams one, which is why
-`supports_live_text` and `supports_edit` are separate flags
+SeaTalk cannot edit a delivered text message at all, yet streams one, which is why
+the core asks for a live surface (`supports_live_text`) and not for edits
 ([channels](../spec.md) "Grow a reply in place on one live surface"); the streamed message IS the reply, so
 `live_text_persists` MUST be true and the surface opens the moment the turn
 starts, acknowledging the owner immediately.

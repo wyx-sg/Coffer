@@ -33,7 +33,7 @@ Coffer 用智能体之下的一层共享层取代这些副本：
 | --- | --- |
 | **一个 MCP 端点** | 上游 MCP 服务器只注册一次。每个智能体的配置里只有一个 `coffer` 条目；工具以 `<server>__<tool>` 的名字出现，每个服务器开放哪些工具、哪些智能体能用都由你决定，每次调用都有记录（从不记录参数）。工具数超出预算后，`coffer__search_tools` 可以在完整目录里搜索。 |
 | **自定义工具** | 导入 OpenAPI 规范，或描述一个请求，就能把任意 HTTP API 变成智能体的工具。请求由网关发出，出站时带上你的密钥。 |
-| **一个技能库** | [AgentSkills](https://agentskills.io) 技能只导入一次——来自文件夹或 git 仓库——Coffer 把它们链接进每个智能体的 `skills/` 目录，保持链接正确，并跟踪上游更新。**命令行工具**页列出技能需要哪些命令，以及哪些缺失、版本太旧或没有登录。 |
+| **一个技能库** | [AgentSkills](https://agentskills.io) 技能只导入一次——来自文件夹、压缩包或 git 仓库——Coffer 把它们链接进每个智能体的 `skills/` 目录，保持链接正确，并跟踪上游更新。**命令行工具**页列出技能需要哪些命令，以及哪些缺失、版本太旧或没有登录。 |
 | **知识** | `~/.coffer/vault/knowledge/` 下的普通 Markdown 知识集。智能体借助生成的目录，用自己的文件工具读取，通过 `coffer__write` 往里添加。不切块、不做向量化。可选的整理会把新材料合并进已有文档，并保留可撤销的历史。 |
 | **记忆** | Coffer 以只读方式读取每个智能体自己的原生记忆，按项目提炼成笔记，另加一个 `global` 分区，再通过 Hook 投递回去——Claude Code 学到的，Codex 也知道。 |
 | **模型提供商** | 提供商配置（接入地址和 API 密钥）只存一次，智能体一键切换过去。智能体与 Coffer 的本地模型代理通信，由代理在上游加上 API 密钥、在提供同一模型的连接之间故障切换，并统计用量和订阅额度。提供商的 API 密钥 不会写进智能体的配置。 |
@@ -131,7 +131,7 @@ frontend/       React + TypeScript + Vite web UI, served by the daemon
 desktop/        Tauri macOS shell: Dock icon, menu-bar tray, bundled binaries
 docs-site/      VitePress documentation site, English and Chinese (docs-site/zh/)
 openspec/       OpenSpec capability specs and changes
-docs/           Architectural decision records and research
+docs/           Architectural decision records, research notes and skill-library design docs
 e2e/  evals/    Playwright suites; the AI eval harness
 scripts/        Repository gates and maintenance
 .agents/        Conventions for contributors and coding agents

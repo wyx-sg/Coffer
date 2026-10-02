@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
-import type { UnmanagedSkillDetailOut } from "@/lib/api/agents";
+import type { UnmanagedSkillDetailOut } from "@/lib/api/agents-workspace";
 import { useFsActions } from "@/lib/fsActions";
 import { useAdoptUnmanagedSkill, useDeleteUnmanagedSkill } from "@/lib/hooks/useAgents";
 

@@ -8,11 +8,14 @@ defining their own copies.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Iterator, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+import pytest
+
 from coffer.application.chat.registry import AgentProviderRegistry
+from coffer.application.chat.turn_orchestrator import clear_active_turns
 from coffer.domain.audit import AuditEntry
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.attachment import Attachment, UploadedAttachment
@@ -20,6 +23,15 @@ from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.errors import ConversationNotFound
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
 from coffer.domain.chat.message import Message, Role, TextBlock
+
+
+@pytest.fixture(autouse=True)
+def _clear_active_turns_between_tests() -> Iterator[None]:
+    """The per-conversation turn registry is process-global; start and end clean."""
+    clear_active_turns()
+    yield
+    clear_active_turns()
+
 
 # ---------------------------------------------------------------------------
 # Audit
@@ -122,6 +134,7 @@ class FakeMessageRepo:
         *,
         content: list[Any],
         status: str,
+        model_id: str | None,
         prompt_tokens: int | None,
         completion_tokens: int | None,
     ) -> None:
@@ -131,6 +144,7 @@ class FakeMessageRepo:
                     m,
                     content=content,
                     status=status,  # type: ignore[arg-type]
+                    model_id=model_id if model_id is not None else m.model_id,
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
                 )
@@ -174,12 +188,12 @@ class FakeMessageRepo:
     async def delete_by_conversation(self, conversation_id: str) -> None:
         self._messages = [m for m in self._messages if m.conversation_id != conversation_id]
 
-    async def sweep_streaming(self) -> int:
-        """Flip all ``status='streaming'`` rows to ``'failed'``; return count."""
+    async def sweep_streaming(self, *, before: Any = None) -> int:
+        """Flip ``status='streaming'`` rows to ``'failed'``; return count."""
         flipped = 0
         updated: list[Message] = []
         for msg in self._messages:
-            if msg.status == "streaming":
+            if msg.status == "streaming" and (before is None or msg.created_at < before):
                 updated.append(dataclasses.replace(msg, status="failed"))  # type: ignore[call-overload]
                 flipped += 1
             else:

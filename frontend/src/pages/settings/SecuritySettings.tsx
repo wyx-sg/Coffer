@@ -2,7 +2,7 @@
 //
 // Settings › Security: what is about this Mac only — the key that encrypts the
 // vault's secrets and the token that guards the daemon (spec web-ui "Organise
-// Settings into five tabs"). Four blocks in the Settings row rhythm (label and
+// Settings into six tabs"). Four blocks in the Settings row rhythm (label and
 // description on the left, control on the right):
 //
 //   • Encryption — where the master key lives, whether it was read, the

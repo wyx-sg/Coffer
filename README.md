@@ -33,7 +33,7 @@ Coffer replaces the copies with one shared layer beneath the agents:
 | --- | --- |
 | **One MCP endpoint** | Register an upstream MCP server once. Each agent's config holds a single `coffer` entry; tools appear as `<server>__<tool>`, you choose which tools each server exposes and which agents reach it, and every call is recorded (never its arguments). Past a tool budget, `coffer__search_tools` searches the full catalogue. |
 | **Custom tools** | Turn any HTTP API into agent tools by importing an OpenAPI spec or describing one request. The gateway makes the request and adds your key on the way out. |
-| **One skill library** | Import [AgentSkills](https://agentskills.io) folders once — from a folder or a git repository — and Coffer links them into each agent's `skills/` directory, keeps the links correct, and tracks upstream updates. The **CLIs** page shows which commands your skills need and which are missing, too old or not logged in. |
+| **One skill library** | Import [AgentSkills](https://agentskills.io) folders once — from a folder, an archive or a git repository — and Coffer links them into each agent's `skills/` directory, keeps the links correct, and tracks upstream updates. The **CLIs** page shows which commands your skills need and which are missing, too old or not logged in. |
 | **Knowledge** | Collections of plain Markdown under `~/.coffer/vault/knowledge/`. Agents read them with their own file tools from a generated catalogue, and add to them through `coffer__write`. Nothing is chunked or embedded. An optional curation pass merges new material into the existing documents, with a history you can undo. |
 | **Memory** | Coffer reads each agent's own native memory (read-only), distils it into notes per project plus a `global` partition, and delivers them back through a hook — so what Claude Code learned, Codex knows too. |
 | **Model providers** | Store a provider profile (base URL and key) once and switch agents to it. Agents talk to Coffer's local model proxy, which adds the key upstream, fails over between connections serving the same model, and meters usage and subscription quota. No provider key is written into an agent's config. |
@@ -133,7 +133,7 @@ frontend/       React + TypeScript + Vite web UI, served by the daemon
 desktop/        Tauri macOS shell: Dock icon, menu-bar tray, bundled binaries
 docs-site/      VitePress documentation site, English and Chinese (docs-site/zh/)
 openspec/       OpenSpec capability specs and changes
-docs/           Architectural decision records and research
+docs/           Architectural decision records, research notes and skill-library design docs
 e2e/  evals/    Playwright suites; the AI eval harness
 scripts/        Repository gates and maintenance
 .agents/        Conventions for contributors and coding agents

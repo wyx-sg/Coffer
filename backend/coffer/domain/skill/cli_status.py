@@ -96,7 +96,8 @@ def launcher_cli(launcher: str) -> str | None:
 @dataclass(frozen=True)
 class ProbeResult:
     """What checking the command found. ``login`` is ``None`` when the command
-    was not found, so its login check could not run."""
+    was not found, so its login check could not run, or when it declares one
+    that has not been run (only a Check runs it)."""
 
     path: str | None
     version: str | None

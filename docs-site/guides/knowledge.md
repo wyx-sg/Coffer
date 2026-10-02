@@ -108,7 +108,7 @@ A write naming a collection that does not exist is refused, and the error lists 
 ### From the CLI: `coffer knowledge write`
 
 ```sh
-coffer knowledge write --in payments \
+coffer knowledge write --collection payments \
   --title "Session TTL" \
   --description "Where the session TTL is set and its current value." \
   --body "The TTL is 30 days, set in account-session's config key session.ttl_days."
@@ -211,7 +211,7 @@ The shortest interval is 60 seconds. A changed interval applies without a restar
 
 ### Curate by hand
 
-Curating by hand drains a collection: it takes everything pending when it starts — inbox items oldest first, then documents edited since curation last saw them — and runs one pass per item, one after another, until none is left.
+Curating by hand drains a collection: it takes everything pending when it starts — inbox items oldest first, then documents edited since curation last saw them — and runs one pass per item, one after another, until none is left. It is not tied to the owner machine (pressing the button chooses this one), but like the sweep it is refused with `KNOWLEDGE_CURATION_HELD` (409) while a sync conflict or confirmation waits for you. Inbox items are ordered by when they were submitted (the `created_at` in the item itself), never by file time.
 
 ::: code-group
 
@@ -349,7 +349,7 @@ A restore is a new version of its own, written by you; the history before it sta
 
 ```sh
 coffer knowledge changes                 # every collection, newest first
-coffer knowledge changes --in payments   # one collection
+coffer knowledge changes --collection payments   # one collection
 coffer knowledge changes 8d41e07         # one change in full, with each document's diff
 ```
 
@@ -370,6 +370,7 @@ Every document the pass wrote or retired goes back exactly as it was before the 
 On the Knowledge page, open the pass from **Recent changes** (or **See what this pass changed** above a document it wrote) and choose **Undo this pass**; the page asks first, listing each document and what the undo does to it. A refused undo closes the question and the pass's page reads **Not undone**, naming the document that changed since; an undone pass reads **Undone**, with who undid it and when.
 
 - If a later change touched one of the pass's documents, the undo is refused with `KNOWLEDGE_UNDO_CONFLICT` naming that document, and nothing is written. Edit or restore that document instead — or undo the pass by hand while keeping the later edits: the refusal carries a prompt for your agent, offered on the pass's page and printed by `coffer knowledge undo`, that names the pass, each document it touched, the ones edited since, and `git -C ~/.coffer/vault show <version> -- knowledge` for reading what the pass did. The agent edits only the files; Coffer records what it writes as an edit on disk.
+- When the pass merged nothing — there was no model, the item was too large, or curation gave up on it — the document it created was the item as it stood, so the undo puts the item back in the Inbox as well. Nothing you submitted is lost.
 - Only a curation pass can be undone this way (`KNOWLEDGE_NOT_A_PASS` otherwise). For any other change, restore the document's earlier version.
 
 ## Delete documents and collections
@@ -416,7 +417,7 @@ A deleted document or collection stays in the [history](#history-and-undo). **Re
 
 **Pending items never get curated.** Check that curation is switched on (`coffer config get engine.upkeep.curate.enabled`), that this machine is the owner or no owner is set (`coffer config get engine.curate_owner`), and that Coffer's model is configured. Run `coffer knowledge curate <collection>` to see the status of every pass.
 
-**Curation rewrote a document badly.** Find the pass with `coffer knowledge changes --in <collection>`, read it with `coffer knowledge changes <version>`, and undo it with `coffer knowledge undo <version>`, or restore just that document with `coffer knowledge restore`.
+**Curation rewrote a document badly.** Find the pass with `coffer knowledge changes --collection <collection>`, read it with `coffer knowledge changes <version>`, and undo it with `coffer knowledge undo <version>`, or restore just that document with `coffer knowledge restore`.
 
 **An agent does not use the knowledge.** Check that the `coffer-guide` skill is enabled and reaches that agent (`coffer skill scope coffer-guide`), and that the collection's `README.md` opens with a sentence naming its subjects.
 

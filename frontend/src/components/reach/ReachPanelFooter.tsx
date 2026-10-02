@@ -5,7 +5,7 @@
 // its size budget; it owns no state.
 import { useTranslation } from "react-i18next";
 
-import type { ReachMode } from "@/components/reach/reachState";
+import type { ReachMode } from "@/lib/reach/reachState";
 import { Button } from "@/components/ui/button";
 
 interface Props {

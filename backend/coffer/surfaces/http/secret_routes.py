@@ -30,8 +30,9 @@ from fastapi.responses import JSONResponse
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import SecretInUse
+from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import Resource
+from coffer.domain.secret_errors import SecretInUse
 from coffer.domain.secrets import secret_uri, standalone_name
 from coffer.infrastructure.secret.plaintext_scan import skills_citing_secrets
 from coffer.infrastructure.skill.master_store import default_master_root as skills_root
@@ -204,6 +205,14 @@ def _stdio_carries(resource: Resource, ref: str) -> bool:
     return transport.get("type") == "stdio" and ref in refs.values()
 
 
+def _checked_ref(ref: str) -> str:
+    """A ref in a URL path, refused (422) when a segment is empty or only dots:
+    the store maps a ref to a file, and ``.``/``..`` name none."""
+    if any(not s or set(s) == {"."} for s in ref.split("/")):
+        raise ConfigValidationError(f"not a secret ref: {ref!r}")
+    return ref
+
+
 # There is deliberately no `GET /{ref:path}`: no route returns a value (spec
 # secret "Return no plaintext on any route, command or tool").
 @router.get("/{ref:path}/exists", response_model=SecretExistsOut)
@@ -219,7 +228,7 @@ async def secret_exists(
     """
     # to_thread: a store read is blocking file IO; on the loop it would stall
     # every other request meanwhile.
-    return SecretExistsOut(present=await asyncio.to_thread(store.exists, ref))
+    return SecretExistsOut(present=await asyncio.to_thread(store.exists, _checked_ref(ref)))
 
 
 @router.delete(
@@ -242,6 +251,7 @@ async def delete_secret(
     mcp_server, whose config only keeps the secret ref. The 409 names the
     citing resources so the user knows what to detach first.
     """
+    ref = _checked_ref(ref)
     citations = await resources.find_secret_citations(ref)
     name = standalone_name(ref)
     if name:
@@ -276,7 +286,6 @@ async def delete_secret(
     # 204 either way, but only a real removal is a lifecycle change worth an
     # audit row (spec secret "Delete a secret idempotently").
     if removed:
-        await asyncio.to_thread(get_secret_boundary().forget, ref)
         await audit.record(
             AuditEventType.SECRET_DELETED.value,
             actor=actor,

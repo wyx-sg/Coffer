@@ -50,14 +50,22 @@ SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("README.md", (".md",)),
     ("README.zh-CN.md", (".md",)),
     ("docs", (".md",)),
-    ("desktop/src", (".rs", ".json")),
+    ("desktop", (".rs", ".json", ".toml")),
     ("AGENTS.md", (".md",)),
     ("CONTRIBUTING.md", (".md",)),
     (".agents", (".md",)),
     ("openspec/specs", (".md", ".yaml")),
     ("frontend/src", (".ts", ".tsx", ".json")),
 )
-_SKIP_DIRS = {"node_modules", ".vitepress/cache", "dist", "__pycache__"}
+_SKIP_DIRS = {
+    "node_modules",
+    ".vitepress/cache",
+    "dist",
+    "__pycache__",
+    "desktop/gen",  # generated Tauri schemas
+    "desktop/target",
+    "desktop/binaries",
+}
 #: Subtrees of a scanned tree left out on purpose: the ADRs are history.
 _SKIP_TREES = ("docs/decisions/",)
 _SKIP_FILES = {"package-lock.json"}

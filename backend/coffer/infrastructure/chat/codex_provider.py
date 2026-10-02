@@ -23,9 +23,11 @@ from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.adapter_support import (
     ChannelNoteResolver,
     HomeEnvResolver,
+    ManagedCheck,
     MemoryContextComposer,
     ModelLister,
     compose_system_context,
+    require_managed,
 )
 from coffer.infrastructure.chat.codex_agent import CodexAppServerAdapter
 from coffer.infrastructure.chat.codex_app_server import (
@@ -66,6 +68,7 @@ class CodexAppServerProvider:
         compose_memory_context: MemoryContextComposer | None = None,
         resolve_channel: ChannelNoteResolver | None = None,
         resolve_home_env: HomeEnvResolver | None = None,
+        is_managed: ManagedCheck | None = None,
         observe_quota: QuotaObserver | None = None,
         retrieve_memory: MemoryRetriever | None = None,
     ) -> None:
@@ -91,6 +94,9 @@ class CodexAppServerProvider:
         # Points the spawned app-server at the agent's own config dir
         # (CODEX_HOME) when it is not ~/.codex. ``None`` ⇒ the default dir.
         self._resolve_home_env = resolve_home_env
+        # Whether an enabled agent of this type is managed by Coffer; chat offers
+        # and runs managed agents only. ``None`` ⇒ not asked.
+        self._is_managed = is_managed
         # Where Codex's ``account/rateLimits/updated`` goes (the usage kind's
         # quota service, bound at the composition root). ``None`` ⇒ dropped.
         self._observe_quota = observe_quota
@@ -123,6 +129,7 @@ class CodexAppServerProvider:
         await self._conversations.set_agent_config(conversation_id, config)
 
     async def build_adapter(self, conversation_id: str) -> AgentAdapter:
+        await require_managed(self._is_managed, self.agent_key)
         conv = await self._conversations.get(conversation_id)
         if conv is None:
             raise ConversationNotFound(conversation_id)
@@ -201,7 +208,9 @@ class CodexAppServerProvider:
         return await self._transcriber_factory()
 
     async def availability(self) -> bool:
-        return self._which(self._binary) is not None
+        if self._which(self._binary) is None:
+            return False
+        return self._is_managed is None or await self._is_managed()
 
 
 __all__ = ["CodexAppServerProvider"]

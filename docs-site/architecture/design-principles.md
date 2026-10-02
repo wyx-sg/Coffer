@@ -23,7 +23,7 @@ Coffer is a **custodian, not an owner**. It holds your assets on your machine, h
 | [Identity is an immutable uid](#identity-is-an-immutable-uid) | Names are labels; references hold uids. |
 | [Agent files are the source of truth](#agent-files-are-the-source-of-truth) | Coffer reads an agent's state where it lives and never keeps a copy that could drift. |
 | [Files are the truth for bulk content](#files-are-the-truth-for-bulk-content) | Knowledge and memory are plain Markdown; nothing indexes, chunks or embeds them. |
-| [Pull, not push](#pull-not-push) | Coffer puts paths and a catalogue in front of the agent; it does not inject context behind your back. |
+| [Pull, not push](#pull-not-push) | Coffer puts paths and a catalogue in front of the agent; nothing reaches a session except through a hook you installed and can remove. |
 | [Reach is machine-local](#reach-is-machine-local) | Whether a resource is enabled, and for which agents, is decided on the machine it applies to. |
 | [Each kind enforces reach at its own choke point](#each-kind-enforces-reach-at-its-own-choke-point) | One predicate, many enforcement points, no central gate. |
 | [Secrets are never plaintext at rest](#secrets-are-never-plaintext-at-rest) | Fernet ciphertext files in the vault, refs everywhere else. |
@@ -105,11 +105,11 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 ## Pull, not push
 
-**Statement.** Coffer does not inject context into an agent's session automatically. It puts the right paths and a catalogue in front of the model and lets the model read what it needs. The catalogue is a skill: Coffer's own `coffer-guide`, whose resident description names Coffer, its builtin tools and the subjects your knowledge covers, and whose body carries the manual and every knowledge document's path, title and description.
+**Statement.** Coffer puts nothing into an agent's session except through an explicitly installed, removable, audited hook. It puts the right paths and a catalogue in front of the model and lets the model read what it needs. The catalogue is a skill: Coffer's own `coffer-guide`, whose resident description names Coffer, its builtin tools and the subjects your knowledge covers, and whose body carries the manual and every knowledge document's path, title and description.
 
 **Rationale.** Anything in the MCP handshake or a session-start hook is charged to every session whether or not it is needed. A skill has the opposite cost structure: its short description is always in context, its body costs nothing until a model opens it. So the resident budget is spent once, on one description a model can match against.
 
-**In the code.** The gateway's handshake `instructions` are capped at 800 characters: what Coffer is, the builtin tool names, the per-session count of hidden upstream tools, and a pointer to the skill. `coffer-guide` is an ordinary `skill` resource rendered by the knowledge layer and delivered by the skill kind. The one session-start delivery Coffer offers — the memory index — is a hook you install explicitly per agent, remove the same way, and whose every fire is an audit event.
+**In the code.** The gateway's handshake `instructions` are capped at 800 characters: what Coffer is, the builtin tool names, the per-session count of hidden upstream tools, and a pointer to the skill. `coffer-guide` is an ordinary `skill` resource rendered by the knowledge layer and delivered by the skill kind. The only context Coffer delivers into a session is memory, at three moments (the index at session start, up to three matching notes with each prompt, and a guard before a known trap in a shell command). All three go through hooks that connecting an agent installs and disconnecting removes, and every fire is an audit event.
 
 **Rules out.** Silently installed hooks; context injected into a session without an audit trail; writing Coffer's output into an agent's own memory; a catalogue spread across several always-resident skills.
 
@@ -157,11 +157,11 @@ The same stance governs other mismatches Coffer can detect but not safely resolv
 
 ## Off keeps data
 
-**Statement.** `main` carries every capability. A feature that is not ready is declared experimental and ships switched off in a `stable` build. Switching a feature off hides it on every surface; it never deletes, migrates or rewrites its data, and switching it back on resumes where it stopped.
+**Statement.** `main` carries every capability. A feature that is not ready is declared experimental and ships in the same build as everything else, switched off until you switch it on. Switching a feature off hides it on every surface; it never deletes, migrates or rewrites its data, and switching it back on resumes where it stopped.
 
 **Rationale.** A second release branch drifts and collides on every rebase. A runtime switch lets the owner keep testing everything while releasing only what is ready — and a switch that destroyed data would make trying a feature a one-way door.
 
-**In the code.** A registry in the domain layer records each experimental feature with the route prefixes and resource kinds it owns; it is empty right now, since Sync, Knowledge and Memory graduated at 1.0. Gates run at request time: gated routes answer `404 FEATURE_DISABLED`, the generic resource routes refuse and hide the feature's kinds, builtin tools leave `tools/list`, and workers skip their round. Kinds stay registered and migrations always run. The switch is per machine, in `~/.coffer/daemon-config.json`. See [Experimental features](/guides/experimental-features).
+**In the code.** A registry in the domain layer records each experimental feature with the route prefixes and resource kinds it owns; it holds four entries today, `knowledge`, `memory`, `sync` and `models`. A feature never hard-depends on another: a surface that would show two features simply leaves out the part of the one that is off. A switched-off feature looks absent in the UI, with no notice in its place. Gates run at request time: gated routes answer `404 FEATURE_DISABLED`, the generic resource routes refuse and hide the feature's kinds, builtin tools leave `tools/list`, and workers skip their round. Kinds stay registered and migrations always run. Every feature is off by default in every build, and the switch is per machine, in `~/.coffer/daemon-config.json`. See [Experimental features](/guides/experimental-features).
 
 **Rules out.** Wiring-time gates that need a restart; a switch stored in the synced vault; deleting a feature's data when it is switched off.
 

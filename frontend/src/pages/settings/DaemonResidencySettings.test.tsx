@@ -14,7 +14,8 @@ import { DaemonResidencySettings } from "./DaemonResidencySettings";
 
 const getMock = vi.fn();
 const putMock = vi.fn();
-vi.mock("@/lib/api/client", () => ({
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: () => ({ GET: getMock, PUT: putMock }),
   resetApiClient: vi.fn(),
 }));

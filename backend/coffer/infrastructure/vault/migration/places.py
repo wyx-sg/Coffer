@@ -57,8 +57,6 @@ DAEMON_CONFIG_BACKUP = "pre-vault/daemon-config.json"
 HOLD_MARKER = "MIGRATION_ROLLED_BACK"
 #: The record of the upgrade, read by ``--rollback``.
 RECORD = "local/migration.json"
-#: The previous build's sync working tree: left where it is, named in the report.
-OLD_SYNC_TREE = "sync"
 #: The old knowledge root's own history, folded into the vault repository.
 OLD_KNOWLEDGE_GIT = "knowledge/.git"
 
@@ -80,7 +78,6 @@ __all__ = [
     "LAYOUT_REVISION",
     "LEGACY_DB",
     "OLD_KNOWLEDGE_GIT",
-    "OLD_SYNC_TREE",
     "PRE_LAYOUT_REVISION",
     "RECORD",
     "RUNS_DB",

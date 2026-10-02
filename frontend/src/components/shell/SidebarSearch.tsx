@@ -22,7 +22,7 @@ export function SidebarSearch({ collapsed, onOpen }: Props) {
       aria-label={collapsed ? label : undefined}
       data-testid="sidebar-search"
       className={cn(
-        "flex h-[30px] items-center rounded-md border border-border bg-surface-raised text-sm text-text-subtle transition-colors duration-fast hover:bg-surface-hover hover:text-text",
+        "flex h-control-md items-center rounded-md border border-border bg-surface-raised text-sm text-text-subtle transition-colors duration-fast hover:bg-surface-hover hover:text-text",
         collapsed ? "w-9 justify-center" : "mx-0.5 w-[calc(100%-4px)] gap-2 pl-2.5 pr-2",
       )}
     >

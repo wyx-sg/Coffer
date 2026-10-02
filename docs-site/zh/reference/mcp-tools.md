@@ -14,15 +14,15 @@ schema 和返回结果，Coffer 聚合的上游工具、资源和提示词的命
 
 | 工具 | 用途 | 何时存在 |
 | --- | --- | --- |
-| [`coffer__write`](#coffer-write) | 把一条长期有效的事实记入 Coffer 的知识。 | 始终存在。 |
+| [`coffer__write`](#coffer-write) | 把一条长期有效的事实记入 Coffer 的知识。 | `knowledge` 功能开启时。 |
 | [`coffer__search_tools`](#coffer-search-tools) | 按意图对上游工具目录排序。 | 始终存在。 |
 
 完整列表就这两个。Coffer 的记忆笔记和它自己的记录没有对应工具：
 它们用智能体自己的文件工具和 `coffer` 命令行来读。见
 [不用工具读取记忆和日志](#memory-and-logs-without-a-tool)。
 
-目前没有内置工具属于某个[实验功能](/zh/guides/experimental-features)。如果有，那么在其功能关闭期间，
-该工具不会出现在 `tools/list` 中，握手说明里也不会提到它，调用它得到的回应和调用一个不存在的工具完全一样。
+`coffer__write` 属于 `knowledge` [实验功能](/zh/guides/experimental-features)。
+在该功能关闭期间，该工具不会出现在 `tools/list` 中，握手说明里也不会提到它，调用它得到的回应和调用一个不存在的工具完全一样。
 切换功能开关在下一次列出或调用时生效，无需重启。
 
 ::: tip 智能体里的名称
@@ -54,7 +54,7 @@ Coffer 以名为 `coffer` 的 MCP 服务器装进智能体的配置，所以大�
 ## coffer\_\_write {#coffer-write}
 
 把用户工作环境中长期有效的信息记入一个知识集：某个服务的事实、一条约定、一个决定及其理由、
-一个坑以及怎么避开。你写的是新材料；Coffer 的整理任务会把它合并进知识集的文档，并与已有内容去重。
+一个坑以及怎么避开。你写的是新材料；Coffer 的整理任务会把它整理进知识集的文档，并与已有内容去重。
 它不用于记录智能体眼前仓库里的东西、临时性的内容或密钥。没有对应的读取工具：
 智能体用自己的文件工具，在 `coffer-guide` 技能列出的路径下读取知识。
 
@@ -82,7 +82,7 @@ Coffer 以名为 `coffer` 的 MCP 服务器装进智能体的配置，所以大�
   "collection": "global",
   "title": "Staging DB is read-only on Fridays",
   "status": "pending",
-  "note": "Queued as new material. Coffer's curation pass merges it into this collection's documents shortly."
+  "note": "Queued as an item. Coffer's curation folds it into this collection's documents shortly."
 }
 ```
 
@@ -96,7 +96,7 @@ Coffer 以名为 `coffer` 的 MCP 服务器装进智能体的配置，所以大�
   "file_path": "/Users/you/.coffer/vault/knowledge/global/staging-db-read-only-on-fridays.md",
   "folder_path": "/Users/you/.coffer/vault/knowledge/global",
   "status": "written",
-  "note": "Filed as a document of its own: no internal model is configured to merge it."
+  "note": "Filed as a document of its own: Coffer's model is not set to curate it."
 }
 ```
 

@@ -77,8 +77,7 @@ make dev
 
 ```text
 status:  ready
-version: 0.1.1
-channel: dev
+version: 0.2.0
 port:    18150
 ```
 
@@ -100,7 +99,7 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | `HOME` | Coffer 的每一棵目录树（保险库、`local/`、`content/`、`derived/`、`runs.db`）都从它解析，没有针对单棵树的覆盖选项。沙盒 `HOME` 就是一个独立的 Coffer |
 | `COFFER_DB_URL` | 历史数据库的 SQLAlchemy URL（默认 `sqlite+aiosqlite:///~/.coffer/runs.db`） |
 | `COFFER_LOG_DIR` | 守护进程写日志文件的位置 |
-| `COFFER_FEATURES` | 为这个守护进程固定实验功能的开关，格式为 `<key>=on,<other-key>=off`。注册表目前是空的，所以没有可固定的 |
+| `COFFER_FEATURES` | 为这个守护进程固定实验功能的开关，格式为 `<key>=on,<other-key>=off`。例如 `models=on,sync=off`；键为 `knowledge`、`memory`、`sync` 和 `models`，没有被固定、也没在设置里开启的功能一律关闭 |
 | `COFFER_WEBUI_DIR` | 从另一个目录提供构建好的界面 |
 
 [配置参考](/zh/reference/configuration)列出了守护进程读取的每一个变量。
@@ -150,7 +149,10 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | `make verify-benchmark` | 所有标记为 `benchmark` 的性能预算测试，包括慢到进不了 `verify` 的那些 |
 | `make verify-secrets` | 像 CI 的 `secrets-scan` job 那样，用 gitleaks 扫描完整的 git 历史。没装 gitleaks 时跳过 |
 | `make lint` | 所有静态门禁：见[测试](/zh/contributing/testing#what-make-verify-runs) |
-| `make format` | 对 `backend` 和 `evals` 运行 `ruff format` 和 `ruff check --fix`，然后对 `frontend/` 运行 prettier |
+| `make format` | 对 `backend` 和 `evals` 运行 `ruff format` 和 `ruff check --fix`。前端由它自己的 prettier 配置格式化，不归这个目标管 |
+| `make verify-visual` | 截图基线：每个路由、浅色和深色。不属于 `verify` 或 `verify-all` |
+| `make visual-update` | 重新录制当前平台的截图基线 |
+| `make test-durations` | 重新测量测试耗时，用于集成测试分片的均衡（串行，约 15 分钟） |
 | `make coverage` | pytest 和 Vitest 覆盖率报告，不设阈值 |
 | `make eval` | 确定性评测套件和基线门禁 |
 | `make eval-routing` | 额外加上工具路由套件（需要本地 LLM） |
@@ -159,16 +161,14 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | `make contracts` | 从后端模型重新生成每项能力的传输契约，再从这些契约生成前端类型 |
 | `make frontend-codegen` | 只从签入的契约重新生成前端的 TypeScript API 类型 |
 | `make docs-reference` | 重新生成本站的 CLI 参考页面（英文和中文） |
+| `make docs-build` | 按 Pages 工作流的方式构建本站；有失效的内部链接就会失败 |
+| `make refresh-prices` | 刷新内置的模型价格表（需要联网；不在 `verify` 中） |
 | `make bundle-binaries` | 用 PyInstaller 把 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim` 冻结到 `dist/` |
 | `make desktop` | 构建未签名的 `Coffer.app` 和 `.dmg`（很慢，见下文） |
 | `make desktop-lint` | 对桌面 crate 运行 `cargo check` 和 `cargo clippy -D warnings` |
 | `make desktop-test` | 对桌面 crate 运行 `cargo test` |
 | `make desktop-stage-binaries` | 放置占位的 sidecar 二进制，让 cargo 不需要真实构建就能编译 |
 | `make clean` | 删除 `.venv`、`node_modules`、`frontend/dist`、各种缓存和桌面构建产物 |
-
-::: tip `make format` 会动到每个前端文件
-它的 prettier 那一步会重写整个 `frontend/`。不要把纯格式化的改动混进无关的 pull request。Claude Code 的 Hook 已经会格式化智能体编辑的每个文件。
-:::
 
 ## 传输契约与前端代码生成 {#wire-contracts-and-frontend-codegen}
 

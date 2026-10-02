@@ -47,6 +47,8 @@ chat's own, uploaded to `~/.coffer/content/chat-media` and pruned by the same ag
 Either way a conversation persists only the reference and reads the bytes at
 turn time.
 
+Conversations are always on: no experimental feature gates them. The knowledge and memory features only change what a conversation's turns carry (spec [experimental-features](../experimental-features/spec.md) "Close the memory feature's surfaces").
+
 ## Requirements
 
 ### Requirement: Route every turn through the agent-provider registry
@@ -88,8 +90,8 @@ message.
 ### Requirement: Expose the registered agents and their models
 The platform MUST expose its registered agents — each with a stable key, a
 display name, and a current availability flag — over the REST API, so a caller
-offers only agents that exist and marks the ones whose CLI is absent on this
-host. It MUST likewise expose, per agent, the models that agent can be put on;
+offers only agents that exist; whether one is offered is decided by "Offer and run
+only managed agents". It MUST likewise expose, per agent, the models that agent can be put on;
 the route is the platform's, while the catalogue behind it is the agent kind's
 answer ([agent-registry](../agent-registry/spec.md)), reaching this route
 through a port rather than an import.
@@ -101,6 +103,23 @@ through a port rather than an import.
   display name and an availability flag, the `builtin` agent is **not** among
   them ([Coffer's Model Is an Internal Engine](../../../docs/decisions/coffer-model-is-an-internal-engine.md)),
   and the list is reachable from the REST API.
+
+
+### Requirement: Offer and run only managed agents
+Chat MUST offer an agent only when its CLI is installed on this host and an
+enabled agent of its type is registered with Coffer (added on the Agents page);
+an agent that is not installed, or installed but not added or enabled, MUST NOT
+be offered for selection. A turn for a type with no enabled agent MUST be
+refused with an `agent_not_managed` rejection rather than run against the CLI's
+own default config directory, which Coffer was told to leave alone. With no
+managed agent at all, the draft surface is replaced by a state that links to the
+Agents page and offers the install prompt to copy.
+
+#### Scenario: an unmanaged agent type is not offered and runs no turn
+- **GIVEN** the `claude_code` CLI is installed but no enabled `claude_code` agent is registered
+- **WHEN** the provider is asked whether it is available and a turn is started on it
+- **THEN** it is not available and the turn is refused as `agent_not_managed`
+- **AND** once an enabled agent of that type is registered, the provider is available and the turn runs
 
 ### Requirement: Distinguish a missing agent path from a bad turn body
 An `agent_key` no provider answers for MUST be **404** on a subresource path —
@@ -291,7 +310,10 @@ conversation with no new message for the auto-archive window (default 7 days),
 then deletes archived conversations and their messages the configured number of
 days after archiving (default 30 days). Either window may be set to
 keep-forever to disable that stage. Auto-archiving is reversible; only deletion
-is destructive.
+is destructive, so the delete stage MUST also require that the conversation has
+had no new message for the delete window: an archived conversation that is
+still being written to (a chat thread resumed from a phone) is never deleted
+mid-use.
 
 #### Scenario: an idle conversation is archived, then deleted with its messages
 - **GIVEN** the default retention windows, a conversation idle for longer than the auto-archive window, and an archived conversation with messages archived longer ago than the delete window
@@ -299,6 +321,12 @@ is destructive.
 - **THEN** the idle conversation is archived but kept
 - **AND** the long-archived conversation and its messages are deleted
 - **AND** with the auto-archive window set to keep-forever, an idle conversation is left unarchived
+
+#### Scenario: an archived conversation that receives a channel message is not deleted while active
+- **GIVEN** an archived conversation whose archive time is older than the delete window, but which received a message (from a channel) within that window
+- **WHEN** the retention worker prunes
+- **THEN** the conversation and its messages are kept
+- **AND** once that last message is itself older than the delete window, the conversation is deleted
 
 ### Requirement: Register conversation retention in the framework registry
 Both windows MUST be registered as ordinary entries of the framework's own
@@ -463,6 +491,14 @@ inferred from silence. The owner resumes the queue after fixing the cause.
 - **THEN** the message is put back at the head, the queue is paused, a turn
   error is published, and the message is still there when the owner resumes.
 
+#### Scenario: a held queue is resumed from the page, not retried
+- **GIVEN** a turn error that arrives on the event stream while no turn is
+  running and messages are waiting in the pending queue
+- **WHEN** the page shows that error
+- **THEN** it is presented as a held queue with a Resume action that replaces the
+  pending queue with itself (`PUT .../pending`), and offers no Retry that would
+  send the last user message again
+
 ### Requirement: Reconcile a replaced queue against existing entries
 Replacing the pending queue MUST reconcile the new ordered texts against the
 existing entries, reusing an entry for each text it still contains (first
@@ -495,13 +531,22 @@ not carry ten thousand buses.
 ### Requirement: Express a turn as typed events
 System MUST express a turn as a sequence of typed events covering, at minimum,
 turn start, text deltas, tool calls, tool results, turn completion, turn error,
-and pending-queue change.
+and pending-queue change. The event stream (`GET /api/v1/chat/conversations/{id}/events`)
+MUST declare each event's `data:` shape in the chat contract, one model per event
+type with the SSE `event:` name equal to its `type`, so the frontend's types are
+generated from the contract and a field renamed in the domain events fails a gate.
 
 #### Scenario: send a message and receive a streamed reply
 - **GIVEN** a conversation on a registered agent,
 - **WHEN** a turn is started,
 - **THEN** the turn's events stream in order — start, text deltas, completion —
   and the assistant reply is persisted.
+
+#### Scenario: the event stream's wire shape is generated from the contract
+- **GIVEN** the seven turn event types,
+- **WHEN** a domain event gains, loses or renames a field,
+- **THEN** the wire model for that event no longer matches it and the test suite
+  fails, and the generated contract differs until it is regenerated.
 
 ### Requirement: Replay the in-flight turn to late subscribers
 System MUST publish those events on a per-conversation in-process bus that any
@@ -553,8 +598,7 @@ lives — a direct chat or a group (by its name when Coffer knows it), a thread 
 the chat's main timeline, and a parallel thread's `🧵#N` mark — and every row of the list MUST show
 the latest message's words on one line and whether a turn is running in it (the narrower list beside
 an open conversation marks the running ones and leaves the line out). A channel's link to its
-conversations opens the list filtered to that channel, named in a chip that clears the filter. A conversation carrying an `owner` belongs to that surface, is left out of the
-list, and stays readable by id. A conversation's page MUST show the full exchange and a reply box
+conversations opens the list filtered to that channel, named in a chip that clears the filter. A conversation's page MUST show the full exchange and a reply box
 that continues it, whichever source opened it; **New conversation** is a secondary action, and the
 page opens on the list rather than on a welcome or suggestions page, which it does not have. The
 composer carries no voice input: a voice message reaches an agent only through a channel, which
@@ -661,6 +705,14 @@ error the owner can act on rather than as a client hammering the endpoint.
 - **THEN** it re-subscribes with a backoff and replays the in-flight turn; after
   a bounded number of failed attempts it stops and reports the error.
 
+#### Scenario: an idle event stream is re-subscribed
+- **GIVEN** an open conversation whose event subscription is closed while no turn
+  is running, or whose connection fails
+- **WHEN** the client recovers
+- **THEN** it re-subscribes with a backoff, so a turn started later from any
+  surface still streams; an HTTP error response such as 404 is reported and not
+  retried
+
 ### Requirement: Show a just-sent prompt immediately
 A just-sent prompt MUST appear in the thread immediately, before its persisted
 row has been fetched, and MUST be retired when that row lands or when its turn
@@ -720,6 +772,18 @@ running.
 - **THEN** each tool call is a card naming its tool, placed between the text blocks in the order the turn emitted them
 - **AND** opening the finished card shows what the tool was called with and its result
 - **AND** the card with no result reads as still running
+
+### Requirement: Summarise the files a reply changed
+Under an assistant reply that is no longer streaming, the thread MUST show a
+"Files changed" card listing each file the reply's tool calls wrote, with the
+lines added and removed; repeated edits to one file are summed into one row, and
+a reply that changed no file shows no card.
+
+#### Scenario: a reply's file edits are summed into one row per file
+- **GIVEN** an assistant reply whose tool calls edit one file twice, write a second file, and read a third
+- **WHEN** the thread renders it
+- **THEN** the Files changed card lists the two written files only, one row each, with their added and removed line counts
+- **AND** a reply with no file-writing tool call shows no card
 
 ### Requirement: Render assistant text as GitHub-flavoured markdown
 Assistant text MUST render as GitHub-flavoured markdown with single newlines
@@ -849,9 +913,9 @@ with a **Default** option, which clears the conversation's model so the agent
 runs its projected default and is what the picker shows while no model is set.
 After it come the models the platform offers for the agent
 ([provider-switching](../provider-switching/spec.md) "Serve one model list to
-every surface": the agent's own catalogue, or the active connection's curated
-`text` ids when one is active — an active connection that curates models, none
-of them `text`, offers none) and the **current value** — which MUST stay
+every surface": the agent's own catalogue, or the curated
+`text` ids of the connection the agent runs on, when it runs on one — a
+connection that curates models, none of them `text`, offers none) and the **current value** — which MUST stay
 selectable whatever that list contains, so a conversation never shows a picker
 that cannot represent the model it is actually on. Those are the only options:
 the page does not introspect a connection's endpoint itself.
@@ -1144,8 +1208,11 @@ none, the provider MUST default to the Coffer-managed workspace
 `~/.coffer/content/workspace` (created on first use) rather than reject the turn — so a
 client with no configured workspace works out of the box. An
 explicitly-supplied cwd MUST be an existing directory or the configuration is
-rejected. Availability MUST reflect whether the agent's binary is resolvable on
-the daemon's PATH; an unavailable agent is listed but not selectable.
+rejected. Availability MUST reflect two things: whether the agent's binary is
+resolvable on the user's PATH (the login shell's PATH merged with the daemon's
+inherited one), and whether an **enabled agent of that type is registered** with
+Coffer; an agent failing either is unavailable and is not offered (see "Offer
+and run only managed agents").
 
 A turn MUST stream the tool's line-delimited JSON output mapped onto the
 platform's turn events, and persist the upstream session id so the next turn
@@ -1165,15 +1232,17 @@ A turn MUST run against the config directory of its type's one agent
 ([agent-registry](../agent-registry/spec.md) "Keep one agent per type, named by
 it") while that agent is enabled — the same one whose models the pickers offer
 ([agent-registry](../agent-registry/spec.md) "Serve each agent type's model
-catalogue from its one agent"); a disabled agent never answers. Coffer delivers skills, installs its
+catalogue from its one agent"); a disabled agent never answers, and a type with
+no enabled agent has no turn at all. Coffer delivers skills, installs its
 MCP entry and edits config files in that directory, so a turn that read any
 other one would not see them. When that agent's `config_dir` is not its type's
 standard location, the spawned process's environment MUST carry the variable the
 product reads it from — `CLAUDE_CONFIG_DIR=<config_dir>` for Claude Code,
-`CODEX_HOME=<config_dir>` for Codex — merged with the daemon's own environment
-and with any key the provider projects; for the standard location (or when no
-agent of the type is registered) the environment MUST be left as the daemon's
-own, so the process behaves as when the user runs the CLI themselves.
+`CODEX_HOME=<config_dir>` for Codex — merged with the daemon's own environment;
+for the standard location the environment MUST be left as the daemon's own, so
+the process behaves as when the user runs the CLI themselves. No provider key
+rides the environment: an API-key connection is reached through Coffer's model
+proxy.
 
 #### Scenario: a streamed reply reaches the consumer exactly once
 - **GIVEN** a Claude Code turn whose SDK delivers the reply as streamed increments and then as the finished assistant message
@@ -1185,13 +1254,14 @@ own, so the process behaves as when the user runs the CLI themselves.
 #### Scenario: a turn on an agent with its own config directory runs against that directory
 - **GIVEN** a `claude_code` agent registered with a `config_dir` other than `~/.claude`, and a `codex` agent registered with a `config_dir` other than `~/.codex`
 - **WHEN** a turn runs on each
-- **THEN** the Claude Code process is started with `CLAUDE_CONFIG_DIR` set to the agent's `config_dir`, and the Codex app-server with `CODEX_HOME` set to its `config_dir`, the rest of the daemon's environment (and a projected provider key) intact
+- **THEN** the Claude Code process is started with `CLAUDE_CONFIG_DIR` set to the agent's `config_dir`, and the Codex app-server with `CODEX_HOME` set to its `config_dir`, the rest of the daemon's environment intact
 - **AND** a turn on an agent whose `config_dir` is its type's standard location starts its process with the environment untouched
 
 #### Scenario: a disabled agent does not answer for its type
 - **GIVEN** a `claude_code` agent registered with a `config_dir` other than `~/.claude`, then disabled
-- **WHEN** a turn's environment is resolved for the `claude_code` type
-- **THEN** it carries no `CLAUDE_CONFIG_DIR`, as when no agent of the type is registered
+- **WHEN** the `claude_code` provider is asked whether it is available and a turn is started on it
+- **THEN** the provider is not available and carries no `CLAUDE_CONFIG_DIR`
+- **AND** the turn is refused as `agent_not_managed`, exactly as when no agent of the type is registered
 
 ### Requirement: Mirror a web reply into the channel it came from
 A message the owner sends from the Conversations page into a conversation an IM channel

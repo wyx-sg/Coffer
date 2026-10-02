@@ -36,7 +36,7 @@ flowchart TB
 | 层 | 放什么 | 可以导入 |
 | --- | --- | --- |
 | `domain/` | 实体、值对象和纯规则：资源、类型、范围、审计事件名、错误码、每种类型的配置 schema 和领域逻辑。 | 标准库和 Pydantic。项目里的其他东西都不行，FastAPI、SQLAlchemy、`sqlite3`、httpx、`keyring`、anyio 也都不行。 |
-| `application/` | 用例服务、它们需要的端口（带类型的 Python protocol）、后台 worker、类型工厂。 | `domain/`。不能导入 `surfaces/`，也不能导入 `infrastructure/`，但知识和记忆的文件底层有两个指名的例外。 |
+| `application/` | 用例服务、它们需要的端口（带类型的 Python protocol）、后台 worker、类型工厂。 | `domain/`。不能导入 `surfaces/`，也不能导入 `infrastructure/`，但有三个指名的例外：知识和记忆的文件底层，以及二进制部署器对保险库主目录的那一次读取。 |
 | `infrastructure/` | 适配器：持久化、密钥存储、子进程和 HTTP 客户端、git、文件树 I/O、LLM 和智能体 SDK 的封装。 | `domain/`、`application/` 的端口。不能导入 `surfaces/`。 |
 | `surfaces/` | 入口：FastAPI 应用和路由、Typer CLI、stdio shim，以及把一切接起来的组合根。 | 下面所有层。 |
 
@@ -54,12 +54,12 @@ flowchart TB
 | --- | --- |
 | 分层架构：surfaces > application > domain | 导入只能向内。领域模块从不导入应用模块；应用模块从不导入界面模块。 |
 | 基础设施不导入界面层 | 适配器从不反过来伸手进路由或 CLI 命令。比如守护进程入口之所以自己读 `daemon.json`，而不是去问某个路由模块，就是这个原因。 |
-| 应用层不导入基础设施 | 应用代码依赖它自己定义的端口。例外：`application.knowledge` 可以导入 `infrastructure.knowledge`，`application.memory` 可以导入 `infrastructure.memory`，因为这两个底层都只是很薄的文件 I/O 辅助代码，背后没有引擎，加一个端口纯属形式主义。 |
+| 应用层不导入基础设施 | 应用代码依赖它自己定义的端口。例外：`application.knowledge` 可以导入 `infrastructure.knowledge`，`application.memory` 可以导入 `infrastructure.memory`，因为这两个底层都只是很薄的文件 I/O 辅助代码，背后没有引擎，加一个端口纯属形式主义；以及 `application.binary_deploy` 可以读 `infrastructure.vault.home`，它是唯一列出 `~/.coffer` 下所有路径的模块。 |
 | 领域层是纯的 | 领域层不导入项目的其他层，也不导入 `fastapi`、`sqlalchemy`、`sqlite3`、`httpx`、`keyring` 或 `anyio`。 |
 | keyring 只限于基础设施 | 界面层和应用层从不直接导入 `keyring`。 |
 | CLI 不直接访问钥匙串 | `surfaces.cli` 完全不能导入 `infrastructure.secret`。CLI 只能通过守护进程的 HTTP API 接触密钥，所以在每台机器上，守护进程是主密钥唯一的读取者。 |
 | 禁止跨类型导入（每种类型一条） | 九条对称的契约：`mcp`、`agent`、`skill`、`knowledge`、`channel`、`chat`、`provider`、`memory`、`sync`，每条都禁止该领域的模块导入其他领域的模块。指名的例外只涉及纯领域词汇：`provider` 和 `memory` 可以读 `domain.agent`，`channel` 可以读 `domain.chat`。`domain.knowledge` 和 `infrastructure.knowledge` 是共享底层。 |
-| 与类型无关的核心不导入类型专属代码 | 资源服务及其范围和删除辅助模块、审计服务、保留期服务和 worker、内置工具注册表、Coffer 自己的引擎模块、领域层的资源、范围和审计模块、共享的基础设施包、通用的依赖提供者和通用路由，都不能导入任何类型。唯一获准的例外是 Alembic 的迁移环境，它把每种类型的 ORM 模型导入到同一份 metadata 里。 |
+| 与类型无关的核心不导入类型专属代码 | 资源服务及其范围、启停、删除、重命名、标题和类型辅助模块、仓库端口、调和器、关注列表和事件流、审计服务、保留期服务和 worker、内置工具注册表、Coffer 自己的引擎模块、领域层的资源、调和、范围和审计模块、共享的基础设施包、通用的依赖提供者和通用路由，都不能导入任何类型。获准的例外有两个：Alembic 的迁移环境（它把每种类型的 ORM 模型导入到同一份 metadata 里），以及一次性的保险库迁移（它要读遍每个领域才能搬数据）。 |
 | 引擎限定：markitdown | 只有消息渠道的附件提取器和知识上传转换器可以导入 `markitdown`（或 `docling`）。 |
 | 已弃用的引擎处处禁止 | `llama_index`、`mem0`、`chromadb`、`sentence_transformers`、`sqlite_vec` 和 `fastembed` 在任何地方都不能导入。Coffer 不做任何 embedding，要重新引入就必须有意地修改这条契约。 |
 | LangGraph 和 LangChain 限定在 infrastructure/llm | Coffer 自己的模型调用都走 `infrastructure/llm/`。领域层、应用层，以及对话、MCP、消息渠道、知识、持久化、密钥、守护进程和日志这些基础设施包，都不能导入 `langgraph` 或任何 `langchain*` 包；它们通过注入的端口接触模型。 |
@@ -105,7 +105,7 @@ FastAPI 依赖就是模块级的 setter / getter 函数对，背后是模块全�
 
 ```text
 backend/coffer/
-├── build_channel.py        # CHANNEL = "dev"; the release workflow stamps "stable"
+├── build_channel.py        # build stamp: COMMIT, and CHANNEL "dev" (the release workflow stamps "stable", which hardens host/CORS checks)
 ├── main.py                 # ASGI entry: create_app()
 ├── domain/                 # pure; imports nothing from other layers
 │   ├── resource.py         # Resource, Kind, name validation

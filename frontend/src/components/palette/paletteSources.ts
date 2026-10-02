@@ -13,7 +13,7 @@ import { useChannels } from "@/lib/hooks/useChannels";
 import { useConversations } from "@/lib/hooks/useConversations";
 import { useCustomToolGroups } from "@/lib/hooks/useCustomTools";
 import { useClis } from "@/lib/hooks/useClis";
-import { isFeatureOn, type FeatureKey } from "@/lib/hooks/useFeatures";
+import { isFeatureOn } from "@/lib/hooks/useFeatures";
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
 import { useMemoryPartitions } from "@/lib/hooks/useMemory";
 import { useProviders } from "@/lib/hooks/useProviders";
@@ -152,9 +152,9 @@ export const KIND_LIST_HOOKS: Record<ObjectKind, () => KindState> = {
   secret: useSecretObjects,
 };
 
-/** Every sidebar entry of a switched-on feature and every Settings tab, by the
- *  names the sidebar and the tabs use. */
-export function usePageItems(features: Record<FeatureKey, boolean> | null): PaletteItem[] {
+/** Every sidebar entry of a switched-on feature and every Settings tab, by
+ *  the names the sidebar and the tabs use. */
+export function usePageItems(features: Record<string, boolean> | null): PaletteItem[] {
   const { t } = useTranslation();
   return useMemo<PaletteItem[]>(() => {
     const entries: PaletteItem[] = NAV_ENTRIES.filter((entry) =>

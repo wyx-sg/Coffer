@@ -136,6 +136,9 @@ in the same PR — before or alongside the code, never as a follow-up:
   ADR, the [`docs-site/architecture/`](../docs-site/architecture/) pages, the rest of `docs-site/`, and any
   affected `.agents/*` convention.
 
+The Claude Design canvas is part of this: a UI change redraws its boards in the
+same work item (see AGENTS.md §3 "Four-way sync").
+
 A pure refactor or a frontend-only change with no contract impact needs no spec
 edit — but if behaviour, an endpoint, a schema or the IA changes, the docs
 change with it.
@@ -158,7 +161,7 @@ nothing about **whose spec** a mechanism is:
 | Change feed | `application/events/` (`broker.py`, `attention_watch.py`), behind `GET /api/v1/events` | `resource-framework` |
 | Kind-agnostic adapters and vocabulary two kinds share | `infrastructure/net/`, `infrastructure/agent_files/`, `domain/hook_trust.py`, `domain/channel_turn.py` | — |
 
-Everything else is a kind (`mcp`, `agent`, `skill`, `knowledge`, `channel`, `chat`, `provider`, `memory`, `sync`) with its own subdir per layer. There is no `jobs` or `session` module — don't import one.
+Everything else is a per-kind package (`mcp`, `agent`, `skill`, `knowledge`, `channel`, `chat`, `provider`, `memory`, `sync`, plus `secret`, `usage`, `model_proxy` and `vault`) with its own subdir per layer; `chat` and `sync` register no resource kind. There is no `jobs` or `session` module — don't import one.
 
 ## Deciding What Is a Capability
 

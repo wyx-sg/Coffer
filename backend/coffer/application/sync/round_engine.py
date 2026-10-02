@@ -25,6 +25,7 @@ from typing import Any
 from coffer.application.sync import round_plaintext
 from coffer.application.sync.round_deps import RoundDeps
 from coffer.application.sync.round_guard import hold_for, invalid_files
+from coffer.application.sync.round_layout import layout_refusal
 from coffer.application.sync.round_trees import (
     conflict_files,
     identity_conflicts,
@@ -120,7 +121,14 @@ class RoundEngine:
             return rec(
                 RoundStatus.JOIN_REQUIRED, detail="this vault shares no history with the remote"
             )
-        d.state.set_joined(True)
+        if not d.state.joined():
+            # Shared history is not consent: a machine pointed at a new remote
+            # (a mirror, a renamed repository, a clone) joins only when the
+            # person previews and chooses to (spec vault-sync "Join a new
+            # machine by taking the union").
+            return rec(
+                RoundStatus.JOIN_REQUIRED, detail="this machine has not joined this remote yet"
+            )
         if local == tip:
             return rec(RoundStatus.NOTHING_TO_DO, from_commit=local, to_commit=local)
         if d.git.is_ancestor(tip, local):
@@ -268,7 +276,7 @@ class RoundEngine:
             checked = round_plaintext.check(d, tip, final)
             if checked.findings or checked.moved:
                 return round_plaintext.refused(rec, checked, **common)
-            final = common["to_commit"] = checked.commit
+            final = common["to_commit"] = self._after_fold(checked)
             common["folded"] = checked.folded
         pushed = d.changes(tip, final) if final != tip else ()
         if final != tip:
@@ -321,7 +329,7 @@ class RoundEngine:
         checked = round_plaintext.check(d, tip, final)
         if checked.findings or checked.moved:
             return round_plaintext.refused(rec, checked, from_commit=tip, to_commit=final)
-        final = checked.commit
+        final = self._after_fold(checked)
         pushed = d.changes(tip, final)
         try:
             d.git.push(final, remote.branch, token)
@@ -343,6 +351,16 @@ class RoundEngine:
             folded=checked.folded,
         )
 
+    def _after_fold(self, checked: round_plaintext.PushCheck) -> str:
+        """The commit to push after a plaintext check. A fold makes a new commit
+        the descriptor inside it knows nothing of (it names the commit that was
+        folded away, which the remote never receives), so the descriptor is
+        written again over the folded commit: what is pushed names a commit the
+        remote holds, and a reinstall of this machine is recognised."""
+        if not checked.folded:
+            return checked.commit
+        return self._publish_descriptor(checked.commit)
+
     def _publish_descriptor(self, commit: str) -> str:
         """Write this machine's descriptor when it changed; answer the commit
         to push (``commit`` itself when nothing changed)."""
@@ -361,30 +379,6 @@ class RoundEngine:
         return version or commit
 
 
-def layout_refusal(d: RoundDeps, tip: str) -> tuple[RoundStatus, str] | None:
-    """Why a remote at ``tip`` cannot be converged with, or ``None``.
-
-    A remote carries exactly this build's layout or it is refused, in either
-    direction: a newer one is another Coffer's, and an older one is rebuilt
-    from a migrated machine rather than converted here (ADR
-    every-vault-file-carries-its-format-version)."""
-    layout = d.layout_of(tip)
-    if layout is None or layout == d.layout:
-        return None
-    if layout > d.layout:
-        return (
-            RoundStatus.REMOTE_TOO_NEW,
-            f"the remote's layout {layout} is newer than this build's {d.layout}; "
-            "upgrade Coffer on this machine",
-        )
-    return (
-        RoundStatus.REMOTE_TOO_OLD,
-        f"the remote is at layout {layout}, older than this build's {d.layout}; rebuild it "
-        "from a machine that has been upgraded (clear it and let that machine push), "
-        "then join it from here",
-    )
-
-
 def _summary(machines: tuple[str, ...]) -> str:
     return (
         f"Merged changes from {', '.join(machines)}"
@@ -393,4 +387,4 @@ def _summary(machines: tuple[str, ...]) -> str:
     )
 
 
-__all__ = ["PROBLEM_STATUS", "Recorder", "RoundEngine", "layout_refusal"]
+__all__ = ["PROBLEM_STATUS", "Recorder", "RoundEngine"]

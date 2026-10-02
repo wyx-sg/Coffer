@@ -1,9 +1,9 @@
 # Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do](desktop-shell-over-a-shared-frontend.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](distribution-pyinstaller.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [principles](../../docs-site/architecture/principles.md) (Credentials; Network defaults; "Not a firewall or security boundary"; an amendment to both is proposed separately), research note [credentials and secrets](../research/credentials-secrets.md), spec secret "Return no plaintext on any route, command or tool" (replacing the former audit-every-read and redact-unless-asked requirements), spec secret "Release plaintext only to a present human in the desktop app", spec secret "Hold a secret for a new destination until a person approves it", spec secret "Hold plaintext only in memory at the moment of use", spec daemon "Require a token on every management call", spec daemon "Refuse a request whose Host or Origin is not the daemon's own", spec desktop-app "Reimplement no daemon route in the shell", PR #464
+**Related**: [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do](desktop-shell-over-a-shared-frontend.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](distribution-pyinstaller.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [principles](../../docs-site/architecture/principles.md) (Secrets; Network defaults), research note [credentials and secrets](../research/credentials-secrets.md), spec secret "Return no plaintext on any route, command or tool", spec secret "Release plaintext only to a present human in the desktop app", spec secret "Hold a secret for a new destination until a person approves it", spec secret "Hold plaintext only in memory at the moment of use", spec daemon "Require a token on every management call", spec daemon "Refuse a request whose Host or Origin is not the daemon's own", spec desktop-app "Reimplement no daemon route in the shell", PR #464
 
 ## Context
 
@@ -23,16 +23,15 @@ and not another OS user (loopback binding and file modes already keep that one
 out). Second in line is a **web page in the user's browser**, which can send
 requests to `127.0.0.1` and, through DNS rebinding, read the answers.
 
-**What such an agent can do today** (measured 2026-09-30 on macOS 15.7.7, SIP
-on; the research is summarised in the rearchitecture working set as
-`secrets-vs-agents-research.md` and `permissions-research.md`):
+**What such an agent could do before the boundary** (measured 2026-09-30 on
+macOS 15.7.7, SIP on, against the design this decision replaced):
 
 | Path | Result |
 | --- | --- |
-| Read `~/.coffer/daemon.json`, then `GET /api/v1/credentials/{ref}` or run `coffer credentials get --show` | the plaintext of any secret — audited as `credential_read`, not refused |
+| Read `~/.coffer/daemon.json`, then call the route that returned a secret's value, or run the command's `--show` form | the plaintext of any secret — audited as a read, not refused |
 | `coffer provider key --connection-uid <uid>` | a real provider key |
 | `coffer sync key export <file>` | the master key, which opens every ciphertext |
-| Read `~/.coffer/master.key` | the master key (today's file default) |
+| Read `~/.coffer/master.key` | the master key (the file default) |
 | `lldb -p <daemon pid>` | decrypted secrets from the daemon's memory: the shipped binaries are ad-hoc signed with no hardened runtime. Against the same binary signed with `codesign -o runtime`, the attach is refused |
 | `ps eww <pid>` / `KERN_PROCARGS2` on an MCP stdio server Coffer spawned | the secret in that server's initial environment — **also from inside Claude Code's Seatbelt sandbox**, and also against a hardened-runtime binary |
 | `security find-generic-password -w` on an item another signed app owns | an Allow / Always Allow / Deny dialog; one "Always Allow" opens the item to every process for good |
@@ -62,10 +61,9 @@ The browser case has CVEs in exactly this product class: Ollama
 (TS-2022-004/005, no `Host` check), and the MCP Inspector (CVE-2025-49596, CVSS
 9.4: an unauthenticated local proxy that spawned stdio commands, fixed by
 `Origin` validation plus a session token). The MCP transport spec makes
-`Origin` validation a MUST for every HTTP server. Coffer already refuses a
-non-loopback `Host`
-([A Per-Start Token … Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md));
-it does not yet check `Origin` on every listener.
+`Origin` validation a MUST for every HTTP server. Coffer refuses a non-loopback
+`Host` and a foreign `Origin` on every listener
+([A Per-Start Token … Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md)).
 
 ## Options Considered
 
@@ -84,19 +82,31 @@ before**.
    next reveal asks again. The master key itself carries no presence flag
    ([The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read](master-key-lives-in-the-macos-keychain.md)),
    so the daemon starts and restarts unattended; presence gates the
-   operation, not the key. The desktop app decrypts
-   the ciphertext itself, in its own hardened process, and shows the value; the
-   daemon has **no route that returns plaintext** to anyone — not REST, not the
-   CLI, not MCP. `GET /api/v1/credentials/{ref}` stops returning a value;
-   `coffer credentials get --show` and `coffer sync key export` are removed;
-   the browser UI offers none of these actions and names the desktop app
-   instead. Writing a secret stays open to every surface: a caller that
-   supplies a value already has it.
+   operation, not the key. The grant is a one-time challenge bound to one
+   operation (`reveal`, `approve`, `export_master_key`) and one target (the ref,
+   the approval, the folder), valid for two minutes and consumed by its first
+   redeem whether or not the signature verifies. The desktop app runs the
+   LocalAuthentication check first — a fresh context per operation, the prompt
+   naming the operation and its target — and only then fetches the challenge and
+   signs it with HMAC-SHA256 under a grant key that is itself an HMAC of the
+   master key with a fixed label, derived when needed and never stored. The
+   daemon releases the one value to the app only against a signature that
+   verifies (`POST /api/v1/secrets/presence/reveal`). That keeps a single
+   decryption path and gives the shell no access to the store; the protection is
+   the same, because the route acts only on a grant that only a holder of the
+   master key can sign. Apart from that route the daemon has **no route that
+   returns plaintext** to anyone — not REST, not the CLI, not MCP; no command
+   prints a value or exports the master key; the browser UI offers none of
+   these actions and names the desktop app instead. Writing a secret stays open
+   to every surface: a caller that supplies a value already has it.
 2. **A secret goes to a new destination only with the human's approval.** A
    *destination* is a place Coffer sends a secret's plaintext: an MCP server's
-   environment variable or HTTP header, a custom tool group's authentication, a
+   environment variable or HTTP header, a
    channel adapter's credential, the sync remote's push token, and the base URL
-   of a provider connection that carries a key. Citing an existing secret from
+   of a provider connection that carries a key. The target of a provider
+   connection is its base URL: the local model proxy and the internal engine
+   receive a key only for an approved URL. Telegram and SeaTalk channels are the
+   channel destinations wired today. Citing an existing secret from
    a destination that did not cite it before, or changing where a resource that
    already cites one sends it (the command of a stdio server, the URL of an HTTP
    server or a provider), saves the change with the binding **pending**: Coffer
@@ -106,20 +116,37 @@ before**.
    change with a key derived from the master key, and the daemon applies a
    binding only with a valid signature. Only Coffer's signed binaries can read
    the master key, and only the desktop app's approval path signs, so a process
-   an agent controls cannot produce one. A binding whose secret value was supplied in the
-   same call needs no approval. Pending bindings are attention items on the
-   Overview.
+   an agent controls cannot produce one. A binding whose secret value was supplied for it needs
+   no approval: the destination was just registered or changed, and the ref has
+   never been bound anywhere, is not a standalone `secret/` name and was written
+   on this machine within the last five minutes, which is how every surface that registers a resource with a
+   pasted secret behaves. That is decided inside the registration call, by one
+   post-register seam every resource kind goes through, and the binding is
+   recorded there, so a second destination citing the same ref is not a first
+   one and waits, so the five minutes only bound how old an unused value may be and are no longer a race to the first use. A ref already in use elsewhere, or
+   a target that moved, records its pending approval in the same call. Bindings
+   are also evaluated at the moment of use (spawn, adapter start, push), which
+   catches changes that reach the vault behind Coffer's back; a binding met only
+   there is never counted as supplied. Replacing a value
+   already in use, adding a new standalone secret (it would reach any `coffer
+   run` child at once) and switching the protection off wait for an approval the
+   same way; rejecting needs no grant. The CLI prints "waiting for approval in
+   the Coffer app" and exits `9`, or waits with `--wait`. Pending bindings are
+   attention items on the Overview.
 3. **Turning these protections off takes the human.** Any setting that would
-   weaken rule 1 or rule 2 changes only in the desktop app, signed the same
-   way. No environment variable, config key or CLI flag does it.
+   weaken rule 1 or rule 2 (`secrets.require_approval`) switches off only
+   through an approval applied in the desktop app, signed the same way. No
+   environment variable, config key or CLI flag does it.
 4. **`Host` and `Origin` are checked on every listener.** The daemon's REST
    API, `/mcp`, the event stream, the served web UI and the model proxy all
    refuse a `Host` that is not the loopback address and port, and refuse a
    request whose `Origin` is not one of Coffer's own: the daemon's
    `http://127.0.0.1:<port>` and `http://localhost:<port>`, the desktop shell's
-   `tauri://localhost` / `http://tauri.localhost`, and the Vite dev origin in a
-   dev build. A request with no `Origin` — the CLI, the shim, an agent —
-   passes. The browser UI stays: it is served from the daemon's own origin and
+   `tauri://localhost` / `http://tauri.localhost`, and the Vite dev origin when
+   a source checkout enables it; the model proxy, which no page has business with, refuses any
+   `Origin` at all. A request with no `Origin` — the CLI, the shim, an agent —
+   passes. The mechanism is the daemon-auth ADR's; this rule is the boundary's
+   reliance on it. The browser UI stays: it is served from the daemon's own origin and
    lacks only the actions of rules 1–3.
 5. **Agents get capabilities, not keys.** The MCP gateway injects an HTTP
    upstream's headers itself, so the agent sees tool results and never the
@@ -128,18 +155,19 @@ before**.
    ([API-Key Providers Are Reached Through a Separate Local Model Proxy](api-key-providers-are-reached-through-a-separate-local-model-proxy.md)).
    That token is kept although an agent can read it: it attributes usage per
    agent, keeps browser pages and other users' processes off the user's quota,
-   and fills the key field both agents insist on. `coffer provider key` is
-   removed once the proxy ships.
+   and fills the key field both agents insist on. No command returns a
+   provider's real key.
 6. **Per-agent tokens for attribution are a SHOULD, not a MUST.** When the
    gateway and the REST API can tell which agent is calling from a token Coffer
-   minted for it, audit rows, reach and usage key on that identity instead of
-   the self-reported `clientInfo.name`. It makes the trail trustworthy against
-   accidents; it is not part of the boundary, because a same-user agent can
-   read another agent's token.
+   minted for it, audit rows, reach and usage would key on that identity instead
+   of the self-reported `clientInfo.name`. It would make the trail trustworthy
+   against accidents; it is not part of the boundary, because a same-user agent
+   can read another agent's token. Only the model proxy has such tokens today.
 7. **The processes that hold secrets cannot be inspected.** Every shipped
    binary is signed with the Developer ID under the hardened runtime, without
-   `get-task-allow`, and notarised, so a same-user debugger cannot attach to
-   the daemon, the proxy or the desktop app. The master key lives in a
+   `get-task-allow`, and notarised (`scripts/release_signing.sh`), so a
+   same-user debugger cannot attach to the daemon, the proxy or the desktop
+   app. The master key lives in a
    data-protection Keychain item in an access group limited to Coffer's Team
    ID: the signed daemon reads it silently, and any other binary — an agent's
    own program, `/usr/bin/security` — gets no access and no "Always Allow"
@@ -150,15 +178,15 @@ before**.
 - **A third-party stdio MCP server that takes its token from its environment.**
   The token sits in the server's initial environment, which any same-user
   process reads with `ps eww`, from inside Claude Code's sandbox too. Coffer
-  cannot fix a server it did not write. The UI labels such a binding "readable
-  by local agents" and prefers an HTTP server with gateway-injected headers
+  cannot fix a server it did not write. The UI labels such a binding "Readable by local
+  processes" and prefers an HTTP server with gateway-injected headers
   wherever the upstream offers one.
 - **`coffer run` children.** A secret resolved into a child's environment is
   readable by the agent that started the child: it is the parent, and `ps eww`
   works regardless. `coffer run` stays as the accident guard it was designed as
   ([Standalone Secrets Are Named `coffer://secret/` References](standalone-secrets-are-named-references-injected-into-one-child.md)),
-  labelled the same way. A per-secret opt-in for `coffer run` is the lever if
-  this proves too wide; it is not decided here.
+  labelled the same way ("Readable by local processes"). A per-secret opt-in for
+  `coffer run` is the lever if this proves too wide; it is not decided here.
 - **Computer-use agents.** An agent granted Accessibility or screen control can
   click an approval dialog or type a password. The presence gate holds against
   an agent with a shell, not one with the mouse.
@@ -245,10 +273,10 @@ sandboxed agent cannot read `daemon.json`, the master key file or the vault.
 - **Why it loses.** Rule 4 removes the browser's risk at a fraction of the
   cost, and rules 1–3 keep the sensitive actions out of the browser.
 
-### Option E — Keep plaintext on the CLI and REST, audited (today)
+### Option E — Keep plaintext on the CLI and REST, audited (the design this replaced)
 
-`coffer credentials get --show` and `GET /api/v1/credentials/{ref}` return the
-value and record `credential_read`.
+A `get --show` command and a REST read route return the value and record an
+audit row for the read.
 
 - **Pros.** Scriptable; works over SSH; every read leaves a trail.
 - **Cons.** An audit is not a refusal: the injected agent runs the command, and
@@ -305,106 +333,36 @@ Rules a future change must respect:
   path.
 - Every listener refuses a foreign `Host` and a foreign `Origin`.
 - The UI labels every binding a residual risk covers — a stdio server's
-  environment, a `coffer run` secret — as readable by local agents, and nothing
+  environment, a `coffer run` secret — as readable by local processes, and nothing
   describes Coffer as protecting it.
 
 ## Consequences
 
-- **Rewrites** [The Master Key Lives in the macOS Keychain](master-key-lives-in-the-macos-keychain.md)
-  (an access group only Coffer's signed binaries can read, no presence flag on
-  the key, export only in the app) and
-  [Standalone Secrets Are Named `coffer://secret/` References](standalone-secrets-are-named-references-injected-into-one-child.md)
-  (no plaintext read, the threat table above); both are rewritten in the same
-  change as this ADR.
-- **Revises, on acceptance,** [Resources Cite Secrets by Opaque Reference](credential-references.md)
-  (deliberate reads through the API end; binding a ref to a new destination
-  becomes an approval),
-  [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md)
-  (the key helper is removed, not only withdrawn from agents),
-  [A Per-Start Token … Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md)
-  (the `Origin` check on every listener) and
-  [The Desktop Shell Hosts the Shared Frontend](desktop-shell-over-a-shared-frontend.md)
-  (the shell gains reveal, export and approval signing — each something a
-  browser cannot do, since each needs a LocalAuthentication presence check).
-- **Principles** (an amendment proposed in its own change). The Credentials clause is amended, a clause "Secret
-  plaintext reaches only a present human; agents get capabilities, never keys"
-  is added, and "Not a firewall or security boundary" becomes "Not a firewall
-  or a sandbox": Coffer still confines nothing an agent does with its own
-  shell, but it holds this one narrow boundary.
-- **Specs.** credentials: "Audit every read of a secret value" and "Redact a
-  secret on the command line unless asked" give way to the desktop-only reveal
-  and the pending-binding approval; vault-sync: `key export` leaves the CLI;
-  daemon: `Origin` refusal on every listener; desktop-app: "Reimplement no
-  daemon route in the shell" gains the reveal and signing exception;
-  provider-switching: `coffer provider key` is removed with the proxy; web-ui:
-  the residual-risk labels and the hand-off to the desktop app.
-- **Costs accepted.** No reveal, export or approval over SSH or from a
-  browser; a machine without the signed app can use secrets but never see one;
-  a Touch ID per reveal and per new binding.
-- **Order of work.** The `Origin` guard ships first, on its own
-  (`rearch/origin-guard`). Hardened-runtime signing lands with the Developer
-  ID. The plaintext routes are removed in the same change that adds the desktop
-  reveal, so no release has neither.
-- **Docs.** The security architecture page's threat table is rewritten from
-  this ADR's Context and residual risks, and `SECURITY.md` states the same.
-
-## Implementation notes (2026-09-30)
-
-How the OpenSpec change `add-secret-boundary` built this decision; its
-`design.md` has the details.
-
-- **The grant.** The daemon issues a one-time challenge bound to one operation
-  (`reveal`, `approve`, `export_master_key`) and one target (the ref, the
-  approval id, the folder). It lives two minutes and is consumed by its first
-  redeem whether or not the signature verifies. The desktop app runs the
-  LocalAuthentication check first — a fresh context per operation, policy
-  `deviceOwnerAuthentication`, the prompt naming the operation and its target —
-  and only then fetches the challenge and signs it with HMAC-SHA256 under a
-  grant key that is itself an HMAC of the master key with a fixed label. The
-  grant key is derived when needed and never stored. A cancelled check sends
-  nothing.
-- **The daemon releases plaintext; the app does not decrypt.** Option A says
-  the desktop app decrypts the ciphertext itself. As built, the daemon releases
-  the one value to the app through presence-gated routes
-  (`POST /api/v1/credentials/presence/reveal`, and
-  `.../presence/master-key-export`, which writes the backup into the chosen
-  folder and answers only its path and fingerprint), and applies an approval
-  only against a grant that verifies. This keeps one decryption path, and the
-  shell needs no access to the store; the protection is the same, because the
-  routes act only on a grant that only a holder of the master key can sign.
-- **"A binding whose secret value was supplied in the same call"** is
-  implemented as: the ref has never been bound anywhere, is not a standalone
-  `secret/` name, and was stored within the last five minutes. Every surface
-  that registers a resource with a pasted secret stores it first and cites it
-  seconds later; a secret stored long ago, already sent elsewhere, or kept for
-  `coffer run`, is not fresh.
-- **Adoption at upgrade.** The first start of the daemon that has the boundary
-  approves every binding in use, once, through the same enumeration that
-  computes targets at use, so upgrading breaks nothing that worked. Bindings
-  are evaluated at the moment of use (spawn, adapter start, push), which also
-  catches changes that reach the vault behind Coffer's back.
-- **Destinations wired now:** an MCP server's environment variable (stdio) and
-  header (HTTP), a Telegram or SeaTalk channel's credential, and the sync
-  remote's push token. The provider connection's key and a custom tool's
-  authentication are to call the same service when they are built. Replacing a
-  value in use, adding a new standalone secret (`add_secret`, shown as "New
-  secret"; decided with the user on 2026-09-30, because a stored standalone
-  secret reaches any `coffer run` child at once) and switching
-  `secrets.require_approval` off wait for an approval; rejecting needs no grant. The CLI prints "waiting for approval in
-  the Coffer app" and exits `9`, or waits with `--wait`.
-- **Development builds do not hold the boundary.** Until the Developer-ID
-  signed build exists, the master key is the `0600` file (or the legacy
-  keychain item) and the shell derives the grant key from it, so any same-user
-  process can forge a grant. The daemon reports `development: true` and the
-  shell titles every presence prompt "Development build"; on a Mac without
-  LocalAuthentication a development build falls back to a modal confirmation
-  in the app window. The boundary holds only in a signed release
-  ([The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read](master-key-lives-in-the-macos-keychain.md),
-  "Open questions").
-- **Provider connections** are a destination whose target is the base URL:
-  the local model proxy and the internal engine receive a key only for an
-  approved URL (the proxy state is rebuilt when an approval is applied), and a
-  key replaced through the provider edit waits sealed like any value in use.
-  `coffer provider key` went with the proxy.
-- **Not yet built:** per-agent tokens (rule 6) and hardened-runtime signing and
-  notarisation (rule 7).
+- The secret spec states each rule as operable behaviour: no plaintext on any
+  route, command or tool, the presence-gated reveal, key backup and approval, the
+  pending binding with its signed approval, and the held replacement value.
+  The desktop shell gains reveal, key export and approval signing — each
+  something a browser cannot do, since each needs a LocalAuthentication
+  presence check ([The Desktop Shell Hosts the Shared Frontend](desktop-shell-over-a-shared-frontend.md)).
+- The principles' Secrets clause carries the invariant that secret plaintext
+  reaches only a present human and agents get capabilities, never keys, and
+  states that Coffer holds this one narrow boundary while confining nothing an
+  agent does with its own shell.
+- **Costs accepted.** No reveal, export or approval over SSH or from a browser;
+  a machine without the signed app can use secrets but never see one; a Touch ID
+  per reveal and per new binding.
+- **Development builds do not hold the boundary.** Their master key is a
+  `0600` file (or the login keychain), and the shell derives the grant key from
+  it, so any same-user process can forge a grant. The daemon reports
+  `development: true`, the shell titles every presence prompt "Development
+  build", and on a Mac without LocalAuthentication a development build falls
+  back to a modal confirmation in the app window. The boundary holds only in a
+  signed release ([The Master Key Lives in a Keychain Access Group](master-key-lives-in-the-macos-keychain.md)).
+- The security architecture page's threat table and `SECURITY.md` state the
+  residual risks listed in Option A.
+- Not built yet: per-agent tokens on the gateway and the REST API (rule 6);
+  attribution still uses the self-reported agent name there.
+- Not built yet: any destination beyond MCP servers, channels, the sync push
+  token and provider connections; a new destination type is added to the
+  pending-binding list in the change that introduces it.
+- Not decided: whether `coffer run` needs a per-secret opt-in.

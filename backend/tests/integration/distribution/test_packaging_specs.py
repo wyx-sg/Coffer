@@ -267,7 +267,7 @@ def test_daemon_spec_includes_attachment_and_chat_hidden_imports() -> None:
       * markitdown  — infrastructure/chat/document_extract.py (spec channels "Give
                       documents to every agent as extracted text")
       * openai      — infrastructure/provider/*
-      * langgraph / langchain — infrastructure/llm/*, infrastructure/chat/*
+      * langgraph — infrastructure/llm/* (the only importer of langgraph/langchain_*)
 
     The knowledge layer declares nothing here: it is a directory of markdown
     files with no converter, no index and no embedding client to bundle.
@@ -281,7 +281,7 @@ def test_daemon_spec_includes_attachment_and_chat_hidden_imports() -> None:
     """
     tree = _parse_spec(_REPO / "backend" / "coffer-daemon.spec")
     submodules = _collect_submodules_args(tree)
-    for pkg in ("markitdown", "openai", "langgraph", "langchain"):
+    for pkg in ("markitdown", "openai", "langgraph"):
         assert pkg in submodules, (
             f"daemon spec must collect_submodules({pkg!r}) — it is imported "
             "lazily by chat/provider code and PyInstaller misses it statically"
@@ -634,9 +634,7 @@ def test_smoke_test_bundle_script_present_and_invokes_shim() -> None:
     assert script.exists(), "scripts/smoke_test_bundle.sh is required by the smoke-test scenario"
     contents = script.read_text()
     assert "coffer-mcp-shim" in contents, "smoke_test_bundle.sh must locate and run coffer-mcp-shim"
-    assert '"initialize"' in contents or "'initialize'" in contents or "initialize" in contents, (
-        "smoke_test_bundle.sh must send a JSON-RPC initialize request"
-    )
+    assert "initialize" in contents, "smoke_test_bundle.sh must send a JSON-RPC initialize request"
     assert "jsonrpc" in contents.lower(), "smoke_test_bundle.sh must speak JSON-RPC"
     # The shim only replies after reaching a live daemon, and its frozen-binary
     # auto-spawn fallback can't relaunch itself — so the script must start the

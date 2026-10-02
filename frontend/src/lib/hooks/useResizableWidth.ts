@@ -58,6 +58,7 @@ function writeStored(key: string, value: number | null): void {
   }
 }
 
+/** @ui-only hook options; never crosses the wire. */
 export interface ResizableWidthOptions {
   /** Names the split, e.g. "chat.list"; stored as `coffer.split.<storageKey>`. */
   storageKey: string;
@@ -70,6 +71,7 @@ export interface ResizableWidthOptions {
   max?: number;
 }
 
+/** @ui-only hook result; never crosses the wire. */
 export interface ResizableWidth {
   /** The width to render, already clamped to `bounds`. */
   width: number;

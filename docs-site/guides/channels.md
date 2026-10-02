@@ -78,6 +78,8 @@ A code is eight characters from an alphabet with no `0`, `O`, `1` or `I`. It wor
 
 Pairing again from a different account replaces the owner. The previous owner's direct chat and group pairings are removed.
 
+A direct chat paired by an older Coffer, before pairings recorded who the owner is, completes itself: the first message you send there is recognised as yours (in a direct chat the chat id is your own id) and the bot answers as usual. If a message cannot be matched that way, the bot asks you to pair the chat again with a new code.
+
 ## Talk to an agent
 
 Send the bot a message. The first message opens a conversation on the channel's default agent, in the Coffer-managed workspace `~/.coffer/content/workspace`, and every later message continues it. You can move a chat to another agent, model or directory with [commands](#commands).
@@ -99,7 +101,7 @@ Send the bot a message. The first message opens a conversation on the channel's 
   The `💬` line is what the agent last said before a tool call; the answer grows under the rule. The final reply keeps everything the agent wrote, one paragraph per stretch of text.
 
   A step line in a direct chat adds the agent's own one-line description or the file name, never the raw command. In a group it names only the tool (`⏳ Bash`), because everyone there reads it.
-- A turn that fails, is stopped, or hits the tool-iteration limit ends with a one-line summary: the outcome, tool count, duration and tokens. A turn that succeeds sends no summary; the reply is the signal.
+- A turn that fails or is stopped ends with a one-line summary: the outcome, tool count, duration and tokens. A turn that succeeds sends no summary; the reply is the signal.
 
 ### What the reply looks like
 
@@ -127,6 +129,14 @@ Messages sent in quick succession are one question. The channel waits for a shor
 Both pauses are per-channel settings: on the channel's **Settings** tab under **Message batching**, or with `coffer channel edit <name> --wait-after-text <seconds> --wait-after-forward <seconds>`. Each takes 0 to 60 seconds; 0 answers every such message on its own.
 
 Messages you send while a turn is running wait in the conversation's queue and run in order — the same queue the Conversations page shows. A burst sent during a turn joins the queue as one entry. Each message that waits is answered "⏳ Queued (n)", n being how many now wait. Up to 10 may wait; a message sent while 10 already wait is dropped, and the bot says so and why.
+
+### When a chat has been quiet
+
+A conversation that nobody has touched for a day is rarely the one you mean to continue. When your next message reaches a chat whose conversation has been idle longer than the channel's idle period (24 hours by default), Coffer opens a new conversation instead of continuing the old one, and says so in one line before the answer: `🆕 Started a new conversation after 24 h idle.` The old conversation stays in the conversation list, untouched. The chat's agent, model, effort and directory carry over, as they do after `/new`. The rule applies to each conversation a channel keeps: the direct chat's, and each group thread's or parallel thread's own.
+
+Set the period on the channel's **Settings** tab under **Conversations** (**Start a new conversation after**, in hours; 0 never starts a new one), or from the CLI with `coffer channel add` or `coffer channel edit <name> --new-conversation-after-idle-hours <hours>`. `coffer channel show` prints it as `idle:`.
+
+A conversation you archived on the Conversations page is never continued by a message from a chat: the next message opens a new conversation, without a line about it, and the archived one stays archived.
 
 ### Parallel conversations
 
@@ -207,7 +217,7 @@ This is why `/new` is safe to use often: it clears the context, not your choices
 
 A conversation normally runs in the Coffer-managed workspace `~/.coffer/content/workspace`. `/dir` moves the chat to another directory, but only to one the channel allows. The allow-list exists because anyone holding your phone — or a slip of the thumb — should not be able to point an agent with full permissions at an arbitrary folder on your machine; you decide the places in advance, at the computer.
 
-Both live on the channel's **Settings** tab under **Working directories**. **Default** is where new conversations start (none means the agent's own); **Allowed for /dir** lists the folders `/dir` may switch into — add one with **Add directory…**, take one out with **Remove**, and the default's row is marked *default*. With none allowed, `/dir` is off. Or from the CLI:
+Both live on the channel's **Settings** tab under **Working directories**. **Default** is where new conversations start (none means the Coffer workspace); **Allowed for /dir** lists the folders `/dir` may switch into — add one with **Add directory…**, take one out with **Remove**, and the default's row is marked *default*. With none allowed, `/dir` is off. Or from the CLI:
 
 ```sh
 coffer channel edit my-telegram --default-dir ~/src/coffer              # where new conversations start
@@ -215,7 +225,7 @@ coffer channel edit my-telegram --dir ~/src/coffer --dir ~/src/notes   # replace
 coffer channel edit my-telegram --no-dirs                              # allows none
 ```
 
-`--dir` is repeatable and relative paths are made absolute. Each allowed directory also admits the directories beneath it.
+`--dir` is repeatable. Paths must be absolute (`~` is expanded by the shell); a relative one is refused and nothing is saved. Each allowed directory also admits the directories beneath it.
 
 - `/dir <path>` accepts an allowed path or one beneath it; `/dir <name>` accepts the base name of one allowed path (`/dir coffer`). The directory must exist.
 - Switching opens a fresh conversation there and remembers the directory for the chat.
@@ -258,10 +268,6 @@ Telegram shows a command menu; Coffer registers it from the same list the help a
 On a platform with buttons, a bare `/model`, `/dir`, `/resume` and a `/kb` with no collection answer with a selection card. A card carries at most six buttons; a longer list is paged, four choices at a time with **← Prev** and **Next →**. Paging changes nothing — only tapping a choice does. After a tap, the card is rewritten in place so the tick moves to your new choice.
 
 A button tap is checked exactly like a message: only the owner's taps count. If the platform refuses a card, the command answers in plain text instead.
-
-::: info Changes from earlier versions
-`/new <agent>` replaced `/agent`, `/model <level>` replaced `/effort`, `/status` lists the parallel threads `/threads` did, and `/kb` replaced `/save`. The old words are no longer reserved: `/threads` is corrected to `/thread`, the others reach the agent as text.
-:::
 
 ## Default agent and scope
 
@@ -314,7 +320,7 @@ Your pairing travels with the channel, so moving it does not make you pair again
 Add the bot to a group to use it there.
 
 - The bot acts only on a message addressed to it — an @mention, or a reply to the bot. Other group messages are ignored.
-- Only the owner can drive it. An addressed message from anyone else gets a short "not authorized" reply and starts no turn.
+- Only the owner can drive it. An addressed message from anyone else gets a short "not authorized" reply and starts no turn; a message from anyone else that is not addressed to the bot (possible when you turned off **Require @mention**) is dropped without a word.
 - In the group's main chat, the answer goes into a thread rooted at your message, never into the main chat. Inside a thread, the bot replies in that thread.
 - Each thread is its own conversation with its own agent, history and queue, so threads run concurrently.
 - A group answer is attached to the message that asked: on Telegram it is sent as a reply to that message; on SeaTalk the thread rooted at that message is the attachment, and the answer @mentions you.
@@ -388,7 +394,7 @@ The **Channels** page is where a channel is set up and looked after: its setup, 
 
 The channel list sits beside the open channel. It groups channels by what they need from you: **Needs attention** (reconnecting, kicked, can't start, not paired, bound to no machine or to one Coffer does not know), **Connected**, **Elsewhere** (run by another machine) and, when there are any, **Off**. **Filter** narrows it by name or platform. A channel is addressed by its uid — `/channels/<uid>` for its **Overview**, `/channels/<uid>/settings` for its **Settings** — so a rename never breaks a link.
 
-The header names the channel, its status and where it runs (`SeaTalk app 8231 · WebSocket · runs on this machine`), with the one action its state calls for — **Send test**, **Reconnect now**, **Take it back**, **Retry**, **Replace secret** or **Replace token**, **Run it here…** — and a **⋯** menu: **Send test message**, **Reconnect**, **Change machine…**, **Replace secret** (or **Replace token**) and **Delete channel**. Whenever something is wrong, a banner under the header says why and what fixes it: lost connection and reconnecting, another process took the SeaTalk connection, the SeaTalk SDK is missing, the platform refused the connection, the adapter stopped (often a revoked token or a regenerated secret), the status could not be read, the channel runs on another machine by design, or it is bound to no machine or an unknown one. **Reconnect** restarts the channel's adapter.
+The header names the channel, its status and where it runs (`SeaTalk app 8231 · WebSocket · runs on this machine`), with the one action its state calls for — **Send test**, **Reconnect now**, **Take it back**, **Retry**, **Replace secret** or **Replace token**, **Run it here…** — and a **⋯** menu: **Send test message**, **Reconnect**, **Change machine…**, **Replace secret** (or **Replace token**) and **Delete channel**. Whenever something is wrong, a banner under the header says why and what fixes it: lost connection and reconnecting, another process took the SeaTalk connection, the SeaTalk SDK is missing, the platform refused the connection, the adapter stopped (often a revoked token or a regenerated secret), the status could not be read, the channel runs on another machine by design, or it is bound to no machine or an unknown one. **Reconnect** restarts the channel's adapter: the daemon stops it and its connection, starts them again from the stored configuration and reads the secret as it is now, and a channel that was waiting out a failed start is retried at once. From the CLI it is `coffer channel restart <name>`; the REST equivalent is `POST /api/v1/channels/{uid}/restart`.
 
 **Overview** holds:
 
@@ -396,7 +402,7 @@ The header names the channel, its status and where it runs (`SeaTalk app 8231 ·
 - **Agents** — **Default agent** (saved as soon as you pick it) and **Agents it may drive**, the channel's scope (see [Default agent and scope](#default-agent-and-scope)).
 - **Conversations from this channel**.
 
-**Settings** saves each change as you make it — a number or a path once you stop typing and it is valid, a switch at once — and says **Saving…**, **Saved** or **Couldn't save** at the top. It holds the channel's title, **In group chats**, **Message batching**, **Replies**, **Directories for /dir**, **Secrets** (the SeaTalk App ID, and the secret or token, masked, with **Replace**), **Runs on** and **Delete…**. A replaced secret is written under the reference the channel already uses and the adapter restarts on it, so rotating a secret changes neither pairing nor binding. Deleting a channel stops the bot and removes its pairing; its conversations stay on the Conversations page.
+**Settings** saves each change as you make it — a number or a path once you stop typing and it is valid, a switch at once — and says **Saving…**, **Saved** or **Couldn't save** at the top. It holds the channel's title, **In group chats**, **Message batching**, **Replies**, **Conversations**, **Directories for /dir**, **Secrets** (the SeaTalk App ID, and the secret or token, masked, with **Replace**), **Runs on** and **Delete…**. Every field starts from the settings the daemon reports for the channel, defaults included. A replaced secret is written under the reference the channel already uses and the daemon notices the new value and restarts the adapter on it by itself — also when you replace it with `coffer secret set` — so rotating a secret changes neither pairing nor binding. Deleting a channel stops the bot and removes its pairing; its conversations stay on the Conversations page.
 
 From the CLI:
 
@@ -405,6 +411,7 @@ coffer channel list
 coffer channel show my-telegram
 coffer channel disable my-telegram   # stop the adapter
 coffer channel enable my-telegram    # start it again
+coffer channel restart my-telegram   # stop the adapter and start it afresh
 coffer channel rm my-telegram        # stop it and remove the pairing
 printf %s "$NEW_TOKEN" | coffer secret set channel/tg/bot-token   # rotate
 ```
@@ -414,6 +421,7 @@ channel:  my-telegram (telegram)
 uid:      9b2e…
 agent:    claude-code
 gating:   require_mention=on  ignore_other_mentions=off
+idle:     new conversation after 24 h idle
 secret:   bot_token_ref = channel/tg/bot-token
 enabled:  True    running: True
 runs on:  3f9c… (this machine)

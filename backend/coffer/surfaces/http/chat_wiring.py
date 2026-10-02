@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
@@ -23,14 +24,15 @@ from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.chat.turn_runner import DEFAULT_TURN_IDLE_TIMEOUT_SECONDS
 from coffer.application.provider.introspection import ModelIntrospectionService
-from coffer.application.provider.targets import projection_targets
+from coffer.application.provider.targets import connection_for_agent
 from coffer.application.resource_service import ResourceService
 from coffer.application.runtime.supervisor import spawn
+from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.chat.channel_note import ChannelNote
-from coffer.domain.errors import ResourceNotFound, SecretMissing
-from coffer.domain.provider.config import ProviderConfig
+from coffer.domain.errors import ResourceNotFound
 from coffer.domain.provider.modality import Modality
+from coffer.domain.secret_errors import SecretMissing
 from coffer.infrastructure.agent.claude_binary_models import ClaudeBinaryModelDiscovery
 from coffer.infrastructure.agent.codex_rpc_models import CodexRpcModelDiscovery
 from coffer.infrastructure.agent.model_discovery import (
@@ -91,15 +93,14 @@ class _ActiveProviderModels:
     half of the catalogue's provider question.
 
     Resolves ``ProviderService`` lazily per call (through the provider kind's
-    getter — this runs at request time, by design), so activating, re-targeting
+    getter — this runs at request time, by design), so switching, re-targeting
     or curating a connection takes effect on the next card render with no
     rewiring.
 
-    Matches the connection the same way the turn machinery does when it injects a
-    key (``resolve_active_key_for_agent``): the first one flagged ``is_active``
-    whose per-agent SCOPE reaches this agent type (ADR per-agent-resource-scope) — and a
-    disabled connection reaches none. An agent with no such connection runs on
-    its own login, which is what ``None`` says.
+    Asks the one question every consumer asks, ``connection_for_agent``: the
+    connection the AGENT's record names, when it is switched on and its scope
+    reaches the agent (ADR per-agent-resource-scope). An agent on no connection
+    runs on its own login, which is what ``None`` says.
 
     Narrowed to ``text``: the question is what a CHAT picker may offer, and the
     same endpoint's embedding, image, video and speech models would be rejected
@@ -109,40 +110,35 @@ class _ActiveProviderModels:
     answers ``[]``.
     """
 
-    #: Held rather than resolved lazily like the provider service: a
-    #: connection's reach names agent UIDS, so answering a question about an
-    #: agent TYPE needs the agent registry, and that is a plain dependency.
+    #: Held rather than resolved lazily like the provider service: the agent
+    #: key names a TYPE, and finding the agent row of that type needs the agent
+    #: registry, which is a plain dependency.
     resources: ResourceService
 
     async def curated_models(self, agent_key: str) -> list[str] | None:
         try:
             connections = await get_provider_service().list()
-            # A connection's reach is now an allow-list of agent UIDS, so
-            # answering "does it cover this agent TYPE" means asking which
-            # registered agents it reaches and what type each of those is. The
-            # rows are fetched once, not per connection.
             agents = await self.resources.list(kind="agent")
         except Exception:
             # Nothing is wired yet, or the provider kind is unhappy: a catalogue
             # read degrades to "no active provider", never to an error.
             _log.debug("agent.catalogue.provider_lookup_failed", exc_info=True)
             return None
-        for resource in connections:
+        for agent in agents:
             try:
-                cfg = ProviderConfig.model_validate(resource.config)
+                if AgentConfig.model_validate(agent.config).type.value != agent_key:
+                    continue
             except ValueError:
-                # A row this build cannot parse is not a candidate; the
-                # provider kind's own validation reports it where it is edited.
-                _log.debug("agent.catalogue.provider_config_invalid", extra={"name": resource.name})
                 continue
-            if cfg.is_active and any(
-                t.value == agent_key for t in projection_targets(resource, cfg, agents)
-            ):
-                # Curating nothing is "no restriction" (``None``); curating
-                # something but nothing ``text`` is an empty chat list (``[]``),
-                # never the agent's own catalogue (spec provider-switching
-                # "Offer only text models to chat pickers").
-                return cfg.model_ids(Modality.TEXT) if cfg.models else None
+            chosen = connection_for_agent(agent, connections)
+            if chosen is None:
+                return None
+            _, cfg = chosen
+            # Curating nothing is "no restriction" (``None``); curating
+            # something but nothing ``text`` is an empty chat list (``[]``),
+            # never the agent's own catalogue (spec provider-switching
+            # "Offer only text models to chat pickers").
+            return cfg.model_ids(Modality.TEXT) if cfg.models else None
         return None
 
 
@@ -245,9 +241,14 @@ def wire_chat(
     # 5. Startup sweep: flip any lingering ``status='streaming'`` rows to
     #    ``'failed'`` (recover from a prior daemon crash).
 
+    # It runs as a background task, so a turn can begin before it does: it only
+    # touches rows older than this daemon (spec chat "Sweep streaming rows left by
+    # a crashed daemon").
+    daemon_started = datetime.now(tz=UTC)
+
     async def _sweep() -> None:
         try:
-            n = await TurnOrchestrator.sweep_streaming_messages(msg_repo)
+            n = await TurnOrchestrator.sweep_streaming_messages(msg_repo, before=daemon_started)
             if n:
                 _log.info("chat.startup_sweep: flipped %d streaming rows to failed", n)
         except Exception:

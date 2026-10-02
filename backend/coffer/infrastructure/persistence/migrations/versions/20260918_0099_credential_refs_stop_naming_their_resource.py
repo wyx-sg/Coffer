@@ -6,8 +6,7 @@ not — ``application/provider/service.py::_mint_ref`` returns
 ``provider/<uuid4 hex>/key`` and says why: deriving a ref from the connection's
 name "made the name a key — renaming then had to move the secret". These two
 never got the same treatment because neither could be renamed at all, so the
-hazard was unreachable. [Resource Identity Is an Immutable
-`uid`](../../../../../../docs/decisions/resource-identity-is-an-immutable-uid.md)
+hazard was unreachable. ADR identity-is-the-uid-inside-the-file
 makes rename a field on ``PATCH /api/v1/resources/{uid}`` for every kind, which
 is what reaches it — so this revision moves the existing refs out of the way of
 the rename that now exists.

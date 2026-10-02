@@ -9,8 +9,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
-import { getApiClient } from "@/lib/api/client";
-import { throwApiError, translateApiError } from "@/lib/api/errors";
+import { attentionApi } from "@/lib/api/attention";
+import { translateApiError } from "@/lib/api/errors";
 import { attentionKey } from "@/lib/api/queryKeys";
 
 function useAttentionKeyMutation(method: "PUT" | "DELETE") {
@@ -18,14 +18,8 @@ function useAttentionKeyMutation(method: "PUT" | "DELETE") {
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async (key: string) => {
-      const params = { params: { path: { key } } };
-      const { error } =
-        method === "PUT"
-          ? await getApiClient().PUT("/attention/ignored/{key}", params)
-          : await getApiClient().DELETE("/attention/ignored/{key}", params);
-      if (error) throwApiError(error, "INTERNAL_ERROR", "attention ignore failed");
-    },
+    mutationFn: (key: string) =>
+      method === "PUT" ? attentionApi.ignore(key) : attentionApi.unignore(key),
     onSuccess: () => void qc.invalidateQueries({ queryKey: attentionKey }),
     onError: (e) => toast.error(translateApiError(t, e)),
   });

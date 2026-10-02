@@ -27,8 +27,8 @@ SEATALK_RENDER_NOTES = (
 )
 
 SEATALK_CAPABILITIES = ChannelCapabilities(
-    supports_edit=False,  # no API rewrites a delivered SeaTalk message
-    # But a message CAN grow in place — init_stream/update_stream.
+    # A delivered SeaTalk text message cannot be rewritten, but one CAN grow in
+    # place — init_stream/update_stream.
     supports_live_text=True,
     live_text_persists=True,  # the streamed message IS the reply
     # Both chat kinds: single_chat_typing and group_chat_typing. The group one
@@ -37,10 +37,9 @@ SEATALK_CAPABILITIES = ChannelCapabilities(
     supports_typing=True,
     max_message_chars=CHUNK_LIMIT,
     supports_buttons=True,
-    # Update Message covers interactive cards (never text — see supports_edit).
+    # Update Message covers interactive cards (never text).
     supports_card_update=True,
     supports_media=True,
-    supports_groups=True,
     supports_history_fetch=True,
     # "Mention the asker in a group answer": SeaTalk mentions from a bare id, so a
     # group reply can open by @mentioning whoever asked without resolving a display

@@ -75,7 +75,7 @@ class SkillBindingOut(BaseModel):
     Both halves of the agent's identity ride along: ``agent_uid`` is what a
     client follows to that agent, ``agent_name`` is what it prints. A delivery
     is a fact about an agent row, so it keeps pointing at the same agent when
-    the user renames it (ADR resource-identity-is-an-immutable-uid).
+    the user renames it (ADR identity-is-the-uid-inside-the-file).
     """
 
     agent_uid: str
@@ -119,7 +119,7 @@ def _source_out(
 
 class SkillOut(BaseModel):
     # Identity first, label second — ``/api/v1/skills/{uid}`` is what every
-    # other route here takes (ADR resource-identity-is-an-immutable-uid).
+    # other route here takes (ADR identity-is-the-uid-inside-the-file).
     uid: str
     #: Fixed once registered: the master folder, the delivered links and the
     #: SKILL.md ``name:`` all carry it (409 NAME_IMMUTABLE on a change).
@@ -216,7 +216,7 @@ def _actor(x_coffer_actor: str | None = Header(default=None)) -> str:
 # arriving in the path had to be refused before it reached the filesystem. The
 # path segment is now a uid the daemon minted, and a name only ever enters
 # through ``ResourceService``, which validates it once for every kind
-# (ADR resource-identity-is-an-immutable-uid). A second copy of that rule here
+# (ADR identity-is-the-uid-inside-the-file). A second copy of that rule here
 # would be a rule nothing can violate, kept alive for a route shape that is
 # gone.
 

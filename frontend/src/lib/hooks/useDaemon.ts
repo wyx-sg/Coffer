@@ -1,8 +1,7 @@
 // frontend/src/lib/hooks/useDaemon.ts
 import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getApiClient } from "@/lib/api/client";
-import { ApiError, throwApiError } from "@/lib/api/errors";
+import { daemonApi } from "@/lib/api/daemon";
 import {
   applyDaemonConnection,
   daemonVersionMatches,
@@ -10,21 +9,12 @@ import {
   restartDaemon,
 } from "@/lib/tauri";
 import { restartFromBrowser } from "@/lib/daemonRestart";
-import type { components } from "@/lib/api/types";
 import { daemonStatusKey, daemonUpgradeKey, daemonVersionSkewKey } from "@/lib/api/queryKeys";
-
-type DaemonStatusOut = components["schemas"]["DaemonStatusOut"];
 
 export function useDaemonStatus() {
   const query = useQuery({
     queryKey: daemonStatusKey,
-    queryFn: async (): Promise<DaemonStatusOut> => {
-      const client = getApiClient();
-      const { data, error } = await client.GET("/daemon/status");
-      if (error) throwApiError(error, "INTERNAL_ERROR", "status failed");
-      if (!data) throw new ApiError("INTERNAL_ERROR", "empty status response");
-      return data;
-    },
+    queryFn: daemonApi.status,
     // Only used for the offline banner — poll slowly and stop while the
     // window is backgrounded to avoid waking the daemon every 5s.
     refetchInterval: 30_000,
@@ -117,11 +107,6 @@ export function useUpgradeHandoff(enabled: boolean) {
     queryKey: daemonUpgradeKey,
     enabled,
     staleTime: Infinity,
-    queryFn: async (): Promise<string> => {
-      const { data, error } = await getApiClient().GET("/daemon/upgrade");
-      if (error) throwApiError(error, "INTERNAL_ERROR", "upgrade hand-off failed");
-      if (!data) throw new ApiError("INTERNAL_ERROR", "empty upgrade response");
-      return data.handoff.prompt;
-    },
+    queryFn: daemonApi.upgradePrompt,
   });
 }

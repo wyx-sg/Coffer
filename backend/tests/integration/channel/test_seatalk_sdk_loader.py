@@ -14,7 +14,6 @@ from typing import Any
 
 import pytest
 
-from coffer.infrastructure.channel import seatalk_sdk
 from coffer.infrastructure.channel.seatalk_sdk import (
     SeaTalkSdkMissingError,
     load_sdk,
@@ -106,21 +105,3 @@ def test_absent_vendor_dir_is_not_added_to_sys_path(tmp_path: Path) -> None:
 def test_a_second_call_returns_the_already_imported_module(tmp_path: Path) -> None:
     write_fake_sdk_package(tmp_path / "vendor")
     assert load_sdk() is load_sdk()
-
-
-def test_real_sdk_loads_when_the_operator_has_supplied_it(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Not a requirement — a bonus check for a machine that has the real SDK.
-
-    Skipped everywhere it is absent (CI, any outside contributor), because the
-    product must work without it.
-    """
-    monkeypatch.delenv("COFFER_SEATALK_SDK_DIR", raising=False)
-    real_dir = seatalk_sdk.sdk_dir()
-    if not (real_dir / _PACKAGE).is_dir():
-        pytest.skip(f"no operator-supplied SeaTalk SDK in {real_dir}")
-    module = load_sdk()
-    assert hasattr(module, "Client")
-    assert hasattr(module, "EventDispatcher")
-    assert hasattr(module, "KickError")

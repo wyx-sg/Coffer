@@ -53,7 +53,7 @@ class _ReadRaisesKeyringLocked:
 def test_get_raises_keyring_locked(monkeypatch):
     """A locked keychain may hold the value: the adapter raises SecretLocked
     rather than answer "absent"."""
-    from coffer.domain.errors import SecretLocked
+    from coffer.domain.secret_errors import SecretLocked
     from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 
     monkeypatch.setattr(keyring.core, "_keyring_backend", _ReadRaisesKeyringLocked())
@@ -100,7 +100,7 @@ class _SetRaisesKeyringLocked(keyring.backend.KeyringBackend):
 
 def test_keyring_set_under_locked_raises_secret_locked(monkeypatch):
     """KeyringAdapter.set must raise SecretLocked when the backend is locked."""
-    from coffer.domain.errors import SecretLocked
+    from coffer.domain.secret_errors import SecretLocked
     from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 
     monkeypatch.setattr(keyring.core, "_keyring_backend", _SetRaisesKeyringLocked())

@@ -256,6 +256,9 @@ def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> 
     # Claude Code states none ("Read Claude Code and Codex memory with their search terms").
     assert summary["search_terms"] == []
     assert summary["created_at"] and summary["updated_at"]
+    # The note's own file, so a page opens it without walking the file tree.
+    assert summary["file_path"].endswith("/coffer/notes/python-lockfile.md")
+    assert pathlib.Path(summary["file_path"]).is_file()
     # Retirement is a file leaving `notes/` plus a line in `RETIRED.md`, never a
     # flag a client has to filter on ("Record retirements so they stick").
     assert "status" not in summary
@@ -379,12 +382,9 @@ def test_distil_with_no_internal_connection_still_writes_an_index(client, tmp_pa
     assert "coffer" in _sync(client)["distilled"]
     assert _partitions(client)["coffer"]["note_count"] == 1
 
-    index = client.get(
-        f"/api/v1/memory/partitions/{_partition_uid(client, 'coffer')}/files/content",
-        params={"path": "MEMORY.md"},
-    ).json()
-    assert "python-lockfile" in index["content"]
-    assert str(repository.resolve()) in index["content"]
+    index = (_memory_root() / "coffer" / "MEMORY.md").read_text(encoding="utf-8")
+    assert "python-lockfile" in index
+    assert str(repository.resolve()) in index
 
     audit = client.get("/api/v1/audit").json()["entries"]
     distilled = [e for e in audit if e["event_type"] == "memory_distilled"]
@@ -721,7 +721,7 @@ def test_the_delivery_management_routes_are_gone(client) -> None:
 @pytest.mark.acceptance(
     spec="memory", scenario="a partition's own directory is browsable as a file tree"
 )
-def test_partition_files_walk_the_directory_and_read_one_file(client, tmp_path) -> None:
+def test_partition_files_walk_the_directory(client, tmp_path) -> None:
     partition = _distilled(client, tmp_path)
     memory_store.write_retired(
         partition,
@@ -741,60 +741,6 @@ def test_partition_files_walk_the_directory_and_read_one_file(client, tmp_path) 
     assert names["notes"]["type"] == "dir"
     assert "derived" not in names["notes"]
     assert "notes/python-lockfile.md" in {c["path"] for c in names["notes"]["children"]}
-
-    content = client.get(
-        f"/api/v1/memory/partitions/{uid}/files/content",
-        params={"path": "notes/python-lockfile.md"},
-    ).json()
-    assert content["binary"] is False
-    assert content["truncated"] is False
-    assert "uv sync --frozen" in content["content"]
-    assert content["abs_path"].endswith("/notes/python-lockfile.md")
-    assert content["folder_abs_path"] == str(memory_paths.notes_dir(partition))
-
-    # Reading under `.raw/` is refused as absent, the way the tree leaves it out.
-    raw_entry = next((_memory_root() / partition / ".raw").iterdir())
-    raw = client.get(
-        f"/api/v1/memory/partitions/{uid}/files/content",
-        params={"path": f".raw/{raw_entry.name}"},
-    )
-    assert raw.status_code == 404
-    assert raw.json()["error"]["code"] == "MEMORY_FILE_NOT_FOUND"
-
-
-def test_partition_files_are_read_only(client, tmp_path) -> None:
-    """No write reaches this family. The tree is derived ("Keep the memory tree
-    derived and local"), so an edit would survive only until the next aggregation
-    pass."""
-    partition = _distilled(client, tmp_path)
-
-    r = client.put(
-        f"/api/v1/memory/partitions/{_partition_uid(client, partition)}/files/content",
-        json={"path": "notes/python-lockfile.md", "content": "rewritten"},
-    )
-    assert r.status_code == 405
-
-
-def test_partition_files_refuse_a_path_that_escapes_the_partition(client, tmp_path) -> None:
-    partition = _distilled(client, tmp_path)
-
-    r = client.get(
-        f"/api/v1/memory/partitions/{_partition_uid(client, partition)}/files/content",
-        params={"path": "../../../../etc/passwd"},
-    )
-    assert r.status_code == 400
-    assert r.json()["error"]["code"] == "MEMORY_UNSAFE_PATH"
-
-
-def test_partition_file_that_is_not_there_is_not_found(client, tmp_path) -> None:
-    partition = _distilled(client, tmp_path)
-
-    r = client.get(
-        f"/api/v1/memory/partitions/{_partition_uid(client, partition)}/files/content",
-        params={"path": "notes/no-such-note.md"},
-    )
-    assert r.status_code == 404
-    assert r.json()["error"]["code"] == "MEMORY_FILE_NOT_FOUND"
 
 
 def test_files_of_an_unknown_partition_are_not_found(client) -> None:

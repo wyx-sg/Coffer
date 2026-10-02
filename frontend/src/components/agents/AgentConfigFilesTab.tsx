@@ -12,6 +12,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { LoadError } from "@/components/LoadError";
 import { ConfigDirectoryPane } from "@/components/agents/ConfigDirectoryPane";
 import { ConfigEditorPane } from "@/components/agents/ConfigEditorPane";
 import { ConfigFileTree } from "@/components/agents/ConfigFileTree";
@@ -23,7 +24,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { baseName } from "@/lib/agents/configFiles";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
-import { translateApiError } from "@/lib/api/errors";
 import { useBeforeUnload } from "@/lib/hooks/useBeforeUnload";
 import { useCreateConfigChild, useDeleteConfigChild } from "@/lib/hooks/useConfigDirFiles";
 import { useConfigEditorState } from "@/lib/hooks/useConfigEditorState";
@@ -84,7 +84,7 @@ export function AgentConfigFilesTab({ agent, onDirtyChange }: Props) {
   const list = s.files.isPending ? (
     <p className="px-2 text-sm text-text-muted">{t("common.loading")}</p>
   ) : s.files.error ? (
-    <p className="px-2 text-sm text-danger">{translateApiError(t, s.files.error)}</p>
+    <LoadError className="px-2" error={s.files.error} onRetry={() => void s.files.refetch()} />
   ) : s.allFiles.length === 0 ? (
     <p className="px-2 text-sm text-text-muted">{t("agents.config.none")}</p>
   ) : (

@@ -7,7 +7,7 @@
 // translator and the locale are passed in.
 import type { TFunction } from "i18next";
 
-import type { DiffLine } from "@/components/change-preview/changeCounts";
+import type { DiffLine } from "@/lib/changePreview/changeCounts";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import type { ConflictFile } from "@/lib/api/sync";
 

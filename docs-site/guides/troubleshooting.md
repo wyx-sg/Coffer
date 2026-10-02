@@ -75,7 +75,6 @@ The error code is `DB_SCHEMA_TOO_NEW`.
 coffer: WARNING: attached to a Coffer daemon at version 0.1.1 (/Users/you/.coffer/bin/0.1.1/coffer-daemon) but this coffer is 0.2.0; run `coffer daemon restart` to serve the current build
 ```
 
-`coffer daemon status` may also show `channel: unknown — the running daemon predates this CLI; restart it: coffer daemon restart`.
 
 **Cause.** You installed a new version while the old daemon kept running. The daemon outlives the CLI and shim processes that attach to it, so the old build is still answering.
 
@@ -136,11 +135,11 @@ See [MCP servers](/guides/mcp-servers) and [Connect a client](/guides/connect-a-
 
 **Fix.** Keep one port: `coffer config get daemon.port` tells you the configured port; `coffer config unset daemon.port` returns to 8000.
 
-### A page says a feature "is switched off"
+### A page or command is missing, or a command says a feature is switched off
 
-**Cause.** The page belongs to an [experimental feature](/guides/experimental-features) that is switched off on this machine. Experimental features are off by default in release builds. No feature is experimental right now, so a current build does not show this notice.
+**Cause.** The page, command or tool belongs to an [experimental feature](/guides/experimental-features) that is switched off on this machine. Experimental features are off by default, and a switched-off feature looks absent: no sidebar entry, no palette result, and a link to its page shows the not-found page. The four features are Knowledge, Memory, Sync and Model providers.
 
-**Fix.** Press **Switch on** on the notice, switch it under **Settings → General**, or run `coffer config set feature.<key> on`. If the notice says `COFFER_FEATURES` holds it off, the feature is pinned in the daemon's environment; change it where the daemon is started.
+**Fix.** Switch it on under **Settings → Features**, or run `coffer config set feature.<key> on` (a command that needs a feature prints exactly that line). `coffer config list feature.` shows what decided each feature; if it says `pin`, `COFFER_FEATURES` holds it in the daemon's environment, so change it where the daemon is started.
 
 ## Secrets and macOS keychain prompts
 
@@ -221,7 +220,7 @@ Messages are accepted only from the paired owner. In a group, the bot acts only 
 
 ## Collect information for a bug report
 
-1. The version and channel: `coffer daemon status`, or **Settings → About → Copy diagnostics**.
+1. The version: `coffer daemon status`, or **Settings → About → Copy diagnostics**.
 2. How you installed it (desktop app, release archive, source) and your macOS version.
 3. The error as printed, and the command or action that produced it. Re-run a failing CLI command with `coffer -v …` for the full traceback and HTTP context.
 4. The relevant lines of `daemon.log`, filtered to the time of the failure, or the `X-Coffer-Trace` id of the failing request.

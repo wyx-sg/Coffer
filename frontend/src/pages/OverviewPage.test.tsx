@@ -9,25 +9,16 @@ import { acceptance } from "@/test/acceptance";
 import type { StreamMessage } from "@/lib/events/eventStream";
 import { OverviewPage } from "./OverviewPage";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
-vi.mock("@/lib/api/call", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/api/call")>()),
-  call: vi.fn(),
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
 }));
 vi.mock("@/lib/events/eventStream", () => ({ followDaemonEvents: vi.fn() }));
-// No real area carries an experimental feature, so the gate is tested by
-// flagging the Knowledge tile with a test-only one.
-vi.mock("@/lib/overview/health", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@/lib/overview/health")>();
-  return {
-    ...real,
-    AREAS: real.AREAS.map((a) => (a.id === "knowledge" ? { ...a, feature: "fake_feature" } : a)),
-  };
-});
-
 const { getApiClient } = await import("@/lib/api/client");
-const { call } = await import("@/lib/api/call");
 const { followDaemonEvents } = await import("@/lib/events/eventStream");
+
+const ALL_ON = { knowledge: true, memory: true, sync: true, models: true };
+const ALL_OFF = { knowledge: false, memory: false, sync: false, models: false };
 
 const now = Date.now();
 const ago = (ms: number) => new Date(now - ms).toISOString();
@@ -106,6 +97,9 @@ interface Setup {
 }
 
 let state: Required<Setup>;
+/** The routes the page read that the typed-client mock answers by its fallback table. */
+let routed: string[] = [];
+let routeFallback: (path: string) => unknown = () => undefined;
 let listener: ((m: StreamMessage) => void) | null;
 
 function ok(data: unknown) {
@@ -114,10 +108,11 @@ function ok(data: unknown) {
 const FAIL = { error: { code: "INTERNAL_ERROR", message: "boom" } };
 
 function install(setup: Setup = {}) {
+  routed = [];
   state = {
     attention: setup.attention ?? EMPTY_ATTENTION,
     agents: setup.agents ?? AGENTS,
-    features: setup.features ?? { fake_feature: true },
+    features: setup.features ?? ALL_ON,
     failing: setup.failing ?? [],
     types: setup.types ?? "one-found",
   };
@@ -204,7 +199,17 @@ function install(setup: Setup = {}) {
             total: 1,
           });
         default:
-          return ok(undefined);
+          try {
+            routed.push(path);
+            return ok(routeFallback(path));
+          } catch (e) {
+            const err = e as ApiError;
+            return Promise.resolve({
+              data: undefined,
+              error: { error: { code: err.code, message: err.envelopeMessage } },
+              response: { status: 404 },
+            });
+          }
       }
     });
   // The daemon keeps what is ignored: PUT moves an item from `items` to
@@ -230,8 +235,7 @@ function install(setup: Setup = {}) {
     DELETE: vi.fn().mockImplementation(keyed(false)),
   } as unknown as ReturnType<typeof getApiClient>);
 
-  vi.mocked(call).mockImplementation((async (path: string) => {
-    if (state.failing.includes(path)) throw new ApiError("INTERNAL_ERROR", "boom");
+  const routes = (path: string): unknown => {
     switch (path) {
       case "/agents":
         return { items: state.agents };
@@ -304,7 +308,8 @@ function install(setup: Setup = {}) {
       default:
         throw new ApiError("NOT_FOUND", `unmocked ${path}`);
     }
-  }) as typeof call);
+  };
+  routeFallback = routes;
   return get;
 }
 
@@ -496,20 +501,65 @@ describe("one area failing to load leaves the rest of overview working", () => {
   });
 });
 
+/** Every request the page made to a route of one of the four experimental features. */
+function gatedRequests(get: ReturnType<typeof install>): string[] {
+  const GATED = /^\/(providers|models|proxy|usage|knowledge|memory|sync)(\/|$)/;
+  const KINDS = new Set(["provider", "knowledge", "memory"]);
+  const viaClient = get.mock.calls
+    .filter(([path, init]) => {
+      const kind = (init as { params?: { query?: { kind?: string } } } | undefined)?.params?.query
+        ?.kind;
+      return GATED.test(path as string) || (path === "/resources" && KINDS.has(kind ?? ""));
+    })
+    .map(([path]) => path as string);
+  const viaCall = routed.filter((path) => GATED.test(path));
+  return [...viaClient, ...viaCall];
+}
+
 describe("overview hides an area whose backend or feature is off", () => {
-  acceptance("web-ui", "overview hides an area whose backend or feature is off", async () => {
-    install({ features: { fake_feature: false } });
+  acceptance(
+    "web-ui",
+    "overview hides an area whose backend or feature is off",
+    async () => {
+      const get = install({ features: ALL_OFF });
+      renderPage();
+      const region = health();
+      const tools = await within(region).findByRole("link", { name: "Custom tools" });
+      // Only the always-on areas have a tile while every feature is off.
+      for (const name of ["Knowledge", "Memory", "Model providers", "Sync", "Usage"]) {
+        expect(within(region).queryByRole("link", { name })).toBeNull();
+      }
+      await waitFor(() =>
+        expect(tools).toHaveTextContent("31 requests · 0 errors in the last 24 h"),
+      );
+      const clis = within(region).getByRole("link", { name: "CLIs" });
+      await waitFor(() => expect(clis).toHaveTextContent("Needed by 2 skills · gh, jq"));
+      const secrets = within(region).getByRole("link", { name: "Secrets" });
+      await waitFor(() => expect(secrets).toHaveTextContent("1 unused"));
+      const names = within(region)
+        .getAllByRole("link")
+        .map((a) => a.getAttribute("aria-label"));
+      expect(names).toEqual([
+        "Agents",
+        "MCP servers",
+        "Skills",
+        "Channels",
+        "Custom tools",
+        "CLIs",
+        "Secrets",
+      ]);
+      // Nothing of a switched-off feature was asked for, so nothing can have failed.
+      expect(gatedRequests(get)).toEqual([]);
+    },
+  );
+
+  test("with every feature on, each area has its tile", async () => {
+    install();
     renderPage();
     const region = health();
     expect(await within(region).findByRole("link", { name: "Memory" })).toBeInTheDocument();
     expect(within(region).getByRole("link", { name: "Sync" })).toBeInTheDocument();
-    expect(within(region).queryByRole("link", { name: "Knowledge" })).toBeNull();
-    const tools = within(region).getByRole("link", { name: "Custom tools" });
-    await waitFor(() => expect(tools).toHaveTextContent("31 requests · 0 errors in the last 24 h"));
-    const clis = within(region).getByRole("link", { name: "CLIs" });
-    await waitFor(() => expect(clis).toHaveTextContent("Needed by 2 skills · gh, jq"));
-    const secrets = within(region).getByRole("link", { name: "Secrets" });
-    await waitFor(() => expect(secrets).toHaveTextContent("1 unused"));
+    expect(within(region).getByRole("link", { name: "Knowledge" })).toBeInTheDocument();
     const usage = within(region).getByRole("link", { name: "Usage" });
     await waitFor(() => expect(usage).toHaveTextContent("Anthropic 71%"));
     expect(usage).toHaveTextContent("$4.12");
@@ -518,6 +568,32 @@ describe("overview hides an area whose backend or feature is off", () => {
       .getAllByRole("link")
       .map((a) => a.getAttribute("aria-label"));
     expect(names.slice(-4)).toEqual(["Custom tools", "CLIs", "Secrets", "Usage"]);
+  });
+
+  test("one feature off hides only its own tiles and requests", async () => {
+    const get = install({ features: { ...ALL_ON, models: false } });
+    renderPage();
+    const region = health();
+    expect(await within(region).findByRole("link", { name: "Memory" })).toBeInTheDocument();
+    expect(within(region).queryByRole("link", { name: "Model providers" })).toBeNull();
+    expect(within(region).queryByRole("link", { name: "Usage" })).toBeNull();
+    expect(within(region).getByRole("link", { name: "Knowledge" })).toBeInTheDocument();
+    expect(gatedRequests(get).filter((p) => /providers|usage|proxy|models/.test(p))).toEqual([]);
+  });
+
+  test("the first-run panel offers only the areas whose feature is on", async () => {
+    const get = install({ agents: [], types: "none-found", features: ALL_OFF });
+    renderPage();
+    const then = (await screen.findByRole("heading", { name: "Then add what they share" })).closest(
+      "section",
+    )!;
+    expect(within(then).getByText("MCP servers")).toBeInTheDocument();
+    expect(within(then).getByText("Skills")).toBeInTheDocument();
+    expect(within(then).getByText("Channels")).toBeInTheDocument();
+    for (const name of ["Knowledge", "Model providers"]) {
+      expect(within(then).queryByText(name)).toBeNull();
+    }
+    expect(gatedRequests(get)).toEqual([]);
   });
 });
 
@@ -534,7 +610,7 @@ describe("a resolved problem leaves overview on its own", () => {
     act(() => {
       listener?.({
         type: "change",
-        change: { seq: 1, kind: "attention", id: null, rev: null, op: "upsert" },
+        change: { seq: 1, kind: "attention", id: null, op: "upsert" },
       });
     });
     expect(await screen.findByText("Nothing needs you")).toBeInTheDocument();
@@ -631,7 +707,7 @@ acceptance("web-ui", "overview flags a required CLI that needs attention", async
   act(() => {
     listener?.({
       type: "change",
-      change: { seq: 2, kind: "attention", id: null, rev: null, op: "upsert" },
+      change: { seq: 2, kind: "attention", id: null, op: "upsert" },
     });
   });
   expect(await screen.findByText("Nothing needs you")).toBeInTheDocument();

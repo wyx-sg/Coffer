@@ -16,6 +16,7 @@ import {
   Boxes,
   Brain,
   Database,
+  FlaskConical,
   Gauge,
   Info,
   KeyRound,
@@ -34,15 +35,16 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import type { FeatureKey } from "@/lib/hooks/useFeatures";
+import type { FeatureKey } from "@/lib/features";
 
 export interface NavEntry {
   to: string;
   labelKey: string;
   icon: LucideIcon;
   /** The experimental feature the entry belongs to; while it is not switched
-   *  on the entry is left out of the sidebar and the palette (spec
-   *  experimental-features "Close every surface of a switched-off feature"). */
+   *  on the entry is left out of the sidebar and the palette, and its page is
+   *  not found (spec experimental-features "Close every surface of a
+   *  switched-off feature"). */
   feature?: FeatureKey;
 }
 
@@ -63,7 +65,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     labelKey: "nav.group.agents",
     entries: [
       { to: "/agents", labelKey: "nav.agents", icon: Bot },
-      { to: "/model-providers", labelKey: "nav.modelProviders", icon: Boxes },
+      { to: "/model-providers", labelKey: "nav.modelProviders", icon: Boxes, feature: "models" },
     ],
   },
   {
@@ -88,8 +90,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     // Give agents things they know.
     labelKey: "nav.group.context",
     entries: [
-      { to: "/knowledge", labelKey: "nav.knowledge", icon: Library },
-      { to: "/memory", labelKey: "nav.memory", icon: Brain },
+      { to: "/knowledge", labelKey: "nav.knowledge", icon: Library, feature: "knowledge" },
+      { to: "/memory", labelKey: "nav.memory", icon: Brain, feature: "memory" },
     ],
   },
   {
@@ -98,8 +100,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     entries: [
       { to: "/secrets", labelKey: "nav.secrets", icon: KeyRound },
       { to: "/activity", labelKey: "nav.activity", icon: ScrollText },
-      { to: "/usage", labelKey: "nav.usage", icon: Gauge },
-      { to: "/sync", labelKey: "nav.sync", icon: RefreshCw },
+      { to: "/usage", labelKey: "nav.usage", icon: Gauge, feature: "models" },
+      { to: "/sync", labelKey: "nav.sync", icon: RefreshCw, feature: "sync" },
     ],
   },
 ];
@@ -107,7 +109,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 /** Every sidebar entry, in sidebar order. */
 export const NAV_ENTRIES: readonly NavEntry[] = NAV_GROUPS.flatMap((g) => g.entries);
 
-export type SettingsTabId = "general" | "security" | "data" | "daemon" | "about";
+export type SettingsTabId = "general" | "security" | "data" | "daemon" | "about" | "features";
 
 export interface SettingsTab {
   id: SettingsTabId;
@@ -115,14 +117,18 @@ export interface SettingsTab {
   icon: LucideIcon;
 }
 
-/** The Settings modal's five tabs, in order (spec web-ui "Organise Settings
- *  into five tabs"). Each is addressable at `/settings/<id>`. */
+/** The Settings modal's six tabs, in order (spec web-ui "Organise Settings
+ *  into six tabs"), the same in every build. Each is addressable at
+ *  `/settings/<id>`; Features, last, is where the experimental features are
+ *  switched (spec experimental-features "Switch a feature from the settings page
+ *  or the command line"). */
 export const SETTINGS_TABS: readonly SettingsTab[] = [
   { id: "general", labelKey: "settings.tabs.general", icon: SlidersHorizontal },
   { id: "security", labelKey: "settings.tabs.security", icon: ShieldCheck },
   { id: "data", labelKey: "settings.tabs.data", icon: Database },
   { id: "daemon", labelKey: "settings.tabs.daemon", icon: DaemonIcon },
   { id: "about", labelKey: "settings.tabs.about", icon: Info },
+  { id: "features", labelKey: "settings.tabs.features", icon: FlaskConical },
 ];
 
 export function settingsPath(tab: SettingsTabId = "general"): string {

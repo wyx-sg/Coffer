@@ -89,7 +89,6 @@ const makeProvider = (over: Partial<Provider> = {}): Provider => ({
   secret_ref: "provider/acme",
   local_runtime: null,
   compatible_agents: ["codex"],
-  is_active: false,
   internal_default: false,
   transcribe_default: false,
   fallback: true,
@@ -101,6 +100,7 @@ const makeProvider = (over: Partial<Provider> = {}): Provider => ({
   ...over,
 });
 const chat = (...ids: string[]): ProviderModel[] => ids.map((id) => ({ id, modality: "text" }));
+// The agent runs on the provider under test (UID) — its record names it.
 const agent = (type: "claude_code" | "codex", model: string | null): AgentOut =>
   ({
     uid: `a-${type}`,
@@ -108,6 +108,7 @@ const agent = (type: "claude_code" | "codex", model: string | null): AgentOut =>
     name: type,
     display_name: type === "codex" ? "Codex" : "Claude Code",
     model,
+    connection_uid: UID,
   }) as AgentOut;
 
 function setEndpoint(state: EndpointState) {
@@ -169,7 +170,6 @@ describe("ProviderDetailPage", () => {
       makeProvider({
         protocol: "anthropic",
         compatible_agents: ["claude_code"],
-        is_active: true,
         internal_default: true,
       }),
     );
@@ -195,7 +195,7 @@ describe("ProviderDetailPage", () => {
   test("the Overview names the endpoint, the key's secret and the offered models", async () => {
     agentsState.data = [agent("codex", "gpt-5-codex")];
     serves(chat("gpt-5", "gpt-5-codex", "o4-mini"));
-    serve(makeProvider({ is_active: true, models: chat("gpt-5", "gpt-5-codex") }));
+    serve(makeProvider({ models: chat("gpt-5", "gpt-5-codex") }));
     renderPage();
     await heading();
 
@@ -321,7 +321,7 @@ describe("ProviderDetailPage", () => {
 
   test("a rejected key shows in the header, a banner and Used by", async () => {
     agentsState.data = [agent("codex", "gpt-5-codex")];
-    serve(makeProvider({ is_active: true }));
+    serve(makeProvider());
     setEndpoint({
       data: {
         models: [],
@@ -342,7 +342,7 @@ describe("ProviderDetailPage", () => {
 
   test("Edit renames first, then patches the endpoint; the protocol is locked while live", async () => {
     agentsState.data = [agent("codex", "gpt-5-codex")];
-    const provider = makeProvider({ is_active: true });
+    const provider = makeProvider();
     serve(provider);
     resources.rename.mockResolvedValue(undefined);
     api.update.mockResolvedValue(provider);
@@ -395,7 +395,7 @@ describe("ProviderDetailPage", () => {
 
   test("Replace key tests the new key, then waits for approval when the key is in use", async () => {
     agentsState.data = [agent("codex", "gpt-5-codex")];
-    serve(makeProvider({ is_active: true }));
+    serve(makeProvider());
     api.update.mockResolvedValue(makeProvider());
     listModels.mockResolvedValue({ models: chat("gpt-5"), message: "", reachable: true });
     renderPage();

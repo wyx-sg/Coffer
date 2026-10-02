@@ -1,7 +1,7 @@
 // frontend/src/components/mcp/invocationsTabs.test.tsx
 // The server's tabs: the path names the open one, and each tab carries its
 // count (none for a kind the server has none of). What the Invocations tab
-// reads is pinned in InvocationsTable.test.tsx.
+// reads is pinned in server/McpCallsLog.test.tsx.
 import { expect, test } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";

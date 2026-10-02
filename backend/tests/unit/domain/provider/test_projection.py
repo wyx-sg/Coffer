@@ -77,7 +77,6 @@ def test_codex_sets_provider_block_and_preserves_others() -> None:
         'approval_policy = "never"\n',
         base_url="https://gw/v1",
         model="gpt-x",
-        wire_api="responses",
         display_name="Coffer (acme)",
         auth=_AUTH,
     )
@@ -94,12 +93,8 @@ def test_codex_sets_provider_block_and_preserves_others() -> None:
 
 
 def test_codex_handles_empty_and_is_idempotent() -> None:
-    first = apply_codex_provider(
-        "", base_url="u", model="m", wire_api="responses", display_name="x", auth=_AUTH
-    )
-    second = apply_codex_provider(
-        first, base_url="u", model="m", wire_api="responses", display_name="x", auth=_AUTH
-    )
+    first = apply_codex_provider("", base_url="u", model="m", display_name="x", auth=_AUTH)
+    second = apply_codex_provider(first, base_url="u", model="m", display_name="x", auth=_AUTH)
     assert tomllib.loads(first) == tomllib.loads(second)
 
 
@@ -153,7 +148,23 @@ def test_remove_anthropic_keeps_a_user_owned_apikeyhelper() -> None:
         )
     )
     assert d["apiKeyHelper"] == "my-own-helper"  # only Coffer's managed helper is cleared
-    assert "ANTHROPIC_BASE_URL" not in d["env"]
+    assert d["env"] == {"ANTHROPIC_BASE_URL": "u"}  # no Coffer marker: the env keys are theirs
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="switching back leaves the user's own gateway settings alone",
+)
+def test_a_users_own_gateway_settings_are_left_byte_identical_and_not_present() -> None:
+    from coffer.domain.provider.agent_projection import ClaudeCodeProviderProjection
+
+    text = (
+        '{"env": {"ANTHROPIC_BASE_URL": "https://gw.corp/anthropic", '
+        '"ANTHROPIC_DEFAULT_HAIKU_MODEL": "my-haiku", "NO_PROXY": "a.corp,127.0.0.1,localhost"},'
+        ' "theme": "dark"}'
+    )
+    assert json.loads(remove_anthropic_settings(text)) == json.loads(text)
+    assert ClaudeCodeProviderProjection().is_present(text) is False
 
 
 def test_remove_anthropic_empty_and_idempotent() -> None:
@@ -170,7 +181,6 @@ def test_remove_codex_clears_managed_block_preserves_others() -> None:
         'approval_policy = "never"\n',
         base_url="u",
         model="gpt-x",
-        wire_api="responses",
         display_name="Coffer (acme)",
         auth=_AUTH,
     )
@@ -196,9 +206,7 @@ def test_remove_codex_keeps_a_user_owned_provider() -> None:
 def test_remove_codex_empty_and_idempotent() -> None:
     assert remove_codex_provider("").strip() == ""
     once = remove_codex_provider(
-        apply_codex_provider(
-            "", base_url="u", model="m", wire_api="responses", display_name="x", auth=_AUTH
-        )
+        apply_codex_provider("", base_url="u", model="m", display_name="x", auth=_AUTH)
     )
     twice = remove_codex_provider(once)
     assert tomllib.loads(once) == tomllib.loads(twice)
@@ -219,7 +227,6 @@ def test_the_proxy_form_names_no_key_in_the_environment() -> None:
         user_policy,
         base_url="http://127.0.0.1:8001/openai/v1",
         model="m",
-        wire_api="responses",
         display_name="x",
         auth=CodexAuthCommand("/opt/coffer", ("proxy", "token", "--agent-uid", "a1")),
     )
@@ -359,7 +366,6 @@ def test_codex_points_at_an_absolute_catalog_path() -> None:
         "",
         base_url="u",
         model="m",
-        wire_api="responses",
         display_name="x",
         catalog_path=pathlib.Path("/home/u/.codex/coffer-model-catalog.json"),
         auth=_AUTH,
@@ -377,7 +383,6 @@ def test_codex_rejects_a_relative_catalog_path() -> None:
             "",
             base_url="u",
             model="m",
-            wire_api="responses",
             display_name="x",
             catalog_path=pathlib.Path(".codex/coffer-model-catalog.json"),
             auth=_AUTH,
@@ -389,14 +394,11 @@ def test_codex_drops_a_stale_coffer_catalog_when_the_set_is_cleared() -> None:
         "",
         base_url="u",
         model="m",
-        wire_api="responses",
         display_name="x",
         catalog_path=pathlib.Path("/home/u/.codex/coffer-model-catalog.json"),
         auth=_AUTH,
     )
-    cleared = apply_codex_provider(
-        projected, base_url="u", model="m", wire_api="responses", display_name="x", auth=_AUTH
-    )
+    cleared = apply_codex_provider(projected, base_url="u", model="m", display_name="x", auth=_AUTH)
     assert "model_catalog_json" not in tomllib.loads(cleared)
 
 
@@ -405,7 +407,6 @@ def test_codex_keeps_a_user_owned_catalog_when_it_curates_nothing() -> None:
         'model_catalog_json = "/home/u/my-models.json"\n',
         base_url="u",
         model="m",
-        wire_api="responses",
         display_name="x",
         auth=_AUTH,
     )
@@ -417,7 +418,6 @@ def test_remove_codex_drops_the_coffer_catalog() -> None:
         "",
         base_url="u",
         model="m",
-        wire_api="responses",
         display_name="x",
         catalog_path=pathlib.Path("/home/u/.codex/coffer-model-catalog.json"),
         auth=_AUTH,
@@ -442,7 +442,6 @@ def test_catalog_projection_preserves_comments_and_ordering() -> None:
         original,
         base_url="u",
         model="m",
-        wire_api="responses",
         display_name="x",
         catalog_path=pathlib.Path("/home/u/.codex/coffer-model-catalog.json"),
         auth=_AUTH,

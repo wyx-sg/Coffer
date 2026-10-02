@@ -13,7 +13,8 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { AgentPluginsTab } from "./AgentPluginsTab";
 import en from "@/i18n/locales/en.json";
-import type { AgentOut, PluginOut, PluginsResponse } from "@/lib/api/agents";
+import type { AgentOut } from "@/lib/api/agents";
+import type { PluginOut, PluginsResponse } from "@/lib/api/agents-workspace";
 import { acceptance } from "@/test/acceptance";
 
 vi.mock("@/lib/api/agents", () => ({
@@ -34,9 +35,9 @@ function agent(type: AgentOut["type"]): AgentOut {
     model: null,
     effort: null,
     tier_models: null,
-    wire_api: null,
     version: null,
     install_handoff: null,
+    connection_uid: null,
     state: "installed_active",
     created_at: "2026-09-01T00:00:00Z",
     updated_at: "2026-09-01T00:00:00Z",

@@ -9,50 +9,29 @@ The lifecycle is:
 from __future__ import annotations
 
 import asyncio
-import weakref
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack, suppress
 from pathlib import Path
 from typing import Any, TextIO
 
-import psutil
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.session import ListRootsFnT, SamplingFnT
-from mcp.client.stdio import get_default_environment, stdio_client
+from mcp.client.stdio import get_default_environment
 from mcp.types import ServerNotification
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import StdioTransport
-from coffer.infrastructure.daemon.orphan_sweep import reap_pidfile, record_spawn
-from coffer.infrastructure.logging.files import open_upstream_errlog, write_coffer_line
+from coffer.infrastructure.daemon.orphan_sweep import reap_pidfile
+from coffer.infrastructure.logging.files import write_coffer_line
 from coffer.infrastructure.mcp.dispatch import dispatch_method
 from coffer.infrastructure.mcp.process_group import kill_process_group
+from coffer.infrastructure.mcp.stdio_spawn import leaf_exception, open_child
 
 NotificationCallback = Callable[[Any], Awaitable[None]]
 
-# Serialise the "snapshot children → spawn → diff" window across the
-# whole process. Each session owns its own supervisor whose spawn_lock is
-# per-(supervisor, server), so without a process-wide lock two concurrent
-# spawns from different sessions can interleave their before/after snapshots
-# and mis-attribute (or miss) each other's child PID. Held only around the
-# narrow spawn window, never across MCP initialize.
-#
-# One lock per event loop: an ``asyncio.Lock`` binds to the loop of its first
-# contended acquire, so a single module-level lock would refuse every later
-# loop (a test's, or the daemon's after a restart in-process) with
-# "bound to a different event loop". The daemon runs one loop, so it still
-# has exactly one lock.
-_SPAWN_SNAPSHOT_LOCKS: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock] = (
-    weakref.WeakKeyDictionary()
-)
-
-
-def _spawn_snapshot_lock() -> asyncio.Lock:
-    loop = asyncio.get_running_loop()
-    lock = _SPAWN_SNAPSHOT_LOCKS.get(loop)
-    if lock is None:
-        lock = _SPAWN_SNAPSHOT_LOCKS[loop] = asyncio.Lock()
-    return lock
+# How long close() waits for the lifetime task to unwind before cancelling it.
+_TEARDOWN_SECONDS = 12.0
 
 
 class StdioUpstreamConnection:
@@ -78,7 +57,7 @@ class StdioUpstreamConnection:
         # upstream's stderr file and every timeout message a user reads.
         # ``_server_uid`` is the identity the PID files are recorded under, so a
         # leaked child is still attributable to the same registration after the
-        # user renames it (ADR resource-identity-is-an-immutable-uid). It
+        # user renames it (ADR identity-is-the-uid-inside-the-file). It
         # defaults to empty for a hand-built connection in a test that spawns
         # nothing it cares to attribute; ``record_spawn`` then writes the file
         # under the empty identity, which still reaps by pid + cmdline.
@@ -94,7 +73,12 @@ class StdioUpstreamConnection:
         self._kill_group_on_close = kill_group_on_close
         self._child_pids: list[int] = []
 
-        self._exit_stack: AsyncExitStack | None = None
+        # The lifetime task owning the child and its anyio scopes, and the event
+        # ``close`` pokes it with.
+        self._runner: asyncio.Task[None] | None = None
+        self._close_event: asyncio.Event | None = None
+        self._ready: asyncio.Future[Any] | None = None
+        self._errlog: TextIO | None = None
         self._session: ClientSession | None = None
         self._notification_callback: NotificationCallback | None = None
         # Server-initiated request callbacks (sampling and roots)
@@ -127,7 +111,9 @@ class StdioUpstreamConnection:
     async def spawn_and_initialize(self) -> dict[str, Any]:
         """Spawn the subprocess + complete MCP initialize.
 
-        Returns the server's capabilities as a plain dict.
+        Returns the server's capabilities as a plain dict. The whole phase is
+        bounded by ``spawn_timeout_seconds``, measured here while waiting on the
+        lifetime task's ready-future — the same shape as the HTTP adapter.
         """
         # Build the child env from the SDK's minimal safe allowlist
         # (PATH/HOME/SHELL/… — what a server legitimately needs to run) plus
@@ -139,7 +125,6 @@ class StdioUpstreamConnection:
         # ``env`` also bypasses stdio_client's own filter, so our additions
         # (including secrets) survive intact.
         env = {**get_default_environment(), **self._transport.env, **self._env_overlay}
-
         params = StdioServerParameters(
             command=self._transport.command,
             args=self._transport.args,
@@ -147,106 +132,136 @@ class StdioUpstreamConnection:
             cwd=self._transport.cwd,
         )
 
-        self._exit_stack = AsyncExitStack()
-        errlog = None
+        loop = asyncio.get_running_loop()
+        ready: asyncio.Future[Any] = loop.create_future()
+        # Whoever waited may have left (the caller was cancelled): an outcome
+        # nobody reads is not an error worth a "never retrieved" warning.
+        ready.add_done_callback(lambda f: f.cancelled() or f.exception())
+        close_event = asyncio.Event()
+        self._close_event = close_event
+        self._ready = ready
+        self._runner = spawn(
+            self._run_lifetime(params, env, ready, close_event),
+            name=f"coffer-mcp-stdio-upstream:{self._server_name}",
+        )
         try:
-            # --- PID snapshot (hardened by the process-wide lock) ---
-            # Snapshot this daemon's children BEFORE letting the SDK spawn the
-            # upstream subprocess, then diff after stdio_client opens to learn
-            # the new child PID(s). This diff-snapshot approach is used because
-            # mcp.client.stdio.stdio_client manages the subprocess internally
-            # and doesn't expose the PID.
-            #
-            # Serialise the snapshot+spawn+diff under a process-wide
-            # lock so concurrent spawns from OTHER sessions' supervisors can't
-            # interleave the snapshot window and steal/miss each other's PID.
-            # We hold the lock only across the spawn itself (not initialize).
-            self_proc = psutil.Process()
-            async with _spawn_snapshot_lock():
-                children_before = {c.pid for c in self_proc.children(recursive=False)}
-
-                # Give this upstream its own stderr file. The SDK's default
-                # is the daemon's stderr, which lands in daemon.log and
-                # drowns Coffer's own lines there (see logging/files.py).
-                if self._stderr_sink is not None:
-                    errlog = None
-                else:
-                    errlog = open_upstream_errlog(self._server_name)
-                if errlog is not None:
-                    self._exit_stack.callback(errlog.close)
-                    # LIFO: this runs after the client's teardown, before close.
-                    self._exit_stack.callback(self._note_stop, errlog)
-                    write_coffer_line(errlog, f"start {self._command_line()}")
-                sink = errlog if errlog is not None else self._stderr_sink
-                client = stdio_client(params) if sink is None else stdio_client(params, errlog=sink)
-                read, write = await asyncio.wait_for(
-                    self._exit_stack.enter_async_context(client),
-                    timeout=self._spawn_timeout,
-                )
-
-                # Snapshot after — new PIDs belong to the SDK's spawn. Record a
-                # PID file for EVERY new child, not just ones whose cmdline[0]
-                # equals the configured command: servers launched via a wrapper
-                # (npx/uv/node) have a resolved-interpreter cmdline that never
-                # matches the bare command, and skipping them left real orphans
-                # untracked. record_spawn stores the child's actual cmdline so
-                # sweep_orphans can still guard against PID recycling.
-                children_after = {c.pid for c in self_proc.children(recursive=False)}
-                new_pids = children_after - children_before
-                # The SDK starts the child in a new session, so its pid is
-                # also its process group's id.
-                self._child_pids = sorted(new_pids)
-
-                self._pid_files = []
-                for new_pid in new_pids:
-                    try:
-                        cmd = psutil.Process(new_pid).cmdline()
-                        self._pid_files.append(record_spawn(self._server_uid, new_pid, cmd))
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
-            # --- end PID snapshot ---
-
-            session = ClientSession(
-                read,
-                write,
-                message_handler=self._message_handler,
-                sampling_callback=self._sampling_callback,
-                list_roots_callback=self._list_roots_callback,
-            )
-            await asyncio.wait_for(
-                self._exit_stack.enter_async_context(session),
-                timeout=self._spawn_timeout,
-            )
-            init_result = await asyncio.wait_for(
-                session.initialize(),
-                timeout=self._spawn_timeout,
-            )
-        except TimeoutError as exc:
-            if errlog is not None:
-                write_coffer_line(errlog, f"error did not start within {self._spawn_timeout}s")
+            # asyncio.wait (not wait_for) neither cancels the future nor
+            # re-raises its exception, so the outcome is classified below.
+            done, _pending = await asyncio.wait({ready}, timeout=float(self._spawn_timeout))
+        except asyncio.CancelledError:
+            # The caller gave up (the listing budget, a shutdown): the child may
+            # already be running, so tear it down before the cancel moves on.
+            with suppress(Exception):
+                await self._cleanup()
+            raise
+        if not done:
+            self._note_error(f"error did not start within {self._spawn_timeout}s")
             await self._cleanup()
             raise UpstreamTimeout(
                 f"MCP server {self._server_name!r} did not finish starting within "
                 f"{self._spawn_timeout}s (its spawn timeout)"
-            ) from exc
-        except Exception as exc:
-            if errlog is not None:
-                write_coffer_line(errlog, self._launch_error_line(exc, env))
+            )
+        if ready.cancelled():
             await self._cleanup()
-            # Don't interpolate the raw exception into the message —
-            # an upstream/transport error can embed secret-bearing argv or
-            # env detail. Surface only the exception type; the original is
-            # chained via ``from exc`` for a debugger but never stringified
-            # into logs or API responses.
-            raise UpstreamUnavailable(f"upstream init failed: {type(exc).__name__}") from exc
+            raise UpstreamUnavailable("upstream init cancelled: CancelledError")
+        exc = ready.exception()
+        if exc is not None:
+            leaf = leaf_exception(exc)
+            self._note_error(self._launch_error_line(leaf, env))
+            await self._cleanup()
+            # Don't interpolate the raw exception into the message — an
+            # upstream/transport error can embed secret-bearing argv or env
+            # detail. Surface only the exception type; the original is chained
+            # via ``from exc`` for a debugger but never stringified into logs or
+            # API responses.
+            raise UpstreamUnavailable(f"upstream init failed: {type(leaf).__name__}") from exc
 
-        self._session = session
-
+        init_result = ready.result()
         try:
             capabilities: dict[str, Any] = init_result.capabilities.model_dump(by_alias=True)
         except AttributeError:
             capabilities = {}
         return capabilities
+
+    def _note_error(self, line: str) -> None:
+        if self._errlog is not None:
+            write_coffer_line(self._errlog, line)
+
+    async def _run_lifetime(
+        self,
+        params: StdioServerParameters,
+        env: dict[str, str],
+        ready: asyncio.Future[Any],
+        close_event: asyncio.Event,
+    ) -> None:
+        """Own the child process, its pipes and the ClientSession for the
+        connection's whole life.
+
+        Runs as its own task so every anyio cancel scope the SDK opens is entered
+        and exited by this task, in order — however many other tasks (a gather
+        child, the recovery task, a request task) later call ``close``. Publishes
+        the initialize result (or the failure) on ``ready``, parks until
+        ``close_event`` is set, and unwinds the contexts here.
+        """
+        exit_stack = AsyncExitStack()
+        session: ClientSession | None = None
+        init_error: BaseException | None = None
+        init_result: Any = None
+        try:
+            try:
+                started = await open_child(
+                    exit_stack,
+                    params,
+                    server_name=self._server_name,
+                    server_uid=self._server_uid,
+                    stderr_sink=self._stderr_sink,
+                    command_line=self._command_line(),
+                    on_stop=self._note_stop,
+                )
+                self._errlog = started.errlog
+                self._pid_files = started.pid_files
+                self._child_pids = started.child_pids
+                session = await exit_stack.enter_async_context(
+                    ClientSession(
+                        started.read,
+                        started.write,
+                        message_handler=self._message_handler,
+                        sampling_callback=self._sampling_callback,
+                        list_roots_callback=self._list_roots_callback,
+                    )
+                )
+                init_result = await session.initialize()
+            except (Exception, asyncio.CancelledError) as exc:
+                init_error = exc
+
+            if init_error is None:
+                self._session = session
+                if not ready.done():
+                    ready.set_result(init_result)
+                with suppress(asyncio.CancelledError):
+                    await close_event.wait()
+        finally:
+            close_error: BaseException | None = None
+            try:
+                # aclose() drives stdio_client's teardown, whose FINAL step
+                # closes the two daemon-side pipe fds. It is internally bounded
+                # (the SDK waits ~2s for the child to exit after stdin closes,
+                # then SIGTERM -> SIGKILL with its own 2s grace), so 10s clears
+                # it with margin; the cap only trips for a wedged teardown, which
+                # the pid-file reap in ``_cleanup`` then covers.
+                await asyncio.wait_for(exit_stack.aclose(), timeout=10.0)
+            except (Exception, asyncio.CancelledError, BaseExceptionGroup) as exc:
+                close_error = exc
+            if self._session is session:
+                self._session = None
+            if not ready.done():
+                publish = init_error
+                if isinstance(publish, asyncio.CancelledError) and close_error is not None:
+                    publish = close_error
+                if publish is None:
+                    ready.cancel()
+                else:
+                    ready.set_exception(publish)
 
     def _command_line(self) -> str:
         """The launcher and its static args. Secrets never appear here: they
@@ -306,28 +321,20 @@ class StdioUpstreamConnection:
         await self._cleanup()
 
     async def _cleanup(self) -> None:
-        if self._exit_stack is not None:
-            # aclose() drives stdio_client's teardown, whose FINAL step
-            # (process.__aexit__ in the `async with (tg, process)`) is what
-            # actually closes the two daemon-side pipe fds — the child's stdin
-            # writer and stdout reader. That teardown is internally bounded but
-            # not instant: the SDK waits up to PROCESS_TERMINATION_TIMEOUT (2s)
-            # for the child to exit after stdin closes, then escalates
-            # SIGTERM→SIGKILL with its own 2s grace — ~4s worst case. The old 5s
-            # cap sat right on that edge, so under event-loop contention (several
-            # upstreams disposing at once, or a persistently-failing upstream the
-            # supervisor keeps retrying) asyncio.wait_for cancelled aclose()
-            # mid-teardown BEFORE process.__aexit__ ran, leaking both pipe fds
-            # every time. reap_pidfile below kills the child but never closes
-            # those daemon-side fds, so they accumulated (~100 leaks/week here)
-            # until the daemon hit RLIMIT_NOFILE and every spawn/accept failed
-            # with OSError [Errno 24] "Too many open files". 10s clears the SDK's
-            # ~4s internal budget with margin so the fds are released on the
-            # normal-but-slow path; the cap only trips for a truly wedged
-            # teardown (rare, and then RLIMIT_NOFILE headroom + reap cover it).
-            with suppress(TimeoutError, asyncio.CancelledError, Exception):
-                await asyncio.wait_for(self._exit_stack.aclose(), timeout=10.0)
-            self._exit_stack = None
+        """Stop the lifetime task (which unwinds the child and its pipes in the
+        task that opened them), then reap what is left of the child itself."""
+        runner, self._runner = self._runner, None
+        if runner is not None:
+            if self._close_event is not None:
+                self._close_event.set()
+            if self._ready is not None and not self._ready.done():
+                # Still starting: the task is inside initialize, not parked on
+                # the event, so it has to be cancelled to start unwinding.
+                runner.cancel()
+            done, _ = await asyncio.wait({runner}, timeout=_TEARDOWN_SECONDS)
+            if not done:
+                runner.cancel()
+                await asyncio.wait({runner}, timeout=_TEARDOWN_SECONDS)
 
         # Belt-and-braces against leaked upstream processes. aclose()
         # normally tears down the upstream subprocess tree, but when a

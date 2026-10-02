@@ -63,5 +63,5 @@ lists them as notes) in the group that owns the file.
 
 ## 6. Close
 
-- [ ] 6.1 Run `make verify`
-- [ ] 6.2 Archive the change (`npx openspec archive remove-seatalk-webhook-delivery --yes`) in the same PR
+- [x] 6.1 Run `make verify`
+- [x] 6.2 Archive the change (`npx openspec archive remove-seatalk-webhook-delivery --yes`) in the same PR

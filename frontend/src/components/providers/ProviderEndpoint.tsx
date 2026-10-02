@@ -25,7 +25,7 @@ import { useUpdateProvider } from "@/lib/hooks/useProviders";
 import { pendingReplaceFor } from "@/lib/providers/approvals";
 import { PROTOCOL_LABEL_KEY } from "@/lib/providers/presets";
 import type { ProviderUse } from "@/lib/providers/usedBy";
-import { Section } from "./Section";
+import { Section } from "@/components/Section";
 import { useLockedBy } from "./useLockedBy";
 
 const LINK = "font-label text-accent-text no-underline hover:underline";
@@ -51,7 +51,7 @@ export function ProviderEndpoint({ provider, use, rejectedStatus, onReplaceKey }
   const { t } = useTranslation();
   const approvals = usePendingApprovals();
   const pending = pendingReplaceFor(approvals.data?.approvals, provider.secret_ref);
-  const lockedBy = useLockedBy(provider, use);
+  const lockedBy = useLockedBy(use);
   const runtime = provider.local_runtime;
   const proxy = useProxyAddress();
   const update = useUpdateProvider();

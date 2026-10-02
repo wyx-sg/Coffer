@@ -84,7 +84,7 @@ def curated_at(relpath: str, data: bytes) -> str:
     return str(entry.get("at") or "")
 
 
-def _is_document(relpath: str, collection: str) -> bool:
+def is_document(relpath: str, collection: str) -> bool:
     parts = relpath.split("/")
     if parts[0] != collection or len(parts) < 2 or any(p.startswith(".") for p in parts):
         return False
@@ -111,7 +111,7 @@ def edited_documents(
     changed: set[str] = set()
     for vault_path, blob in repo.tree("HEAD", paths.vault_path(collection)).items():
         relpath = paths.from_vault_path(vault_path)
-        if relpath is None or not _is_document(relpath, collection):
+        if relpath is None or not is_document(relpath, collection):
             continue
         if (settled.get(relpath) or {}).get("blob") != blob:
             changed.add(relpath)

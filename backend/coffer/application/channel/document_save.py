@@ -3,7 +3,9 @@ document into a collection" — the phone and the Knowledge page are two ends of
 entrance).
 
 Free functions over a :class:`CommandContext`, reading the owning
-``ChannelCommands``' ports (``_collections``/``_ingest``).
+``ChannelCommands``' ports (``_collections``/``_ingest``). `/kb` stays a
+reserved word while the ``knowledge`` feature is off — it answers why nothing was
+saved — but the help text and the menus offer it only while knowledge is on.
 """
 
 from __future__ import annotations
@@ -20,6 +22,24 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
+#: What `/kb` answers while the ``knowledge`` feature is switched off (spec
+#: experimental-features "Withdraw what a switched-off feature put in front of
+#: agents"). The pending document is kept, so a `/kb` after switching it on
+#: still has something to save.
+KNOWLEDGE_OFF = (
+    "⚠️ Knowledge is switched off on this machine, so nothing was saved. "
+    "Switch it on in Coffer's Settings → Features, or run: "
+    "coffer config set feature.knowledge on"
+)
+
+
+async def _refuse_if_knowledge_off(ctx: CommandContext) -> bool:
+    """Answer the notice and return True when knowledge is switched off."""
+    if ctx.commands._knowledge_enabled():
+        return False
+    await ctx.say(KNOWLEDGE_OFF)
+    return True
+
 
 async def cmd_kb(ctx: CommandContext, text: str) -> None:
     """Save the pending document — the one most recently sent in this
@@ -32,6 +52,8 @@ async def cmd_kb(ctx: CommandContext, text: str) -> None:
     already confirmed it by typing it — anything else (no name, or one that doesn't
     resolve) falls back to a selection card so the tap itself is the confirmation.
     """
+    if await _refuse_if_knowledge_off(ctx):
+        return
     session = ctx.session
     if session is None or session.pending_document is None:
         await ctx.say("⚠️ No document to save — send one, then /kb.")
@@ -66,7 +88,11 @@ async def apply_save_collection(ctx: CommandContext, collection: str) -> None:
     conversion failure leaves the collection exactly as it was (the ingest
     service's own guarantee), and retrying the same bytes against the same
     failure is never useful, so the owner is told to send the document again.
+
+    A card tapped after knowledge was switched off saves nothing either.
     """
+    if await _refuse_if_knowledge_off(ctx):
+        return
     session = ctx.session
     pending = session.pending_document if session is not None else None
     if pending is None:
@@ -105,4 +131,4 @@ async def apply_save_collection(ctx: CommandContext, collection: str) -> None:
     )
 
 
-__all__ = ["apply_save_collection", "cmd_kb"]
+__all__ = ["KNOWLEDGE_OFF", "apply_save_collection", "cmd_kb"]

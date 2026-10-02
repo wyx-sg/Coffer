@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { agentTabPath } from "@/lib/agents/routes";
-import type { PluginOut } from "@/lib/api/agents";
+import type { PluginOut } from "@/lib/api/agents-workspace";
 import { translateApiError } from "@/lib/api/errors";
 import { useAgentRoute } from "@/lib/hooks/useAgentRoute";
 import { useAgentPlugin, useTogglePlugin, useUninstallPlugin } from "@/lib/hooks/useAgents";

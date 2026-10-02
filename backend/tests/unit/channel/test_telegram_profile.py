@@ -137,13 +137,18 @@ async def test_asker_only_commands_stay_ephemeral_in_every_menu() -> None:
             assert flags["status"] is True and flags["new"] is False
 
 
+@pytest.mark.acceptance(
+    spec="experimental-features",
+    scenario="knowledge off answers /kb as switched off",
+)
 @pytest.mark.asyncio
-async def test_kb_is_in_every_private_menu() -> None:
+async def test_kb_is_left_out_of_every_menu_while_knowledge_is_off() -> None:
     call = _Calls({"getMyDescription": {"description": "x"}})
-    await register_profile(call)
+    await register_profile(call, knowledge_enabled=False)
     menus = call.menus()
     assert len(menus) == 6
-    assert set(menus[("all_private_chats", "zh")]) == _PRIVATE
+    assert all("kb" not in menu for menu in menus.values())
+    assert set(menus[("all_private_chats", "zh")]) == _PRIVATE - {"kb"}
 
 
 @pytest.mark.asyncio

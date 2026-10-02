@@ -6,9 +6,9 @@
 // Coffer does not manage; its state says what can be done with it: adopt it,
 // fix it (invalid SKILL.md), nothing (a foreign link), or remove it when Coffer
 // already delivers a skill of the same name (a duplicate).
-import type { StatusTone } from "@/components/status/statusTone";
+import type { StatusTone } from "@/lib/statusTone";
 import type { Owner } from "@/lib/agents/owner";
-import type { UnmanagedSkillOut } from "@/lib/api/agents";
+import type { UnmanagedSkillOut } from "@/lib/api/agents-workspace";
 import type { SkillOut } from "@/lib/api/skills";
 
 export type OwnSkillState = "notManaged" | "foreign" | "invalid" | "duplicate" | "adoptFailed";

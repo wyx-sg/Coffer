@@ -14,12 +14,8 @@ from collections import Counter
 from typing import Any
 
 from coffer.application.sync import round_plaintext
-from coffer.application.sync.round_engine import (
-    PROBLEM_STATUS,
-    Recorder,
-    RoundEngine,
-    layout_refusal,
-)
+from coffer.application.sync.round_engine import PROBLEM_STATUS, Recorder, RoundEngine
+from coffer.application.sync.round_layout import layout_refusal
 from coffer.application.sync.round_trees import identity_conflicts, settle_machines
 from coffer.domain.sync.joins import AreaCount, JoinKind, JoinPreview
 from coffer.domain.sync.remote import SyncRemote

@@ -26,7 +26,7 @@ from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli.main import app as cli_app
 from tests.support.features import FAKE_FEATURE, register_fake_feature
 
-from ._real_app import boot, extract_json
+from ._real_app import NO_PIN, boot, extract_json
 
 _runner = CliRunner()
 
@@ -35,13 +35,13 @@ _runner = CliRunner()
 def daemon(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     """The real app, with a test-only feature registered before it boots."""
     register_fake_feature(monkeypatch, route_prefixes=())
-    yield from boot(tmp_path, monkeypatch)
+    yield from boot(tmp_path, monkeypatch, features=NO_PIN)
 
 
 @pytest.fixture
 def bare_daemon(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    """The real app over the real, empty registry."""
-    yield from boot(tmp_path, monkeypatch)
+    """The real app over the shipped registry."""
+    yield from boot(tmp_path, monkeypatch, features=NO_PIN)
 
 
 def _daemon_config(home: pathlib.Path) -> dict[str, Any]:
@@ -76,26 +76,25 @@ def test_a_feature_is_listed_and_switched_through_the_daemon(
     assert unknown.exit_code == 4 and "feature.nope" in unknown.output
 
 
-@pytest.mark.acceptance(
-    spec="experimental-features", scenario="an empty registry lists no features"
-)
-def test_an_empty_registry_lists_nothing_and_exits_0(bare_daemon: TestClient) -> None:
-    listed = _runner.invoke(cli_app, ["config", "list", "feature."])
+def test_the_listing_names_the_four_experimental_features(bare_daemon: TestClient) -> None:
+    listed = _runner.invoke(cli_app, ["config", "list", "feature.", "--json"])
     assert listed.exit_code == 0, listed.output
-    assert listed.output.strip() == ""
-    as_json = _runner.invoke(cli_app, ["config", "list", "feature.", "--json"])
-    assert as_json.exit_code == 0, as_json.output
-    assert extract_json(as_json.output)["settings"] == []
+    rows = extract_json(listed.output)["settings"]
+    assert [r["key"] for r in rows] == [
+        "feature.knowledge",
+        "feature.memory",
+        "feature.sync",
+        "feature.models",
+    ]
+    # Every feature starts off, decided by the default.
+    assert all(r["value"] is False for r in rows), rows
 
 
-@pytest.mark.acceptance(
-    spec="experimental-features", scenario="unsetting a feature returns it to the channel default"
-)
-def test_unsetting_a_feature_returns_it_to_the_channel_default(
+def test_unsetting_a_feature_returns_it_to_off_on_the_cli(
     daemon: TestClient, tmp_path: Any
 ) -> None:
     assert (
-        _runner.invoke(cli_app, ["config", "set", f"feature.{FAKE_FEATURE}", "off"]).exit_code == 0
+        _runner.invoke(cli_app, ["config", "set", f"feature.{FAKE_FEATURE}", "on"]).exit_code == 0
     )
     unset = _runner.invoke(cli_app, ["config", "unset", f"feature.{FAKE_FEATURE}"])
     assert unset.exit_code == 0, unset.output
@@ -108,9 +107,8 @@ def test_unsetting_a_feature_returns_it_to_the_channel_default(
     }
     registered = {r["key"] for r in daemon.get("/daemon/features").json()["features"]}
     assert set(rows) == {f"feature.{key}" for key in registered}
-    assert rows[f"feature.{FAKE_FEATURE}"]["note"] == "channel default"
-    channel = daemon.get("/daemon/features").json()["channel"]
-    assert rows[f"feature.{FAKE_FEATURE}"]["value"] is (channel == "dev")
+    assert rows[f"feature.{FAKE_FEATURE}"]["note"] == "off by default"
+    assert rows[f"feature.{FAKE_FEATURE}"]["value"] is False
 
 
 # --- secrets.storage --------------------------------------------------------------

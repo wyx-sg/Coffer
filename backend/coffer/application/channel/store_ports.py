@@ -31,9 +31,9 @@ class ChannelPeer:
     display_name: str
     paired_at: datetime
     # The paired sender's stable identity (Telegram from.id, SeaTalk
-    # employee_code); the owner gate checks it when present. ``None`` on rows
-    # paired before the gate gained sender awareness → chat-id-only fallback.
-    sender_id: str | None = None
+    # employee_code); every owner gate compares it. Pairing refuses a message
+    # that carries none, and a group row inherits the owner's.
+    sender_id: str = ""
 
 
 class ChannelPeerRepoPort(Protocol):
@@ -59,7 +59,7 @@ class ChannelPeerRepoPort(Protocol):
     async def list_by_resource(self, resource_uid: str) -> list[ChannelPeer]: ...
 
     async def owner_sender_id(self, resource_uid: str) -> str | None:
-        """The first non-null ``sender_id`` paired for this channel, across
+        """The first non-empty ``sender_id`` paired for this channel, across
         all its peer rows (DM + any groups/threads). ``None`` when the
         channel has no peer with a known sender identity."""
         ...

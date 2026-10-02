@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from coffer.infrastructure.chat.adapter_support import (
     ChannelNoteResolver,
     HomeEnvResolver,
+    ManagedCheck,
     MemoryContextComposer,
     ModelLister,
 )
@@ -45,6 +46,8 @@ class DriverDeps:
     resolve_channel: ChannelNoteResolver | None
     resolve_home_env: Callable[[str], HomeEnvResolver]
     observe_quota: QuotaObserver | None = None
+    #: Per-agent "is an enabled agent of this type managed" check (``None`` ⇒ not asked).
+    is_managed: Callable[[str], ManagedCheck] | None = None
     #: A channel turn's per-prompt memory retrieval (``None`` ⇒ none).
     retrieve_memory: MemoryRetriever | None = None
 
@@ -64,6 +67,7 @@ class ClaudeSdkDriver:
             retrieve_memory=deps.retrieve_memory,
             resolve_channel=deps.resolve_channel,
             resolve_home_env=deps.resolve_home_env(self.agent_key),
+            is_managed=deps.is_managed(self.agent_key) if deps.is_managed else None,
             observe_quota=deps.observe_quota,
         )
 
@@ -83,6 +87,7 @@ class CodexAppServerDriver:
             retrieve_memory=deps.retrieve_memory,
             resolve_channel=deps.resolve_channel,
             resolve_home_env=deps.resolve_home_env(self.agent_key),
+            is_managed=deps.is_managed(self.agent_key) if deps.is_managed else None,
             observe_quota=deps.observe_quota,
         )
 

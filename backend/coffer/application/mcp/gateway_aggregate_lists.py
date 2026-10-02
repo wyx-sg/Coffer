@@ -19,8 +19,9 @@ Two design decisions matter:
 On per-server timeout / unavailable: log the server and error, then leave
 that server out of the batch and NAME it in the outcome
 (ADR tool-overload-tier-the-list-search-the-rest). The
-supervisor's retry/cooldown continues in the background; the session uses
-the named failures to retry and tell the client to re-list, because a
+supervisor's attempt is cancelled with the budget (its half-open child is
+torn down), and the session uses the named failures to retry and tell the client
+to re-list, because a
 client that cached the truncated list will otherwise never see those tools
 again this session.
 """
@@ -34,13 +35,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from coffer.application.mcp.discovery import CapabilityDiscovery
-from coffer.domain.errors import (
-    SecretLocked,
-    SecretMissing,
-    UpstreamTimeout,
-    UpstreamUnavailable,
-)
-from coffer.domain.secret_errors import SecretBindingPending
+from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
+from coffer.domain.secret_errors import SecretBindingPending, SecretLocked, SecretMissing
 
 _logger = logging.getLogger(__name__)
 

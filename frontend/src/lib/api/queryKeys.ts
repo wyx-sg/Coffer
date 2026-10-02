@@ -233,6 +233,8 @@ export const messagesKey = (conversationId: string) => ["messages", conversation
 export const secretsKey = ["secrets"] as const;
 /** The approvals still waiting for a present human. */
 export const pendingApprovalsKey = ["secrets", "approvals", "pending"] as const;
+/** The approvals a person refused (and none superseded). */
+export const refusedApprovalsKey = ["secrets", "approvals", "rejected"] as const;
 export const secretBoundaryKey = ["secrets", "secret-boundary"] as const;
 export const secretsListKey = ["secrets", "list"] as const;
 export const secretScanKey = ["secrets", "scan"] as const;

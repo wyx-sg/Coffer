@@ -108,9 +108,10 @@ Coffer 存在磁盘上的几乎所有东西都在你的 home 目录下：保险�
 
 ```python [pytest]
 @pytest.mark.acceptance(
-    spec="experimental-features", scenario="a source build reports the dev channel"
+    spec="experimental-features",
+    scenario="a stored setting for a feature the registry does not name is ignored",
 )
-async def test_status_reports_the_dev_channel_and_every_feature_unauthenticated(client): ...
+def test_a_stored_setting_for_a_retired_feature_is_ignored(home): ...
 ```
 
 ```ts [Vitest]
@@ -225,6 +226,7 @@ CI 失败时，`e2e` job 会把 Playwright 报告和 trace，以及隔离守护�
 | `scripts/check_agent_type_branches.py` | 智能体描述符及其切面以外的代码都不按智能体类型分支。见[智能体切面](/zh/architecture/agent-facets) |
 | `scripts/check_frontend_colors.py` | 前端在 `src/index.css` 之外没有颜色字面量；每种颜色都是主题 token |
 | `scripts/check_ignored_sources.py` | 没有 `.gitignore` 规则隐藏源码树中的文件，也没有未锚定的模式命中 `lib/` 或 `env/` 这类常见源码文件夹名（那样会在任意深度隐藏该文件夹） |
+| `scripts/check_bare_tasks.py` | `backend/coffer/` 下的模块启动的裸 `asyncio.create_task` / `ensure_future` 不得超出脚本中列出的额度。后台工作一律走 supervisor（它给任务命名、记录崩溃并在关停时取消）；在原地被 await 的任务连同理由登记在脚本里 |
 | `ruff check`、`ruff format --check` | 按 `backend/pyproject.toml` 中的规则，对 `backend/` 和 `evals/` 做 lint 和格式检查 |
 | `mypy` | 在设置了 `strict = true` 的 `backend/pyproject.toml` 下，对整个 `coffer` 包做类型检查 |
 | `lint-imports` | import-linter 契约：分层方向（`surfaces` → `application` → `domain`）、纯净的 `domain`、`keyring` 只限于密钥代码、类型之间不跨类型导入，以及特定库只限于各自的适配器 |
@@ -245,11 +247,11 @@ CI 失败时，`e2e` job 会把 Playwright 报告和 trace，以及隔离守护�
 
 | Workflow | 触发条件 | 运行什么 |
 | --- | --- | --- |
-| `verify.yml` | 指向 `main` 的 pull request、推送到 `main` | 并行的多个 job，每个运行一个 Makefile 目标：`lint`（`make lint`）、`test-unit`、`test-integration`、`test-contract`、`test-benchmark`、`test-e2e`、`test-visual`（`make verify-<tier>`）、`audit-acceptance`（`make verify-acceptance`）和 `secrets-scan`（用 gitleaks 扫描完整历史，和本地 `make verify-secrets` 一样）。集成层级被拆成四个并排运行的分片，按每个测试上次测得的耗时做均衡，最后有一个检查只在所有分片都通过时才通过。只改动了没有测试读取的文档的 pull request 会跳过测试 job；检查文档的门禁仍然运行，被跳过的检查计为通过 |
-| `ci.yml` | 推送到 `main` 和 `feature/**`、每周定时 | 一个 `make verify` job。定时运行的是**最新依赖金丝雀**：它用 `uv sync --upgrade` 而不是锁文件安装，所以破坏 Coffer 的上游发布会按计划暴露出来 |
+| `verify.yml` | 指向 `main` 和 `feature/rearch` 的 pull request、推送到 `main` | 并行的多个 job，每个运行一个 Makefile 目标：`lint`（`make lint`）、`test-unit`、`test-integration`、`test-contract`、`test-benchmark`、`test-e2e`、`test-visual`（`make verify-<tier>`；视觉 job 只报告不阻塞，`continue-on-error`，直到基线提交为止）、`audit-acceptance`（`make verify-acceptance`）和 `secrets-scan`（用 gitleaks 扫描完整历史，和本地 `make verify-secrets` 一样）。集成层级被拆成四个并排运行的分片，按每个测试上次测得的耗时做均衡，最后有一个检查只在所有分片都通过时才通过。只改动了没有测试读取的文档的 pull request 会跳过测试 job；检查文档的门禁仍然运行，被跳过的检查计为通过 |
+| `ci.yml` | 推送到 `main` 和 `feature/**`、手动触发（`workflow_dispatch`）、每周定时 | 一个 `make verify` job。定时运行的是**最新依赖金丝雀**：它用 `uv sync --upgrade` 而不是锁文件安装，所以破坏 Coffer 的上游发布会按计划暴露出来 |
 | `pr-title.yml` | pull request 被创建或编辑 | 按 `.commitlintrc.yaml` 检查标题 |
-| `desktop.yml` | `desktop/**` 或 `Makefile` 有改动 | `make desktop-lint` 和 `make desktop-test` |
-| `evals.yml` | `evals/` 或 MCP、知识、记忆代码有改动 | `make eval`：确定性评测套件，以相对已提交基线的回归作为门禁 |
+| `desktop.yml` | `main` 和 `feature/rearch` 上 `desktop/**` 或 `Makefile` 有改动 | `make desktop-lint` 和 `make desktop-test` |
+| `evals.yml` | `main` 和 `feature/rearch` 上 `evals/`、MCP 领域代码（`backend/coffer/domain/mcp/`）或锁文件有改动 | `make eval`：确定性评测套件，以相对已提交基线的回归作为门禁 |
 | `pages.yml` | `docs-site/**` 有改动 | 构建本站，并从 `main` 部署 |
 | `release.yml` | 一个 `v*` 标签 | 面向 Apple 芯片 macOS 的冻结二进制、CLI 压缩包和桌面 `.dmg`，然后创建 GitHub Release |
 

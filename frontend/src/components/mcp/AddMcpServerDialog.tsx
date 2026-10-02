@@ -33,7 +33,7 @@ import { ImportFromAgents, toastImport } from "./add/ImportFromAgents";
 import { PasteStep } from "./add/PasteStep";
 import { ReviewStep } from "./add/ReviewStep";
 import { ServerForm } from "./add/ServerForm";
-import type { FailedServer, NewServer, ReachIntent } from "./importMcpServers";
+import type { FailedServer, NewServer, ReachIntent } from "@/lib/mcp/importMcpServers";
 
 interface Props {
   open: boolean;

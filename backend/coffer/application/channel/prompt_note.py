@@ -45,7 +45,7 @@ class ChannelNoteReader:
             return None  # deleted: the turn is still a channel turn, with no facts left
         platform = platform_label(str(resource.config.get("channel_type", "")))
         loc = await self._threads.locate(conversation_id)
-        binding = self._binding(resource.name)
+        binding = self._binding(resource.uid)
         return ChannelNote(
             name=resource.name,
             platform=platform,

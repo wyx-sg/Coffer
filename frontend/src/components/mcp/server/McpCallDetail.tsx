@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { StatusDot } from "@/components/status/StatusDot";
 import type { components } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
-import { callTone, seconds } from "./serverState";
+import { callTone, seconds } from "@/lib/mcp/serverState";
 
 type Invocation = components["schemas"]["InvocationOut"];
 

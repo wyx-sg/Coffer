@@ -118,6 +118,10 @@ class QueuedInbound:
     mention_user_name: str = ""
     title_hint: str = ""
     conversation_thread_id: str = ""
+    #: The inbound message ids of the earlier messages a burst folded into this
+    #: turn (``reply_to_message_id`` is the last one's). Each of them carries the
+    #: turn's progress marks, so none is left on its receipt mark.
+    earlier_message_ids: tuple[str, ...] = ()
 
 
 class TurnPort(Protocol):
@@ -218,10 +222,11 @@ class TurnDriver:
                 peer,
                 item.conversation_thread_id,
                 chat_kind=item.chat_kind,
+                idle_hours=binding.new_conversation_after_idle_hours,
+                say=_say,
             )
         except CofferError as e:
-            # e.g. the channel's default agent is unknown/misconfigured — the
-            # owner must see it in the chat, not only in the daemon log.
+            # e.g. the default agent is unknown/misconfigured: say so in the chat.
             await _say(explain_conversation_error(e))
             return
         if len(self._turns.pending(conversation_id)) >= QUEUE_MAX:
@@ -278,7 +283,7 @@ class TurnDriver:
         """The orchestrator began this message's turn: render it into the chat."""
         # Keyed by the conversation, so `/stop` from anywhere that conversation is
         # reached finds its running turn; the task name says where it renders.
-        session = self._session(binding.resource.name, peer.chat_id, item.conversation_thread_id)
+        session = self._session(binding.resource.uid, peer.chat_id, item.conversation_thread_id)
         task = spawn(
             self._render(binding, peer, item, conversation_id, queue, session),
             name=f"channel-render:{binding.resource.name}:{peer.chat_id}:{item.thread_id}",
@@ -375,7 +380,21 @@ class TurnDriver:
         never fails a delivered reply (see "Acknowledge receipt and completion
         by capability")."""
         adapter = binding.adapter
-        if not (emoji and adapter.capabilities.supports_reactions and item.reply_to_message_id):
+        if not (emoji and adapter.capabilities.supports_reactions):
             return
-        with contextlib.suppress(Exception):
-            await adapter.set_reaction(peer.chat_id, item.reply_to_message_id, emoji)
+        # Every message the turn answers, the merged burst's earlier ones included.
+        for message_id in (*item.earlier_message_ids, item.reply_to_message_id):
+            if not message_id:
+                continue
+            with contextlib.suppress(Exception):
+                await adapter.set_reaction(peer.chat_id, message_id, emoji)
+
+    async def mark_stopped(
+        self, binding: ChannelBinding, peer: ChannelPeer, items: Sequence[QueuedInbound]
+    ) -> None:
+        """Put the stopped mark on messages a ``/stop`` discarded before they
+        became a turn: they were acknowledged on arrival and would otherwise stay
+        on their receipt mark for good."""
+        marks = binding.adapter.capabilities.reactions
+        for item in items:
+            await self._react(binding, peer, item, marks.stopped)

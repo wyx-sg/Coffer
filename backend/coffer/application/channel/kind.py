@@ -261,14 +261,14 @@ def make_channel_kind(
 
     ``on_delete`` is injected by the composition root: it evicts the channel
     from the runtime (stopping its adapter and, for SeaTalk, closing its
-    websocket connection) before the row — and, via FK cascade, the
-    peer binding — is removed. Channel config holds only secret refs, so
-    no audit redaction is needed.
+    websocket connection) before the row — and, as a follower
+    of the resource's lifecycle, the peer pairings document — is removed.
+    Channel config holds only secret refs, so no audit redaction is needed.
 
     ``agent_names`` (also injected by the composition root) maps every
     registered agent's uid to its name. It is the only reader this kind still
     needs, and it decides nothing: a channel's ``default_agent`` and its scope
-    are both agent uids (ADR resource-identity-is-an-immutable-uid), so the
+    are both agent uids (ADR identity-is-the-uid-inside-the-file), so the
     checks compare them directly. What the map buys is a refusal an owner can
     act on — labels instead of UUIDs — plus the one question a uid cannot
     answer by itself: whether any agent is registered under it at all.

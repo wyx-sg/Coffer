@@ -9,10 +9,6 @@ independently, a move never counted, and more pairings never adding a loss.
 
 from __future__ import annotations
 
-import pytest
-
-pytest.importorskip("hypothesis")
-
 from hypothesis import given
 from hypothesis import strategies as st
 

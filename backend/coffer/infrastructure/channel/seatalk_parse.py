@@ -86,19 +86,66 @@ def mentions_others(mentioned_list: Sequence[Any] | None) -> bool:
     )
 
 
+def _size(text: str) -> int:
+    return len(text.encode("utf-8"))
+
+
+def _cut_to_bytes(line: str, room: int) -> list[str]:
+    """Cut one line into pieces of at most ``room`` UTF-8 bytes, on character
+    boundaries — the last resort for a line longer than a whole message."""
+    pieces: list[str] = []
+    start = used = 0
+    for index, char in enumerate(line):
+        width = _size(char)
+        if used + width > room and index > start:
+            pieces.append(line[start:index])
+            start, used = index, 0
+        used += width
+    pieces.append(line[start:])
+    return pieces
+
+
 def split_to_byte_limit(chunk: str, byte_limit: int) -> list[str]:
-    """Split a chunk further until each piece fits the UTF-8 byte cap.
+    """Split a chunk until each piece fits the UTF-8 byte cap.
 
     chunk_text counts characters, but CJK text is 3 bytes per character in
-    UTF-8 — a 3500-character chunk can be ~10 KB. Halve at character
-    boundaries until every piece encodes under the limit.
+    UTF-8 — a 3500-character chunk can be ~10 KB. Pieces break at line
+    boundaries, and a cut inside a code fence closes the fence in one piece and
+    reopens it (same opening line) in the next, so no piece shows a half-open
+    block. Only a single line longer than the cap is cut mid-line.
     """
-    if len(chunk.encode("utf-8")) <= byte_limit:
+    if _size(chunk) <= byte_limit:
         return [chunk]
-    mid = len(chunk) // 2
-    return split_to_byte_limit(chunk[:mid], byte_limit) + split_to_byte_limit(
-        chunk[mid:], byte_limit
-    )
+    fences = [line for line in chunk.split("\n") if line.lstrip(" \t").startswith("```")]
+    # What closing and reopening a fence adds to a piece, reserved up front.
+    reserve = max((_size(line) for line in fences), default=0) + 5 if fences else 0
+    room = max(byte_limit - reserve, 1)
+    pieces: list[str] = []
+    lines: list[str] = []
+    used = 0
+    fence: str | None = None  # the opening line while inside a code fence
+
+    def close(*, last: bool = False) -> None:
+        nonlocal lines, used
+        body = "\n".join(lines)
+        pieces.append(body + "\n```" if fence is not None and not last else body)
+        lines, used = [], 0
+
+    for raw in chunk.split("\n"):
+        for line in _cut_to_bytes(raw, room):
+            cost = _size(line) + (1 if lines else 0)
+            if lines and used + cost > room:
+                close()
+                if fence is not None:
+                    lines, used = [fence], _size(fence)
+                cost = _size(line) + (1 if lines else 0)
+            lines.append(line)
+            used += cost
+        if raw.lstrip(" \t").startswith("```"):
+            fence = None if fence is not None else raw
+    if lines:
+        close(last=True)
+    return pieces
 
 
 def message_to_item(msg: dict[str, Any]) -> ForwardedItem:

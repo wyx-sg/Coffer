@@ -96,6 +96,7 @@ class _StubRuntime:
         #: a live connection on the floor.
         self.websocket_states: dict[str, str] = {}
         self.websocket_errors: dict[str, str] = {}
+        self.restarted: list[str] = []
 
     def websocket_state(self, channel_uid: str) -> tuple[str, str | None] | None:
         state = self.websocket_states.get(channel_uid)
@@ -105,6 +106,10 @@ class _StubRuntime:
 
     def is_running(self, name: str) -> bool:
         return name in self.adapters
+
+    async def restart(self, channel_uid: str) -> bool:
+        self.restarted.append(channel_uid)
+        return True
 
     async def local_machine_id(self) -> str:
         return _MACHINE_ID
@@ -127,7 +132,7 @@ class _Daemon:
         """The channel row behind a name a test typed.
 
         ``get_by_name`` and not ``get``: a uid addresses a resource everywhere
-        inside the daemon now (ADR resource-identity-is-an-immutable-uid), and
+        inside the daemon now (ADR identity-is-the-uid-inside-the-file), and
         a test standing where a person stands holds the label — so it resolves
         it the same way the CLI does, once, at the edge.
         """
@@ -172,7 +177,7 @@ def channel_daemon(tmp_path, monkeypatch):
     resources = ResourceService(
         # The `agent` kind is wired in as well, which it did not need to be
         # before: a channel's ``default_agent`` holds an agent UID
-        # (ADR resource-identity-is-an-immutable-uid), so `coffer channel
+        # (ADR identity-is-the-uid-inside-the-file), so `coffer channel
         # register --agent <name>` has a name to resolve and the kind's own
         # "is that a registered agent" check has a registry to ask.
         kinds={"channel": make_channel_kind(agent_names=_agent_names), "agent": make_agent_kind()},
@@ -219,6 +224,13 @@ def channel_daemon(tmp_path, monkeypatch):
     def _daemon_status() -> dict[str, Any]:
         return {"machine_id": _MACHINE_ID}
 
+    #: The machine ids the registry holds; a test replaces it to say who else is in.
+    machines: list[str] = [_MACHINE_ID]
+
+    @fapp.get("/api/v1/sync/machines")
+    def _machines() -> dict[str, Any]:
+        return {"machines": [{"machine_id": m} for m in machines]}
+
     fapp.dependency_overrides[get_resource_service] = lambda: resources
     fapp.dependency_overrides[get_audit_service] = lambda: audit
     set_channel_service(service)
@@ -248,6 +260,7 @@ def channel_daemon(tmp_path, monkeypatch):
         runtime=runtime,
         audit=audit,
         agent_uid=agent.uid,
+        machines=machines,
     )
 
     set_channel_service(None)
@@ -460,6 +473,43 @@ def test_edit_changes_the_ping_threshold(channel_daemon: _Daemon) -> None:
     assert r.exit_code == 0, r.output
     assert channel_daemon.channel("tg").config["notify_after_seconds"] == 0
     assert runner.invoke(app, ["channel", "edit", "tg", "--notify-after", "3601"]).exit_code == 2
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="the idle period comes from the channel's settings"
+)
+def test_the_idle_period_is_set_with_add_and_edit_and_shown_by_show(
+    channel_daemon: _Daemon,
+) -> None:
+    r = runner.invoke(
+        app,
+        [
+            "channel", "add", "tg", "--type", "telegram", "--bot-token-ref", _TG_REF,
+            "--agent", _AGENT_NAME, "--new-conversation-after-idle-hours", "6",
+        ],
+    )  # fmt: skip
+    assert r.exit_code == 0, r.output
+    assert channel_daemon.channel("tg").config["new_conversation_after_idle_hours"] == 6
+    assert (
+        "idle:     new conversation after 6 h idle"
+        in runner.invoke(app, ["channel", "show", "tg"]).output
+    )
+
+    r = runner.invoke(app, ["channel", "edit", "tg", "--new-conversation-after-idle-hours", "0"])
+    assert r.exit_code == 0, r.output
+    assert channel_daemon.channel("tg").config["new_conversation_after_idle_hours"] == 0
+    assert "idle:     never" in runner.invoke(app, ["channel", "show", "tg"]).output
+    bad = runner.invoke(app, ["channel", "edit", "tg", "--new-conversation-after-idle-hours", "-1"])
+    assert bad.exit_code == 2
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a restart rebuilds the adapter on demand")
+def test_restart_asks_the_daemon_to_rebuild_the_adapter(channel_daemon: _Daemon) -> None:
+    assert _register_tg().exit_code == 0
+    r = runner.invoke(app, ["channel", "restart", "tg"])
+    assert r.exit_code == 0, r.output
+    assert "restarted" in r.output
+    assert channel_daemon.runtime.restarted == [channel_daemon.uid("tg")]
 
 
 @pytest.mark.acceptance(
@@ -681,7 +731,7 @@ def test_pair_prints_code_and_expiry(channel_daemon: _Daemon) -> None:
     code = r.output.split("pairing code:")[1].split()[0]
     assert len(code) == 8
     assert "expires at:" in r.output
-    assert channel_daemon.pairing.pending("tg") is True
+    assert channel_daemon.pairing.pending(channel_daemon.uid("tg")) is True
 
 
 def test_pair_unknown_channel_exits_4(channel_daemon: _Daemon) -> None:
@@ -694,7 +744,7 @@ def test_pair_unknown_channel_exits_4(channel_daemon: _Daemon) -> None:
 )
 def test_show_renders_runtime_pairing_and_inbound(channel_daemon: _Daemon) -> None:
     assert _register_st().exit_code == 0
-    channel_daemon.runtime.adapters["st"] = _StubAdapter()
+    channel_daemon.runtime.adapters[channel_daemon.uid("st")] = _StubAdapter()
     channel_daemon.pair("st")
 
     r = runner.invoke(app, ["channel", "show", "st"])
@@ -763,7 +813,7 @@ def test_show_names_the_websocket_connection_state(channel_daemon: _Daemon) -> N
     assert _register_st("up").exit_code == 0
     assert _register_st("down").exit_code == 0
     for name in ("up", "down"):
-        channel_daemon.runtime.adapters[name] = _StubAdapter()
+        channel_daemon.runtime.adapters[channel_daemon.uid(name)] = _StubAdapter()
     channel_daemon.runtime.websocket_states[channel_daemon.uid("up")] = "connected"
     down = channel_daemon.uid("down")
     channel_daemon.runtime.websocket_states[down] = "error"
@@ -800,7 +850,7 @@ def test_show_of_a_websocket_channel_prints_its_error_verbatim(
     process already holding the connection — are only actionable if the owner
     can read them."""
     assert _register_st().exit_code == 0
-    channel_daemon.runtime.adapters["st"] = _StubAdapter()
+    channel_daemon.runtime.adapters[channel_daemon.uid("st")] = _StubAdapter()
     st_uid = channel_daemon.uid("st")
     channel_daemon.runtime.websocket_states[st_uid] = "kicked"
     channel_daemon.runtime.websocket_errors[st_uid] = "another connection took over"
@@ -817,7 +867,7 @@ def test_show_of_a_channel_missing_the_sdk_prints_the_hand_off(
     """The CLI hands over the same words as the channel page (the SDK is missing)."""
     monkeypatch.setenv("COFFER_SEATALK_SDK_DIR", str(tmp_path / "sdk"))
     assert _register_st().exit_code == 0
-    channel_daemon.runtime.adapters["st"] = _StubAdapter()
+    channel_daemon.runtime.adapters[channel_daemon.uid("st")] = _StubAdapter()
     st_uid = channel_daemon.uid("st")
     channel_daemon.runtime.websocket_states[st_uid] = "sdk_missing"
     channel_daemon.runtime.websocket_errors[st_uid] = "not found"
@@ -866,7 +916,7 @@ def test_show_unknown_channel_exits_4(channel_daemon: _Daemon) -> None:
 def test_notify_sends_to_paired_peer(channel_daemon: _Daemon) -> None:
     assert _register_tg().exit_code == 0
     adapter = _StubAdapter()
-    channel_daemon.runtime.adapters["tg"] = adapter
+    channel_daemon.runtime.adapters[channel_daemon.uid("tg")] = adapter
     channel_daemon.pair("tg", chat_id="555")
 
     r = runner.invoke(app, ["channel", "notify", "tg", "build green"])
@@ -877,7 +927,7 @@ def test_notify_sends_to_paired_peer(channel_daemon: _Daemon) -> None:
 
 def test_notify_unpaired_channel_exits_5(channel_daemon: _Daemon) -> None:
     assert _register_tg().exit_code == 0
-    channel_daemon.runtime.adapters["tg"] = _StubAdapter()
+    channel_daemon.runtime.adapters[channel_daemon.uid("tg")] = _StubAdapter()
     r = runner.invoke(app, ["channel", "notify", "tg", "hello"])
     assert r.exit_code == 5  # 409 CHANNEL_NOT_PAIRED → conflict exit code
 
@@ -897,3 +947,69 @@ def test_edit_sets_and_clears_the_default_directory(channel_daemon: _Daemon, tmp
     r = runner.invoke(app, ["channel", "edit", "tg", "--no-default-dir"])
     assert r.exit_code == 0, r.output
     assert not channel_daemon.channel("tg").config.get("default_agent_config")
+
+
+def test_show_names_the_agent_the_way_its_owner_does(channel_daemon: _Daemon) -> None:
+    assert _register_tg().exit_code == 0
+    shown = runner.invoke(app, ["channel", "show", "tg"])
+    assert f"agent:    {_AGENT_NAME}\n" in shown.output
+    assert channel_daemon.agent_uid not in shown.output.split("agent:")[1].split("\n")[0]
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a channel bound to an unknown machine starts nowhere"
+)
+def test_show_reports_a_binding_to_an_unknown_machine_as_a_fault(channel_daemon: _Daemon) -> None:
+    """Distinct from a channel merely bound elsewhere: only one of the two is
+    somebody's mistake, and the CLI joins the registry to tell them apart."""
+    assert _register_tg().exit_code == 0
+    elsewhere = "ffffffffffffffff"
+    channel_daemon.machines.append(elsewhere)
+
+    assert runner.invoke(app, ["channel", "bind", "tg", elsewhere]).exit_code == 0
+    shown = runner.invoke(app, ["channel", "show", "tg"])
+    assert f"runs on:  {elsewhere} (another machine)" in shown.output
+
+    # The same id once the registry no longer holds that machine.
+    channel_daemon.machines.remove(elsewhere)
+    channel_daemon.machines.append("eeeeeeeeeeeeeeee")
+    shown = runner.invoke(app, ["channel", "show", "tg"])
+    assert f"runs on:  {elsewhere} (UNKNOWN MACHINE" in shown.output
+    assert "another machine" not in shown.output
+
+
+def test_bind_refuses_an_id_no_machine_has(channel_daemon: _Daemon) -> None:
+    assert _register_tg().exit_code == 0
+    channel_daemon.machines.append("ffffffffffffffff")
+    r = runner.invoke(app, ["channel", "bind", "tg", "ffffffffffffff"])  # one digit short
+    assert r.exit_code == 1
+    assert channel_daemon.channel("tg").config["runs_on"] == _MACHINE_ID  # nothing saved
+
+
+def test_bind_here_warns_when_another_machine_still_holds_the_channel(
+    channel_daemon: _Daemon,
+) -> None:
+    assert _register_tg().exit_code == 0
+    channel_daemon.machines.append("ffffffffffffffff")
+    assert runner.invoke(app, ["channel", "bind", "tg", "ffffffffffffffff"]).exit_code == 0
+
+    r = runner.invoke(app, ["channel", "bind", "tg"])
+    assert r.exit_code == 0, r.output
+    assert "both machines may answer the bot" in r.output
+    # The clean handover — rebinding away from the machine that holds it — warns nothing.
+    quiet = runner.invoke(app, ["channel", "bind", "tg", "ffffffffffffffff"])
+    assert "warning" not in quiet.output
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="the channel's default directory is edited from the Channels page and the CLI",
+)
+def test_a_relative_directory_is_refused_with_nothing_saved(channel_daemon: _Daemon) -> None:
+    assert _register_tg().exit_code == 0
+    before = dict(channel_daemon.channel("tg").config)
+    for flags in (["--dir", "relative/dir"], ["--default-dir", "../project"]):
+        r = runner.invoke(app, ["channel", "edit", "tg", *flags])
+        assert r.exit_code == 2, r.output
+        assert "relative" in r.output + r.stderr
+    assert dict(channel_daemon.channel("tg").config) == before

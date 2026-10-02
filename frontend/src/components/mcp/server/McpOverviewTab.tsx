@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { AgentOut } from "@/lib/api/agents";
 import type { InvocationSummary, ToolTiering } from "@/lib/hooks/useMcpServerPage";
 import { cn } from "@/lib/utils";
-import { relativeTime, type ServerState } from "./serverState";
+import { relativeTime, type ServerState } from "@/lib/mcp/serverState";
 
 export function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (

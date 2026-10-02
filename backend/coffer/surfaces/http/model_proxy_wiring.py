@@ -93,12 +93,21 @@ def wire_model_proxy(
     reconciler: Reconciler,
     *,
     coffer_dir: pathlib.Path | None = None,
+    enabled: Callable[[], bool] = lambda: True,
 ) -> ModelProxyWiring:
     """Build the supervisor, publish the management facade, and start
-    supervising unless ``COFFER_MODEL_PROXY=off``."""
+    supervising unless ``COFFER_MODEL_PROXY=off``.
+
+    ``enabled`` is whether the ``models`` feature is on right now: while it is
+    off the proxy is pushed an empty state, so it serves no agent and no
+    connection (spec experimental-features "Close every surface of a
+    switched-off feature"); the connections and tokens it held are untouched.
+    """
     tokens = ProxyTokenService(secret_store)
 
     async def state() -> ProxyState:
+        if not enabled():
+            return ProxyState()
         return await build_proxy_state(provider_svc, tokens)
 
     supervisor = ProxySupervisor(

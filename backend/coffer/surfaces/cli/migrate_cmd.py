@@ -18,11 +18,11 @@ import typer
 from coffer import __version__
 from coffer.domain.error_base import CofferError
 from coffer.infrastructure.daemon import bootstrap
+from coffer.infrastructure.persistence.migrations_runner import upgrade_to
 from coffer.infrastructure.vault.migration.rehearse import rehearse
 from coffer.infrastructure.vault.migration.rollback import resume, rollback
 from coffer.infrastructure.vault.migration.run import migrate
 from coffer.surfaces.cli._options import ExitCode
-from coffer.surfaces.http.migrations_runner import upgrade_to
 
 
 def _home() -> Path:

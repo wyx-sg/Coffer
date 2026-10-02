@@ -401,7 +401,7 @@ async def test_media_returned_in_a_group_thread_is_uploaded_into_that_thread(
     originating thread, not the group main chat."""
     img = tmp_path / "chart.png"
     img.write_bytes(b"PNG")
-    adapter = FakeChannelAdapter(supports_edit=False, supports_media=True, supports_groups=True)
+    adapter = FakeChannelAdapter(supports_edit=False, supports_media=True)
 
     async def send(text: str) -> None:
         await adapter.send_text("gid-1", text, thread_id="t1", chat_kind="group")
@@ -597,7 +597,6 @@ async def test_typing_heartbeat_re_sends_in_a_group_thread_when_group_typing_is_
         supports_edit=False,
         supports_live_text=False,
         supports_typing=True,
-        supports_groups=True,
     )
     queue: asyncio.Queue[Any] = asyncio.Queue()
 
@@ -638,7 +637,6 @@ async def test_no_typing_heartbeat_on_a_transport_that_reacts() -> None:
     adapter = FakeChannelAdapter(
         supports_typing=True,
         supports_reactions=True,
-        supports_groups=True,
     )
     queue: asyncio.Queue[Any] = asyncio.Queue()
 
@@ -679,7 +677,6 @@ async def test_no_interim_signal_without_a_live_text_surface_in_a_group() -> Non
         supports_edit=False,
         supports_live_text=False,
         supports_typing=True,
-        supports_groups=True,
     )
     queue: asyncio.Queue[Any] = asyncio.Queue()
 
@@ -734,7 +731,7 @@ def _streaming_adapter(**kwargs: Any) -> FakeChannelAdapter:
     scenario="a reply grows in place on a transport that streams but cannot edit",
 )
 async def test_streaming_transport_grows_one_message_instead_of_sending_fragments() -> None:
-    adapter = _streaming_adapter(supports_groups=True)
+    adapter = _streaming_adapter()
 
     async def send(text: str) -> None:
         await adapter.send_text("gid-1", text, thread_id="t1", chat_kind="group")
@@ -938,7 +935,6 @@ async def test_a_group_reply_opens_with_a_mention_of_the_asker() -> None:
     adapter = FakeChannelAdapter(
         supports_edit=False,
         supports_live_text=False,
-        supports_groups=True,
         mention_template=_MENTION,
     )
 
@@ -971,16 +967,13 @@ async def test_a_sender_with_no_mention_id_gets_a_clean_reply() -> None:
     mentionable = FakeChannelAdapter(
         supports_edit=False,
         supports_live_text=False,
-        supports_groups=True,
         mention_template=_MENTION,
     )
     await _group_reply(mentionable, mention_user_id="")
     assert mentionable.texts() == ["the answer"]
 
     # And the mirror case: an id, but a transport with no mention spelling.
-    speechless = FakeChannelAdapter(
-        supports_edit=False, supports_live_text=False, supports_groups=True
-    )
+    speechless = FakeChannelAdapter(supports_edit=False, supports_live_text=False)
     await _group_reply(speechless, mention_user_id="st-77")
     assert speechless.texts() == ["the answer"]
 
@@ -996,7 +989,7 @@ async def test_the_mention_is_in_the_message_the_stream_is_created_as() -> None:
     observed live. So the very first snapshot, the one that posts the message,
     carries it; and every snapshot after it does too, or the mention would appear
     at creation, vanish for the whole stream, and come back at the end."""
-    adapter = _streaming_adapter(supports_groups=True, mention_template=_MENTION)
+    adapter = _streaming_adapter(mention_template=_MENTION)
 
     await _group_reply(
         adapter,
@@ -1028,9 +1021,7 @@ async def test_a_scaffolding_surface_carries_no_mention_and_the_reply_one() -> N
     surface is deleted before the answer is sent, so its snapshots stay plain —
     a mention there would render as raw markup — and the reply that closes it
     carries the mention exactly once."""
-    adapter = _streaming_adapter(
-        supports_groups=True, mention_template=_MENTION, live_text_persists=False
-    )
+    adapter = _streaming_adapter(mention_template=_MENTION, live_text_persists=False)
 
     await _group_reply(
         adapter,
@@ -1060,7 +1051,6 @@ async def test_a_sender_with_no_id_is_mentioned_by_email_where_the_platform_allo
     adapter = FakeChannelAdapter(
         supports_edit=False,
         supports_live_text=False,
-        supports_groups=True,
         mention_template=_MENTION,
         mention_email_template=_MENTION_BY_EMAIL,
     )
@@ -1076,7 +1066,6 @@ async def test_the_id_wins_when_both_an_id_and_an_address_are_known() -> None:
     adapter = FakeChannelAdapter(
         supports_edit=False,
         supports_live_text=False,
-        supports_groups=True,
         mention_template=_MENTION,
         mention_email_template=_MENTION_BY_EMAIL,
     )

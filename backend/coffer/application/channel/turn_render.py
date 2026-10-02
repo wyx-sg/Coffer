@@ -14,8 +14,8 @@ from the adapter's declared capabilities (never its type):
   still shows time passing.
 
 A clean success sends no trailing fact summary — the reply is the completion
-signal. Only a turn that ended abnormally (failed, interrupted, or at the
-tool-iteration limit) sends one, carrying its error/stop/limit signal.
+signal. Only a turn that ended abnormally (failed or interrupted) sends one,
+carrying its error or stop signal.
 """
 
 from __future__ import annotations

@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import type { ToolTiering } from "@/lib/hooks/useMcpServerPage";
 import { McpCallout as Callout } from "./McpCallout";
-import { seconds, shortTime, type ServerState, secretLabel } from "./serverState";
+import { seconds, shortTime, type ServerState, secretLabel } from "@/lib/mcp/serverState";
 import type { TestResult } from "./testResult";
 
 /** A clause that opens the sentence starts with a capital. */

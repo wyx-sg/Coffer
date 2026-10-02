@@ -19,6 +19,7 @@ and a round").
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
@@ -28,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 import coffer
 from coffer.application.audit_service import AuditService
+from coffer.application.features import FeatureService
 from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.inventory import AgentPluginInventory
@@ -36,6 +38,7 @@ from coffer.application.sync.round_engine import RoundEngine
 from coffer.application.sync.service import SyncService
 from coffer.application.sync.token import BoundaryToken
 from coffer.application.sync.worker import SyncWorker
+from coffer.domain.features import SYNC
 from coffer.domain.secrets import SecretDestination, sync_remote_destination
 from coffer.domain.vault.writes import Change, TreeReader, Validator, Verdict
 from coffer.infrastructure.daemon.config import write_machine_name
@@ -54,7 +57,7 @@ from coffer.infrastructure.vault.git import git_available
 from coffer.infrastructure.vault.home import vault_root
 from coffer.infrastructure.vault.instance import vault_writer
 from coffer.infrastructure.vault.writer import VaultWriter
-from coffer.surfaces.http.knowledge.curation_state import set_vault_write_lock
+from coffer.surfaces.http.knowledge.curation_state import set_curation_hold, set_vault_write_lock
 from coffer.surfaces.http.secret_boundary_wiring import boundary_resolver
 from coffer.surfaces.http.sync_dependencies import set_sync_service
 
@@ -96,6 +99,15 @@ async def _reconcile_imported() -> None:
     from coffer.surfaces.http.reconcile_dependencies import get_reconciler
 
     await get_reconciler().run(trigger=Trigger.IMPORT)
+
+
+def _reconciler_hold() -> contextlib.AbstractAsyncContextManager[object]:
+    """Keep the reconciler's passes out while a round, its import pass and
+    its history are written (spec resource-framework "Converge what Coffer
+    writes outside its database with one reconciler")."""
+    from coffer.surfaces.http.reconcile_dependencies import get_reconciler
+
+    return get_reconciler().hold()
 
 
 def wire_sync(
@@ -148,6 +160,7 @@ def wire_sync(
         vault_path=vault_root,
         inventory=AgentPluginInventory(resources, _plugins),
         after_apply=_reconcile_imported,
+        hold=_reconciler_hold,
         git_available=git_available,
         host_label=machine_label,
     )
@@ -175,12 +188,14 @@ def start_sync(
     )
     set_sync_service(wiring.service)
     set_vault_write_lock(wiring.service.lock)
+    set_curation_hold(wiring.service.divergence_outstanding)
     return wiring
 
 
-def start_sync_worker(wiring: SyncWiring) -> SyncWorker:
-    """Rounds on the remote's interval; the first 30 s after start."""
-    worker = SyncWorker(wiring.service)
+def start_sync_worker(wiring: SyncWiring, features: FeatureService) -> SyncWorker:
+    """Rounds on the remote's interval; the first 30 s after start. Nothing
+    runs while the ``sync`` feature is off."""
+    worker = SyncWorker(wiring.service, is_enabled=lambda: features.is_enabled(SYNC))
     worker.start()
     return worker
 

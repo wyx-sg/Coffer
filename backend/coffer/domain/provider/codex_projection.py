@@ -29,6 +29,10 @@ from coffer.domain.provider.model_binding import ProjectedModel
 
 #: The ``model_providers`` table key Coffer manages, and the ``model_provider``
 #: selector that points at it.
+#: The one ``wire_api`` Codex still loads — it parses ``responses`` and refuses
+#: every other spelling, the retired ``chat`` included — so it is fixed here
+#: instead of being a setting.
+CODEX_WIRE_API = "responses"
 CODEX_PROVIDER_ID = "coffer"
 #: Filename of the model catalogue Coffer writes next to an agent's
 #: ``config.toml``. The name doubles as the OWNERSHIP MARKER: de-projection
@@ -124,7 +128,6 @@ def apply_codex_provider(
     *,
     base_url: str,
     model: str | None,
-    wire_api: str,
     display_name: str,
     auth: CodexAuthCommand,
     effort: str | None = None,
@@ -156,7 +159,7 @@ def apply_codex_provider(
     block = tomlkit.table()
     block["name"] = display_name
     block["base_url"] = base_url
-    block["wire_api"] = wire_api
+    block["wire_api"] = CODEX_WIRE_API
     # WebSockets off: pointed at another base URL, Codex otherwise tries the
     # Responses WebSocket transport first and stalls.
     block["supports_websockets"] = False

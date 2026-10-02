@@ -66,8 +66,8 @@ class BuiltinSkillSeed:
         Safe to call on a timer and at every boot: when the master folder
         already holds exactly this text and the row agrees with it, nothing is
         written and nothing is audited. Delivery is reconciled either way,
-        because a machine that received the row through a converge round has
-        the master and the row but has never linked it into an agent.
+        because the master and the row can both exist while no agent has been
+        linked to it yet.
         """
         try:
             changed = await self._write(name=name, text=text)

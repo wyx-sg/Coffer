@@ -1,4 +1,4 @@
-"""Channel pairings as vault documents (plan D13; spec vault-storage).
+"""Channel pairings as vault documents (spec vault-storage).
 
 Which chats on a platform belong to a channel's owner is the person's, and it
 travels: ``state/channel-peers/<channel name>.json``::
@@ -51,7 +51,7 @@ def _peer(uid: str, raw: Any) -> ChannelPeer | None:
         chat_id=raw["chat_id"],
         display_name=str(raw.get("display_name") or ""),
         paired_at=_time(raw.get("paired_at")),
-        sender_id=sender if isinstance(sender, str) and sender else None,
+        sender_id=sender if isinstance(sender, str) else "",
     )
 
 

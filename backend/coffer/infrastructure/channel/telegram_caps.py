@@ -34,7 +34,6 @@ PLAIN_RENDER_NOTES = (
 def telegram_capabilities(features: FeatureSet) -> ChannelCapabilities:
     rich = features.rich_messages.available
     return ChannelCapabilities(
-        supports_edit=True,
         supports_live_text=True,  # the edit IS its live surface
         supports_typing=True,
         # "Render replies in the platform's rich format": a rich message carries 32k characters
@@ -44,7 +43,6 @@ def telegram_capabilities(features: FeatureSet) -> ChannelCapabilities:
         supports_buttons=True,
         supports_card_update=True,  # editMessageText rewrites text + keyboard
         supports_media=True,
-        supports_groups=True,
         supports_reactions=True,
         reactions=TELEGRAM_REACTIONS,
         mention_template=TELEGRAM_MENTION_TEMPLATE,

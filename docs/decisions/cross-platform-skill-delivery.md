@@ -3,12 +3,13 @@
 **Status**: Accepted
 **Date**: 2026-05-29
 **Deciders**: Yuxing Wu
-**Related**: spec skill-manager; spec agent-registry; [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Per-Agent Resource Scope](per-agent-resource-scope.md); [Resource Reach Is Machine-Local](resource-reach-is-machine-local.md); [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md); [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md); research note [agent skills](../research/agent-skills.md)
+**Related**: spec skill-manager; spec agent-registry; [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Per-Agent Resource Scope](per-agent-resource-scope.md); [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md); [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md); [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md); research note [agent skills](../research/agent-skills.md)
 
 ## Context
 
-Coffer keeps one master folder per skill under `~/.coffer/skills/<name>/`, and
-that folder is the single editable copy (spec skill-manager "Keep one master
+Coffer keeps one master folder per skill under `~/.coffer/vault/skills/<name>/`
+(Coffer's own builtin skill, which is derived output, under
+`~/.coffer/derived/skills/<name>/`), and that folder is the single editable copy (spec skill-manager "Keep one master
 folder per skill"); the name in that path is fixed once the skill is
 registered ([Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md)). Each registered agent must
 nevertheless see the skill in its own skills directory, under its own layout:
@@ -59,7 +60,7 @@ used is recorded per binding.
 - **Why it lost.** It is kept only as the Windows last resort, where it is
   recorded, marked and never mistaken for a link.
 
-### Option C — Point each agent's configuration at `~/.coffer/skills/`
+### Option C — Point each agent's configuration at `~/.coffer/vault/skills/`
 
 - **Pros.** No per-skill filesystem objects at all.
 - **Cons.** Both agents fix their skills path; where an override exists it
@@ -96,7 +97,8 @@ of the same rule.**
   fallback. Windows: symlink, else junction, else copy → `symlink`, `junction`
   or `copy_fallback`. The mode is decided per binding, not per OS, because one
   machine can mix filesystems, and it is recorded in the binding row (one row
-  per delivered `(skill, agent)` in `skill_agent_bindings`) and in the
+  per delivered `(skill, agent)` in `skill_agent_bindings`, in this machine's
+  derived database) and in the
   `skill_bound` audit event.
 - **Removal inspects before it removes.** A symlink is unlinked; a Windows
   junction is `rmdir`'d, which removes the link and not the target; a real
@@ -121,10 +123,13 @@ of the same rule.**
   then recreate). `replaced_with_regular`, `missing_master` and
   `orphan_master` are reported, never auto-remediated. The repair is audited
   with the actor `system`.
-- **Degraded delivery is visible.** A `copy_fallback` binding is badged on the
-  Skills page and carries `mode: copy_fallback` in its audit event; `verify`
-  treats a copy that carries the skill's `SKILL.md` as healthy, since a real
-  directory is the expected shape of that mode.
+- **Degraded delivery is visible where the copy is shown, not as a warning.**
+  A `copy_fallback` binding is listed on the skill's Delivery tab as **Copied,
+  not linked** and carries `mode: copy_fallback` in its audit event; the
+  library row carries no mark, because a copy made this way is a working
+  delivery. A copy whose content no longer matches master is reported as drift
+  and replaced from master; `verify` treats a copy that matches master as healthy,
+  since a real directory is the expected shape of that mode.
 
 ## Consequences
 

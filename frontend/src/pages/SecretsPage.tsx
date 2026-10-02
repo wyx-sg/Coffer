@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { AddSecretDialog } from "@/components/secret/AddSecretDialog";
 import { DeleteSecretDialog } from "@/components/secret/DeleteSecretDialog";
 import { PendingApprovalsEntry } from "@/components/secret/PendingApprovalsEntry";
+import { RefusedApprovalsEntry } from "@/components/secret/RefusedApprovalsEntry";
 import { ReplaceSecretDialog } from "@/components/secret/ReplaceSecretDialog";
 import { RevealSecretDialog } from "@/components/secret/RevealSecretDialog";
 import { ScanSecretsDialog } from "@/components/secret/ScanSecretsDialog";
@@ -62,7 +63,6 @@ export function SecretsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={KeyRound}
         title={t("secrets.title")}
         badges={<HelpTip label={t("secrets.about.label")}>{t("secrets.about.body")}</HelpTip>}
         subtitle={t("secrets.subtitle")}
@@ -84,6 +84,7 @@ export function SecretsPage() {
       />
 
       <PendingApprovalsEntry />
+      <RefusedApprovalsEntry />
       <SecretsMissingBanner count={rows.filter(isMissingHere).length} />
 
       {secrets.error ? (

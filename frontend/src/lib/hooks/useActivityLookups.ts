@@ -6,7 +6,7 @@
 // agent badges and the client-side predicate.
 import { useMemo } from "react";
 
-import { transportOf, type Transport } from "@/components/mcp/server/serverState";
+import { transportOf, type Transport } from "@/lib/mcp/serverState";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useResources } from "@/lib/hooks/useResources";
 

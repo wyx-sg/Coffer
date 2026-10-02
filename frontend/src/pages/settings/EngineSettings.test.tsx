@@ -31,6 +31,13 @@ vi.mock("@/lib/api/providers", async (orig) => {
   };
 });
 
+// The Models feature is on unless a test says otherwise.
+let modelsOn: boolean | undefined = true;
+vi.mock("@/lib/hooks/useFeatures", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/hooks/useFeatures")>()),
+  useFeatureEnabled: () => modelsOn,
+}));
+
 // The internal-engine section reads/writes its own singleton config, and the
 // model dropdown lists the chosen endpoint's models — both hit the network.
 const setBound = vi.fn();
@@ -84,7 +91,6 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => {
     secret_ref: "provider/acme/key",
     local_runtime: null,
     compatible_agents: ["claude_code"],
-    is_active: false,
     title: null,
     internal_default: false,
     transcribe_default: false,
@@ -128,6 +134,7 @@ function renderPage() {
 describe("EngineSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    modelsOn = true;
     engineConfig = {
       model: null,
       updated_at: null,
@@ -136,6 +143,18 @@ describe("EngineSettings", () => {
       default_model_timeout_s: 60,
     };
   });
+
+  acceptance(
+    "experimental-features",
+    "a page omits the section that belongs to a switched-off feature",
+    () => {
+      modelsOn = false;
+      const { container } = renderPage();
+      // Coffer's model is a connection of a model provider: with Models off the
+      // section is absent, with no notice about it.
+      expect(container).toBeEmptyDOMElement();
+    },
+  );
 
   acceptance(
     "internal-engine",

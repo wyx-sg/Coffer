@@ -2,6 +2,7 @@
 import { useTranslation } from "react-i18next";
 
 import { HelpTip } from "@/components/HelpTip";
+import { Section } from "@/components/Section";
 import {
   Select,
   SelectContent,
@@ -20,21 +21,25 @@ export function TierSection({ draft: c }: Props) {
   // A pinned tier stays selectable even when the list no longer offers it.
   const options = [...new Set([...c.models, ...Object.values(c.draftTiers)])].filter(Boolean);
   return (
-    <section className="flex min-w-0 flex-col gap-2.5">
-      <div className="flex min-h-[26px] items-center gap-2">
-        <h3 className="text-sm font-semibold text-text">{t("agents.modelTab.tiers.title")}</h3>
-        <HelpTip label={t("agents.modelTab.tiers.helpLabel")}>
-          <p className="text-xs">{t("agents.modelTab.tiers.help")}</p>
-        </HelpTip>
-        <button
-          type="button"
-          onClick={c.resetTiers}
-          disabled={c.busy}
-          className="ml-auto text-xs font-label text-accent-text hover:underline disabled:opacity-60"
-        >
-          {t("agents.modelTab.tiers.reset")}
-        </button>
-      </div>
+    <Section
+      title={t("agents.modelTab.tiers.title")}
+      className="min-w-0"
+      aside={
+        <>
+          <HelpTip label={t("agents.modelTab.tiers.helpLabel")}>
+            <p className="text-xs">{t("agents.modelTab.tiers.help")}</p>
+          </HelpTip>
+          <button
+            type="button"
+            onClick={c.resetTiers}
+            disabled={c.busy}
+            className="ml-auto text-xs font-label text-accent-text hover:underline disabled:opacity-60"
+          >
+            {t("agents.modelTab.tiers.reset")}
+          </button>
+        </>
+      }
+    >
       <div className="flex flex-col gap-2">
         {c.tiers.map((tier) => {
           const id = `agent-tier-${tier}`;
@@ -66,6 +71,6 @@ export function TierSection({ draft: c }: Props) {
         })}
       </div>
       <span className="text-xs text-text-subtle">{t("agents.modelTab.tiers.hint")}</span>
-    </section>
+    </Section>
   );
 }

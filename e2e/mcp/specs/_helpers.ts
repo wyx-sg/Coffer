@@ -312,7 +312,7 @@ export async function waitForCapabilities(
  * Resolve a resource NAME to the uid every route now addresses it by.
  *
  * A resource's identity is an opaque uid (ADR
- * resource-identity-is-an-immutable-uid); a test knows the name it registered,
+ * identity-is-the-uid-inside-the-file); a test knows the name it registered,
  * so it looks the uid up the same way the CLI does — through the one route
  * allowed to find a resource by its label. Returns null when nothing matches,
  * so a cleanup path can stay best-effort.

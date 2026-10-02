@@ -30,7 +30,8 @@ from coffer.domain.vault.layout import RESOURCES, STATE
 from coffer.infrastructure.persistence.derived_db import open_derived_db
 from coffer.infrastructure.platform.host import machine_label
 from coffer.infrastructure.sync.identity import resolve_identity
-from coffer.infrastructure.vault.git import GitMissing
+from coffer.infrastructure.sync.local_state import JsonRemoteStore
+from coffer.infrastructure.vault.git import GitMissing, git_available
 from coffer.infrastructure.vault.instance import set_machine, vault_repository, vault_writer
 from coffer.infrastructure.vault.merge import MIN_GIT, git_version
 from coffer.infrastructure.vault.resource_store import FileResourceRepo
@@ -79,19 +80,28 @@ async def build_vault_stores(kinds: dict[str, Kind]) -> VaultStores:
     ``kinds`` is the live registry the composition root fills while wiring:
     the store and the validator read it at every use, never a copy.
     """
+    repo = vault_repository()
     try:
-        repo = vault_repository()
+        # Before the vault is opened: ensure() can init the repository and make
+        # its first commit, and a git too old to run sync must not get that far
+        # (spec vault-storage "Refuse to start on a git older than 2.40").
+        if not git_available():
+            raise GitMissing()
+        found = git_version(repo)
+        if found < MIN_GIT:
+            # merge-tree --write-tree with --merge-base, which every sync round
+            # runs, needs git 2.40 (ADR sync-applies-clean-merges-and-stops-on-any-conflict).
+            # How git is updated depends on the machine, so the refusal names no
+            # installer and carries the hand-off for the person's agent instead.
+            raise RuntimeError(git_too_old_message(found))
+        # Whether secret/ is committed is a property of the remote, known before
+        # the first write: set it before ensure() rewrites the exclude file, or a
+        # secret written before the first sync round would be committed late.
+        remote = JsonRemoteStore().get()
+        repo.set_carry_secret(bool(remote and remote.include_secret))
         repo.ensure()
     except GitMissing as exc:
         raise RuntimeError(str(exc)) from exc
-    found = git_version(repo)
-    if found < MIN_GIT:
-        # merge-tree --write-tree with --merge-base, which every sync round
-        # runs, needs git 2.40 (ADR sync-applies-clean-merges-and-stops-on-any-conflict;
-        # spec vault-storage "Refuse to start on a git older than 2.40"). How
-        # git is updated depends on the machine, so the refusal names no
-        # installer and carries the hand-off for the person's agent instead.
-        raise RuntimeError(git_too_old_message(found))
     machine = _machine_id()
     set_machine(lambda: machine)
     resources = FileResourceRepo(kinds)

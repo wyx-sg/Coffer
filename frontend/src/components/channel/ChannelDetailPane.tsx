@@ -29,7 +29,7 @@ import { ChannelPairingCode } from "./ChannelPairingCode";
 import { ChannelReplaceSecretDialog } from "./ChannelReplaceSecretDialog";
 import { ChannelSendTestDialog } from "./ChannelSendTestDialog";
 import { ChannelSettingsTab } from "./ChannelSettingsTab";
-import { channelPlatform } from "./channelState";
+import { channelPlatform } from "@/lib/channels/channelState";
 import { ChannelStatusBanner } from "./ChannelStatusBanner";
 import { platformLabel } from "./PlatformMark";
 
@@ -92,7 +92,7 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
       case "reconnect":
       case "takeBack":
       case "retryStart":
-        reconnect.mutate({ enabled: channel.enabled });
+        reconnect.mutate();
         return;
       case "refresh":
         void status.refetch();
@@ -145,12 +145,19 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
           />
         </TabsContent>
         <TabsContent value="settings">
-          <ChannelSettingsTab
-            key={channel.uid}
-            channel={channel}
-            onReplaceSecret={() => setDialog("secret")}
-            onDelete={() => setDialog("delete")}
-          />
+          {status.data?.settings ? (
+            <ChannelSettingsTab
+              key={channel.uid}
+              channel={channel}
+              settings={status.data.settings}
+              onReplaceSecret={() => setDialog("secret")}
+              onDelete={() => setDialog("delete")}
+            />
+          ) : status.data ? (
+            // Stored settings that no longer validate: say so instead of
+            // guessing values for them.
+            <p className="text-sm text-text-muted">{t("channels.settings.unavailable")}</p>
+          ) : null}
         </TabsContent>
       </Tabs>
 

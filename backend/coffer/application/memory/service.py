@@ -29,6 +29,7 @@ and ``context.py`` states it as the promise it relies on.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 
 from coffer.application.audit_service import AuditService
@@ -87,7 +88,11 @@ class MemoryService:
         model_selector: ModelSelectorPort | None = None,
         secret_resolver: Callable[[str], str] | None = None,
         read_timeout: TimeoutReader | None = None,
+        announce: Callable[[str], None] | None = None,
     ) -> None:
+        # Told a partition's uid when its notes or raw entries changed outside a
+        # resource write (an aggregation, a distil pass). One event on the stream.
+        self._announce = announce
         self._read_timeout = read_timeout
         self._resources = resources
         self._audit = audit
@@ -126,7 +131,10 @@ class MemoryService:
         # config update below addresses it by uid without a second lookup.
         known = {row.name: row for row in memory_rows}
 
-        outcome = run_aggregation(
+        # Reads and parses every agent's memory files and writes ``.raw/``: disk work
+        # that must not hold the event loop.
+        outcome = await asyncio.to_thread(
+            run_aggregation,
             agents=[self._resolve_agent_source(row) for row in agent_rows],
             readers=self._readers,
             known=[placement_of(row) for row in memory_rows],
@@ -136,8 +144,10 @@ class MemoryService:
             row = known.get(touch.placement.name)
             if row is None:
                 await self._register_partition(touch, actor=actor)
-            elif placement_of(row) != touch.placement:
-                await self._record_repository(row.uid, touch.placement, actor=actor)
+            else:
+                if placement_of(row) != touch.placement:
+                    await self._record_repository(row.uid, touch.placement, actor=actor)
+                self._say_changed(row.uid)
 
         result = outcome.result
         await self._audit.record(
@@ -148,7 +158,6 @@ class MemoryService:
                 "entries_written": result.entries_written,
                 "sources_read": result.sources_read,
                 "sources_skipped": result.sources_skipped,
-                "failures": [f.path for f in result.failures],
                 # Whose read failed and why, for the Memory page's header
                 # ("Report the last read of the agents' memory").
                 "failure_details": [
@@ -157,6 +166,10 @@ class MemoryService:
             },
         )
         return result
+
+    def _say_changed(self, uid: str) -> None:
+        if self._announce is not None:
+            self._announce(uid)
 
     async def _register_partition(self, touch: PartitionTouch, *, actor: str) -> None:
         """Give a newly-filled partition its Resource row — and nothing else.
@@ -208,9 +221,9 @@ class MemoryService:
         it runs. The label can be, and is wanted here only for the path.
 
         Raises ``ResourceNotFound`` for a partition with no row, which is what the route
-        answers 404 with: a directory nobody registered is not a partition (see "Create
-        partitions only by aggregation"). The repository path travels into the pass
-        because the index restates it — a partition has to explain itself to a human
+        answers 404 with: a directory nobody registered is not a partition (see
+        "Provision partitions only from aggregation"). The repository path travels into the
+        pass because the index restates it — a partition has to explain itself to a human
         browsing it, and its directory name is only a slug (see "Identify a partition by
         its repository").
 
@@ -250,6 +263,7 @@ class MemoryService:
                 "model_used": result.model_used,
             },
         )
+        self._say_changed(uid)
         return result
 
     # ----------------------------------------------------------------- #
@@ -261,6 +275,16 @@ class MemoryService:
         "Present a partition as its memories")."""
         rows = await self._resources.list(kind=KIND_MEMORY)
         return [summary_of(row, placement_of(row)) for row in sorted(rows, key=lambda r: r.name)]
+
+    async def placements(self) -> list[Placement]:
+        """Every partition's name and repository, from the rows alone.
+
+        What a hook fire needs to resolve a session's directory to a partition. The
+        management listing above counts every partition's notes and parses every
+        undistilled raw entry — far too much to pay on each prompt.
+        """
+        rows = await self._resources.list(kind=KIND_MEMORY)
+        return [placement_of(row) for row in sorted(rows, key=lambda r: r.name)]
 
     async def list_notes(self, partition: str) -> tuple[Note, ...]:
         """Every note in ``partition``, read from its ``notes/`` directory now.
@@ -277,8 +301,8 @@ class MemoryService:
         every partition to every agent").
 
         There is no gate: the kind declares no enabled switch and no reach, so
-        every registered partition is delivered and recalled. A partition leaves
-        this list only by being deleted.
+        every registered partition is delivered at session start and recalled at prompts.
+        A partition leaves this list only by being deleted.
         """
         rows = await self._resources.list(kind=KIND_MEMORY)
         return sorted(r.name for r in rows)

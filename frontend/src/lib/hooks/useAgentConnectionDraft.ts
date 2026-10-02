@@ -5,8 +5,9 @@
 // Picking a provider, model, effort or tier is a DRAFT: nothing is PATCHed or
 // activated until Confirm. A custom connection must pass a test for the CURRENT
 // draft first (any change resets the result); the built-in login needs none.
-// Confirm PATCHes the agent's binding, then activates the connection — the only
-// step that writes native config — with `effort` and, for Claude Code,
+// Confirm PATCHes the agent's binding, then switches the agent onto the
+// connection (`activate` with its type) — the only step that writes native
+// config — with `effort` and, for Claude Code,
 // `tier_models` (an explicit null clears them). The built-in login writes no
 // binding: nothing reads it there, so the tab shows the agent's own default
 // model and its effort read-only.
@@ -24,53 +25,25 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/toast";
 import type { AgentOut, AgentPatch } from "@/lib/api/agents";
 import { ApiError, translateApiError } from "@/lib/api/errors";
-import { modelIds, WIRE_BY_AGENT, type Provider } from "@/lib/api/providers";
+import { modelIds, WIRE_BY_AGENT } from "@/lib/api/providers";
 import { agentsKey, providersKey } from "@/lib/api/queryKeys";
+import { activeProviderFor } from "@/lib/providers/usedBy";
 import { agentTypeLabel } from "@/lib/agents/display";
 import { useAgentModels } from "@/lib/hooks/useAgentModels";
 import { usePatchAgent } from "@/lib/hooks/useAgents";
 import { useListProviderModels, useTestConnection } from "@/lib/hooks/useModelIntrospection";
 import { useActivateProvider, useProviders, useUseBuiltinProvider } from "@/lib/hooks/useProviders";
+import {
+  BUILTIN,
+  isLocal,
+  suggestTiers,
+  tiersFor,
+  tiersKey,
+  type Tier,
+  type TierModels,
+} from "@/lib/agents/connectionDraft";
 
-// Radix forbids an empty value, so the "use built-in login" option is a token.
-export const BUILTIN = "__builtin__";
-
-export type Tier = "opus" | "sonnet" | "haiku" | "fable";
-type TierModels = Partial<Record<Tier, string>>;
-const BASE_TIERS: Tier[] = ["opus", "sonnet", "haiku"];
-
-/** A connection to a model runtime on this machine: detected as one, or on loopback. */
-function isLocal(conn: Provider | null): boolean {
-  if (!conn) return false;
-  if (conn.local_runtime) return true;
-  try {
-    const host = new URL(conn.base_url ?? "").hostname.replace(/^\[|\]$/g, "");
-    return host === "localhost" || host === "127.0.0.1" || host === "::1";
-  } catch {
-    return false;
-  }
-}
-
-/** The tiers a connection offers: Fable only when one of its models is a Fable. */
-function tiersFor(models: string[]): Tier[] {
-  return models.some((m) => m.toLowerCase().includes("fable"))
-    ? [...BASE_TIERS, "fable"]
-    : BASE_TIERS;
-}
-
-/** Coffer's prefill (spec provider-switching "Suggest a model for each Claude
- *  Code tier"): the model whose id names the tier, else the Model; a local
- *  runtime pins every tier to the Model. */
-function suggestTiers(models: string[], model: string, local: boolean): TierModels {
-  const out: TierModels = {};
-  for (const tier of tiersFor(models)) {
-    const match = local ? undefined : models.find((m) => m.toLowerCase().includes(tier));
-    out[tier] = match ?? model;
-  }
-  return out;
-}
-
-const tiersKey = (tiers: TierModels) => JSON.stringify(Object.entries(tiers).sort());
+export { BUILTIN, type Tier } from "@/lib/agents/connectionDraft";
 
 export function useAgentConnectionDraft(agent: AgentOut) {
   const { t } = useTranslation();
@@ -95,7 +68,9 @@ export function useAgentConnectionDraft(agent: AgentOut) {
       ),
     [providers.data, agent.type],
   );
-  const active = compatible.find((p) => p.is_active) ?? null;
+  // The agent's record names its connection; a pointer that no longer resolves
+  // (deleted, switched off, out of scope) reads as the built-in login.
+  const active = activeProviderFor(agent, providers.data ?? []);
 
   // APPLIED state. Tracked by uid: a renamed connection must stay selected.
   const appliedConn = active?.uid ?? BUILTIN;
@@ -230,7 +205,11 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     patchAgent.mutate(
       { uid: agent.uid, body },
       {
-        onSuccess: () => activate.mutate(draftConn, { onSuccess: () => switched(draftModel) }),
+        onSuccess: () =>
+          activate.mutate(
+            { uid: draftConn, agentType: agent.type },
+            { onSuccess: () => switched(draftModel) },
+          ),
         // usePatchAgent carries no toast of its own.
         onError: (e) => toast.error(translateApiError(t, e)),
       },

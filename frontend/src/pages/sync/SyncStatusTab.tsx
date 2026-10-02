@@ -27,7 +27,7 @@ interface Props {
 
 export function SyncStatusTab({ status, state, startedAt, onRun }: Props) {
   // isLoading, not isPending: a disabled query stays "pending" forever.
-  const { data, isLoading, error } = useSyncRuns(true);
+  const { data, isLoading, error, refetch } = useSyncRuns(true);
   const runs = data?.rounds ?? [];
   const stopped = status.conflicts > 0 || status.held > 0;
 
@@ -48,6 +48,7 @@ export function SyncStatusTab({ status, state, startedAt, onRun }: Props) {
         runs={runs}
         isLoading={isLoading}
         error={error}
+        onRetry={() => void refetch()}
         nextRoundAt={status.next_round_at}
       />
     </div>

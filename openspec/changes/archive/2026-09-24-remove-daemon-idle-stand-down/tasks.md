@@ -36,5 +36,5 @@ codegen reads the contract, which is already updated in this change.
 
 ## 5. Close
 
-- [ ] 5.1 Run `make verify`
-- [ ] 5.2 Archive the change (`npx openspec archive remove-daemon-idle-stand-down --yes`) in the same PR
+- [x] 5.1 Run `make verify`
+- [x] 5.2 Archive the change (`npx openspec archive remove-daemon-idle-stand-down --yes`) in the same PR

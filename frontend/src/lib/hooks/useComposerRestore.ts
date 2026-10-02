@@ -7,6 +7,7 @@ import { useEffect, type Dispatch, type SetStateAction } from "react";
 
 import type { ChatAttachment } from "@/lib/api/chat";
 
+/** @ui-only hook argument; never crosses the wire. */
 export interface ComposerRestore {
   text: string;
   attachments: ChatAttachment[];

@@ -3,27 +3,26 @@
 // Connected / not connected / needs repair / disabled render the Connection
 // card with the one action the state calls for; config left behind and not
 // found replace the whole tab with their fix card. Only the network boundary
-// is mocked: `call` (every hand-written request) and the generated client
-// (the resource reads), each answering by path.
+// is faked (`fakeApi`), answering each request by path.
 import type { PropsWithChildren } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 import { AgentOverviewTab, type OverviewActions } from "./AgentOverviewTab";
 import type { AgentOut, AgentTypeOut, CofferConnection, CofferHook } from "@/lib/api/agents";
 import { acceptance } from "@/test/acceptance";
-import { mockApiClient } from "@/test/mockApiClient";
+import { fakeApi } from "@/test/fakeApi";
 
-vi.mock("@/lib/api/call", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/api/call")>()),
-  call: vi.fn(),
+const callMock = fakeApi();
+
+// The Models feature is on unless a test says otherwise.
+let modelsOn = true;
+vi.mock("@/lib/hooks/useFeatures", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/hooks/useFeatures")>()),
+  useFeatureEnabled: () => modelsOn,
 }));
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
-const { call } = await import("@/lib/api/call");
-const { getApiClient } = await import("@/lib/api/client");
-const callMock = vi.mocked(call);
 
 const HOME = "/Users/me";
 const AGENT: AgentOut = {
@@ -35,9 +34,9 @@ const AGENT: AgentOut = {
   model: "claude-opus-5-5",
   effort: "high",
   tier_models: null,
-  wire_api: null,
   version: "2.1.281",
   install_handoff: null,
+  connection_uid: null,
   state: "installed_active",
   created_at: "2026-06-12T08:00:00Z",
   updated_at: "2026-09-27T18:04:00Z",
@@ -147,6 +146,9 @@ function route(path: string): unknown {
         },
       ],
     };
+  if (p === "/daemon/status") return { features: {} };
+  if (p === "/resources/u-cc") return { uid: "u-cc", enabled: world.enabled };
+  if (p.startsWith("/resources")) return { resources: [{ uid: "m1", enabled: true, scope: null }] };
   if (p === "/providers") return { providers: [] };
   if (p === "/agents/types") return { types: [TYPE_ROW] };
   throw new Error(`unexpected request ${path}`);
@@ -159,15 +161,7 @@ beforeEach(() => {
     enabled: true,
     transcripts: [{ title: "Fix SeaTalk reconnect", source_path: "/s/1.jsonl" }],
   };
-  callMock.mockImplementation(async (path: string) => route(path) as never);
-  const api = mockApiClient({
-    GET: vi.fn(async (path: string) =>
-      path === "/resources/{uid}"
-        ? { data: { uid: "u-cc", enabled: world.enabled }, error: undefined }
-        : { data: { resources: [{ uid: "m1", enabled: true, scope: null }] }, error: undefined },
-    ),
-  });
-  vi.mocked(getApiClient).mockReturnValue(api as never);
+  callMock.mockImplementation(async (path: string) => route(path));
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -295,6 +289,27 @@ describe("AgentOverviewTab — summary, model, details, sessions", () => {
     );
   });
 
+  acceptance(
+    "experimental-features",
+    "a page omits the section that belongs to a switched-off feature",
+    async () => {
+      modelsOn = false;
+      try {
+        renderTab();
+        expect(await screen.findByText("claude-opus-5-5")).toBeInTheDocument();
+        // The model and effort stay; the provider line, the link to the Model
+        // tab and any notice about the switched-off feature do not.
+        expect(screen.getByText("High")).toBeInTheDocument();
+        expect(screen.queryByText("Provider")).toBeNull();
+        expect(screen.queryByText(/Built-in login/)).toBeNull();
+        expect(screen.queryByRole("link", { name: "Change" })).toBeNull();
+        expect(screen.queryByText(/switched off|needs/i)).toBeNull();
+      } finally {
+        modelsOn = true;
+      }
+    },
+  );
+
   test("Codex says Effort too, and a null effort reads Model default", async () => {
     renderTab({ agent: { type: "codex", effort: null }, typeRow: { type: "codex" } });
     expect(await screen.findByText("Effort")).toBeInTheDocument();
@@ -360,6 +375,11 @@ describe("AgentOverviewTab — problem states replace the tab", () => {
     await screen.findByText(/Checked at \d\d:\d\d/);
     callMock.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "Check again" }));
-    expect(callMock).toHaveBeenCalledWith("/agents/types");
+    await waitFor(() =>
+      expect(callMock).toHaveBeenCalledWith(
+        "/agents/types",
+        expect.objectContaining({ method: "GET" }),
+      ),
+    );
   });
 });

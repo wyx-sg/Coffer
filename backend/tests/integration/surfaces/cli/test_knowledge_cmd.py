@@ -107,7 +107,7 @@ def _make_collection(name: str, description: str = "test collection") -> None:
 def _write(collection: str, title: str, body: str = "b", description: str = "d") -> str:
     """Submit one piece of material and return the line the command printed.
 
-    The command takes ``--in <collection>`` and never a path: where knowledge
+    The command takes ``--collection <collection>`` and never a path: where knowledge
     lands is the layer's call (spec knowledge "Submit every entrance's input as
     material"). The app booted here has no internal model, so the material is
     promoted to a document on the spot and the line is that document's path
@@ -124,7 +124,7 @@ def _write(collection: str, title: str, body: str = "b", description: str = "d")
             description,
             "--body",
             body,
-            "--in",
+            "--collection",
             collection,
         ],
     )
@@ -232,7 +232,7 @@ def test_write_takes_no_folder(knowledge_cli_daemon):
                 "t",
                 "--description",
                 "d",
-                "--in",
+                "--collection",
                 "shopee",
                 flag,
                 value,

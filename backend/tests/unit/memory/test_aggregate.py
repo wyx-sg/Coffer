@@ -476,6 +476,96 @@ async def test_an_entry_the_agent_deleted_from_its_own_memory_stops_being_stored
     assert [e.entry.title for e in list_raw_entries("coffer")] == ["Kept"]
 
 
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="memory", scenario="a deleted source file takes its raw entries with it"
+)
+async def test_a_source_file_the_agent_deleted_takes_its_entries_with_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A bullet removed from a file is pruned on the re-read; a file deleted
+    outright is never listed again, so only a sweep of what the agent no longer
+    lists notices its entries — otherwise the note it fed is delivered for good."""
+    root = _repository(tmp_path, "coffer")
+    config = tmp_path / "cx"
+    config.mkdir()
+    resources = FakeResources()
+    resources.add_agent("codex", "codex", str(config))
+    resources.add_agent("other", "claude_code", "/cc")
+    reader = FakeReader(agent_type="codex")
+    gone = str(config / "memories" / "gone.md")
+    kept = str(config / "memories" / "kept.md")
+    reader.set_source(str(config), gone, "d1", (raw_entry("Gone", "g", project_root=str(root)),))
+    reader.set_source(str(config), kept, "d1", (raw_entry("Kept", "k", project_root=str(root)),))
+    other = FakeReader(agent_type="claude_code")
+    other.set_source(
+        "/cc", "/cc/m.md", "d1", (raw_entry("Theirs", "t", anchor="x", project_root=str(root)),)
+    )
+    readers = {"codex": reader, "claude_code": other}
+    await _aggregate(resources, readers)
+    assert sorted(e.entry.title for e in list_raw_entries("coffer")) == ["Gone", "Kept", "Theirs"]
+
+    reader.sources_by_dir[str(config)] = [
+        src for src in reader.sources_by_dir[str(config)] if src.path != gone
+    ]
+    await _aggregate(resources, readers)
+
+    assert sorted(e.entry.title for e in list_raw_entries("coffer")) == ["Kept", "Theirs"]
+
+
+@pytest.mark.asyncio
+async def test_a_config_directory_that_is_not_there_prunes_nothing(tmp_path: pathlib.Path) -> None:
+    """An unmounted or momentarily missing directory lists nothing; that is no
+    evidence the agent forgot everything it ever remembered."""
+    root = _repository(tmp_path, "coffer")
+    config = tmp_path / "cx"
+    config.mkdir()
+    resources = FakeResources()
+    resources.add_agent("codex", "codex", str(config))
+    reader = FakeReader(agent_type="codex")
+    path = str(config / "memories" / "MEMORY.md")
+    reader.set_source(str(config), path, "d1", (raw_entry("Kept", "k", project_root=str(root)),))
+    await _aggregate(resources, {"codex": reader})
+
+    config.rmdir()
+    reader.sources_by_dir[str(config)] = []
+    await _aggregate(resources, {"codex": reader})
+
+    assert [e.entry.title for e in list_raw_entries("coffer")] == ["Kept"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="memory",
+    scenario="a second clone resolves by repository identity and a gone checkout is replaced",
+)
+async def test_a_partition_whose_recorded_checkout_is_gone_adopts_the_clone_that_exists(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The same remote read from another directory: the row's old path is no longer a
+    directory, so the partition would stay unresolvable from every cwd."""
+    remote = "git@example.com:team/coffer.git"
+    old = _repository(tmp_path, "old", remote=remote)
+    resources = FakeResources()
+    resources.add_agent("codex", "codex", "/cx")
+    reader = FakeReader(agent_type="codex")
+    reader.set_source(
+        "/cx", "/cx/m.md", "d1", (raw_entry("A", "a", anchor="a", project_root=str(old)),)
+    )
+    await _aggregate(resources, {"codex": reader})
+    row = next(r for r in await resources.list(kind=KIND_MEMORY))
+    assert row.config["repository_path"] == str(old)
+
+    old.rename(tmp_path / "moved-away")
+    new = _repository(tmp_path, "new", remote=remote)
+    reader.set_digest("/cx", "/cx/m.md", "d2")
+    reader.content["/cx/m.md"] = (raw_entry("A", "a", anchor="a", project_root=str(new)),)
+    await _aggregate(resources, {"codex": reader})
+
+    row = next(r for r in await resources.list(kind=KIND_MEMORY))
+    assert row.config["repository_path"] == str(new)
+
+
 # --- failure isolation -------------------------------------------------------
 
 
@@ -791,3 +881,33 @@ def test_run_aggregation_over_no_agents_writes_nothing() -> None:
     outcome = run_aggregation(agents=[], readers={}, known=[])
     assert outcome.result.partitions == ()
     assert outcome.touched == ()
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="memory", scenario="aggregating and distilling announce the partition that changed"
+)
+async def test_aggregating_and_distilling_announce_the_partition_that_changed(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Notes and raw entries change with no write to the partition's row, so the page
+    would never learn of them from a resource hint: the service names the partition."""
+    root = _repository(tmp_path, "coffer")
+    resources = FakeResources()
+    resources.add_agent("codex", "codex", "/cx")
+    reader = FakeReader(agent_type="codex")
+    reader.set_source(
+        "/cx", "/cx/m.md", "d1", (raw_entry("A", "a", anchor="a", project_root=str(root)),)
+    )
+    announced: list[str] = []
+    service = memory_service(resources, {"codex": reader})
+    service._announce = announced.append  # type: ignore[attr-defined]
+
+    await service.aggregate()  # registers the partition: the row write is the hint
+    uid = next(r.uid for r in await resources.list(kind=KIND_MEMORY))
+    reader.set_digest("/cx", "/cx/m.md", "d2")
+    await service.aggregate()
+    assert announced == [uid]
+
+    await service.distil(uid)
+    assert announced == [uid, uid]

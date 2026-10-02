@@ -63,7 +63,6 @@ Every move is recorded in `local/migration.json` as it happens, so a rollback ca
 
 - **Links into moved trees.** Links in `~/.claude` and `~/.codex` that point into the old locations. The skill links Coffer delivered are repaired when the daemon next starts and reconciles; a link you made yourself, you re-point.
 - **Nested git repositories** inside moved trees.
-- **The old sync working tree** `~/.coffer/sync`, left where it was and no longer used. Delete it once you are satisfied.
 - **Your sync remote must be rebuilt**, if you had one (below).
 
 Then start Coffer as usual. `coffer path` prints the new roots.

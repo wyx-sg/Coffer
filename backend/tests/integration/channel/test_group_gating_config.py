@@ -67,6 +67,29 @@ async def test_require_mention_off_admits_unaddressed_owner_message(env: Channel
 
 
 @pytest.mark.acceptance(
+    spec="channels", scenario="a non-owner's un-addressed group message is dropped silently"
+)
+async def test_require_mention_off_drops_a_non_owners_chatter_silently(env: ChannelEnv) -> None:
+    """With ``require_mention`` off a stranger's un-addressed message reaches the
+    owner gate; it is dropped without a word, and only an ADDRESSED one is
+    refused aloud — the bot is not the group's noisiest member."""
+    resource = await env.register_channel("tg")
+    adapter = env.bind(resource, require_mention=False)
+    await env.pair(resource, "owner", sender_id="owner-1")
+
+    await env.processor.on_message(
+        inbound("tg", "grp-1", "just chatting", chat_kind="group", addressed=False, sender_id="x-2")
+    )
+    assert adapter.sent == []
+    assert await env.peers.get_by_chat(resource.uid, "grp-1") is None
+
+    await env.processor.on_message(
+        inbound("tg", "grp-1", "@bot do it", chat_kind="group", addressed=True, sender_id="x-2")
+    )
+    assert "Not authorized" in adapter.sent[-1][1]
+
+
+@pytest.mark.acceptance(
     spec="channels",
     scenario="ignore_other_mentions drops a message that also @mentions a human",
 )

@@ -356,14 +356,11 @@ async def test_non_json_upstream_surfaces_as_channel_send_failed(
 async def test_outbound_methods_map_to_bot_api_calls(fake_telegram: FakeTelegram) -> None:
     adapter = make_telegram_adapter(fake_telegram)
     try:
-        await adapter.edit_text("555", "10", "edited")
         await adapter.delete_message("555", "10")
         await adapter.send_typing("555")
     finally:
         await adapter.stop()
 
-    edits = fake_telegram.calls_for("editMessageText")
-    assert edits[0] == {"chat_id": "555", "message_id": "10", "text": "edited"}
     assert fake_telegram.calls_for("deleteMessage") == [{"chat_id": "555", "message_id": "10"}]
     assert fake_telegram.calls_for("sendChatAction") == [{"chat_id": "555", "action": "typing"}]
 
@@ -439,12 +436,11 @@ async def test_send_text_chat_kind_group_is_ignored(fake_telegram: FakeTelegram)
     assert send["chat_id"] == "555"
 
 
-async def test_capabilities_declare_groups_but_not_history_fetch(
+async def test_capabilities_declare_no_history_fetch(
     fake_telegram: FakeTelegram,
 ) -> None:
     adapter = make_telegram_adapter(fake_telegram)
     try:
-        assert adapter.capabilities.supports_groups is True
         assert adapter.capabilities.supports_history_fetch is False
     finally:
         await adapter.stop()
@@ -703,7 +699,7 @@ async def test_forwarded_message_text_starts_with_forwarded_marker(
             _group_update(
                 35,
                 text="original text",
-                forward_from={"first_name": "Alice"},
+                forward_origin={"type": "user", "sender_user": {"first_name": "Alice"}},
             )
         ]
     )
@@ -855,6 +851,24 @@ async def test_start_registers_the_full_command_menu(fake_telegram: FakeTelegram
         assert fake_telegram.calls_for("setChatMenuButton")[0]["menu_button"] == {
             "type": "commands"
         }
+    finally:
+        await adapter.stop()
+
+
+async def test_knowledge_off_keeps_kb_out_of_the_registered_menus(
+    fake_telegram: FakeTelegram,
+) -> None:
+    """The adapter hands its knowledge switch to the menu registration (spec
+    channels/telegram "Register command menus per chat scope and language")."""
+    adapter = make_telegram_adapter(fake_telegram, knowledge_enabled=False)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    try:
+        await wait_until(lambda: bool(fake_telegram.calls_for("setChatMenuButton")))
+        registered = fake_telegram.calls_for("setMyCommands")
+        assert len(registered) == 6
+        assert all(
+            "kb" not in {entry["command"] for entry in call["commands"]} for call in registered
+        )
     finally:
         await adapter.stop()
 
@@ -1376,3 +1390,41 @@ async def test_a_refused_rich_draft_falls_back_to_the_plain_draft(
         await adapter.stop()
     assert len(fake_telegram.calls_for("sendRichMessageDraft")) == 1  # latched off after one
     assert fake_telegram.calls_for("sendMessageDraft")[0]["text"] == "⏳ Working · 1s"
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a rate-limited send backs off and retries")
+async def test_a_rate_limited_send_waits_the_platforms_retry_after_then_succeeds(
+    fake_telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    waits: list[float] = []
+
+    async def _sleep(delay: float) -> None:
+        waits.append(delay)
+
+    monkeypatch.setattr("coffer.infrastructure.channel.telegram_transport.asyncio.sleep", _sleep)
+    fake_telegram.rate_limited_sends = [2, 5]
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        sent = await adapter.send_text("555", "hi")
+    finally:
+        await adapter.stop()
+    assert sent.message_id
+    assert waits == [2.0, 5.0]  # each wait is the platform's own retry_after
+    assert len(fake_telegram.calls_for("sendMessage")) == 3
+
+
+async def test_a_send_that_stays_rate_limited_fails_after_a_bounded_number_of_retries(
+    fake_telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _sleep(delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("coffer.infrastructure.channel.telegram_transport.asyncio.sleep", _sleep)
+    fake_telegram.rate_limited_sends = [1] * 10
+    adapter = make_telegram_adapter(fake_telegram)
+    try:
+        with pytest.raises(ChannelSendFailed):
+            await adapter.send_text("555", "hi")
+    finally:
+        await adapter.stop()
+    assert len(fake_telegram.calls_for("sendMessage")) == 4  # the send plus three retries

@@ -4,10 +4,10 @@
 // channel — and by agent, read from and written to the URL so a filtered list
 // is a link (a channel's "Conversations from this channel" opens
 // `/conversations?channel=<uid>`). Pure, so the matching is unit-tested alone.
-import type { Conversation } from "@/lib/api/chat";
+import type { ChannelPlatform, Conversation } from "@/lib/api/chat";
 
 /** Where a conversation came from: Coffer's own UI, or a channel's platform. */
-export type SourceFilter = "all" | "coffer" | "seatalk" | "telegram";
+export type SourceFilter = "all" | "coffer" | ChannelPlatform;
 
 export interface ConversationFilters {
   source: SourceFilter;
@@ -19,12 +19,14 @@ export interface ConversationFilters {
   archived: boolean;
 }
 
-const SOURCES: readonly SourceFilter[] = ["all", "coffer", "seatalk", "telegram"];
+/** Every platform the contract names; typed as a record so a new one is a compile error here. */
+const PLATFORMS: Record<ChannelPlatform, true> = { seatalk: true, telegram: true };
+const SOURCES: readonly string[] = ["all", "coffer", ...Object.keys(PLATFORMS)];
 
 export function parseFilters(params: URLSearchParams): ConversationFilters {
   const raw = params.get("source") ?? "all";
   return {
-    source: (SOURCES as readonly string[]).includes(raw) ? (raw as SourceFilter) : "all",
+    source: SOURCES.includes(raw) ? (raw as SourceFilter) : "all",
     channel: params.get("channel") || null,
     agent: params.get("agent") || null,
     archived: params.get("archived") === "1",
@@ -78,5 +80,7 @@ export function clearFilters(filters: ConversationFilters): ConversationFilters 
  *  config, so the source switch still says which platform a channel filter is. */
 export function channelSource(config: unknown): SourceFilter | null {
   const type = (config as { channel_type?: unknown } | null | undefined)?.channel_type;
-  return type === "seatalk" || type === "telegram" ? type : null;
+  return typeof type === "string" && Object.hasOwn(PLATFORMS, type)
+    ? (type as ChannelPlatform)
+    : null;
 }

@@ -1,7 +1,7 @@
 """The CLI against a daemon older than itself.
 
 A daemon started before the experimental-features change answers
-``/daemon/status`` without ``channel`` and without ``machine_id``. The CLI says
+``/daemon/status`` without ``machine_id``. The CLI says
 that the daemon needs a restart, rather than failing on a missing key or
 telling the user to try again — which no amount of trying would change.
 """
@@ -63,17 +63,6 @@ def _serve(monkeypatch: pytest.MonkeyPatch, answers: dict[str, Any]) -> None:
     )
     monkeypatch.setattr(cli_client, "client_or_exit", lambda: (_FakeDaemon(answers), info))
     monkeypatch.setattr(cli_client, "daemon_is_running", lambda: True)
-
-
-def test_daemon_status_names_an_outdated_daemon_instead_of_failing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _serve(monkeypatch, {"/daemon/status": _OLD_STATUS, "/upkeep/runs": {"runs": []}})
-    res = runner.invoke(app, ["daemon", "status"])
-    assert res.exit_code == 0, res.output
-    [line] = [line for line in res.output.splitlines() if line.startswith("channel:")]
-    assert "unknown" in line
-    assert _RESTART in line
 
 
 _CHANNEL_ROWS = {

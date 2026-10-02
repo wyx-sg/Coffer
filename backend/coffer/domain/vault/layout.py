@@ -95,13 +95,6 @@ def kind_of_resource_path(path: str) -> str | None:
     return None
 
 
-def is_document(path: str) -> bool:
-    """Whether Coffer parses the file at ``path`` (as opposed to carrying its
-    bytes, as it does for knowledge and skill files)."""
-    head = path.split("/", 1)[0]
-    return path.endswith(DOCUMENT_SUFFIX) and head in (RESOURCES, STATE, MACHINES)
-
-
 def area_of(path: str) -> str:
     """The area a vault-relative path belongs to (see the module docstring)."""
     parts = path.split("/")
@@ -129,7 +122,6 @@ __all__ = [
     "VAULT_DIRS",
     "StorageClass",
     "area_of",
-    "is_document",
     "kind_of_resource_path",
     "resource_path",
     "safe_stem",

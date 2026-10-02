@@ -51,7 +51,6 @@ class FakeChannelAdapter:
         supports_buttons: bool = False,
         supports_card_update: bool = False,
         supports_media: bool = True,
-        supports_groups: bool = False,
         supports_history_fetch: bool = False,
         supports_reactions: bool = False,
         set_reaction_fails: bool = False,
@@ -61,10 +60,10 @@ class FakeChannelAdapter:
         reactions: ReactionSet | None = None,
         **capabilities: Any,
     ) -> None:
+        # ``supports_edit`` is this fake's own switch, not a capability: a fake that
+        # edits (``edit_text`` records) has a live surface by definition, one that
+        # does not may still stream (SeaTalk) — a test says so explicitly.
         self._caps = ChannelCapabilities(
-            supports_edit=supports_edit,
-            # A transport that can edit has a live surface by definition; one
-            # that cannot may still stream (SeaTalk) — a test says so explicitly.
             supports_live_text=supports_edit if supports_live_text is None else supports_live_text,
             live_text_persists=live_text_persists,
             supports_typing=supports_typing,
@@ -72,7 +71,6 @@ class FakeChannelAdapter:
             supports_buttons=supports_buttons,
             supports_card_update=supports_card_update,
             supports_media=supports_media,
-            supports_groups=supports_groups,
             supports_history_fetch=supports_history_fetch,
             supports_reactions=supports_reactions,
             # How this transport spells an @mention, if it can at all ("Mention

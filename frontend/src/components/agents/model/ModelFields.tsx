@@ -25,7 +25,7 @@ export function ModelFields({ agentType, draft: c }: Props) {
 
   return (
     <section className="flex min-w-0 flex-col gap-2.5">
-      <h3 className="min-h-[26px] text-sm font-semibold leading-[26px] text-text">
+      <h3 className="min-h-control-sm text-sm font-semibold leading-[26px] text-text">
         {t("agents.modelTab.model.title")}
       </h3>
       <div className="flex flex-col gap-3.5">

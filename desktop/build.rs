@@ -4,8 +4,8 @@
 //
 //   - `connect-src ... http://127.0.0.1:*` allows any loopback port. The
 //     daemon now binds a fixed port by default (8000, see the desktop-shell
-//     ADR), but that default is user-configurable via `coffer daemon port
-//     set`, so the exact port is still not known at build time. Pinning a
+//     ADR), but that default is user-configurable (the `daemon.port` setting),
+//     so the exact port is still not known at build time. Pinning a
 //     single port here would break every user who moved it. The threat
 //     surface stays local-only — no remote origin is permitted.
 //

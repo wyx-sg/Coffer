@@ -13,9 +13,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
-pytest.importorskip("hypothesis")
-
 from hypothesis import given
 from hypothesis import strategies as st
 

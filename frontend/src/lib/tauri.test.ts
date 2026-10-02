@@ -21,7 +21,6 @@ import {
   followLanguageInShell,
   setShellLanguage,
   presenceAvailable,
-  presenceMode,
   revealSecret,
   exportMasterKeyBackup,
   approvePending,
@@ -320,7 +319,6 @@ describe("presence-gated actions", () => {
   test("outside the shell every action rejects, naming the desktop app, and invokes nothing", async () => {
     leaveTauri();
     for (const run of [
-      () => presenceMode(),
       () => revealSecret("mcp_server/abc/TOKEN"),
       () => exportMasterKeyBackup("correct horse"),
       () => approvePending("apr-1"),
@@ -334,10 +332,6 @@ describe("presence-gated actions", () => {
 
   test("inside the shell each action invokes its command with camelCase args", async () => {
     enterTauri();
-    invokeMock.mockResolvedValueOnce({ development: true });
-    await expect(presenceMode()).resolves.toEqual({ development: true });
-    expect(invokeMock).toHaveBeenLastCalledWith("presence_mode");
-
     invokeMock.mockResolvedValueOnce("s3cret");
     await expect(revealSecret("mcp_server/abc/TOKEN")).resolves.toBe("s3cret");
     expect(invokeMock).toHaveBeenLastCalledWith("reveal_secret", {

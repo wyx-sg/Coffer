@@ -87,7 +87,7 @@ The file Coffer writes is chosen by the **agent**, not by the protocol. Reaching
 2. Pick a **Provider**. Only enabled providers that reach this agent are offered.
 3. Pick a **Model** (and, for Claude Code, the model for the **Haiku** tier, which also runs its background tasks). The first model the endpoint returns is pre-selected.
 4. Click **Test connection**. **Confirm switch** stays disabled until the test passes for the current provider and model.
-5. Click **Confirm switch**. Coffer saves the model on the agent and then activates the provider — the only step that writes the agent's config.
+5. Click **Confirm switch**. Coffer saves the model on the agent and then switches that agent onto the provider — the only step that writes the agent's config.
 
 Picking the **Built-in login** and confirming puts the agent back on its own login; no test is needed.
 
@@ -97,16 +97,19 @@ While the agent runs on a provider, the Model tab also shows, read-only, **Fallb
 
 ```sh
 coffer agent edit claude-code --model sonnet --effort high --tier haiku=haiku
-coffer provider switch deepseek
-# switched to deepseek [openai] → claude_code, codex
+coffer provider switch deepseek --agent claude_code
+# switched claude_code to deepseek [openai]
+coffer provider switch deepseek       # no --agent: every registered, enabled agent it reaches
 
 coffer provider builtin claude_code   # Claude Code back on its own login
 coffer provider builtin codex         # Codex back on its own login
 ```
 
-`builtin` takes the type of the agent to revert, `claude_code` or `codex` — not a wire, because a provider reaches agents through its reach, and a wire does not name an agent. It is idempotent. Because a provider's active flag covers every agent it was switched into, reverting one agent type reverts the provider as a unit.
+Which provider an agent runs on is a field of the agent itself (its `connection_uid`), so an agent is on at most one provider at a time and the choice stays on this machine; it never syncs. A provider that is deleted, switched off or no longer reaches the agent leaves that agent on its own login.
 
-At most one provider is active per agent type. Switching to a new one takes the agents it reaches over from the previous one and removes the previous projection from any agent the new one does not cover. If no agent the provider reaches is registered, the switch still marks it active and reports the skipped types.
+`builtin` takes the type of the agent to revert, `claude_code` or `codex` — not a wire, because a provider reaches agents through its reach, and a wire does not name an agent. It is idempotent and reverts only that agent: another agent running on the same provider stays on it.
+
+Which provider an agent runs on is a setting of the agent itself, so an agent is on at most one provider and switching one agent never moves another. Switching an agent onto a provider it is not reached by (the provider or the agent is switched off, or the provider's reach does not name the agent) is refused with `PROVIDER_DOES_NOT_REACH_AGENT`. The choice is per machine: it is part of the agent's record, which is not synced.
 
 The model lives on the **agent**, not on the provider: a provider says which gateway account to use, and the agent's binding says which model to run there. An agent with no model bound gets no model key written and runs on its own default.
 
@@ -216,7 +219,7 @@ An empty selection means no restriction: every model the endpoint serves. Model 
 
 What a model picker offers for an agent is decided in one place and served to every surface — the Conversations page, a channel's `/model` card, and `coffer agent models`:
 
-- when the agent's active provider curates **text** models, exactly those, in your order;
+- when the provider the agent runs on curates **text** models, exactly those, in your order;
 - otherwise, the agent's own catalogue (see [Agents](/guides/agents#models)).
 
 Non-text models are never offered as chat models. A provider that curates only non-text models offers no chat model at all. Reading this list never touches the network.
@@ -255,19 +258,19 @@ coffer provider rm deepseek
 
 - **Rotating** the key overwrites the stored secret at the same ref; nothing that cites it changes.
 - **Waiting for approval.** A new `--secret` for a key in use, a new `--base-url` for a connection whose key already goes somewhere, and `coffer provider add … --secret-ref` with a key another connection uses are saved but held until you approve them in the Coffer app. The command prints `waiting for approval in the Coffer app` with the approval's id and exits `9`; with `--wait` it waits for your answer instead. The old key and URL stay in use until then.
-- **Changing the protocol** is refused with `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while the provider is switched on. Run `coffer provider builtin <agent_type>` for each agent type it reaches (the refusal names them), edit, then switch again.
+- **Changing the protocol** is refused with `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while an agent runs on the provider. Run `coffer provider builtin <agent_type>` for each agent running on it (the refusal names them), edit, then switch again.
 - **Renaming** changes only the label. The uid, the secret ref and the agents' files stay as they are; Codex's `name = "Coffer (<name>)"` label updates on the next switch.
 - **Deleting** removes the provider and deletes its secret if nothing else cites it.
 
 ## Boot self-check
 
-The active flag records a fact about a file Coffer does not own: the agent's CLI, other tools, you, or a restore from backup can all rewrite it. At every daemon start, Coffer checks each active provider against the agents it reaches. If an agent's config no longer carries Coffer's keys, Coffer clears the active flag, so every surface shows that agent on its built-in login. It does **not** write the projection back: a flag left over from an earlier session is no reason to re-route your agent through a gateway you may have stopped using. If the reverse is true — Coffer's keys are in the file while nothing is marked active — Coffer leaves the file alone.
+The agent's recorded provider is a fact about a file Coffer does not own: the agent's CLI, other tools, you, or a restore from backup can all rewrite it. At every daemon start, Coffer checks each agent that runs on a provider. If the agent's config no longer carries Coffer's keys, Coffer clears that agent's provider, so every surface shows it on its built-in login. It does **not** write the projection back: a choice left over from an earlier session is no reason to re-route your agent through a gateway you may have stopped using. If the reverse is true — Coffer's keys are in the file while the agent runs on no provider — Coffer leaves the file alone.
 
-After a [vault sync](/guides/vault-sync) round brings in provider changes from another machine, Coffer re-derives the projection on this machine: for each agent type with a registered agent, it projects the active provider that reaches it, or removes Coffer's keys if none does. Reach itself is per machine and never synced.
+After a [vault sync](/guides/vault-sync) round brings in provider changes from another machine, Coffer re-projects every agent that runs on a provider on this machine from the provider as it now is. A switch made on another machine does not arrive: which provider an agent runs on, like reach, is per machine and never synced.
 
 ## Coffer's own engine
 
-Some of Coffer's work runs on a model of its own: memory organisation, knowledge curation, sync conflict resolution, and voice transcription for channels. That model borrows the endpoint and key of one provider and names its own model. With nothing configured, knowledge curation and memory distillation fall back to a mechanical pass (see [Knowledge](/guides/knowledge#without-an-internal-model) and [Memory](/guides/memory#how-the-passes-run)), a sync conflict waits for you to resolve it, and a voice message reaches the agent as an audio file.
+Some of Coffer's work runs on a model of its own: memory organisation, knowledge curation, and voice transcription for channels. That model borrows the endpoint and key of one provider and names its own model. With nothing configured, knowledge curation and memory distillation fall back to a mechanical pass (see [Knowledge](/guides/knowledge#without-an-internal-model) and [Memory](/guides/memory#how-the-passes-run)), and a voice message reaches the agent as an audio file.
 
 **Web UI:** open **Settings › General** and find the **Coffer's model** section. It has two pickers, and each one is a provider first and then a model from that provider's list:
 
@@ -302,12 +305,12 @@ The other `engine.*` keys control the unattended passes (`engine.upkeep.<pass>.e
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | Switch fails with `CONFIG_FILE_STALE` | The agent's config changed between Coffer's read and write | Run the switch again. |
+| Switch fails with `PROVIDER_DOES_NOT_REACH_AGENT` | The provider or the agent is switched off, or the provider's reach does not name the agent | Switch it on or add the agent to its reach, then switch again. |
 | Switch fails with `PROVIDER_INTERNAL_ONLY` | You tried to switch an agent onto an `ollama` provider | Use it as the internal-engine default instead. |
-| The agent gets `503` "no connection is active" from the proxy | The provider was disabled, reaches no agent, or its key is missing | Check the provider's reach and key; `coffer proxy status` shows the proxy itself. |
+| The agent gets `503` "no connection is active" from the proxy | The provider the agent runs on was disabled, no longer reaches the agent, or its key is missing | Check the provider's reach and key; `coffer proxy status` shows the proxy itself. |
 | The agent gets `401` from the proxy | The helper printed no token, or a stale one | Run the `apiKeyHelper` / `auth` command from the agent's file yourself; `coffer proxy rotate <agent>` issues a fresh token. |
 | Nothing answers on `127.0.0.1:8001` | The proxy is not running | `coffer proxy status`; the daemon restarts a crashed proxy within a few seconds. |
-| The agent page shows the built-in login | Coffer's regular check found the agent's config no longer carries the projection, and marked the connection inactive rather than re-route the agent | Switch again if you still want the provider. |
-| A `wire_api` other than `responses` is refused | Codex refuses to load any other value | Leave it at `responses`. |
+| The agent page shows the built-in login | Coffer's regular check found the agent's config no longer carries the projection, and cleared the agent's provider rather than re-route it | Switch again if you still want the provider. |
 
 ## Related
 

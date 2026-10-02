@@ -53,6 +53,25 @@ class AdoptSecretUnresolved(CofferError):  # noqa: N818
         super().__init__("secret-like env keys need a keychain mapping: " + ", ".join(self.keys))
 
 
+class AdoptSecretRefExists(CofferError):  # noqa: N818
+    """An adopt names a secret ref that already holds a value, or a standalone name. Maps to 409.
+
+    Adopting writes values, so it may only create refs: replacing one would
+    change what every server citing it receives, and a standalone name is added
+    only with a person's approval (spec secret "Hold a new standalone secret
+    until a person approves it").
+    """
+
+    code = "ADOPT_SECRET_REF_EXISTS"
+
+    def __init__(self, refs: list[str]) -> None:
+        self.refs = sorted(refs)
+        super().__init__(
+            "adopting writes new secrets only; these refs already exist or are standalone "
+            "names: " + ", ".join(self.refs)
+        )
+
+
 class AgentConfigParseError(CofferError):
     """An agent config file could not be parsed. Maps to 422."""
 

@@ -2,7 +2,7 @@
 
 ``protocol`` is mutable on purpose — the probe that guessed the wire can be
 wrong, and the fix must not cost the user their key. But the wire is not inert
-the way the docstrings once claimed: ``targets.scoped_targets`` returns nothing
+the way the docstrings once claimed: ``targets.reaches`` answers false
 for ``ollama`` BEFORE scope is consulted, so a keyless connection covers no
 agent at all.
 
@@ -54,9 +54,23 @@ def _anthropic_body(name: str = "acme", **over) -> dict:
     return body
 
 
+def _register_claude(c: TestClient, tmp_path: pathlib.Path) -> pathlib.Path:
+    """Register the Claude Code agent over a config dir and return the dir."""
+    cfg = tmp_path / "agent-cfg"
+    cfg.mkdir(parents=True, exist_ok=True)
+    r = c.post("/api/v1/agents", json={"type": "claude_code", "config_dir": str(cfg)})
+    assert r.status_code == 201, r.text
+    return cfg
+
+
+def _switch(c: TestClient, uid: str):
+    """Switch the Claude Code agent onto connection ``uid``."""
+    return c.post(f"/api/v1/providers/{uid}/activate", json={"agent_type": "claude_code"})
+
+
 def _create(c: TestClient, **over) -> str:
     """Create the connection and return its **uid** — how every route below
-    addresses it (ADR resource-identity-is-an-immutable-uid).
+    addresses it (ADR identity-is-the-uid-inside-the-file).
 
     The name goes on the wire once, at creation, and is never a path segment
     again: ``provider`` lost its rename route precisely because what Coffer
@@ -74,23 +88,17 @@ def _create(c: TestClient, **over) -> str:
     scenario="correcting a mis-probed wire is refused while the connection is live",
 )
 def test_patch_refuses_to_move_the_wire_of_a_live_connection(tmp_path, monkeypatch):
-    """An active connection's wire is pinned while it is projected.
+    """A connection's wire is pinned while an agent runs on it.
 
     The refusal is a 409 the user can act on: it names the connection and the
     command that puts the agents back first. The native config it already wrote
     must be byte-for-byte what it was before the refused patch.
     """
     app = _app(tmp_path, monkeypatch, 59810)
-    cfg = tmp_path / "agent-cfg"
-    cfg.mkdir(parents=True, exist_ok=True)
     with _client(app) as c:
-        r = c.post(
-            "/api/v1/agents",
-            json={"type": "claude_code", "name": "cc", "config_dir": str(cfg)},
-        )
-        assert r.status_code == 201, r.text
+        cfg = _register_claude(c, tmp_path)
         uid = _create(c)
-        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
+        assert _switch(c, uid).status_code == 200
         projected = (cfg / "settings.json").read_text()
         assert json.loads(projected)["env"]["ANTHROPIC_BASE_URL"] == (
             "http://127.0.0.1:8001/anthropic"
@@ -116,8 +124,9 @@ def test_patch_still_edits_other_fields_of_a_live_connection(tmp_path, monkeypat
     moves, or correcting a typo'd base URL would need a de-projection too."""
     app = _app(tmp_path, monkeypatch, 59820)
     with _client(app) as c:
+        _register_claude(c, tmp_path)
         uid = _create(c)
-        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
+        assert _switch(c, uid).status_code == 200
         r = c.patch(f"/api/v1/providers/{uid}", json={"base_url": "https://gw/anthropic/v2"})
         assert r.status_code == 200, r.text
         assert r.json()["base_url"] == "https://gw/anthropic/v2"
@@ -135,8 +144,9 @@ def test_patch_accepts_the_current_wire_resent_on_a_live_connection(tmp_path, mo
     """
     app = _app(tmp_path, monkeypatch, 59830)
     with _client(app) as c:
+        _register_claude(c, tmp_path)
         uid = _create(c)
-        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
+        assert _switch(c, uid).status_code == 200
         r = c.patch(
             f"/api/v1/providers/{uid}",
             json={"protocol": "anthropic", "base_url": "https://gw/anthropic/v3"},
@@ -168,19 +178,14 @@ def test_patch_moves_the_wire_of_a_connection_that_is_not_live(tmp_path, monkeyp
 def test_the_wire_moves_again_once_the_agents_are_back_on_their_own_login(tmp_path, monkeypatch):
     """The refusal names a way out, and the way out works.
 
-    ``use-builtin`` de-projects and clears ``is_active``; the same patch that
+    ``use-builtin`` de-projects and clears the agent's connection; the same patch that
     was refused a moment ago then succeeds.
     """
     app = _app(tmp_path, monkeypatch, 59850)
-    cfg = tmp_path / "agent-cfg"
-    cfg.mkdir(parents=True, exist_ok=True)
     with _client(app) as c:
-        c.post(
-            "/api/v1/agents",
-            json={"type": "claude_code", "name": "cc", "config_dir": str(cfg)},
-        )
+        cfg = _register_claude(c, tmp_path)
         uid = _create(c)
-        c.post(f"/api/v1/providers/{uid}/activate")
+        _switch(c, uid)
         assert c.patch(f"/api/v1/providers/{uid}", json={"protocol": "openai"}).status_code == 409
 
         # ``use-builtin`` takes the AGENT type, not a connection: it puts that
@@ -203,8 +208,9 @@ def test_the_guard_covers_every_wire_not_just_the_two_that_reach_an_agent(
     rule is the same for every value, including ``unknown``."""
     app = _app(tmp_path, monkeypatch, 59860 + 10 * ["ollama", "unknown"].index(wire))
     with _client(app) as c:
+        _register_claude(c, tmp_path)
         uid = _create(c)
-        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
+        assert _switch(c, uid).status_code == 200
         bad = c.patch(f"/api/v1/providers/{uid}", json={"protocol": wire})
         assert bad.status_code == 409, bad.text
         assert bad.json()["error"]["code"] == "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE"

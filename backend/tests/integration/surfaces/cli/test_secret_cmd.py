@@ -291,17 +291,20 @@ def test_list_json_carries_presence(monkeypatch):
 
 
 def test_list_daemon_spawn_timeout(tmp_path, monkeypatch):
-    """list degrades gracefully (exit 0) when the daemon can't be reached."""
+    """list fails like every other command (non-zero, a message) when the daemon
+    can't be reached: an empty table with exit 0 reads as "no secrets"."""
     from coffer.surfaces.cli import _client as cli_client
 
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(cli_client, "_spawn_daemon", lambda: None)
     monkeypatch.setattr(cli_client, "_DAEMON_BOOT_TIMEOUT", 0.05)
 
-    result = runner.invoke(app, ["secret", "list"])
-    assert result.exit_code == 0
-    combined = result.output + (result.stderr or "")
-    assert "daemon" in combined.lower() or "no known" in combined.lower()
+    for argv in (["secret", "list"], ["secret", "list", "--json"]):
+        result = runner.invoke(app, argv)
+        assert result.exit_code != 0
+        combined = result.output + (result.stderr or "")
+        assert "daemon" in combined.lower()
+        assert '"refs"' not in combined
 
 
 # ---------------------------------------------------------------------------

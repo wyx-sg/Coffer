@@ -82,13 +82,13 @@ class Transaction:
             self._originals.setdefault(path, self._writer.read_disk(path))
             self._writer._own(path)
 
-    def write(self, path: str, data: bytes, expected: str | Expect | None = Expect.HEAD) -> None:
+    def write(self, path: str, data: bytes, expected: str | Expect = Expect.HEAD) -> None:
         self._put(check_path(path), data, expected)
 
-    def delete(self, path: str, expected: str | Expect | None = Expect.HEAD) -> None:
+    def delete(self, path: str, expected: str | Expect = Expect.HEAD) -> None:
         self._put(check_path(path), None, expected)
 
-    def _put(self, path: str, data: bytes | None, expected: str | Expect | None) -> None:
+    def _put(self, path: str, data: bytes | None, expected: str | Expect) -> None:
         w = self._writer
         with w.lock:
             current = w.read_disk(path)
@@ -195,10 +195,8 @@ class VaultWriter:
         except OSError:
             return None
 
-    def compare(self, path: str, current: bytes | None, expected: str | Expect | None) -> None:
+    def compare(self, path: str, current: bytes | None, expected: str | Expect) -> None:
         """Raise ``VaultFileStale`` unless ``current`` is what was expected."""
-        if expected is None:
-            return
         if expected is Expect.ABSENT:
             if current is not None:
                 raise VaultFileStale(path, f"{path} already exists")
@@ -228,14 +226,14 @@ class VaultWriter:
         data: bytes,
         *,
         meta: CommitMeta,
-        expected: str | Expect | None = Expect.HEAD,
+        expected: str | Expect = Expect.HEAD,
     ) -> str | None:
         with self.begin(meta) as txn:
             txn.write(path, data, expected)
         return txn.version
 
     def delete_file(
-        self, path: str, *, meta: CommitMeta, expected: str | Expect | None = Expect.HEAD
+        self, path: str, *, meta: CommitMeta, expected: str | Expect = Expect.HEAD
     ) -> str | None:
         with self.begin(meta) as txn:
             txn.delete(path, expected)
@@ -369,10 +367,6 @@ class VaultWriter:
         """Files on disk that failed validation and are not committed."""
         with self.lock:
             return dict(self._problems)
-
-    def forget_problem(self, path: str) -> None:
-        with self.lock:
-            self._problems.pop(path, None)
 
 
 __all__ = ["Transaction", "VaultWriter"]

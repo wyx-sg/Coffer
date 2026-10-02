@@ -42,10 +42,34 @@ class ProviderUsageLookup:
         wanted = set(uids)
         return {r.uid: r.name for r in await self._service.list() if r.uid in wanted}
 
+    async def _already_logged(self, event: FailoverEvent) -> bool:
+        """Whether this failover already has its Activity row.
+
+        The ingest hands every failover of a spool file here on a replay too —
+        a daemon that died between committing the rows and logging them would
+        otherwise lose the rows for good — so the log is what makes it
+        idempotent: one row per (moment, agent, connection left, model)."""
+        assert self._audit is not None
+        rows = await self._audit.query(
+            event_type=AuditEventType.PROVIDER_FAILOVER.value, since=event.at, limit=500
+        )
+        key = (event.at.isoformat(), event.agent_uid, event.from_uid, event.model)
+        return any(
+            (
+                r.details.get("at"),
+                r.details.get("agent_uid"),
+                r.details.get("from_uid"),
+                r.details.get("model"),
+            )
+            == key
+            for r in rows
+        )
+
     async def failed_over(self, event: FailoverEvent) -> None:
         """One Activity row per failover, filed against the connection the
-        request left, so it also reads in that provider's own history."""
-        if self._audit is None:
+        request left, so it also reads in that provider's own history. A
+        failover already logged is not logged again."""
+        if self._audit is None or await self._already_logged(event):
             return
         resource = None
         if event.from_uid:

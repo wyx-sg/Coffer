@@ -3,8 +3,7 @@
 #
 # Output: dist/coffer-daemon (single-file executable)
 # Ships the built web UI (frontend/dist) as `webui/` — the daemon serves it
-# itself now that the desktop shell is gone (spec daemon "Serve the built web UI
-# from the daemon's own origin").
+# itself (spec daemon "Serve the built web UI from the daemon's own origin").
 
 # -*- mode: python ; coding: utf-8 -*-
 
@@ -37,7 +36,7 @@ hidden = (
     #                spec channels "Give documents to every agent as extracted
     #                text")
     #   openai     — providers/*
-    #   langgraph / langchain — llm/*, chat/*
+    #   langgraph  — infrastructure/llm/* (the only importer of langgraph/langchain)
     # The knowledge layer needs no index and no embedding client bundled: it is
     # a directory of markdown files an agent greps (ADR knowledge-is-plain-files).
     # Converters it does need — markitdown below turns an uploaded document into
@@ -58,7 +57,6 @@ hidden = (
     + collect_submodules("xlrd")
     + collect_submodules("openai")
     + collect_submodules("langgraph")
-    + collect_submodules("langchain")
     + [
         # Anyio sniffio backend
         "anyio._backends._asyncio",

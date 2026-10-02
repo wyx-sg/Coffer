@@ -30,6 +30,7 @@ from .conftest import (
     inbound,
     tap_event,
     turn_body,
+    uid_of,
     wait_until,
 )
 from .test_queue_and_stop import GatedAdapter
@@ -173,19 +174,21 @@ async def test_status_in_a_direct_chat_lists_its_parallel_threads(env: ChannelEn
 
     await env.processor.on_message(inbound("tg", "owner", "/status"))
     assert adapter.texts()[-1].splitlines()[-1] == (
-        "Parallel threads: 🧵#2 write docs (idle) · 🧵#1 deploy check (running)"
+        "Parallel threads (2): 🧵#2 write docs · Codex · idle; "
+        "🧵#1 deploy check · Coffer Assistant · running"
     )
 
     # A message behind the running turn shows as queued once the turn is gone.
     await env.processor.on_message(inbound("tg", "owner", "next", thread_id="t1"))
     await env.processor.on_message(inbound("tg", "owner", "/stop", thread_id="t1"))
     await wait_until(
-        lambda: env.processor._running_in("tg", "owner", "t1") is None,
+        lambda: env.processor._running_in(uid_of("tg"), "owner", "t1") is None,
         message="the stopped turn never cleared its session",
     )
     await env.processor.on_message(inbound("tg", "owner", "/status"))
     assert adapter.texts()[-1].splitlines()[-1] == (
-        "Parallel threads: 🧵#2 write docs (idle) · 🧵#1 deploy check (1 waiting)"
+        "Parallel threads (2): 🧵#2 write docs · Codex · idle; "
+        "🧵#1 deploy check · Coffer Assistant · 1 waiting"
     )
     gated.release.set()
 

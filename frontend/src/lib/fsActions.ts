@@ -10,10 +10,12 @@ import { fsApi } from "@/lib/api/fs";
 
 /** Open/reveal actions, wired to the loopback daemon. */
 export function useFsActions(): {
-  open: (path: string, withApp: string) => Promise<void>;
+  open: (path: string, withApp?: string) => Promise<void>;
   reveal: (path: string) => Promise<void>;
+  /** The host's native folder dialog; `available: false` = no dialog tool here. */
+  pickFolder: (start?: string | null) => Promise<{ available: boolean; path: string | null }>;
 } {
-  const open = async (path: string, withApp: string): Promise<void> => {
+  const open = async (path: string, withApp?: string): Promise<void> => {
     await fsApi.open(path, withApp || undefined);
   };
 
@@ -21,5 +23,7 @@ export function useFsActions(): {
     await fsApi.reveal(path);
   };
 
-  return { open, reveal };
+  const pickFolder = (start?: string | null) => fsApi.pickFolder(start);
+
+  return { open, reveal, pickFolder };
 }

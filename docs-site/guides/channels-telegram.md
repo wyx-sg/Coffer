@@ -63,6 +63,7 @@ channel:  my-telegram (telegram)
 uid:      9b2e…
 agent:    claude-code
 gating:   require_mention=on  ignore_other_mentions=off
+idle:     new conversation after 24 h idle
 secret:   bot_token_ref = channel/tg/bot-token
 enabled:  True    running: True
 runs on:  3f9c… (this machine)
@@ -199,6 +200,7 @@ Run `coffer channel show my-telegram`.
 - `running: False` — the channel is disabled, dormant (its scope names no agent), has no usable default agent, or is bound to another machine. The status and the channel's page say which.
 - `peer: not paired` — pair first. An unpaired bot answers nobody.
 - `runs on: … (another machine)` — only that machine polls the bot. Rebind with `coffer channel bind my-telegram`.
+- `runs on: … (UNKNOWN MACHINE …)` — the channel names a machine no longer in this vault, so it runs nowhere. Rebind it with `coffer channel bind my-telegram`.
 
 **The bot answers someone else, or stops answering after a second machine was set up.**
 Two consumers are polling the same bot. This happens when the same token is registered twice, under two channel names or on two vaults. Keep one registration.

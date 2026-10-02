@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { ResourceOut } from "@/lib/api/resources";
 import { searchableName } from "@/lib/resourceTitle";
 import { ChannelListRow } from "./ChannelListRow";
-import { CHANNEL_GROUPS, channelPlatform, type ChannelView } from "./channelState";
+import { CHANNEL_GROUPS, channelPlatform, type ChannelView } from "@/lib/channels/channelState";
 import { platformLabel } from "./PlatformMark";
 
 interface Props {

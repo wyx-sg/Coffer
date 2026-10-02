@@ -25,7 +25,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from coffer.application.runtime.supervisor import spawn
-from coffer.infrastructure.channel.telegram_text import clip_tail_utf16
+from coffer.infrastructure.channel.telegram_text import clip_snapshot_utf16
 
 _logger = logging.getLogger(__name__)
 
@@ -243,7 +243,8 @@ class TelegramLiveText(LiveTextSurface):
         return await super().close(text)
 
     async def _write(self, text: str) -> None:
-        text = clip_tail_utf16(text, TELEGRAM_TEXT_LIMIT)  # the cap counts UTF-16 units
+        # The cap counts UTF-16 units; the status header outlives the answer's head.
+        text = clip_snapshot_utf16(text, TELEGRAM_TEXT_LIMIT)
         if not self._message_id:
             extra: dict[str, Any] = {}
             if self._thread_id:

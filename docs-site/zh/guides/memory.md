@@ -67,7 +67,7 @@ Coffer 不读会话记录，也不读 rollout 文件。两个智能体本来就�
 | `RETIRED.md` | 每条已退役笔记的标题、原因，以及取代它的笔记。下一轮会读这个文件，这样同一个没变过的来源不会把已退役的主题又带回来。当构成一条笔记的所有原始条目都已离开 `.raw/`（智能体删掉了那条事实，或者它现在归到了另一个分区）时，这条笔记也会在这里退役，原因写作「its sources are gone」；这类记录不会阻止该主题以后回来。 |
 | `.raw/` | 每个条目读到时的原样内容，附带智能体、来源路径和读取时间。它是提炼这一轮的输入，也让你能拿一条笔记去对照它原来的文字。它不在 Web 界面里显示，也不能通过分区的文件路由读取；要看就到磁盘上 `coffer path memory <partition>` 下面打开。 |
 
-`~/.coffer/derived/memory/` 下的一切都是派生的，随时可以删掉再重建，而且[保险库同步](/zh/guides/vault-sync)不会带上它：每台机器都根据自己装的智能体各自构建。要挪动记忆根目录，在守护进程的环境里设置 `COFFER_MEMORY_ROOT`。
+`~/.coffer/derived/memory/` 下的一切都是派生的，随时可以删掉再重建，而且[保险库同步](/zh/guides/vault-sync)不会带上它：每台机器都根据自己装的智能体各自构建。
 
 ## 各轮如何运行 {#how-the-passes-run}
 
@@ -126,11 +126,11 @@ Memory → choose the partition → Update memory
 | **你发送的每次提问** | 你的提问点到的至多三条笔记（如果有匹配得足够好的） | `UserPromptSubmit` |
 | **已知陷阱之前** | 你标记为陷阱的命令会被拦下一次，并以那条笔记作为原因；命令输出里出现已知错误时，会带出对应的笔记 | shell 上的 `PreToolUse` / `PostToolUse` |
 
-三者都经过同一个 Hook，在你把智能体接入 Coffer 时安装进智能体自己的设置。这个设计背后的决策和依据见决策记录（ADR）[记忆在三个时机到达会话](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)（状态：Proposed）。
+三者都经过同一个 Hook，在你把智能体接入 Coffer 时安装进智能体自己的设置。这个设计背后的决策和依据见决策记录（ADR）[记忆在三个时机到达会话](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)。
 
 ### 安装 Hook {#install-the-hook}
 
-投递借助每个智能体自己的 Hook 机制。这个 Hook 是智能体[接入 Coffer](/zh/guides/agents#connect-an-agent-to-coffer) 的其中一部分：在 `memory` 开启时接入智能体就会安装它，断开就会移除它；打开 `memory` 会把它装进每个已接入的智能体。Coffer 从不把它装进你没有接入的智能体。
+投递借助每个智能体自己的 Hook 机制。这个 Hook 是智能体[接入 Coffer](/zh/guides/agents#connect-an-agent-to-coffer) 的其中一部分：接入智能体时安装它，断开时移除它。Coffer 从不把它装进你没有接入的智能体。
 
 ::: code-group
 
@@ -183,7 +183,7 @@ Hook 输出的内容上限是 9,500 字节，低于两个智能体对 Hook 输�
 
 ```text
 Coffer memory: notes recorded for this user that may apply to this request. …
-- (/Users/you/.coffer/memory/payments-api/notes/retry-budget-for-ledger-writes.md) a fact they recorded: Retry budget for ledger writes — ledger writes retry three times, then park in the dead-letter table.
+- (/Users/you/.coffer/derived/memory/payments-api/notes/retry-budget-for-ledger-writes.md) a fact they recorded: Retry budget for ledger writes — ledger writes retry three times, then park in the dead-letter table.
 ```
 
 - 一条笔记**每个会话只给一次**。之后的提问再点到同一条笔记，也不会再带进来，即使守护进程重启过。
@@ -333,14 +333,14 @@ Memory → choose the partition
 
 :::
 
-在 Web 界面里，一条笔记叫作**记忆条目**（英文界面里是 memory）：每个主题一条。**记忆**页面在**会话开始时投递**区块下方用表格列出分区：分区、它的路径（`global` 显示为**所有项目**）以及它的记忆条目数。还没有提炼过任何东西时，它显示**还没有提炼出任何东西**和**更新记忆**。仓库在磁盘上已经不存在的分区会标记为**仓库已不在**；它不再投递任何东西，并一直留在列表里，直到你删除它（见[重建分区](#rebuild-a-partition)）。
+在 Web 界面里，一条笔记叫作**记忆条目**（英文界面里是 memory）：每个主题一条。**记忆**页面在**会话开始时投递**区块下方用表格列出分区：分区、它的路径（`global` 显示为**所有项目**）、**示例记忆**（最近更新的那一条，或者有多少条目在等待提炼）、它的记忆条目数、**来源**（它学自哪些智能体）以及说明上次提炼时间的**提炼**列。还没有任何分区时，它显示首次使用的欢迎面板**还没有提炼出任何东西**：列出 Coffer 在这台 Mac 上找到记忆的已连接智能体，或者提示连接一个，并带有**更新记忆**。仓库在磁盘上已经不存在的分区会标记为**仓库已不在**；它不再投递任何东西，并一直留在列表里，直到你删除它（见[重建分区](#rebuild-a-partition)）。
 
 分区页面有两个标签页：
 
 - **记忆条目**（默认）列出分区的记忆条目（每条显示标题和一行描述），旁边是选中的那一条。选中的记忆条目显示标题、一行写明它学自哪些智能体和最近更新时间的说明（*学自 Claude Code, Codex · 更新于 …*），以及正文，并为它自己的文件提供**在编辑器中打开**和**在 Finder 中显示**；列表和记忆条目撑满窗口，在内部滚动。列表下方，折叠起来的**已退役**组以只读方式列出已退役的记忆条目以及每条的原因。在没有设置 Coffer 的模型时，列表上方有一条提示，说明每个智能体的条目会各自成为一条记忆条目，并附有指向**设置 › 通用**的链接。
 - **投递内容**显示在这个分区的项目里，每个智能体会收到的会话开始文本（见[确认它在起作用](#see-it-working)）。
 
-这个页面只显示 Coffer 的记忆条目。它不显示文件树，不显示 `MEMORY.md` 或 `RETIRED.md`，不显示 `.raw/`，不显示原生路径，也不显示任何智能体的原文；这些都留在磁盘上、REST 路由里和命令行中。没有针对单条记忆条目的操作：记忆条目是派生的，你的编辑会被下一轮提炼重写。页头的 **⋯** 菜单提供**在文件管理器中显示分区文件夹**、**复制路径**，以及只在仓库不在时才出现的**删除分区…**。
+这个页面只显示 Coffer 的记忆条目。它不显示文件树，不显示 `MEMORY.md` 或 `RETIRED.md`，不显示 `.raw/`，不显示原生路径，也不显示任何智能体的原文；这些都留在磁盘上、REST 路由里和命令行中。没有针对单条记忆条目的操作：记忆条目是派生的，你的编辑会被下一轮提炼重写。页头的 **⋯** 菜单提供**在文件管理器中显示分区文件夹**、**复制路径**，**在活动中查看提炼记录**（“变更”标签页，每一轮提炼都记录在那里），以及只在仓库不在时才出现的**删除分区…**。
 
 一条笔记的 `origins` frontmatter 写明了构成它的每个智能体文件，`.raw/` 保存了每个条目读到时的原样，所以一条读起来不对的笔记，你可以一路追溯到智能体实际记录的内容。
 
@@ -388,7 +388,7 @@ Web 界面只在标记为**仓库已不在**的分区上提供**删除**：其�
 
 - **适用于每次回复的规则不归记忆管。** 像「总是用中文回复」或偏好的语气这样的规则适用于每个轮次。没有哪次提问会点到它，也没有哪条命令会触发它，所以检索和触发器都不能在合适的时机把它送到。把这类规则放进智能体每个轮次都会加载的指令里：Claude Code 是 `CLAUDE.md`，Codex 是 `AGENTS.md`。这些文件归你所有，Coffer 从不写它们。
 - **很小的存储很少越过门槛。** 相关度门槛是在一个真实规模的存储上调出来的。排序按每个词在整个存储里有多罕见来加权，所以只有少数几条笔记时，即使是匹配的笔记得分也很低，一次提问通常什么都带不进来。这是有意为之：它避免一个只和笔记共享常见词的提问带进噪音。随着智能体学到的东西越来越多，检索会开始起作用。
-- **守护进程重启会忘掉每个会话已经拿到过什么。** Coffer 在内存中按会话记住某个会话已经拿到过哪些笔记、哪些触发器已经拦过命令。守护进程重启之后，正在运行的会话可能会再次拿到某条笔记，或者被某个触发器再多拦一条命令。
+- **闲置超过一周的会话会被当作新会话。** Coffer 根据审计日志里的投递记录重建每个会话已经拿到过什么，所以守护进程重启不会让某条笔记重复出现，也不会让触发器再多拦一条命令。超过七天的记录不会读回，所以闲置那么久的会话可能会再次拿到某条笔记。
 - **检索只读当前仓库的分区和 `global`。** 归档在另一个仓库下的笔记，永远不会在提问时被带进来。智能体仍然可以通过搜索记忆根目录找到它。
 - **Coffer 停了，记忆也绝不会碍事。** 如果守护进程没在运行、响应慢或返回错误，Hook 什么都不输出，直接放行提问或命令。你只是丢了这一次触发的投递，仅此而已。短提问和没有触发器匹配的命令根本不会联系守护进程。
 
@@ -415,4 +415,4 @@ Web 界面只在标记为**仓库已不在**的分区上提供**删除**：其�
 - [MCP 工具参考](/zh/reference/mcp-tools)
 - [记忆规格](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md)
 - [聚合智能体的记忆，从不写入](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md)
-- [记忆在三个时机到达会话](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)（Proposed）
+- [记忆在三个时机到达会话](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)

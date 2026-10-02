@@ -14,8 +14,7 @@ import pathlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from coffer.domain.errors import SecretMissing
-from coffer.domain.secret_errors import MasterKeyMissing, SecretLocked
+from coffer.domain.secret_errors import MasterKeyMissing, SecretLocked, SecretMissing
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore, ref_files
 from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.surfaces.http.secret_boundary_wiring import (

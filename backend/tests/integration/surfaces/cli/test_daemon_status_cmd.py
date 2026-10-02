@@ -81,22 +81,21 @@ def live_daemon(tmp_path, monkeypatch):
     from fastapi import FastAPI
     from starlette.testclient import TestClient
 
-    from coffer.infrastructure.daemon import config as daemon_config
+    from coffer.infrastructure.daemon import phase
     from coffer.infrastructure.daemon.pid_lock import DaemonInfo
-    from coffer.surfaces.http import daemon_routes, feature_dependencies
     from coffer.surfaces.http import errors as err_handlers
+    from coffer.surfaces.http import feature_dependencies
     from coffer.surfaces.http.auth import set_active_token
     from coffer.surfaces.http.daemon_routes import router as daemon_router
     from coffer.surfaces.http.upkeep_routes import router as upkeep_router
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.delenv(daemon_config.FEATURES_ENV, raising=False)
     prior = feature_dependencies._feature_service
     feature_dependencies.set_feature_service(feature_dependencies.build_feature_service())
     set_active_token(_TOKEN)
     # The phase is process-wide; an earlier test's shutdown may have left it
     # draining.
-    monkeypatch.setattr(daemon_routes, "_DAEMON_PHASE", "ready")
+    monkeypatch.setattr(phase, "_PHASE", "ready")
 
     def _connect():
         app = FastAPI()
@@ -126,10 +125,10 @@ def live_daemon(tmp_path, monkeypatch):
     feature_dependencies._feature_service = prior
 
 
-def test_status_prints_the_channel(live_daemon):
+def test_status_prints_no_channel(live_daemon):
     res = CliRunner().invoke(app, ["daemon", "status"])
     assert res.exit_code == 0, res.output
-    assert "channel: dev" in res.stdout.splitlines()
+    assert not [line for line in res.stdout.splitlines() if line.startswith("channel")]
 
 
 @pytest.mark.acceptance(spec="daemon", scenario="status names the passes in flight")
@@ -199,7 +198,7 @@ def test_the_status_probe_carries_what_the_shell_shows(live_daemon, monkeypatch)
     assert body["started_at"]
     assert body["version"]
     assert body["executable"]
-    assert body["channel"] == "dev"
+    assert "channel" not in body
     assert body["pid"] == os.getpid()
     # A build from source carries no commit; the key is still answered.
     assert "commit" in body
@@ -209,11 +208,7 @@ def test_the_status_probe_carries_what_the_shell_shows(live_daemon, monkeypatch)
     res = CliRunner().invoke(app, ["daemon", "status", "--json"])
     assert res.exit_code == 0, res.output
     cli = json.loads(res.stdout)
-    assert (cli["version"], cli["channel"], cli["port"]) == (
-        body["version"],
-        body["channel"],
-        body["port"],
-    )
+    assert (cli["version"], cli["port"]) == (body["version"], body["port"])
 
 
 @pytest.mark.acceptance(spec="daemon", scenario="the command line prints loop lag and task crashes")

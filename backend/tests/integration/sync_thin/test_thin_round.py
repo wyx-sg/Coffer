@@ -160,18 +160,17 @@ def test_moving_a_resource_file_is_not_a_loss(pair: tuple[Machine, Machine]) -> 
     mac, mini = pair
     with mac.writer.begin(mac_meta()) as txn:
         for i in range(25):
-            txn.write(f"resources/skill/s{i}.json", resource("skill", f"s{i}", f"{i:032x}"), None)
+            txn.write(f"resources/skill/s{i}.json", resource("skill", f"s{i}", f"{i:032x}"))
     mac.round()
     mini.round()
     with mac.writer.begin(mac_meta()) as txn:
         for i in range(25):
             data = mac.disk(f"resources/skill/s{i}.json")
             assert data is not None
-            txn.delete(f"resources/skill/s{i}.json", None)
+            txn.delete(f"resources/skill/s{i}.json")
             txn.write(
                 f"resources/skill/renamed-{i}.json",
                 data.replace(b'"name": "s', b'"name": "r'),
-                None,
             )
     assert mac.round().status is RoundStatus.PUSHED
     assert mini.round().status is RoundStatus.PULLED

@@ -37,7 +37,10 @@ vi.mock("@/lib/shellUpdates", () => ({
 }));
 
 const getMock = vi.fn();
-vi.mock("@/lib/api/client", () => ({ getApiClient: () => ({ GET: getMock }) }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: () => ({ GET: getMock }),
+}));
 vi.mock("@/lib/api/agentProviders", () => ({
   agentProvidersApi: { list: vi.fn().mockResolvedValue({ agents: [] }) },
 }));

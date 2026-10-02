@@ -66,6 +66,11 @@ _FOREIGN_SESSION = {"hooks": [{"type": "command", "command": "/skynet/sessionSta
 _FOREIGN_STOP = {"hooks": [{"type": "command", "command": "/skynet/stop.sh"}]}
 
 
+class _MemoryOn:
+    def is_enabled(self, key: str) -> bool:
+        return key == "memory"
+
+
 @dataclass
 class _Rig:
     home: IsolatedHome
@@ -114,7 +119,9 @@ async def rig(isolated_home: IsolatedHome) -> AsyncIterator[_Rig]:
     )
     reconciler = Reconciler(audit=audit)
     built = _Rig(isolated_home, agents, mcp, delivery, audit, repo, reconciler, engine)
-    reconciler.register(DeliveryHookTarget(delivery=delivery, connected=built.connected))
+    reconciler.register(
+        DeliveryHookTarget(delivery=delivery, features=_MemoryOn(), connected=built.connected)
+    )
     try:
         yield built
     finally:
@@ -279,7 +286,7 @@ async def test_a_dry_run_writes_nothing_under_home(rig: _Rig) -> None:
     assert plan.dry_run is True
     assert [r.change.difference.op for r in plan.results] == [Op.MODIFY, Op.MODIFY]
     assert all(r.outcome is Outcome.PLANNED for r in plan.results)
-    assert rig.reconciler.pending_hints == {}
+    assert not rig.reconciler.pending_hints
     assert rig.reconciler.last_pass is None
 
 

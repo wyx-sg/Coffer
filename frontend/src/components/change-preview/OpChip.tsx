@@ -3,7 +3,7 @@
 import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";
-import type { ChangeOp } from "./changeCounts";
+import type { ChangeOp } from "@/lib/changePreview/changeCounts";
 
 const LOOK: Record<ChangeOp, { symbol: string; tone: string }> = {
   add: { symbol: "+", tone: "bg-success-soft text-success" },

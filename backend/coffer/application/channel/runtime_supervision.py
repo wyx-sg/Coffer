@@ -11,9 +11,9 @@ websocket connection"). Its reconciler follows this discipline:
    answering with authorization prompts,
 4. latch a failure for 30 seconds instead of retrying hot.
 
-``Latch`` is that memory, and the reconciler is a plain function over it.
-``ChannelRuntime`` keeps a thin method that holds the guards tied to its own
-state (no controller wired, shutting down) and owns the latch.
+``Latch`` is that memory, one per channel, and the reconciler is a plain function
+over them. ``ChannelRuntime`` keeps a thin method that holds the guards tied to
+its own state (no controller wired, shutting down) and owns the latches.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ _logger = logging.getLogger(__name__)
 # start ladder in ``ChannelRuntime`` so one answer covers every retry here.
 FAILURE_RETRY_SECONDS = 30.0
 
-# ``{channel name: resource row}`` for every channel this machine should run.
+# ``{channel uid: resource row}`` for every channel this machine should run.
 # The row itself rather than the two fields the reconcilers used to be handed:
 # they read its ``config``, the runtime also needs its ``id`` and its ``uid``,
 # and a tuple that exists only to carry a subset of a row is a place for the
@@ -88,7 +88,9 @@ async def reconcile_websockets(
     websockets: WebSocketControllerPort,
     materialize: MaterializeFn | None,
     desired: Desired,
-    latch: Latch[dict[str, tuple[str, str]]],
+    latches: dict[str, Latch[tuple[str, str, str]]],
+    *,
+    secret_revision: Callable[[str], str | None] | None = None,
 ) -> None:
     """Hold one SeaTalk WebSocket per enabled SeaTalk channel (spec channels/seatalk
     "Receive every event over one outbound websocket connection").
@@ -96,8 +98,12 @@ async def reconcile_websockets(
     The register handshake authenticates with ``app_id`` and the materialized
     app secret, which is exactly why this transport needs no signing secret and
     no public URL.
+
+    Each channel has its own latch (``latches``, keyed by uid): a channel whose
+    secret cannot be read, or whose connection will not start, waits out its own
+    30 seconds without holding up the others.
     """
-    refs: dict[str, tuple[str, str]] = {}
+    refs: dict[str, tuple[str, str, str]] = {}
     names: dict[str, str] = {}
     if materialize is not None:
         for resource in desired.values():
@@ -107,19 +113,26 @@ async def reconcile_websockets(
             app_id = str(config.get("app_id") or "")
             secret_ref = str(config.get("app_secret_ref") or "")
             if app_id and secret_ref:
-                refs[resource.uid] = (app_id, secret_ref)
+                # The third part is the stored secret's revision: rotating a
+                # secret keeps its ref, and without it a rotated secret would
+                # look like a steady state and never be read again.
+                stamp = secret_revision(secret_ref) if secret_revision is not None else None
+                refs[resource.uid] = (app_id, secret_ref, stamp or "")
                 names[resource.uid] = resource.name
     # Always drop connections for channels no longer wanted (disabled or
     # deleted), even in a steady state.
     for uid in websockets.active() - set(refs):
         with contextlib.suppress(Exception):
             await websockets.ensure_stopped(uid)
-    if refs == latch.refs and all(websockets.running(n) for n in refs):
-        return
-    if latch.cooling(wanted=bool(refs)):
-        return
-    secrets: dict[str, tuple[str, str]] = {}
-    for uid, (app_id, secret_ref) in refs.items():
+    for uid in set(latches) - set(refs):
+        del latches[uid]
+    for uid, key in refs.items():
+        app_id, secret_ref, _ = key
+        latch = latches.setdefault(uid, Latch())
+        if latch.refs == key and websockets.running(uid):
+            continue
+        if latch.cooling(wanted=True):
+            continue
         assert materialize is not None  # refs is empty otherwise
         destination = channel_destination(uid, names[uid], "seatalk", app_id)
         try:
@@ -127,13 +140,11 @@ async def reconcile_websockets(
         except Exception:
             latch.failed()
             _logger.exception("channel.websocket.secret_failed", extra={"channel_uid": uid})
-            return
-        secrets[uid] = (app_id, secret)
-    try:
-        for uid, (app_id, secret) in secrets.items():
+            continue
+        try:
             await websockets.ensure_running(uid, app_id, secret)
-    except Exception:
-        latch.failed()
-        _logger.exception("channel.websocket.reconcile_failed")
-        return
-    latch.converged(refs)
+        except Exception:
+            latch.failed()
+            _logger.exception("channel.websocket.reconcile_failed", extra={"channel_uid": uid})
+            continue
+        latch.converged(key)

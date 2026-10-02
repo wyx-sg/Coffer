@@ -21,6 +21,8 @@ interface Props {
   agent: AgentOut;
 }
 
+/** The Model tab. It exists only while the Models feature is on (the tab strip
+ *  leaves it out otherwise), so everything here may ask for providers. */
 export function AgentModelTab({ agent }: Props) {
   const { t } = useTranslation();
   const c = useAgentConnectionDraft(agent);

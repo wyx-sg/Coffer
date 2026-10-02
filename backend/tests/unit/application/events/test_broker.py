@@ -21,26 +21,26 @@ async def _drain(sub: Subscription) -> list[Envelope | Resync]:
 
 def _publish(broker: EventBroker, n: int) -> None:
     for i in range(n):
-        broker.publish("skill", f"u{i}", i + 1)
+        broker.publish("skill", f"u{i}")
 
 
 def test_seq_starts_at_one_and_grows_by_one_per_envelope() -> None:
     broker = EventBroker()
     assert broker.head == 0
-    first = broker.publish("skill", "u1", 3)
-    second = broker.publish("agent", "u2", 1, "delete")
-    assert first == Envelope(1, "skill", "u1", 3, "upsert")
-    assert second == Envelope(2, "agent", "u2", 1, "delete")
+    first = broker.publish("skill", "u1")
+    second = broker.publish("agent", "u2", "delete")
+    assert first == Envelope(1, "skill", "u1", "upsert")
+    assert second == Envelope(2, "agent", "u2", "delete")
     assert broker.head == 2
 
 
 def test_a_changed_hint_becomes_an_envelope_with_its_op() -> None:
     broker = EventBroker()
-    broker.publish_changed(Changed("mcp_server", "u9", 4))
-    broker.publish_changed(Changed("mcp_server", "u9", 5, "delete"))
+    broker.publish_changed(Changed("mcp_server", "u9"))
+    broker.publish_changed(Changed("mcp_server", "u9", "delete"))
     assert broker.buffered == (
-        Envelope(1, "mcp_server", "u9", 4, "upsert"),
-        Envelope(2, "mcp_server", "u9", 5, "delete"),
+        Envelope(1, "mcp_server", "u9", "upsert"),
+        Envelope(2, "mcp_server", "u9", "delete"),
     )
 
 
@@ -54,8 +54,8 @@ async def test_a_live_subscriber_receives_what_is_published_after_it() -> None:
     broker = EventBroker()
     _publish(broker, 2)
     sub = broker.subscribe()
-    broker.publish("skill", "later", 1)
-    assert await _drain(sub) == [Envelope(3, "skill", "later", 1, "upsert")]
+    broker.publish("skill", "later")
+    assert await _drain(sub) == [Envelope(3, "skill", "later", "upsert")]
 
 
 async def test_resuming_replays_exactly_the_envelopes_after_the_last_seen() -> None:
@@ -63,8 +63,8 @@ async def test_resuming_replays_exactly_the_envelopes_after_the_last_seen() -> N
     _publish(broker, 5)
     sub = broker.subscribe(last_event_id=3)
     assert [i.seq for i in await _drain(sub) if isinstance(i, Envelope)] == [4, 5]
-    broker.publish("skill", "live", 1)
-    assert await _drain(sub) == [Envelope(6, "skill", "live", 1, "upsert")]
+    broker.publish("skill", "live")
+    assert await _drain(sub) == [Envelope(6, "skill", "live", "upsert")]
 
 
 async def test_resuming_at_the_head_or_just_before_the_oldest_needs_no_resync() -> None:
@@ -87,8 +87,8 @@ async def test_an_id_this_run_never_issued_is_one_resync(foreign: int) -> None:
     _publish(broker, 2)
     sub = broker.subscribe(last_event_id=foreign)
     assert await _drain(sub) == [Resync(2)]
-    broker.publish("skill", "live", 1)
-    assert await _drain(sub) == [Envelope(3, "skill", "live", 1, "upsert")]
+    broker.publish("skill", "live")
+    assert await _drain(sub) == [Envelope(3, "skill", "live", "upsert")]
 
 
 async def test_resuming_from_zero_on_a_fresh_run_replays_everything() -> None:
@@ -102,8 +102,8 @@ async def test_a_subscriber_that_falls_behind_is_resynced_then_carries_on_live()
     sub = broker.subscribe()
     _publish(broker, 3)  # the third overflows the queue of two
     assert await _drain(sub) == [Resync(3)]
-    broker.publish("skill", "live", 1)
-    assert await _drain(sub) == [Envelope(4, "skill", "live", 1, "upsert")]
+    broker.publish("skill", "live")
+    assert await _drain(sub) == [Envelope(4, "skill", "live", "upsert")]
 
 
 async def test_an_overflowing_subscriber_never_holds_more_than_its_limit() -> None:
@@ -121,8 +121,8 @@ async def test_next_waits_for_a_publish_and_times_out_when_idle() -> None:
     assert await sub.next(timeout=0.01) is None
     waiter = asyncio.ensure_future(sub.next(timeout=1))
     await asyncio.sleep(0)
-    broker.publish("skill", "u1", 1)
-    assert await waiter == Envelope(1, "skill", "u1", 1, "upsert")
+    broker.publish("skill", "u1")
+    assert await waiter == Envelope(1, "skill", "u1", "upsert")
 
 
 def test_a_closed_subscription_receives_nothing_more() -> None:
@@ -131,7 +131,7 @@ def test_a_closed_subscription_receives_nothing_more() -> None:
     assert broker.subscriber_count == 1
     sub.close()
     sub.close()  # idempotent
-    broker.publish("skill", "u1", 1)
+    broker.publish("skill", "u1")
     assert broker.subscriber_count == 0
     assert sub.pending() == 0
 

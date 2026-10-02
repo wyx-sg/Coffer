@@ -21,6 +21,7 @@ function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** @ui-only hook result; never crosses the wire. */
 export interface ShellUpdates {
   /** False in a browser, which offers no update control. */
   inShell: boolean;

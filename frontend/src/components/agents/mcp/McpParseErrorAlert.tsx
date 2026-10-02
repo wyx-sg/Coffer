@@ -10,7 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import { agentTabPath } from "@/lib/agents/routes";
-import type { McpEntriesResponse } from "@/lib/api/agents";
+import type { McpEntriesResponse } from "@/lib/api/agents-workspace";
 
 type ParseError = McpEntriesResponse["parse_errors"][number];
 

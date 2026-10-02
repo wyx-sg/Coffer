@@ -320,6 +320,26 @@ async def test_a_kind_whose_name_is_not_fixed_still_renames(tmp_path):
     await engine.dispose()
 
 
+# --- the reserved name -----------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a server cannot take the name of Coffer's own gateway"
+)
+async def test_a_server_cannot_be_named_coffer(tmp_path):
+    c, _svc, engine = await _app(tmp_path)
+    async with c:
+        refused = await c.post(
+            "/api/v1/resources",
+            json={"kind": "mcp_server", "name": "coffer", "config": _SERVER_CONFIG},
+        )
+        assert refused.status_code == 422, refused.text
+        assert refused.json()["error"]["code"] == "CONFIG_INVALID"
+        assert "reserved" in refused.json()["error"]["message"]
+    await engine.dispose()
+
+
 # --- the 24-character cap on a new MCP server name -----------------------------
 
 

@@ -21,6 +21,9 @@ from tests.integration.surfaces.cli.test_mcp_cmd import (  # noqa: F401  (fixtur
     mcp_daemon,
 )
 
+#: The uid of a server since deleted: its rows stay in the log, under the uid.
+_GONE_UID = "0123456789abcdef0123456789abcdef"
+
 _runner = CliRunner()
 
 
@@ -121,7 +124,7 @@ def test_the_command_line_reads_the_invocation_log(mcp_daemon: Any) -> None:  # 
             (fs, "write_file", "error"),
             (git, "git_log", "error"),
             ("coffer", "coffer__write", "error"),
-            ("deleted:old", "gone_tool", "error"),
+            (_GONE_UID, "gone_tool", "error"),
         ]
     )
 
@@ -138,7 +141,7 @@ def test_the_command_line_reads_the_invocation_log(mcp_daemon: Any) -> None:  # 
     assert failed.exit_code == 0, failed.output
     rows = json.loads(failed.output)["invocations"]
     assert {r["status"] for r in rows} == {"error"}
-    assert {r["resource_uid"] for r in rows} == {fs, git, "coffer", "deleted:old"}
+    assert {r["resource_uid"] for r in rows} == {fs, git, "coffer", _GONE_UID}
 
 
 @pytest.mark.acceptance(spec="mcp-gateway", scenario="the invocation log pages by cursor")

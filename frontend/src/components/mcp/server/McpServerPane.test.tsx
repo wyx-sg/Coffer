@@ -53,7 +53,8 @@ const TOOLS = ["list_issues", "get_issue", "search_events", "resolve_issue", "cr
   }),
 );
 
-vi.mock("@/lib/api/client", () => ({
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: () => ({
     GET: vi.fn(async (path: string, init?: { params?: { query?: unknown } }) => {
       api.gets.push({ path, query: init?.params?.query });
@@ -450,6 +451,19 @@ describe("McpServerPane", () => {
     expect(secretsApi.remove).not.toHaveBeenCalledWith("SHARED");
     expect(onDeleted).toHaveBeenCalled();
   });
+  test("a secret that cannot be deleted with its server is reported, not swallowed", async () => {
+    vi.mocked(secretsApi.remove).mockRejectedValueOnce(new Error("in use"));
+    renderPane();
+    fireEvent.click(await screen.findByRole("button", { name: /more actions for sentry/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /delete/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(
+      await within(dialog).findByRole("checkbox", { name: /also delete the secret SENTRY_TOKEN/i }),
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: /delete server/i }));
+    expect(await screen.findByText(/Couldn't delete 1 secret/)).toBeInTheDocument();
+  });
+
   test("a failing server's header is tinted, and its tools come from the saved switches at once", async () => {
     api.status = { status: "failing", last_ok_at: new Date().toISOString() };
     renderPane();

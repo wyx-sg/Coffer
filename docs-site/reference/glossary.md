@@ -62,17 +62,10 @@ The link between a [skill](#skill) and an agent it is delivered to. Coffer deliv
 by placing a symlink to its folder in the [master store](#master-store) into the agent's
 skills directory, and `coffer skill verify` reports any drift. See [Skills](/guides/skills).
 
-### Build channel
-
-Whether a build is `stable` (a tagged release) or `dev` (everything else, including source
-runs). The channel decides the default state of every
-[experimental feature](#experimental-feature). See
-[Distribution and releases](/architecture/distribution#release-channels).
-
 ### Built-in login
 
 An agent's own authentication, as it was before Coffer [projected](#projection) a
-[connection](#connection) into it. `coffer provider builtin <wire>` returns an agent to
+[connection](#connection) into it. `coffer provider builtin <agent_type>` returns an agent to
 it. See [Model providers](/guides/providers).
 
 ### Built-in tool
@@ -127,7 +120,7 @@ synced machines never rewrite the same collection at once. Set with
 
 A bounded rewrite of one [collection](#collection) by the [internal engine](#internal-engine):
 it takes one pending item (new [material](#material) from the [inbox](#inbox), or a document
-edited since it was last curated), merges it into the collection's documents, and writes at
+edited since it was last curated), folds it into the collection's documents, and writes at
 most eight files. It runs on a timer and on demand (`coffer knowledge curate`). See
 [Knowledge](/architecture/knowledge#the-curation-pass).
 
@@ -185,11 +178,10 @@ into [notes](#note) and rewrites its index, `MEMORY.md`. See [Memory](/architect
 
 ### Experimental feature
 
-A capability that ships switched off on stable builds and can be switched on per machine.
-None is experimental right now: Sync, Knowledge and Memory graduated at 1.0 and are always
-on. While a feature is off its routes answer
-`404 FEATURE_DISABLED`, its tools leave the MCP tool list, and its UI is hidden; its data is
-kept. See [Experimental features](/guides/experimental-features) and
+A capability that ships switched off and can be switched on per machine. Four are: `knowledge`
+(Knowledge), `memory` (Memory), `sync` (Vault sync) and `models` (Model providers, the proxy and
+Usage). While a feature is off its routes answer `404 FEATURE_DISABLED`, its tools leave the MCP
+tool list, and its UI looks absent; its data is kept. See [Experimental features](/guides/experimental-features) and
 [Configuration](/reference/configuration#experimental-features).
 
 ## I
@@ -257,7 +249,7 @@ machine with `coffer sync key import`. See [Secret store](/guides/secret-store#w
 
 New knowledge submitted to a collection, from `coffer__write`, `coffer knowledge write`,
 an upload or a channel. Material waits in the [inbox](#inbox) until the
-[curation pass](#curation-pass) merges it into the documents. See
+[curation pass](#curation-pass) folds it into the documents. See
 [Knowledge](/guides/knowledge).
 
 ### MCP gateway

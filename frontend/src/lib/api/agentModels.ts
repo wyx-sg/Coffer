@@ -21,9 +21,9 @@
 // which of its models take one.
 //
 // The wire types are aliases of the agent-registry contract's schemas.
-// Transport via the shared `call` (.agents/frontend.md §4).
+// Transport via the typed client (.agents/frontend.md §4).
 
-import { call, enc } from "@/lib/api/call";
+import { getApiClient, unwrap } from "@/lib/api/client";
 import type { components as AgentRegistryWire } from "@/lib/api/generated/agent-registry";
 
 // ---------------------------------------------------------------------------
@@ -32,13 +32,16 @@ import type { components as AgentRegistryWire } from "@/lib/api/generated/agent-
 
 export type AgentModel = AgentRegistryWire["schemas"]["AgentModelOut"];
 
-export type AgentModelsOut = AgentRegistryWire["schemas"]["AgentModelsOut"];
-
 // ---------------------------------------------------------------------------
 // API object
 // ---------------------------------------------------------------------------
 
 export const agentModelsApi = {
   /** The catalogue for one agent type. 404s on an unknown agent key. */
-  list: (agentKey: string) => call<AgentModelsOut>(`/agent-providers/${enc(agentKey)}/models`),
+  list: (agentKey: string) =>
+    unwrap(
+      getApiClient().GET("/agent-providers/{agent_key}/models", {
+        params: { path: { agent_key: agentKey } },
+      }),
+    ),
 };

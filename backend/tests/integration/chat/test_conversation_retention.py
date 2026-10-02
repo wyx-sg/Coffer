@@ -125,6 +125,51 @@ async def test_idle_conversations_are_archived_then_deleted_with_their_messages(
 
 
 @pytest.mark.acceptance(
+    spec="chat",
+    scenario="an archived conversation that receives a channel message is not deleted while active",
+)
+async def test_an_archived_conversation_still_being_written_to_is_not_deleted(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    engine, sm = await _db(tmp_path)
+    try:
+        svc = _retention(sm)
+        await svc.initialize_defaults()
+        async with sm() as s:
+            # Archived 31 days ago (past the delete window), but a channel message
+            # touched it yesterday.
+            await s.execute(
+                text(
+                    "INSERT INTO conversations "
+                    "(id, agent_key, title, created_at, updated_at, archived_at) "
+                    "VALUES ('active', 'agent', 't', :created, :touched, :arch)"
+                ),
+                {
+                    "created": _NOW - timedelta(days=60),
+                    "touched": _NOW - timedelta(days=1),
+                    "arch": _NOW - timedelta(days=31),
+                },
+            )
+            await s.execute(
+                text(_MSG_SQL), {"id": "m-live", "conv": "active", "ts": _NOW - timedelta(days=1)}
+            )
+            await s.commit()
+
+        await svc.prune(now=_NOW)
+        async with sm() as s:
+            kept = set((await s.execute(text("SELECT id FROM conversations"))).scalars().all())
+            msgs = set((await s.execute(text("SELECT id FROM chat_messages"))).scalars().all())
+        assert kept == {"active"}
+        assert msgs == {"m-live"}
+
+        # Once the last message is itself past the window, deletion proceeds.
+        await svc.prune(now=_NOW + timedelta(days=31))
+        async with sm() as s:
+            left = (await s.execute(text("SELECT COUNT(*) FROM conversations"))).scalar_one()
+        assert left == 0
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.acceptance(
     spec="chat", scenario="chat's retention windows are tuned beside every other table"
 )
 async def test_chat_retention_windows_are_ordinary_registry_entries(tmp_path) -> None:  # type: ignore[no-untyped-def]

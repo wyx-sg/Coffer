@@ -5,7 +5,7 @@
 import { useTranslation } from "react-i18next";
 
 import { ReachControl } from "@/components/reach/ReachControl";
-import type { ReachIntent } from "../importMcpServers";
+import type { ReachIntent } from "@/lib/mcp/importMcpServers";
 
 interface Props {
   value: ReachIntent;

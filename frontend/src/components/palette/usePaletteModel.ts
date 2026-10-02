@@ -7,8 +7,10 @@
 import { useCallback, useMemo, useState } from "react";
 
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
-import { useFeatureMap } from "@/lib/hooks/useFeatures";
+import { isFeatureOn, useFeatureMap } from "@/lib/hooks/useFeatures";
+import { NAV_ENTRIES } from "@/lib/navigation";
 import {
+  KIND_PAGE,
   OBJECT_KINDS,
   objectItem,
   searchGroups,
@@ -52,7 +54,18 @@ export function usePaletteModel(query: string): PaletteModel {
     setKinds((prev) => ({ ...prev, [kind]: state }));
   }, []);
 
-  const liveKinds: readonly ObjectKind[] = reachable ? OBJECT_KINDS : NO_KINDS;
+  // A kind that lives on a switched-off feature's page is not listed, and its
+  // list is not asked for (spec experimental-features "Close every surface of
+  // a switched-off feature").
+  const liveKinds = useMemo<readonly ObjectKind[]>(
+    () =>
+      reachable
+        ? OBJECT_KINDS.filter((kind) =>
+            isFeatureOn(features, NAV_ENTRIES.find((e) => e.to === KIND_PAGE[kind])?.feature),
+          )
+        : NO_KINDS,
+    [reachable, features],
+  );
 
   const pages = usePageItems(features);
 

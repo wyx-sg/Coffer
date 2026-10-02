@@ -120,11 +120,8 @@ Rules a future change must respect:
   things: idle MCP sessions are still reaped by the `/mcp` session reaper
   ([Session Subprocess Model](session-subprocess-model.md)), which is not an
   idle exit of the daemon.
-- `daemon-config.json` no longer has an idle setting. An `idle_shutdown_hours`
-  key an earlier build wrote is ignored on read and dropped by the next write
-  (`_RETIRED_KEYS` in `infrastructure/daemon/config.py`); no migration is
-  involved because the file is read before the database opens. A downgrade
-  reads the absent key as that build's own default.
+- `daemon-config.json` has no idle setting, so there is no idle window to
+  configure.
 - `GET`/`PUT /api/v1/daemon/residency` carry only `login_service_supported` and
   `login_service_installed`.
 - The login service is macOS-only (`login_service.is_supported`). Elsewhere the

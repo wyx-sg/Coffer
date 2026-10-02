@@ -64,7 +64,8 @@ async def test_dm_turn_carries_a_direct_origin_block(env: ChannelEnv) -> None:
     await wait_until(lambda: "Hello world" in adapter.texts())
 
     assert (await _user_texts(env))[0] == (
-        "[Message origin]\nplatform: telegram\nchat: direct (id: owner)\nfrom: Owner\n\nhi"
+        "[Message origin]\nplatform: telegram\nchat: direct (id: owner)\n"
+        "from: Owner (id: owner)\n\nhi"
     )
 
 

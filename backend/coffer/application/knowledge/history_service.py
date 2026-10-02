@@ -13,7 +13,11 @@ edit; **undo** puts every document one curation pass wrote or retired back
 exactly as it was before the pass, as one commit — refused, naming the
 document, when a later commit changed any of them. Undo records each restored
 document as settled by curation, so the sweep does not read the undo as an
-edit and redo the pass; the item the pass consumed is not put back in the inbox.
+edit and redo the pass. A pass that merged nothing (``no_model``, ``too_large`` or
+one that gave up) turned its item into a document as it stood, so undoing it puts
+that item back in the inbox: removing the document would otherwise lose the
+knowledge. A pass that merged its item leaves the item gone; its text stays in
+the history.
 """
 
 from __future__ import annotations
@@ -54,7 +58,7 @@ from coffer.domain.knowledge.history import (
 from coffer.domain.pagination import decode_cursor, encode_cursor
 from coffer.domain.resource import Resource
 from coffer.domain.vault.writers import CommitMeta
-from coffer.infrastructure.knowledge import fs, inbox, paths
+from coffer.infrastructure.knowledge import collection_files, fs, inbox, paths
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
 
@@ -64,6 +68,11 @@ _FEED = "knowledge_changes"
 #: How many commits one read of git asks for while filling a page.
 _BATCH = 100
 _INBOX_SEGMENT = f"/{paths.INBOX_DIR_NAME}/"
+
+
+#: The pass outcomes that promoted the item as it stood instead of merging it
+#: (spec knowledge "Report every pass outcome as a status").
+_PROMOTING_STATUSES = frozenset({"no_model", "too_large", "truncated"})
 
 
 def _is_document(path: str) -> bool:
@@ -315,6 +324,13 @@ class KnowledgeHistoryService:
         if change.meta.operation != OP_PASS:
             raise KnowledgeNotAPass(version)
         documents = [d.path for d in change.documents if _is_document(d.path)]
+        # What a promoting pass took out of the inbox goes back, so undoing it
+        # loses nothing.
+        items = (
+            [d.path for d in change.documents if not _is_document(d.path) and d.status == REMOVED]
+            if change.meta.status in _PROMOTING_STATUSES
+            else []
+        )
         changed_since: dict[str, str] = {}
         for relpath in documents:
             later = await asyncio.to_thread(history.later, change.version, relpath)
@@ -353,6 +369,11 @@ class KnowledgeHistoryService:
                         await asyncio.to_thread(fs.delete_file, relpath)
                 else:
                     await asyncio.to_thread(fs.write_bytes, relpath, before, settled=True)
+            for relpath in items:
+                raw = await asyncio.to_thread(history.show, f"{change.version}^", relpath)
+                if raw is not None:
+                    tx.touch(relpath)
+                    await asyncio.to_thread(collection_files.restore_file, relpath, raw)
         if change.meta.collection:
             with contextlib.suppress(Exception):
                 row = await self._knowledge.require_collection(change.meta.collection)
@@ -360,7 +381,7 @@ class KnowledgeHistoryService:
                     AuditEventType.KNOWLEDGE_EDITED.value,
                     resource=row,
                     actor=actor,
-                    details={"undo": change.version, "documents": documents},
+                    details={"undo": change.version, "documents": documents, "items": items},
                 )
         await self._knowledge.catalogue_changed()
         if tx.version is None:

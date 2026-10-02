@@ -42,9 +42,10 @@ class _Delivery:
         self.fired.append((agent_uid, dict(details or {})))
 
 
-def _agent(uid: str, agent_type: str) -> Any:
+def _agent(uid: str, agent_type: str, *, enabled: bool = True) -> Any:
     return SimpleNamespace(
         uid=uid,
+        enabled=enabled,
         config={"type": agent_type, "config_dir": f"/home/u/.{agent_type}"},
     )
 
@@ -67,7 +68,6 @@ class _Rig:
 
 @pytest.fixture
 def rig(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> _Rig:
-    monkeypatch.setenv("COFFER_MEMORY_TRIGGERS_ROOT", str(tmp_path / "vault" / "memory-triggers"))
     repo = tmp_path / "work" / "coffer"
     memory = corpus(str(repo))
     memory.add(node20_note("coffer"))
@@ -183,7 +183,7 @@ async def test_a_channel_turn_index_is_the_hooks_and_audited_once(rig: _Rig) -> 
 
 
 @pytest.mark.asyncio
-async def test_a_channel_turn_with_no_index_gets_no_header_and_no_fire() -> None:
+async def test_a_channel_turn_with_no_index_gets_no_header_but_the_start_is_audited() -> None:
     memory = FakeMemory()
     delivery = _Delivery()
     turns = TurnRetrieval(
@@ -194,4 +194,27 @@ async def test_a_channel_turn_with_no_index_gets_no_header_and_no_fire() -> None
     )
     got = await turns.index_for_turn(agent_key="codex", cwd="/nowhere", conversation_id="c")
     assert got is None
-    assert delivery.fired == []
+    # Like the hook, a session start is recorded even when there was nothing to give.
+    assert [d for _uid, d in delivery.fired] == [
+        {
+            "moment": "session_start",
+            "session_id": conversation_session("c"),
+            "event": CHANNEL_TURN_EVENT,
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_disabled_agent_of_the_same_type_is_not_the_one_audited() -> None:
+    memory = FakeMemory()
+    delivery = _Delivery()
+    turns = TurnRetrieval(
+        RetrievalService(memory, SessionLedger(), signature=lambda _p: ()),  # type: ignore[arg-type]
+        delivery,
+        _Agents([_agent("u-off", "codex", enabled=False), _agent("u-on", "codex")]),  # type: ignore[arg-type]
+        memory,  # type: ignore[arg-type]
+    )
+
+    await turns.index_for_turn(agent_key="codex", cwd="/nowhere", conversation_id="c")
+
+    assert [uid for uid, _d in delivery.fired] == ["u-on"]

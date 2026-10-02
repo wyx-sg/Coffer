@@ -32,7 +32,7 @@ Releases, the one-line installer and the desktop app are built for **macOS on Ap
 
 ## Does Coffer run a language model?
 
-No model runs inside Coffer. A few of Coffer's own background passes need one (merging new knowledge into documents, distilling memory, describing knowledge collections, transcribing voice messages), and they call a model provider you pick under **Settings › General → Coffer's model**. Until you pick one, curation and distillation run mechanically (each new item becomes a document or note as it stands), and voice messages reach the agent as audio files.
+No model runs inside Coffer. A few of Coffer's own background passes need one (folding new knowledge into documents, distilling memory, describing knowledge collections, transcribing voice messages), and they call a model provider you pick under **Settings › General → Coffer's model**. Until you pick one, curation and distillation run mechanically (each new item becomes a document or note as it stands), and voice messages reach the agent as audio files.
 
 Everything else is deterministic and local. `coffer__search_tools` ranks tools by keyword, agents find knowledge and memory notes with their own file tools, and nothing is embedded. See [Model providers](/guides/providers).
 

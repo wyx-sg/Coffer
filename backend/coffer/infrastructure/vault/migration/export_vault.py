@@ -142,6 +142,22 @@ def write_capability_switches(txn: LayoutCommit, home: Path, state: LegacyState)
     return len(off)
 
 
+def owner_sender_filled(rows: list[Row]) -> list[str]:
+    """Each row's sender id, the owner's DM completed (rows in pairing order).
+
+    A pairing made before pairings recorded who the owner is has no sender id,
+    and the owner gate would refuse its own owner for ever. The DM is the
+    channel's earliest pairing (a group can only be added to a channel that
+    already works), and a DM chat id IS the user's id on SeaTalk and Telegram,
+    so that row takes its chat id. Group rows are left as they are: a group
+    chat id says nothing about who is in it.
+    """
+    senders = [str(r.get("sender_id") or "") for r in rows]
+    if rows and not senders[0] and not str(rows[0]["chat_id"]).startswith("-"):
+        senders[0] = str(rows[0]["chat_id"])
+    return senders
+
+
 def write_channel_peers(txn: LayoutCommit, home: Path, state: LegacyState) -> int:
     """One ``state/channel-peers/<channel>.json`` per paired channel, in pairing order."""
     by_channel: dict[str, list[Row]] = {}
@@ -150,6 +166,7 @@ def write_channel_peers(txn: LayoutCommit, home: Path, state: LegacyState) -> in
     docs = StateDocuments(PEERS_AREA, "channel_uid", home=home)
     for uid, rows in sorted(by_channel.items()):
         rows.sort(key=lambda r: (when(r["paired_at"]), r.get("id") or 0))
+        senders = owner_sender_filled(rows)
         peers = [
             peer_entry(
                 ChannelPeer(
@@ -157,10 +174,10 @@ def write_channel_peers(txn: LayoutCommit, home: Path, state: LegacyState) -> in
                     chat_id=r["chat_id"],
                     display_name=str(r.get("display_name") or ""),
                     paired_at=when(r["paired_at"]),
-                    sender_id=r.get("sender_id") or None,
+                    sender_id=sender,
                 )
             )
-            for r in rows
+            for r, sender in zip(rows, senders, strict=True)
         ]
         docs.stage(_as_txn(txn), uid, state.name_of(uid) or uid, {"peers": peers})
     return len(by_channel)
@@ -196,6 +213,7 @@ def write_engine_settings(txn: LayoutCommit, state: LegacyState) -> bool:
 
 __all__ = [
     "StorageOf",
+    "owner_sender_filled",
     "when",
     "write_capability_switches",
     "write_channel_peers",

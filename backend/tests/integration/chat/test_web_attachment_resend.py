@@ -16,7 +16,6 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from coffer.application.chat.turn_orchestrator import clear_active_turns
 from coffer.domain.chat.attachment import Attachment
 from coffer.surfaces.http.auth import set_active_token
 from tests.integration.chat.test_web_attachments import (
@@ -31,11 +30,9 @@ from tests.integration.chat.test_web_attachments import (
 
 @pytest.fixture(autouse=True)
 def _reset_turns() -> Generator[None, None, None]:
-    clear_active_turns()
     set_active_token(_TOKEN)
     yield
     set_active_token(None)
-    clear_active_turns()
 
 
 @pytest.fixture

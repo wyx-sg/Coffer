@@ -12,11 +12,6 @@ import { acceptance } from "@/test/acceptance";
 vi.mock("./EngineSettings", () => ({
   EngineSettings: () => null,
 }));
-// So is the Experimental features section (its own test, and the Settings
-// modal's, cover it).
-vi.mock("./ExperimentalFeaturesSettings", () => ({
-  ExperimentalFeaturesSettings: () => null,
-}));
 
 // The picker lists editors the daemon detected as installed; stub that out so
 // these tests drive a fixed set without a live daemon.

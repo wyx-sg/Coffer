@@ -1,10 +1,10 @@
 """Master key lifecycle for the encrypted secret store.
 
-Envelope encryption: secrets are Fernet-encrypted in SQLite; the only
-secret material outside the DB is the master key managed here. It lives
-in EXACTLY one of two places:
+Envelope encryption: each secret is one Fernet-encrypted file in the vault
+(``vault/secret/<ref>.enc``); the only secret material outside the vault is
+the master key managed here. It lives in EXACTLY one of two places:
 
-- a 0600 file next to the DB (default — no keychain prompts, matches the
+- a 0600 file in ``~/.coffer/`` (default — no keychain prompts, matches the
   threat model: an attacker who can read ~/.coffer/ is out of scope), or
 - the OS keychain under ref ``master-key`` (opt-in hardening — survives
   ~/.coffer/ exfiltration, costs at most one keychain prompt per daemon
@@ -32,7 +32,7 @@ from typing import Literal, Protocol
 
 from cryptography.fernet import Fernet
 
-from coffer.domain.errors import MasterKeyMissing, SecretLocked
+from coffer.domain.secret_errors import MasterKeyMissing, SecretLocked
 from coffer.infrastructure.secret.master_key_backends import MasterKeyBackend
 
 KEYCHAIN_REF = "master-key"
@@ -152,13 +152,14 @@ class MasterKeyManager:
     def install_key(self, key: bytes) -> None:
         """Install a master key brought from another machine (spec vault-sync bootstrap).
 
-        Writes to the 0600 file store (the default); a machine that prefers the
-        keychain can ``relocate("keychain")`` afterwards. Validates the bytes are
+        Writes to where the key already is: the 0600 file (the default) or the
+        keychain; a machine that prefers the keychain can ``relocate("keychain")``
+        afterwards. Validates the bytes are
         a usable Fernet key so a corrupt import fails loudly instead of locking
         every secret on next decrypt.
 
-        When a *different* key is already installed, the old key is first copied
-        to a timestamped ``master.key.bak-*`` sibling: the file being replaced
+        When a *different* key is already installed (in either place), the old key
+        is first copied to a timestamped ``master.key.bak-*`` sibling: the file being replaced
         may be the only copy of the key that decrypts existing ciphertext, so
         overwriting it in place would orphan those secrets permanently.
         """
@@ -167,10 +168,19 @@ class MasterKeyManager:
         if self._vault is not None:
             self._install_in_vault(self._vault, key)
             return
-        existing = self._key_path.read_bytes().strip() if self._key_path.exists() else b""
+        # The key lives in exactly one place: the file, or, when there is no
+        # file, the keychain. A key brought in replaces it THERE, so a second
+        # copy never appears that a later move could silently overwrite.
+        in_file = self._key_path.read_bytes().strip() if self._key_path.exists() else b""
+        in_keychain = b""
+        if not in_file:
+            stored = self._keyring.get(KEYCHAIN_REF)
+            in_keychain = stored.encode() if stored else b""
+        existing = in_file or in_keychain
+        to_keychain = bool(in_keychain)
         self._key = key
         if existing == key:
-            self._location = "file"
+            self._location = "keychain" if to_keychain else "file"
             return
         if existing:
             stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
@@ -178,6 +188,12 @@ class MasterKeyManager:
             fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(fd, "wb") as f:
                 f.write(existing)
+        if to_keychain:
+            self._keyring.set(KEYCHAIN_REF, key.decode())
+            if self._keyring.get(KEYCHAIN_REF) != key.decode():
+                raise SecretLocked("keychain write could not be verified")
+            self._location = "keychain"
+            return
         self._write_file(key)
         self._location = "file"
 

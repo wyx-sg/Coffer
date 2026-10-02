@@ -63,11 +63,25 @@ def parse_git_location(url: str, ref: str | None = None, path: str | None = None
         scheme = urlsplit(url).scheme.lower()
         if scheme not in ALLOWED_SCHEMES:
             raise GitLocationError(f"the {scheme!r} transport is not allowed for a skill source")
+        _refuse_credentials(url, scheme)
     elif not _SCP_RE.match(url):
         raise GitLocationError(f"{url!r} is not a repository URL")
     if ref is not None and (ref.startswith("-") or not _REF_RE.match(ref)):
         raise GitLocationError(f"{ref!r} is not a branch, tag or commit")
     return GitLocation(url=url, ref=ref, subpath=normalise_subpath(path))
+
+
+def _refuse_credentials(url: str, scheme: str) -> None:
+    """A source URL is stored in the vault (which syncs), in the skill's own
+    metadata and in API answers, so it carries no credential: the git
+    credential helper or an ssh key supplies one. ``ssh://git@host/…`` keeps its
+    user name — that is an account, not a secret — but a password never stays."""
+    parts = urlsplit(url)
+    if parts.password is not None or (parts.username and scheme != "ssh"):
+        raise GitLocationError(
+            "the repository URL must not carry a user name or password; "
+            "let git's credential helper or an ssh key supply it"
+        )
 
 
 def display_url(url: str) -> str:

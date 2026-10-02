@@ -18,7 +18,7 @@ import dataclasses
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from coffer.domain.errors import SecretMissing
+from coffer.domain.secret_errors import SecretMissing
 from coffer.domain.sync.remote import DEFAULT_USERNAME, SyncRemote
 from coffer.domain.vault.remote_errors import RemoteFailed, RemoteProblem
 
@@ -69,9 +69,11 @@ class RemoteMixin:
             d.git.set_carry_secret(remote.include_secret)
 
         await self._locked(apply)
-        # A token not stored here yet is reported by the first round, with the
-        # ref it names.
+        # A token supplied with the remote is approved with it; one already in
+        # use elsewhere waits now. A token not stored here yet is reported by
+        # the first round, with the ref it names.
         with contextlib.suppress(SecretMissing):
+            await self._token.bind(remote, actor="user")
             await self._token.token_for(remote)
         return remote
 
@@ -112,6 +114,7 @@ class RemoteMixin:
 
         candidate = SyncRemote(url=url, branch=branch, secret_ref=secret_ref, username=username)
         try:
+            await self._token.bind(candidate, actor="user")
             token = await self._token.token_for(candidate)
         except SecretMissing as exc:
             return RemoteCheck("auth_failed", detail=str(exc))

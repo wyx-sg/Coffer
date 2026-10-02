@@ -65,8 +65,9 @@ answer in picker order:
 Each source degrades to an empty list on any failure — a missing CLI, a moved
 bundle anchor, an unauthenticated or wedged Codex — and costs only its own
 models. When a connection is active for the agent, `offered()` returns that
-connection's curated `models` instead, while efforts still come from the
-runtime. Nothing validates a model name: a name typed anywhere is passed to the
+connection's curated `models` instead (a connection that curates nothing falls
+through to the agent's catalogue), while efforts still come from the runtime
+for the ids the agent also knows. Nothing validates a model name: a name typed anywhere is passed to the
 CLI verbatim. The effort rides beside the id — `AgentModel.efforts` and `.default_effort`
 in the catalogue, `effort` beside `model` in the conversation's agent config
 (`domain/chat/agent_config.py`) — and is sent on `turn/start`. An agent

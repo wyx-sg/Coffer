@@ -33,7 +33,7 @@ Three things make the hooks actually run and actually arrive:
 Lives in `~/.codex/hooks.json` (the allowlisted `"hooks"` key —
 `domain.agent.allowlists._codex_files`), beside whatever other tools wired up;
 Coffer's own entry sits alongside them on the same `SessionStart` array, never
-replacing them (`domain.memory.delivery.install_entry` only ever touches its
+replacing them (`domain.memory.delivery.install_entries` only ever touches its
 own marker-scoped entries).
 """
 

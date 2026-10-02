@@ -84,7 +84,7 @@ coffer agent add codex            # register the codex agent at ~/.codex
 
 The command `coffer scan` prints is `coffer agent add <type>`, with `--config-dir` added only when the directory it found is not the type's standard one.
 
-`coffer agent prompt <type>` prints the same install or reinstall prompt the Agents page copies, while that type's program is not found (`--json` returns it under `handoff`); when the program is found it says there is nothing to hand off and exits with code 5. `coffer agent show <type>` points at it for a registered agent whose program is gone.
+`coffer agent prompt <type>` prints the same install or reinstall prompt the Agents page copies, while that type's program is not found (`--json` returns it under `handoff`); when the program is found it says there is nothing to hand off and exits with code 5. `coffer agent show <name>` points at it for a registered agent whose program is gone.
 
 ### Use a different config directory
 
@@ -376,17 +376,17 @@ coffer agent models claude_code
 # sonnet  Sonnet 5  efforts: low, medium, high, xhigh, max
 ```
 
-`coffer agent models` takes the agent's type. When an active [model provider](/guides/providers) curates a model list for the agent, pickers offer that list instead.
+`coffer agent models` takes the agent's type. When the [model provider](/guides/providers) the agent runs on curates a model list, pickers offer that list instead.
 
 The agent record carries the model binding that provider projection writes into the agent's config:
 
 ```sh
 coffer agent edit claude-code --model sonnet --effort high --tier haiku=haiku
 coffer agent edit claude-code --clear-tiers
-coffer agent edit codex --model gpt-5.5 --wire-api responses
+coffer agent edit codex --model gpt-5.5
 ```
 
-For Codex, `responses` is the only accepted `--wire-api` value; Codex refuses to load a `config.toml` with any other. A change takes effect on disk the next time the agent's provider is switched.
+A change takes effect on disk the next time the agent's provider is switched.
 
 ## Model, native memory and sessions in the web UI
 
@@ -429,7 +429,7 @@ The **Skills** tab lists, in one table with the owner filter, the skills Coffer 
 | **Availability** shows **Not found** | The agent's CLI (`claude` or `codex`) is not on the daemon's `PATH` | Install the CLI, or make it visible to the daemon. |
 | The agent reads **Not installed** | Its program is not on your login shell's `PATH`; only its config directory is left | Reinstall the agent, or put its program on your `PATH`. |
 | Detected as **Installed, never run** | The program is installed but has never created its config directory | Add it anyway: registering at the standard directory creates it. |
-| Add is refused with `AGENT_TYPE_REGISTERED` | An agent of that type is already registered; there is one per type | To use another directory, run `coffer agent edit <type> --config-dir <dir>` instead. |
+| Add is refused with `AGENT_TYPE_REGISTERED` | An agent of that type is already registered; there is one per type | To use another directory, run `coffer agent edit <name> --config-dir <dir>` instead. |
 | A save fails with `CONFIG_FILE_STALE` | The file changed after you opened it | Re-open the file and save again. |
 | Plugin uninstall is missing | `claude` is not on `PATH` | Run `claude plugin uninstall <id>` yourself. |
 

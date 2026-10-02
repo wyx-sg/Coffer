@@ -7,9 +7,9 @@
 // request — it includes the daemon's hop, which is what the user waits for.
 import { useState } from "react";
 
-import type { ProviderModel } from "@/lib/api/providers";
+import type { ListModelsIn, ProviderModel } from "@/lib/api/providers";
 import { translateApiError } from "@/lib/api/errors";
-import { type ProviderProbe, useListProviderModels } from "@/lib/hooks/useModelIntrospection";
+import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
 import { authStatusOf, isAuthFailure, probeFailed } from "@/lib/providers/probeStatus";
 import type { TFunction } from "i18next";
 
@@ -22,7 +22,7 @@ export function useEndpointTest(t: TFunction) {
   const list = useListProviderModels();
   const [result, setResult] = useState<EndpointTestResult | null>(null);
 
-  const run = async (probe: ProviderProbe): Promise<EndpointTestResult> => {
+  const run = async (probe: ListModelsIn): Promise<EndpointTestResult> => {
     setResult(null);
     const started = performance.now();
     let next: EndpointTestResult;

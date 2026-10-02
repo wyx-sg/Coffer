@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { ApiError } from "@/lib/api/errors";
 
+/** @ui-only hook options; never crosses the wire. */
 export interface FileDraftOptions {
   /** Content as last loaded from the daemon; `undefined` while loading. */
   loaded: string | undefined;

@@ -405,7 +405,7 @@ export interface components {
             mirror: components["schemas"]["ChannelMirrorOut"] | null;
             place: components["schemas"]["ChannelPlaceOut"] | null;
             /** Platform */
-            platform: string | null;
+            platform: ("telegram" | "seatalk") | null;
         };
         /**
          * ChannelMirrorOut
@@ -421,7 +421,7 @@ export interface components {
             /** Deliverable */
             deliverable: boolean;
             /** Platform */
-            platform: string;
+            platform: ("telegram" | "seatalk") | null;
             /** Reason */
             reason: string | null;
             /** Target */
@@ -648,6 +648,22 @@ export interface components {
             pending: string[];
         };
         /**
+         * QueueChangedEventOut
+         * @description The data of a `queue_changed` event: the pending-message queue changed.
+         */
+        QueueChangedEventOut: {
+            /**
+             * Pending
+             * @description The ordered texts still waiting to run as turns.
+             */
+            pending: string[];
+            /**
+             * Type
+             * @constant
+             */
+            type: "queue_changed";
+        };
+        /**
          * SendMessageAck
          * @description Response for POST /conversations/{id}/messages — fire-and-return
          *     (ADR chat-single-owner-live-mirror).
@@ -681,6 +697,114 @@ export interface components {
              * @default
              */
             text?: string;
+        };
+        /**
+         * TextDeltaEventOut
+         * @description The data of a `text_delta` event: a chunk of assistant text.
+         */
+        TextDeltaEventOut: {
+            /** Text */
+            text: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "text_delta";
+        };
+        /**
+         * ToolCallEventOut
+         * @description The data of a `tool_call` event: the agent requested a tool invocation.
+         */
+        ToolCallEventOut: {
+            /** Tool Input */
+            tool_input: {
+                [key: string]: unknown;
+            };
+            /** Tool Name */
+            tool_name: string;
+            /** Tool Use Id */
+            tool_use_id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "tool_call";
+        };
+        /**
+         * ToolResultEventOut
+         * @description The data of a `tool_result` event: the result or error of a prior `tool_call`.
+         */
+        ToolResultEventOut: {
+            /** Error */
+            error: string | null;
+            /** Output */
+            output: {
+                [key: string]: unknown;
+            } | null;
+            /** Tool Name */
+            tool_name: string;
+            /** Tool Use Id */
+            tool_use_id: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "tool_result";
+        };
+        /**
+         * TurnDoneEventOut
+         * @description The data of a `turn_done` event: the turn completed (or was interrupted).
+         */
+        TurnDoneEventOut: {
+            /** Completion Tokens */
+            completion_tokens: number | null;
+            /** Prompt Tokens */
+            prompt_tokens: number | null;
+            /**
+             * Stop Reason
+             * @description Why the turn ended: `end_turn`, or `interrupted` when the user stopped it.
+             */
+            stop_reason: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "turn_done";
+        };
+        /**
+         * TurnErrorEventOut
+         * @description The data of a `turn_error` event: the turn failed.
+         */
+        TurnErrorEventOut: {
+            /**
+             * Code
+             * @description A short machine token, e.g. `stream_ended`, `turn_timeout`.
+             */
+            code: string;
+            /** Message */
+            message: string;
+            /**
+             * Type
+             * @constant
+             */
+            type: "turn_error";
+        };
+        /**
+         * TurnEventMessage
+         * @description The `data:` of one event on `GET /api/v1/chat/conversations/{id}/events`,
+         *     chosen by its SSE `event:` name (which equals the model's `type`).
+         */
+        TurnEventMessage: components["schemas"]["TurnStartEventOut"] | components["schemas"]["TextDeltaEventOut"] | components["schemas"]["ToolCallEventOut"] | components["schemas"]["ToolResultEventOut"] | components["schemas"]["TurnDoneEventOut"] | components["schemas"]["TurnErrorEventOut"] | components["schemas"]["QueueChangedEventOut"];
+        /**
+         * TurnStartEventOut
+         * @description The data of a `turn_start` event: the agent loop began a turn.
+         */
+        TurnStartEventOut: {
+            /**
+             * Type
+             * @constant
+             */
+            type: "turn_start";
         };
         /**
          * UndeliveredReplyOut
@@ -1155,12 +1279,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description A Server-Sent Events stream of the seven turn events (`turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_done`, `turn_error`, `queue_changed`) that stays open across turns until the client disconnects. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/event-stream": unknown;
+                };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {

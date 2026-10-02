@@ -9,13 +9,10 @@
 // `refetchInterval` (lib/hooks/useAttentionSignals.ts).
 import { useQuery } from "@tanstack/react-query";
 
-import { getApiClient } from "@/lib/api/client";
-import { ApiError, throwApiError } from "@/lib/api/errors";
+import { attentionApi, type AttentionItem } from "@/lib/api/attention";
 import { attentionKey } from "@/lib/api/queryKeys";
-import type { components } from "@/lib/api/types";
 
-export type AttentionReport = components["schemas"]["AttentionOut"];
-export type AttentionItem = components["schemas"]["AttentionItemOut"];
+export type { AttentionItem };
 
 interface Options {
   /** Re-read on a timer, for a reader with no event stream of its own. */
@@ -27,11 +24,6 @@ export function useAttention({ refetchInterval }: Options = {}) {
     queryKey: attentionKey,
     refetchInterval,
     refetchIntervalInBackground: false,
-    queryFn: async (): Promise<AttentionReport> => {
-      const { data, error } = await getApiClient().GET("/attention");
-      if (error) throwApiError(error, "INTERNAL_ERROR", "read attention failed");
-      if (!data) throw new ApiError("INTERNAL_ERROR", "empty attention response");
-      return data;
-    },
+    queryFn: attentionApi.read,
   });
 }

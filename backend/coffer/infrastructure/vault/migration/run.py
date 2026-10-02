@@ -56,7 +56,6 @@ from coffer.infrastructure.vault.migration.places import (
     HOLD_MARKER,
     KNOWLEDGE_GIT_BACKUP,
     LEGACY_DB,
-    OLD_SYNC_TREE,
     PRE_LAYOUT_REVISION,
     RUNS_DB,
     SIDE_FILES,
@@ -238,11 +237,6 @@ def _notices(home: Path, state: LegacyState) -> list[str]:
         f"link into a moved tree, left as it is: {link}" for link in links_into_old_trees(home)
     ]
     notes += _nested_repositories(home)
-    if at(home, OLD_SYNC_TREE).exists():
-        notes.append(
-            f"the previous build's sync working tree {at(home, OLD_SYNC_TREE)} is left in "
-            "place; nothing reads it any more"
-        )
     if state.sync_remote is not None:
         notes.append(
             "the sync remote is kept but holds the previous layout: publish this vault to an "

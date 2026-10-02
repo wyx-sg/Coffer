@@ -1,10 +1,12 @@
 // frontend/src/lib/hooks/useResourceMutations.ts
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/api/errors";
 import { ownListKeysForKind, resourcesKey } from "@/lib/api/queryKeys";
 import { resourcesApi } from "@/lib/api/resources";
 import { useToast } from "@/components/ui/toast";
+import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
 /**
  * What every kind-agnostic write needs: the `uid` it acts on, and the `kind` —
@@ -93,4 +95,17 @@ export function useSetResourceTitle() {
       resourcesApi.setTitle(uid, title),
     onSuccess: (_data, { kind }) => invalidateFor(qc, kind),
   });
+}
+
+/** Delete every row of a selection: each delete is attempted, one summary toast
+ *  says how many landed (see `useBulkMutate`), and the generic list refreshes
+ *  once. */
+export function useBulkDeleteResources() {
+  const bulk = useBulkMutate({ invalidate: [resourcesKey] });
+  const { run } = bulk;
+  const removeAll = useCallback(
+    <T extends { uid: string }>(rows: T[]) => run(rows, (r) => resourcesApi.remove(r.uid)),
+    [run],
+  );
+  return { run: removeAll, isPending: bulk.isPending };
 }

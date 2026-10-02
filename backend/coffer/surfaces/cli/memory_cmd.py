@@ -20,7 +20,7 @@ each agent is given is ``coffer memory delivered <partition>``.
 
 Every command takes a partition's **name**, because that is what a person
 knows; each resolves once through ``_resolve`` to the uid the routes address
-resources by (ADR resource-identity-is-an-immutable-uid).
+resources by (ADR identity-is-the-uid-inside-the-file).
 """
 
 from __future__ import annotations

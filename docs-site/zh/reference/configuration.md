@@ -18,7 +18,7 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 | 浏览器 `localStorage` | Web 界面偏好 | 按浏览器保存，从不发给守护进程 |
 
 ::: warning 环境变量与脱离启动的守护进程
-守护进程通常是脱离调用方启动的——由命令行、智能体的 MCP shim、桌面应用或开机自启服务拉起——它继承的是启动它的那个进程的环境，而不是你的 shell 配置文件。只有在启动守护进程的进程的环境里设置环境变量，它才能到达守护进程，例如 `COFFER_FEATURES=<key>=off coffer daemon restart`。想长期保留的设置，应该放进 `daemon-config.json` 或 **设置**。
+守护进程通常是脱离调用方启动的——由命令行、智能体的 MCP shim、桌面应用或开机自启服务拉起——它继承的是启动它的那个进程的环境，而不是你的 shell 配置文件。只有在启动守护进程的进程的环境里设置环境变量，它才能到达守护进程，例如 `COFFER_FEATURES=run=off,models=off coffer daemon restart`。想长期保留的设置，应该放进 `daemon-config.json` 或 **设置**。
 :::
 
 ## 环境变量 {#environment-variables}
@@ -29,10 +29,10 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 
 | 名称 | 默认值 | 作用 | 读取位置 |
 | --- | --- | --- | --- |
-| `COFFER_FEATURES` | 未设置 | 为该守护进程固定实验功能状态，覆盖本机设置和通道默认值。语法见下文。启动时读取一次。 | [`infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) |
-| `COFFER_ALLOWED_HOSTS` | 未设置 | 逗号分隔的额外 `Host` 请求头名称，守护进程除 `127.0.0.1`、`localhost` 和 `::1` 之外也会应答它们；`*` 关闭该检查。请求中写的是其他主机，或是另一个端口上的回环名称时，返回 `403 HOST_NOT_ALLOWED`。从不放宽 `Origin` 检查。 | [`surfaces/http/host_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/host_guard.py) |
-| `COFFER_CORS_ORIGINS` | 未设置 | 逗号分隔的精确源列表，整体替换跨源允许列表，同时作用于 CORS 和 `Origin` 检查。不设置时，守护进程只允许桌面应用的源（`tauri://localhost`、`http://tauri.localhost`）。守护进程自己的源始终允许；其他任何源返回 `403 ORIGIN_NOT_ALLOWED`。 | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
-| `COFFER_DEV_CORS` | 未设置 | `1` 会把 Vite 开发服务器的源 `http://localhost:5173` 和 `http://127.0.0.1:5173` 加入默认允许列表，同时作用于 CORS 和 `Origin` 检查。设置了 `COFFER_CORS_ORIGINS` 时忽略。`make dev` 会设置它。 | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
+| `COFFER_FEATURES` | 未设置 | 为该守护进程固定实验功能状态，覆盖本机设置和默认值（关闭）。语法见下文。启动时读取一次。 | [`infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) |
+| `COFFER_ALLOWED_HOSTS` | 未设置 | 逗号分隔的额外 `Host` 请求头名称，守护进程除 `127.0.0.1`、`localhost` 和 `::1` 之外也会应答它们；`*` 关闭该检查。请求中写的是其他主机，或是另一个端口上的回环名称时，返回 `403 HOST_NOT_ALLOWED`。从不放宽 `Origin` 检查。正式发布构建会忽略它。 | [`surfaces/http/host_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/host_guard.py) |
+| `COFFER_CORS_ORIGINS` | 未设置 | 逗号分隔的精确源列表，整体替换跨源允许列表，同时作用于 CORS 和 `Origin` 检查。不设置时，守护进程只允许桌面应用的源（`tauri://localhost`、`http://tauri.localhost`）。守护进程自己的源始终允许；其他任何源返回 `403 ORIGIN_NOT_ALLOWED`。正式发布构建会忽略它。 | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
+| `COFFER_DEV_CORS` | 未设置 | `1` 会把 Vite 开发服务器的源 `http://localhost:5173` 和 `http://127.0.0.1:5173` 加入默认允许列表，同时作用于 CORS 和 `Origin` 检查。设置了 `COFFER_CORS_ORIGINS` 时忽略。正式发布构建会忽略它。`make dev` 会设置它。 | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
 | `COFFER_WEBUI_DIR` | 内置 | 存放已构建 Web 界面（`index.html`）的目录。不设置时，守护进程提供冻结二进制中打包的界面，在源码检出中则提供 `frontend/dist`。 | [`surfaces/http/webui.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/webui.py) |
 | `COFFER_PRICE_REFRESH` | 未设置 | `off` 强制关闭每日模型价格表刷新，无论 `price_refresh` 怎么设；价格取自构建中附带的列表。测试套件和 e2e 守护进程会设置它。 | [`infrastructure/usage/price_refresh.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/usage/price_refresh.py) |
 | `COFFER_MODEL_PROXY` | 未设置 | `off` 让守护进程不启动也不监管[本地模型代理](/zh/architecture/model-proxy)；其他任何值或不设置则保持开启。测试套件会设置它。 | [`surfaces/http/model_proxy_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/model_proxy_wiring.py) |
@@ -129,18 +129,27 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 | `proxy_port` | 1024–65535 的整数，或 `null` | `8001` | [本地模型代理](/zh/architecture/model-proxy)在 `127.0.0.1` 上绑定的端口，也是投射到智能体配置中的端口。无效值会被忽略并记警告，改用默认值。代理下次启动时生效。 | 编辑文件 |
 | `machine_name` | 字符串 | 去掉 `.local` 的主机名 | 本机在保险库同步中的显示名称。可随意修改；没有任何东西引用它。 | **同步** 页面、`coffer sync machine rename` |
 | `machine_id` | 字符串 | 由主机派生 | 由主机派生的机器 id 的缓存，在同步的保险库中用来指代本机。删除后会重新算出同一个值。 | 由守护进程写入 |
-| `features` | 布尔值组成的对象 | `{}` | 本机的实验功能开关。立即生效。注册表中没有声明的键会被忽略。 | **设置 → 通用**、`coffer config set feature.<key> on\|off` |
+| `features` | 布尔值组成的对象 | `{}` | 本机的实验功能开关。立即生效。注册表中没有声明的键会被忽略。 | **设置 → 功能**、`coffer config set feature.<key> on\|off` |
 | `price_refresh` | 布尔值 | `true` | 守护进程是否每天从 genai-prices 刷新一次模型价格表。关闭时使用构建中附带的价格表。每次刷新时读取。 | **设置 › 通用 → 刷新模型价格**、`coffer config set prices.refresh on\|off` |
 
 守护进程的运行时状态——它的 pid、端口和 API 令牌——在另一个文件 `~/.coffer/daemon.json` 中，启动时创建、退出时删除。见[文件与目录](/zh/reference/filesystem#daemon-files)。
 
 ## 实验功能 {#experimental-features}
 
-实验功能是可以按机器关闭的能力；关闭后会隐藏它的页面、命令和路由，但不会删除它保存的任何东西。每个注册表条目写明它的键、它拥有的路由和资源类型。
+实验功能是在你开启之前一直关闭的能力，按机器开启；关闭期间它看起来就像不存在——它的页面、命令和路由都不可用——但不会删除它保存的任何东西。每个注册表条目写明它的键、它拥有的路由和资源类型。
 
-目前没有任何实验功能：注册表是空的。同步、知识和记忆（键为 `vault_sync`、`knowledge`、`memory`）已在 1.0 转正并始终开启；一次迁移删除了它们存储的开关。现在 `coffer config set feature.<其中之一>` 会报告未知设置，`PUT /api/v1/daemon/features/<其中之一>` 会返回 `FEATURE_UNKNOWN`。
+注册表里有四个功能，按这个顺序：
 
-功能关闭期间，它的路由返回 `404`，错误码为 `FEATURE_DISABLED`，命令行会打印重新开启它的命令。注册表位于 [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py)。
+| 键 | 关闭的内容 | REST 前缀 |
+| --- | --- | --- |
+| `knowledge` | 知识 | `/api/v1/knowledge` |
+| `memory` | 记忆 | `/api/v1/memory` |
+| `sync` | 保险库同步 | `/api/v1/sync` |
+| `models` | 模型提供商、本地模型代理和用量 | `/api/v1/providers`、`/api/v1/models`、`/api/v1/proxy`、`/api/v1/usage` |
+
+其余一切始终开启，包括对话和消息渠道。其他任何键都不是功能：`coffer config set feature.<key>` 会报告未知设置，`PUT /api/v1/daemon/features/<key>` 会返回 `FEATURE_UNKNOWN`。注册表没有声明的键，其已保存的设置会被忽略。
+
+功能关闭期间，它的路由返回 `404`，错误码为 `FEATURE_DISABLED`，命令行会打印开启它的命令。注册表位于 [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py)。
 
 ### 功能状态如何决定 {#how-a-feature-s-state-is-decided}
 
@@ -148,25 +157,25 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 
 1. **固定值** — 守护进程所在进程的 `COFFER_FEATURES` 中的条目。被固定的功能无法从界面或命令行修改（`409 FEATURE_PINNED`）。
 2. **设置** — `daemon-config.json` 中 `features` 下本机的值。
-3. **通道默认值** — `dev` 构建为开，`stable` 构建为关。发布构建标记为 `stable`；其他所有构建（源码运行、本地冻结构建）都是 `dev`。
+3. **默认值** — 每个构建中的每个功能都是关。
 
-注册表中有条目时，**设置 → 通用** 会显示实验功能区块，并说明每个开关是由三者中的哪一个决定的。注册表为空时不显示该区块。
+**设置 → 功能** 在每个构建中都会列出这四个功能，状态的来源报告为 `pin`、`setting` 或 `default`。被固定的功能，开关不可用。
 
 ### COFFER_FEATURES 语法 {#coffer-features-syntax}
 
 逗号分隔的 `key=value` 条目列表。`on`、`true` 和 `1` 表示开启；`off`、`false` 和 `0` 表示关闭。条目两侧的空白会被忽略，值不区分大小写。未知的键或格式错误的条目会被记录并跳过，绝不会让守护进程停下。
 
 ```sh
-COFFER_FEATURES="<key>=on,<other-key>=off" coffer daemon restart
+COFFER_FEATURES="knowledge=on,models=off" coffer daemon restart
 ```
 
 ### 命令 {#commands}
 
 ```sh
-coffer config list feature.             # every feature, its state, and what decided it (nothing right now)
-coffer config set feature.<key> on      # switch on, at once
+coffer config list feature.             # every feature, its state, and what decided it (feature.knowledge, feature.memory, feature.sync, feature.models)
+coffer config set feature.<key> on      # switch on, at once; <key> is knowledge, memory, sync or models
 coffer config set feature.<key> off
-coffer config unset feature.<key>       # back to the channel default
+coffer config unset feature.<key>       # back to off
 ```
 
 面向任务的指南见[实验功能](/zh/guides/experimental-features)。
@@ -182,7 +191,7 @@ coffer config unset feature.<key>       # back to the channel default
 | **每页行数** | `20`（可选 10、20、50、100） | 每个表格的初始每页行数。 | — | 浏览器 `localStorage`（`coffer.pageSize`） |
 | **首选编辑器** | 系统默认 | Coffer 打开托管文件时使用的应用或命令。 | — | 浏览器 `localStorage`（`coffer.preferredEditor`） |
 | **开机自启动** | 关 | 安装一个 launchd agent（`~/Library/LaunchAgents/dev.coffer.daemon.plist`），在登录时启动守护进程并在崩溃后重启它。仅限 macOS。 | `coffer daemon service install`、`uninstall`、`status` | plist 文件 |
-| **实验功能** | 通道默认值 | 见[实验功能](#experimental-features)。 | `coffer config set feature.<key>` | `daemon-config.json` |
+| **实验功能**（设置 → 功能） | 关 | 见[实验功能](#experimental-features)。 | `coffer config set feature.<key>` | `daemon-config.json` |
 
 ### 设置 › 通用 → Coffer 自用模型 {#settings-›-general-→-coffer-s-model}
 

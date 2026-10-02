@@ -5,7 +5,7 @@ lifecycle verbs every kind's group shares (``_kind_verbs``); ``edit`` carries
 the two group-gating switches as this kind's own flags. ``add`` and ``show``
 are this kind's own: ``add`` takes a channel type's settings as flags and binds
 the channel to this machine, and ``show`` reports the channel's status beside
-its configuration. ``pair``, ``bind`` and ``notify`` are channel-specific.
+its configuration. ``pair``, ``bind``, ``restart`` and ``notify`` are channel-specific.
 """
 
 from __future__ import annotations
@@ -18,10 +18,16 @@ import typer
 
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._approvals import WAIT_OPTION, pending_for, settle
+from coffer.surfaces.cli._channel_machine import (
+    handover_warning,
+    known_machines,
+    this_machine_id,
+)
 from coffer.surfaces.cli._channel_options import (
     _DEFAULT_DIR,
     _DIRS,
     _IGNORE_OTHER_MENTIONS,
+    _NEW_CONVERSATION_AFTER_IDLE,
     _NO_DEFAULT_DIR,
     _NO_DIRS,
     _NOTIFY_AFTER,
@@ -35,12 +41,12 @@ from coffer.surfaces.cli._channel_options import (
     settings_config,
     with_default_dir,
 )
+from coffer.surfaces.cli._channel_show import agent_name, echo_channel
 from coffer.surfaces.cli._kind_verbs import (
     Column,
     EditFlags,
     KindVerbs,
     check_title_arg,
-    label,
     register_kind_verbs,
     verbose_of,
 )
@@ -48,24 +54,6 @@ from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli._resolve import resolve_ref, resolve_uid
 
 app = typer.Typer(help="Manage messaging channels (Telegram, SeaTalk)")
-
-
-def _this_machine_id(client: Any, *, verbose: bool) -> str:
-    """This daemon's machine id, from the surface that already publishes it.
-
-    The CLI cannot derive it: the id is read from the host by the daemon and
-    cached beside the database, and a CLI deriving its own would be a second
-    answer to an identity question that must have exactly one. Read off the
-    daemon's status rather than the sync surface: a channel is bound to a
-    machine whether or not the vault syncs with anything.
-    """
-    r = client.get("/daemon/status")
-    _cli_client.check(r, verbose=verbose)
-    machine_id = _cli_client.status_machine_id(r.json())
-    if not machine_id:
-        typer.echo("the daemon has not derived this machine's id yet — try again", err=True)
-        raise typer.Exit(1)
-    return str(machine_id)
 
 
 def add(
@@ -102,6 +90,7 @@ def add(
     wait_after_forward: float | None = _WAIT_AFTER_FORWARD,
     show_steps: bool | None = _SHOW_STEPS,
     notify_after: float | None = _NOTIFY_AFTER,
+    new_conversation_after_idle_hours: float | None = _NEW_CONVERSATION_AFTER_IDLE,
     dirs: list[str] | None = _DIRS,
     default_dir: str | None = _DEFAULT_DIR,
     title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
@@ -133,6 +122,7 @@ def add(
             wait_after_forward,
             show_steps,
             notify_after,
+            new_conversation_after_idle_hours,
         )
     )
     allowed = directories(dirs, False)
@@ -169,7 +159,7 @@ def add(
     check_title_arg(title)
     c, _info = _cli_client.client_or_exit()
     with c:
-        config["runs_on"] = runs_on if runs_on else _this_machine_id(c, verbose=verbose)
+        config["runs_on"] = runs_on if runs_on else this_machine_id(c, verbose=verbose)
         # A new channel is created unscoped, so an enabled one starts here and
         # may drive every registered agent (ADR per-agent-resource-scope).
         # Narrowing the agents it may drive is a later, separate edit —
@@ -227,70 +217,14 @@ def show(
         resource = resolve_ref(c, "channel", ref, verbose=verbose)
         r = c.get(f"/channels/{resource['uid']}/status")
         _cli_client.check(r, verbose=verbose)
-    body = r.json()
+        body = r.json()
+        known = [] if output_json else known_machines(c, verbose=verbose)
+        agent_uid = (resource.get("config") or {}).get("default_agent") or ""
+        agent = "-" if output_json or not agent_uid else agent_name(c, agent_uid, verbose=verbose)
     if output_json:
         typer.echo(_json.dumps({**resource, "status": body}, indent=2))
         return
-    config = resource.get("config") or {}
-    typer.echo(f"channel:  {label(resource)} ({body['channel_type']})")
-    if resource.get("title"):
-        typer.echo(f"name:     {resource['name']}")
-    typer.echo(f"uid:      {resource['uid']}")
-    if resource.get("description"):
-        typer.echo(f"about:    {resource['description']}")
-    typer.echo(f"agent:    {config.get('default_agent') or '-'}")
-    typer.echo(
-        f"gating:   require_mention={'on' if config.get('require_mention', True) else 'off'}"
-        f"  ignore_other_mentions={'on' if config.get('ignore_other_mentions') else 'off'}"
-    )
-    default_dir = (config.get("default_agent_config") or {}).get("cwd")
-    if default_dir:
-        typer.echo(f"default:  {default_dir}")
-    for path in config.get("directories") or []:
-        typer.echo(f"dir:      {path}")
-    for key in sorted(k for k in config if k.endswith("_ref")):
-        typer.echo(f"secret:   {key} = {config[key]}")
-    typer.echo(f"enabled:  {body['enabled']}    running: {body['running']}")
-    # spec channels "Bind each channel to the one machine that runs it": unbound runs
-    # nowhere and is said so — never dressed as the normal "another machine" state.
-    binding = body.get("runs_on")
-    if not binding:
-        typer.echo("runs on:  unbound (runs nowhere)")
-    else:
-        where = "this machine" if body.get("runs_here") else "another machine"
-        typer.echo(f"runs on:  {binding} ({where})")
-    typer.echo(f"pairing:  {'code pending' if body['pending_pairing'] else 'no pending code'}")
-    peer = body.get("peer")
-    if peer:
-        typer.echo(f"peer:     {peer['display_name']} (chat {peer['chat_id']})")
-        typer.echo(f"conv:     {peer.get('active_conversation_id') or '-'}")
-    else:
-        typer.echo("peer:     not paired")
-    inbound = body.get("inbound")
-    if inbound:
-        _echo_inbound(inbound)
-    for diagnostic in body.get("diagnostics") or []:
-        # spec channels/telegram "Report privacy mode that defeats the group
-        # configuration": a setting that reads correctly here and does nothing in
-        # the chat is worth interrupting for.
-        typer.echo(f"warning:  {diagnostic['message']}")
-    if body.get("handoff"):
-        # The same hand-off the channel page offers (the SDK is missing).
-        typer.echo(f"\nFor your agent:\n{body['handoff']['prompt']}")
-
-
-def _echo_inbound(inbound: dict[str, object]) -> None:
-    """The inbound lines of ``coffer channel show`` for a SeaTalk channel.
-
-    Spec channels/seatalk "Report the websocket connection as the channel's
-    inbound state": the connection state and its last error, and nothing about
-    a listener, port, path, URL or tunnel — none exists.
-    """
-    state = inbound.get("websocket_state") or "not connected yet"
-    typer.echo(f"inbound:  websocket ({state})")
-    error = inbound.get("websocket_error")
-    if error:  # verbatim: a missing SDK or a held connection is actionable only if read
-        typer.echo(f"ws error: {error}")
+    echo_channel(resource, body, agent=agent, known=known)
 
 
 def bind(
@@ -316,10 +250,41 @@ def bind(
         r = c.get(f"/resources/{uid}")
         _cli_client.check(r, verbose=verbose)
         config = dict(r.json().get("config") or {})
-        config["runs_on"] = machine_id if machine_id else _this_machine_id(c, verbose=verbose)
+        here = this_machine_id(c, verbose=verbose)
+        target = machine_id or here
+        known = known_machines(c, verbose=verbose)
+        if known and target not in known:
+            # A mistyped id would bind the channel to nobody: it would run nowhere.
+            typer.echo(f"no machine in this vault has the id {target}", err=True)
+            raise typer.Exit(1)
+        warning = handover_warning(config.get("runs_on"), target, here=here)
+        config["runs_on"] = target
         r = c.patch(f"/resources/{uid}", json={"config": config})
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"channel {name} runs on {config['runs_on']}")
+    typer.echo(f"channel {name} runs on {target}")
+    if warning:
+        typer.echo(warning)
+
+
+def restart(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Channel name"),
+) -> None:
+    """Stop the channel's adapter and start it again, reading its secret afresh.
+
+    Use it when a channel is stuck connecting, or to take a SeaTalk connection
+    back from another process. Replacing a secret with `coffer secret set`
+    already restarts the adapter on its own.
+    """
+    verbose = (ctx.obj or {}).get("verbose", False)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        uid = resolve_uid(c, "channel", name, verbose=verbose)
+        r = c.post(f"/channels/{uid}/restart")
+        _cli_client.check(r, verbose=verbose)
+    typer.echo(
+        f"channel {name} restarted" if r.json().get("running") else f"channel {name} is not running"
+    )
 
 
 def notify(
@@ -368,6 +333,9 @@ _CHANNEL = KindVerbs(
             edit_option("wait_after_forward", _WAIT_AFTER_FORWARD, float | None),
             edit_option("show_steps", _SHOW_STEPS),
             edit_option("notify_after", _NOTIFY_AFTER, float | None),
+            edit_option(
+                "new_conversation_after_idle_hours", _NEW_CONVERSATION_AFTER_IDLE, float | None
+            ),
             edit_option("dirs", _DIRS, list[str] | None),
             edit_option("no_dirs", _NO_DIRS, bool),
             edit_option("default_dir", _DEFAULT_DIR, str | None),
@@ -379,7 +347,8 @@ _CHANNEL = KindVerbs(
         "list": "List registered channels.",
         "edit": (
             "Change a channel's name, title, description, group gating, quiet windows, "
-            "live status, completion ping, default directory or `/dir` directories."
+            "live status, completion ping, idle rollover, default directory or `/dir` "
+            "directories."
         ),
         "rm": "Remove a channel and its pairings.",
         "enable": "Enable a channel (its adapter starts on the machine it is bound to).",
@@ -397,4 +366,5 @@ app.command("add")(add)
 register_kind_verbs(app, dataclasses.replace(_CHANNEL, verbs=_CHANNEL.verbs - {"list"}))
 app.command("pair")(pair)
 app.command("bind")(bind)
+app.command("restart")(restart)
 app.command("notify")(notify)

@@ -9,6 +9,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderOpen } from "lucide-react";
 
+import { LoadError } from "@/components/LoadError";
 import { SettingRow } from "@/components/settings/SettingsLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,7 @@ import {
   useUpdateRetentionPolicy,
 } from "@/lib/hooks/useRetention";
 import { formatDateTime } from "@/lib/utils";
-import { RetentionPolicySection } from "@/pages/settings/RetentionPolicySection";
+import { RetentionPolicySection } from "./RetentionPolicySection";
 import { DataBlock } from "./DataBlock";
 
 /** The record kinds the block shows, in the design's order; the other pruned tables keep their defaults. */
@@ -119,7 +120,11 @@ export function HistoryBlock({ size, onReveal }: Props) {
             <Skeleton className="h-10 w-full" />
           </div>
         ) : policies.error ? (
-          <p className="py-2.5 text-xs text-danger">{translateApiError(t, policies.error)}</p>
+          <LoadError
+            className="py-2.5"
+            error={policies.error}
+            onRetry={() => void policies.refetch()}
+          />
         ) : (
           rows.map((policy) => (
             <RetentionPolicySection
@@ -160,7 +165,10 @@ export function HistoryBlock({ size, onReveal }: Props) {
             {prune.isPending ? t("settings.retention.pruning") : t("settings.retention.pruneAll")}
           </Button>
         </SettingRow>
-        <p className="pb-1 pt-2 text-xs text-text-muted" data-testid="settings-data-other-retention">
+        <p
+          className="pb-1 pt-2 text-xs text-text-muted"
+          data-testid="settings-data-other-retention"
+        >
           {t("settings.data.otherRetention")} <code className="font-mono">coffer config</code>
         </p>
       </DataBlock>

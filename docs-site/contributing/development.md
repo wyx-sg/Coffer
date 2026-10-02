@@ -77,8 +77,7 @@ With a port range set, the daemon binds the first free port in the range instead
 
 ```text
 status:  ready
-version: 0.1.1
-channel: dev
+version: 0.2.0
 port:    18150
 ```
 
@@ -100,7 +99,7 @@ The source daemon also serves the built UI at its own origin when `frontend/dist
 | `HOME` | Every Coffer tree — the vault, `local/`, `content/`, `derived/`, `runs.db` — resolves from it; there is no per-tree override. A sandbox `HOME` is a separate Coffer |
 | `COFFER_DB_URL` | SQLAlchemy URL of the history database (default `sqlite+aiosqlite:///~/.coffer/runs.db`) |
 | `COFFER_LOG_DIR` | Where the daemon writes its log files |
-| `COFFER_FEATURES` | Pin experimental features for this daemon, as `<key>=on,<other-key>=off`. The registry is empty right now, so there is nothing to pin |
+| `COFFER_FEATURES` | Pin experimental features for this daemon, as `<key>=on,<other-key>=off`. For example `models=on,sync=off`; the keys are `knowledge`, `memory`, `sync` and `models`, and each is off unless pinned or switched on in Settings |
 | `COFFER_WEBUI_DIR` | Serve a built UI from another directory |
 
 The [configuration reference](/reference/configuration) lists every variable the daemon reads.
@@ -150,7 +149,10 @@ Run `make help` for the same list.
 | `make verify-benchmark` | Every perf-budget test marked `benchmark`, including the ones too slow for `verify` |
 | `make verify-secrets` | gitleaks over the full git history, as CI's `secrets-scan` job runs it. Skips when gitleaks is not installed |
 | `make lint` | Every static gate: see [Testing](/contributing/testing#what-make-verify-runs) |
-| `make format` | `ruff format` and `ruff check --fix` over `backend` and `evals`, then prettier over `frontend/` |
+| `make format` | `ruff format` and `ruff check --fix` over `backend` and `evals`. The frontend is formatted by its own prettier setup, not by this target |
+| `make verify-visual` | Screenshot baseline: every route, light and dark. Not part of `verify` or `verify-all` |
+| `make visual-update` | Re-record this platform's screenshot baseline |
+| `make test-durations` | Re-measure test durations for the integration shard balance (serial, about 15 minutes) |
 | `make coverage` | pytest and Vitest coverage reports, with no thresholds |
 | `make eval` | The deterministic eval suites and the baseline gate |
 | `make eval-routing` | Adds the tool-routing suite (needs a local LLM) |
@@ -159,16 +161,14 @@ Run `make help` for the same list.
 | `make contracts` | Regenerate every capability's wire contract from the backend's models, then the frontend's types from those contracts |
 | `make frontend-codegen` | Regenerate only the frontend's TypeScript API types from the checked-in contracts |
 | `make docs-reference` | Regenerate the CLI reference pages of this site (English and Chinese) |
+| `make docs-build` | Build this site the way the Pages workflow does; fails on a dead internal link |
+| `make refresh-prices` | Refresh the bundled model price list (needs the network; not in `verify`) |
 | `make bundle-binaries` | Freeze `coffer`, `coffer-daemon` and `coffer-mcp-shim` with PyInstaller into `dist/` |
 | `make desktop` | Build the unsigned `Coffer.app` and `.dmg` (slow: see below) |
 | `make desktop-lint` | `cargo check` and `cargo clippy -D warnings` on the desktop crate |
 | `make desktop-test` | `cargo test` on the desktop crate |
 | `make desktop-stage-binaries` | Stage placeholder sidecar binaries so cargo can compile without a real build |
 | `make clean` | Remove `.venv`, `node_modules`, `frontend/dist`, caches and desktop build output |
-
-::: tip `make format` touches every frontend file
-Its prettier pass rewrites the whole of `frontend/`. Keep formatting-only churn out of an unrelated pull request. The Claude Code hook already formats each file an agent edits.
-:::
 
 ## Wire contracts and frontend codegen
 

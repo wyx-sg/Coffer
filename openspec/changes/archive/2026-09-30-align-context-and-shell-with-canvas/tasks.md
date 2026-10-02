@@ -28,5 +28,5 @@
 ## 5. Wrap-up
 
 - [x] 5.1 en / zh strings, docs-site guides and architecture pages, generated contracts and references
-- [ ] 5.2 `make verify`, `make verify-visual` with the moved baselines re-recorded
+- [x] 5.2 `make verify`, `make verify-visual` with the moved baselines re-recorded
 - [x] 5.3 Archive the change (`npx openspec archive align-context-and-shell-with-canvas --yes`)

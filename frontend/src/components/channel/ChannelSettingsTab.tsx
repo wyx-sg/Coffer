@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { translateApiError } from "@/lib/api/errors";
+import type { ChannelSettings } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useChannelAutoSave, CHANNEL_KIND, type AutoSaveState } from "@/lib/hooks/useChannels";
 import { useSetResourceTitle } from "@/lib/hooks/useResourceMutations";
@@ -56,11 +57,13 @@ const nonEmpty = (text: string) => (text.trim() === "" ? null : text.trim());
 
 interface Props {
   channel: ResourceOut;
+  /** The channel's typed settings, defaults filled in — what its fields start from. */
+  settings: ChannelSettings;
   onReplaceSecret: () => void;
   onDelete: () => void;
 }
 
-export function ChannelSettingsTab({ channel, onReplaceSecret, onDelete }: Props) {
+export function ChannelSettingsTab({ channel, settings, onReplaceSecret, onDelete }: Props) {
   const { t } = useTranslation();
   const id = useId();
   const { save, state } = useChannelAutoSave(channel);
@@ -105,7 +108,7 @@ export function ChannelSettingsTab({ channel, onReplaceSecret, onDelete }: Props
         />
       </div>
 
-      <ChannelBatchingFields channel={channel} save={save} />
+      <ChannelBatchingFields settings={settings} save={save} />
 
       <Section title={t("channels.settings.secrets.title")}>
         {seatalk ? (
@@ -160,7 +163,7 @@ export function ChannelSettingsTab({ channel, onReplaceSecret, onDelete }: Props
         </div>
       </Section>
 
-      <ChannelReplyDirectoryFields channel={channel} save={save} />
+      <ChannelReplyDirectoryFields settings={settings} save={save} />
 
       <Section title={t("channels.settings.danger.title")}>
         <div className="flex items-center justify-between gap-4 rounded-xl border border-border-subtle p-3.5">

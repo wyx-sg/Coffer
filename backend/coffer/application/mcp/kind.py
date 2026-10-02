@@ -50,6 +50,9 @@ def _mcp_secret_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
 #: characters for the upstream tool's own name.
 MCP_SERVER_NAME_MAX_LEN = 24
 
+#: The name Coffer's own gateway answers to; a registered server may not take it.
+RESERVED_MCP_SERVER_NAME = "coffer"
+
 
 def _validate_mcp_name(name: str) -> None:
     """Reject mcp_server names that would break tool/prompt namespacing.
@@ -63,6 +66,11 @@ def _validate_mcp_name(name: str) -> None:
     every tool's client-visible name fits the 64 characters model provider
     APIs accept.
     """
+    if name == RESERVED_MCP_SERVER_NAME:
+        # A server called ``coffer`` would have its tools read as Coffer's own
+        # built-ins (tiering, ``coffer__search_tools``) and shadow the built-in
+        # ``write`` and ``search_tools`` (spec mcp-gateway "Forward tools, resources and prompts").
+        raise ValueError(f"mcp_server name {name!r} is reserved for Coffer's own MCP server")
     if "__" in name:
         raise ValueError(
             f"mcp_server name {name!r} may not contain '__' "

@@ -121,10 +121,10 @@ already knows the caller and the tool. Cons: it sees only MCP tools routed
 through Coffer, not the agent's built-in shell and file tools, which carry most
 of the risk; each tool must be classified as write or read. It was built for
 unattended workflow runs (PR #398, with a `ToolCallGatePort` applied only when a
-run identity is on the session), and parked with the workflow kind on the
-`feature/workflow` branch (PR #410). Ordinary conversations never passed through
-it. It remains the candidate if unattended runs return, because there nobody is
-driving the turn.
+run identity is on the session), parked with the workflow kind on the
+`feature/workflow` branch (PR #410), and is not in the codebase. Ordinary
+conversations never passed through it. It remains the candidate if unattended
+runs return, because there nobody is driving the turn.
 
 ## Decision
 
@@ -136,8 +136,19 @@ outbound-only IM transports and a fail-closed sender check, plus the daemon's
 token on the web. There is no approval relay, approval UI, approval route or
 approval audit event.
 
+Which agents may be driven at all is part of the same gate. Chat offers and
+runs **managed, enabled agents only**: an agent that is unmanaged (a CLI found
+on the PATH that no registered agent stands behind) or disabled is not offered
+on any surface and a turn on it is refused (`agent_not_managed`,
+`infrastructure/chat/adapter_support.py`), rather than run against the CLI's
+own default config directory. A full-permission turn therefore only ever runs
+in a config directory Coffer knows about, with the skills and MCP entry Coffer
+delivered there (spec chat "Ship Claude Code and Codex subprocess providers on
+the type's one agent").
+
 A future change must keep these properties:
 
+- Only managed, enabled agents are offered and run turns.
 - Channel inbound stays outbound-only or authenticated. A public, unauthenticated
   inbound path would turn "only the owner can issue instructions" into an
   assumption.
@@ -152,6 +163,8 @@ A future change must keep these properties:
 - A channel-driven agent can run any command the user could, anywhere the user
   could. The owner's defences are pairing, watching, and interrupting.
   Prompt injection through content the agent reads is not mitigated by Coffer.
+- Disabling an agent in Coffer stops it from answering on every surface at
+  once; there is no second switch to remember per channel.
 - The owner-gate code is security-critical. Pairing, the sender gate and group
   addressing rules are specified in spec channels and covered by
   [Channel Owner Gate](channel-owner-gate.md).

@@ -60,9 +60,8 @@ from coffer.application.knowledge.curate_tools import (
     build_tools,
     document_count,
 )
-from coffer.application.knowledge.recording import item_author, recording
+from coffer.application.knowledge.recording import item_author, record_curated, recording
 from coffer.application.knowledge.service import KnowledgeService
-from coffer.domain.audit import AuditEventType
 from coffer.domain.knowledge.entry import Pending
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 from coffer.domain.knowledge.history import OP_PASS, WRITER_CURATION
@@ -155,6 +154,10 @@ async def run_curation(
             truncations=truncations,
         )
         tx.meta = dataclasses.replace(tx.meta, status=str(result["status"]))
+    # The pass has settled (committed): its inbox count and documents moved, whoever
+    # started it — the sweep and the agent's own write never pass the Curate route.
+    if result["status"] != "up_to_date":
+        service.announce(collection_uid)
     return result
 
 
@@ -244,6 +247,10 @@ async def _pass(
         on_touch=tx.touch,
         # The brief carries these in full, so the pass has seen their content.
         shown=[*chosen, *([item.document] if item.document is not None else [])],
+        shown_fingerprints={
+            **{body.path: body.fingerprint for body in candidate_bodies},
+            **({found.path: found.fingerprint} if item.document is not None else {}),
+        },
     )
     try:
         run = await agent.run(
@@ -302,28 +309,13 @@ async def _pass(
         "refused": counters.refused,
         "gave_up": gave_up,
         "promoted": promoted,
+        # An edited document the pass gave up on is settled as seen, which is
+        # what ``stamped`` reports ("Bound a pass to eight writes").
+        "stamped": (item.document or "") if gave_up else "",
     }
     # One event per pass that ran, cut off or not: with no review step, the
     # audit log is the only place a person sees something rewrote the corpus.
-    with contextlib.suppress(Exception):
-        await service._audit.record(
-            AuditEventType.KNOWLEDGE_CURATED.value,
-            resource=row,
-            actor=actor,
-            details={
-                k: result[k]
-                for k in (
-                    "item",
-                    "model",
-                    "documents_before",
-                    "documents_after",
-                    "written",
-                    "retired",
-                    "status",
-                    "gave_up",
-                )
-            },
-        )
+    await record_curated(service, row, actor, result)
     return result
 
 

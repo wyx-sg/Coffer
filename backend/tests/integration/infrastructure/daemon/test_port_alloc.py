@@ -2,7 +2,7 @@
 
 :func:`bind_fixed_socket` is the one a user's daemon uses: exactly one port,
 and a refusal naming its holder when that port is not to be had.
-:func:`bind_free_socket` / :func:`allocate` are the scan, which survives only
+:func:`bind_free_socket` is the scan, which survives only
 for the ``COFFER_PORT_RANGE_*`` override the test suite pins so its own daemons
 do not queue up for 8000 — so the tests below are the last thing keeping that
 path honest.
@@ -18,7 +18,6 @@ from coffer.infrastructure.daemon.port_alloc import (
     NoFreePort,
     PortHolder,
     PortInUse,
-    allocate,
     bind_fixed_socket,
     bind_free_socket,
     fixed_port_conflict_message,
@@ -26,8 +25,11 @@ from coffer.infrastructure.daemon.port_alloc import (
 
 
 def test_picks_default_when_free():
-    port = allocate(start=58000, end=58009)
-    assert 58000 <= port <= 58009
+    s = bind_free_socket(start=58000, end=58009)
+    try:
+        assert 58000 <= s.getsockname()[1] <= 58009
+    finally:
+        s.close()
 
 
 def test_bind_free_socket_returns_loopback_bound_socket():
@@ -71,25 +73,13 @@ def test_falls_back_when_default_busy():
     s.bind(("127.0.0.1", 58010))
     s.listen()
     try:
-        port = allocate(start=58010, end=58019)
-        assert 58011 <= port <= 58019
+        free = bind_free_socket(start=58010, end=58019)
+        try:
+            assert 58011 <= free.getsockname()[1] <= 58019
+        finally:
+            free.close()
     finally:
         s.close()
-
-
-def test_raises_when_all_busy():
-    sockets = []
-    try:
-        for p in range(58020, 58025):
-            s = socket.socket()
-            s.bind(("127.0.0.1", p))
-            s.listen()
-            sockets.append(s)
-        with pytest.raises(NoFreePort):
-            allocate(start=58020, end=58024)
-    finally:
-        for s in sockets:
-            s.close()
 
 
 def test_bind_fixed_socket_binds_exactly_that_port():

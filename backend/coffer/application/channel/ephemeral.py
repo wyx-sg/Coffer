@@ -3,8 +3,10 @@ chatter private in a group").
 
 "Act in a group only on an addressed message from the owner" stops the bot *acting* on
 everything said in a group. This is the other half: stopping it from *saying* everything
-out loud. ``/status``, ``/help`` and the selection cards are the asker's own business —
-announcing each one to everybody is how a useful bot becomes an unwelcome one.
+out loud. ``/status``, ``/help`` and the other command answers are the asker's own
+business — announcing each one to everybody is how a useful bot becomes an unwelcome
+one. Selection cards are the exception: a card is rewritten after it is used, which
+a privately-delivered message cannot be.
 
 Where the platform can deliver a message only the asker's client shows
 (Telegram ephemeral messages) those answers go that way. The agent's actual

@@ -60,8 +60,10 @@ _FORMAT_VERSION = 1
 # scrypt at N=2^17, r=8: ~128 MiB and a few hundred milliseconds per attempt.
 _N, _R, _P = 2**17, 8, 1
 # Upper bounds for a file's own parameters, so a crafted file cannot make the
-# daemon allocate gigabytes.
+# daemon allocate gigabytes: scrypt needs 128 * r * N bytes, bounded here at
+# 256 MiB (twice what this module's own export uses).
 _MAX_N, _MAX_R, _MAX_P = 2**20, 16, 4
+_MAX_SCRYPT_BYTES = 256 * 1024 * 1024
 _SOURCE = "<import>"
 
 
@@ -177,6 +179,7 @@ def _kdf_params(doc: dict[str, Any]) -> tuple[bytes, int, int, int]:
     except (KeyError, TypeError, ValueError, binascii.Error) as e:
         raise MasterKeyFileInvalid(_SOURCE, "unreadable key derivation parameters") from e
     power_of_two = n > 1 and n & (n - 1) == 0
-    if not (power_of_two and n <= _MAX_N and 1 <= r <= _MAX_R and 1 <= p <= _MAX_P and salt):
+    in_range = power_of_two and n <= _MAX_N and 1 <= r <= _MAX_R and 1 <= p <= _MAX_P
+    if not (in_range and salt and 128 * r * n <= _MAX_SCRYPT_BYTES):
         raise MasterKeyFileInvalid(_SOURCE, "key derivation parameters out of range")
     return salt, n, r, p

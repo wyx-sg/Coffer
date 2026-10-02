@@ -10,7 +10,7 @@ agent used to fetch through ``key`` stays with the local model proxy, and the
 agents run ``coffer proxy token`` instead.
 
 Every command takes the connection's NAME and resolves it to the uid the
-routes address (ADR resource-identity-is-an-immutable-uid).
+routes address (ADR identity-is-the-uid-inside-the-file).
 
 Which connection the internal engine and speech-to-text run on is a setting,
 ``coffer config set engine.provider|transcribe.provider <name>``.
@@ -266,28 +266,66 @@ def edit(
 
 def switch(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Connection to activate"),
+    name: str = typer.Argument(..., help="Connection to switch onto"),
+    agent: str | None = typer.Option(
+        None,
+        "--agent",
+        help="Agent type to switch: claude_code | codex. Default: every registered, "
+        "enabled agent the connection reaches",
+    ),
 ) -> None:
-    """Switch the agents this connection reaches onto it and write their native config."""
+    """Switch agents onto this connection and write their native config.
+
+    \f
+    Per agent: each switch changes that agent's native config file and that
+    agent's record, and nothing else. Without ``--agent`` the connection's
+    reach (``compatible_agents``) is walked and an agent that is not registered,
+    or is switched off, is skipped with a line saying so.
+    """
     verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(f"/providers/{resolve_uid(c, 'provider', name, verbose=verbose)}/activate")
-        _cli_client.check(r, verbose=verbose)
-    data = r.json()
-    projected = ", ".join(data["projected"]) or "(no matching agent)"
-    typer.echo(f"switched to {data['activated']} [{data['protocol']}] → {projected}")
+        uid = resolve_uid(c, "provider", name, verbose=verbose)
+        if agent is not None:
+            types = [agent]
+        else:
+            r = c.get(f"/providers/{uid}")
+            _cli_client.check(r, verbose=verbose)
+            types = [str(t) for t in r.json()["compatible_agents"]]
+        switched = 0
+        for agent_type in types:
+            r = c.post(f"/providers/{uid}/activate", json={"agent_type": agent_type})
+            if agent is None and (r.status_code == 404 or _does_not_reach(r)):
+                typer.echo(f"skipped {agent_type}: not registered, switched off or out of scope")
+                continue
+            if r.status_code in (400, 422):
+                typer.echo(f"not an agent type: {agent_type!r}", err=True)
+                raise typer.Exit(6)
+            _cli_client.check(r, verbose=verbose)
+            data = r.json()
+            typer.echo(f"switched {data['agent']} to {data['activated']} [{data['protocol']}]")
+            switched += 1
+    if switched == 0:
+        typer.echo("no agent was switched", err=True)
+        raise typer.Exit(1)
+
+
+def _does_not_reach(r: Any) -> bool:
+    return bool(
+        r.status_code == 409
+        and r.json().get("error", {}).get("code") == "PROVIDER_DOES_NOT_REACH_AGENT"
+    )
 
 
 def builtin(
     ctx: typer.Context,
     agent_type: str = typer.Argument(..., help="Agent type: claude_code | codex"),
 ) -> None:
-    """Switch's other half: put every agent of this type back on its OWN login.
+    """Switch's other half: put the agent of this type back on its OWN login.
 
-    Removes Coffer's projection from the native config and clears the active
-    connection covering it. Idempotent — a no-op when the agent already runs
-    built-in.
+    Removes Coffer's projection from its native config and clears its
+    connection. Only that agent changes. Idempotent — a no-op when the agent
+    already runs built-in.
 
     \f
     Takes the agent type the route is keyed by, the same vocabulary as
@@ -304,7 +342,7 @@ def builtin(
         _cli_client.check(r, verbose=verbose)
     data = r.json()
     deprojected = ", ".join(data["deprojected"]) or "(no matching agent)"
-    previous = data["previous"] or "(nothing was active)"
+    previous = data["previous"] or "(no connection)"
     typer.echo(f"{data['agent_type']} back on its built-in login, was {previous} → {deprojected}")
 
 
@@ -315,7 +353,6 @@ _PROVIDER = KindVerbs(
     columns=(
         Column("Protocol", lambda it: str(_config(it, "protocol") or "")),
         Column("Base URL", lambda it: str(_config(it, "base_url") or "")),
-        Column("Active", lambda it: "yes" if _config(it, "is_active") else ""),
         Column("Internal", lambda it: "yes" if _config(it, "internal_default") else ""),
     ),
     help={

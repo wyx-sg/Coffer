@@ -11,6 +11,7 @@ from coffer.infrastructure.channel.render import (
     markdown_to_telegram_html,
     split_leading_mention,
 )
+from coffer.infrastructure.channel.seatalk_parse import split_to_byte_limit
 
 #: The two documented SeaTalk mention forms, each built with a target the marker
 #: escaper WOULD mangle if it were allowed near them: an id holding `_`, and an
@@ -271,6 +272,37 @@ class TestChunkTextKeepsFencesWhole:
         joined = "\n".join(c.removeprefix("```log\n").removesuffix("\n```") for c in chunks)
         assert joined == body
 
+    @pytest.mark.acceptance(spec="channels", scenario="a code block is never split across messages")
+    def test_a_fence_that_starts_after_prose_in_one_block_is_closed_and_reopened(self):
+        body = "\n".join(f"line {i:02d}" for i in range(40))
+        text = f"Here is the log:\n```log\n{body}\n```\nthanks"
+        chunks = chunk_text(text, 100)
+        assert all(len(c) <= 100 for c in chunks)
+        assert all(c.count("```") % 2 == 0 for c in chunks)
+        assert chunks[0] == "Here is the log:" and chunks[-1].endswith("thanks")
+
+
+class TestByteSplitKeepsFencesWhole:
+    """SeaTalk caps a message in bytes, so a chunk is split again by size — at
+    line boundaries, never through a code block."""
+
+    @pytest.mark.acceptance(spec="channels", scenario="a code block is never split across messages")
+    def test_cjk_text_with_a_fence_is_cut_at_lines_and_each_piece_keeps_its_fence_whole(self):
+        row = "中文" * 30
+        text = "第一行\n```py\n" + "\n".join([row] * 10) + "\n```\n结束"
+        pieces = split_to_byte_limit(text, 400)
+        assert len(pieces) > 1
+        assert all(len(p.encode()) <= 400 for p in pieces)
+        assert all(p.count("```") % 2 == 0 for p in pieces)
+        assert sum(p.count(row) for p in pieces) == 10  # no row is cut
+
+    def test_a_single_line_longer_than_the_cap_is_cut_on_a_character_boundary(self):
+        pieces = split_to_byte_limit("中" * 600, 500)
+        assert all(len(p.encode()) <= 500 for p in pieces)
+        assert "".join(pieces) == "中" * 600
+
+
+class TestChunkTextPlainParagraphs:
     def test_a_long_plain_paragraph_prefers_a_newline_to_cut_at(self):
         text = "a" * 30 + "\n" + "b" * 30
         assert chunk_text(text, 40) == ["a" * 30, "b" * 30]

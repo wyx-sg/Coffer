@@ -22,12 +22,12 @@ the ADRs the research informs. What Coffer decided, and why, lives in
 | [Knowledge curation](./knowledge-curation.md) | Plain-Markdown knowledge bases co-maintained by people and an LLM | `knowledge` |
 | [Agent memory](./agent-memory.md) | Capturing, consolidating and re-delivering what agents learn across sessions | `memory` |
 | [Multi-machine sync](./multi-machine-sync.md) | Converging one user's vault across their machines through a remote they own | `vault-sync` |
-| [Credentials & secrets](./credentials-secrets.md) | Holding secrets for agents and MCP servers without exposing plaintext | `credentials` |
+| [Credentials & secrets](./credentials-secrets.md) | Holding secrets for agents and MCP servers without exposing plaintext | `secret` |
 | [Activity & audit](./activity-and-audit.md) | Audit logs, invocation logs, daemon logs, retention and the UI over them | `resource-framework`, `web-ui`, `daemon` |
 | [Desktop shell & daemon](./desktop-shell-and-daemon.md) | A resident localhost daemon plus a native shell and CLI from one download | `daemon`, `desktop-app` |
 | [Agent evaluation](./agent-evaluation.md) | Capturing interactions into datasets and gating CI on regressions | none — engineering harness |
 
-Capabilities with no note: `resource-framework` (as a framework), `experimental-features`
+Capabilities with no note: `resource-framework` (as a framework), `vault-storage`, `experimental-features`
 and `internal-engine` — engineering internals where the ADRs carry the reasoning.
 
 ## How a note is written

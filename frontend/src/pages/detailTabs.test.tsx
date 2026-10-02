@@ -21,9 +21,6 @@ import { SKILL_TABS } from "@/lib/skills/tabs";
 vi.mock("@/components/mcp/CapabilityList", () => ({
   CapabilityList: ({ type }: { type: string }) => <div>{`capability list: ${type}`}</div>,
 }));
-vi.mock("@/components/mcp/InvocationsTable", () => ({
-  InvocationsTable: () => <div>invocations</div>,
-}));
 vi.mock("@/lib/hooks/useSkills", () => ({
   useRemoveSkill: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useSkillFiles: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
@@ -31,10 +28,12 @@ vi.mock("@/lib/hooks/useSkills", () => ({
   useSkillCopies: vi.fn(() => ({ data: undefined, isFetching: false, refetch: vi.fn() })),
   useCheckSkillSource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useReadSkillFileNow: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useWriteSkillFile: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
 }));
 vi.mock("@/lib/hooks/useScope", () => ({
   useResourceScope: vi.fn(() => ({ data: { scope: null, supports_scope: true } })),
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useBulkReach: vi.fn(() => ({ disable: vi.fn(), enable: vi.fn(), isPending: false })),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn(() => ({ data: [] })) }));
 vi.mock("@/lib/hooks/useResourceMutations", () => ({

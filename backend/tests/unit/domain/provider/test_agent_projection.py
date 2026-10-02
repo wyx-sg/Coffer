@@ -36,7 +36,6 @@ def _req(
         key_helper=proxy_token_helper("a" * 32, coffer_cli="/opt/coffer/bin/coffer"),
         codex_auth=CodexAuthCommand("/opt/coffer/bin/coffer", proxy_token_args("a" * 32)),
         binding=binding or ModelBinding(model="m-1"),
-        wire_api=None,
         models=tuple(ProjectedModel(id=m) for m in models),
     )
 

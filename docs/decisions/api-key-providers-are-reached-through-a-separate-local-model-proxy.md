@@ -1,22 +1,36 @@
 # API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [Usage Is Metered at the Proxy; Subscription Agents Show Only Their Official Remaining Quota](usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [The Daemon Binds a Fixed Port and Refuses to Start Without It](daemon-binds-a-fixed-port.md), [The Daemon Is Resident: It Never Idles Out, and a Login Service Restarts Only a Crash](daemon-is-a-resident-login-service.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](distribution-pyinstaller.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [principles](../../docs-site/architecture/principles.md) (Credentials; Network defaults; "Not a firewall or security boundary"), research note [provider switching](../research/provider-switching.md), spec provider-switching "Project into Claude Code settings without clobbering them", spec provider-switching "Project into Codex config without clobbering it", spec provider-switching "Authenticate each agent to the proxy with its own local token", spec secret "Hold plaintext only in memory at the moment of use", PR #412, PR #464
+**Related**: [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md), [Usage Is Metered at the Proxy; Subscription Agents Show Only Their Official Remaining Quota](usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [The Daemon Binds a Fixed Port and Refuses to Start Without It](daemon-binds-a-fixed-port.md), [The Daemon Is Resident: It Never Idles Out, and a Login Service Restarts Only a Crash](daemon-is-a-resident-login-service.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](distribution-pyinstaller.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [principles](../../docs-site/architecture/principles.md) (Secrets; Network defaults), research note [provider switching](../research/provider-switching.md), spec provider-switching "Reach API-key and local connections through the local model proxy", spec provider-switching "Project into Claude Code settings without clobbering them", spec provider-switching "Project into Codex config without clobbering it", spec provider-switching "Authenticate each agent to the proxy with its own local token", spec provider-switching "Fail over only before the first content byte", spec secret "Hold plaintext only in memory at the moment of use", PR #412, PR #464
 
 ## Context
 
-Today an API-key connection reaches an agent by being written into the agent's
-own config file
-([LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md)):
-Claude Code gets the upstream `ANTHROPIC_BASE_URL` and an `apiKeyHelper` that
-asks the daemon for the real key; Codex gets a `[model_providers.coffer]`
-table with the upstream `base_url` and `env_key = "COFFER_PROVIDER_KEY"`, the
-real key being merged into the environment of every Codex process Coffer
-spawns ([Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md)).
+An agent on an API-key connection has to call a model with a key that Coffer
+holds as ciphertext, and the agent is a process Coffer neither owns nor trusts
+with a provider key: Claude Code and Codex run as the user, a managed agent runs
+with full permissions, and a prompt-injected agent can run any command the user
+can. Two questions follow, and they were answered in two steps.
 
-Three things the 1.0 plan requires cannot be done from a config file:
+The first step was to **project** the connection into the agent's own config
+file ([LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md))
+and to keep the real key out of that file. The projection wrote the upstream
+endpoint plus a key indirection: for Claude Code an `apiKeyHelper` that asked the
+daemon for the real key (`coffer provider key --connection-uid <uid>`, answering
+404 and exiting 4 for a connection that no longer reached an agent, so a stale
+helper failed closed); for Codex `env_key = "COFFER_PROVIDER_KEY"`, with the real
+key merged into the environment of every Codex process Coffer spawned and
+`COFFER_PROVIDER_KEY` added to Codex's `shell_environment_policy.exclude` so `env`
+in a turn would not print it. That design rested on a rule that survives this ADR
+unchanged: **no raw provider key is ever written into an agent's native config
+file.** Those files are plaintext under the home directory, copied into dotfile
+repos and backups, read by other tools and restored wholesale by the user, and
+the principles say secret plaintext exists only in memory between decrypt and the
+injection that consumes it.
+
+The second step is this ADR, because three things the product needs cannot be
+done from a config file:
 
 - **Usage and cost of API-key traffic.** Nothing Coffer runs sees the
   requests, so usage could only be estimated from transcripts, which do not
@@ -24,14 +38,15 @@ Three things the 1.0 plan requires cannot be done from a config file:
   calls) and whose format is the agent's internal business.
 - **Failover.** A connection with several keys, or several endpoints serving
   the same model, has no way to move a failing request to a healthy member.
-- **The raw key out of the agent's reach.** Codex holds the real key in its
+- **The raw key out of the agent's reach.** Codex held the real key in its
   environment. PR #464 had to exclude `COFFER_PROVIDER_KEY` from Codex's
   shell commands after it was found reachable by `env`, and a Codex started
-  from the user's own terminal has no key at all unless the user exports it.
+  from the user's own terminal had no key at all unless the user exported it;
+  Claude Code's helper printed the real key to anyone who could run it.
 
-The earlier ADRs rejected a proxy for three reasons: a resident component on
-every model call, the daemon going down taking every agent with it, and the
-proxy seeing every prompt. The first is measured cheap — gateway overhead is
+A proxy was rejected at first for three reasons: a resident component on every
+model call, the daemon going down taking every agent with it, and the proxy
+seeing every prompt. The first is measured cheap — gateway overhead is
 microseconds to low milliseconds per request even in Python (vendor-published
 benchmarks put LiteLLM at about 600 µs at 5k RPS), against a time-to-first-token
 of seconds at single-user rates. The second and third are design questions
@@ -66,22 +81,58 @@ carries them anyway: an OAuth token forwarded to a third-party `api_base`
 
 ## Options Considered
 
-### Option A — Keep projecting the upstream endpoint and a key indirection into each agent's config (today)
+### Option A — Project the upstream endpoint and a key indirection into each agent's config (the design this replaced)
 
-The design of the two ADRs above, unchanged.
+The agent's file names the upstream `base_url`, and the real key reaches the
+agent at use time through a Coffer-resolved indirection: Claude Code's
+`apiKeyHelper` (stdout is the key, re-invoked periodically) or Codex's
+`env_key` environment variable. The key stays Fernet ciphertext in the store
+under an opaque ref.
 
 - **Pros.** No component on the request path; an agent keeps working while
   Coffer is stopped, as long as it can still get its key; nothing new to
-  supervise.
+  supervise; no plaintext key in any file Coffer writes; a key rotation in Coffer
+  reaches Claude Code on its next helper call; removing the connection makes the
+  helper fail closed.
 - **Cons.** It meters nothing and fails over nothing, so it cannot deliver
-  the two things the 1.0 Usage page and failover need. The real key sits in
-  every Coffer-spawned Codex process's environment, guarded only by a
-  shell-policy exclude the user or a later Codex default can undo. A terminal
-  Codex needs a manual export of the real key. Rotating a Codex key reaches
-  only processes started after it. Switching connection means a file rewrite
-  and an agent restart.
+  the two things the Usage page and failover need. The real key still reaches
+  the agent: it sits in every Coffer-spawned Codex process's environment,
+  guarded only by a shell-policy exclude the user or a later Codex default can
+  undo, and Claude Code's helper prints it to any caller. A terminal Codex needs
+  a manual export of the real key. Rotating a Codex key reaches only processes
+  started after it. Switching connection means a file rewrite and an agent
+  restart. Claude Code depends on the daemon being reachable when it fetches a
+  key, and uninstalling Coffer leaves a helper line that fails.
 - **Why it loses.** It cannot meet the requirement, and the one secret it
   still hands to an agent is a real provider key.
+
+### Option A2 — Write the key into the native file (the cc-switch shape)
+
+Put the raw key in `env.ANTHROPIC_AUTH_TOKEN` and the Codex provider table.
+
+- **Pros.** Works with no daemon, no helper and no shell export; the simplest
+  thing that runs.
+- **Cons.** The key lands in plaintext in files that are backed up, synced by
+  dotfile tools and committed to git by accident; a rotation means rewriting
+  every file on every machine; it breaks the rule every other Coffer secret
+  follows.
+- **Why it loses.** The secrets principle admits no exception, and the proxy
+  makes the exception unnecessary.
+
+### Option A3 — Store the key in the OS keychain and point the agents at it
+
+Write the key to the macOS keychain and let each agent read it through a helper
+such as `security find-generic-password`.
+
+- **Pros.** An OS-grade secret store; no daemon dependency for the read.
+- **Cons.** Codex has no keychain hook, only `env_key`, so it still needs
+  launch-time injection; a keychain entry is a second copy of a secret Coffer
+  already stores and must be kept in step on rotation and sync; and any binary
+  allowed to run the helper reads the key, the agent's included
+  ([The Master Key Lives in a Keychain Access Group](master-key-lives-in-the-macos-keychain.md)
+  records how weak per-application keychain trust is against a same-user
+  process).
+- **Why it loses.** It duplicates the store and does not work for Codex.
 
 ### Option B — A proxy inside the daemon
 
@@ -95,69 +146,74 @@ Mount the proxy routes on the daemon's own server.
   every agent, including the ones in the user's own terminal. The daemon's
   event loop also runs the MCP gateway, channels, sync and the chat drivers;
   a blocking bug in any of them stalls every model call. This is the exact
-  failure — "daemon down means both agents dead" — for which the earlier ADRs
-  rejected a proxy.
+  failure — "daemon down means both agents dead" — that made a proxy look too
+  risky in the first place.
 - **Why it loses.** It puts the hottest path in the process that restarts
   most and does the most.
 
 ### Option C — A separate, supervised proxy process from the same binary (chosen)
 
 The proxy is its own small process, started from the daemon's frozen binary in
-a proxy mode, so there is no fourth binary to build, sign and ship. The daemon
+a proxy mode (`coffer-daemon proxy`), so there is no fourth binary to build, sign and ship. The daemon
 supervises it — spawns it at start if it is not already running, health-checks
 it, restarts it on a crash — and a daemon restart or upgrade does not stop it:
 the new daemon finds the running proxy through `~/.coffer/proxy.json`
-(`{port, pid, started_at}` plus a control token, mode `0600`) and re-attaches.
+(`port`, `pid`, `started_at`, `version` and a control token, mode `0600`) and re-attaches.
 A proxy from an older build drains its open streams and is replaced once idle.
 
 **Surface.** It binds `127.0.0.1` only, with no option for another interface,
-on a fixed port kept in `daemon-config.json`, so the value written into the
+on a fixed port (`proxy_port` in `daemon-config.json`, 8001 by default), so the value written into the
 agents' files never changes on its own
 ([The Daemon Binds a Fixed Port and Refuses to Start Without It](daemon-binds-a-fixed-port.md)).
 It serves only `POST /anthropic/v1/messages`,
 `POST /anthropic/v1/messages/count_tokens`, `GET /anthropic/v1/models`,
 `POST /openai/v1/responses` and `HEAD /api/hello`, plus its own control
-route; everything else is 404. A request with an `Origin` header or a `Host`
+route; everything else is 404. A request with any `Origin` header or a `Host`
 other than the loopback address and port is refused, as the daemon refuses
 them ([A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md)).
 
 **Local token per agent.** Each managed agent has its own random 256-bit
 token, compared in constant time, accepted as `Authorization: Bearer` or
-`x-api-key`. It unlocks the loopback proxy and nothing else, and it tells the
-proxy which agent is calling, which is how usage is attributed. A request
+`x-api-key`. It is kept as Fernet ciphertext in the secret store under the
+machine-local ref `proxy-token/<agent_uid>`, which vault sync skips, and the proxy
+receives only its SHA-256 digest. It unlocks the loopback proxy and nothing else,
+and it tells the proxy which agent is calling, which is how usage is attributed. A request
 carrying any other credential — a claude.ai OAuth bearer such as
 `sk-ant-oat…`, a real provider key — is refused with 401 and nothing is
 forwarded. Client credentials are always stripped; the proxy injects the real
 key for the upstream it chose. The threat model is stated plainly: the token
 keeps browsers and other users' processes out, not a same-user process that
-can read what the agent can read, consistent with the principles' "not a
-security boundary".
+can read what the agent can read; the secret boundary is the key, which the
+agent never holds
+([Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)).
 
 **Pointing the agents.**
 
-- Claude Code, when an API-key connection is active for it:
+- Claude Code, when it runs on an API-key connection:
   `env.ANTHROPIC_BASE_URL = http://127.0.0.1:<port>/anthropic`; `NO_PROXY`
   gains `127.0.0.1,localhost` so a corporate `HTTPS_PROXY` never captures the
-  loopback leg; `apiKeyHelper = coffer proxy token --agent-uid <uid>`, which
-  prints the agent's local token; the model variables from the agent's
-  binding, plus `ANTHROPIC_DEFAULT_HAIKU_MODEL`, because behind a custom base
-  URL Claude Code otherwise runs background tasks on the main model, a silent
-  cost multiplier its protocol page names.
+  loopback leg; `apiKeyHelper = <coffer> proxy token --agent-uid <uid>`, which
+  prints the agent's local token; the model keys from the agent's binding, plus
+  `ANTHROPIC_DEFAULT_HAIKU_MODEL`, because behind a custom base URL Claude Code
+  otherwise runs background tasks on the main model, a silent cost multiplier
+  its protocol page names.
 - Codex: `model_provider = "coffer"` and a `[model_providers.coffer]` table
   with `base_url = http://127.0.0.1:<port>/openai/v1`,
   `wire_api = "responses"`, `supports_websockets = false`,
   `requires_openai_auth = false` and
-  `auth = {command = "coffer", args = ["proxy", "token", "--agent-uid", "<uid>"]}`.
+  `auth = {command = "<coffer>", args = ["proxy", "token", "--agent-uid", "<uid>"]}`.
   A terminal Codex then works with no export, because it runs the command
-  itself. **Version caveat:** the command-backed `auth` table is in Codex's
-  current config reference, and the adopting change must confirm it on the
-  minimum Codex version Coffer supports before relying on it. On a Codex
-  without it, the table falls back to `env_key`, and what that variable
-  carries is the agent's local proxy token — never a provider key — injected
-  into the Codex processes Coffer spawns and, for terminal use, exported by
-  the user.
-- `model_catalog_json`, scope-driven reach, one active connection per agent
-  type, the boot check and `use-builtin` are unchanged.
+  itself. The command-backed `auth` table (`ModelProviderAuthInfo`) needs Codex
+  0.155.1 or later, the version it was confirmed on; no process's environment
+  carries a proxy token either.
+- Both helper lines name the CLI by absolute path, because an agent started
+  from the Dock gets no login `PATH`.
+- `model_catalog_json`, scope-driven reach, the agent's own connection pointer,
+  the boot check and `use-builtin` are described by
+  [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md).
+  Switching between two API-key connections changes the proxy's route, not the
+  agent's file; a switch between a subscription login and an API-key connection
+  is still a file write.
 
 **Keys.** The daemon remains the only holder of the master key. It decrypts
 the keys of the connections the proxy serves and hands them to the proxy over
@@ -176,31 +232,42 @@ as received, pings and comments included, error bodies verbatim. A usage
 reader consumes a copy of the bytes beside the relay; a reader failure never
 touches the relay. Timeouts: 10 s to connect, no total timeout, at least
 300 s of upstream read idleness, matching both agents' own watchdogs. The
-upstream leg honours the user's `HTTPS_PROXY`.
+upstream leg honours the user's `HTTPS_PROXY` for a remote member; a local
+runtime is reached directly.
 
-**Failover.** Only across the keys and endpoints of one connection that serve
-the **same model id**, in the same upstream family (Anthropic-direct and a
-cloud-hosted Anthropic are not one pool: signatures and cache do not
-transfer). A session — `x-claude-code-session-id`, Codex's `session_id` — stays
+**Failover.** Only across connections that serve the **same model id**, in the
+same upstream family (Anthropic-direct and a cloud-hosted Anthropic are not one
+pool: signatures and cache do not transfer). A connection holds one key and one
+endpoint, so the pool is the agent's own connection first, then every other
+enabled connection that reaches the same agent type, speaks the same protocol,
+is switched on as a fallback and lists the requested model among its curated
+models, in the order of the Model providers list. A local runtime has no
+fallback members and is never one. A session — `x-claude-code-session-id`, Codex's `session_id` — stays
 on one member until that member fails, which keeps the prompt cache warm. A
 request fails over only **before the first content byte** reaches the agent:
 on a connect, TLS or DNS error, a 5xx, 529 or 429 status, a first-byte
 timeout, or an `event: error` that arrives before the first content event
-(the proxy holds the response until that point, bounded to a few kilobytes
-and seconds). After that it never switches: the error or truncation goes to
+(the proxy holds the response until that point, bounded to 64 KiB and
+5 seconds). After that it never switches: the error or truncation goes to
 the agent and the agent's own retry runs, landing on a healthy member because
 the failure has marked this one. The same key is never retried, since both
 agents already retry (Codex four request and five stream retries by default),
 and a retry storm is what cc-switch recorded before its PR #7426 — nineteen
 retries in four minutes against one overloaded upstream. A 429 with
-`retry-after` cools its member for that long; 401 or 403 disables the member
-until the user fixes it; 400, 404 and 413 never fail over. Mid-stream errors
+`retry-after` cools its member for that long; 401 or 403 also fail over (the
+key is at fault, not the request) and disable the member until its key changes;
+400, 404 and 413 never fail over. Mid-stream errors
 and truncations count as member failures. There is no model substitution.
 
 **Logging.** Metadata only: the usage record and each failover decision. No
 bodies, no prompts, no completions, no credentials; `authorization`,
 `x-api-key` and cookies are redacted at the logger, as the audit ADR already
 requires of invocation logs.
+
+**Local runtimes.** Ollama, LM Studio, vLLM and llama-server are upstreams of
+the same routes, keyless or with an optional key, detected read-only with a
+minimum version per wire. "No protocol translation" stands: every mainstream
+runtime serves both wires itself.
 
 **Subscription traffic never goes through it.** An agent on its own login has
 no proxy base URL and no helper projected, and the proxy refuses the
@@ -215,7 +282,7 @@ credential such an agent would send.
 - **Cons.** A resident process on every API-key model call: if the proxy is
   down, those calls fail until the daemon restarts it. The proxy holds
   decrypted provider keys in memory for its lifetime, which the principles'
-  Credentials clause must now name. It sees every prompt in transit, which the
+  Secrets clause names. It sees every prompt in transit, which the
   metadata-only rule keeps out of anything stored. And it is one more process
   to supervise, version and drain on upgrade.
 - **Why it wins.** It is the only option that meters and fails over without
@@ -279,34 +346,14 @@ the same model and only before the first content byte, and logs metadata only.
 Agents on a subscription login are never pointed at it, and it refuses their
 credentials.
 
-This **revises**
-[LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md)
-in these parts only: its Option B (a local proxy) is adopted, for API-key
-connections and in the separate-process form above; the Claude Code writer
-projects the proxy's URL, the proxy-token helper, `NO_PROXY` and the pinned
-background model instead of the upstream `base_url` and the key helper; the
-Codex writer projects the proxy's URL, `supports_websockets = false`,
-`requires_openai_auth = false` and the `auth` command instead of the upstream
-`base_url` and `env_key`; and a switch between two API-key connections for the
-same agent type takes effect in the proxy for sessions opened after the switch
-(a running session keeps its route, so thinking signatures stay valid),
-without a file rewrite or restart. Its resource model, scope-driven reach,
-one-active-per-type rule, boot check, converge re-projection and `use-builtin`
-stand; a switch between a subscription login and an API-key connection is
-still a file write.
-
-It **revises**
-[Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md)
-in these parts only: its Option C (a proxy that injects the key) is adopted;
-the helper `coffer provider key --connection-uid <uid>` and the key route it
-calls stop serving agents, replaced by `coffer proxy token --agent-uid <uid>`,
-which returns a local token; `COFFER_PROVIDER_KEY` no longer carries a
-provider key — it is dropped, or on a Codex without command-backed `auth`
-carries the local token — so neither the launch-time injection of a real key
-nor the user's terminal export of one remains, and the
-`shell_environment_policy` exclude stays only while a token is injected. Its
-rule that no raw provider key is ever written into a native config file
-stands, and now holds for the agents' environments too.
+The Claude Code writer projects the proxy's URL, the proxy-token helper,
+`NO_PROXY` and the pinned background model; the Codex writer projects the
+proxy's URL, `supports_websockets = false`, `requires_openai_auth = false` and
+the `auth` command. No command and no route returns a provider key to an agent:
+the `coffer provider key` helper and the key route it called are gone, and no
+process's environment carries a provider key. The rule that no raw provider key
+is ever written into a native config file holds for the agents' environments
+too.
 
 Rules a future change must respect:
 
@@ -323,57 +370,30 @@ Rules a future change must respect:
 - A projection for a subscription-mode agent never writes the proxy URL or
   helper.
 
-## Implementation notes (2026-09-30)
-
-Where the adopting change departs from the text above, and why:
-
-- **The failover pool is a set of connections, not the keys of one.** A
-  connection holds one key and one endpoint, so "several keys or endpoints of
-  one connection" has nothing to draw on. The pool is the active connection
-  first, then every other enabled connection that reaches the same agent type,
-  speaks the same protocol and lists the requested model among its curated
-  models — still the same model id and the same upstream family, as decided.
-  A local runtime has no fallback members. 401 and 403 also fail over (the
-  key is at fault, not the request) besides disabling the member.
-- **The minimum Codex version is 0.155.1**, the version the command-backed
-  `auth` table (`ModelProviderAuthInfo`) was confirmed on. Codex is always
-  given the `auth` form; the `env_key` fallback was not needed, so no
-  process's environment carries a proxy token either.
-- **Both helper lines name the CLI by absolute path** (Claude Code's
-  `apiKeyHelper` and Codex's `auth.command`), for the reason the key helper
-  already did: an agent started from the Dock gets no login `PATH`.
-- **Tokens** are Fernet ciphertext in the credential store under the
-  machine-local ref `proxy-token/<agent_uid>`, which vault sync skips; the
-  proxy receives only their SHA-256 digests.
-- **The default port is 8001** (`proxy_port` in `daemon-config.json`).
-- **Local runtimes** (Ollama, LM Studio, vLLM, llama-server) are upstreams of
-  the same routes, keyless or with an optional key, detected read-only with a
-  minimum version per wire. "No protocol translation" stands: every
-  mainstream runtime serves both wires itself.
-
 ## Consequences
 
-- **Principles.** The Credentials clause is amended in the adopting change:
-  the proxy holds decrypted provider keys in memory for its lifetime, as a
-  header-injection consumer, and never holds the master key. The process
-  model — one daemon — gains the proxy as its only sibling process, supervised
-  by the daemon.
+- **Principles.** The Secrets clause names the proxy: it holds decrypted
+  provider keys in memory for its lifetime, as a header-injection consumer,
+  receives them from the daemon over its authenticated loopback control route,
+  and never holds the master key. The process model — one daemon — has the proxy
+  as its only sibling process, supervised by the daemon.
 - **Distribution.** No new binary: the proxy mode ships inside
   `coffer-daemon`, so the three-binary layout of
   [Distribution — Three PyInstaller Binaries](distribution-pyinstaller.md)
   holds, and the release smoke test boots the proxy mode too.
-- **Projection.** The provider projection writers move to the proxy form
-  through the shared native-config writer and the projection registry; files
-  written in the old form are re-projected by the reconciler once, not read
-  indefinitely.
-- **Tests first.** A byte-equality relay test over recorded SSE, pings
-  included; an open-list header test (an unknown `anthropic-beta` value and an
-  unknown body field arrive untouched); a failover commit-point test (an error
-  before and after the first content byte); auth tests (no token, an
-  OAuth-shaped token, a foreign `Host`, an `Origin` present).
-- **Obligations.** Spec deltas in provider-switching (the proxy projection,
-  the token helper, failover, the refusal of foreign credentials) and daemon
-  (supervising and re-attaching to the proxy); the docs-site provider guide
-  and architecture pages explain the proxy, the token and what it does not
-  log; the minimum Codex version is recorded once the `auth` table is
-  confirmed on it.
+- **Projection.** The provider projection writers write the proxy form through
+  the shared native-config writer and the projection registry; a file whose
+  values went stale is re-projected by the reconciler.
+- **Provider keys and approval.** The proxy holds a connection's key only once
+  the key may go to the connection's base URL; a replaced key or a moved base URL
+  waits for a person's approval, and the daemon pushes the proxy its state again
+  when the approval is applied, with no restart.
+- **Tests.** A byte-equality relay test over recorded SSE, pings included; an
+  open-list header test (an unknown `anthropic-beta` value and an unknown body
+  field arrive untouched); a failover commit-point test (an error before and
+  after the first content byte); auth tests (no token, an OAuth-shaped token, a
+  foreign `Host`, an `Origin` present).
+- The architecture page [The local model proxy](../../docs-site/architecture/model-proxy.md)
+  explains the proxy, the token and what it does not log.
+- If the proxy is down, API-key model calls fail until the daemon restarts it;
+  `coffer proxy status` shows what the supervisor sees.

@@ -11,6 +11,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { SearchInput } from "@/components/SearchInput";
+import { Kbd } from "@/components/ui/kbd";
 import { type ActivityRecord, type ActivityTab } from "@/lib/activity/records";
 import type { ActivityFilters } from "@/lib/activity/filters";
 import type { TabCount } from "@/lib/hooks/useActivityFeed";
@@ -193,12 +194,12 @@ export function ActivityFilterBar({
             ariaLabel={t("activity.filters.searchLabel")}
           />
           {filters.search || tab === "daemon" ? null : (
-            <kbd
+            <Kbd
               aria-hidden
-              className="pointer-events-none absolute right-2.5 top-1/2 inline-flex h-[18px] -translate-y-1/2 items-center rounded-[4px] border border-border bg-surface-raised px-[5px] font-sans text-2xs text-text-subtle"
+              className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2"
             >
               /
-            </kbd>
+            </Kbd>
           )}
         </div>
         {trailing}

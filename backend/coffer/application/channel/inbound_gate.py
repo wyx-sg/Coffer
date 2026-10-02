@@ -48,13 +48,18 @@ async def group_peer(
         # would let any member without a resolvable sender_id drive
         # turns on the owner's agent. Refuse whenever ownership can't
         # be proven, not just when it is provably wrong.
-        await safe_send(
-            binding,
-            msg.chat_id,
-            "🚫 Not authorized — only this channel's owner can use me here.",
-            thread_id=msg.thread_id,
-            chat_kind="group",
-        )
+        #
+        # Aloud only to a member who spoke to the bot. With ``require_mention`` off,
+        # un-addressed chatter reaches this line too, and a refusal to every
+        # member's every message would make the bot the group's noisiest member.
+        if msg.addressed:
+            await safe_send(
+                binding,
+                msg.chat_id,
+                "🚫 Not authorized — only this channel's owner can use me here.",
+                thread_id=msg.thread_id,
+                chat_kind="group",
+            )
         return None
     peer = await peers.get_by_chat(binding.resource.uid, msg.chat_id)
     if peer is None:

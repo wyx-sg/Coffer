@@ -8,7 +8,7 @@ to fail the sweep (busy is an ordinary state, not a fault).
 Both workers sweep **uids**, and claim them, because that is what the route the
 button hits claims: the collision only happens if the two writers spell the
 target the same way, and a label is exactly what can be edited between them
-reading it (ADR resource-identity-is-an-immutable-uid). The uids below are
+reading it (ADR identity-is-the-uid-inside-the-file). The uids below are
 readable strings (``uid-busy``) rather than real hex, so a failure names which
 target was skipped; nothing in either worker parses them.
 """
@@ -196,3 +196,41 @@ async def test_a_delivery_that_raises_does_not_stop_the_sweep(corpus) -> None:  
     ).run_once()
 
     assert started == ["uid-free"]
+
+
+async def test_the_vault_lock_is_held_for_one_pass_not_the_whole_sweep(corpus) -> None:  # type: ignore[no-untyped-def]
+    """A sweep over several collections can run for minutes; a sync round waiting
+    on the lock must get its turn between passes ("Never overlap a curation pass
+    and a round" asks for no overlap, not for a whole-sweep monopoly)."""
+    import asyncio
+
+    lock = asyncio.Lock()
+    held_during: list[bool] = []
+    held_between: list[bool] = []
+
+    class _Watching(_Collections):
+        async def collection(self, uid: str) -> Resource:
+            # Resolved before each collection's pass, outside it.
+            held_between.append(lock.locked())
+            return await super().collection(uid)
+
+    async def _curate(svc: Any, collection_uid: str, **kwargs: Any) -> dict[str, object]:
+        held_during.append(lock.locked())
+        return {"status": "ok"}
+
+    async def _collections() -> list[str]:
+        return ["uid-busy", "uid-free"]
+
+    await CurationWorker(
+        service=_Watching(),  # type: ignore[arg-type]
+        curate=_curate,
+        is_enabled=_enabled,
+        deliver=None,
+        list_collections=_collections,
+        runs=UpkeepRunRegistry(),
+        lock=lock,
+    ).run_once()
+
+    assert held_during == [True, True]
+    assert held_between == [False, False]
+    assert lock.locked() is False

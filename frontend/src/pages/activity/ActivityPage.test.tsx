@@ -8,7 +8,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { acceptance } from "@/test/acceptance";
 import type { StreamMessage } from "@/lib/events/eventStream";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 
 // The change feed: tests drive its listener by hand instead of opening a stream.
 const stream: { listener: ((m: StreamMessage) => void) | null } = { listener: null };
@@ -313,7 +316,7 @@ describe("ActivityPage", () => {
     act(() =>
       stream.listener?.({
         type: "change",
-        change: { seq: 1, kind: "skill", id: "u", rev: 2, op: "upsert" },
+        change: { seq: 1, kind: "skill", id: "u", op: "upsert" },
       }),
     );
     await waitFor(() =>
@@ -421,27 +424,23 @@ test("a failed call opens with its error first", async () => {
   );
 });
 
-acceptance(
-  "resource-framework",
-  "the Activity drawer shows a record's trace id",
-  async () => {
-    mockApi({
-      audit: [{ ...AUDIT_ENTRY, trace_id: "req-a1b2" }],
-      invocations: [{ ...INVOCATION, trace_id: "mcp-c3d4" }],
-    });
-    const { unmount } = render(wrap(<ActivityPage />));
-    fireEvent.click((await screen.findByText(/filesystem/)).closest("tr")!);
-    const change = await screen.findByRole("complementary", { name: "Details" });
-    expect(within(change).getByText("Trace id")).toBeInTheDocument();
-    expect(within(change).getByText("req-a1b2")).toBeInTheDocument();
-    unmount();
+acceptance("resource-framework", "the Activity drawer shows a record's trace id", async () => {
+  mockApi({
+    audit: [{ ...AUDIT_ENTRY, trace_id: "req-a1b2" }],
+    invocations: [{ ...INVOCATION, trace_id: "mcp-c3d4" }],
+  });
+  const { unmount } = render(wrap(<ActivityPage />));
+  fireEvent.click((await screen.findByText(/filesystem/)).closest("tr")!);
+  const change = await screen.findByRole("complementary", { name: "Details" });
+  expect(within(change).getByText("Trace id")).toBeInTheDocument();
+  expect(within(change).getByText("req-a1b2")).toBeInTheDocument();
+  unmount();
 
-    render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
-    fireEvent.click((await screen.findByText(target("github.search_issues"))).closest("tr")!);
-    const call = await screen.findByRole("complementary", { name: "Details" });
-    expect(within(call).getByText("mcp-c3d4")).toBeInTheDocument();
-  },
-);
+  render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
+  fireEvent.click((await screen.findByText(target("github.search_issues"))).closest("tr")!);
+  const call = await screen.findByRole("complementary", { name: "Details" });
+  expect(within(call).getByText("mcp-c3d4")).toBeInTheDocument();
+});
 
 test("a record written with no trace id shows no trace row", async () => {
   mockApi({ audit: [AUDIT_ENTRY] });

@@ -24,12 +24,6 @@ from typing import Protocol
 from coffer.domain.provider.modality import Modality
 from coffer.domain.usage.pricing import ModelPrice
 
-#: WIRE PROTOCOLS Coffer treats as machine-local; their base URL is loopback, so
-#: the SSRF guard (which blocks loopback) is intentionally skipped for them. The
-#: members are ``domain.provider.config.Protocol`` values, because that is what
-#: the port's ``provider`` argument carries — a detected wire, not a vendor id.
-LOCAL_PROTOCOLS = frozenset({"ollama"})
-
 
 @dataclass(frozen=True)
 class TestResult:
@@ -104,13 +98,6 @@ class ProviderIntrospectionPort(Protocol):
         self, *, provider: str, model: str, base_url: str | None, api_key: str | None
     ) -> None:
         """Raise on failure (any exception); return None on success."""
-
-    async def detect_protocol(self, *, base_url: str | None, api_key: str | None) -> str:
-        """Classify the endpoint's wire as 'anthropic'/'openai'/'ollama'/'unknown'.
-
-        Conservative: only assert anthropic/openai when a probe clearly succeeds;
-        ambiguity returns 'unknown' so the agent page falls back to user choice.
-        """
 
 
 class EngineNotifyPort(Protocol):

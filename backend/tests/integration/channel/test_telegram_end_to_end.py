@@ -15,7 +15,7 @@ import pytest
 
 from coffer.application.channel.ports import AdapterCallbacks
 from coffer.application.chat.turn_orchestrator import active_turns
-from coffer.domain.errors import SecretMissing
+from coffer.domain.secret_errors import SecretMissing
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 from tests.integration.infrastructure.channel.conftest import (
     FakeTelegram,

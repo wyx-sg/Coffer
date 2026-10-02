@@ -15,7 +15,8 @@
 // another route. It is a placeholder that parses plus a middleware that never
 // lets a request reach it.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { getApiClient, resetApiClient } from "./client";
+import { getApiClient, resetApiClient, unwrap, unwrapOptional, unwrapVoid } from "./client";
+import { ApiError } from "./errors";
 import { acceptance } from "@/test/acceptance";
 
 const realLocation = window.location;
@@ -71,5 +72,62 @@ describe("getApiClient", () => {
     expect(fetchSpy).toHaveBeenCalled();
     const request = fetchSpy.mock.calls[0][0] as Request;
     expect(request.url).toBe("http://127.0.0.1:8000/api/v1/daemon/status");
+  });
+
+  test("sends the token and the actor on every request", async () => {
+    servedFrom("http://127.0.0.1:8000");
+    (window as unknown as Record<string, unknown>).__COFFER_TOKEN__ = "tok-1";
+    resetApiClient();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+
+    await getApiClient().GET("/daemon/status");
+
+    const request = fetchSpy.mock.calls[0][0] as Request;
+    expect(request.headers.get("X-Coffer-Token")).toBe("tok-1");
+    expect(request.headers.get("X-Coffer-Actor")).toBe("ui");
+    delete (window as unknown as Record<string, unknown>).__COFFER_TOKEN__;
+  });
+});
+
+describe("unwrap", () => {
+  const settled = (body: unknown, status: number) => {
+    servedFrom("http://127.0.0.1:8000");
+    resetApiClient();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(body === undefined ? null : JSON.stringify(body), {
+        status,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    return getApiClient().GET("/daemon/status");
+  };
+
+  test("returns the 2xx body", async () => {
+    await expect(unwrap(settled({ ok: 1 }, 200))).resolves.toEqual({ ok: 1 });
+  });
+
+  test("throws the envelope's code, message and details on a non-2xx", async () => {
+    const err = await unwrap(
+      settled({ error: { code: "NOPE", message: "refused", details: { reason: "x" } } }, 409),
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({
+      code: "NOPE",
+      envelopeMessage: "refused",
+      details: { reason: "x" },
+    });
+  });
+
+  test("falls back to INTERNAL_ERROR with the status when the body is not the envelope", async () => {
+    const err = await unwrapVoid(settled({ detail: "boom" }, 500)).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: "INTERNAL_ERROR", envelopeMessage: "request failed: 500" });
+  });
+
+  test("treats an empty 204 as no value", async () => {
+    await expect(unwrapOptional(settled(undefined, 204))).resolves.toBeUndefined();
+    await expect(unwrapVoid(settled(undefined, 204))).resolves.toBeUndefined();
+    await expect(unwrap(settled(undefined, 204))).rejects.toBeInstanceOf(ApiError);
   });
 });

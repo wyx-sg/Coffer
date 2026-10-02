@@ -37,7 +37,7 @@ _CWD_META_KEY = "coffer/cwd"
 #: identity from (spec mcp-gateway "Take the agent identity from the
 #: handshake"). The value is the agent
 #: resource's **uid**, matched against the uids a scope holds (ADR
-#: resource-identity-is-an-immutable-uid).
+#: identity-is-the-uid-inside-the-file).
 _AGENT_UID_META_KEY = "coffer/agent-uid"
 
 
@@ -49,7 +49,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     because this string outlives the edit that renames the agent — the entry is
     written once into a file Coffer does not otherwise touch — and because the
     gateway matches what we report against the uids a resource's ``scope`` holds
-    (ADR resource-identity-is-an-immutable-uid).
+    (ADR identity-is-the-uid-inside-the-file).
 
     ``allow_abbrev=False`` keeps the flag exact: argparse otherwise takes any
     unambiguous PREFIX of a long option, so ``--agent <x>`` would be read as

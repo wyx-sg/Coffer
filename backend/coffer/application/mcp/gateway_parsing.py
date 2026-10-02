@@ -15,7 +15,7 @@ _CWD_META_KEY = "coffer/cwd"
 #: The extension key the shim stamps its self-reported agent identity into (spec
 #: mcp-gateway "Take the agent identity from the handshake"). The value is the agent
 #: resource's **uid**, matched against the uids a scope holds, never against a label
-#: (ADR resource-identity-is-an-immutable-uid; "no name fallback").
+#: (ADR identity-is-the-uid-inside-the-file; "no name fallback").
 _AGENT_UID_META_KEY = "coffer/agent-uid"
 
 

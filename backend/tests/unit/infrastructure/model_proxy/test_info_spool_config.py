@@ -15,6 +15,7 @@ from coffer.infrastructure.daemon import config
 from coffer.infrastructure.model_proxy import info as info_mod
 from coffer.infrastructure.model_proxy.spool import UsageSpool, finalize_orphans, spool_dir
 from coffer.infrastructure.net.loopback_authority import is_allowed_host, split_authority
+from tests.support.waiting import wait_until
 
 
 def _record(n: int) -> UsageRecord:
@@ -60,11 +61,12 @@ async def test_spool_finalizes_on_count_on_age_and_on_close(tmp_path: Path) -> N
     assert [r["dedupe_key"] for r in lines] == ["d0", "d1", "d2", "d3"]
     assert all(f.name.startswith("77-") for f in done)
     spool.append(_record(9))
-    import asyncio
-
-    await asyncio.sleep(0.5)  # age-based rename, no flush
-    assert (
-        not list(tmp_path.glob("*.part")) and len(list(tmp_path.glob("*.jsonl"))) == len(done) + 1
+    # age-based rename, no flush
+    await wait_until(
+        lambda: (
+            not list(tmp_path.glob("*.part"))
+            and len(list(tmp_path.glob("*.jsonl"))) == len(done) + 1
+        )
     )
     spool.append(_record(10))
     await spool.close()

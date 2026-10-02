@@ -54,7 +54,7 @@ flowchart LR
 | **local** | `local/` | Machine-local resources (agents), reach, the sync remote, retention, the secret boundary's approvals, machine-local ciphertext. | Never | No | You lose settings you would set again |
 | **content** | `content/` | Chat and channel attachments, the chat workspace. | Not yet | No | No: it is your only copy |
 | **runs** | `runs.db` | Audit log, MCP invocations, conversations, channel threads and outbox, sync rounds, usage, quota. | Never | It *is* history | You lose history |
-| **derived** | `derived/` | `derived.db`, the memory tree, the agent transcript cache, the uid index, Coffer's own guide skill, editor copies of sync conflicts. | Never | No | Yes: it is rebuilt |
+| **derived** | `derived/` | `derived.db`, the memory tree, the agent transcript cache, Coffer's own guide skill, editor copies of sync conflicts. | Never | No | Yes: it is rebuilt |
 
 Which class a resource belongs to is declared by its kind, with a per-row refinement: most kinds live in the vault, `agent` is local (an agent's config directory is a fact about this machine), `memory` partitions are derived, and the builtin `coffer-guide` skill is derived because every machine renders its own.
 
@@ -98,7 +98,7 @@ A resource file carries its identity, format version, name, description and conf
 - **Every document carries `format_version`.** A file older than the build is read through an in-memory upgrade chain and not rewritten on an ordinary write; a newer one is read-only, or flagged if this build cannot read it. Unknown fields are kept where they were. See [Every Vault File Carries Its Own Format Version](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-file-carries-its-format-version.md).
 - **Paths under your home** are written against `${HOME}` and expanded on each machine.
 - **Reach is not in the file.** Whether a resource is enabled here, and for which agents, is in `local/reach.json`.
-- **`rev` and `updated_at` are not in the file.** They are a per-uid counter in the derived index (`derived/index/resources.json`), bumped when the file's content changes. Deleting the index restarts the counters, which only the in-process event dedupe reads.
+- **`updated_at` is not in the file.** It is the file's modification time on this machine; no revision counter or index is kept.
 
 What Coffer ignores in the repository is written into `.git/info/exclude`, never into a tracked `.gitignore` another machine could change: editor and system litter, hidden entries inside collections (except `.inbox/`), and `secret/` unless your sync remote carries secrets.
 
@@ -164,7 +164,6 @@ Every connection runs this pragma suite:
 ├── derived.db                   MCP server health, skill deliveries, capability first/last seen
 ├── memory/<partition>/          the memory tree (MEMORY.md, notes/, RETIRED.md, .raw/)
 ├── cache/agent/                 agent transcript cache
-├── index/resources.json         uid index and per-uid revision counter
 ├── resources/                   derived resource files (memory partitions, coffer-guide)
 ├── skills/coffer-guide/         Coffer's own guide skill, rendered from the build
 └── sync-conflicts/              editor copies of a stopped round's conflicting files
@@ -199,7 +198,7 @@ The vault needs `git`. A machine without it fails at startup with a message sayi
 
 ## Migrations of runs.db
 
-Schema changes to `runs.db` are Alembic revisions kept in the persistence package, one file per revision named `YYYYMMDD_NNNN_<slug>`. The head is `0136`, the revision that turned the old database into `runs.db`: it re-keyed the history tables to uids and dropped every table whose state moved into files. A schema change is always a migration, never tables created implicitly from the models.
+Schema changes to `runs.db` are Alembic revisions kept in the persistence package, one file per revision named `YYYYMMDD_NNNN_<slug>`. The head is `0138`, which dropped the unused `owner` column from `conversations`. `0137` added the correlation ids to the audit log, and `0136`, before it, turned the old database into `runs.db`: it re-keyed the history tables to uids and dropped every table whose state moved into files. A schema change is always a migration, never tables created implicitly from the models.
 
 Migrations run in the daemon's lifespan, before any service is built:
 
@@ -244,8 +243,7 @@ Two small JSON files sit directly under `~/.coffer`. `daemon.json` is runtime st
 | The `vault` package in the domain layer | Layout, documents, format versions, writers and trailers. |
 | The `vault` package in the application layer | Validation rules, history and restore, problems. |
 | The `vault` package in the infrastructure layer | The class roots under `~/.coffer`, the repository, the writer, the scanner, the resource and state stores, reach, local JSON, the one-time upgrade. |
-| The `persistence` package in the infrastructure layer | The runs.db engine, models and Alembic revisions; `derived.db`. |
-| The HTTP surface | Startup migration, backup, too-new guard, the refusal of an old home. |
+| The `persistence` package in the infrastructure layer | The runs.db engine, models and Alembic revisions; `derived.db`; the migration runner (startup migration, backup, too-new guard, the refusal of an old home), which both the daemon's startup and `coffer migrate` call. |
 | The `secret` package in the infrastructure layer | Secret ciphertext as files. |
 | The `daemon` package in the infrastructure layer | `daemon-config.json`. |
 

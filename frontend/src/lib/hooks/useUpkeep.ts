@@ -41,7 +41,7 @@ function useUpkeepRuns() {
  * under (`UPKEEP_RUNS.guard(kind, uid)`), for the Curate / Update route and
  * for the sweep alike, because a pass that takes minutes must be aimed at
  * something that cannot be renamed underneath it (ADR
- * resource-identity-is-an-immutable-uid). A lookup by name never matched.
+ * identity-is-the-uid-inside-the-file). A lookup by name never matched.
  *
  * `null` while the first read is still in flight, which is the honest answer
  * to give a button: the page's own optimistic pending state covers the moment

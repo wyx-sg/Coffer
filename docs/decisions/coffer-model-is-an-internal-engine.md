@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-09
 **Deciders**: Yuxing Wu
-**Related**: [Internal Engine Settings](internal-engine-settings.md), [Knowledge Curation](knowledge-curation.md), [Aggregate Agent Memory, Never Write It](aggregate-agent-memory-never-write-it.md), [Tool Overload: Tier the List, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), spec internal-engine "Resolve the engine's connection and model together", spec internal-engine "Make every internal pass a clean no-op when nothing is configured", spec chat "Require every writer to name the agent", [principles](../../docs-site/architecture/principles.md) ("Not a model provider"), PR #57, PR #93, PR #315
+**Related**: [Internal Engine Settings](internal-engine-settings.md), [Knowledge Curation](knowledge-curation.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Aggregate Agent Memory, Never Write It](aggregate-agent-memory-never-write-it.md), [Tool Overload: Tier the List, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), spec internal-engine "Resolve the engine's connection and model together", spec internal-engine "Make every internal pass a clean no-op when nothing is configured", spec chat "Require every writer to name the agent", [principles](../../docs-site/architecture/principles.md) ("Not a model provider"), PR #57, PR #93, PR #315
 
 ## Context
 
@@ -20,14 +20,12 @@ rather than an agent's:
 | Memory distil | Rewrites the derived digest of the agents' aggregated memory | `application/memory/distil*.py`, one-shot `LangchainLlmCompletion` |
 | Knowledge curation | Merges inbox material into a collection's documents and carries a person's edit through the rest | `infrastructure/llm/agentic_reorg.py` — a LangGraph ReAct loop with four internal write tools |
 | Knowledge ingest | Writes the one-line description of an ingested document | `application/knowledge/ingest.py`, one-shot completion |
-| Vault-sync conflicts | Resolves, inside the git working tree only, a conflict the converge round cannot settle mechanically | `AgenticConflictResolver`, wired in `surfaces/http/sync_wiring.py` |
 | Voice transcription | Turns an inbound voice message into text for the turn | `infrastructure/llm/transcription.py`, on its own connection |
 
 Every one of these is unattended or invisible: nobody converses with the model
 while it runs, and each pass has a safe answer when no model is configured
 (material becomes a document as it stands, a description falls back to the
-document's opening prose, the digest is not rewritten, a conflicted converge
-round stops for the user's own git tools, audio is handed to the agent as a
+document's opening prose, the digest is not rewritten, audio is handed to the agent as a
 file). The code resolves the engine through one
 seam, `application/engine/resolve.py`, which answers `None` rather than raising
 when either half — a flagged connection or a chosen model — is missing.
@@ -66,7 +64,7 @@ BM25 ranker. The model is configured once, in Settings → Coffer's model
 Pros: each pass gets exactly the model capability it needs (a completion, or a
 fenced loop with four tools) and nothing more; the no-op default means Coffer
 works with no model at all; LangChain and LangGraph stay confined to
-`infrastructure/llm` (import-linter Contract 9a), so the dependency is one
+`infrastructure/llm` (import-linter Contract 9a in `backend/pyproject.toml`), so the dependency is one
 package deep. Cons: the operator configures a model separately from the agents
 they already pay for, and a pass without one is quietly not done — the settings
 page has to say so. It wins because every consumer is unattended background
@@ -102,8 +100,7 @@ Delete the LLM machinery; do every pass mechanically or not at all.
 
 Pros: no model to configure, no LangChain dependency, no model cost. Cons: the
 passes that need judgement have no mechanical equivalent — merging new material
-into existing documents, rewriting a digest, describing a source, resolving a
-text conflict — and transcription needs a speech model by definition. The
+into existing documents, rewriting a digest, describing a source — and transcription needs a speech model by definition. The
 passes already degrade to their no-model answers, so Option A contains Option D
 as its unconfigured state; deleting the engine would remove the configured
 state without saving anything the no-op path does not already save.
@@ -126,8 +123,8 @@ has none.
 
 Coffer's model is an internal engine. It has no chat persona, no agent-registry
 entry and no gateway tool. It is reached only by Coffer's own passes — memory
-distil, knowledge curation and ingest, vault-sync conflict resolution, and
-speech transcription on its own connection — each through a port, each a clean
+distil, knowledge curation and ingest, and speech transcription on its own
+connection — each through a port, each a clean
 no-op when the engine is not configured. Rules a future change must respect:
 
 - The chat surface and the channels drive managed agents only; no built-in
@@ -148,5 +145,8 @@ no-op when the engine is not configured. Rules a future change must respect:
 - Pass quality depends on the model the operator chooses, and Coffer cannot
   vouch for it. The fences — curation's four tools and write cap, distil
   writing only the derived tree — bound what a poor model can damage.
+- A sync conflict is not an engine pass: the round stops and the person
+  resolves it, with a hand-off prompt for their own agent
+  ([Sync Only Pulls and Pushes the Vault Repository](sync-applies-clean-merges-and-stops-on-any-conflict.md)).
 - Adding a new internal pass means adding a port consumer, not a user surface.
   Adding a user-facing model surface would reopen this decision.

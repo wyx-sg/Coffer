@@ -19,7 +19,7 @@ tools, skills, CLIs), **Context** (knowledge and memory) and **System**
 footer. See
 [The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md)
 for the decision behind it, and the earlier
-[Sidebar Grouped by Role](../../../docs/decisions/sidebar-grouped-by-role.md)
+[The Sidebar Is Grouped by What the Person Comes to Do: Agents, Run, Capabilities, Context, System](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md)
 for the axis it replaced (sidebar policy kept from it: no "soon" placeholders).
 **Observability** (system health / metrics) is a reserved future surface and
 appears in the sidebar only once it ships; Activity is not it, because a record
@@ -87,8 +87,9 @@ every CLI a skill requires on the CLIs page". An
 entry whose experimental feature is switched off (spec
 [experimental-features](../experimental-features/spec.md) "Close every surface of a switched-off feature")
 MUST be left out, and MUST appear on the next render after the feature is
-switched on. Knowledge, Memory and Sync are ordinary entries, owned by no
-experimental feature:
+switched on. Model providers and Usage belong to `models`, Knowledge to `knowledge`,
+Memory to `memory` and Sync to `sync`; every other entry, Conversations and
+Channels included, is owned by no feature and is always there:
 
 ```
   Overview         /                  — the landing page
@@ -127,7 +128,8 @@ experimental feature:
 - **GIVEN** a sidebar entry owned by a registered experimental feature that is switched off
 - **WHEN** the app shell is rendered
 - **THEN** the sidebar leaves that entry out and lists every other entry under its heading
-- **AND** with a registry that names no feature, the sidebar lists all fifteen entries
+- **AND** with every feature switched on, the sidebar lists all fifteen entries
+- **AND** with the four features switched off, it lists only Overview, Agents, Conversations, Channels, MCP servers, Custom tools, Skills, CLIs, Secrets and Activity
 
 ### Requirement: Call a surface by one name everywhere
 A surface MUST carry one name in every place it is named — sidebar, page header,
@@ -214,7 +216,9 @@ tabs are [agent-registry](../agent-registry/spec.md)'s; this capability owns
 only that they are tabs on a detail page laid out like every other.
 
 Every detail page MUST put its tab in the path: `/<kind>/<id>/<tab>`, with the
-default tab at the bare `/<kind>/<id>`, never in a `?tab=` query. The `<id>` is
+default tab at the bare `/<kind>/<id>`, never in a `?tab=` query. A list page
+with no detail to nest under (Sync, Activity) carries its tab in the query
+instead, as `?tab=`, with the default tab at the bare address. The `<id>` is
 the resource's name where the kind's name is fixed and unique within the kind —
 skills (`/skills/<name>`), MCP servers (`/mcp-servers/<name>`) and custom tool
 groups (`/custom-tools/<group>`), which are `mcp_server` resources — the agent's
@@ -320,12 +324,13 @@ its own button beside it.
 For a scoped kind, the list's reach filter MUST offer the same states the panel
 does, rather than a bare enabled / disabled pair, and the column, the filter and
 the button MUST all use the word *reach*, because they are all asking the one
-question.
+question. The Skills library, the MCP servers list and the custom-tool groups list
+each carry this filter.
 
 #### Scenario: the reach filter offers the panel's states under the reach name
 - **GIVEN** a list surface of a scoped kind
 - **WHEN** its reach filter is built
-- **THEN** it offers Disabled, Every agent and Only selected agents, labelled as the reach button labels them
+- **THEN** it offers All, then Disabled, Every agent and Only selected agents, the last three labelled as the reach button labels them
 - **AND** the filter is headed Reach, the word the column and the button use
 
 ### Requirement: Make empty, loading and error states first-class
@@ -721,18 +726,18 @@ fails CI rather than showing a reader a raw `resource_enabled`.
 - **THEN** each has a plain-language line in both locales
 - **AND** a change of that type renders as its line rather than as the raw event code
 
-### Requirement: Organise Settings into five tabs
+### Requirement: Organise Settings into six tabs
 Settings — the modal of "Open Settings as a modal from the sidebar footer" —
-MUST carry exactly five tabs, in this order, grouped by what they manage rather
-than by how Coffer is built, and MUST open on General:
+MUST carry six tabs, in this order, in every build, grouped by what they manage
+rather than by how Coffer is built, and MUST open on General:
 
 - **General** (`/settings/general`) — display preferences (the interface language
   and the theme, the default page size and the preferred external editor), the
   **Coffer's model** section: the
   model Coffer's own engine runs on and the speech-to-text model (see "Choose
-  Coffer's model in Settings › General"), and — only while the registry names
-  an experimental feature — the Experimental features card (spec
-  [experimental-features](../experimental-features/spec.md) "List and switch the features on the General tab").
+  Coffer's model in Settings › General"). It carries no experimental-features
+  card; the switches are on the Features tab. While `models` is off the
+  connection choice for Coffer's model is left out.
 - **Security** (`/settings/security`) — what is about this machine only: where
   the master encryption key lives — in a signed release its Keychain access
   group; in a development build the file `~/.coffer/master.key` or the login
@@ -748,6 +753,9 @@ than by how Coffer is built, and MUST open on General:
 - **About** (`/settings/about`) — version, license, source, whether a newer
   version is available (see "Check for and install updates on Settings › About"),
   and a small **Copy diagnostics** action beside the version.
+- **Features** (`/settings/features`) — the four experimental features, each
+  marked Experimental, with its switch (spec
+  [experimental-features](../experimental-features/spec.md) "Show the Features tab in every build").
 
 Clicking a tab
 swaps the modal's right pane without a full page reload and without closing the
@@ -757,7 +765,7 @@ modal.
 - **GIVEN** the user navigates to `/settings`
 - **WHEN** the route resolves
 - **THEN** the Settings modal opens on the General tab
-- **AND** the modal's tab list shows General, Security, Data, Daemon, and About — exactly those five, in that order — with the current route highlighted
+- **AND** the modal's tab list shows General, Security, Data, Daemon, About and Features — exactly those six, in that order — with the current route highlighted
 - **AND** clicking a tab swaps the right pane content without a full page reload and the modal stays open
 
 #### Scenario: the security tab keeps only machine-level settings
@@ -1220,13 +1228,22 @@ An address no route matches MUST render a not-found page in the workspace,
 with the shell around it, that names the address, suggests the sidebar page
 closest to its first segment when one is close ("Did you mean /mcp-servers"),
 and offers **Back to Overview** and **Search Coffer**, which opens the command
-palette over the page.
+palette over the page. The address of a page that belongs to a switched-off
+experimental feature is an address no route matches: it MUST render this page,
+with no notice that the feature is switched off (spec
+[experimental-features](../experimental-features/spec.md) "Make a switched-off
+feature look absent in the UI").
 
 #### Scenario: an unknown address suggests the closest page
 - **GIVEN** the user opens `/mcp/sentri`
 - **WHEN** the route resolves
 - **THEN** the page says nothing lives at `/mcp/sentri`, suggests `/mcp-servers`, and offers Back to Overview and Search Coffer
 - **AND** Search Coffer opens the command palette
+
+#### Scenario: a switched-off feature's address is not found
+- **GIVEN** the `knowledge` feature switched off
+- **WHEN** the user opens `/knowledge`
+- **THEN** the not-found page shows, with no mention of the feature being switched off and no switch-on button
 
 ### Requirement: Send a memory-hook problem on Overview to the agent's Hooks tab
 When Coffer's memory hook in an agent's own settings no longer matches what Coffer installs —
@@ -1398,7 +1415,7 @@ disabled.
 #### Scenario: copy diagnostics carries no secret
 - **GIVEN** Settings › About open
 - **WHEN** the user chooses Copy diagnostics beside the version
-- **THEN** the clipboard holds the version, channel, host, daemon state and port and the enabled features, and no token or secret value
+- **THEN** the clipboard holds the version, host, daemon state and port and the enabled features, and no token or secret value
 
 ### Requirement: Group the sidebar by what the user comes to do
 The sidebar MUST be grouped by what the user comes to Coffer to do, so that each
@@ -1510,9 +1527,9 @@ page its connection (spec [desktop-app](../desktop-app/spec.md) "Restart by stop
 The About tab MUST show the version (with the short commit a release build was
 made from, when stamped), license, source, the data folder, the update check of "Check
 for and install updates on Settings › About" and **Copy diagnostics** only —
-which copies the version, release channel, host, daemon state and port, and
+which copies the version, host, daemon state and port, and
 the enabled experimental features as plain text, and never a token or a
-secret — with no release-channel control, no language picker (the
+secret — with no language picker (the
 sidebar already switches language) and no installed-resource-kind list
 (developer detail). Remaining jargon is rewritten in plain language (e.g.
 "prune" is phrased as clearing expired data).
@@ -1521,7 +1538,7 @@ sidebar already switches language) and no installed-resource-kind list
 - **GIVEN** the user opens the Settings tabs
 - **WHEN** each tab is fully rendered
 - **THEN** no tab exposes a "Shutdown daemon" or "Stop daemon" control
-- **AND** the About tab shows version / license / source / data folder, the update check and Copy diagnostics only — no language picker, no resource-kind list, no release channel
+- **AND** the About tab shows version / license / source / data folder, the update check and Copy diagnostics only — no language picker, no resource-kind list
 
 ### Requirement: Set when the daemon runs on the Daemon tab
 The Daemon tab MUST carry a card for when Coffer's daemon runs, with one control: a **Start at
@@ -1729,7 +1746,7 @@ then a match at the start of a name), then the other matching pages, then the
 matching objects in one group per kind, named as the kind's sidebar entry and
 in sidebar order, each group holding a few; typing more narrows them.
 
-A page of a switched-off experimental feature MUST NOT appear. The
+A page or object of a switched-off experimental feature MUST NOT appear. The
 palette MUST read the list routes the pages already read and add no route of its
 own. Arrow keys MUST move the selection, Enter MUST open it, and Escape MUST
 close the palette and return focus where it was.
@@ -1909,7 +1926,7 @@ beside the pages used every day, the convention of desktop applications' own
 preferences windows.
 
 The modal MUST stay addressable by route: each tab is `/settings/<tab>`
-(General, Security, Data, Daemon, About — see "Organise Settings into five
+(General, Security, Data, Daemon, About, Features — see "Organise Settings into six
 tabs"), and while it is open the address bar and history carry that route,
 so a deep link, a reload, a link from another page (such as the footer's link
 to `/settings/daemon`) or the palette opens the modal on that tab.

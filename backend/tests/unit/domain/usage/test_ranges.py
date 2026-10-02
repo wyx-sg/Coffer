@@ -16,9 +16,6 @@ _NOW = datetime(2026, 9, 30, 23, 30, tzinfo=UTC)
 def test_today_is_the_local_day() -> None:
     span = resolve_range("today", now=_NOW, tz=_SGT)
     assert (span.start, span.end) == (date(2026, 10, 1), date(2026, 10, 1))
-    lo, hi = span.utc_bounds()
-    assert lo == datetime(2026, 9, 30, 16, 0, tzinfo=UTC)
-    assert hi == datetime(2026, 10, 1, 16, 0, tzinfo=UTC)
 
 
 @pytest.mark.acceptance(

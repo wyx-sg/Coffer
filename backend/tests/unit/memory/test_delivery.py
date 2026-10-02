@@ -15,14 +15,23 @@ from coffer.domain.memory.delivery import (
     HOOKS_KEY,
     MARKER,
     DeliveryStatus,
+    EntrySpec,
     MalformedDeliveryConfig,
     entry_command,
     find_command,
     hook_invocation,
-    install_entry,
+    install_entries,
     is_installed,
     remove_entry,
 )
+
+
+def install_entry(
+    text: str, *, event: str, command: str, matcher: str | None, timeout: int | None = None
+) -> str:
+    """One entry on one event, through the function production uses."""
+    return install_entries(text, (EntrySpec(event, command, matcher, timeout),))
+
 
 # ---------------------------------------------------------------------------
 # entry_command / hook_invocation
@@ -52,7 +61,7 @@ def test_entry_command_is_marker_prefixed() -> None:
 
 
 # ---------------------------------------------------------------------------
-# install_entry: fresh config, idempotency, foreign-entry preservation
+# install_entries: fresh config, idempotency, foreign-entry preservation
 # ---------------------------------------------------------------------------
 
 

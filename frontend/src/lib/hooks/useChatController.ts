@@ -44,6 +44,7 @@ interface FirstMessage {
 /** What the draft will create: the agent, where it runs, and how. `model` and
  *  `effort` null inherit the agent's own defaults; `cwd` null is Coffer's own
  *  workspace (~/.coffer/content/workspace). */
+/** @ui-only draft form state; never crosses the wire. */
 export interface DraftConfig {
   agentKey: string;
   cwd: string | null;

@@ -1,7 +1,7 @@
 // frontend/src/pages/settings/SettingsModal.tsx
 //
 // Settings as a large modal over the page the user is on (spec web-ui "Open
-// Settings as a modal from the sidebar footer", "Organise Settings into five
+// Settings as a modal from the sidebar footer", "Organise Settings into six
 // tabs"). Each tab is a route, `/settings/<tab>`; the shell keeps the page
 // underneath rendered, and closing — the close control, Escape, a click
 // outside, or browser Back — returns to it at its own route. A tab switch
@@ -10,7 +10,7 @@
 //
 // The tabs hold the settings pages' existing content (their redesign is later
 // work in change revise-web-ui-ia): General with the Coffer's model section,
-// Security, Data, Daemon (with Start at login, moved from General) and About.
+// Security, Data, Daemon (with Start at login, moved from General), About and Features.
 import { Navigate, useLocation, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
@@ -23,15 +23,17 @@ import { cn } from "@/lib/utils";
 import { AboutPage } from "./AboutPage";
 import { DaemonSettings } from "./DaemonSettings";
 import { DataSettings } from "./DataSettings";
+import { ExperimentalFeaturesSettings } from "./ExperimentalFeaturesSettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { SecuritySettings } from "./SecuritySettings";
 
-const PANES: Record<SettingsTabId, () => JSX.Element> = {
+const PANES: Record<SettingsTabId, () => JSX.Element | null> = {
   general: GeneralSettings,
   security: SecuritySettings,
   data: DataSettings,
   daemon: DaemonSettings,
   about: AboutPage,
+  features: ExperimentalFeaturesSettings,
 };
 
 function isTab(value: string | undefined): value is SettingsTabId {
@@ -96,7 +98,7 @@ export function SettingsModal() {
                       openSettings(item.id);
                     }}
                     className={cn(
-                      "flex h-[30px] shrink-0 items-center gap-[9px] rounded-item px-2.5 text-sm transition-colors duration-fast",
+                      "flex h-control-md shrink-0 items-center gap-[9px] rounded-item px-2.5 text-sm transition-colors duration-fast",
                       active
                         ? "bg-surface-selected font-label text-text"
                         : "text-text-muted hover:bg-surface-hover hover:text-text",

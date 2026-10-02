@@ -43,7 +43,10 @@ class _Pending:
 
 
 class PairingManager:
-    """Issue and claim pairing codes, one pending code per channel."""
+    """Issue and claim pairing codes, one pending code per channel.
+
+    Keyed by the channel's uid, so a rename between issuing and claiming does not
+    lose the code (ADR identity-is-the-uid-inside-the-file)."""
 
     def __init__(
         self,
@@ -55,7 +58,7 @@ class PairingManager:
         self._ttl = ttl_seconds
         self._max_attempts = max_attempts
         self._now = now_fn or (lambda: datetime.now(tz=UTC))
-        self._pending: dict[str, _Pending] = {}
+        self._pending: dict[str, _Pending] = {}  # channel uid -> code
 
     def issue(self, channel: str) -> tuple[str, datetime]:
         """Generate a fresh code for the channel, replacing any pending one."""
@@ -139,7 +142,12 @@ async def claim_pairing(
     """
     if not text.strip():
         return None
-    if not pairing.try_claim(binding.resource.name, text):
+    if not sender_id:
+        # A pairing binds a person, and the owner gate compares sender ids: a
+        # claim from a message whose sender the transport could not name would
+        # bind nobody. Refused before the code is touched, so it burns nothing.
+        return None
+    if not pairing.try_claim(binding.resource.uid, text):
         _logger.debug("channel.inbound.ignored", extra={"channel": binding.resource.name})
         return None
     peer = ChannelPeer(
@@ -147,10 +155,10 @@ async def claim_pairing(
         chat_id=chat_id,
         display_name=sender_display,
         paired_at=datetime.now(tz=UTC),
-        sender_id=sender_id or None,
+        sender_id=sender_id,
     )
     await peers.upsert_replacing(
-        peer, await _previous_owner_chats(peers, binding.resource.uid, chat_id, peer.sender_id)
+        peer, await _previous_owner_chats(peers, binding.resource.uid, chat_id, sender_id)
     )
     await audit.record(
         AuditEventType.CHANNEL_PAIRED.value,
@@ -160,13 +168,13 @@ async def claim_pairing(
         # precisely so a caller that already holds the row cannot mis-file it.
         resource=binding.resource,
         actor="channel",
-        details={"chat_id": chat_id, "display_name": sender_display},
+        details={"chat_id": chat_id, "sender_id": sender_id, "display_name": sender_display},
     )
     return peer
 
 
 async def _previous_owner_chats(
-    peers: ChannelPeerRepoPort, resource_uid: str, chat_id: str, sender_id: str | None
+    peers: ChannelPeerRepoPort, resource_uid: str, chat_id: str, sender_id: str
 ) -> list[str]:
     """The chats to un-pair: every one that belongs to anyone but the claimer.
 
@@ -180,20 +188,14 @@ async def _previous_owner_chats(
     The same sender re-pairing keeps its rows, groups included — that is a rebind,
     not a change of owner.
 
-    A row paired before the gate learned sender ids has none. It is kept only when
-    it is provably the claimer's own DM: a DM's chat id IS its person's id
-    (Telegram private chat id = user id, SeaTalk DM chat id = employee_code). Any
-    other identity-less row — another person's DM, a group — proves nothing and
-    goes. The caller writes the un-pairs and the new row as one
+    The caller writes the un-pairs and the new row as one
     ``upsert_replacing``, so a failure cannot leave the channel ownerless.
     """
     drop: list[str] = []
     for existing in await peers.list_by_resource(resource_uid):
         if existing.chat_id == chat_id:
             continue  # the upsert rebinds this row in place
-        if sender_id is not None and existing.sender_id == sender_id:
+        if existing.sender_id == sender_id:
             continue
-        if sender_id is not None and existing.sender_id is None and existing.chat_id == sender_id:
-            continue  # the claimer's own legacy DM
         drop.append(existing.chat_id)
     return drop

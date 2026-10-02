@@ -8,7 +8,8 @@
 // an import or adoption from either refreshes both.
 import { useQueries } from "@tanstack/react-query";
 
-import { agentsApi, type AgentOut, type McpEntryOut } from "@/lib/api/agents";
+import { agentsApi, type AgentOut } from "@/lib/api/agents";
+import type { McpEntryOut } from "@/lib/api/agents-workspace";
 import { agentMcpEntriesKey } from "@/lib/api/queryKeys";
 import { useAgents } from "@/lib/hooks/useAgents";
 

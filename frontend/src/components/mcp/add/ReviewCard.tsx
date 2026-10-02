@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import type { NewServer } from "../importMcpServers";
+import type { NewServer } from "@/lib/mcp/importMcpServers";
 import { NameField } from "./NameField";
 
 interface Props {

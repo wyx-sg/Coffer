@@ -119,7 +119,6 @@ Everything under `derived/` is rebuilt from the rest, so deleting it (with the d
 | `derived/derived.db` | MCP server health, which skill copies were delivered into which agent, when each upstream capability was first and last seen. Recreated when its schema version differs. | Health checks, skill delivery, the gateway |
 | `derived/memory/<partition>/` | Derived memory for `global` or one repository: `MEMORY.md` (index), `notes/`, `RETIRED.md` (what was retired and why), hidden `.raw/` (what aggregation read, verbatim). `.source_state.json` at the root records what the last aggregation read. | Aggregation and distil (retirement decisions in `RETIRED.md` are lost) |
 | `derived/cache/agent/.transcript_summaries.json` | What the transcript reader already parsed. | The next read, slowly |
-| `derived/index/resources.json` | The uid index: where each resource file was found, and its revision counter. | The next read |
 | `derived/resources/` | Derived resource files: memory partitions, and `skill/coffer-guide.json`. | The daemon at start |
 | `derived/skills/coffer-guide/` | Coffer's own guide skill, rendered from this build. | The daemon at start |
 | `derived/sync-conflicts/` | Marked-up copies of a stopped round's conflicting files, for a hand merge. | Opening the file in an editor again |
@@ -130,7 +129,6 @@ Everything under `derived/` is rebuilt from the rest, so deleting it (with the d
 | --- | --- | --- |
 | `coffer.db.pre-vault` (+ `-wal`, `-shm`) | The database as it was before `coffer migrate`. Never opened for writing again; `coffer migrate --rollback` copies it back. | Once you will not roll back. |
 | `pre-vault/knowledge.git`, `pre-vault/knowledge-stamped/`, `pre-vault/daemon-config.json` | The old knowledge history, the knowledge documents before their curation stamps were removed, and the old `daemon-config.json`. | Once you will not roll back. |
-| `sync/` | The previous build's sync working tree, left where it was. Nothing reads it. | Yes. |
 | `vault.rolled-back-<ts>/`, `local.rolled-back-<ts>/` | What a rollback set aside. | Once you have taken what you need from them. |
 
 See [Upgrading an existing Coffer](/guides/upgrading).
@@ -141,9 +139,9 @@ See [Upgrading an existing Coffer](/guides/upgrading).
 | --- | --- | --- | --- | --- |
 | `daemon.json` | Runtime state of the running daemon: `version`, `pid`, `port`, `token`, `started_at`, `binary_path`. Mode `0600`. Every client (CLI, shim, desktop app, web UI dev server) reads the port and API token from it. Removed when the daemon exits. | daemon | No | Only while no daemon runs. A stale file is detected and ignored. |
 | `daemon.lock` | `flock` target that serialises detect-or-spawn, so two clients never start two daemons. Left on disk between runs by design. | daemon, CLI, shim | No | Yes, while no daemon is starting. |
-| `daemon-config.json` | Settings read before the database opens: `port`, `proxy_port`, `machine_name`, `machine_id` (cache), `features`. Mode `0600`. See [Configuration](/reference/configuration#daemon-config-json). | daemon, CLI | No (machine-local on purpose) | Yes: the daemon falls back to port 8000, the host name and the channel defaults. |
+| `daemon-config.json` | Settings read before the database opens: `port`, `proxy_port`, `machine_name`, `machine_id` (cache), `features`. Mode `0600`. See [Configuration](/reference/configuration#daemon-config-json). | daemon, CLI | No (machine-local on purpose) | Yes: the daemon falls back to port 8000, the host name and the defaults (every experimental feature off). |
 | `proxy.json` | Runtime state of the running [model proxy](/architecture/model-proxy): `port`, `pid`, `started_at`, `version` and `control_token`, the token the daemon uses to push the proxy its state and tell it to drain. Mode `0600`. Written by the proxy once its socket is bound, and removed on exit only while it still names that proxy's pid. The proxy outlives daemon restarts, and a new daemon finds it through this file. | model proxy | No | Only while no proxy runs. |
-| `proxy-usage/<pid>-<seq>.jsonl` (`.jsonl.part` while open) | The model proxy's usage records, one JSON object per line, metadata only. The proxy never opens the database; the daemon ingests each finished file. `COFFER_PROXY_SPOOL_DIR` moves the directory. | model proxy, daemon | No | Finished files not yet ingested are lost from the usage report. |
+| `proxy-usage/<pid>-<start>-<seq>.jsonl` (`.jsonl.part` while open) | The model proxy's usage records, one JSON object per line, metadata only. The proxy never opens the database; the daemon ingests each finished file. `COFFER_PROXY_SPOOL_DIR` moves the directory. | model proxy, daemon | No | Finished files not yet ingested are lost from the usage report. |
 | `upstream-pids/<server-uid>-<pid>.json` | One file per upstream MCP server process the daemon spawned, so the next daemon can reap orphans after a crash. | daemon | No | Yes, while the daemon is stopped. |
 
 See [Daemon and processes](/architecture/daemon) and [Running the daemon](/guides/daemon).

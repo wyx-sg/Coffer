@@ -1,6 +1,6 @@
 # Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
 **Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md), [Coffer Drives Claude Code Through the Agent SDK and Codex Through `codex app-server`](driving-agents-through-sdk-and-app-server.md), [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md), [Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale](agent-hook-installation.md), [Skills Reach an Agent as a Directory Link to One Master Folder](cross-platform-skill-delivery.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database](one-level-triggered-reconciler-compares-parameters.md), research note [agent plugins](../research/agent-plugins.md), research note [agent chat clients](../research/agent-chat-clients.md), spec agent-registry "Support exactly the Claude Code and Codex agent types", spec chat "Ship Claude Code and Codex subprocess providers on the type's one agent", spec provider-switching "Keep projection transforms pure", PR #87, PR #309
@@ -8,41 +8,31 @@
 ## Context
 
 [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md)
-put every per-agent *value* — config directory, allowlist, MCP file shape,
+puts every per-agent *value* — config directory, allowlist, MCP file shape,
 skill subpath, plugin capability — in `AgentDescriptor`
-(`domain/agent/descriptor.py`). Its Consequences section is explicit that
-*mechanisms* were left out and still branch on `AgentType` in their own
-modules. They still do:
+(`domain/agent/descriptor.py`). That leaves the per-agent *mechanisms*: the
+code that translates, runs or reads. Before this decision they branched on
+`AgentType` in their own modules:
 
-- **Provider projection** — `domain/provider/projection.py` holds
-  `_TARGETS: dict[Protocol, ProjectionTarget]` (line 87) and
-  `wire_for_agent` (line 104), and `application/provider/switch_ops.py` holds
-  `AGENT_FOR_WIRE: dict[Protocol, AgentType]` (line 34), which
-  `deactivate(wire)` and `ProviderService` use to find "the" agent behind a
-  wire. The *writer* is already chosen per agent type (`_AGENT_TARGETS`,
-  line 96, after the provider ADR's Option E was retired), but deactivation,
-  the boot heal (`application/provider/boot_reconcile.py` calls
-  `wire_for_agent`) and the back-compat `use-builtin/{wire}` route still
-  assume **exactly one agent type per protocol and one protocol per agent
-  type**. A second agent that speaks the Anthropic protocol has no
+- **Provider projection** was keyed by wire protocol, with a table that
+  assumed **exactly one agent type per protocol and one protocol per agent
+  type**; deactivation, the boot heal and a `use-builtin/{wire}` route all
+  relied on it. A second agent that speaks the Anthropic protocol had no
   representation.
-- **Memory delivery** — `application/memory/delivery.py` `_ADAPTERS:
-  dict[AgentType, DeliveryAdapter]`.
-- **Native memory and transcripts** — `domain/agent/native_memory.py`
-  (`if agent_type is AgentType.CLAUDE_CODE … CODEX`),
-  `domain/agent/transcripts.py` (a dict keyed by `AgentType` value), and the
-  readers under `infrastructure/memory/readers/` and `infrastructure/agent/`.
-- **Chat drivers** — `surfaces/http/chat_provider_wiring.py` constructs
-  `ClaudeSdkProvider` and `CodexAppServerProvider` by name.
-- **Model catalogue** — `infrastructure/agent/claude_binary_models.py` and
-  `infrastructure/agent/codex_rpc_models.py`, selected by type.
+- **Memory delivery** held a dict of adapters keyed by `AgentType`.
+- **Native memory and transcripts** branched on the agent type in the domain
+  and in the readers under `infrastructure/memory/readers/` and
+  `infrastructure/agent/`.
+- **Chat drivers** were constructed by name in the chat wiring.
+- **Model catalogue** probes (`infrastructure/agent/claude_binary_models.py`,
+  `infrastructure/agent/codex_rpc_models.py`) were selected by type.
 
-Adding a third agent today means finding each of those by search, the failure
+Adding a third agent meant finding each of those by search, the failure
 mode the descriptor ADR's Option A lost for. And the set of things Coffer
-places into an agent is about to grow past MCP, skills, providers and hooks
-(rules, commands, subagents, permissions), each of which lands in a
-different file per agent, at user level, project level, or in a directory
-several agents share.
+places into an agent grows past MCP, skills, providers and hooks (rules,
+commands, subagents, permissions), each of which lands in a different file
+per agent, at user level, project level, or in a directory several agents
+share.
 
 One candidate landing format was measured on 2026-09-29 in isolated config
 directories, Claude Code 2.1.281 and Codex 0.155.1: the **agent plugin**.
@@ -65,12 +55,12 @@ lacks the mechanism, each implemented in `infrastructure/` and bound to the
 record at the composition root (the domain record names the port type, never
 the implementation):
 
-| Facet | Answers | Today's code it absorbs |
+| Facet | Answers | Code it absorbs |
 | --- | --- | --- |
-| `projection` | Which asset types this agent can receive, where each lands, and how Coffer's asset is translated into the agent's native shape | `mcp_install`, skill subpath, `domain/provider/projection.py`, `_ADAPTERS` in `memory/delivery.py` |
-| `driver` | How Coffer runs a turn on this agent | `ClaudeSdkProvider`, `CodexAppServerProvider` |
-| `memory_reader` | How the agent's native memory and transcripts are read (read only, per [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md)) | `native_memory.py`, `transcripts.py`, the readers |
-| `dependency_probe` | Whether the agent is installed here, which version, and what that version supports (model catalogue, hook events) | `detect_marker`, `claude_binary_models.py`, `codex_rpc_models.py` |
+| `projection` | Which asset types this agent can receive, where each lands, and how Coffer's asset is translated into the agent's native shape | the MCP injection spec, the skill subpath, the provider translation (`domain/provider/agent_projection.py`), the memory delivery adapters (`infrastructure/memory/delivery/`) |
+| `driver` | How Coffer runs a turn on this agent | the Claude Code and Codex chat drivers (`infrastructure/chat/drivers.py`) |
+| `memory_reader` | How the agent's native memory and transcripts are read (read only, per [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md)) | `domain/agent/native_memory.py`, `domain/agent/transcripts.py`, `infrastructure/memory/readers/` |
+| `dependency_probe` | Whether the agent is installed here, which version, and what that version supports (model catalogue, hook events) | the program probe (`infrastructure/agent/program_probe.py`), the model catalogue probes |
 
 The projection facet is a **registry keyed by asset type × landing point**.
 Each entry states:
@@ -85,11 +75,11 @@ Each entry states:
   use (for providers, the protocols the agent accepts, which may be none; for
   hooks, the events it offers).
 
-Provider projection stops being keyed by protocol: an agent declares which
+Provider projection is not keyed by protocol: an agent declares which
 protocols it accepts, a connection reaches agents by scope, and deactivation
-names an **agent**, not a wire. `AGENT_FOR_WIRE`, `_TARGETS` and
-`wire_for_agent` go; the `use-builtin/{wire}` route is migrated to take an
-agent.
+names an **agent**, not a wire (`POST /providers/use-builtin/{agent_type}`).
+The one projection mode is pointing the agent at Coffer's local model proxy;
+the facet has no second mode.
 
 The **driver** facet is direct-first: Claude Code through the Agent SDK and
 Codex through `codex app-server`, as
@@ -102,7 +92,7 @@ Kimi CLI and Qwen Code); it never replaces a direct driver.
   a missing facet is `None` and every consumer already handles absence. The
   projection registry is exactly the list of targets the reconciler
   iterates, so a new asset type is a registry entry, not a new service. The
-  one-protocol-one-agent assumption is removed at its three remaining sites.
+  one-protocol-one-agent assumption has no representation left.
   Facets can be contract-tested once against a fake agent directory.
 - **Cons.** The descriptor now references ports whose implementations live in
   `infrastructure/`, so binding moves to the composition root and the record
@@ -115,11 +105,11 @@ Kimi CLI and Qwen Code); it never replaces a direct driver.
 
 ### Option B — Keep branching on `AgentType` in each mechanism module
 
-The status quo for mechanisms.
+The design this replaced.
 
 - **Pros.** No new abstraction; each module reads top to bottom.
 - **Cons.** Every new agent or asset type is a search across the modules
-  above; the Protocol ↔ AgentType bijection stays implicit in three places;
+  above; the Protocol to AgentType bijection stays implicit in several places;
   nothing lists what an agent can receive, so neither the reconciler nor the
   UI can ask. It is the option the descriptor ADR already rejected for
   values.
@@ -182,30 +172,37 @@ type. Drivers are direct where the vendor offers a structured protocol; ACP
 serves only agents that speak it natively. The agent plugin format is not a
 projection target.
 
+The facets are bound in `surfaces/http/agent_facet_wiring.py`, which calls
+`bind_facets` in `domain/agent/facets.py`; each implementation declares the
+agent type it serves and the binder groups them onto a copy of the table.
+Consumers receive the resulting `AgentCatalog` and ask it for a facet.
+
 Rules a future change must respect:
 
-- Outside `domain/agent/` and the facet implementations, no code branches on
-  `AgentType`.
+- Outside `domain/agent/`, `infrastructure/agent/` and the facet
+  implementations, no code branches on `AgentType`;
+  `scripts/check_agent_type_branches.py` fails the build on it.
 - A capability field is added only when a shipped agent uses it.
 - A shared landing point is written once and never removed while any reader
   still wants it.
 
 ## Consequences
 
-- **Extends** [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md);
-  its list of mechanisms that "still branch on `AgentType`" becomes this
-  ADR's facet table, and that ADR is rewritten to point here when this one is
-  accepted. [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md)
-  keeps its design; only the protocol-keyed lookups are removed.
+- The descriptor ADR's list of mechanisms that branch on `AgentType` is this
+  ADR's facet table; [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md)
+  holds the values, this one the mechanisms.
+  [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md)
+  has the provider translation as one entry of the registry.
 - The projection registry is the target list of
   [One Level-Triggered Reconciler](one-level-triggered-reconciler-compares-parameters.md):
   each entry supplies `desired`, `observe` and `apply` for its asset type.
-- Provider projection keeps a reserved second mode — pointing the agent at a
-  local proxy instead of writing the endpoint — as a declared option of the
-  facet, not implemented.
-- **Follow-up work:** the four port interfaces and their bindings; moving
-  the sites in Context behind them; deleting `AGENT_FOR_WIRE`, `_TARGETS` and
-  `wire_for_agent` and migrating `use-builtin/{wire}`; a shared facet
-  contract test run against a fake agent directory for each shipped agent; a
-  grep gate that fails on `AgentType.` branches outside `domain/agent/` and
-  the facet implementations.
+- Provider projection has one mode: the agent is pointed at the local model
+  proxy. A mode that writes the vendor endpoint into the agent's config is not
+  part of the facet.
+- Not built yet: the `project` and `shared` landing points. `Landing`
+  declares them, but every entry the two shipped agents have lands at `user`.
+- Not built yet: ACP drivers. The two shipped agents are driven directly; an
+  ACP driver would be added with the first long-tail agent that needs it.
+- Not built yet: one facet contract test run against a fake agent directory
+  for each shipped agent; `backend/tests/unit/domain/agent/test_facets.py`
+  covers binding and the registry, not each facet's behaviour.

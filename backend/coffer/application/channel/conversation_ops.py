@@ -9,6 +9,8 @@ injected ports — no per-processor state.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol
 
 from coffer.application.channel.conversation_spec import resolve_conversation_spec
@@ -123,7 +125,7 @@ async def open_conversation(
         agent_config=spec.agent_config,
         # The channel's uid, not its name: this is the return address a relayed
         # reply comes back to, and it has to keep naming the same channel after
-        # the owner renames it (ADR resource-identity-is-an-immutable-uid).
+        # the owner renames it (ADR identity-is-the-uid-inside-the-file).
         channel_uid=binding.resource.uid,
         peer_chat_id=peer.chat_id,
     )
@@ -143,6 +145,11 @@ async def open_conversation(
     return str(conv.id)
 
 
+def idle_notice(idle_hours: float) -> str:
+    """The one line a chat is told when idle time rolled it into a new conversation."""
+    return f"🆕 Started a new conversation after {idle_hours:g} h idle."
+
+
 async def ensure_conversation(
     conversations: ConversationPort,
     threads: ChannelThreadConversationRepoPort,
@@ -151,8 +158,20 @@ async def ensure_conversation(
     thread_id: str = "",
     *,
     chat_kind: str | None = None,
+    idle_hours: float = 0,
+    say: Callable[[str], Awaitable[None]] | None = None,
+    now: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
 ) -> str:
-    """Return this thread's active conversation, recreating it if it was deleted.
+    """Return this thread's active conversation, opening a new one when there is
+    nothing usable to continue.
+
+    "Nothing usable" is three cases: the conversation was deleted, it was
+    archived (a message to an archived conversation opens a new one and never
+    revives it — spec channels "Open a new conversation when the active one is
+    archived"), or the thread sat idle longer than ``idle_hours`` (spec channels
+    "Open a new conversation after an idle period"; 0 never rolls over). Only
+    the idle case speaks, through ``say``: the old conversation stays in the list
+    and the owner should know why the agent no longer remembers it.
 
     ``chat_kind`` (when the caller knows it) is remembered on the thread and on
     the conversation's history row, so a reply typed on the web knows which of
@@ -160,10 +179,17 @@ async def ensure_conversation(
     row = await threads.get(binding.resource.uid, peer.chat_id, thread_id)
     if row is not None and row.active_conversation_id is not None:
         try:
-            await conversations.get_conversation(row.active_conversation_id)
+            current = await conversations.get_conversation(row.active_conversation_id)
         except ConversationNotFound:
-            pass
-        else:
+            current = None
+        if current is not None and current.archived_at is None:
+            if idle_hours > 0 and now() - current.updated_at > timedelta(hours=idle_hours):
+                opened = await open_conversation(
+                    conversations, threads, binding, peer, thread_id, chat_kind=chat_kind
+                )
+                if say is not None:
+                    await say(idle_notice(idle_hours))
+                return opened
             if chat_kind and row.chat_kind != chat_kind:
                 await threads.note_chat_kind(
                     binding.resource.uid, peer.chat_id, thread_id, chat_kind

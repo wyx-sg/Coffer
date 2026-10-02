@@ -29,7 +29,7 @@ _runner = CliRunner()
 @pytest.fixture
 def daemon(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     (tmp_path / ".claude").mkdir()
-    yield from boot(tmp_path, monkeypatch)
+    yield from boot(tmp_path, monkeypatch, features="knowledge=on,memory=on")
 
 
 def _run(*args: str) -> Any:
@@ -227,3 +227,13 @@ def test_path_with_no_target_prints_every_root(daemon: TestClient, tmp_path: pat
     assert all(os.path.isabs(v) for v in body.values())
     assert json.loads(json.dumps(body)) == body
     assert _lines(_run("vault").output) == [body["vault"]]
+
+
+def test_a_switched_off_feature_names_its_switch(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for _client in boot(tmp_path, monkeypatch, features="knowledge=off,memory=off"):
+        for target in ("knowledge", "memory"):
+            r = _run(target)
+            assert r.exit_code == 1
+            assert f"coffer config set feature.{target} on" in r.output

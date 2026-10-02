@@ -33,6 +33,7 @@ from coffer.surfaces.shim.bootstrap import (
     _setup_shim_log,
     _wait_for_daemon,
 )
+from coffer.surfaces.shim.sse import SseDrain
 from coffer.surfaces.shim.wire import emit_error, forward_response
 
 _logger = logging.getLogger("coffer.shim")
@@ -54,13 +55,14 @@ _NOT_SENT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout)
 _STDIN_READ_LIMIT = 64 * 1024 * 1024  # 64 MiB
 
 
-class _Bridge:
+class _Bridge(SseDrain):
     """One run of the bridge — stdin → POST, SSE → stdout."""
 
     def __init__(self, info: DaemonInfo, *, agent_uid: str | None = None) -> None:
         self._base = f"http://127.0.0.1:{info.port}"
         self._headers = {"X-Coffer-Token": info.token}
         self._session_id: str | None = None
+        self._reinit_lock = asyncio.Lock()
         # The initialize envelope is cached at handshake time so it can be
         # replayed verbatim against a fresh daemon after a restart (the new
         # daemon has no knowledge of the old MCP session).
@@ -252,6 +254,22 @@ class _Bridge:
                     # Fall through and forward the original 401 as the error.
                     _logger.exception("shim.post_failed_after_recover")
 
+        # The daemon dropped this session (its idle reaper, or a restart that
+        # kept the port): handshake again with the cached ``initialize`` — which
+        # carries the agent identity — and resend. Nothing ran, so any method,
+        # a ``tools/call`` included, is safe to resend.
+        if response.status_code == 404 and envelope.get("method") != "initialize":
+            stale = response.request.headers.get("Mcp-Session-Id")
+            if stale and await self._reinitialize(client, stale):
+                try:
+                    response = await client.post(
+                        "/mcp", json=envelope, headers=self._request_headers()
+                    )
+                except Exception as e3:
+                    _logger.exception("shim.post_failed_after_reinitialize")
+                    emit_error(envelope.get("id"), code=-32603, message=f"shim: {e3}")
+                    return
+
         if "Mcp-Session-Id" in response.headers:
             self._session_id = response.headers["Mcp-Session-Id"]
 
@@ -292,6 +310,22 @@ class _Bridge:
         await self._replay_initialize(client)
         return True
 
+    async def _reinitialize(self, client: httpx.AsyncClient, stale: str) -> bool:
+        """Open a new session after the daemon answered 404 for ``stale``.
+
+        Concurrent requests that all met the same 404 handshake once: whoever
+        gets the lock first replaces the stale id, the rest see a new one and
+        just retry. True once this shim holds a session other than ``stale``.
+        """
+        async with self._reinit_lock:
+            if self._session_id == stale:
+                self._session_id = None
+                try:
+                    await self._replay_initialize(client)
+                except Exception:
+                    _logger.exception("shim.reinitialize_failed")
+            return self._session_id is not None and self._session_id != stale
+
     async def _replay_initialize(self, client: httpx.AsyncClient) -> None:
         """Re-run the cached ``initialize`` against the (rebound) daemon so a
         new MCP session is established before the caller retries. The reply is
@@ -302,63 +336,6 @@ class _Bridge:
         response = await client.post("/mcp", json=self._init_envelope, headers=dict(self._headers))
         if "Mcp-Session-Id" in response.headers:
             self._session_id = response.headers["Mcp-Session-Id"]
-
-    async def _drain_sse(self, client: httpx.AsyncClient) -> None:
-        """After the first session id is known, stream notifications, reconnecting.
-
-        A bounded reconnect loop around :meth:`_drain_sse_once`. The
-        daemon may close the stream at any time (e.g. its idle-session reaper
-        drops the session), and a single transient error must not silently stop
-        server-initiated notifications (tools/list_changed, sampling, …) for the
-        rest of a long-lived editor session. We reconnect with the same session
-        id and an exponential backoff until ``_stop`` is set.
-        """
-        while not self._stop.is_set() and self._session_id is None:
-            await asyncio.sleep(0.1)
-
-        backoff = 0.5
-        while not self._stop.is_set():
-            healthy = await self._drain_sse_once(client)
-            if self._stop.is_set():
-                return
-            # Reset backoff after a healthy stream; otherwise grow it.
-            backoff = 0.5 if healthy else min(backoff * 2, 5.0)
-            await asyncio.sleep(backoff)
-
-    async def _drain_sse_once(self, client: httpx.AsyncClient) -> bool:
-        """One SSE connection attempt. Open GET /mcp, forward each `data:` line
-        to stdout until the stream ends or ``_stop`` is set.
-
-        Returns True if a healthy (200) stream was served, False on a non-200
-        status or a transport error (so the caller can back off before retry).
-        """
-        headers = {**self._headers, "Mcp-Session-Id": self._session_id or ""}
-        try:
-            async with client.stream("GET", "/mcp", headers=headers) as response:
-                if response.status_code != 200:
-                    _logger.warning(
-                        "shim.sse_unexpected_status status=%s",
-                        response.status_code,
-                    )
-                    if response.status_code == 401:
-                        # The daemon restarted with a new token (see
-                        # _handle_envelope). Without this the stream was
-                        # retried every 5 s forever with the dead token.
-                        await self._recover(client)
-                    return False
-                async for raw in response.aiter_lines():
-                    if self._stop.is_set():
-                        return True
-                    if not raw or not raw.startswith("data:"):
-                        continue
-                    payload = raw[len("data:") :].strip()
-                    if payload:
-                        sys.stdout.write(payload + "\n")
-                        sys.stdout.flush()
-            return True
-        except Exception as e:
-            _logger.warning("shim.sse_disconnected", extra={"error": str(e)})
-            return False
 
 
 async def _async_main(argv: list[str] | None = None) -> int:

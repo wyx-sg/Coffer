@@ -15,22 +15,15 @@ binary. Per Contract 9 this file is the only one that imports the real
 from __future__ import annotations
 
 import asyncio
-import base64
 import contextlib
 import logging
-import pathlib
 from collections.abc import AsyncIterator, Callable, Sequence
 from typing import Any, Protocol
 
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, RateLimitEvent
 
 from coffer.application.chat.ports import QuotaObserver
-from coffer.domain.chat.attachment import (
-    INLINE_IMAGE_MAX_BYTES,
-    Attachment,
-    base64_size,
-    inline_image_mime,
-)
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
     STREAM_ENDED,
     STREAM_ENDED_MESSAGE,
@@ -41,6 +34,7 @@ from coffer.domain.chat.events import (
 )
 from coffer.domain.chat.message import Message
 from coffer.infrastructure.chat.adapter_support import ParseState, SessionSink, last_user_text
+from coffer.infrastructure.chat.claude_sdk_attachments import attachment_block
 from coffer.infrastructure.chat.claude_sdk_mapping import ClaudeParseState, map_sdk_message
 from coffer.infrastructure.chat.document_extract import (
     DocumentExtractor,
@@ -112,34 +106,6 @@ def default_session_factory(options: ClaudeAgentOptions) -> ClaudeSdkSession:
     return ClaudeSdkClientSession(options)
 
 
-def _attachment_block(att: Attachment) -> dict[str, Any]:
-    """Materialise one attachment into a stream-json content block: an image the
-    API takes inline (``inline_image_mime``: sniffed type, under the ceiling) as
-    a base64 ``image`` block — the base64 lives only in this request — and
-    anything else as a text pointer to its on-disk path, which the agent opens
-    with its own tools. Documents were text-extracted upstream."""
-    path = pathlib.Path(att.path)
-    try:
-        fits = base64_size(path.stat().st_size) <= INLINE_IMAGE_MAX_BYTES
-        data = path.read_bytes() if att.is_image and fits else b""
-    except OSError:
-        return {"type": "text", "text": f"[Attached file '{att.filename}' could not be read]"}
-    media_type = inline_image_mime(data) if data else None
-    if media_type is not None:
-        encoded = base64.standard_b64encode(data).decode()
-        return {
-            "type": "image",
-            "source": {"type": "base64", "media_type": media_type, "data": encoded},
-        }
-    return {
-        "type": "text",
-        "text": (
-            f"[The user attached a file '{att.filename}', saved at {att.path}. "
-            "Open it with your tools if it is relevant.]"
-        ),
-    }
-
-
 #: Sentinel pushed after the terminal event so ``_stream`` knows to stop.
 _SENTINEL = object()
 
@@ -189,6 +155,9 @@ class ClaudeSdkAgentAdapter:
         self._observe_quota = observe_quota
         # A channel turn's retrieval: the notes its prompt names.
         self._prompt_memory = prompt_memory
+        #: The model the turn ran on, as the CLI reported it; filled in while the
+        #: turn streams. The turn runner reads it when it finalises the reply.
+        self.model_id: str | None = None
 
     async def run_turn(
         self,
@@ -268,7 +237,7 @@ class ClaudeSdkAgentAdapter:
         blocks: list[dict[str, Any]] = []
         if prompt:
             blocks.append({"type": "text", "text": prompt})
-        blocks.extend(_attachment_block(att) for att in attachments)
+        blocks.extend(attachment_block(att) for att in attachments)
         return blocks
 
     async def _connect(
@@ -279,9 +248,12 @@ class ClaudeSdkAgentAdapter:
         session = self._session_factory(self._build_options(resume=resume))
         try:
             await session.connect(prompt)
-        except Exception:
-            with contextlib.suppress(Exception):
-                await session.disconnect()
+        except BaseException:
+            # BaseException, not Exception: a Stop, a delete or a shutdown that lands
+            # while the CLI is spawning raises CancelledError here, and the process
+            # it already started must not outlive the turn.
+            with contextlib.suppress(BaseException):
+                await asyncio.shield(session.disconnect())
             raise
         return session
 
@@ -341,7 +313,9 @@ class ClaudeSdkAgentAdapter:
                     if isinstance(msg, RateLimitEvent):
                         raw = msg.rate_limit_info.raw
                         await forward_quota(self._observe_quota, "claude_code", raw)
-                    for event in map_sdk_message(msg, state):
+                    events = map_sdk_message(msg, state)
+                    self.model_id = state.model or self.model_id
+                    for event in events:
                         await queue.put(event)
                         if isinstance(event, (TurnDone, TurnError)):
                             await queue.put(_SENTINEL)

@@ -20,23 +20,23 @@
 // title, the Automatic control and Upload / Add a document, then the tree and
 // the pane, each scrolling on its own.
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Library, Plus, Upload } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
-import { KnowledgeAddDocumentDialog } from "@/components/knowledge/KnowledgeAddDocumentDialog";
 import { KnowledgeAutomaticPopover } from "@/components/knowledge/KnowledgeAutomaticPopover";
-import { KnowledgeCreateDialog } from "@/components/knowledge/KnowledgeCreateDialog";
+import { KnowledgeDialogs, type KnowledgeDialog } from "@/components/knowledge/KnowledgeDialogs";
 import { KnowledgeNav } from "@/components/knowledge/KnowledgeNav";
 import { KnowledgeNoModelLine } from "@/components/knowledge/KnowledgeNoModelLine";
 import { KnowledgePane } from "@/components/knowledge/KnowledgePane";
-import { KnowledgeUploadDialog } from "@/components/knowledge/KnowledgeUploadDialog";
 import { KnowledgeWelcomePanel } from "@/components/knowledge/KnowledgeWelcomePanel";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { Button } from "@/components/ui/button";
 import { translateApiError } from "@/lib/api/errors";
+import { knowledgeKey } from "@/lib/api/queryKeys";
 import { useDetailTab } from "@/lib/detailTabs";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 import { useCofferModelSet } from "@/lib/hooks/useInternalEngine";
@@ -48,19 +48,25 @@ import {
   KNOWLEDGE_TABS,
 } from "@/lib/knowledge/routes";
 
-type Dialog = "create" | "add" | "upload" | null;
-
 export function KnowledgePage() {
   const { t } = useTranslation();
-  // Agents write items while the page is open: the change feed keeps the
-  // Inbox counts current without a poll.
-  useDaemonEvents();
+  // Agents write items while the page is open: a knowledge change event
+  // (submit, curation settling) refetches everything read under knowledgeKey —
+  // Inbox counts, the tree, document bodies — without a poll.
+  const qc = useQueryClient();
+  useDaemonEvents({
+    onMessage: (m) => {
+      if (m.type === "change" && m.change.kind === "knowledge") {
+        void qc.invalidateQueries({ queryKey: knowledgeKey });
+      }
+    },
+  });
   const { uid, version } = useParams<{ uid?: string; version?: string }>();
   const [params] = useSearchParams();
   const file = params.get("file");
   const collections = useKnowledgeCollections();
   const modelSet = useCofferModelSet();
-  const [dialog, setDialog] = useState<Dialog>(null);
+  const [dialog, setDialog] = useState<KnowledgeDialog>(null);
 
   const [tab] = useDetailTab(
     KNOWLEDGE_TABS,
@@ -79,7 +85,6 @@ export function KnowledgePage() {
   const header = (
     <div className="shrink-0 border-b border-border px-6 pb-4 pt-[18px]">
       <PageHeader
-        icon={Library}
         title={t("knowledge.title")}
         badges={list.length > 0 && modelSet ? <KnowledgeAutomaticPopover /> : null}
         subtitle={list.length > 0 && modelSet === false ? <KnowledgeNoModelLine /> : null}
@@ -100,26 +105,13 @@ export function KnowledgePage() {
   );
 
   const dialogs = (
-    <>
-      <KnowledgeCreateDialog open={dialog === "create"} onOpenChange={close} />
-      {list.length > 0 ? (
-        <>
-          <KnowledgeAddDocumentDialog
-            open={dialog === "add"}
-            onOpenChange={close}
-            collections={list}
-            initial={current?.name ?? null}
-            modelSet={modelSet}
-          />
-          <KnowledgeUploadDialog
-            open={dialog === "upload"}
-            onOpenChange={close}
-            collections={list}
-            initial={current?.name ?? null}
-          />
-        </>
-      ) : null}
-    </>
+    <KnowledgeDialogs
+      dialog={dialog}
+      onOpenChange={close}
+      collections={list}
+      initial={current?.name ?? null}
+      modelSet={modelSet}
+    />
   );
 
   // Full-bleed like Skills: Layout pads every page, and this one is a

@@ -13,7 +13,7 @@ from coffer.domain.chat.events import TextDelta, TurnDone, TurnError, TurnStarte
 from coffer.domain.chat.message import Role, TextBlock
 from tests.unit.chat.conftest import FakeAgentAdapter
 
-from .conftest import ChannelEnv, inbound, turn_body, wait_until
+from .conftest import ChannelEnv, inbound, turn_body, uid_of, wait_until
 
 
 def _text(message) -> str:  # type: ignore[no-untyped-def]
@@ -91,7 +91,7 @@ async def test_turn_error_is_delivered_as_a_short_notice(env: ChannelEnv) -> Non
     assert "upstream timed out" in notice
     assert "PROVIDER_TIMEOUT" in notice
     # The channel stays up: the binding is still live and answers commands.
-    assert env.processor.binding("tg") is not None
+    assert env.processor.binding(uid_of("tg")) is not None
 
 
 async def test_empty_message_with_no_attachments_gets_an_unsupported_notice(

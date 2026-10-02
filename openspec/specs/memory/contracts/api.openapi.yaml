@@ -198,60 +198,6 @@ paths:
       summary: List Partition Files
       tags:
       - memory
-  /api/v1/memory/partitions/{uid}/files/content:
-    get:
-      description: |-
-        One file out of the partition's directory.
-
-        ``UnsafeMemoryPath`` (400) and ``MemoryFileNotFound`` (404) both propagate
-        to the app-wide handler in ``surfaces/http/errors.py``, which already maps
-        every ``CofferError`` — the same way knowledge's own file read reports an
-        escape or a miss, rather than each route inventing an ``HTTPException``.
-      operationId: read_partition_file_api_v1_memory_partitions__uid__files_content_get
-      parameters:
-      - in: path
-        name: uid
-        required: true
-        schema:
-          title: Uid
-          type: string
-      - in: query
-        name: path
-        required: true
-        schema:
-          minLength: 1
-          title: Path
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FileContentOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Read Partition File
-      tags:
-      - memory
   /api/v1/memory/partitions/{uid}/notes:
     get:
       description: |-
@@ -891,47 +837,6 @@ components:
       - error
       title: ErrorResponse
       type: object
-    FileContentOut:
-      description: |-
-        One file's content, read-only.
-
-        No fingerprint, unlike the skill kind's equivalent: a fingerprint exists to
-        make a later write conditional, and this family has no write. The tree under
-        ``~/.coffer/derived/memory/`` is derived ("Keep the memory tree derived and local") —
-        an edit here would be overwritten
-        by the next aggregation pass, so the surface does not offer one.
-      properties:
-        abs_path:
-          title: Abs Path
-          type: string
-        binary:
-          title: Binary
-          type: boolean
-        content:
-          title: Content
-          type: string
-        folder_abs_path:
-          title: Folder Abs Path
-          type: string
-        path:
-          title: Path
-          type: string
-        size:
-          title: Size
-          type: integer
-        truncated:
-          title: Truncated
-          type: boolean
-      required:
-      - path
-      - abs_path
-      - folder_abs_path
-      - content
-      - truncated
-      - binary
-      - size
-      title: FileContentOut
-      type: object
     FileNodeOut:
       description: |-
         One entry in a partition's own directory ("Present a partition as its
@@ -1084,6 +989,10 @@ components:
         description:
           title: Description
           type: string
+        file_path:
+          default: ''
+          title: File Path
+          type: string
         key:
           title: Key
           type: string
@@ -1123,6 +1032,7 @@ components:
       - created_at
       - updated_at
       - agents
+      - file_path
       - body
       - origins
       title: NoteOut
@@ -1147,6 +1057,10 @@ components:
           type: string
         description:
           title: Description
+          type: string
+        file_path:
+          default: ''
+          title: File Path
           type: string
         key:
           title: Key
@@ -1182,6 +1096,7 @@ components:
       - created_at
       - updated_at
       - agents
+      - file_path
       title: NoteSummaryOut
       type: object
     OriginOut:

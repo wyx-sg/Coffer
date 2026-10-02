@@ -53,6 +53,7 @@ def machine(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     monkeypatch.setenv("COFFER_LOG_DIR", str(tmp_path / "logs"))
+    monkeypatch.setenv("COFFER_FEATURES", "context=on,sync=off")
     shim = tmp_path / "bin" / "coffer-mcp-shim"
     shim.parent.mkdir()
     shim.write_text("#!/bin/sh\n", encoding="utf-8")

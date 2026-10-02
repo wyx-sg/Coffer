@@ -14,7 +14,7 @@ mirrors REST operations".
 
 "Tiny" now means two routers, not one. Every ``coffer agent`` verb takes the
 agent's TYPE (its name) and resolves it to the uid the routes address
-(ADR resource-identity-is-an-immutable-uid), and that resolution is
+(ADR identity-is-the-uid-inside-the-file), and that resolution is
 ``GET /resources?kind=agent&name=`` — the framework's shared route, on a
 different router from ``/agents``. An app serving only ``agent_router`` would
 fail every name-taking command before it ever reached an agent route, and it
@@ -852,8 +852,8 @@ def test_plugin_rm_force_and_prompt(workspace_cli):
 # agent edit — the model binding (spec provider-switching "Take projected
 # model keys from the agent's binding")
 #
-# PATCH /agents/{uid} has carried `model` / `fast_model` / `wire_api` since the
-# per-agent binding landed, and the projector reads exactly those fields
+# PATCH /agents/{uid} carries the per-agent binding (`model`, `effort`,
+# `tier_models`), and the projector reads exactly those fields
 # (`application/provider/projector.py`). Until these options existed a
 # terminal-only user could activate a connection and never bind a model to it,
 # so the agent kept answering on its own default and nothing said why.
@@ -913,17 +913,11 @@ def test_agent_edit_binding_a_model_leaves_the_config_dir_alone(agent_cli_daemon
     assert shown["config_dir"] == str(config_dir)
 
 
-def test_agent_edit_rejects_a_wire_api_codex_cannot_load(agent_cli_daemon):
-    """`chat` makes Codex fail to load config.toml at all. The domain refuses
-    it; the CLI must surface that as a readable error, not a traceback."""
+def test_agent_edit_has_no_wire_api_option(agent_cli_daemon):
+    """The Codex wire is fixed at `responses`; there is nothing to choose."""
     _add_codex(agent_cli_daemon)
-    bad = _runner.invoke(cli_app, ["agent", "edit", "codex", "--wire-api", "chat"])
-    combined = bad.output + (bad.stderr or "")
-    # 6 = INVALID_INPUT, i.e. the daemon refused the value — not 2, which is
-    # what typer returns for an option the command does not have at all.
-    assert bad.exit_code == 6, combined
-    assert "Traceback" not in combined, combined
-    assert "responses" in combined, combined
+    bad = _runner.invoke(cli_app, ["agent", "edit", "codex", "--wire-api", "responses"])
+    assert bad.exit_code == 2, bad.output + (bad.stderr or "")
 
 
 def test_agent_show_reports_the_model_binding(agent_cli_daemon):
@@ -950,7 +944,7 @@ def memory_daemon(tmp_path, monkeypatch):
     shim = tmp_path / "coffer-mcp-shim"
     shim.write_text("#!/bin/sh\n", encoding="utf-8")
     monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(shim))
-    yield from boot(tmp_path, monkeypatch)
+    yield from boot(tmp_path, monkeypatch, features="memory=on")
 
 
 @pytest.mark.acceptance(

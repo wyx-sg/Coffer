@@ -18,13 +18,6 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 from coffer.domain.agent.types import AgentType
 
-#: The only value Codex accepts for a provider block's ``wire_api``. Its
-#: parser rejects every other spelling outright ("unknown variant, expected
-#: `responses`"), and the retired ``chat`` gets a message of its own naming
-#: this as the fix. Kept as a constant so the validator and the projection
-#: default cannot drift apart.
-_CODEX_WIRE_API = "responses"
-
 
 class AgentConfig(BaseModel):
     """Resource.config payload when kind == 'agent'."""
@@ -46,40 +39,21 @@ class AgentConfig(BaseModel):
     # settings key / Codex's ``model``; ``effort`` → Claude Code's
     # ``effortLevel`` / Codex's ``model_reasoning_effort``; ``tier_models`` →
     # Claude Code's ``ANTHROPIC_DEFAULT_<TIER>_MODEL`` pins (the Haiku pin also
-    # runs its background tasks); ``wire_api`` → Codex's provider wire. All
+    # runs its background tasks). All
     # optional — an unbound agent projects no model key, so it runs on its OWN
     # default model (the connection carries none).
     model: str | None = None
     effort: str | None = None
     tier_models: dict[str, str] | None = None
-    # Validated against the one Codex wire-api value that still exists (see
-    # _validate_wire_api) so a bad value is a 422 at PATCH time, not a Codex
-    # config that fails to load.
-    wire_api: str | None = None
-
-    @field_validator("wire_api")
-    @classmethod
-    def _validate_wire_api(cls, v: str | None) -> str | None:
-        """``responses`` is the only wire Codex still speaks.
-
-        ``chat`` was the other half of this choice and is now refused outright:
-        Codex 0.139.0 answers ``wire_api = "chat" is no longer supported`` and
-        FAILS TO LOAD config.toml at all, so an agent projected with it cannot
-        start — not a degraded turn, a dead CLI. Rejecting the value here is the
-        only place that failure is still the user's to see: past this boundary it
-        is written into a file Coffer does not read back, where it surfaces as
-        the agent being broken rather than as a setting being wrong.
-
-        Coffer does not otherwise police what a CLI accepts, but this one is
-        already outside the CLI's own vocabulary — Codex's error names
-        ``responses`` as the fix, and its parser rejects every other spelling
-        (``unknown variant, expected `responses```).
-        """
-        if v is not None and v != _CODEX_WIRE_API:
-            raise ValueError(
-                f"wire_api must be {_CODEX_WIRE_API!r} — Codex no longer supports any other value"
-            )
-        return v
+    # The provider connection this agent runs on (spec agent-registry "Carry the
+    # connection an agent runs on on the agent record"): the uid of a ``provider``
+    # resource, or ``None`` for the agent's own built-in login. Which connection
+    # an agent is on is a fact about the AGENT, so at most one per agent holds by
+    # construction. It is a bare uid, not checked against the provider table here
+    # (domain stays pure, and the connection may be deleted later): one that
+    # resolves to no enabled connection reaching this agent means "no connection"
+    # (``application.provider.targets.connection_for_agent``).
+    connection_uid: str | None = None
 
     @field_validator("effort")
     @classmethod

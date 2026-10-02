@@ -1822,6 +1822,11 @@ components:
         config_dir:
           title: Config Dir
           type: string
+        connection_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connection Uid
         created_at:
           format: date-time
           title: Created At
@@ -1869,11 +1874,6 @@ components:
           - type: string
           - type: 'null'
           title: Version
-        wire_api:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Wire Api
       required:
       - uid
       - name
@@ -1883,7 +1883,7 @@ components:
       - model
       - effort
       - tier_models
-      - wire_api
+      - connection_uid
       - state
       - version
       - install_handoff
@@ -1915,11 +1915,6 @@ components:
             type: object
           - type: 'null'
           title: Tier Models
-        wire_api:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Wire Api
       title: AgentPatch
       type: object
     AgentType:

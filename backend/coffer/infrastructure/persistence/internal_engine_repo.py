@@ -1,4 +1,4 @@
-"""Coffer's own settings as a vault document (plan D13; spec vault-storage).
+"""Coffer's own settings as a vault document (spec vault-storage).
 
 The engine's model, what it may run unattended and how often, the one machine
 allowed to curate: every field is a decision the person made for the whole

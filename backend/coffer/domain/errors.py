@@ -102,17 +102,6 @@ class ScopeInvalidError(CofferError):
     code = "SCOPE_INVALID"
 
 
-# secret-store error family: re-exported from coffer.domain.secret_errors
-# (split for the file-size limit) so the coffer.domain.errors.X import paths keep working.
-from coffer.domain.secret_errors import (  # noqa: E402, I001
-    SecretInUse as SecretInUse,
-    SecretLocked as SecretLocked,
-    SecretMissing as SecretMissing,
-    SecretUnreadable as SecretUnreadable,
-    MasterKeyMissing as MasterKeyMissing,
-)
-
-
 class UpstreamUnavailable(CofferError):  # noqa: N818
     code = "UPSTREAM_UNAVAILABLE"
 
@@ -321,15 +310,6 @@ class UpkeepAlreadyRunning(CofferError):  # noqa: N818
         super().__init__(f"an upkeep pass is already running for {kind}:{name}")
         self.kind = kind
         self.name = name
-
-
-class TargetConflict(CofferError):  # noqa: N818
-    code = "TARGET_CONFLICT"
-
-    def __init__(self, path: str, reason: str) -> None:
-        super().__init__(f"refusing to overwrite target ({reason}): {path}")
-        self.path = path
-        self.reason = reason
 
 
 class ResourceProtected(CofferError):  # noqa: N818

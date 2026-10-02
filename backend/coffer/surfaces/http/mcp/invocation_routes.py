@@ -108,7 +108,7 @@ async def _project(
 ) -> InvocationListOut:
     """Turn log rows into the wire shape, attaching each server's current label.
 
-    The log records the uid (ADR resource-identity-is-an-immutable-uid), which
+    The log records the uid (ADR identity-is-the-uid-inside-the-file), which
     is what keeps one server's history one history across a rename — but a
     timeline of opaque uids is unreadable, and making every client hold the
     whole resource list just to render it would push this join into four
@@ -120,10 +120,9 @@ async def _project(
     rows.
 
     ``resource_name`` is null for a uid that resolves to nothing, which is the
-    honest answer for the two reserved forms the log also carries — ``coffer``
-    for Coffer's own built-in tools, ``deleted:<name>`` for a server already
-    gone when the log was re-keyed — as well as for a server deleted since. The
-    client falls back to showing the uid's own text there.
+    honest answer for ``coffer``, the reserved value Coffer's own built-in tools
+    log under, and for a server deleted since. The client falls back to showing
+    the uid's own text there.
 
     The consequence of resolving rather than storing: a renamed server's past
     rows all read under its CURRENT name. That is the deliberate trade. The
@@ -211,8 +210,8 @@ async def list_all_invocations(
     ``uid`` narrows to a single server, which makes this a superset of the
     per-server route; that one stays because the resource page addresses its
     own server by path, not by filter. The filter takes the value the rows were
-    written under, so the two reserved forms (``coffer`` and ``deleted:<name>``)
-    are filterable too — and, unlike the name filter this replaced, it neither
+    written under, so the reserved ``coffer`` value is filterable too — and, unlike
+    the name filter this replaced, it neither
     hides the history of a server that has since been renamed nor hands a
     reused name the previous holder's calls.
 

@@ -82,9 +82,9 @@ sequenceDiagram
 5. **停止？** 内容冲突、同一个资源名对应两个不同的 uid，或者合并后的文件校验失败，都会让整轮停止。什么都不检出，什么都不推送。
 6. **防护。** [删除断路器](#the-deletion-breaker)检查这一轮会在本机移除的内容，以及本机自己的提交会从共享历史中移除的内容。
 7. **检出。** 给 `L` 打上标签 `refs/tags/coffer/pre-apply/<timestamp>`（保留十个）。以 `L` 和 `R` 为父提交提交 `M`，然后在保险库写锁下用 `git read-tree -m -u L M` 把保险库移到它上面。Git 在写任何文件之前，会对照 `L` 核对它要改的每个路径，所以如果某个路径你正在编辑（未提交或无效的编辑），这一轮会以 `waiting_on_edit` 等待并点名该文件。
-8. **发布。** 本机的描述文件在它自己的提交中更新。推送之前，这次推送会发布的每个 blob（从要推送的提交可达、从 `R` 不可达，也就是每个尚未推送的提交里的每个版本）都会用 `coffer secret scan` 的检测读一遍；`secret/*.enc` 是密文，会被跳过。如果某个文件现在仍含有值，这一轮记为 `plaintext_found`，什么也不推送。如果只有更早的、尚未推送的提交含有值，就把它折叠掉：这些尚未推送的提交合成一个基于 `R`、树相同的提交，改为推送它。然后推送结果。推送被拒绝是 `push_failed`：保险库已经持有合并结果，下一轮会再试。
+8. **发布。** 本机的描述文件在它自己的提交中更新。推送之前，这次推送会发布的每个 blob（从要推送的提交可达、从 `R` 不可达，也就是每个尚未推送的提交里的每个版本）都会用 `coffer secret scan` 的检测读一遍；`secret/*.enc` 是密文，会被跳过。如果某个文件现在仍含有值，这一轮记为 `plaintext_found`，什么也不推送。如果只有更早的、尚未推送的提交含有值，就把它折叠掉：这些尚未推送的提交合成一个基于 `R`、树相同的提交，改为推送它，并在其上重新写一次描述文件，使推送出去的描述文件指向远端持有的提交。然后推送结果。推送被拒绝是 `push_failed`：保险库已经持有合并结果，下一轮会再试。
 
-一轮同步改动了保险库之后，[调和器](/zh/architecture/reconciler)会跑一轮，让每种类型重新投射到达的内容：智能体配置、shim、技能交付、提供商投射。同步本身不导入任何类型。
+一轮同步改动了保险库之后，[调和器](/zh/architecture/reconciler)会跑一轮，让每种类型重新投射到达的内容（这一轮同步从第一次 git 调用起就持有调和器，直到这轮调和跑完，所以没有任何一轮调和会在保险库只应用了一半时做判断）：智能体配置、shim、技能交付、提供商投射。同步本身不导入任何类型。
 
 ### 一轮同步的结果 {#round-outcomes}
 
@@ -143,7 +143,7 @@ sequenceDiagram
 
 ## 加入 {#joining}
 
-从未与远端收敛过的机器处于**加入**状态。定时器从不自行加入：在你加入之前，每一轮都以 `join_required` 结束，什么都不传输。加入总是先预览，预览用的就是加入时要用的同一组事实，所以你看到的就是将要发生的：
+从未与远端收敛过的机器处于**加入**状态。定时器从不自行加入：在你加入之前，每一轮都以 `join_required` 结束，什么都不传输——即使你指向的远端与保险库共享历史（镜像、改名后的仓库）也一样。加入总是先预览，预览用的就是加入时要用的同一组事实，所以你看到的就是将要发生的：
 
 | 情形 | 如何识别 | 加入做什么 |
 | --- | --- | --- |
@@ -231,5 +231,5 @@ Coffer 调用真正的 `git`，所以远端始终是一个你可以克隆和查�
 ## 相关内容 {#related}
 
 - 规格：[vault-sync](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md)，以及关于 `runs_on` 的 [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)
-- 决策记录：[Sync Only Pulls and Pushes the Vault Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md)、[A Sync Round That Would Lose Too Much Is Held](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-deletion-breaker.md)、[Storage Is Five Classes by Nature](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/storage-is-five-classes-by-nature.md)、[Secrets Cross Machines Only as Ciphertext](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/credentials-across-machines.md)
+- 决策记录：[Sync Only Pulls and Pushes the Vault Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md)、[A Sync Round That Would Lose Too Much Is Held](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-deletion-breaker.md)、[Storage Is Five Classes by Nature](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/storage-is-five-classes-by-nature.md)、[Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/secrets-cross-machines-only-as-ciphertext.md)
 - [保险库同步指南](/zh/guides/vault-sync) · [持久化](/zh/architecture/persistence) · [知识架构](/zh/architecture/knowledge) · [安全模型](/zh/architecture/security)

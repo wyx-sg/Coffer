@@ -28,7 +28,7 @@ import { useAgentConfigFiles, useAgentHooks } from "@/lib/hooks/useAgents";
 import { toneClass } from "@/lib/statusColors";
 import { cn } from "@/lib/utils";
 
-import { OverviewSection } from "./OverviewSection";
+import { Section } from "@/components/Section";
 import { baseName, mcpConfigPath } from "./paths";
 import {
   configLine,
@@ -78,7 +78,7 @@ export function OverviewSummary({ agent, typeRow, disabled, notConnected = false
   ];
 
   return (
-    <OverviewSection title={t(`${K}.heading`)}>
+    <Section title={t(`${K}.heading`)}>
       <ul className="flex flex-col">
         {rows.map(({ tab, icon: Icon, summary }, i) => (
           <li key={tab} className={cn(i > 0 && "border-t border-border-subtle")}>
@@ -110,6 +110,6 @@ export function OverviewSummary({ agent, typeRow, disabled, notConnected = false
           </li>
         ))}
       </ul>
-    </OverviewSection>
+    </Section>
   );
 }

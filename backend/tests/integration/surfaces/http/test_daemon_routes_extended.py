@@ -125,24 +125,8 @@ async def test_rotate_token_requires_auth(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_shutdown_returns_204(tmp_path):
-    """Shutdown schedules graceful exit. We can't actually kill the test
-    process — just verify the endpoint returns 204."""
-    c, _ = await _client(tmp_path)
-    async with c:
-        # Mock os.kill to avoid actually terminating the test process
-        import unittest.mock as mock
-
-        with mock.patch("coffer.surfaces.http.daemon_routes._schedule_shutdown") as mocked:
-            r = await c.post("/api/v1/daemon/shutdown")
-            assert r.status_code == 204
-            mocked.assert_called_once()
-    set_active_token(None)
-
-
-@pytest.mark.asyncio
 async def test_shutdown_signals_termination(tmp_path):
-    """_schedule_shutdown must send SIGTERM to the current process.
+    """The shutdown route answers 204 and sends SIGTERM to the current process.
 
     We patch os.kill at the module level so we can assert it is called
     with the correct arguments (os.getpid(), signal.SIGTERM) without

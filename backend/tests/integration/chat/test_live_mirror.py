@@ -20,10 +20,10 @@ from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import (
     TurnOrchestrator,
     active_turns,
-    clear_active_turns,
 )
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
 from coffer.domain.chat.message import Message
+from tests.support.chat_turns import start_turn
 from tests.unit.chat.conftest import (
     FakeAgentAdapter,
     FakeConversationRepo,
@@ -31,13 +31,6 @@ from tests.unit.chat.conftest import (
 )
 
 pytestmark = pytest.mark.asyncio
-
-
-@pytest.fixture(autouse=True)
-def _reset() -> None:
-    clear_active_turns()
-    yield
-    clear_active_turns()
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +154,7 @@ async def test_observe_turn_from_another_surface() -> None:
 
     # A web observer subscribes; the turn is started via the channel seam.
     observer = orch.subscribe(conv.id)
-    await orch.start_turn(conv.id, "hi from IM")
+    await start_turn(orch, conv.id, "hi from IM")
 
     events = await _collect_until(observer, _is_done)
     texts = [e.text for e in events if isinstance(e, TextDelta)]

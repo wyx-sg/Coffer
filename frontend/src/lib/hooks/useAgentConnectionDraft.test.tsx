@@ -5,20 +5,17 @@
 // a draft dirty, the test-before-confirm rule, which binding fields a confirm
 // PATCHes, where Effort's levels come from, and Coffer's tier prefill.
 import type { PropsWithChildren } from "react";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+import { fakeApi } from "@/test/fakeApi";
 import type { AgentOut } from "@/lib/api/agents";
 import type { AgentModel } from "@/lib/api/agentModels";
 import type { Provider, ProviderModel } from "@/lib/api/providers";
 import { BUILTIN, useAgentConnectionDraft } from "./useAgentConnectionDraft";
 
-const call = vi.fn();
-vi.mock("@/lib/api/call", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api/call")>();
-  return { ...actual, call: (...args: unknown[]) => call(...args) };
-});
+const call = fakeApi();
 
 const AGENT: AgentOut = {
   uid: "a-claude",
@@ -29,9 +26,9 @@ const AGENT: AgentOut = {
   model: null,
   effort: null,
   tier_models: null,
-  wire_api: null,
   version: null,
   install_handoff: null,
+  connection_uid: null,
   state: "installed_active",
   created_at: "",
   updated_at: "",
@@ -46,7 +43,6 @@ function conn(name: string, over: Partial<Provider> = {}): Provider {
     protocol: "anthropic",
     base_url: "https://api.example.com",
     secret_ref: "ref",
-    is_active: false,
     title: null,
     internal_default: false,
     transcribe_default: false,
@@ -84,13 +80,18 @@ async function setup(agent: AgentOut, providers: Provider[], catalogue?: AgentMo
   return hook;
 }
 
-async function testAndConfirm(result: { current: ReturnType<typeof useAgentConnectionDraft> }) {
+async function testAndConfirm(
+  result: { current: ReturnType<typeof useAgentConnectionDraft> },
+  agentType = "claude_code",
+) {
   act(() => result.current.runTest());
   await waitFor(() => expect(result.current.canConfirm).toBe(true));
   act(() => result.current.confirm());
   await waitFor(() =>
     expect(call.mock.calls.some(([p]) => String(p).endsWith("/activate"))).toBe(true),
   );
+  const activation = call.mock.calls.find(([p]) => String(p).endsWith("/activate"));
+  expect((activation?.[1] as { body: unknown }).body).toEqual({ agent_type: agentType });
   const patch = call.mock.calls.find(([, o]) => (o as { method?: string })?.method === "PATCH");
   return (patch?.[1] as { body: Record<string, unknown> }).body;
 }
@@ -154,7 +155,7 @@ describe("useAgentConnectionDraft", () => {
     ]);
     expect(result.current.showTiers).toBe(false);
     act(() => result.current.pickConnection("u-oa"));
-    const body = await testAndConfirm(result);
+    const body = await testAndConfirm(result, "codex");
     expect(body).toEqual({ model: "gpt-5", effort: null });
   });
 
@@ -191,16 +192,22 @@ describe("useAgentConnectionDraft", () => {
     expect(result.current.draftTiers.haiku).toBe("qwen-coder");
   });
 
+  test("a pointer to a connection that no longer reaches the agent reads as the built-in login", async () => {
+    const agent: AgentOut = { ...AGENT, model: "m1", connection_uid: "u-gw" };
+    const { result } = await setup(agent, [conn("gw", { enabled: false, models: text("m1") })]);
+    expect(result.current.appliedConn).toBe(BUILTIN);
+    expect(result.current.draftConn).toBe(BUILTIN);
+  });
+
   test("an applied binding is the starting draft, and Discard returns to it", async () => {
     const agent: AgentOut = {
       ...AGENT,
       model: "m1",
       effort: "low",
       tier_models: { opus: "m1", sonnet: "m1", haiku: "m1" },
+      connection_uid: "u-gw",
     };
-    const { result } = await setup(agent, [
-      conn("gw", { is_active: true, models: text("m1", "m2") }),
-    ]);
+    const { result } = await setup(agent, [conn("gw", { models: text("m1", "m2") })]);
     expect(result.current.draftConn).toBe("u-gw");
     expect(result.current.draftEffort).toBe("low");
     expect(result.current.dirty).toBe(false);

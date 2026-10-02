@@ -10,13 +10,20 @@ import type { AgentQuota, UsageSummary, UsageTotals } from "@/lib/api/usage";
 import { acceptance } from "@/test/acceptance";
 import { UsagePage } from "./UsagePage";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 vi.mock("@/lib/activity/export", () => ({ saveFile: vi.fn() }));
-// The providers an agent may run on: an active one that reaches an agent type
-// puts that agent on an API key.
+// The providers an agent may run on, and the agents' records: an agent whose
+// `connection_uid` names a provider that reaches it runs on an API key.
 const providerList = vi.hoisted(() => ({ current: [] as Array<Record<string, unknown>> }));
+const agentList = vi.hoisted(() => ({ current: [] as Array<Record<string, unknown>> }));
 vi.mock("@/lib/hooks/useProviders", () => ({
   useProviders: () => ({ data: providerList.current }),
+}));
+vi.mock("@/lib/hooks/useAgents", () => ({
+  useAgents: () => ({ data: agentList.current }),
 }));
 
 const { getApiClient } = await import("@/lib/api/client");
@@ -239,6 +246,7 @@ const summaryCalls = (get: ReturnType<typeof install>["get"]) =>
 afterEach(() => {
   vi.clearAllMocks();
   providerList.current = [];
+  agentList.current = [];
 });
 
 describe("subscription quota", () => {
@@ -351,11 +359,11 @@ describe("subscription quota", () => {
         title: null,
         base_url: "https://api.openai.com/v1",
         enabled: true,
-        is_active: true,
         local_runtime: false,
         compatible_agents: ["codex"],
       },
     ];
+    agentList.current = [{ uid: "a-codex", type: "codex", connection_uid: "p1" }];
     install({ quota: NO_QUOTA });
     renderPage();
     const quota = quotaSection();
@@ -448,7 +456,6 @@ describe("API-key usage", () => {
         title: "Anthropic API",
         base_url: "https://api.anthropic.com",
         enabled: true,
-        is_active: false,
         local_runtime: false,
         compatible_agents: ["claude_code"],
       },

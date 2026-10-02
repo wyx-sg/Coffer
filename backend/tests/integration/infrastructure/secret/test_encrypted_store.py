@@ -9,7 +9,7 @@ import threading
 import pytest
 from cryptography.fernet import Fernet
 
-from coffer.domain.errors import SecretUnreadable
+from coffer.domain.secret_errors import SecretUnreadable
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 
 

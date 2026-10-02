@@ -100,7 +100,7 @@ def test_parse_args_does_not_read_a_prefix_as_agent_uid():
     """``allow_abbrev=False``: ``--agent <x>`` is not taken as an abbreviation
     of ``--agent-uid``, so a label is never reported where a uid belongs and
     the session is unidentified — strictly less access, never more (ADR
-    resource-identity-is-an-immutable-uid)."""
+    identity-is-the-uid-inside-the-file)."""
     ns = _parse_args(["--agent", "claude_code"])
     assert ns.agent_uid is None
 

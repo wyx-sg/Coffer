@@ -73,6 +73,9 @@ def window_for(binding: ChannelBinding, msg: InboundMessage) -> float:
 #: is whatever the caller handed ``add`` with the burst's latest message.
 FlushCallback = Callable[[Any, QueuedInbound], Awaitable[None]]
 
+#: ``(context, discarded parts) -> awaitable`` — told what a ``/stop`` threw away.
+DropCallback = Callable[[Any, list[BurstPart]], Awaitable[None]]
+
 
 @dataclass
 class _Burst:
@@ -95,6 +98,12 @@ def merge_parts(parts: list[BurstPart]) -> QueuedInbound:
         conversation_thread_id=last.item.conversation_thread_id,
         chat_kind=last.item.chat_kind,
         reply_to_message_id=last.item.reply_to_message_id,
+        earlier_message_ids=tuple(
+            message_id
+            for p in parts[:-1]
+            for message_id in (*p.item.earlier_message_ids, p.item.reply_to_message_id)
+            if message_id
+        ),
         mention_user_id=last.item.mention_user_id,
         mention_user_email=last.item.mention_user_email,
         mention_user_name=last.item.mention_user_name,
@@ -105,13 +114,16 @@ def merge_parts(parts: list[BurstPart]) -> QueuedInbound:
 class InboundBurst:
     """Per-key quiet-window buffer. ``add`` holds a message and (re)arms the
     key's timer; ``flush`` releases a key now (a command arriving behind held
-    messages); ``drop`` discards it (``/stop``); ``cancel_all`` on shutdown."""
+    messages); ``drop`` discards it (``/stop``); ``drop_channel`` forgets a
+    channel's holdings when it is unbound or the daemon shuts down."""
 
     def __init__(
         self,
         on_flush: FlushCallback,
+        on_drop: DropCallback | None = None,
     ) -> None:
         self._on_flush = on_flush
+        self._on_drop = on_drop
         self._bursts: dict[BurstKey, _Burst] = {}
         self._timers: dict[BurstKey, asyncio.TimerHandle] = {}
         #: The latest release of each key still being submitted.
@@ -136,17 +148,19 @@ class InboundBurst:
         does next (a command) lands behind it."""
         self._cancel_timer(key)
         burst = self._bursts.pop(key, None)
-        await self._wait_released(key)
         if burst is not None:
-            await self._on_flush(burst.context, merge_parts(burst.parts))
+            self._release(key, burst)
+        await self._wait_released(key)
 
     async def drop(self, key: BurstKey) -> None:
         """Discard what ``key`` holds (``/stop``). A release already under way is
         waited for, not raced: it was heard before the stop, so it reaches the
         queue first and the stop's pause holds it there."""
         self._cancel_timer(key)
-        self._bursts.pop(key, None)
+        burst = self._bursts.pop(key, None)
         await self._wait_released(key)
+        if burst is not None and self._on_drop is not None:
+            await self._on_drop(burst.context, burst.parts)
 
     async def settled(self) -> None:
         """Return once nothing is held and no release is still being submitted."""
@@ -154,18 +168,13 @@ class InboundBurst:
             await asyncio.sleep(0.005)
 
     def drop_channel(self, channel: str) -> None:
+        """Forget everything a channel holds — its held bursts AND the releases
+        already under way, so nothing is submitted for a channel that is gone."""
         for key in [k for k in self._bursts if k[0] == channel]:
             self._cancel_timer(key)
             self._bursts.pop(key, None)
-
-    def cancel_all(self) -> None:
-        for timer in self._timers.values():
-            timer.cancel()
-        self._timers.clear()
-        self._bursts.clear()
-        for task in list(self._releasing.values()):
-            task.cancel()
-        self._releasing.clear()
+        for key in [k for k in self._releasing if k[0] == channel]:
+            self._releasing.pop(key).cancel()
 
     def _cancel_timer(self, key: BurstKey) -> None:
         timer = self._timers.pop(key, None)
@@ -180,8 +189,10 @@ class InboundBurst:
     def _fire(self, key: BurstKey) -> None:
         self._timers.pop(key, None)
         burst = self._bursts.pop(key, None)
-        if burst is None:
-            return
+        if burst is not None:
+            self._release(key, burst)
+
+    def _release(self, key: BurstKey, burst: _Burst) -> None:
         # Chained behind this key's previous release, so two bursts of one chat
         # reach the conversation in the order they were released.
         previous = self._releasing.get(key)

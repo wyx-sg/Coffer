@@ -8,15 +8,14 @@
 //
 // What the page leaves out is the requirement too: no file tree, no
 // `MEMORY.md` / `RETIRED.md`, no `.raw/`, no native path and no agent's
-// original text. The partition's file listing is read only to find the
-// selected memory's own file for open-in-editor and reveal.
+// original text. Open-in-editor and reveal use the memory's own `file_path`.
 import { useSearchParams } from "react-router-dom";
 import { Brain } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState";
 import { FILE_PANE_COLUMN, FILE_PANE_SCROLL, useFillToBottom } from "@/components/filePane";
-import { MemoryList } from "@/components/memory/MemoryList";
+import { MemoryList, RetiredGroup } from "@/components/memory/MemoryList";
 import { MemoryPane } from "@/components/memory/MemoryPane";
 import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
 import { NoModelNotice } from "@/components/memory/NoModelNotice";
@@ -24,10 +23,10 @@ import { SplitView } from "@/components/SplitView";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { agentTypeLabel } from "@/lib/agents/display";
-import type { MemoryFileNode, PartitionOut } from "@/lib/api/memoryTypes";
+import type { PartitionOut } from "@/lib/api/memoryTypes";
 import { agentTypeOfOrigin } from "./memoryAgents";
 import { useCofferModelSet } from "@/lib/hooks/useInternalEngine";
-import { useMemoryNotes, useMemoryRetired, usePartitionFiles } from "@/lib/hooks/useMemory";
+import { useMemoryNotes, useMemoryRetired } from "@/lib/hooks/useMemory";
 
 /** The search param naming the selected memory. */
 const MEMORY_PARAM = "memory";
@@ -43,23 +42,11 @@ interface Props {
   partition?: PartitionOut;
 }
 
-/** The node at `path` (relative to the partition directory), if any. */
-function findNode(node: MemoryFileNode | undefined, path: string): MemoryFileNode | null {
-  if (!node) return null;
-  if (node.path === path) return node;
-  for (const child of node.children) {
-    const hit = findNode(child, path);
-    if (hit) return hit;
-  }
-  return null;
-}
-
 export function PartitionMemoriesTab({ uid, name, running, partition }: Props) {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const notes = useMemoryNotes(uid);
   const retired = useMemoryRetired(uid);
-  const files = usePartitionFiles(uid);
   const modelSet = useCofferModelSet();
   const fill = useFillToBottom();
 
@@ -71,9 +58,7 @@ export function PartitionMemoriesTab({ uid, name, running, partition }: Props) {
     next.set(MEMORY_PARAM, slug);
     setParams(next, { replace: true });
   };
-  const filePath = selected
-    ? (findNode(files.data, `notes/${selected}.md`)?.abs_path ?? null)
-    : null;
+  const filePath = memories.find((m) => m.slug === selected)?.file_path || null;
 
   const notice = modelSet === false ? <NoModelNotice /> : null;
 
@@ -114,6 +99,7 @@ export function PartitionMemoriesTab({ uid, name, running, partition }: Props) {
           }
           action={<MemoryUpdateButton running={running} />}
         />
+        {(retired.data ?? []).length > 0 ? <RetiredGroup retired={retired.data ?? []} /> : null}
       </div>
     );
   }

@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { honoursRequireMention } from "./editChannel";
+import { honoursRequireMention } from "@/lib/channels/editChannel";
 
 /** The two group-gating switches, as the form holds them. */
 export interface ChannelGroupDraft {

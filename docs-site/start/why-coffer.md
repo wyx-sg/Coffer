@@ -54,7 +54,7 @@ See [MCP gateway](/architecture/mcp-gateway) for how sessions, namespacing and t
 **What it means for you.**
 
 - Your knowledge is plain Markdown you can open, grep, version and edit in any tool.
-- Agents add material through `coffer__write`. A curation pass, run by Coffer's own model if you set one up, merges new material into the existing documents.
+- Agents add material through `coffer__write`. A curation pass, run by Coffer's own model if you set one up, folds new material into the existing documents.
 - Memory works the other way round. Coffer's distilled memory is pushed, through a hook that you install explicitly for each agent: the index at session start, the notes a prompt names, and a note you tied to a command just before it runs. The [memory guide](/guides/memory) explains how.
 
 ## Secrets are encrypted with a key you hold

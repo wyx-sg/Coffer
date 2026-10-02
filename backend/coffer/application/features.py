@@ -5,7 +5,7 @@ experimental-features "Decide a feature's state per machine"):
 
 1. a pin from ``COFFER_FEATURES``, fixed for the daemon's lifetime;
 2. the machine's own setting, kept in ``~/.coffer/daemon-config.json``;
-3. the channel default — off on ``stable``, on on ``dev``.
+3. the default — off.
 
 The settings are loaded once and held in memory, so a gate costs one dict
 lookup; :meth:`FeatureService.set` writes the config file BEFORE it changes the
@@ -24,10 +24,8 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from coffer.domain.features import (
-    Channel,
     FeaturePinned,
     FeatureSource,
-    channel_default,
     feature_keys,
     get_feature,
 )
@@ -67,25 +65,26 @@ class FeatureService:
     def __init__(
         self,
         *,
-        channel: Channel,
         settings: FeatureSettingsPort,
         pins: Mapping[str, bool] | None = None,
     ) -> None:
-        self._channel: Channel = channel
         self._settings_port = settings
         known = set(feature_keys())
         self._pins = {k: v for k, v in (pins or {}).items() if k in known}
-        self._settings = {k: v for k, v in settings.read().items() if k in known}
+        stored = settings.read()
+        for key in sorted(set(stored) - known):
+            # A key a newer build wrote, or a feature since retired: ignored by
+            # every read (spec experimental-features "Declare the experimental
+            # features in one registry"), never listed.
+            _logger.warning("ignoring stored setting for unregistered feature %r", key)
+        self._settings = {k: v for k, v in stored.items() if k in known}
         self._subscribers: list[FeatureSubscriber] = []
         # One switch at a time, from its write to the last subscriber's
-        # answer: two switches of ``memory`` interleaved would run the hook's
-        # withdraw and restore against each other, and the agents would end up
-        # carrying whichever finished last rather than what the switch says.
+        # answer: two switches of one feature interleaved would run its
+        # subscribers' withdraw and restore against each other, and the machine
+        # would end up carrying whichever finished last rather than what the
+        # switch says.
         self._switching = asyncio.Lock()
-
-    @property
-    def channel(self) -> Channel:
-        return self._channel
 
     def state(self, key: str) -> FeatureState:
         """The resolved state of ``key``; raise ``FeatureUnknown`` for an unregistered key."""
@@ -94,7 +93,7 @@ class FeatureService:
             return FeatureState(key, self._pins[key], "pin")
         if key in self._settings:
             return FeatureState(key, self._settings[key], "setting")
-        return FeatureState(key, channel_default(self._channel), "channel")
+        return FeatureState(key, False, "default")
 
     def is_enabled(self, key: str) -> bool:
         return self.state(key).enabled
@@ -127,8 +126,8 @@ class FeatureService:
             return await self._settled(key, before)
 
     async def unset(self, key: str) -> FeatureState:
-        """Remove this machine's setting for ``key``, so it follows the channel
-        default again (spec experimental-features "Switch a feature from the
+        """Remove this machine's setting for ``key``, so it is off
+        again (spec experimental-features "Switch a feature from the
         settings page or the command line").
 
         Refuses a pinned feature with ``FeaturePinned``, like :meth:`set`, and

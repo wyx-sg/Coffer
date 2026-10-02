@@ -64,8 +64,8 @@ class TurnDone:
     """The turn completed.
 
     ``stop_reason`` is a short token describing why the turn ended — e.g.
-    ``"end_turn"`` (normal completion), ``"max_iterations"`` (the tool-step
-    limit was reached), or ``"interrupted"`` (the user stopped the turn).
+    ``"end_turn"`` (normal completion) or ``"interrupted"`` (the user stopped the
+    turn). A turn the agent cuts short (its own turn limit) arrives as a ``TurnError``.
     Token counts may be ``None`` if the agent does not report them.
     """
 

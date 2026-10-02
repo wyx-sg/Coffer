@@ -14,7 +14,7 @@ import { ChevronDown } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { sortAgents } from "@/components/agent/agentOrder";
-import type { ReachMode } from "@/components/reach/reachState";
+import type { ReachMode } from "@/lib/reach/reachState";
 import { cn } from "@/lib/utils";
 
 interface ReachBadgeAgent {

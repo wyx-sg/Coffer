@@ -2,8 +2,9 @@
 (ADR api-key-providers-are-reached-through-a-separate-local-model-proxy).
 
 The proxy holds no database; the daemon pushes it one :class:`ProxyState` —
-every managed agent's token digest, and for each agent on a connection the
-members that may serve it: the active connection first, then every other
+every managed agent's token digest, and for each agent on a connection
+(``AgentConfig.connection_uid``, read through ``targets.connection_for_agent``)
+the members that may serve it: that connection first, then every other
 enabled connection that reaches the same agent type, speaks the same protocol
 and is switched on as a fallback, in Model providers list order (spec
 provider-switching "Order providers, and fail over in that order"; failover
@@ -22,6 +23,7 @@ import itertools
 from typing import TYPE_CHECKING
 
 from coffer.application.provider.proxy_tokens import ProxyTokenService
+from coffer.application.provider.targets import connection_for_agent, reaches
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.model_proxy.state import (
@@ -82,7 +84,7 @@ async def _member(
 
 async def build_proxy_state(service: ProviderService, tokens: ProxyTokenService) -> ProxyState:
     """The state to push now: every enabled agent's token digest, and a route
-    for each one whose type has an active connection."""
+    for each one that runs on a connection."""
     agents = await service._agents.list()
     enabled: list[tuple[Resource, AgentConfig]] = []
     for row in agents:
@@ -95,20 +97,16 @@ async def build_proxy_state(service: ProviderService, tokens: ProxyTokenService)
     digests = await tokens.digests(row.uid for row, _ in enabled)
     # Already in list order — the order fallbacks are tried in.
     connections = await service.list()
-    reach = {r.uid: set(service._compat(r, agents)) for r in connections}
 
     routes: list[ProxyRoute] = []
     for row, cfg in enabled:
         wire = _wire_for(service, cfg.type)
         if wire is None:
             continue
-        active = next(
-            (r for r in connections if service._cfg(r).is_active and cfg.type in reach[r.uid]),
-            None,
-        )
-        if active is None:
+        chosen = connection_for_agent(row, connections)
+        if chosen is None:
             continue
-        active_cfg = service._cfg(active)
+        active, active_cfg = chosen
         primary = await _member(service, active, active_cfg, wire)
         if primary is None:
             continue
@@ -118,7 +116,7 @@ async def build_proxy_state(service: ProviderService, tokens: ProxyTokenService)
                 other_cfg = service._cfg(other)
                 if other.uid == active.uid or not other_cfg.offers_fallback:
                     continue
-                if cfg.type not in reach[other.uid] or other_cfg.protocol != active_cfg.protocol:
+                if not reaches(other, other_cfg, row) or other_cfg.protocol != active_cfg.protocol:
                     continue
                 member = await _member(service, other, other_cfg, wire)
                 if member is not None and member.models:

@@ -14,7 +14,10 @@ import { acceptance } from "@/test/acceptance";
 import { routes } from "@/router";
 import { cli } from "@/test/cliFixtures";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 const { getApiClient } = await import("@/lib/api/client");
 
 /** Every GET answers an empty, well-formed body; the calls are recorded. */
@@ -23,6 +26,13 @@ function mockApi() {
     Promise.resolve({
       data: {
         resources: [],
+        // GET /agents/types, /providers, /fs/editors, /secrets/approvals: the
+        // pages the table mounts read these through the request modules.
+        types: [],
+        install_handoff: null,
+        providers: [],
+        editors: [],
+        approvals: [],
         groups: [],
         agents: [],
         candidates: [],
@@ -34,6 +44,9 @@ function mockApi() {
         version: "0.0.0",
         port: 1,
         started_at: "2026-01-01T00:00:00Z",
+        features: {},
+        // GET /usage/summary — the Overview's usage tile reads it.
+        totals: { input_tokens: 0, output_tokens: 0 },
       },
       error: undefined,
     }),

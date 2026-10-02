@@ -126,6 +126,24 @@ async def test_materialize_failure_is_latched_not_raised():
     assert ws.started == {}
 
 
+async def test_one_channels_failing_secret_does_not_hold_the_others_connections_back():
+    """Each channel waits out its own failure: the channel whose secret cannot be
+    read is retried later, and the SeaTalk channels beside it start now."""
+
+    async def flaky(refs: dict[str, str], destination: Any = None) -> dict[str, str]:
+        if any("broken" in ref for ref in refs.values()):
+            raise RuntimeError("store down")
+        return await _materialize(refs, destination)
+
+    ws = StubWebSocketController()
+    rt = _runtime(ws, materialize=flaky)
+    broken = {**_seatalk(), "app_secret_ref": "channel/broken/app-secret"}
+    await rt._reconcile_websockets(
+        {"broken": channel_row("broken", broken), "st": channel_row("st", _seatalk())}
+    )
+    assert ws.started == {_ST: ("app-1", "secret::channel/st/app-secret")}
+
+
 async def test_no_controller_wired_is_a_no_op():
     rt = _runtime(None)
     await rt._reconcile_websockets({"st": channel_row("st", _seatalk())})

@@ -35,10 +35,11 @@ function lazyPage<K extends string>(
 }
 
 /** A page that belongs to an experimental feature: while the feature is off
- *  the route renders a notice saying so instead (spec experimental-features
- *  "Close every surface of a switched-off feature"). A page is gated here by
+ *  the route renders the standard not-found page, as if the page did not exist
+ *  (spec experimental-features "Close every surface of a switched-off
+ *  feature"). A page is gated here by
  *  the `feature` its sidebar entry carries in `lib/navigation.ts`, so one flag
- *  on the entry closes both. No entry carries one while the registry is empty. */
+ *  on the entry closes both. */
 const FEATURE_OF_PATH = new Map<string, FeatureKey>(
   NAV_GROUPS.flatMap((g) => g.entries)
     .filter((e): e is NavEntry & { feature: FeatureKey } => e.feature !== undefined)
@@ -51,7 +52,14 @@ function gateRoutes(table: RouteObject[]): RouteObject[] {
     const top = route.path?.split("/")[0];
     const feature = top === undefined ? undefined : FEATURE_OF_PATH.get(top);
     if (feature === undefined || route.element === undefined) return route;
-    return { ...route, element: <FeatureGate feature={feature}>{route.element}</FeatureGate> };
+    return {
+      ...route,
+      element: (
+        <FeatureGate feature={feature} notFound={<NotFoundPage />}>
+          {route.element}
+        </FeatureGate>
+      ),
+    };
   });
 }
 
@@ -75,7 +83,7 @@ const settingsModal = lazyPage(() => import("./pages/settings/SettingsModal"), "
 // Detail routes follow one rule (spec web-ui "Lay out every detail page's tabs
 // alike"): `/<kind>/<id>/<tab>`, the default tab at the bare path. `<id>` is the
 // name where a kind's name is fixed — skills and MCP servers — and the immutable
-// uid where a name can be renamed (ADR resource-identity-is-an-immutable-uid).
+// uid where a name can be renamed (ADR identity-is-the-uid-inside-the-file).
 const pageRoutes: RouteObject[] = gateRoutes([
   { index: true, element: <OverviewPage /> },
   // One element for both addresses, so opening a conversation from the list —

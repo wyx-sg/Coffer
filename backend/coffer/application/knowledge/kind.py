@@ -10,7 +10,7 @@ almost all default. The fields that are not:
   skill and agent kinds do.
 - ``on_rename`` moves that folder. The row's name is the directory's name, so
   a label that changes without the directory changing with it leaves the row
-  pointing at nothing (ADR resource-identity-is-an-immutable-uid: "the three
+  pointing at nothing (ADR identity-is-the-uid-inside-the-file: "the three
   file-backed kinds get an ``on_rename`` hook ... that hook is the whole of
   what rename costs anywhere").
 - ``titled`` is False: a collection has no display title. Its heading is

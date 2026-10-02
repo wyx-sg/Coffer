@@ -61,7 +61,7 @@ export function MemoryList({ memories, retired, selected, onSelect, sources = []
   );
 }
 
-function RetiredGroup({ retired }: { retired: RetiredNoteOut[] }) {
+export function RetiredGroup({ retired }: { retired: RetiredNoteOut[] }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const Chevron = open ? ChevronDown : ChevronRight;

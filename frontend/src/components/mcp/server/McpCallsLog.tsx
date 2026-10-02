@@ -23,7 +23,7 @@ import type { AgentOut } from "@/lib/api/agents";
 import { useMcpInvocations } from "@/lib/hooks/useMcpInvocations";
 import { cn } from "@/lib/utils";
 import { McpCallDetail } from "./McpCallDetail";
-import { callTone, seconds, shortTime } from "./serverState";
+import { callTone, seconds, shortTime } from "@/lib/mcp/serverState";
 
 const ALL = "all";
 

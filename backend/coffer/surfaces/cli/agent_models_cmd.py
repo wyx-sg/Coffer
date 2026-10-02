@@ -1,7 +1,7 @@
-"""``coffer agent models <agent_key>`` — the models an agent can be put on.
+"""``coffer agent models <type>`` — the models an agent can be put on.
 
 CLI parity for the web model picker: both read
-``GET /agent-providers/{agent_key}/models``, the one list every surface is
+``GET /agent-providers/{agent_type}/models``, the one list every surface is
 served (spec provider-switching "Serve one model list to every surface"). The
 argument is the agent key the provider registry answers for (``claude_code``,
 ``codex``), not an agent resource's name — the route is keyed that way, and an
@@ -37,14 +37,16 @@ def _line(model: dict[str, Any]) -> str:
 
 def models(
     ctx: typer.Context,
-    agent_key: str = typer.Argument(..., help="Agent type, e.g. claude_code or codex"),
+    agent_type: str = typer.Argument(
+        ..., metavar="TYPE", help="Agent type, e.g. claude_code or codex"
+    ),
     output_json: bool = typer.Option(False, "--json", help="JSON output"),
 ) -> None:
     """List the models a picker offers for this agent, with their effort levels."""
     verbose = bool((ctx.obj or {}).get("verbose", False))
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/agent-providers/{agent_key}/models")
+        r = c.get(f"/agent-providers/{agent_type}/models")
         _cli_client.check(r, verbose=verbose)
     data = r.json()
     if output_json:

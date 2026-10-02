@@ -60,11 +60,10 @@ class AgentPatch(BaseModel):
     model: str | None = None
     effort: str | None = None
     tier_models: dict[str, str] | None = None
-    wire_api: str | None = None
 
 
 class AgentOut(BaseModel):
-    # The agent's identity (ADR resource-identity-is-an-immutable-uid). Every
+    # The agent's identity (ADR identity-is-the-uid-inside-the-file). Every
     # route here also takes the type in its place, because there is one agent
     # per type.
     uid: str
@@ -88,7 +87,13 @@ class AgentOut(BaseModel):
     #: Claude Code only: the model each tier (``opus``, ``sonnet``, ``haiku``,
     #: ``fable``) is pinned to while the agent is on a connection.
     tier_models: dict[str, str] | None
-    wire_api: str | None
+    #: The provider connection (its uid) the agent runs on, or ``None`` for its
+    #: own built-in login (spec agent-registry "Carry the connection an agent
+    #: runs on on the agent record"). Read-only here: it is switched through
+    #: ``POST /providers/{uid}/activate`` and ``/providers/use-builtin/{type}``,
+    #: which write the agent's native config with it. A uid that names a
+    #: connection no longer enabled or reaching the agent means no connection.
+    connection_uid: str | None
     # Two-signal detection (spec agent-registry "Detect an agent by its
     # program and its config directory"): the program on the agent's real
     # PATH, and the config directory on disk. Read at request time.
@@ -187,7 +192,7 @@ async def _to_out(r: Resource, detect: AutoDetectService) -> AgentOut:
         model=cfg.model,
         effort=cfg.effort,
         tier_models=cfg.tier_models,
-        wire_api=cfg.wire_api,
+        connection_uid=cfg.connection_uid,
         state=detection.state,
         version=detection.version,
         install_handoff=handoff_out(prompt),
@@ -287,7 +292,7 @@ async def update_agent(
     r = await svc.get(uid)
     if "config_dir" in sent:
         r = await svc.update_config_dir(uid=uid, new_config_dir=body.config_dir, actor=actor)
-    if sent & {"model", "effort", "tier_models", "wire_api"}:
+    if sent & {"model", "effort", "tier_models"}:
         # Per-agent model binding. An explicit null effort / tier_models
         # unbinds it; the projection reconcile target re-projects.
         r = await svc.set_model_binding(
@@ -297,7 +302,6 @@ async def update_agent(
             clear_effort="effort" in sent and body.effort is None,
             tier_models=body.tier_models if "tier_models" in sent else None,
             clear_tiers="tier_models" in sent and body.tier_models is None,
-            wire_api=body.wire_api if "wire_api" in sent else None,
             actor=actor,
         )
     return await _to_out(r, detect)

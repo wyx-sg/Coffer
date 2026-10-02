@@ -1,5 +1,5 @@
 """The validator's rule for state documents, ``state/<area>/<name>.json``
-(plan D13; spec vault-storage).
+(spec vault-storage).
 
 A state document is a JSON object at a format version this build can read.
 The areas this build writes are checked for their shape: an MCP server's

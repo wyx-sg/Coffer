@@ -47,9 +47,9 @@ and the daemon-wide change feed `/api/v1/events`;
 its packages are `domain/{resource,scope,audit,retention}.py`, the kind-agnostic
 services beside them in `application/`, and their surfaces; an import-linter contract
 fences the core off from every kind; and it has ADRs of its own
-([Sidebar Grouped by Role](../../../docs/decisions/sidebar-grouped-by-role.md),
+([The Sidebar Is Grouped by What the Person Comes to Do: Agents, Run, Capabilities, Context, System](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md),
 [Resource Framework Upfront](../../../docs/decisions/resource-framework-upfront.md),
-[Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md),
+[A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md),
 [Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)). It is one
 behaviour — what happens to a managed thing between the moment a kind creates it and the
 moment it is deleted, recorded while it happens — and it is independently operable:
@@ -70,7 +70,7 @@ token gate.
 
 ### Requirement: Address every resource by an immutable uid through one kind-agnostic surface
 The system MUST model every managed thing as a *resource* identified by an immutable,
-opaque **`uid`** ([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)),
+opaque **`uid`** ([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md)),
 and MUST expose one kind-agnostic REST surface, `/api/v1/resources*`, to list, read, update,
 enable, disable and delete any of them without the caller knowing the kind. Every route and
 every stored reference from one resource to another MUST address the uid. A uid MUST be minted
@@ -147,7 +147,7 @@ happens to a resource once a kind has made one.
 #### Scenario: refuse a generic create for a kind that owns its creation
 - **GIVEN** a registered kind that declares it is not creatable through the kind-agnostic surface,
 - **WHEN** a registration for that kind arrives on the kind-agnostic create route,
-- **THEN** it is refused as a conflict with the code `GENERIC_CREATE_NOT_ALLOWED`, and no resource row and no audit entry is written,
+- **THEN** it is refused as a conflict with the code `GENERIC_CREATE_NOT_ALLOWED`, and no resource file and no audit entry is written,
 - **AND** that kind's command group offers `add` only if the kind supplies its own, and the memory group offers no `add` at all.
 
 ### Requirement: Carry a per-agent reach on every resource
@@ -196,7 +196,9 @@ write path.
 ### Requirement: Run the kind's cleanup before a deletion completes
 Deleting a resource MUST run the kind's own cleanup hook while the resource can still be
 resolved, and a hook that fails MUST abort the deletion rather than leave a half-deleted
-thing — a resource is never left registered with its on-disk half already gone. Rows a
+thing — a resource is never left registered with its on-disk half already gone. To keep that
+true when the write itself would be refused, the framework MUST first confirm the resource's
+file can be written now (not read-only, no unsettled edit on disk) before it runs the hook. Rows a
 kind owns MUST cascade; history MUST NOT — the audit log and the invocation log outlive
 the resource they describe. Secrets that no remaining resource cites MUST be
 released, and a failure to release MUST NOT turn an already-completed deletion into a
@@ -209,6 +211,11 @@ spec's.
 - **THEN** the hook runs while the resource can still be read back, the resource is gone, and the deletion returns without an error,
 - **AND** the audit entries written before the deletion are still readable for that resource,
 - **AND** when the kind's cleanup hook raises instead, the deletion is refused with that error, the resource is still registered, and no deletion audit entry is written.
+
+#### Scenario: a file that cannot be written stops a deletion before the cleanup runs
+- **GIVEN** a resource whose file has an edit on disk that is not settled yet, and a kind with a cleanup hook,
+- **WHEN** the user deletes it,
+- **THEN** the deletion is refused as stale, the hook never ran, and the resource is still registered.
 
 ### Requirement: Let a kind refuse a deletion before anything is torn down
 A kind MAY supply a **pre-write delete guard**: given the resource a delete names, it
@@ -251,7 +258,8 @@ to the name it already has MUST change nothing and record nothing. The resource'
 which is named after the resource, MUST move to the new name in the same vault commit that
 records the rename ([vault-storage](../vault-storage/spec.md) "Identify a resource by the uid inside its file"). A kind that keeps an on-disk
 artifact named after the resource MUST be given the chance to move it, with a failure aborting
-the rename rather than leaving the two disagreeing.
+the rename rather than leaving the two disagreeing: a file that cannot be written is refused
+before the hook runs, and a write that fails after it asks the kind to move the artifact back.
 
 A kind whose name is visible outside Coffer MUST declare its name fixed, because agents and the
 files they read quote that name. Today these are `mcp_server`, whose name prefixes every tool
@@ -287,7 +295,9 @@ editable title on the kinds that have one"): the fixed name is what every surfac
 - **AND** a rename the kind cannot carry out — something already occupies the
   destination — is refused with the resource and the artifact both untouched, rather
   than leaving a resource pointing at a directory that is not there or merging
-  into one that was never its own.
+  into one that was never its own,
+- **AND** a resource file that cannot be written (an unsettled edit on disk) is refused before
+  the artifact moves, and a write that fails after the artifact moved puts it back.
 
 #### Scenario: a fixed name refuses a rename
 - **GIVEN** a registered MCP server and a registered skill
@@ -696,32 +706,29 @@ items, and the answer MUST count the items per kind.
 - **THEN** it carries one `cli` item for `gh` with reason `cli_outdated` whose action is `check` through `POST /api/v1/clis/gh/check`
 - **AND** once `gh` is current, present and logged in, no `cli` item is listed
 
-### Requirement: Carry a monotonic revision on every resource
-Every resource MUST carry an integer revision that is 1 when the resource is
-first seen on this machine and grows by one with every change to its file or to
-its reach here — config, enabled flag, scope, name, title — whoever made it: a
-surface, a hand edit Coffer committed, or a sync checkout. Every change MUST
-emit an in-process hint naming the kind, the uid and the new revision, which
-only brings the next reconcile pass forward. The revision is derived, never a
-key of the file — two machines stamping it would conflict on every edit — and
-is kept under `~/.coffer/derived/`; after that directory is deleted every
-resource starts again at 1, which costs nothing, because only the in-process
-dedupe of hints reads it.
+### Requirement: Announce every write to a resource as an in-process hint
+Every change to a resource MUST emit an in-process hint naming the kind, the uid and
+whether the resource still exists (`upsert` or `delete`) — whoever made the change: a
+surface, a hand edit Coffer committed, or a sync checkout. The hint only brings the next
+reconcile pass forward for the targets that follow that kind. No revision number is kept:
+nothing compares one, and a hint is an accelerator that is cheap to repeat. A resource's
+`updated_at` is the modification time of its file on this machine, so reading a resource
+writes nothing.
 
-#### Scenario: every write to a resource bumps its revision
-- **GIVEN** a newly registered resource at revision 1
-- **WHEN** its config, its enabled flag and its title are changed in turn
-- **THEN** it reads revision 4, and each write emitted one hint carrying the revision it produced
+#### Scenario: every write to a resource is hinted
+- **GIVEN** a newly registered resource
+- **WHEN** its config, its enabled flag, its title, its scope and its name are changed in turn, and it is then deleted
+- **THEN** each write emitted one hint for that uid, the last one marked `delete`
+- **AND** a read of the resource emitted none
 
 ### Requirement: Announce every change on one daemon-wide event stream
 `GET /api/v1/events` MUST be one Server-Sent Events stream for the whole
 daemon, gated by the token header like every other management call, so a
 client reads it with `fetch` rather than `EventSource`. Each `change` event
-MUST carry an envelope `{seq, kind, id, rev, op}` and an SSE id that names both
+MUST carry an envelope `{seq, kind, id, op}` and an SSE id that names both
 the daemon run and the `seq`, because `seq` starts again at 1 on every run:
 `seq` grows by one per event across the daemon run, `kind` is the resource
-kind or `attention`, `id` is the resource's uid (none for `attention`), `rev`
-is the revision the write produced (none for `attention`), and `op` is
+kind or `attention`, `id` is the resource's uid (none for `attention`), and `op` is
 `upsert` or `delete`. Every resource write through the framework MUST produce
 one envelope, and so MUST every change in what the attention list reports. An
 envelope is an invalidation hint only: it MUST NOT carry the resource's state,
@@ -737,8 +744,8 @@ client to refetch everything. While nothing changes the stream MUST send a
 #### Scenario: a resource write is announced as an invalidation hint
 - **GIVEN** a client reading the event stream
 - **WHEN** a resource is disabled and then deleted
-- **THEN** the client receives two `change` events for that uid, an `upsert` carrying the revision the disable produced and then a `delete`, with consecutive `seq` values
-- **AND** neither envelope carries any field of the resource beyond its kind, uid and revision
+- **THEN** the client receives two `change` events for that uid, an `upsert` for the disable and then a `delete`, with consecutive `seq` values
+- **AND** neither envelope carries any field of the resource beyond its kind and uid
 
 #### Scenario: a reconnecting client resumes after the last event it saw
 - **GIVEN** a client that saw `change` events up to `seq` n and disconnected, after which two more resources were written

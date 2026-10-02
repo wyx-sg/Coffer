@@ -6,7 +6,7 @@ own strategy". Kept out of ``agent_cmd.py`` for the 400-line backend file cap;
 ``agent_cmd`` calls :func:`attach`.
 
 The agent is taken by NAME and resolved to a uid through ``_resolve`` (ADR
-resource-identity-is-an-immutable-uid). The ``plugin_id`` beside it stays as it
+identity-is-the-uid-inside-the-file). The ``plugin_id`` beside it stays as it
 is: it names something inside the agent's own config, which Coffer did not mint.
 """
 
@@ -26,7 +26,7 @@ from coffer.surfaces.cli._resolve import resolve_ref
 plugin_app = typer.Typer(help="View and manage an agent's installed plugins")
 _console = Console()
 
-_AGENT = typer.Argument(..., help="Agent name")
+_AGENT = typer.Argument(..., metavar="NAME", help="Agent name or uid")
 _PLUGIN = typer.Argument(..., help="Plugin id (name@marketplace)")
 
 

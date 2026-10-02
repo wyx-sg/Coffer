@@ -97,7 +97,7 @@ class RetrievalService:
         """The session's own partition and every served partition it reads:
         its repository's (when it has one) and ``global``."""
         served = set(await self._memory.served_partitions())
-        project = resolve_cwd_partition(await self._memory.list_partitions(), cwd)
+        project = resolve_cwd_partition(await self._memory.placements(), cwd)
         wanted = [p for p in dict.fromkeys((project, GLOBAL_PARTITION)) if p in served]
         return project, wanted
 

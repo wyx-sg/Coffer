@@ -24,6 +24,7 @@ from coffer.surfaces.http.memory_turn_wiring import memory_context_composer
 class _Partition:
     name: str
     repository_path: str
+    repository_key: str = ""
 
 
 class _FakeMemory:
@@ -36,12 +37,12 @@ class _FakeMemory:
     async def list_notes(self, partition: str) -> list[Note]:
         return [n for n in self._notes if n.partition == partition]
 
-    async def list_partitions(self) -> list[_Partition]:
+    async def placements(self) -> list[_Partition]:
         return [_Partition("global", "")]
 
 
 class _BrokenMemory(_FakeMemory):
-    async def list_partitions(self) -> list[_Partition]:
+    async def placements(self) -> list[_Partition]:
         raise OSError("tree unreadable")
 
 
@@ -55,7 +56,7 @@ class _Delivery:
 
 class _Agents:
     async def list(self) -> list[Any]:
-        return [SimpleNamespace(uid="u-claude", config={"type": "claude_code"})]
+        return [SimpleNamespace(uid="u-claude", enabled=True, config={"type": "claude_code"})]
 
 
 def _composer(memory: _FakeMemory, delivery: _Delivery | None = None) -> Any:
@@ -87,7 +88,8 @@ async def test_nothing_to_deliver_appends_nothing() -> None:
     delivery = _Delivery()
     compose = _composer(_FakeMemory([]), delivery)
     assert await compose("claude_code", "/home/dev/coffer", "c1") is None
-    assert delivery.fired == []
+    # The session start is still audited, as the hook records an empty one.
+    assert [d["moment"] for _uid, d in delivery.fired] == ["session_start"]
 
 
 @pytest.mark.asyncio

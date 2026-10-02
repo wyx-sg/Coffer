@@ -7,10 +7,12 @@ stale: aggregation only fills ``.raw/``, and distil only reads what is already
 there. So ``POST /api/v1/memory/sync`` and ``coffer memory sync`` run both, in that
 order, and the web UI offers them as one **Update memory** button.
 
-**Only partitions with undistilled raw entries are distilled.** An entry is
+**Only partitions with something to distil are distilled.** An entry is
 undistilled when no note's provenance and no ``RETIRED.md`` record names it (see
-"Distil incrementally in two stages"); a partition holding none would get nothing
-from a pass but a rewritten index, so it is not visited. That is also what makes
+"Distil incrementally in two stages"), and a note whose raw entries are all gone is
+owed its retirement (see "Retire a note whose raw entries are all gone"); a partition
+holding neither would get nothing from a pass but a rewritten index, so it is not
+visited. That is also what makes
 the answer useful: ``distilled`` names what actually changed. With no internal
 connection the pass is the mechanical one (see "Distil mechanically with no internal
 connection") — ``MemoryService.distil`` decides that, not this module.
@@ -27,7 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from coffer.application.memory.aggregate import AggregationResult
-from coffer.application.memory.distil import has_undistilled
+from coffer.application.memory.distil import has_distil_work
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.application.upkeep_runs import UPKEEP_RUNS, UpkeepRunRegistry
 
@@ -49,9 +51,10 @@ class UpdateResult:
     """
 
     aggregation: AggregationResult
-    #: Partitions that held undistilled raw entries and were distilled.
+    #: Partitions that had something to distil — new raw entries, or a note whose
+    #: sources are gone — and were distilled.
     distilled: tuple[str, ...]
-    #: Partitions that held undistilled raw entries but whose distil pass was
+    #: Partitions that had something to distil but whose distil pass was
     #: already running elsewhere; that pass covers them.
     skipped: tuple[str, ...]
 
@@ -74,7 +77,7 @@ async def update_memory(
         aggregation = await service.aggregate(actor=actor)
         distilled: list[str] = []
         skipped: list[str] = []
-        pending = [p for p in await service.list_partitions() if has_undistilled(p.name)]
+        pending = [p for p in await service.list_partitions() if has_distil_work(p.name)]
         for done, partition in enumerate(pending):
             if tracked:
                 runs.progress(KIND_MEMORY, UPDATE_RUN, done=done, total=len(pending))

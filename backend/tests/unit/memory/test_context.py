@@ -40,6 +40,7 @@ from coffer.application.memory.context import (
 from coffer.application.memory.index import recency
 from coffer.domain.memory.note import TYPE_PROJECT, TYPE_USER, Note, Origin
 from coffer.infrastructure.memory import paths as memory_paths
+from coffer.infrastructure.memory.repository import resolve_repository
 
 _REPOSITORY = "/home/dev/coffer"
 
@@ -48,6 +49,7 @@ _REPOSITORY = "/home/dev/coffer"
 class _Partition:
     name: str
     repository_path: str
+    repository_key: str = ""
 
 
 class _FakeMemory:
@@ -70,7 +72,7 @@ class _FakeMemory:
     async def list_notes(self, partition: str) -> list[Note]:
         return list(self._notes.get(partition, []))
 
-    async def list_partitions(self) -> list[_Partition]:
+    async def placements(self) -> list[_Partition]:
         return list(self._partitions)
 
 
@@ -178,6 +180,33 @@ async def test_a_nested_repository_resolves_to_the_inner_one() -> None:
     )
     composed = await compose_context(memory, cwd="/home/dev/outer/vendor/inner/src")
     assert composed.partition == "inner"
+
+
+def _clone(root, remote: str):  # type: ignore[no-untyped-def]
+    git_dir = root / ".git"
+    git_dir.mkdir(parents=True)
+    (git_dir / "config").write_text(
+        f'[core]\n\tbare = false\n[remote "origin"]\n\turl = {remote}\n', encoding="utf-8"
+    )
+    return root
+
+
+@pytest.mark.asyncio
+async def test_a_second_clone_elsewhere_resolves_by_repository_identity(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The partition records one checkout's path; a session in another clone of
+    the same remote — a path no partition records — is still about that repository."""
+    remote = "git@example.com:team/coffer.git"
+    first = _clone(tmp_path / "first", remote)
+    second = _clone(tmp_path / "elsewhere" / "second", remote)
+    key = resolve_repository(first).key  # type: ignore[union-attr]
+    memory = _FakeMemory(
+        {"coffer": [_note("c", "coffer")], "global": []},
+        partitions=[_Partition("coffer", str(first), key), _Partition("global", "")],
+    )
+
+    composed = await compose_context(memory, cwd=str(second / "src"))
+
+    assert composed.partition == "coffer"
 
 
 @pytest.mark.asyncio

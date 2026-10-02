@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from collections.abc import AsyncIterator
+from typing import Any
 
 from coffer.application.audit_service import AuditService
 from coffer.domain.audit import AuditEventType
@@ -76,8 +77,37 @@ async def submitted_by(audit: AuditService | None, row: Resource, name: str) -> 
 async def item_author(service: object, row: Resource, name: str, fallback: str) -> str:
     """The author a pass names for its item: the audit event's actor, else the
     item's own frontmatter ``actor`` (``user`` or ``agent``)."""
-    found = await submitted_by(getattr(service, "_audit", None), row, name)
+    found = await submitted_by(getattr(service, "audit", None), row, name)
     return found or fallback
 
 
-__all__ = ["item_author", "recording", "settle", "submitted_by", "writer_of"]
+#: What a ``knowledge_curated`` event carries of a pass's outcome.
+_CURATED_DETAILS = (
+    "item",
+    "model",
+    "documents_before",
+    "documents_after",
+    "written",
+    "retired",
+    "status",
+    "gave_up",
+)
+
+
+async def record_curated(
+    service: object, row: Resource, actor: str, result: dict[str, Any]
+) -> None:
+    """Record one ``knowledge_curated`` event for a pass that ran; never raises."""
+    audit = getattr(service, "audit", None)
+    if audit is None:
+        return
+    with contextlib.suppress(Exception):
+        await audit.record(
+            AuditEventType.KNOWLEDGE_CURATED.value,
+            resource=row,
+            actor=actor,
+            details={k: result[k] for k in _CURATED_DETAILS},
+        )
+
+
+__all__ = ["item_author", "record_curated", "recording", "settle", "submitted_by", "writer_of"]

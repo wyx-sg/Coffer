@@ -7,7 +7,6 @@
 // the daemon's event stream: an attention change refetches the list, a
 // resource change the lists the tiles read (useDaemonEvents), so rows clear
 // themselves as problems resolve.
-import { LayoutDashboard } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -30,7 +29,6 @@ export function OverviewPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={LayoutDashboard}
         title={t("overview.title")}
         subtitle={t("overview.subtitle")}
         actions={firstRun ? null : <LiveMark live={live} checkedAt={attention.dataUpdatedAt} />}

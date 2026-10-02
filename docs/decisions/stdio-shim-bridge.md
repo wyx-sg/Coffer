@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-19
 **Deciders**: Yuxing Wu
-**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Auth and Origin Guard](daemon-auth-and-origin-guard.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [Session Subprocess Model](session-subprocess-model.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), [Resource Identity Is an Immutable uid](resource-identity-is-an-immutable-uid.md), spec mcp-gateway "Present Coffer as one MCP server", spec mcp-gateway "Take the agent identity from the handshake", spec agent-registry "Install Coffer's MCP server into an agent in one action", PR #219, PR #408
+**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Auth and Origin Guard](daemon-auth-and-origin-guard.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [Session Subprocess Model](session-subprocess-model.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), spec mcp-gateway "Present Coffer as one MCP server", spec mcp-gateway "Take the agent identity from the handshake", spec agent-registry "Install Coffer's MCP server into an agent in one action", PR #219, PR #408
 
 ## Context
 
@@ -111,13 +111,27 @@ strictly less (spec mcp-gateway "Take the agent identity from the handshake").
 Unknown flags are ignored rather than fatal.
 
 **A restarted daemon is recovered in place** (PR #219). The shim caches the
-`initialize` envelope. When a POST fails to connect, it re-reads `daemon.json`
-for up to 5 s; if a live daemon answers at a different port *or with a
-different token*, it rebinds its client, drops the dead session id, replays the
-cached handshake (without forwarding the reply, which the agent already has)
-and retries the call once. A blip against the same daemon is not recovered
-this way; a daemon that is gone surfaces as a JSON-RPC error on that request
-rather than a hang.
+`initialize` envelope. When a POST fails, it re-reads `daemon.json` for up to
+5 s; if a live daemon answers at a different port *or with a different token*,
+it rebinds its client, drops the dead session id and replays the cached
+handshake (without forwarding the reply, which the agent already has). A reply
+of `401` (a restart on the same port rotates the token) takes the same path,
+and a `404` for the session id (the daemon's idle reaper dropped it, or a
+restart kept the port) opens a fresh session by replaying the handshake, which
+carries the agent identity. A blip against the same live daemon is not
+recovered this way; a daemon that is gone surfaces as a JSON-RPC error on that
+request rather than a hang.
+
+**A `tools/call` is resent only when it provably never left the shim.** An
+upstream write is not idempotent, and a daemon that died mid-call may already
+have run it. A failure raised before the request was sent (a refused or timed-out
+connect) is resent once after recovery. Any other transport failure (a read
+timeout, a reset mid-response) may follow a request the old daemon received, so
+the shim still rebinds, so that later calls work, but answers that call with a
+JSON-RPC error saying it may or may not have run and that its effect should be
+checked before calling it again. Every other method is safe to resend and is.
+A `404` is the exception that resends a `tools/call` too, because the daemon
+refused the session before running anything.
 
 **Exit codes are a contract:** `0` on stdin EOF or SIGTERM, `1` on an uncaught
 fatal error, `3` when no daemon answers within 10 s of spawning one, with the
@@ -131,6 +145,9 @@ reason pointing at `~/.coffer/logs/daemon.log`.
 - With the fixed port of [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md)
   the port rarely changes, but the token changes on every start, so recovery
   still runs on every restart; it compares the token as well as the address.
+- A restart that lands during a `tools/call` can leave that call's effect
+  unknown to the agent. The shim says so in the error rather than guessing, and
+  leaves the decision to run it again to the agent.
 - Each agent session is one shim process and one gateway session with its own
   upstream processes ([Session Subprocess Model](session-subprocess-model.md)).
 - The shim's stdin reader accepts lines up to 64 MiB, because the default

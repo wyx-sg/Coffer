@@ -50,7 +50,7 @@ The registry is also the list of targets the [reconciler](/architecture/reconcil
 
 ### Provider projection without a protocol map
 
-A model provider connection reaches agents through its scope, not through its protocol. Each agent's provider entry declares which protocols its native config speaks, and nothing maps a protocol to one agent. Reverting an agent to its own login names the agent, not a wire. The one place a wire still appears — the key helper line older versions wrote into Claude Code's settings — is answered by asking which agents declare that wire.
+A model provider connection reaches agents through its scope, not through its protocol. Each agent's provider entry declares which protocols its native config speaks, and nothing maps a protocol to one agent. Reverting an agent to its own login names the agent, not a wire.
 
 A provider translation is pure. It returns a plan: the new text of the main file, the files to write before it, and the files to remove after it. Codex's model catalogue is the reason: the catalogue must exist before the settings point at it, and must stay until the pointer is gone, so the agent never reads a pointer to a file that is not there. The same entry also answers whether Coffer's keys are present, which is how the boot check decides that a connection marked active is not really projected — asking the same code that writes the keys means the check can never drift from the writer.
 

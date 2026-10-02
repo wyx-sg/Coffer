@@ -17,7 +17,7 @@ import pytest
 from coffer.domain.chat.events import TextDelta, TurnDone, TurnError, TurnStarted
 from tests.unit.chat.conftest import FakeAgentAdapter
 
-from .conftest import ChannelEnv, FakeChannelAdapter, inbound, wait_until
+from .conftest import ChannelEnv, FakeChannelAdapter, inbound, uid_of, wait_until
 
 
 def _clean_reply(text: str = "done") -> FakeAgentAdapter:
@@ -111,7 +111,7 @@ async def test_failing_reaction_still_delivers_the_reply(env: ChannelEnv) -> Non
     assert ("owner", "still here") in adapter.sent
     assert ("owner", "msg-9", "👀") in adapter.reactions
     # The channel stays live for the next message.
-    assert env.processor.binding("tg") is not None
+    assert env.processor.binding(uid_of("tg")) is not None
 
 
 @pytest.mark.acceptance(

@@ -7,8 +7,8 @@
 import { describe, expect, test } from "vitest";
 import type { TFunction } from "i18next";
 
-import { reachFilter, reachFilterOptions } from "./reachFilter";
-import { reachLabel, reachModeOf } from "@/components/reach/reachState";
+import { matchesReach, reachFilterOptions } from "./reachFilter";
+import { reachLabel, reachModeOf } from "@/lib/reach/reachState";
 
 // Echoes the key, so the assertions read which label each choice carries.
 const t = ((key: string) => key) as unknown as TFunction;
@@ -47,13 +47,18 @@ describe("reachFilterOptions", () => {
   });
 });
 
-describe("reachFilter", () => {
-  test("builds a DataTable filter under the shared Reach header", () => {
-    const filter = reachFilter(t, (row: { on: boolean }) => ({ enabled: row.on, scope: null }));
-    expect(filter.key).toBe("reach");
-    expect(filter.label).toBe("resources.cols.reach");
-    expect(filter.allLabel).toBe("resources.status.all");
-    expect(filter.accessor({ on: true })).toBe("everywhere");
-    expect(filter.accessor({ on: false })).toBe("disabled");
+describe("matchesReach", () => {
+  const off = { enabled: false, scope: null };
+  const everyone = { enabled: true, scope: null };
+  const some = { enabled: true, scope: { agents: ["u-agent-7f21"] } };
+
+  test("all lets every row through", () => {
+    expect([off, everyone, some].every((r) => matchesReach("all", r))).toBe(true);
+  });
+
+  test("each state keeps only the rows the control reads as that state", () => {
+    expect([off, everyone, some].filter((r) => matchesReach("disabled", r))).toEqual([off]);
+    expect([off, everyone, some].filter((r) => matchesReach("everywhere", r))).toEqual([everyone]);
+    expect([off, everyone, some].filter((r) => matchesReach("restricted", r))).toEqual([some]);
   });
 });

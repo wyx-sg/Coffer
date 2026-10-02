@@ -18,7 +18,7 @@ Coffer keeps configuration in five places, and each one exists for a reason:
 | Browser `localStorage` | Web UI preferences | Per browser, never sent to the daemon |
 
 ::: warning Environment variables and a detached daemon
-The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, by the desktop app or by the login service — and inherits the environment of whichever process started it, not your shell profile. An environment variable only reaches the daemon if you set it in the environment of the process that starts it, for example `COFFER_FEATURES=<key>=off coffer daemon restart`. Settings you want to keep belong in `daemon-config.json` or in **Settings**.
+The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, by the desktop app or by the login service — and inherits the environment of whichever process started it, not your shell profile. An environment variable only reaches the daemon if you set it in the environment of the process that starts it, for example `COFFER_FEATURES=run=off,models=off coffer daemon restart`. Settings you want to keep belong in `daemon-config.json` or in **Settings**.
 :::
 
 ## Environment variables
@@ -29,10 +29,10 @@ Links point at the file that reads each variable on GitHub.
 
 | Name | Default | Effect | Where read |
 | --- | --- | --- | --- |
-| `COFFER_FEATURES` | unset | Pins experimental features for this daemon process, overriding the machine setting and the channel default. Syntax below. Read once at start. | [`infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) |
-| `COFFER_ALLOWED_HOSTS` | unset | Comma-separated extra `Host` header names the daemon answers besides `127.0.0.1`, `localhost` and `::1`; `*` disables the check. Requests naming any other host, or a loopback name on another port, get `403 HOST_NOT_ALLOWED`. Never relaxes the `Origin` check. | [`surfaces/http/host_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/host_guard.py) |
-| `COFFER_CORS_ORIGINS` | unset | Comma-separated list of exact origins that replaces the cross-origin allow-list entirely, for both CORS and the `Origin` check. Without it the daemon allows only the desktop app's origins (`tauri://localhost`, `http://tauri.localhost`). The daemon's own origins are always allowed; any other origin gets `403 ORIGIN_NOT_ALLOWED`. | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
-| `COFFER_DEV_CORS` | unset | `1` adds the Vite dev server origins `http://localhost:5173` and `http://127.0.0.1:5173` to the default allow-list, for both CORS and the `Origin` check. Ignored when `COFFER_CORS_ORIGINS` is set. `make dev` sets it. | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
+| `COFFER_FEATURES` | unset | Pins experimental features for this daemon process, overriding the machine setting and the default (off). Syntax below. Read once at start. | [`infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) |
+| `COFFER_ALLOWED_HOSTS` | unset | Comma-separated extra `Host` header names the daemon answers besides `127.0.0.1`, `localhost` and `::1`; `*` disables the check. Requests naming any other host, or a loopback name on another port, get `403 HOST_NOT_ALLOWED`. Never relaxes the `Origin` check. A tagged release build ignores it. | [`surfaces/http/host_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/host_guard.py) |
+| `COFFER_CORS_ORIGINS` | unset | Comma-separated list of exact origins that replaces the cross-origin allow-list entirely, for both CORS and the `Origin` check. Without it the daemon allows only the desktop app's origins (`tauri://localhost`, `http://tauri.localhost`). The daemon's own origins are always allowed; any other origin gets `403 ORIGIN_NOT_ALLOWED`. A tagged release build ignores it. | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
+| `COFFER_DEV_CORS` | unset | `1` adds the Vite dev server origins `http://localhost:5173` and `http://127.0.0.1:5173` to the default allow-list, for both CORS and the `Origin` check. Ignored when `COFFER_CORS_ORIGINS` is set. A tagged release build ignores it. `make dev` sets it. | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py) |
 | `COFFER_WEBUI_DIR` | built-in | Directory holding a built web UI (`index.html`). Without it the daemon serves the UI bundled into the frozen binary, or `frontend/dist` in a source checkout. | [`surfaces/http/webui.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/webui.py) |
 | `COFFER_PRICE_REFRESH` | unset | `off` pins the daily model price-list refresh off, whatever `price_refresh` says; prices come from the list shipped in the build. The test suite and the e2e daemon set it. | [`infrastructure/usage/price_refresh.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/usage/price_refresh.py) |
 | `COFFER_MODEL_PROXY` | unset | `off` keeps the daemon from starting or supervising the [local model proxy](/architecture/model-proxy); any other value, or none, leaves it on. The test suite sets it. | [`surfaces/http/model_proxy_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/model_proxy_wiring.py) |
@@ -129,18 +129,27 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
 | `proxy_port` | integer 1024–65535, or `null` | `8001` | The port the [local model proxy](/architecture/model-proxy) binds on `127.0.0.1`, and the one projected into agents' configs. An invalid value is ignored with a warning and the default applies. Takes effect when the proxy next starts. | edit the file |
 | `machine_name` | string | host name without `.local` | This machine's display label in vault sync. Free to change; nothing references it. | **Sync** page, `coffer sync machine rename` |
 | `machine_id` | string | derived from the host | Cache of the host-derived machine id that names this machine in a synced vault. Deleting it recomputes the same value. | written by the daemon |
-| `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. A key the registry does not declare is ignored. | **Settings → General**, `coffer config set feature.<key> on\|off` |
+| `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. A key the registry does not declare is ignored. | **Settings → Features**, `coffer config set feature.<key> on\|off` |
 | `price_refresh` | boolean | `true` | Whether the daemon refreshes the model price list from genai-prices once a day. Off, it prices from the list shipped in the build. Read at each refresh. | **Settings › General → Refresh model prices**, `coffer config set prices.refresh on\|off` |
 
 The daemon's runtime state — its pid, port and API token — lives in a different file, `~/.coffer/daemon.json`, which is created on start and removed on exit. See [Files and directories](/reference/filesystem#daemon-files).
 
 ## Experimental features
 
-An experimental feature is a capability that can be switched off per machine; switching one off hides its pages, commands and routes and deletes nothing it holds. Each registry entry names its key, the routes it owns and the resource kinds it owns.
+An experimental feature is a capability that is off until you switch it on, per machine; while it is off it looks absent — its pages, commands and routes are closed — and nothing it holds is deleted. Each registry entry names its key, the routes it owns and the resource kinds it owns.
 
-No feature is experimental right now: the registry is empty. Sync, Knowledge and Memory (keys `vault_sync`, `knowledge`, `memory`) graduated at 1.0 and are always on; a migration removed their stored switches. `coffer config set feature.<one of them>` now reports an unknown setting, and `PUT /api/v1/daemon/features/<one of them>` answers `FEATURE_UNKNOWN`.
+The registry holds four features, in this order:
 
-While a feature is off, its routes answer `404` with code `FEATURE_DISABLED`, and the CLI prints the command that switches it back on. The registry lives in [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py).
+| Key | Closes | REST prefixes |
+| --- | --- | --- |
+| `knowledge` | Knowledge | `/api/v1/knowledge` |
+| `memory` | Memory | `/api/v1/memory` |
+| `sync` | Vault sync | `/api/v1/sync` |
+| `models` | Model providers, the local model proxy and Usage | `/api/v1/providers`, `/api/v1/models`, `/api/v1/proxy`, `/api/v1/usage` |
+
+Everything else is always on, including conversations and channels. Any other key is not a feature: `coffer config set feature.<key>` reports an unknown setting, and `PUT /api/v1/daemon/features/<key>` answers `FEATURE_UNKNOWN`. A stored setting for a key the registry does not name is ignored.
+
+While a feature is off, its routes answer `404` with code `FEATURE_DISABLED`, and the CLI prints the command that switches it on. The registry lives in [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py).
 
 ### How a feature's state is decided
 
@@ -148,25 +157,25 @@ Highest precedence first:
 
 1. **Pin** — an entry in `COFFER_FEATURES` for the daemon process. A pinned feature cannot be changed from the UI or CLI (`409 FEATURE_PINNED`).
 2. **Setting** — this machine's value in `daemon-config.json` under `features`.
-3. **Channel default** — on for a `dev` build, off for a `stable` build. Release builds are stamped `stable`; every other build (source runs, local frozen builds) is `dev`.
+3. **Default** — off, for every feature in every build.
 
-While the registry has an entry, **Settings → General** shows an experimental-features section that says which of the three decided each switch. With the registry empty the section is not shown.
+**Settings → Features** lists the four features in every build and the source of each state is reported as `pin`, `setting` or `default`. A pinned feature's switch is disabled.
 
 ### COFFER_FEATURES syntax
 
 A comma-separated list of `key=value` entries. `on`, `true` and `1` switch a feature on; `off`, `false` and `0` switch it off. Whitespace around entries is ignored and values are case-insensitive. An unknown key or a malformed entry is logged and skipped; it never stops the daemon.
 
 ```sh
-COFFER_FEATURES="<key>=on,<other-key>=off" coffer daemon restart
+COFFER_FEATURES="knowledge=on,models=off" coffer daemon restart
 ```
 
 ### Commands
 
 ```sh
-coffer config list feature.             # every feature, its state, and what decided it (nothing right now)
-coffer config set feature.<key> on      # switch on, at once
+coffer config list feature.             # every feature, its state, and what decided it (feature.knowledge, feature.memory, feature.sync, feature.models)
+coffer config set feature.<key> on      # switch on, at once; <key> is knowledge, memory, sync or models
 coffer config set feature.<key> off
-coffer config unset feature.<key>       # back to the channel default
+coffer config unset feature.<key>       # back to off
 ```
 
 See [Experimental features](/guides/experimental-features) for the task-oriented guide.
@@ -182,7 +191,7 @@ These live in the vault or in `~/.coffer/local/` (or, where noted, elsewhere) an
 | **Default rows per page** | `20` (choices 10, 20, 50, 100) | The initial page size of every table. | — | browser `localStorage` (`coffer.pageSize`) |
 | **Preferred editor** | System default | The app or command Coffer opens managed files with. | — | browser `localStorage` (`coffer.preferredEditor`) |
 | **Start at login** | off | Installs a launchd agent (`~/Library/LaunchAgents/dev.coffer.daemon.plist`) that starts the daemon at login and restarts it after a crash. macOS only. | `coffer daemon service install`, `uninstall`, `status` | the plist file |
-| **Experimental features** | channel default | See [Experimental features](#experimental-features). | `coffer config set feature.<key>` | `daemon-config.json` |
+| **Experimental features** (Settings → Features) | off | See [Experimental features](#experimental-features). | `coffer config set feature.<key>` | `daemon-config.json` |
 
 ### Settings › General → Coffer's model
 

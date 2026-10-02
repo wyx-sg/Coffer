@@ -25,6 +25,7 @@ import { AGENT_TABS, agentBasePath, DEFAULT_AGENT_TAB, type AgentTab } from "@/l
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
 import { useDetailTab } from "@/lib/detailTabs";
 import { useAgentCounts } from "@/lib/hooks/useAgentCounts";
+import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 
 interface Props {
   agent: AgentOut;
@@ -50,7 +51,14 @@ function sum(split: { coffer: number; own: number } | undefined): number | undef
 
 export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
   const { t } = useTranslation();
-  const [tab, setTab] = useDetailTab(AGENT_TABS, DEFAULT_AGENT_TAB, agentBasePath(agent.type));
+  // The Model tab is about connections to model providers, so it exists only
+  // while the Models feature is on; with it off the tab is simply not there and
+  // its address falls back to Overview like any unknown tab.
+  const models = useFeatureEnabled("models");
+  const tabs = models === true ? AGENT_TABS : AGENT_TABS.filter((id) => id !== "model");
+  const [tab, setTab] = useDetailTab(tabs, DEFAULT_AGENT_TAB, agentBasePath(agent.type), {
+    enabled: models !== undefined,
+  });
   const counts = useAgentCounts(agent.uid);
   const [configDirty, setConfigDirty] = useState(false);
   const [pendingTab, setPendingTab] = useState<string | null>(null);
@@ -80,7 +88,7 @@ export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
   return (
     <Tabs value={tab} onValueChange={requestTab} className="flex min-h-0 flex-col">
       <TabsList className="overflow-x-auto">
-        {AGENT_TABS.map((id) => (
+        {tabs.map((id) => (
           <TabsTrigger key={id} value={id}>
             {t(LABEL_KEY[id])}
             {count[id] ? (
@@ -98,9 +106,7 @@ export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
         {tab === "mcp-servers" && <AgentMcpServersTab agent={agent} />}
         {tab === "plugins" && <AgentPluginsTab agent={agent} />}
         {tab === "hooks" && <AgentHooksTab agent={agent} onRepair={() => open.change("connect")} />}
-        {tab === "config" && (
-          <AgentConfigFilesTab agent={agent} onDirtyChange={setConfigDirty} />
-        )}
+        {tab === "config" && <AgentConfigFilesTab agent={agent} onDirtyChange={setConfigDirty} />}
         {tab === "memory" && <AgentMemoryTab agent={agent} />}
         {tab === "sessions" && <AgentSessionsTab agent={agent} />}
       </TabsContent>

@@ -52,7 +52,7 @@ One row per command, however many skills and servers need it:
 
 1. **Found?** The command is looked up on your real `PATH` — your login shell's, merged with the one the daemon inherited — the same `PATH` an agent gets when you start it from a terminal. A command installed where only your shell looks (Homebrew, `~/.local/bin`) is found.
 2. **Version.** Coffer runs `<command> --version` and compares the version with the **highest** minimum any skill asks for. A version it cannot read is shown as unknown and is not called too old.
-3. **Logged in?** If a skill declared a login check, Coffer runs it — without a shell, with a 10-second limit — and looks only at whether it succeeded. **Its output is thrown away unread**: a login check can print your account name or a token, and none of it is kept, logged or shown.
+3. **Logged in?** If a skill declared a login check, Coffer runs it only when you press **Check** (listing the page, and the attention list that polls it, never run one) — without a shell, with a 10-second limit — and looks only at whether it succeeded. **Its output is thrown away unread**: a login check can print your account name or a token, and none of it is kept, logged or shown.
 
 Each command is then **Not found**, **Too old**, **Not logged in** or **Ready**. Results are kept until you press **Check again** or the daemon restarts.
 

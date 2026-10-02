@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from coffer.application.provider.internal_default_guard import refusing_hooks
+from coffer.application.provider.internal_default_guard import EXCLUSIVE_FLAGS, refusing_hooks
 from coffer.domain.provider.config import ProviderConfig, starts_dormant
 from coffer.domain.resource import Kind, Resource
 from coffer.domain.scope import Scope
@@ -34,7 +34,7 @@ def _provider_default_scope(config: dict[str, Any]) -> Scope | None:
     The hook is a pure function of the CONFIG — the framework calls it inside
     ``register`` with nothing but the validated dict — so it cannot name an
     agent at all now that a scope holds agent uids
-    (ADR resource-identity-is-an-immutable-uid). It does not need to:
+    (ADR identity-is-the-uid-inside-the-file). It does not need to:
 
     - a keyless (``ollama``) connection starts ``Scope(agents=[])``, dormant,
       because the framework's own default for an unset scope — every agent —
@@ -62,7 +62,7 @@ def make_provider_kind(rows: _Rows | None = None) -> Kind:
 
     ``rows`` is the resource table the one-flag rule is checked against — the
     composition root passes its ``ResourceService``. Omitted, the kind has no
-    pre-write hooks and the database's unique index is the only guard left.
+    pre-write hooks and the vault's exclusive-flag rule is the only guard left.
     """
     on_register, on_update = refusing_hooks(rows) if rows is not None else (None, None)
     return Kind(
@@ -70,9 +70,10 @@ def make_provider_kind(rows: _Rows | None = None) -> Kind:
         display_name="Provider",
         config_schema=ProviderConfig,
         secret_ref_extractor=_provider_secret_ref_extractor,
-        # spec provider-switching "Keep at most one internal default connection":
-        # the vault refuses a file that would make a second one.
-        exclusive_flags=("internal_default",),
+        # spec provider-switching "Keep at most one internal default connection"
+        # and "...speech-to-text default connection": the vault refuses a file
+        # that would make a second one.
+        exclusive_flags=tuple(EXCLUSIVE_FLAGS),
         # Per-agent scope: a connection's scope names the agents it projects
         # into — the reach this kind used to carry itself, as
         # ``compatible_agents`` inside its config, before the framework grew

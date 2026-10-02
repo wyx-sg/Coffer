@@ -14,7 +14,7 @@ import { AgentBadge } from "@/components/agent/AgentBadge";
 import { sortAgents } from "@/components/agent/agentOrder";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusWord } from "@/components/status/StatusWord";
-import type { StatusTone } from "@/components/status/statusTone";
+import type { StatusTone } from "@/lib/statusTone";
 import { Button } from "@/components/ui/button";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";

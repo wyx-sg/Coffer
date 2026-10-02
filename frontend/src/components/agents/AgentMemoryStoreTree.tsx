@@ -14,10 +14,10 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 
+import { LoadError } from "@/components/LoadError";
 import { AgentMemoryStoreFileViewer } from "@/components/agents/AgentMemoryStoreFileViewer";
 import { FILE_PANE_COLUMN, FILE_PANE_SCROLL, useFillToBottom } from "@/components/filePane";
 import { SplitView } from "@/components/SplitView";
-import { translateApiError } from "@/lib/api/errors";
 import type { NativeMemoryFileNode } from "@/lib/api/agentNativeMemory";
 import { countMemoryFiles, useNativeMemoryFiles } from "@/lib/hooks/useAgentNativeMemory";
 import { cn } from "@/lib/utils";
@@ -50,7 +50,7 @@ export function AgentMemoryStoreTree({
       {tree.isPending ? (
         <p className="px-1 text-sm text-text-muted">{t("common.loading")}</p>
       ) : tree.error ? (
-        <p className="px-1 text-sm text-danger">{translateApiError(t, tree.error)}</p>
+        <LoadError className="px-1" error={tree.error} onRetry={() => void tree.refetch()} />
       ) : root ? (
         <ul className={cn("space-y-0.5", FILE_PANE_SCROLL)}>
           {root.children.map((child) => (

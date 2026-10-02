@@ -22,6 +22,7 @@ never beside a curation pass, and every round recorded. Three rules:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -46,8 +47,7 @@ from coffer.application.sync.service_status import StatusMixin
 from coffer.application.sync.views import RollbackView, RoundPage
 from coffer.domain.audit import AuditEventType
 from coffer.domain.error_base import CofferError
-from coffer.domain.errors import SecretMissing
-from coffer.domain.secret_errors import SecretBindingPending
+from coffer.domain.secret_errors import SecretBindingPending, SecretMissing
 from coffer.domain.sync.errors import SyncNoRemote, SyncRoundNotFound
 from coffer.domain.sync.joins import JoinPreview
 from coffer.domain.sync.remote import SyncRemote
@@ -87,6 +87,7 @@ class SyncService(PlaintextMixin, RemoteMixin, MachinesMixin, StatusMixin, KeyMi
         vault_path: Callable[[], Path],
         inventory: AgentInventoryPort | None = None,
         after_apply: Callable[[], Awaitable[object]] | None = None,
+        hold: Callable[[], contextlib.AbstractAsyncContextManager[object]] | None = None,
         lock: asyncio.Lock | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
         git_available: Callable[[], bool] = lambda: True,
@@ -105,6 +106,10 @@ class SyncService(PlaintextMixin, RemoteMixin, MachinesMixin, StatusMixin, KeyMi
         self._vault_path = vault_path
         self._inventory = inventory
         self._after_apply = after_apply
+        # The reconciler's hold: a round's checkout hints every resource it
+        # changed, and a pass that judged the vault before the round's own
+        # import pass would undo what another machine switched.
+        self._hold = hold or contextlib.nullcontext
         self._lock = lock or asyncio.Lock()
         self._clock = clock
         self._git_available = git_available
@@ -167,22 +172,24 @@ class SyncService(PlaintextMixin, RemoteMixin, MachinesMixin, StatusMixin, KeyMi
         """One recorded round: the inventory refreshed, the token resolved,
         ``run`` in a worker thread, and whatever it ended in stored."""
         remote = self._required_remote()
-        async with self._lock:
-            self._running_since = self._now()
-            try:
-                record = await self._attempt(remote, run, trigger)
-            finally:
-                self._running_since = None
-            stored = await self._history.append(record)
-        await self._record(name, stored)
-        if stored.applied and self._after_apply is not None:
-            # What another machine changed is this machine's warrant to bring
-            # its own side effects in step (an active provider's projection,
-            # a skill's links): one reconcile pass with the import's warrant.
-            try:
-                await self._after_apply()
-            except Exception:
-                _log.warning("sync.after_apply_failed", exc_info=True)
+        async with self._hold():
+            async with self._lock:
+                self._running_since = self._now()
+                try:
+                    record = await self._attempt(remote, run, trigger)
+                finally:
+                    self._running_since = None
+                stored = await self._history.append(record)
+            await self._record(name, stored)
+            if stored.applied and self._after_apply is not None:
+                # What another machine changed is this machine's warrant to
+                # bring its own side effects in step (an active provider's
+                # projection, a skill's links): one reconcile pass with the
+                # import's warrant, still inside the hold.
+                try:
+                    await self._after_apply()
+                except Exception:
+                    _log.warning("sync.after_apply_failed", exc_info=True)
         return stored
 
     async def _attempt(
@@ -366,14 +373,15 @@ class SyncService(PlaintextMixin, RemoteMixin, MachinesMixin, StatusMixin, KeyMi
         next round pushes it (spec vault-sync "Snapshot before checking out
         and roll a round back from it")."""
         record = await self._rollable(round_id)
-        async with self._lock:
-            done = await asyncio.to_thread(
-                _with_lock,
-                self._engine,
-                lambda: round_rollback.rollback(self._engine, record, actor=actor),
-            )
-            stored = await self._history.append(done)
-        await self._record("rollback", stored)
+        async with self._hold():
+            async with self._lock:
+                done = await asyncio.to_thread(
+                    _with_lock,
+                    self._engine,
+                    lambda: round_rollback.rollback(self._engine, record, actor=actor),
+                )
+                stored = await self._history.append(done)
+            await self._record("rollback", stored)
         return stored
 
 

@@ -78,7 +78,7 @@ def _seed_collection(client: TestClient, name: str, description: str) -> str:
     )
     assert resp.status_code == 201, resp.text
     # The uid, because that is what the resource routes take. The name is a
-    # label here as everywhere else (ADR resource-identity-is-an-immutable-uid)
+    # label here as everywhere else (ADR identity-is-the-uid-inside-the-file)
     # and a test that spelled it into a URL would be asserting a route shape
     # Coffer no longer has.
     return str(resp.json()["uid"])

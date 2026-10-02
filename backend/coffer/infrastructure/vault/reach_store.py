@@ -1,5 +1,5 @@
 """Where each resource reaches, on this machine only (ADR
-reach-is-a-machine-local-predicate-over-a-context; spec vault-storage "Store
+reach-is-machine-local-stored-by-uid-never-synced; spec vault-storage "Store
 state in five classes by nature").
 
 Reach is a fact about this machine — which of its agents a skill is delivered
@@ -53,11 +53,6 @@ class Reach:
             else None
         )
         return cls(enabled=raw.get("enabled", True) is not False, scope=scope)
-
-    def fingerprint(self) -> str:
-        """A stable text of this reach, for the revision counter."""
-        agents = self.scope.agents if self.scope is not None else None
-        return f"{self.enabled}|{','.join(agents) if agents is not None else '*'}"
 
 
 def reach_path(home: Path | None = None) -> Path:

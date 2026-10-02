@@ -17,7 +17,8 @@ the daemon — the only writer — ingests them here. Per completed file:
 4. delete the file, only after that commit;
 5. tell the failover log about every attempt that failed over, naming the
    connection the same request went to next when the file carries it (spec
-   provider-switching "Log every failover in Activity").
+   provider-switching "Log every failover in Activity"). A replayed file does
+   this too; the log drops what it already has.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, tzinfo
 
@@ -71,7 +73,11 @@ class UsageIngestService:
         prices: ConnectionPriceLookup,
         failovers: FailoverLog | None = None,
         tz: tzinfo | None = None,
+        is_enabled: Callable[[], bool] = lambda: True,
     ) -> None:
+        # Whether the ``models`` feature is on right now; the loop skips its
+        # pass while it is off (spec experimental-features).
+        self._is_enabled = is_enabled
         self._repo = repo
         self._spool = spool
         self._prices = prices
@@ -148,9 +154,11 @@ class UsageIngestService:
                     )
                 rows = [await self.price(r) for r in batch.records]
                 new = await self._repo.ingest(rows) if rows else 0
-                if new:
-                    # Only a first ingest logs: a replayed file inserts nothing.
-                    await self._log_failovers(batch.records)
+                # Every ingest hands its failovers to the log, a replayed file's
+                # too: a daemon that died between the commit and this line would
+                # otherwise lose them for good, and the log itself skips one it
+                # already holds (``FailoverLog`` implementations are idempotent).
+                await self._log_failovers(batch.records)
                 # Only now — the rows are committed — may the file go.
                 try:
                     self._spool.delete(path)
@@ -167,7 +175,8 @@ class UsageIngestService:
         self._stop.clear()
         while not self._stop.is_set():
             try:
-                await self.ingest_once()
+                if self._is_enabled():
+                    await self.ingest_once()
             except Exception:
                 _logger.exception("usage.ingest.pass_failed")
             with contextlib.suppress(TimeoutError):

@@ -13,11 +13,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 _curation_runner: Any | None = None
 _vault_lock: asyncio.Lock | None = None
+_curation_hold: Callable[[], Awaitable[bool]] | None = None
 
 
 def set_curation_runner(runner: Any) -> None:
@@ -42,6 +43,23 @@ def set_vault_write_lock(lock: asyncio.Lock) -> None:
     """
     global _vault_lock
     _vault_lock = lock
+
+
+def set_curation_hold(check: Callable[[], Awaitable[bool]]) -> None:
+    """The question "is a sync round waiting for a person?", set once sync is wired."""
+    global _curation_hold
+    _curation_hold = check
+
+
+async def curation_held() -> bool:
+    """Whether a pass must not run now: a stop, a hold or a join's differing files
+    is outstanding. False on a vault with no sync wired.
+
+    Only this is shared with the sweep; the *owner machine* gate is not, because a
+    person pressing Curate now has chosen to rewrite on this machine ("Curate on one
+    owner machine only" scopes the unattended pass).
+    """
+    return _curation_hold is not None and await _curation_hold()
 
 
 @contextlib.asynccontextmanager

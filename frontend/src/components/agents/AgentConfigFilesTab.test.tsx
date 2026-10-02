@@ -35,7 +35,6 @@ const AGENT = {
   model: null,
   effort: null,
   tier_models: null,
-  wire_api: null,
   created_at: "2026-09-01T00:00:00Z",
   updated_at: "2026-09-01T00:00:00Z",
 } as AgentOut;

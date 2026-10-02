@@ -8,7 +8,7 @@ import { PencilLine, ScrollText, Server, type LucideIcon } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { StatusWord } from "@/components/status/StatusWord";
-import type { StatusTone } from "@/components/status/statusTone";
+import type { StatusTone } from "@/lib/statusTone";
 import { describeActivity, describeDaemonRecord } from "@/lib/activity/activityText";
 import {
   callServerLabel,
@@ -201,7 +201,7 @@ export function LevelChip({ record }: { record: ActivityRecord }) {
   return (
     <span
       className={cn(
-        "inline-flex h-5 items-center rounded-[5px] px-[7px] font-mono text-2xs uppercase",
+        "inline-flex h-5 items-center rounded-sm px-[7px] font-mono text-2xs uppercase",
         severity === "error"
           ? "bg-danger-soft text-danger"
           : severity === "warning"

@@ -25,7 +25,7 @@ resource-framework:
 | `secret_ref_extractor` | the transport's `secret_refs`, so refs are probed before any write and released after a delete |
 | `audit_redactor`           | an audit-safe copy of a transport config                                                     |
 | `on_delete`                | tears down any running upstream for that server before its file goes                         |
-| `on_rename`                | releases every live connection held under the name being left behind, before the file changes. A supervisor keys its entries — and each one's upstream subprocess — on the server's NAME, because `<server>__<tool>` is the vocabulary the downstream client speaks; without this the old entry becomes unreachable and the next call under the new name starts a second subprocess. It is reachable only because rename became available to every kind ([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)) |
+| `on_rename`                | releases every live connection held under the name being left behind, before the file changes. A supervisor keys its entries — and each one's upstream subprocess — on the server's NAME, because `<server>__<tool>` is the vocabulary the downstream client speaks; without this the old entry becomes unreachable and the next call under the new name starts a second subprocess. It is reachable only because rename became available to every kind ([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md)) |
 
 ## MCP kind value objects (`backend/coffer/domain/mcp/`)
 
@@ -110,7 +110,7 @@ upstream from a broken gateway.
 ### `MCPTool` / `MCPResource` / `MCPPrompt` (`domain/mcp/capability.py`)
 
 Pydantic `BaseModel`s. Live representations returned by upstream queries; never
-persisted (per [Capability State Model](../../../docs/decisions/capability-state-model.md)).
+persisted (per [MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream](../../../docs/decisions/mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md)).
 
 `MCPTool`:
 | Field | Type |
@@ -166,17 +166,16 @@ from the server's `state/mcp-preferences/` document, the times from
 | `agent_uid`       | `str \| None`                                 | the calling agent's uid, when the session names one |
 | `trace_id`        | `str \| None`                                 | the `/mcp` request's trace id; joins the audit rows and daemon log lines the call caused (0137) |
 
-Two reserved values appear in `resource_uid` and are deliberately not uids — a
-real uid is a 32-character `uuid4().hex`, and a name may not contain `:`, so
-neither can collide with one (`domain/mcp/capability.py`):
+One reserved value appears in `resource_uid` and is deliberately not a uid — a
+real uid is a 32-character `uuid4().hex`, so it cannot collide with one
+(`domain/mcp/capability.py`):
 
 | Value              | Means                                                                                                                                                                                                                                                           |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `coffer`           | one of Coffer's own `coffer__*` builtin tools. Builtins share this log so retention and the activity surfaces work uniformly, but no `mcp_server` resource stands behind them and there is no uid to record.                                                          |
-| `deleted:<name>`   | a server already deleted when migration 0097 re-keyed the log. Its identity was never recorded and cannot be recovered, so the label it did carry survives behind a marker that is visibly not an identity. The row joins to no resource, which is the truth about it. |
 
-A row carrying either resolves to no resource, so the tiering counts leave it
-out.
+A row carrying `coffer`, or the uid of a server since deleted, resolves to no
+resource, so the tiering counts leave it out.
 
 **Never store args or results** — schema cannot hold them.
 
@@ -265,7 +264,7 @@ its group does; an emptied group is removed. Entries go with their tool
 CREATE TABLE mcp_invocations (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp        TIMESTAMP NOT NULL,
-    resource_uid     TEXT      NOT NULL,                    -- a resource uid, or 'coffer' / 'deleted:<name>'
+    resource_uid     TEXT      NOT NULL,                    -- a resource uid, or 'coffer'
     capability_type  TEXT      NOT NULL,
     capability_key   TEXT      NOT NULL,
     duration_ms      INTEGER   NOT NULL,

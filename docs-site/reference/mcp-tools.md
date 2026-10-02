@@ -16,15 +16,15 @@ integrations against Coffer. For how the gateway works internally, see
 
 | Tool | Purpose | Present when |
 | --- | --- | --- |
-| [`coffer__write`](#coffer-write) | File a durable fact into Coffer's knowledge. | Always. |
+| [`coffer__write`](#coffer-write) | File a durable fact into Coffer's knowledge. | While the `knowledge` feature is on. |
 | [`coffer__search_tools`](#coffer-search-tools) | Rank the upstream tool catalogue against an intent. | Always. |
 
 Those two are the whole list. Coffer's memory notes and its own records have no tool:
 they are read with the agent's own file tools and with the `coffer` command line. See
 [Memory and logs without a tool](#memory-and-logs-without-a-tool).
 
-No built-in tool belongs to an [experimental feature](/guides/experimental-features) right
-now. A tool that does is, while its feature is switched off, absent from `tools/list`, is not named in the handshake instructions, and a call to it is
+`coffer__write` belongs to the `knowledge` [experimental feature](/guides/experimental-features).
+While that feature is switched off, the tool is absent from `tools/list`, is not named in the handshake instructions, and a call to it is
 answered exactly like a call to a tool that does not exist. Switching a feature takes effect
 on the next list or call, without a restart.
 
@@ -60,7 +60,7 @@ The gateway also injects two arguments that are not in any public schema:
 
 Records something durable about the user's working environment into a knowledge
 collection: a fact about a service, a convention, a decision and its reason, a trap and how
-to avoid it. What you write is new material; Coffer's curation pass merges it into the
+to avoid it. What you write is new material; Coffer's curation pass folds it into the
 collection's documents and deduplicates it against what is already there. It is not for
 anything in the repository in front of the agent, anything transient, or secrets. There is
 no read tool: agents read knowledge with their own file tools, at the paths the
@@ -91,7 +91,7 @@ When an internal model is configured, the material is queued for curation:
   "collection": "global",
   "title": "Staging DB is read-only on Fridays",
   "status": "pending",
-  "note": "Queued as new material. Coffer's curation pass merges it into this collection's documents shortly."
+  "note": "Queued as an item. Coffer's curation folds it into this collection's documents shortly."
 }
 ```
 
@@ -106,7 +106,7 @@ result names it:
   "file_path": "/Users/you/.coffer/vault/knowledge/global/staging-db-read-only-on-fridays.md",
   "folder_path": "/Users/you/.coffer/vault/knowledge/global",
   "status": "written",
-  "note": "Filed as a document of its own: no internal model is configured to merge it."
+  "note": "Filed as a document of its own: Coffer's model is not set to curate it."
 }
 ```
 

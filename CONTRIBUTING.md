@@ -31,7 +31,8 @@ make dev                           # backend (:8000) + frontend (:5173)
 There is one line of development: everything lands on `main`, and a release is a
 tagged `main`. Work that is not ready for users still lands there, behind an
 entry in the experimental-feature registry (`coffer.domain.features`), so it is
-off on a `stable` build and on in every `dev` build, including your own. Gate
+off by default in every build and a person switches it on in Settings →
+Features. Switch it on for your own machine while you work on it. Gate
 every surface it adds through that entry — never a prefix or a group name of
 its own. Once the feature is ready, remove it from the registry, delete its
 gates and add a migration that strips its stored switch, in the same PR. Do not keep a long-lived side branch for it (see

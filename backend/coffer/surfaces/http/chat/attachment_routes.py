@@ -1,6 +1,6 @@
 """POST /api/v1/chat/attachments — the web composer's file upload.
 
-A file attached on the Chat page is uploaded here first and sent later by the
+A file attached on the Conversations page is uploaded here first and sent later by the
 opaque id this returns (``POST .../messages`` ``attachment_ids``), so a send
 stays a small JSON body and the composer can show each file's progress and
 failure on its own (ADR chat-attachment-uploads). The upload is not tied to a

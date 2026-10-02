@@ -26,11 +26,11 @@ import secrets
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from coffer.application.channel.turn_status import LIVE_SEPARATOR, split_snapshot
-from coffer.application.channel.turn_text import clip_stream_preview
+from coffer.application.channel.turn_status import split_snapshot
 from coffer.infrastructure.channel.live_text import LIVE_KEEPALIVE_SECONDS, LiveTextSurface
 from coffer.infrastructure.channel.telegram_features import Feature, is_unsupported
 from coffer.infrastructure.channel.telegram_rich import normalize_rich_markdown
+from coffer.infrastructure.channel.telegram_text import clip_snapshot_utf16
 
 __all__ = ["TelegramDraftLiveText", "draft_markdown", "new_draft_id"]
 
@@ -43,8 +43,7 @@ Call = Callable[..., Awaitable[Any]]
 
 #: What one draft may carry: "0-4096 characters after entities parsing". A
 #: snapshot past it is refused, which would kill the surface mid-reply — so the
-#: TAIL is kept behind an ellipsis instead — the renderer's own
-#: ``clip_stream_preview`` — the newest words being the ones worth watching.
+#: TAIL is kept behind an ellipsis instead — the newest words being the ones worth watching.
 #: (Passing an empty text is NOT a way to clear a draft: the platform shows a
 #: "Thinking…" placeholder for it.)
 DRAFT_TEXT_LIMIT = 4096
@@ -62,15 +61,10 @@ _DRAFT_UPDATE_INTERVAL = 0.2
 
 
 def clip_draft(text: str, limit: int) -> str:
-    """Fit a snapshot to the draft cap, clipping the answer before the status
-    block so the header stays visible on a long reply."""
-    if len(text) <= limit:
-        return text
-    block, answer = split_snapshot(text)
-    head = f"{block}\n{LIVE_SEPARATOR}\n"
-    if answer and len(head) < limit - 1:
-        return head + clip_stream_preview(answer, limit - len(head))
-    return clip_stream_preview(text, limit)
+    """Fit a snapshot to the draft cap (counted in UTF-16 units, as the platform
+    counts), clipping the answer before the status block so the header stays
+    visible on a long reply."""
+    return clip_snapshot_utf16(text, limit)
 
 
 def _entity_escape(text: str) -> str:

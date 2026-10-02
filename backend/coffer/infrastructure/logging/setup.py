@@ -44,6 +44,7 @@ where it is the only way to see anything at all.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import logging.handlers
 import os
@@ -192,6 +193,42 @@ def _stderr_is(path: Path) -> bool:
     return (err.st_dev, err.st_ino) == (target.st_dev, target.st_ino)
 
 
+class _FdFollowingRotatingHandler(logging.handlers.RotatingFileHandler):
+    """A rotating handler that takes the process's own stdout/stderr with it.
+
+    The detached daemon's fds 1 and 2 *are* ``daemon.log`` (the spawner, launchd
+    and the desktop all open it and hand it over), and rotation renames the file
+    out from under them: uvicorn's stray output, tracebacks and faulthandler
+    would then land in ``daemon.log.1`` and be deleted three rotations later,
+    never visible to the reader of ``daemon.log``. After each rollover the new
+    file is dup'd onto whichever of fds 1 and 2 pointed at the old one.
+    """
+
+    def doRollover(self) -> None:  # noqa: N802 — the stdlib hook's name
+        following = self._std_fds_on_this_file()
+        super().doRollover()
+        if self.stream is None:
+            return
+        for fd in following:
+            with contextlib.suppress(OSError):
+                os.dup2(self.stream.fileno(), fd)
+
+    def _std_fds_on_this_file(self) -> list[int]:
+        try:
+            ours = os.stat(self.baseFilename)
+        except OSError:
+            return []
+        fds: list[int] = []
+        for fd in (1, 2):
+            try:
+                st = os.fstat(fd)
+            except OSError:
+                continue
+            if (st.st_dev, st.st_ino) == (ours.st_dev, ours.st_ino):
+                fds.append(fd)
+        return fds
+
+
 def _attach_file_handler(formatter: logging.Formatter | None = None) -> None:
     """Attach a rotating file handler to the root logger.
 
@@ -221,7 +258,7 @@ def _attach_file_handler(formatter: logging.Formatter | None = None) -> None:
             existing.setFormatter(formatter)
             return
 
-    handler = logging.handlers.RotatingFileHandler(
+    handler = _FdFollowingRotatingHandler(
         log_path,
         maxBytes=10 * 1024 * 1024,  # 10 MB
         backupCount=3,

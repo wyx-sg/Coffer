@@ -29,7 +29,8 @@ vi.mock("@/lib/api/agents", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/agents")>()),
   agentsApi: { list: vi.fn(async () => ({ items: [] })) },
 }));
-vi.mock("@/lib/api/client", () => ({
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: () => ({ GET: async () => ({ data: { resources: [] }, error: undefined }) }),
 }));
 vi.mock("@/lib/api/vault", async (importOriginal) => ({

@@ -67,7 +67,7 @@ Partitions are created by aggregation only; you do not create them.
 | `RETIRED.md` | Each retired note's title, the reason, and the note that replaced it. The next pass reads this file so a retired subject is not brought back from the same unchanged source. A note is also retired here, with the reason "its sources are gone", when every raw entry it was built from has left `.raw/` — the agent deleted the fact, or it is now filed into another partition — and that kind of record does not stop the subject coming back. |
 | `.raw/` | Every entry exactly as it was read, with the agent, source path and read time. It is the distil pass's input and lets you check a note against the words it came from. It is not shown in the web UI and not readable through the partition's file routes; open it on disk under `coffer path memory <partition>`. |
 
-Everything under `~/.coffer/derived/memory/` is derived. It can be deleted and rebuilt at any time, and it is not carried by [vault sync](/guides/vault-sync): each machine builds its own from the agents installed on it. To move the memory root, set `COFFER_MEMORY_ROOT` in the daemon's environment.
+Everything under `~/.coffer/derived/memory/` is derived. It can be deleted and rebuilt at any time, and it is not carried by [vault sync](/guides/vault-sync): each machine builds its own from the agents installed on it.
 
 ## How the passes run
 
@@ -126,11 +126,11 @@ Memory reaches a session at three moments:
 | **Each prompt you send** | up to three notes your prompt names, if any match well enough | `UserPromptSubmit` |
 | **Before a known trap** | a command you marked as a trap is held once, with the note as the reason; a known error in a command's output brings in its note | `PreToolUse` / `PostToolUse` on the shell |
 
-All three go through one hook, installed into the agent's own settings when you connect the agent to Coffer. The decision behind this design, and the evidence for it, is the ADR [Memory Reaches a Session at Three Moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) (status: Proposed).
+All three go through one hook, installed into the agent's own settings when you connect the agent to Coffer. The decision behind this design, and the evidence for it, is the ADR [Memory Reaches a Session at Three Moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md).
 
 ### Install the hook
 
-Delivery goes through each agent's own hook mechanism. The hook is one part of the agent's [Coffer connection](/guides/agents#connect-an-agent-to-coffer): connecting an agent while `memory` is on installs it, disconnecting removes it, and switching `memory` on installs it into every connected agent. Coffer never installs it into an agent you have not connected.
+Delivery goes through each agent's own hook mechanism. The hook is one part of the agent's [Coffer connection](/guides/agents#connect-an-agent-to-coffer): connecting an agent installs it and disconnecting removes it. Coffer never installs it into an agent you have not connected.
 
 ::: code-group
 
@@ -183,7 +183,7 @@ When you send a prompt, Coffer ranks the notes of the current repository's parti
 
 ```text
 Coffer memory: notes recorded for this user that may apply to this request. …
-- (/Users/you/.coffer/memory/payments-api/notes/retry-budget-for-ledger-writes.md) a fact they recorded: Retry budget for ledger writes — ledger writes retry three times, then park in the dead-letter table.
+- (/Users/you/.coffer/derived/memory/payments-api/notes/retry-budget-for-ledger-writes.md) a fact they recorded: Retry budget for ledger writes — ledger writes retry three times, then park in the dead-letter table.
 ```
 
 - A note is given **once per session**. A later prompt that names the same note does not bring it in again, even after the daemon restarts.
@@ -333,14 +333,14 @@ Memory → choose the partition
 
 :::
 
-In the web UI a note is called a **memory** (中文 记忆条目): one memory per subject. The **Memory** page lists partitions in a table — the partition, its path (**Every project** for `global`) and its number of memories — under the **Delivered at session start** block. Before anything has been distilled it shows **Nothing distilled yet** with **Update memory** instead. A partition whose repository no longer exists on disk is marked **Repository missing**; nothing is delivered from it, and it stays listed until you delete it (see [Rebuild a partition](#rebuild-a-partition)).
+In the web UI a note is called a **memory** (中文 记忆条目): one memory per subject. The **Memory** page lists partitions in a table — the partition, its path (**Every project** for `global`), a **Sample memory** (the most recently updated one, or how many entries are waiting to be distilled), its number of memories, its **Sources** (the agents it was learned from) and a **Distil** column saying when it was last distilled — under the **Delivered at session start** block. With no partition yet it shows the first-run welcome **Nothing distilled yet** instead: the connected agents whose memory Coffer found on this Mac, or an offer to connect one, with **Update memory**. A partition whose repository no longer exists on disk is marked **Repository missing**; nothing is delivered from it, and it stays listed until you delete it (see [Rebuild a partition](#rebuild-a-partition)).
 
 A partition's page has two tabs:
 
 - **Memories** (the default) lists the partition's memories — each by its title and one-line description — beside the selected one. The selected memory shows its title, a line naming the agents it was learned from and when it was last updated (*Learned by Claude Code, Codex · updated …*), and its body, with **Open in editor** and **Reveal in Finder** for its own file; the list and the memory fill the window and scroll inside. Under the list, a collapsed **Retired** group lists, read-only, the memories that were retired and the reason for each. While Coffer's model is not set, a notice above the list explains that each agent's entry becomes its own memory, with a link to **Settings › General**.
 - **Delivered** shows the session-start text each agent receives in this partition's project (see [See it working](#see-it-working)).
 
-The page shows Coffer's memories only. It shows no file tree, no `MEMORY.md` or `RETIRED.md`, no `.raw/`, no native paths and no agent's original text; those stay on disk, on the REST routes and in the CLI. There are no per-memory actions: memories are derived, and the next distil pass would rewrite an edit. The header's **⋯** menu offers **Reveal partition folder**, **Copy path** and, only while the repository is missing, **Delete partition…**.
+The page shows Coffer's memories only. It shows no file tree, no `MEMORY.md` or `RETIRED.md`, no `.raw/`, no native paths and no agent's original text; those stay on disk, on the REST routes and in the CLI. There are no per-memory actions: memories are derived, and the next distil pass would rewrite an edit. The header's **⋯** menu offers **Reveal partition folder**, **Copy path** **Distil history in Activity** (the Changes tab, where every distil pass is recorded) and, only while the repository is missing, **Delete partition…**.
 
 A note's `origins` frontmatter names every agent file it was built from, and `.raw/` holds each entry exactly as it was read, so you can trace a note that reads wrong back to what the agent actually recorded.
 
@@ -388,7 +388,7 @@ The web UI offers **Delete** only on a partition marked **Repository missing**: 
 
 - **Rules about every reply are not memory's job.** A rule such as "always reply in Chinese" or a preferred tone applies to every turn. No prompt names it and no command trips it, so neither retrieval nor a trigger delivers it at the right moment. Put such rules in the instructions the agent loads on every turn: `CLAUDE.md` for Claude Code, `AGENTS.md` for Codex. You own those files, and Coffer never writes them.
 - **A tiny store rarely clears the bar.** The relevance bar was tuned on a store of real size. The ranking weighs each word by how rare it is across the whole store, so with only a handful of notes even a matching note scores low, and a prompt usually brings in nothing. That is on purpose: it stops a prompt that shares only common words from bringing in noise. Retrieval starts to work as the agents learn more.
-- **A daemon restart forgets what each session was given.** Coffer remembers, per session and in memory, which notes a session already had and which triggers already held a command. After a daemon restart, a running session may be given a note again, or have a trigger hold one more command.
+- **A session idle for more than a week is treated as new.** Coffer rebuilds what each session was given from the delivery fires in the audit log, so a daemon restart does not repeat a note or let a trigger hold a second command. Fires older than seven days are not read back, so a session that has been idle that long can be given a note again.
 - **Retrieval reads only the current repository's partition and `global`.** A note filed under another repository is never brought in at a prompt. The agent can still find it by searching the memory root.
 - **Memory never gets in the way when Coffer is down.** If the daemon is not running, is slow, or answers with an error, the hook prints nothing and lets the prompt or command through. You lose that fire's delivery, nothing more. A short prompt and a command no trigger matches never contact the daemon at all.
 
@@ -415,4 +415,4 @@ The web UI offers **Delete** only on a partition marked **Repository missing**: 
 - [MCP tools reference](/reference/mcp-tools)
 - [Memory spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md)
 - [Aggregate the agents' memory; never write it](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md)
-- [Memory reaches a session at three moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) (Proposed)
+- [Memory reaches a session at three moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)

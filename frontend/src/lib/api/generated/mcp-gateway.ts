@@ -221,8 +221,8 @@ export interface paths {
          *     ``uid`` narrows to a single server, which makes this a superset of the
          *     per-server route; that one stays because the resource page addresses its
          *     own server by path, not by filter. The filter takes the value the rows were
-         *     written under, so the two reserved forms (``coffer`` and ``deleted:<name>``)
-         *     are filterable too — and, unlike the name filter this replaced, it neither
+         *     written under, so the reserved ``coffer`` value is filterable too — and, unlike
+         *     the name filter this replaced, it neither
          *     hides the history of a server that has since been renamed nor hands a
          *     reused name the previous holder's calls.
          *

@@ -6,7 +6,7 @@ like every other management call (so a client reads it with ``fetch``, not
 ``EventSource``). It carries three events, each with a JSON ``data:`` line
 (:mod:`coffer.surfaces.http.event_schemas`):
 
-- ``change`` — an invalidation hint ``{seq, kind, id, rev, op}``; its SSE id
+- ``change`` — an invalidation hint ``{seq, kind, id, op}``; its SSE id
   is ``<run>.<seq>``, naming this daemon run beside the ``seq`` because every
   run numbers from 1 again, so a resume from an earlier run is recognised;
 - ``resync`` — the client may have missed something and refetches

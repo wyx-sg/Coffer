@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { describeActivity } from "@/lib/activity/activityText";
 import { recordLogger, type ActivityRecord } from "@/lib/activity/records";
+import { useKindPageOpen } from "@/lib/hooks/useFeatures";
 import { changeLink, nearby, offsetLabel, whenLabel } from "@/lib/activity/recordText";
 import { useServerFailures } from "@/lib/hooks/useServerFailures";
 import {
@@ -82,9 +83,12 @@ export function RecordDrawer({
       .catch(() => toast.error(t("activity.drawer.copyFailed")));
   };
 
+  const pageOpen = useKindPageOpen();
   const link =
     record.source === "change"
-      ? changeLink(record.entry)
+      ? pageOpen(record.entry.resource_kind ?? "")
+        ? changeLink(record.entry)
+        : null
       : call?.resource_name
         ? { to: `/mcp-servers/${encodeURIComponent(call.resource_name)}`, name: call.resource_name }
         : null;
@@ -167,7 +171,7 @@ export function RecordDrawer({
           ) : record.source === "daemon" ? (
             <LevelChip record={record} />
           ) : (
-            <span className="inline-flex h-5 items-center rounded-[5px] bg-chip px-[7px] text-2xs font-label">
+            <span className="inline-flex h-5 items-center rounded-sm bg-chip px-[7px] text-2xs font-label">
               {t("activity.drawer.kinds.change")}
             </span>
           )}

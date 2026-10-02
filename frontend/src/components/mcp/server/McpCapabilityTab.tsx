@@ -16,7 +16,7 @@ import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { capabilitiesApi } from "@/lib/hooks/useMcpCapabilityMutations";
 import type { InvocationSummary } from "@/lib/hooks/useMcpServerPage";
 import { ToggleSwitch } from "../CapabilityRowCells";
-import { relativeTime, usageByTool } from "./serverState";
+import { relativeTime, usageByTool } from "@/lib/mcp/serverState";
 
 type CapabilityListOut = components["schemas"]["CapabilityListOut"];
 

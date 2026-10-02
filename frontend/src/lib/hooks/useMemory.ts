@@ -20,7 +20,6 @@ import {
   getNote,
   getReading,
   listNotes,
-  listPartitionFiles,
   listPartitions,
   listRetired,
   sync,
@@ -70,16 +69,6 @@ export function useMemoryRetired(uid: string) {
   return useQuery({
     queryKey: memoryRetiredKey(uid),
     queryFn: async () => (await listRetired(uid)).retired,
-    enabled: uid.length > 0,
-  });
-}
-
-/** The partition directory — used only for the absolute paths open-in-editor
- *  and reveal need, never rendered as a tree. */
-export function usePartitionFiles(uid: string) {
-  return useQuery({
-    queryKey: memoryPartitionFilesKey(uid),
-    queryFn: async () => (await listPartitionFiles(uid)).root,
     enabled: uid.length > 0,
   });
 }

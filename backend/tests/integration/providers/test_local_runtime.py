@@ -168,7 +168,12 @@ def test_create_a_keyless_local_runtime_connection(tmp_path, monkeypatch):
             assert body["models"][0]["context_window"] == 65536
 
             c.patch(f"/api/v1/agents/{cc}", json={"model": "qwen3-coder"})
-            assert c.post(f"/api/v1/providers/{body['uid']}/activate").status_code == 200
+            assert (
+                c.post(
+                    f"/api/v1/providers/{body['uid']}/activate", json={"agent_type": "claude_code"}
+                ).status_code
+                == 200
+            )
     settings = json.loads((cfg / "settings.json").read_text())
     assert settings["env"]["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] == "1"
     assert settings["env"]["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] == "65536"
@@ -212,7 +217,12 @@ def _local_codex_catalogue_entry(tmp_path, monkeypatch, port: int, model: dict) 
         )
         assert r.status_code == 201, r.text
         c.patch(f"/api/v1/agents/{cx}", json={"model": model["id"]})
-        assert c.post(f"/api/v1/providers/{r.json()['uid']}/activate").status_code == 200
+        assert (
+            c.post(
+                f"/api/v1/providers/{r.json()['uid']}/activate", json={"agent_type": "codex"}
+            ).status_code
+            == 200
+        )
     [entry] = json.loads((cfg / "coffer-model-catalog.json").read_text())["models"]
     return dict(entry)
 

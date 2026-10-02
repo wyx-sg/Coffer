@@ -3,10 +3,10 @@
 // Every route here takes the skill's `uid`. The name is still the master
 // folder's name on disk and the label every surface prints, but it is a label:
 // the uid is the only thing a request may be built from
-// (ADR resource-identity-is-an-immutable-uid).
+// (ADR identity-is-the-uid-inside-the-file).
 //
 // Wire types are aliases of the skill-manager contract's generated schemas
-// (`generated/skill-manager.ts`). Transport via the shared `call`
+// (`generated/skill-manager.ts`). Transport via the typed client
 // (.agents/frontend.md §4).
 //
 // Sources (spec skill-manager "Add skills from an archive", "Add skills from a
@@ -16,16 +16,13 @@
 // the stage. An update preview of a Git-imported skill is a stage too, so the
 // same cancel closes it.
 
-import { call, enc } from "@/lib/api/call";
+import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type { components as SkillManagerWire } from "@/lib/api/generated/skill-manager";
 
 type Schemas = SkillManagerWire["schemas"];
 
 export type SkillOut = Schemas["SkillOut"];
-export type SkillListOut = Schemas["SkillListOut"];
-export type SkillImportRequest = Schemas["SkillImportRequest"];
 export type SkillFileNode = Schemas["SkillFileNodeOut"];
-export type SkillFileTreeOut = Schemas["SkillFileTreeOut"];
 
 /** Body of a skill-file save. `expected_fingerprint` is required — every
  *  vault write compares: the daemon refuses it with 409 SKILL_FILE_STALE when
@@ -39,87 +36,133 @@ export type GitImportSource = Schemas["GitImportSourceOut"];
 export type SkillStaging = Schemas["SkillStagingOut"];
 export type StagedSkill = Schemas["StagedSkillOut"];
 export type SkillStagingConfirm = Schemas["SkillStagingConfirmRequest"];
-export type SkillStagingConfirmOut = Schemas["SkillStagingConfirmOut"];
 export type SkillStageGit = Schemas["SkillStageGitRequest"];
 export type SkillUpdatePreview = Schemas["SkillUpdatePreviewOut"];
 export type SkillFileChange = Schemas["SkillFileChangeOut"];
 export type SkillUpdateCompare = Schemas["SkillUpdateCompareOut"];
 export type SkillUpdateApply = Schemas["SkillUpdateApplyRequest"];
-export type SkillDriftReport = Schemas["DriftReportOut"];
 export type SkillDriftEntry = Schemas["DriftEntryOut"];
 export type SkillRepairReport = Schemas["RepairReportOut"];
-export type SkillCopyCompare = Schemas["SkillCopyCompareOut"];
-export type SkillOrphanList = Schemas["SkillOrphanListOut"];
+
+const skillPath = (uid: string) => ({ uid });
 
 export const skillsApi = {
-  list: () => call<SkillListOut>("/skills"),
-  importLocal: (body: SkillImportRequest) =>
-    call<SkillOut>("/skills/import", { method: "POST", body }),
-  get: (uid: string) => call<SkillOut>(`/skills/${enc(uid)}`),
-  remove: (uid: string) => call<void>(`/skills/${enc(uid)}`, { method: "DELETE" }),
-  filesTree: (uid: string) => call<SkillFileTreeOut>(`/skills/${enc(uid)}/files`),
+  list: () => unwrap(getApiClient().GET("/skills")),
+  remove: (uid: string) =>
+    unwrapVoid(getApiClient().DELETE("/skills/{uid}", { params: { path: skillPath(uid) } })),
+  filesTree: (uid: string) =>
+    unwrap(getApiClient().GET("/skills/{uid}/files", { params: { path: skillPath(uid) } })),
   fileContent: (uid: string, path: string) =>
-    call<SkillFileContentOut>(`/skills/${enc(uid)}/files/content?path=${enc(path)}`),
+    unwrap(
+      getApiClient().GET("/skills/{uid}/files/content", {
+        params: { path: skillPath(uid), query: { path } },
+      }),
+    ),
   writeFileContent: (uid: string, body: SkillFileWrite) =>
-    call<SkillFileContentOut>(`/skills/${enc(uid)}/files/content`, { method: "PUT", body }),
+    unwrap(
+      getApiClient().PUT("/skills/{uid}/files/content", {
+        params: { path: skillPath(uid) },
+        body,
+      }),
+    ),
 
   // ----- sources: stage → confirm | cancel -----
   stageFolder: (path: string) =>
-    call<SkillStaging>("/skills/stage/folder", { method: "POST", body: { path } }),
+    unwrap(getApiClient().POST("/skills/stage/folder", { body: { path } })),
   stageArchive: (file: File) => {
     const form = new FormData();
     form.append("file", file, file.name);
-    return call<SkillStaging>("/skills/stage/archive", { method: "POST", body: form });
+    // A FormData body goes out as it is, with no Content-Type: the browser
+    // sets the multipart boundary itself.
+    return unwrap(
+      getApiClient().POST("/skills/stage/archive", {
+        body: { file: "" },
+        bodySerializer: () => form,
+      }),
+    );
   },
-  stageGit: (body: SkillStageGit) =>
-    call<SkillStaging>("/skills/stage/git", { method: "POST", body }),
+  stageGit: (body: SkillStageGit) => unwrap(getApiClient().POST("/skills/stage/git", { body })),
   confirmStage: (stagingId: string, body: SkillStagingConfirm) =>
-    call<SkillStagingConfirmOut>(`/skills/stage/${enc(stagingId)}/confirm`, {
-      method: "POST",
-      body,
-    }),
+    unwrap(
+      getApiClient().POST("/skills/stage/{staging_id}/confirm", {
+        params: { path: { staging_id: stagingId } },
+        body,
+      }),
+    ),
   cancelStage: (stagingId: string) =>
-    call<void>(`/skills/stage/${enc(stagingId)}`, { method: "DELETE" }),
+    unwrapVoid(
+      getApiClient().DELETE("/skills/stage/{staging_id}", {
+        params: { path: { staging_id: stagingId } },
+      }),
+    ),
 
   // ----- a Git-imported skill's updates -----
   checkSource: (uid: string) =>
-    call<SkillSourceStatus>(`/skills/${enc(uid)}/source/check`, { method: "POST" }),
+    unwrap(getApiClient().POST("/skills/{uid}/source/check", { params: { path: skillPath(uid) } })),
   previewUpdate: (uid: string) =>
-    call<SkillUpdatePreview>(`/skills/${enc(uid)}/source/preview`, { method: "POST" }),
+    unwrap(
+      getApiClient().POST("/skills/{uid}/source/preview", { params: { path: skillPath(uid) } }),
+    ),
   compareUpdate: (uid: string, stagingId: string, path: string) =>
-    call<SkillUpdateCompare>(
-      `/skills/${enc(uid)}/source/compare?staging_id=${enc(stagingId)}&path=${enc(path)}`,
+    unwrap(
+      getApiClient().GET("/skills/{uid}/source/compare", {
+        params: { path: skillPath(uid), query: { staging_id: stagingId, path } },
+      }),
     ),
   applyUpdate: (uid: string, body: SkillUpdateApply) =>
-    call<SkillOut>(`/skills/${enc(uid)}/source/apply`, { method: "POST", body }),
+    unwrap(
+      getApiClient().POST("/skills/{uid}/source/apply", {
+        params: { path: skillPath(uid) },
+        body,
+      }),
+    ),
   keepMine: (uid: string, commit: string | null) =>
-    call<SkillSourceStatus>(`/skills/${enc(uid)}/source/keep`, {
-      method: "POST",
-      body: { commit },
-    }),
+    unwrap(
+      getApiClient().POST("/skills/{uid}/source/keep", {
+        params: { path: skillPath(uid) },
+        body: { commit },
+      }),
+    ),
   /** "I merged it": pin to `commit`, leaving the master's files as they are. */
   markMerged: (uid: string, commit: string) =>
-    call<SkillOut>(`/skills/${enc(uid)}/source/merged`, { method: "POST", body: { commit } }),
+    unwrap(
+      getApiClient().POST("/skills/{uid}/source/merged", {
+        params: { path: skillPath(uid) },
+        body: { commit },
+      }),
+    ),
 
   changeSource: (uid: string, body: SkillStageGit) =>
-    call<SkillUpdatePreview>(`/skills/${enc(uid)}/source/change`, { method: "POST", body }),
+    unwrap(
+      getApiClient().POST("/skills/{uid}/source/change", {
+        params: { path: skillPath(uid) },
+        body,
+      }),
+    ),
 
   // ----- agents' copies (spec skill-manager "Report skill drift on request") -----
-  verify: () => call<SkillDriftReport>("/skills/verify", { method: "POST" }),
-  repair: () => call<SkillRepairReport>("/skills/repair", { method: "POST" }),
+  verify: () => unwrap(getApiClient().POST("/skills/verify")),
+  repair: () => unwrap(getApiClient().POST("/skills/repair")),
   /** One agent's folder in the way of the skill's link, against master. */
   compareCopy: (uid: string, agentUid: string) =>
-    call<SkillCopyCompare>(`/skills/${enc(uid)}/copies/${enc(agentUid)}`),
+    unwrap(
+      getApiClient().GET("/skills/{uid}/copies/{agent_uid}", {
+        params: { path: { uid, agent_uid: agentUid } },
+      }),
+    ),
   /** Keep master (the folder is backed up and linked) or the agent's version. */
   resolveCopy: (uid: string, agentUid: string, keep: "master" | "agent") =>
-    call<SkillOut>(`/skills/${enc(uid)}/copies/${enc(agentUid)}/resolve`, {
-      method: "POST",
-      body: { keep },
-    }),
+    unwrap(
+      getApiClient().POST("/skills/{uid}/copies/{agent_uid}/resolve", {
+        params: { path: { uid, agent_uid: agentUid } },
+        body: { keep },
+      }),
+    ),
 
   // ----- folders in the store no skill claims -----
-  orphans: () => call<SkillOrphanList>("/skills/orphans"),
+  orphans: () => unwrap(getApiClient().GET("/skills/orphans")),
   adoptOrphan: (name: string) =>
-    call<SkillOut>(`/skills/orphans/${enc(name)}/adopt`, { method: "POST" }),
-  removeOrphan: (name: string) => call<void>(`/skills/orphans/${enc(name)}`, { method: "DELETE" }),
+    unwrap(getApiClient().POST("/skills/orphans/{name}/adopt", { params: { path: { name } } })),
+  removeOrphan: (name: string) =>
+    unwrapVoid(getApiClient().DELETE("/skills/orphans/{name}", { params: { path: { name } } })),
 };

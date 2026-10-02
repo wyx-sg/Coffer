@@ -67,7 +67,7 @@ def _entry_fields(
     and not the name because this string outlives the edit that renames the
     agent: the entry is written once into a file Coffer does not otherwise
     touch, while the gateway matches what the shim reports against the uids a
-    resource's ``scope`` holds (ADR resource-identity-is-an-immutable-uid). A
+    resource's ``scope`` holds (ADR identity-is-the-uid-inside-the-file). A
     name here would go stale on the first rename and quietly stop matching any
     scope — the failure mode "never silently widen" exists to prevent.
 

@@ -90,5 +90,23 @@ class SessionLedger:
     def mark_fired(self, session_id: str, trigger_id: str) -> None:
         self._session(session_id).fired.add(trigger_id)
 
+    def claim_fire(self, session_id: str, trigger_id: str) -> bool:
+        """Mark the trigger fired in this session unless it already was.
+
+        One synchronous step, so two parallel hook fires of one session cannot both
+        pass a ``has_fired`` check made before either has marked ("once per session").
+        """
+        fired = self._session(session_id).fired
+        if trigger_id in fired:
+            return False
+        fired.add(trigger_id)
+        return True
+
+    def release_fire(self, session_id: str, trigger_id: str) -> None:
+        """Give a claim back: the trigger did not fire after all."""
+        found = self._sessions.get(session_id)
+        if found is not None:
+            found.fired.discard(trigger_id)
+
 
 __all__ = ["MAX_SESSIONS", "SessionLedger"]

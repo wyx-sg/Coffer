@@ -15,7 +15,8 @@ import type { SkillFileContentOut } from "@/lib/api/skills";
 import { ApiError } from "@/lib/api/errors";
 import { acceptance } from "@/test/acceptance";
 
-vi.mock("@/lib/hooks/useSkills", () => ({
+vi.mock("@/lib/hooks/useSkills", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/hooks/useSkills")>()),
   useSkillFileContent: vi.fn(),
   useReadSkillFileNow: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));

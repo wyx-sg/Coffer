@@ -1,13 +1,14 @@
 // frontend/src/lib/hooks/useSkills.test.tsx — TEST21-013
 //
-// TanStack Query bindings for /skills. We stub `globalThis.fetch` directly
-// because `skillsApi.*` is plain fetch (no abstracted API client).
+// TanStack Query bindings for /skills. We stub `globalThis.fetch` and assert
+// the `Request` the typed client builds.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
-import { useSkills, useImportSkill, useRemoveSkill } from "./useSkills";
+import { resetApiClient } from "@/lib/api/client";
+import { useSkills, useRemoveSkill } from "./useSkills";
 
 function wrapper() {
   const qc = new QueryClient({
@@ -53,20 +54,28 @@ describe("useSkills", () => {
   });
 
   test("returns the items array on success", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { items: [SAMPLE_SKILL] }));
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () => jsonResponse(200, { items: [SAMPLE_SKILL] }));
     vi.stubGlobal("fetch", fetchMock);
+    resetApiClient();
 
     const { result } = renderHook(() => useSkills(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toHaveLength(1);
     expect(result.current.data?.[0].name).toBe("hello");
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/skills$/);
+    expect((fetchMock.mock.calls[0][0] as Request).url).toMatch(/\/skills$/);
   });
 
   test("throws on a non-2xx envelope", async () => {
+    resetApiClient();
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(jsonResponse(500, { error: { code: "BOOM", message: "kaboom" } })),
+      vi
+        .fn()
+        .mockImplementation(async () =>
+          jsonResponse(500, { error: { code: "BOOM", message: "kaboom" } }),
+        ),
     );
     const { result } = renderHook(() => useSkills(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
@@ -74,36 +83,19 @@ describe("useSkills", () => {
   });
 });
 
-describe("useImportSkill", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  test("POSTs the path and invalidates the skills query", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, SAMPLE_SKILL));
-    vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useImportSkill(), { wrapper: wrapper() });
-    await result.current.mutateAsync({ path: "/tmp/hello" });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/skills\/import$/);
-    expect((init as RequestInit).method).toBe("POST");
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
-      path: "/tmp/hello",
-    });
-  });
-});
-
 describe("useRemoveSkill", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   test("DELETEs the skill addressed by its uid, not its name", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
+    resetApiClient();
     const { result } = renderHook(() => useRemoveSkill(), {
       wrapper: wrapper(),
     });
     await result.current.mutateAsync(SAMPLE_SKILL.uid);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/skills\/sk-5d20$/);
-    expect((init as RequestInit).method).toBe("DELETE");
+    const request = fetchMock.mock.calls[0][0] as Request;
+    expect(request.url).toMatch(/\/skills\/sk-5d20$/);
+    expect(request.method).toBe("DELETE");
   });
 });

@@ -8,12 +8,12 @@
 [Managed Agents Run With Full Permissions](managed-agents-run-with-full-permissions.md) (no approval seat),
 [Channels Are Thin Transport Adapters](channel-adapter-framework.md) (the channel turn seam),
 [Driving Agents Through the SDK and App-Server](driving-agents-through-sdk-and-app-server.md),
-[Resource Identity Is an Immutable UID](resource-identity-is-an-immutable-uid.md);
+[A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md);
 research note [Agent chat clients](../research/agent-chat-clients.md)
 
 ## Context
 
-The web Chat page had been repositioned twice and had its central concept
+The web Chat page was repositioned twice and had its central concept
 removed, always on the same argument — *Coffer is a vault, not an actor; a
 browser chat that competes with the coding agents' own UIs and with IM has no
 durable usage*. It was first a **Vault Console** (talk to the vault, observe
@@ -84,12 +84,9 @@ collapses as a concept: one draft surface, one subscription, no origin
 branching. The channel's uid and the peer chat id stay on the conversation as
 the return address for pushing output back to IM — a conversation "has a
 binding" iff `channel_uid` is set — and the page shows an "also on
-Telegram/SeaTalk" badge. The chat list shows every conversation whose
-`owner` column is null; a conversation created on behalf of another surface
-that owns it (a non-null `owner`) is kept out of the list but readable by id,
-like any transcript (`infrastructure/chat/persistence.py`). No caller on the
-main line sets `owner` today; the column exists so a surface that runs
-conversations for itself does not flood the owner's list.
+Telegram/SeaTalk" badge. The chat list shows every conversation. An earlier
+design reserved an `owner` column to keep another surface's conversations out of
+the list; no surface ever set it, and migration 0138 dropped it.
 
 Pros: the owner can watch a phone-started turn token by token, stop it, and
 keep typing, from the desktop; no event path is special-cased by sender;
@@ -162,7 +159,7 @@ conversation. Turns are started fire-and-return and observed through one SSE
 subscription per conversation that replays the in-flight turn; messages sent
 mid-turn join a FIFO queue shared by web and IM; interrupt stops the turn and
 pauses the queue. Origin is not modelled; a channel binding is a return
-address. Conversations with a non-null `owner` are not listed.
+address.
 
 Invariants:
 
@@ -176,9 +173,15 @@ Invariants:
 
 - The conversation schema carries no origin and no peer display name; the
   channel uid and peer chat id are the binding.
-- A new agent is one `AgentProvider` / `AgentAdapter` pair registered in
-  `surfaces/http/chat_provider_wiring.py`; every surface resolves agents
-  through the provider registry. A new client is one more bus subscriber.
+- A new agent is one `AgentProvider` / `AgentAdapter` pair bound to the agent
+  descriptor as its driver facet (`infrastructure/chat/drivers.py`); the
+  composition asks every driver the agent catalogue holds to build, and
+  `build_agent_provider_registry` (`surfaces/http/chat_provider_wiring.py`)
+  registers them without naming an agent, so there is no per-agent wiring edit.
+  Every surface resolves agents through the provider registry and sees only
+  managed, enabled ones ([Managed Agents Run With Full
+  Permissions](managed-agents-run-with-full-permissions.md)). A new client is
+  one more bus subscriber.
 - Chat stays inside its kind: the import-linter contract "Cross-kind imports
   forbidden (chat)" in `backend/pyproject.toml` has no exceptions, and the
   model catalogue reaches chat only through `ModelCatalogPort`, published by

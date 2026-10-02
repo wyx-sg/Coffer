@@ -1,4 +1,4 @@
-"""``derived/derived.db`` — tables rebuilt from other state (plan D11; ADR
+"""``derived/derived.db`` — tables rebuilt from other state (ADR
 storage-is-five-classes-by-nature).
 
 Three tables are observations this machine can make again: an MCP server's

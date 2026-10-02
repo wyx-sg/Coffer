@@ -10,7 +10,7 @@ import { ChangeSummary } from "./ChangeSummary";
 import { ChangeTargetList } from "./ChangeTargetList";
 import { FileDiff } from "./FileDiff";
 import { WhatWillHappen } from "./WhatWillHappen";
-import type { ChangeItem, ChangePreviewState, ChangeSummaryLine } from "./changeCounts";
+import type { ChangeItem, ChangePreviewState, ChangeSummaryLine } from "@/lib/changePreview/changeCounts";
 
 const SKELETON_WIDTHS = ["w-[70%]", "w-[48%]", "w-[62%]", "w-[40%]"];
 

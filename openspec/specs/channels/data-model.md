@@ -20,6 +20,7 @@ ChannelConfig (discriminator: channel_type)
 │   ├── wait_after_forward_seconds: float = 5.0  # …after a forward or bare files (0–60)
 │   ├── show_steps: bool = True             # step lines under the live status line
 │   ├── notify_after_seconds: float = 90.0  # long-turn ping threshold (0–3600; 0 = off)
+│   ├── new_conversation_after_idle_hours: float = 24.0  # idle hours before a chat's next message opens a new conversation (0–8760; 0 = never)
 │   ├── directories: list[str] = []         # absolute paths `/dir` may switch into (≤32)
 │   └── runs_on: str | None = None          # machine_id that runs the adapter
 ├── TelegramChannelConfig
@@ -39,7 +40,7 @@ Validation rules:
 - The kind declares `secret_ref_extractor`, so `ResourceService` probes
   every ref before the file is written; a dangling ref aborts registration.
 - `default_agent` is the **uid of an agent resource**
-  ([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
+  ([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md)).
   It is a cross-resource reference, so it holds the one thing about that agent
   the owner cannot change — not its registry name, and not the turn platform's
   agent key. It has **no default value**: a uid is minted per vault, so nothing
@@ -143,7 +144,7 @@ document (spec vault-storage), one per channel with at least one pairing
 | `channel_uid` | the channel's uid — what the document is found by; the file name only follows the channel's name |
 | `format_version` | the state document's format (1) |
 | `peers[].chat_id` | Telegram chat id / SeaTalk employee_code or group id; unique within the document |
-| `peers[].sender_id` | the paired sender's stable id (Telegram from.id, SeaTalk employee_code); the owner gate checks it when present. `null` → the chat-id-only gate |
+| `peers[].sender_id` | the paired sender's stable id (Telegram from.id, SeaTalk employee_code); every owner gate compares it, and pairing refuses a message that carries none |
 | `peers[].display_name` | the sender's name at pairing time, for UI/status |
 | `peers[].paired_at` | ISO time (UTC) |
 
@@ -331,9 +332,9 @@ InboundStop:        the platform's own stop control was pressed
 ChoiceButton:       label + opaque value; a list of them renders as a card
 EphemeralTarget:    who a privately-delivered reply is addressed to
 SentMessage:        what a send returned, so a later rewrite can address it
-ChannelCapabilities: supports_live_text, live_text_persists, supports_edit,
+ChannelCapabilities: supports_live_text, live_text_persists,
                     supports_card_update, supports_buttons, supports_typing,
-                    supports_reactions, supports_media, supports_groups,
+                    supports_reactions, supports_media,
                     supports_history_fetch, max_message_chars,
                     mention_template, mention_email_template — how the
                     transport spells an @mention of an id (or of an email
@@ -341,16 +342,17 @@ ChannelCapabilities: supports_live_text, live_text_persists, supports_edit,
 ```
 
 Adapters translate platform payloads to/from these; the application core
-never sees a Telegram update or SeaTalk event shape. `supports_live_text` and
-`supports_edit` are independent on purpose — SeaTalk answers yes to the first
-and no to the second (see "Grow a reply in place on one live surface").
+never sees a Telegram update or SeaTalk event shape. The core asks `supports_live_text`
+("is there a surface I can keep updating?"), never whether a delivered text message can be
+rewritten, because SeaTalk streams one without being able to (see "Grow a reply in place on
+one live surface").
 
 ## Audit events (spec channels)
 
 | event                    | when                                                                  |
 | ------------------------ | --------------------------------------------------------------------- |
 | `channel_pairing_issued` | a pairing code is generated                                           |
-| `channel_paired`         | a sender claims the code and becomes the peer                         |
+| `channel_paired`         | a sender claims the code and becomes the peer; carries the chat id, the sender id and the display name |
 
 Resource lifecycle events (`resource_created` … `resource_deleted`) come from
 the framework automatically. Turn activity is **not** audited: a turn happening

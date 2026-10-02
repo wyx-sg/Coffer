@@ -40,7 +40,8 @@ with a first commit, whether or not a sync remote is configured; configuring
 sync SHALL only add a remote. The repository's own `.git/info/exclude` — never
 a tracked `.gitignore` — SHALL keep out editor and system litter, hidden
 entries inside knowledge collections other than the inbox, and
-`secret/` unless the sync remote carries secrets. A path the exclude
+`secret/` unless the sync remote carries secrets, which the daemon reads from this machine's stored
+remote when it opens the vault, not only once a sync round has run. A path the exclude
 file ignores MUST never be staged, neither as a change nor as a deletion, and
 neither MUST a symbolic link or anything inside a nested git repository.
 
@@ -54,6 +55,11 @@ neither MUST a symbolic link or anything inside a nested git repository.
 - **WHEN** the vault commits
 - **THEN** the ciphertext is in no commit
 - **AND** once the remote carries secrets, the next commit includes it
+
+#### Scenario: a secret written before the first sync round is committed
+- **GIVEN** a machine whose stored remote carries secrets, and a daemon that has just started
+- **WHEN** the daemon opens the vault, before any sync round has run
+- **THEN** `secret/` is not excluded, so a secret written now is committed with that write
 
 ### Requirement: Keep every vault document a JSON object that preserves what it does not know
 Every document Coffer parses in the vault — resource files, state documents,

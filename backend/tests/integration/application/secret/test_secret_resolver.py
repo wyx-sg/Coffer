@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from coffer.application.secret.resolver import SecretResolver
-from coffer.domain.errors import SecretMissing
+from coffer.domain.secret_errors import SecretMissing
 from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from tests.fixtures.keyring import install_in_memory_keyring
 

@@ -56,8 +56,7 @@ SPECS_DIR = REPO_ROOT / "openspec" / "specs"
 CHANGES_DIR = REPO_ROOT / "openspec" / "changes"
 BACKEND_TESTS = REPO_ROOT / "backend" / "tests"
 # The frontend has no tier-by-directory layout: its tests are co-located
-# `*.test.tsx` under src/. `frontend/tests/` was the first scaffold's shape and
-# has been gone since the real web shell landed, so it is not listed here.
+# `*.test.tsx` under src/.
 FRONTEND_TS_ROOTS = [
     REPO_ROOT / "frontend" / "src",
     REPO_ROOT / "e2e",

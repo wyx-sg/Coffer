@@ -23,15 +23,13 @@ import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import { toneTextClass } from "@/lib/statusColors";
 import { cn } from "@/lib/utils";
-import {
-  useSecretSettings,
-  useUpdateSecretSettings,
-} from "@/lib/hooks/useSecretSettings";
+import { useSecretSettings, useUpdateSecretSettings } from "@/lib/hooks/useSecretSettings";
 
 import { useMasterKeyFingerprint } from "@/lib/hooks/useSecurity";
 
 import { formatFingerprint } from "./fingerprint";
 import { ImportKeyRow } from "./ImportKeyRow";
+import { LoadError } from "@/components/LoadError";
 import { MasterKeyBackupRow } from "./MasterKeyBackupRow";
 import { SettingRow, SettingsSection } from "@/components/settings/SettingsLayout";
 
@@ -39,7 +37,7 @@ type Storage = "file" | "keychain";
 
 export function EncryptionSection() {
   const { t } = useTranslation();
-  const { data, isPending, error } = useSecretSettings();
+  const { data, isPending, error, refetch } = useSecretSettings();
 
   return (
     <SettingsSection title={t("settings.security.encryption.title")}>
@@ -48,9 +46,7 @@ export function EncryptionSection() {
           <Skeleton className="h-10 w-full" />
         </div>
       ) : error ? (
-        <p className="py-3 text-sm text-danger" role="alert">
-          {translateApiError(t, error)}
-        </p>
+        <LoadError className="py-3" error={error} onRetry={() => void refetch()} />
       ) : (
         <KeyRows storage={data!.master_key_storage ?? null} />
       )}

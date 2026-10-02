@@ -143,8 +143,6 @@ class ChannelAdapter(Protocol):
         streaming) is the adapter's business."""
         ...
 
-    async def edit_text(self, chat_id: str, message_id: str, text: str) -> None: ...
-
     async def update_card(
         self,
         chat_id: str,
@@ -242,6 +240,9 @@ class ChannelBinding:
     show_steps: bool = True
     # "Ping the asker when a long turn ends": the threshold in seconds, 0 = off.
     notify_after_seconds: float = 90.0
+    # "Open a new conversation after an idle period": a chat idle longer than this
+    # many hours opens a new conversation on its next message; 0 never does.
+    new_conversation_after_idle_hours: float = 24.0
     # The channel's framework-level ``scope`` off the row (ADR
     # per-agent-resource-scope), rewritten into agent KEYS by the gate
     # (``wanted.Routing``) — the row names agent UIDS, every reader below here

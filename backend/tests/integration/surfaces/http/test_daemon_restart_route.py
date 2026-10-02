@@ -101,6 +101,38 @@ async def test_a_second_press_does_not_start_a_second_successor(
     assert len(audit.records) == 1
 
 
+async def test_two_simultaneous_presses_start_one_successor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The claim is taken before the (slow) spawn is awaited, so requests that
+    arrive while it runs do not each start a successor."""
+    import asyncio
+    import threading
+
+    monkeypatch.setattr(daemon_restart_routes.bootstrap, "planned_port", lambda: 8000)
+    gate = threading.Event()
+    restart, audit = _Restart(), _Audit()
+
+    def _slow_spawn() -> int:
+        restart.calls.append("spawn")
+        gate.wait(2)
+        return 4242
+
+    app = _app(restart, audit)
+    app.dependency_overrides[get_self_restart] = lambda: SelfRestart(
+        spawn_successor=_slow_spawn, exit_self=restart.exit
+    )
+    async for c in _client(app):
+        first = asyncio.ensure_future(c.post("/api/v1/daemon/restart"))
+        await asyncio.sleep(0.2)  # the first is now inside the spawn
+        second = await c.post("/api/v1/daemon/restart")
+        gate.set()
+        await first
+    assert second.status_code == 202
+    assert restart.calls.count("spawn") == 1
+    assert len(audit.records) == 1
+
+
 @pytest.mark.acceptance(
     spec="daemon", scenario="a successor that cannot start leaves the daemon serving"
 )

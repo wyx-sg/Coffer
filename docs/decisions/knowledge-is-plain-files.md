@@ -52,7 +52,7 @@ hand-maintained map of paths rots.
 
 ### Option A — A tree of Markdown files, read with the agent's own tools, and a generated catalogue (chosen)
 
-`~/.coffer/knowledge/<collection>/` holds Markdown documents with YAML
+`~/.coffer/vault/knowledge/<collection>/` holds Markdown documents with YAML
 frontmatter (`title`, `description`, `actor`, timestamps), nested however
 whoever filed them chose. The path is the identity; there is no id field and
 no id-to-path table. There is no derived store of any kind. An agent reads
@@ -204,7 +204,7 @@ any time, with literal matching as the fallback while the index is missing.
 ## Decision
 
 **A collection is one tree of Markdown documents under
-`~/.coffer/knowledge/<collection>/`, and the files are the only copy. There is
+`~/.coffer/vault/knowledge/<collection>/`, and the files are the only copy. There is
 no derived index of any kind. An agent reads the documents with its own file
 tools, at the paths a generated catalogue in the `coffer-guide` skill gives it.
 There is one store, served whole to every agent.**
@@ -212,8 +212,9 @@ There is one store, served whole to every agent.**
 Rules a future change must respect:
 
 - **No derived store.** No vectors, no FTS5, no sidecar, no chunking, no
-  reindex, no cache — every answer is read off disk. No table in `coffer.db`
-  beyond the collection's row in the kind-agnostic `resources` table. Engines
+  reindex, no cache — every answer is read off disk. No table in any Coffer
+  database: a collection is one resource file in the vault plus its
+  directory. Engines
   that own a derived store stay banned by the import-linter contract.
 - **Path is identity; frontmatter is metadata.** A collection describes itself
   in its own `README.md`, which is not a document and is not curated.
@@ -225,8 +226,9 @@ Rules a future change must respect:
 - **One undivided store.** A collection carries no per-agent reach and no
   enabled switch: every collection is named to every agent in the one rendered
   skill, and a collection is withheld only by deleting it. The layer itself is
-  always on: it was an experimental feature, off by default on the stable
-  channel, until it graduated at 1.0.
+  part of the `knowledge` experimental feature, which is off by default in
+  every build (spec experimental-features "Close the knowledge feature's
+  surfaces").
 - **Pull, never push.** Nothing in this layer writes into a session or into an
   agent's own files.
 

@@ -12,9 +12,10 @@ import pytest
 
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
-from coffer.application.chat.turn_orchestrator import TurnOrchestrator, clear_active_turns
+from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
 from coffer.domain.chat.message import Message
+from tests.support.chat_turns import start_turn
 
 from .conftest import (
     FakeAgentAdapter,
@@ -24,13 +25,6 @@ from .conftest import (
 )
 
 pytestmark = pytest.mark.asyncio
-
-
-@pytest.fixture(autouse=True)
-def _reset() -> None:
-    clear_active_turns()
-    yield
-    clear_active_turns()
 
 
 class _CountingProvider(FakeAgentProvider):
@@ -93,7 +87,7 @@ async def test_a_turn_reaches_the_agent_the_conversation_names() -> None:
     orchestrator, chat = _platform(alpha, beta)
 
     conv = await chat.create_conversation(agent_key="beta")
-    events = await _drain(await orchestrator.start_turn(conv.id, "hello"))
+    events = await _drain(await start_turn(orchestrator, conv.id, "hello"))
 
     assert beta.builds == [conv.id]
     assert alpha.builds == []
@@ -109,7 +103,7 @@ async def test_the_orchestrator_hands_an_adapter_only_the_history() -> None:
     orchestrator, chat = _platform(provider)
 
     conv = await chat.create_conversation(agent_key="solo")
-    await _drain(await orchestrator.start_turn(conv.id, "what is on disk?"))
+    await _drain(await start_turn(orchestrator, conv.id, "what is on disk?"))
 
     assert len(adapter.calls) == 1
     call = adapter.calls[0]

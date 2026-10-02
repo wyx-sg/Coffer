@@ -106,7 +106,7 @@ async def _build_app(
 
     Hands back the registered server's ``uid`` alongside everything else,
     because that is what its routes are addressed by now
-    (ADR resource-identity-is-an-immutable-uid) and no test can spell one
+    (ADR identity-is-the-uid-inside-the-file) and no test can spell one
     itself — a uid is minted, not chosen.
     """
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")

@@ -95,31 +95,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/memory/partitions/{uid}/files/content": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read Partition File
-         * @description One file out of the partition's directory.
-         *
-         *     ``UnsafeMemoryPath`` (400) and ``MemoryFileNotFound`` (404) both propagate
-         *     to the app-wide handler in ``surfaces/http/errors.py``, which already maps
-         *     every ``CofferError`` — the same way knowledge's own file read reports an
-         *     escape or a miss, rather than each route inventing an ``HTTPException``.
-         */
-        get: operations["read_partition_file_api_v1_memory_partitions__uid__files_content_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/memory/partitions/{uid}/notes": {
         parameters: {
             query?: never;
@@ -414,32 +389,6 @@ export interface components {
             error: components["schemas"]["ErrorDetail"];
         };
         /**
-         * FileContentOut
-         * @description One file's content, read-only.
-         *
-         *     No fingerprint, unlike the skill kind's equivalent: a fingerprint exists to
-         *     make a later write conditional, and this family has no write. The tree under
-         *     ``~/.coffer/derived/memory/`` is derived ("Keep the memory tree derived and local") —
-         *     an edit here would be overwritten
-         *     by the next aggregation pass, so the surface does not offer one.
-         */
-        FileContentOut: {
-            /** Abs Path */
-            abs_path: string;
-            /** Binary */
-            binary: boolean;
-            /** Content */
-            content: string;
-            /** Folder Abs Path */
-            folder_abs_path: string;
-            /** Path */
-            path: string;
-            /** Size */
-            size: number;
-            /** Truncated */
-            truncated: boolean;
-        };
-        /**
          * FileNodeOut
          * @description One entry in a partition's own directory ("Present a partition as its
          *     memories").
@@ -554,6 +503,11 @@ export interface components {
             created_at: string;
             /** Description */
             description: string;
+            /**
+             * File Path
+             * @default
+             */
+            file_path: string;
             /** Key */
             key: string;
             /** Origins */
@@ -588,6 +542,11 @@ export interface components {
             created_at: string;
             /** Description */
             description: string;
+            /**
+             * File Path
+             * @default
+             */
+            file_path: string;
             /** Key */
             key: string;
             /** Partition */
@@ -994,50 +953,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileTreeOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    read_partition_file_api_v1_memory_partitions__uid__files_content_get: {
-        parameters: {
-            query: {
-                path: string;
-            };
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path: {
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FileContentOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

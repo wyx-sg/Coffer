@@ -242,7 +242,7 @@ def _publish_machines(http: TestClient, home: pathlib.Path, *extra: str) -> None
     with vault_writer().begin(meta) as txn:
         for machine_id in (_machine_id(http), *extra):
             doc = {"machine_id": machine_id, "format_version": 1, "name": machine_id, "agents": []}
-            txn.write(f"machines/{machine_id}.json", (json.dumps(doc) + "\n").encode(), None)
+            txn.write(f"machines/{machine_id}.json", (json.dumps(doc) + "\n").encode())
 
 
 def test_an_owner_no_machine_claims_is_reported_as_a_fault(

@@ -14,7 +14,7 @@ import type { PairingCode } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useChannelStatus, useIssuePairingCode } from "@/lib/hooks/useChannels";
 import { displayName } from "@/lib/resourceTitle";
-import { channelPlatform } from "./channelState";
+import { channelPlatform } from "@/lib/channels/channelState";
 import { ChannelPairingCode } from "./ChannelPairingCode";
 
 interface Props {

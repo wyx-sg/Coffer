@@ -14,7 +14,7 @@ vault-wide meaning of dormant (the channel is off), and off must not also mean
 frozen.
 
 Both sides of the comparison are agent UIDS
-(ADR resource-identity-is-an-immutable-uid): a scope names agents by uid and so
+(ADR identity-is-the-uid-inside-the-file): a scope names agents by uid and so
 does ``default_agent``, so the kind compares them directly and needs nothing
 injected to do it. That is what this file used to be about in reverse — a scope
 written in agent RESOURCE names against a ``default_agent`` written as an agent

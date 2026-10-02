@@ -25,7 +25,7 @@ import { ModelPriceCell } from "./ModelPriceCell";
 import { ModelsNotice } from "./ModelsNotice";
 import { ModelsToolbar } from "./ModelsToolbar";
 import { ProviderModelRow } from "./ProviderModelRow";
-import { Section } from "./Section";
+import { Section } from "@/components/Section";
 import { SetPriceDialog } from "./SetPriceDialog";
 import { useModelCuration } from "./useModelCuration";
 

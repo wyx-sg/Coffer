@@ -172,7 +172,7 @@ The vocabulary is a closed enumeration, defined in the domain layer.
 | Resources | `resource_created`, `resource_updated`, `resource_enabled`, `resource_disabled`, `resource_deleted`, `resource_renamed`, `resource_scope_updated` |
 | MCP capabilities | `capability_enabled`, `capability_disabled` |
 | Daemon | `token_rotated`, `daemon_residency_updated`, `daemon_restarted`, `retention_updated`, `internal_engine_model_set` |
-| Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `secret_migrated`, `master_key_relocated`, `secret_resolved`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected`, `secret_imported` |
+| Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `master_key_relocated`, `secret_resolved`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected`, `secret_imported` |
 | Agents | `agent_config_file_written`, `agent_config_file_deleted`, `agent_mcp_installed`, `agent_mcp_uninstalled`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled` |
 | Skills | `skill_imported`, `skill_updated`, `skill_update_merged`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted` |
 | Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted`, `knowledge_curated` |
@@ -190,7 +190,7 @@ No secret event carries a secret value; each records the ref, the standalone sec
 - `secret_imported` — `coffer secret import` moved a plaintext secret from a file into the store.
 - `master_key_exported` — the desktop app wrote a key backup, behind a presence check. No command or route exports the key.
 
-`secret_read`, which the old plaintext read route recorded, is no longer written: that route is gone. Decrypting a secret to spawn an upstream is not an audit event.
+Decrypting a secret to spawn an upstream is not an audit event.
 
 You read the audit log from the **Changes** tab of the Activity page, with `coffer log audit` (`--kind`, `--name`, `--event-type`, `--since`, `--limit`, `--json`), or through `GET /api/v1/audit`. See [Activity and audit](/guides/activity).
 
@@ -201,7 +201,7 @@ Every call the gateway proxies — a tool call, a resource read, a prompt get �
 | Column | Meaning |
 | --- | --- |
 | `timestamp` | when the call started |
-| `resource_uid` | the MCP server's uid; `coffer` for a builtin `coffer__*` tool; `deleted:…` for a server removed since |
+| `resource_uid` | the MCP server's uid; `coffer` for a builtin `coffer__*` tool; a server removed since keeps its uid, with no name |
 | `capability_type`, `capability_key` | `tool` / `resource` / `prompt`, and the upstream's own name for it |
 | `duration_ms` | wall time of the upstream request |
 | `status` | `ok`, `error`, `timeout` or `denied` |
@@ -355,5 +355,5 @@ The invocation log's honest `error` status for in-band tool errors is what makes
 - Guides: [Activity and audit](/guides/activity), [Troubleshooting](/guides/troubleshooting), [Running the daemon](/guides/daemon)
 - Reference: [MCP tools](/reference/mcp-tools), [Files and directories](/reference/filesystem), [Configuration](/reference/configuration), [Error codes](/reference/error-codes)
 - Architecture: [MCP gateway](/architecture/mcp-gateway), [Security model](/architecture/security), [Persistence](/architecture/persistence)
-- Decision records: [Background Work Runs Supervised, and Every Record Carries One Correlation Id](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/background-work-runs-supervised-and-correlated.md), [Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/eval-capture-and-regression-gate.md), [the agent harness guide](https://github.com/wyx-sg/Coffer/blob/main/.agents/harness.md), [Resource Identity Is an Immutable UID](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md)
+- Decision records: [Background Work Runs Supervised, and Every Record Carries One Correlation Id](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/background-work-runs-supervised-and-correlated.md), [Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/eval-capture-and-regression-gate.md), [the agent harness guide](https://github.com/wyx-sg/Coffer/blob/main/.agents/harness.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/identity-is-the-uid-inside-the-file.md)
 - Specs: [daemon](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md), [mcp-gateway](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md), [resource-framework](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md)

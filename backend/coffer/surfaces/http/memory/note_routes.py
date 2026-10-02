@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
+from coffer.application.memory.retrieval import note_file
 from coffer.application.memory.service import MemoryService
 from coffer.application.resource_service import ResourceService
 from coffer.domain.memory.note import Note
@@ -48,6 +49,7 @@ def _note_summary(note: Note) -> NoteSummaryOut:
         created_at=note.created_at,
         updated_at=note.updated_at,
         agents=sorted({o.agent for o in note.origins if o.agent}),
+        file_path=note_file(note),
     )
 
 

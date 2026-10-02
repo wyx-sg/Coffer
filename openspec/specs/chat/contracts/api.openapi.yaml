@@ -504,7 +504,26 @@ paths:
           title: X-Coffer-Token
       responses:
         '200':
-          description: Successful Response
+          content:
+            text/event-stream:
+              itemSchema:
+                properties:
+                  data:
+                    contentMediaType: application/json
+                    contentSchema:
+                      $ref: '#/components/schemas/TurnEventMessage'
+                    type: string
+                  event:
+                    type: string
+                  id:
+                    type: string
+                  retry:
+                    minimum: 0
+                    type: integer
+                required:
+                - data
+                type: object
+          description: A Server-Sent Events stream of the seven turn events (`turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_done`, `turn_error`, `queue_changed`) that stays open across turns until the client disconnects.
         '422':
           content:
             application/json:
@@ -933,7 +952,10 @@ components:
           - type: 'null'
         platform:
           anyOf:
-          - type: string
+          - enum:
+            - telegram
+            - seatalk
+            type: string
           - type: 'null'
           title: Platform
       required:
@@ -959,8 +981,13 @@ components:
           title: Deliverable
           type: boolean
         platform:
+          anyOf:
+          - enum:
+            - telegram
+            - seatalk
+            type: string
+          - type: 'null'
           title: Platform
-          type: string
         reason:
           anyOf:
           - type: string
@@ -1343,6 +1370,24 @@ components:
       - pending
       title: PendingQueueOut
       type: object
+    QueueChangedEventOut:
+      description: 'The data of a `queue_changed` event: the pending-message queue changed.'
+      properties:
+        pending:
+          description: The ordered texts still waiting to run as turns.
+          items:
+            type: string
+          title: Pending
+          type: array
+        type:
+          const: queue_changed
+          title: Type
+          type: string
+      required:
+      - type
+      - pending
+      title: QueueChangedEventOut
+      type: object
     SendMessageAck:
       description: |-
         Response for POST /conversations/{id}/messages — fire-and-return
@@ -1392,6 +1437,149 @@ components:
           title: Text
           type: string
       title: SendMessageRequest
+      type: object
+    TextDeltaEventOut:
+      description: 'The data of a `text_delta` event: a chunk of assistant text.'
+      properties:
+        text:
+          title: Text
+          type: string
+        type:
+          const: text_delta
+          title: Type
+          type: string
+      required:
+      - type
+      - text
+      title: TextDeltaEventOut
+      type: object
+    ToolCallEventOut:
+      description: 'The data of a `tool_call` event: the agent requested a tool invocation.'
+      properties:
+        tool_input:
+          additionalProperties: true
+          title: Tool Input
+          type: object
+        tool_name:
+          title: Tool Name
+          type: string
+        tool_use_id:
+          title: Tool Use Id
+          type: string
+        type:
+          const: tool_call
+          title: Type
+          type: string
+      required:
+      - type
+      - tool_use_id
+      - tool_name
+      - tool_input
+      title: ToolCallEventOut
+      type: object
+    ToolResultEventOut:
+      description: 'The data of a `tool_result` event: the result or error of a prior `tool_call`.'
+      properties:
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        output:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Output
+        tool_name:
+          title: Tool Name
+          type: string
+        tool_use_id:
+          title: Tool Use Id
+          type: string
+        type:
+          const: tool_result
+          title: Type
+          type: string
+      required:
+      - type
+      - tool_use_id
+      - tool_name
+      - output
+      - error
+      title: ToolResultEventOut
+      type: object
+    TurnDoneEventOut:
+      description: 'The data of a `turn_done` event: the turn completed (or was interrupted).'
+      properties:
+        completion_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Completion Tokens
+        prompt_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Prompt Tokens
+        stop_reason:
+          description: 'Why the turn ended: `end_turn`, or `interrupted` when the user stopped it.'
+          title: Stop Reason
+          type: string
+        type:
+          const: turn_done
+          title: Type
+          type: string
+      required:
+      - type
+      - prompt_tokens
+      - completion_tokens
+      - stop_reason
+      title: TurnDoneEventOut
+      type: object
+    TurnErrorEventOut:
+      description: 'The data of a `turn_error` event: the turn failed.'
+      properties:
+        code:
+          description: A short machine token, e.g. `stream_ended`, `turn_timeout`.
+          title: Code
+          type: string
+        message:
+          title: Message
+          type: string
+        type:
+          const: turn_error
+          title: Type
+          type: string
+      required:
+      - type
+      - code
+      - message
+      title: TurnErrorEventOut
+      type: object
+    TurnEventMessage:
+      anyOf:
+      - $ref: '#/components/schemas/TurnStartEventOut'
+      - $ref: '#/components/schemas/TextDeltaEventOut'
+      - $ref: '#/components/schemas/ToolCallEventOut'
+      - $ref: '#/components/schemas/ToolResultEventOut'
+      - $ref: '#/components/schemas/TurnDoneEventOut'
+      - $ref: '#/components/schemas/TurnErrorEventOut'
+      - $ref: '#/components/schemas/QueueChangedEventOut'
+      description: |-
+        The `data:` of one event on `GET /api/v1/chat/conversations/{id}/events`,
+        chosen by its SSE `event:` name (which equals the model's `type`).
+      title: TurnEventMessage
+    TurnStartEventOut:
+      description: 'The data of a `turn_start` event: the agent loop began a turn.'
+      properties:
+        type:
+          const: turn_start
+          title: Type
+          type: string
+      required:
+      - type
+      title: TurnStartEventOut
       type: object
     UndeliveredReplyOut:
       description: |-

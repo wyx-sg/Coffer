@@ -7,7 +7,7 @@ machine only) or ``derived/`` (memory partitions and Coffer's own skill:
 rebuilt). Nothing keys on the path — the uid inside the file is the identity —
 so this module indexes whatever it finds by uid.
 
-**The vault is read at ``HEAD``, never from the working tree** (plan D8):
+**The vault is read at ``HEAD``, never from the working tree**:
 the effective version of a vault resource is the committed one, so a hand
 edit that validation refused stays on disk, uncommitted and flagged, while
 every reader keeps the last valid version. The tree is listed with one

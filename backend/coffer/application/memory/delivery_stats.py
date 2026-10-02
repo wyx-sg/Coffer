@@ -16,6 +16,7 @@ page (spec agent-registry "Connect an agent to Coffer in one action").
 
 from __future__ import annotations
 
+import asyncio
 import pathlib
 from collections import Counter
 from collections.abc import Callable
@@ -94,8 +95,13 @@ class DeliveryStatsService:
                 str((f.details or {}).get("moment") or "session_start") for f in fires
             )
             try:
-                read = self._notes_read(
-                    cfg.type.value, pathlib.Path(cfg.resolved_config_dir()), root, since
+                # Scans every recent session file of the agent: off the event loop.
+                read = await asyncio.to_thread(
+                    self._notes_read,
+                    cfg.type.value,
+                    pathlib.Path(cfg.resolved_config_dir()),
+                    root,
+                    since,
                 )
             except Exception:
                 read = None

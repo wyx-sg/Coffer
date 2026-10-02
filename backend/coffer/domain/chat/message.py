@@ -64,7 +64,7 @@ class ToolResultBlock:
 class AttachmentBlock:
     """A reference to a user-supplied file (channel media) — path/mime/filename,
     never the bytes. Persisted in the user message so the attachment survives in
-    history, shows in the web Chat page, and is re-materialised for the agent on
+    history, shows in the web Conversations page, and is re-materialised for the agent on
     later turns. See the channel-attachments ADR
     (spec channels "Persist inbound attachments as references")."""
 

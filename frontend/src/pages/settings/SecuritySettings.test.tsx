@@ -10,8 +10,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
-import { call } from "@/lib/api/call";
-import { resetApiClient } from "@/lib/api/client";
+import { getApiClient, resetApiClient, unwrap } from "@/lib/api/client";
 import { getCofferToken } from "@/lib/auth";
 import { acceptance } from "@/test/acceptance";
 import { SecuritySettings } from "./SecuritySettings";
@@ -377,7 +376,9 @@ describe("SecuritySettings — daemon access token", () => {
       expect(getCofferToken()).toBe(NEW);
       expect(tokenBox()).toHaveTextContent(/9f3a$/);
       // No reload: the page's next request carries the new token and is accepted.
-      await expect(call("/settings/secrets")).resolves.toEqual({ master_key_storage: "file" });
+      await expect(unwrap(getApiClient().GET("/settings/secrets"))).resolves.toEqual({
+        master_key_storage: "file",
+      });
       expect(seen.at(-1)?.token).toBe(NEW);
     },
   );
@@ -393,7 +394,9 @@ describe("SecuritySettings — daemon access token", () => {
     expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(getCofferToken()).toBe(OLD);
-    await expect(call("/settings/secrets")).resolves.toEqual({ master_key_storage: "file" });
+    await expect(unwrap(getApiClient().GET("/settings/secrets"))).resolves.toEqual({
+      master_key_storage: "file",
+    });
     expect(seen.at(-1)?.token).toBe(OLD);
   });
 

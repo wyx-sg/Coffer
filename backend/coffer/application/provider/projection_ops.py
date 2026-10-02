@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from coffer.application.provider.projector import Priors
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.provider.config import ProviderConfig
@@ -57,13 +58,17 @@ async def project_connection(
     agents: list[Resource],
     *,
     actor: str,
+    priors: Priors | None = None,
 ) -> list[str]:
     """Project ``connection`` into every agent of each type in ``targets``; return
-    the projected agent names. A stale-file refusal is audited, then re-raised."""
+    the projected agent names. A stale-file refusal is audited, then re-raised.
+    ``priors`` collects what every file held before, for the caller's rollback."""
     projected: list[str] = []
     for agent_type in targets:
         try:
-            projected.extend(service._projector.project_type(connection, cfg, agents, agent_type))
+            projected.extend(
+                service._projector.project_type(connection, cfg, agents, agent_type, priors)
+            )
         except ConfigFileStale as exc:
             await _record_refusal(
                 service, exc, connection=connection, agent_type=agent_type, actor=actor
@@ -79,11 +84,12 @@ async def deproject_connection(
     *,
     actor: str,
     connection: Resource | None = None,
+    priors: Priors | None = None,
 ) -> list[str]:
     """Remove Coffer's projection from every agent of ``agent_type``; return the
     reverted names. A stale-file refusal is audited, then re-raised."""
     try:
-        return service._projector.deproject_type(agents, agent_type)
+        return service._projector.deproject_type(agents, agent_type, priors)
     except ConfigFileStale as exc:
         await _record_refusal(
             service, exc, connection=connection, agent_type=agent_type, actor=actor

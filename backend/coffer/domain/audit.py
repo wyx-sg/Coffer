@@ -39,9 +39,7 @@ class AuditEventType(StrEnum):
     STORAGE_CACHE_CLEARED = "storage_cache_cleared"
     INTERNAL_ENGINE_MODEL_SET = "internal_engine_model_set"
     SECRET_SET = "secret_set"
-    SECRET_READ = "secret_read"
     SECRET_DELETED = "secret_deleted"
-    SECRET_MIGRATED = "secret_migrated"
     MASTER_KEY_RELOCATED = "master_key_relocated"
     # The secret boundary (ADR only-a-present-human-sees-a-secret-or-sends-it-
     # somewhere-new): a value shown to a present human in the desktop app, a

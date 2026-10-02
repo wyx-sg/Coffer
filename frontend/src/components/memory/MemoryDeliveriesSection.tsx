@@ -18,7 +18,7 @@ import { translateApiError } from "@/lib/api/errors";
 import type { AgentDeliveryStatsOut } from "@/lib/api/memoryTypes";
 import { useMemoryDeliveries } from "@/lib/hooks/useMemory";
 import { formatDateTime } from "@/lib/utils";
-import { MemorySection } from "./MemorySection";
+import { Section } from "@/components/Section";
 
 const DEFAULT_WINDOW_DAYS = 7;
 
@@ -31,7 +31,10 @@ export function MemoryDeliveriesSection() {
   );
 
   return (
-    <MemorySection
+    <Section
+      as="h2"
+      gap="snug"
+      labelled
       title={t("memory.deliveries.title")}
       meta={t("memory.deliveries.window", { count: days })}
       testId="memory-deliveries"
@@ -56,7 +59,7 @@ export function MemoryDeliveriesSection() {
           </ul>
         )}
       </div>
-    </MemorySection>
+    </Section>
   );
 }
 

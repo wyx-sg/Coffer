@@ -64,9 +64,6 @@ class DaemonStatusOut(BaseModel):
     started_at: datetime
     port: int
     upstream_summary: UpstreamSummary | None = None
-    #: The release channel this build carries (spec experimental-features
-    #: "Stamp every build with a release channel").
-    channel: Literal["stable", "dev"]
     #: Every experimental feature, keyed by its key, and whether it is on. The
     #: web sidebar and the desktop shell read their switches from here.
     features: dict[str, bool]
@@ -80,8 +77,7 @@ class DaemonStatusOut(BaseModel):
     machine_name: str
     #: The daemon's process id, for the Settings Daemon tab's status line.
     pid: int
-    #: The commit a release build was made from (short hash), stamped with the
-    #: channel; ``null`` in a build from source.
+    #: The commit a release build was made from (short hash); ``null`` in a build from source.
     commit: str | None = None
     #: Coffer's data folder, written ``~/…`` when it sits under the home folder.
     data_dir: str
@@ -101,12 +97,11 @@ class FeatureOut(BaseModel):
     key: str
     enabled: bool
     #: ``pin`` — ``COFFER_FEATURES``; ``setting`` — this machine's choice in
-    #: ``daemon-config.json``; ``channel`` — the build's default.
-    source: Literal["pin", "setting", "channel"]
+    #: ``daemon-config.json``; ``default`` — off, nothing decided otherwise.
+    source: Literal["pin", "setting", "default"]
 
 
 class FeatureListOut(BaseModel):
-    channel: Literal["stable", "dev"]
     features: list[FeatureOut]
 
 

@@ -6,7 +6,8 @@ agent-mechanisms-are-optional-facets-on-the-descriptor) — Claude Code over the
 Agent SDK, Codex over ``codex app-server`` — and a further agent is one more
 driver bound at the composition root, with no change here, to the chat
 surface, persistence, or the wire contract. Providers surface in the picker
-only when their binary is on PATH (``availability()``).
+only when their binary is on PATH and an enabled managed agent of that type is
+registered (``availability()``).
 """
 
 from __future__ import annotations
@@ -60,6 +61,20 @@ def agent_home_env_resolver(
         return {} if cfg is None else cfg.runtime_env()
 
     return _resolve
+
+
+def agent_is_managed(
+    agent_key: str, agents: Callable[[], AgentLister] = get_agent_service
+) -> Callable[[], Awaitable[bool]]:
+    """Whether an ENABLED agent of the type ``agent_key`` is registered with Coffer,
+    read per call (spec chat "Offer and run only managed agents"): chat offers a type
+    only once one is, and a turn for a type without one is refused, so a conversation
+    never runs against an agent's default config dir that Coffer was told to leave alone."""
+
+    async def _managed() -> bool:
+        return await answering_agent_config(agents(), agent_key) is not None
+
+    return _managed
 
 
 def build_agent_provider_registry(
@@ -144,6 +159,7 @@ def build_agent_provider_registry(
         compose_memory_context=compose_memory_context,
         resolve_channel=resolve_channel,
         resolve_home_env=agent_home_env_resolver,
+        is_managed=agent_is_managed,
         observe_quota=observe_quota,
         retrieve_memory=retrieve_memory,
     )

@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ReachFilter } from "@/components/reach/ReachFilter";
 import { SearchInput } from "@/components/SearchInput";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { CustomToolGroup } from "@/lib/api/customTools";
 import { sectionGroups } from "@/lib/customTools/groups";
+import type { ReachFilterValue } from "@/lib/reachFilter";
 import { GroupRow } from "./GroupRow";
 
 interface Props {
@@ -19,7 +21,8 @@ interface Props {
 export function GroupList({ groups, loading, selected, onOpen }: Props) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState("");
-  const sections = sectionGroups(groups, filter);
+  const [reach, setReach] = useState<ReachFilterValue>("all");
+  const sections = sectionGroups(groups, filter, reach);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
@@ -29,6 +32,7 @@ export function GroupList({ groups, loading, selected, onOpen }: Props) {
         placeholder={t("customTools.list.filter")}
         ariaLabel={t("customTools.list.filter")}
       />
+      <ReachFilter value={reach} onChange={setReach} />
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
         {loading ? (
           <div className="space-y-2">

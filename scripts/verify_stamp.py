@@ -8,8 +8,11 @@ confirmation when they differ — i.e. when source changed since the last passin
 
 The fingerprint hashes file *content* (via ``git hash-object``), not the index,
 so it is stable across ``git add`` (staging is not a content change) and only
-moves when a tracked-or-untracked source file actually changes. Non-source files
-(docs, data) are excluded so doc-only commits do not trip the guard.
+moves when a tracked-or-untracked source file actually changes. Files the gates
+read are included (code, build config, scripts, styles, YAML/JSON, specs);
+markdown docs and other prose are excluded so doc-only commits do not trip the
+guard. Paths git still lists but that are gone from disk (an unstaged deletion)
+are skipped.
 
     python scripts/verify_stamp.py write   # record the current fingerprint
     python scripts/verify_stamp.py check   # exit 0 if fresh, 1 if stale
@@ -24,9 +27,28 @@ from pathlib import Path
 
 STAMP_NAME = ".coffer-verify.stamp"
 
-# Extensions whose change means "re-run make verify". Build/config that the
-# verify pipeline gates are included; docs/data are deliberately excluded.
-_SOURCE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".jsx", ".rs", ".toml", ".cfg", ".ini")
+# Extensions whose change means "re-run make verify": everything a verify gate
+# reads (frontend colour/i18n checks read .css, the frontend scripts are .mjs,
+# the PyInstaller specs are .spec, CI and openspec config are .yaml/.json).
+# Markdown docs are deliberately excluded.
+_SOURCE_SUFFIXES = (
+    ".py",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".css",
+    ".sh",
+    ".spec",
+    ".rs",
+    ".toml",
+    ".cfg",
+    ".ini",
+    ".yaml",
+    ".yml",
+    ".json",
+)
 _SOURCE_NAMES = {"Makefile"}
 
 
@@ -44,7 +66,9 @@ def _source_files(repo: Path) -> list[str]:
         check=True,
     )
     files = (f for f in proc.stdout.split("\0") if f)
-    return sorted(f for f in files if _is_source(f))
+    # `ls-files -c` still lists a tracked file deleted but not yet staged;
+    # hash-object would exit 128 on it.
+    return sorted(f for f in files if _is_source(f) and (repo / f).is_file())
 
 
 def compute_digest(repo: Path) -> str:

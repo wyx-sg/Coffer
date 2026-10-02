@@ -12,7 +12,10 @@ import { acceptance } from "@/test/acceptance";
 import { SidebarFooter } from "./SidebarFooter";
 
 const get = vi.fn();
-vi.mock("@/lib/api/client", () => ({ getApiClient: () => ({ GET: get }) }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: () => ({ GET: get }),
+}));
 
 // The desktop shell's update record; a browser has none.
 const shell = vi.hoisted(() => ({

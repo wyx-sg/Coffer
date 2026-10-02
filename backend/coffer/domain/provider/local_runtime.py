@@ -45,9 +45,6 @@ MIN_VERSIONS: dict[Runtime, dict[str, tuple[int, ...] | None]] = {
     Runtime.LLAMA_SERVER: {ANTHROPIC_WIRE: None, OPENAI_WIRE: None},
 }
 
-#: Wires a runtime serves only experimentally.
-EXPERIMENTAL: dict[Runtime, frozenset[str]] = {Runtime.LLAMA_SERVER: frozenset({OPENAI_WIRE})}
-
 #: Below this many tokens the agents' own compaction and tool schemas do not
 #: fit well; the Model tab warns (the runtimes' own guidance says 64k).
 SMALL_WINDOW = 64_000
@@ -104,7 +101,6 @@ class LocalRuntime(BaseModel):
 __all__ = [
     "ANTHROPIC_WIRE",
     "DEFAULT_PORTS",
-    "EXPERIMENTAL",
     "MIN_VERSIONS",
     "OPENAI_WIRE",
     "SMALL_WINDOW",

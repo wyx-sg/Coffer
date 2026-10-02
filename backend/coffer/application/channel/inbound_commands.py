@@ -64,7 +64,7 @@ async def route_slash(
         )
         return True
     # Whatever this chat/thread holds runs first; `/stop` drops it instead.
-    key = (binding.resource.name, peer.chat_id, msg.thread_id)
+    key = (binding.resource.uid, peer.chat_id, msg.thread_id)
     if name == "stop":
         await burst.drop(key)
     else:
@@ -79,7 +79,7 @@ async def route_slash(
         binding,
         peer,
         text,
-        session(binding.resource.name, peer.chat_id, conv_thread),
+        session(binding.resource.uid, peer.chat_id, conv_thread),
         send,
         chat_kind=msg.chat_kind,
         thread_id=msg.thread_id,

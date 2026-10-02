@@ -179,18 +179,8 @@ def command_target(
 
 
 def _forward_sender_name(message: dict[str, Any]) -> str:
-    """Best-effort display name for a forwarded message's original sender,
-    across both the modern ``forward_origin`` shape and the pre-Bot-API-7
-    ``forward_from`` / ``forward_sender_name`` fields it replaced.
-
-    The old fields are KEPT deliberately, as of 2026-09. Telegram's own cloud
-    stopped sending them at Bot API 7.0, but a channel may point at a
-    self-hosted Bot API server of any vintage — which is the same reason
-    ``telegram.py`` treats its 10.x capabilities as per-adapter and
-    ``telegram_draft.py`` latches a feature off when a server has never heard
-    of it. Two fields of tolerance against a forwarded message rendered with
-    no sender name. Drop them when the adapter stops supporting self-hosted
-    servers, not before."""
+    """Best-effort display name for a forwarded message's original sender, from
+    ``forward_origin`` (Bot API 7.0+; the fields it replaced are not read)."""
     origin = message.get("forward_origin")
     if isinstance(origin, dict):
         otype = origin.get("type")
@@ -205,18 +195,11 @@ def _forward_sender_name(message: dict[str, Any]) -> str:
         if otype == "channel":
             chat = origin.get("chat") or {}
             return str(chat.get("title") or "")
-    forward_from = message.get("forward_from")
-    if isinstance(forward_from, dict):
-        return str(forward_from.get("first_name") or forward_from.get("username") or "")
-    return str(message.get("forward_sender_name") or "")
+    return ""
 
 
 def _is_forwarded(message: dict[str, Any]) -> bool:
-    return bool(
-        message.get("forward_origin")
-        or message.get("forward_from")
-        or message.get("forward_sender_name")
-    )
+    return bool(message.get("forward_origin"))
 
 
 def prepend_context(message: dict[str, Any], text: str) -> str:

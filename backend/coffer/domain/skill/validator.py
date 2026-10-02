@@ -62,7 +62,7 @@ def validate_skill_folder(
     - SKILL.md present at the folder root
     - SKILL.md has a parseable YAML frontmatter delimited by `---` lines
     - frontmatter conforms to `SkillFrontmatter` (non-empty name/description)
-    - no symlink inside the folder resolves outside the folder
+    - no symlink inside the folder resolves outside the folder or to a folder
     - total folder size ≤ `size_limit_bytes`
 
     Returns `ValidationOk` (with parsed frontmatter, total bytes, and the
@@ -104,6 +104,7 @@ def validate_skill_folder(
     folder_resolved = folder.resolve()
     total = 0
     bad_links: list[str] = []
+    dir_links: list[str] = []
     for root, dirnames, filenames in os.walk(folder, followlinks=False):
         root_path = pathlib.Path(root)
         for nm in (*dirnames, *filenames):
@@ -114,11 +115,16 @@ def validate_skill_folder(
                     # Resolved target must remain inside the folder.
                     if not is_within(target, folder_resolved):
                         bad_links.append(str(entry.relative_to(folder)))
-                    # A symlink never contributes to the size total: an
-                    # in-folder symlink points at a real entry that the walk
-                    # already counts on its own, so following it here would
-                    # double-count those bytes (and an escaping link was just
-                    # flagged above). Either way, skip size accumulation.
+                    # The master-store copy follows a link, so a link to a
+                    # folder would be copied again and again (a link to its own
+                    # root recurses until the filesystem gives up): refuse it.
+                    if target.is_dir():
+                        dir_links.append(str(entry.relative_to(folder)))
+                        continue
+                    # A link to a file is copied as that file's bytes, so it
+                    # counts against the size cap like any other file.
+                    if target.is_file():
+                        total += target.stat().st_size
                     continue
                 if entry.is_file():
                     total += entry.stat().st_size
@@ -131,6 +137,9 @@ def validate_skill_folder(
             "path_escape_symlinks",
             {"offenders": bad_links},
         )
+
+    if dir_links:
+        return ValidationFailure("directory_symlinks", {"offenders": dir_links})
 
     if total > size_limit_bytes:
         return ValidationFailure(

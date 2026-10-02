@@ -81,10 +81,11 @@ Pydantic v2 `BaseModel`. The kind-specific config schema registered with `Resour
 | `model`             | `str \| None`  | the model this agent runs on; `None` = the agent's own default (see "Carry the model binding on the agent record")                                                              |
 | `effort`            | `str \| None`  | the binding's reasoning effort; an explicit null unbinds it                                                                |
 | `tier_models`       | `dict \| None` | Claude Code only: `opus` / `sonnet` / `haiku` / `fable` → model id; an explicit null unbinds it                            |
-| `wire_api`          | `str \| None`  | the binding's wire; only `responses` is accepted (agent-registry/codex "Accept only responses as Codex's wire_api")                                                       |
+| `connection_uid`    | `str \| None`  | the uid of the provider connection this agent runs on; `None` = the agent's own built-in login. Machine-local like the record (agents are filed under `local/`), so it never syncs. Written only by the provider switch operations, never by `PATCH /api/v1/agents/{uid}`; `AgentOut` reports it (see "Carry the connection an agent runs on on the agent record") |
 
 Those are the whole schema — the model is `extra="forbid"` and declares nothing
-else. The three model fields are the agent's own binding (see "Carry the model
+else (no `wire_api`: the one-time vault upgrade strips it from old records, and
+Codex's `responses` is a fixed value the projection writes). The three model fields are the agent's own binding (see "Carry the model
 binding on the agent record"): they live here because the model is chosen at the
 point of use. Projecting them into an agent's native config is [spec
 provider-switching](../provider-switching/spec.md)'s. A `models` curated-set
@@ -221,8 +222,7 @@ suppression list to persist.
 The Alembic data migrations that shaped stored agents ran while agents were
 rows of the pre-vault database — `0031` and `0048` dropped agents of removed
 types, `0056` stripped config keys this spec removed, `0058` the skill-follow
-policy, `0060` backfilled the curated-`models` key, `0061` flipped `wire_api`
-from `chat` to `responses`, and `0063` stripped the curated-`models` key again;
+policy, `0060` backfilled the curated-`models` key, and `0063` stripped the curated-`models` key again;
 the one-time upgrade to the vault layout carried their result into the files.
 
 **Config files and Coffer connection state are NOT persisted by Coffer** — the
@@ -269,7 +269,7 @@ The lifecycle steps required by "Audit every agent lifecycle event" — registra
 ### `AgentService`
 
 Every method is keyword-only and addresses an agent by its immutable `uid`
-([ADR resource-identity-is-an-immutable-uid](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
+([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md)).
 
 | Method | Purpose |
 | ------ | ------- |
@@ -279,7 +279,7 @@ Every method is keyword-only and addresses an agent by its immutable `uid`
 | `list() -> list[Resource]` | Delegate to `ResourceService.list(kind='agent')`. |
 | `get(uid) -> Resource` | Delegate to `ResourceService.get`. |
 | `update_config_dir(*, uid, new_config_dir, actor) -> Resource` | Re-validate the merged config; only when the effective dir changes, check it is free, auto-create and check its `skills/`. Then `ResourceService.update_config` and, on a dir change, the config-dir-changed hook that re-delivers skills to the new location. |
-| `set_model_binding(*, uid, model=None, effort=None, clear_effort=False, tier_models=None, clear_tiers=False, wire_api=None, actor) -> Resource` | The sole writer of the model binding ("Carry the model binding on the agent record"): `None` leaves a field unchanged, `clear_effort` / `clear_tiers` unbind; the merged config is re-validated (a bad `wire_api` → 422). |
+| `set_model_binding(*, uid, model=None, effort=None, clear_effort=False, tier_models=None, clear_tiers=False, actor) -> Resource` | The sole writer of the model binding ("Carry the model binding on the agent record"): `None` leaves a field unchanged, `clear_effort` / `clear_tiers` unbind; the merged config is re-validated. |
 | `remove(*, uid, actor) -> None` | Delete via `ResourceService.delete`. Removal is not permanent — there is no suppression list, so the agent re-appears as a discovery candidate on the next scan. |
 
 ### `AutoDetectService`
@@ -508,7 +508,7 @@ the levels that entry offers.
 | Method               | Purpose                                                                                                                                                                      |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `catalogue(agent_key)` | Ask each of that type's sources in picker order and concatenate what they answer. A source that raises, finds nothing, or no longer matches its anchor contributes nothing and the others still answer. Never raises. |
-| `offered(agent_key)` | What a picker offers: an active connection's curated ids when it curates any (keeping the levels of ids the agent also reports), else `catalogue(agent_key)` — spec provider-switching "Serve one model list to every surface". |
+| `offered(agent_key)` | What a picker offers: the curated ids of the connection the agent runs on when it curates any (keeping the levels of ids the agent also reports), else `catalogue(agent_key)` — spec provider-switching "Serve one model list to every surface". |
 | `efforts(agent_key, model)` | The reasoning levels of `model` within `offered()`; with no model pinned, the first offered entry's. Empty when the agent takes no such setting. |
 | `suggest(agent_key)` | The plain ids of `offered()` — the list a channel's `/model` card presents. |
 
@@ -521,7 +521,7 @@ each named by the type's child spec (`claude_binary_models.py` and
 agent-registry/codex), behind `model_discovery.py`. Nothing here is written to
 a database, to the vault, or to the agent: the catalogue is re-derived on every
 request, which is the whole point of "Keep one source of truth for an agent's
-models". What a PICKER is offered — the narrowing an active connection applies —
+models". What a PICKER is offered — the narrowing the agent's connection applies —
 is spec provider-switching's read over this same service, not a second list.
 
 ### `ConfigFileStorePort` (Protocol, defined in application)

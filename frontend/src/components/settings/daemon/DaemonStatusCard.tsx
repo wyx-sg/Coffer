@@ -15,7 +15,7 @@ import { Power, RotateCw } from "lucide-react";
 
 import { CopyableCommand } from "@/components/settings/CopyableCommand";
 import { StatusDot } from "@/components/status/StatusDot";
-import { STATUS_TONE, type StatusTone } from "@/components/status/statusTone";
+import { STATUS_TONE, type StatusTone } from "@/lib/statusTone";
 import type { DaemonFooterState } from "@/components/shell/useDaemonFooterState";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";

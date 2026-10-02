@@ -52,7 +52,10 @@ def test_requires_list_is_read(daemon: CliDaemon, probe: FakeCommandProbe) -> No
         '  - command: gh\n    min_version: "2.40"\n    login_check: gh auth status\n'
         "    login: gh auth login\n    why: Opens issues.\n  - jq\n",
     )
-    r = daemon.client.get("/clis")
+    # A read never runs a login check; an explicit Check does.
+    assert daemon.client.get("/clis").json()["items"][0]["login"]["state"] in (None, "not_needed")
+    assert probe.login_calls == []
+    r = daemon.client.post("/clis/check")
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["warnings"] == []
@@ -117,7 +120,7 @@ def test_highest_minimum_wins(daemon: CliDaemon, probe: FakeCommandProbe) -> Non
 def test_check_again(daemon: CliDaemon, probe: FakeCommandProbe) -> None:
     probe.commands["gh"] = FakeCommand("2.45", logged_in=False)
     daemon.add_skill("s", "  - command: gh\n    login_check: gh auth status\n")
-    assert daemon.client.get("/clis/gh").json()["status"] == "logged_out"
+    assert daemon.client.post("/clis/gh/check").json()["status"] == "logged_out"
     probe.commands["gh"].logged_in = True
     # Cached until asked again.
     assert daemon.client.get("/clis/gh").json()["status"] == "logged_out"
@@ -164,7 +167,7 @@ def test_a_logged_out_command_asks_only_for_login_help(
     daemon.add_skill(
         "issues", "  - command: gh\n    login_check: gh auth status\n    login: gh auth login\n"
     )
-    prompt = daemon.client.get("/clis/gh").json()["handoff"]["prompt"]
+    prompt = daemon.client.post("/clis/gh/check").json()["handoff"]["prompt"]
     assert prompt.startswith("Please help me log in to the command-line tool `gh`.")
     assert "`gh auth status` says I am not logged in" in prompt
     assert "The skills suggest logging in with `gh auth login`." in prompt
@@ -279,13 +282,13 @@ def test_login_output_is_discarded(
         )
         responses = [
             d.client.get("/clis"),
-            d.client.get("/clis/gh"),
             d.client.post("/clis/gh/check"),
+            d.client.get("/clis/gh"),
             d.client.post("/clis/check"),
             d.client.get("/attention"),
             d.client.get("/audit"),
         ]
-        gh = responses[1].json()
+        gh = responses[2].json()
         assert gh["status"] == "logged_out" and gh["login"]["state"] == "logged_out"
         for r in responses:
             assert r.status_code == 200, r.text

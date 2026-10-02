@@ -1,4 +1,4 @@
-"""The model catalogue follows the provider Coffer activated for the agent.
+"""The model catalogue follows the connection the agent runs on.
 
 Real ``ProviderService`` over a real SQLite file, the real composition-root
 adapter (``_ActiveProviderModels``), and the real on-disk discovery source, so
@@ -12,7 +12,7 @@ failed the turn at the SDK.
 
 The agents are REGISTERED rows here rather than a hand-built list, which they
 did not have to be before: a connection's reach is a scope holding agent UIDS
-(ADR resource-identity-is-an-immutable-uid), so resolving that reach back into
+(ADR identity-is-the-uid-inside-the-file), so resolving that reach back into
 the agent TYPE this catalogue is asked about only works against a registry that
 actually holds the agents.
 """
@@ -106,12 +106,17 @@ class _RegisteredAgents:
     async def list(self) -> list[Resource]:
         return await self._resources.list(kind="agent")
 
-
-class _NoAgents:
-    """An empty registry, for the projector only — see the fixture."""
-
-    async def list(self) -> list[Resource]:
-        return []
+    async def set_connection(
+        self, uid: str, connection_uid: str | None, *, actor: str = "api"
+    ) -> Resource:
+        """What the agent kind does for a switch: write the field on the record."""
+        row = await self._resources.get(uid)
+        return await self._resources.update_config(
+            uid,
+            {**row.config, "connection_uid": connection_uid},
+            actor,
+            allow_lifecycle_kind=True,
+        )
 
 
 class _Env:
@@ -175,12 +180,11 @@ async def env(tmp_path: pathlib.Path) -> AsyncIterator[_Env]:
         resources=resources,
         secrets=store,
         config_store=ConfigFileStore(),
-        # Nothing to project into: this test reads, not writes. The registry
-        # handed here decides only which agents' native config files a switch
-        # writes — the catalogue resolves a connection's REACH through the real
-        # resource table (``_ActiveProviderModels`` below), which is the seam
-        # under test.
-        agents=_NoAgents(),
+        # The switch writes the agent's record (and its tmp config dir); the
+        # catalogue then resolves the connection each AGENT runs on through the
+        # real resource table (``_ActiveProviderModels`` below), which is the
+        # seam under test.
+        agents=_RegisteredAgents(resources),
         audit=audit,
     )
     set_provider_service(providers)
@@ -212,14 +216,15 @@ async def _gateway(
     )
     # Which agents a connection reaches is its framework scope now, not a
     # create argument (ADR per-agent-resource-scope) — and the scope names them
-    # by uid, not by agent type (ADR resource-identity-is-an-immutable-uid), so
+    # by uid, not by agent type (ADR identity-is-the-uid-inside-the-file), so
     # the types a test reads at are resolved through the registered rows.
     await env.resources.update_scope(
         connection.uid,
         Scope(agents=[env.agent_uids[a] for a in agents]),
         actor="test",
     )
-    await env.providers.activate(connection.uid)
+    for agent in agents:
+        await env.providers.activate(connection.uid, agent)
 
 
 async def test_without_a_provider_the_agent_s_own_models_are_offered(env: _Env) -> None:

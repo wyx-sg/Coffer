@@ -50,7 +50,7 @@ function NavRow({ entry, collapsed, active, signal }: RowProps) {
       {experimental && !collapsed ? (
         <span
           data-testid={`nav-experimental-${slug}`}
-          className="shrink-0 rounded-xs border border-border px-1 text-[10px] font-normal leading-4 text-text-muted"
+          className="shrink-0 rounded-xs border border-border px-1 text-2xs font-normal text-text-muted"
         >
           {t("nav.experimental")}
         </span>

@@ -9,12 +9,19 @@ the value. A binding is approved when:
 
 * a person approved it in the desktop app (with a presence grant the daemon
   verified before calling :meth:`approve`);
-* the value was supplied for it moments ago — the ref has never been bound
-  anywhere, is not a standalone ``secret/`` name, and was stored within
-  ``FRESH_WINDOW`` — because a caller that just typed the value already has it;
+* the value was supplied for it — the destination was just registered or
+  changed (:meth:`bind`, called by the one post-register seam every resource
+  kind goes through), and the ref has never been bound anywhere, is not a
+  standalone ``secret/`` name and was written on this machine within
+  ``FRESH_WINDOW`` — because a caller that just typed the value already has it.
+  The binding is recorded right there, so a later destination citing the same
+  ref is a second destination and waits: the window only bounds how old an
+  unused value may be, it is no longer a race to the first use;
 * or the protection is switched off, which itself takes an approval.
 
-Everything else becomes a pending approval, and nothing is injected.
+Everything else becomes a pending approval, and nothing is injected. A
+destination reached only at the moment of use (:meth:`require`, :meth:`refresh`)
+never counts as supplied: whatever arrived behind Coffer's back waits.
 
 Synchronous on purpose: it is consulted from the resolver, which already runs
 in a worker thread. Async callers use ``asyncio.to_thread``.
@@ -26,12 +33,13 @@ import builtins
 import secrets as _secrets
 from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
 
+from coffer.application.secret.boundary_ports import BoundaryStorePort, SealedValueStorePort
 from coffer.domain.secret_errors import (
     ApprovalNotFound,
     ApprovalNotPending,
     SecretBindingPending,
+    SecretBindingRejected,
 )
 from coffer.domain.secrets import (
     SecretApproval,
@@ -42,45 +50,12 @@ from coffer.domain.secrets import (
 
 REQUIRE_APPROVAL_KEY = "require_approval"
 #: How recently a never-bound value must have been stored to count as supplied
-#: for the binding that cites it.
+#: for the destination registered with it: an old value nothing ever used was
+#: not typed for a destination being registered now.
 FRESH_WINDOW = timedelta(minutes=5)
-
 #: Every destination in use right now: where, which refs per slot, and who last
 #: changed it (the actor an approval names).
 Destinations = Iterable[tuple[SecretDestination, Mapping[str, str], str]]
-
-
-class BoundaryStorePort(Protocol):
-    def get_binding(self, ref: str, kind: str, uid: str, slot: str) -> SecretBinding | None: ...
-    def bindings(self, ref: str | None = None) -> builtins.list[SecretBinding]: ...
-    def has_any_binding(self, ref: str) -> bool: ...
-    def put_binding(self, binding: SecretBinding) -> None: ...
-    def delete_bindings(self, ref: str) -> None: ...
-    def create_approval(
-        self, approval: SecretApproval, ciphertext: bytes | None = None
-    ) -> None: ...
-    def get_approval(self, approval_id: str) -> SecretApproval | None: ...
-    def pending_ciphertext(self, approval_id: str) -> bytes | None: ...
-    def find_open_bind(
-        self, ref: str, kind: str, uid: str, slot: str, target_fingerprint: str
-    ) -> SecretApproval | None: ...
-    def pending_of_op(self, op: str, ref: str | None = None) -> list[SecretApproval]: ...
-    def list_approvals(
-        self, *, status: str | None = None, destination_uid: str | None = None, limit: int = 200
-    ) -> list[SecretApproval]: ...
-    def decide(self, approval_id: str, status: str, *, by: str, at: str) -> bool: ...
-    def get_setting(self, key: str) -> str | None: ...
-    def set_setting(self, key: str, value: str) -> None: ...
-
-
-class SealedValueStorePort(Protocol):
-    """The slice of the encrypted store the boundary needs."""
-
-    def exists(self, ref: str) -> bool: ...
-    def created_at(self, ref: str) -> datetime | None: ...
-    def set(self, ref: str, value: str) -> None: ...
-    def seal(self, value: str) -> bytes: ...
-    def unseal(self, token: bytes) -> str: ...
 
 
 def _now() -> datetime:
@@ -134,7 +109,11 @@ class SecretBoundary:
 
     # --- the gate -----------------------------------------------------------
 
-    def _fresh(self, ref: str) -> bool:
+    def _supplied(self, ref: str) -> bool:
+        """Whether ``ref`` holds a value this machine was given for whichever
+        destination first cites it: never bound, not a standalone secret, and
+        written here a moment ago (a ciphertext that arrived from elsewhere was
+        supplied to nobody on this machine)."""
         if is_standalone_ref(ref) or self._store.has_any_binding(ref):
             return False
         created = self._values.created_at(ref)
@@ -158,10 +137,36 @@ class SecretBoundary:
             )
         )
 
+    def bind(
+        self, dest: SecretDestination, refs: Mapping[str, str], *, actor: str
+    ) -> list[SecretApproval]:
+        """Evaluate ``dest`` the moment it is registered or changed.
+
+        The one entry the post-register seam uses, for every kind that binds a
+        secret (an MCP server, a channel, a provider connection, the sync
+        remote): the value a person just supplied for this destination is
+        approved with the registration, and a ref that is already in use
+        elsewhere, or a target that moved, records its pending approval now —
+        where the person is looking — instead of at the first spawn.
+        """
+        return self.check(dest, refs, actor=actor, supplied=True)
+
     def check(
-        self, dest: SecretDestination, refs: Mapping[str, str], *, actor: str = "system"
+        self,
+        dest: SecretDestination,
+        refs: Mapping[str, str],
+        *,
+        actor: str = "system",
+        supplied: bool = False,
     ) -> list[SecretApproval]:
         """The approvals ``dest`` still waits on for ``refs``; empty means go.
+
+        ``supplied`` is set only by :meth:`bind`: the destination was just
+        registered or changed, so a never-bound ref written here counts as
+        given to it.
+
+        A refused binding (``status == "rejected"``) is returned too: it is not
+        waiting, but it blocks until the target changes or it is asked again.
 
         ``refs`` maps each slot (an environment variable, a header, a config
         field) to the ref it cites. Records a pending approval for each slot
@@ -175,7 +180,8 @@ class SecretBoundary:
             bound = self._store.get_binding(ref, dest.kind, dest.uid, slot)
             if bound is not None and bound.target_fingerprint == fp:
                 continue
-            if not on or (bound is None and self._fresh(ref)):
+            if not on or (supplied and bound is None and self._supplied(ref)):
+                self._supersede_bind(ref, dest.kind, dest.uid, slot)
                 self._approve_binding(ref, dest, slot, None)
                 continue
             # A refused binding stays refused for this target: asking again
@@ -210,9 +216,12 @@ class SecretBoundary:
         as a provider connection's base URL or a custom tool's auth — makes
         before it resolves a secret for ``dest``.
         """
-        pending = self.check(dest, refs, actor=actor)
-        if pending:
-            raise SecretBindingPending([a.id for a in pending], [a.describe() for a in pending])
+        waiting = self.check(dest, refs, actor=actor)
+        refused = [a for a in waiting if a.status == "rejected"]
+        if refused:
+            raise SecretBindingRejected([a.id for a in refused], [a.describe() for a in refused])
+        if waiting:
+            raise SecretBindingPending([a.id for a in waiting], [a.describe() for a in waiting])
 
     def _supersede_bind(self, ref: str, kind: str, uid: str, slot: str) -> None:
         for approval in self._store.pending_of_op("bind", ref):
@@ -235,10 +244,16 @@ class SecretBoundary:
         created: list[SecretApproval] = []
         for dest, refs, actor in current:
             for approval in self.check(dest, refs, actor=actor):
-                created.append(approval)
+                if approval.status == "pending":
+                    created.append(approval)
             for slot, ref in refs.items():
                 wanted.add((ref, dest.kind, dest.uid, slot, dest.target_fingerprint))
-        for approval in self._store.pending_of_op("bind"):
+        # Pending and refused bindings alike: a refusal of a target that has since
+        # changed no longer says anything about the current one.
+        undecided = self._store.pending_of_op("bind") + [
+            a for a in self._store.list_approvals(status="rejected") if a.op == "bind"
+        ]
+        for approval in undecided:
             key = (
                 approval.ref or "",
                 approval.destination_kind or "",
@@ -247,7 +262,13 @@ class SecretBoundary:
                 approval.target_fingerprint or "",
             )
             if key not in wanted:
-                self._store.decide(approval.id, "superseded", by="system", at=self._stamp())
+                self._store.decide(
+                    approval.id,
+                    "superseded",
+                    by="system",
+                    at=self._stamp(),
+                    only_from=approval.status,
+                )
         return created
 
     # --- replacing a value that is in use ------------------------------------
@@ -309,7 +330,17 @@ class SecretBoundary:
         approval = self.get(approval_id)
         if approval.status != "pending":
             raise ApprovalNotPending(approval_id, approval.status)
-        sealed = self._store.pending_ciphertext(approval_id)
+        if approval.op in ("add_secret", "replace_value"):
+            # Apply, then record: an approval is "approved" only once the value is
+            # in the store. A master key that no longer opens the sealed value, a
+            # vault lock timeout or a git error leaves it pending, sealed, to try
+            # again instead of losing the new value behind an "approved" row.
+            sealed = self._store.pending_ciphertext(approval_id)
+            assert approval.ref and sealed is not None
+            self._values.set(approval.ref, self._values.unseal(sealed))
+            if not self._store.decide(approval_id, "approved", by=actor, at=self._stamp()):
+                raise ApprovalNotPending(approval_id, self.get(approval_id).status)
+            return self.get(approval_id)
         if not self._store.decide(approval_id, "approved", by=actor, at=self._stamp()):
             raise ApprovalNotPending(approval_id, self.get(approval_id).status)
         if approval.op == "bind":
@@ -325,12 +356,24 @@ class SecretBoundary:
                     approval_id=approval.id,
                 )
             )
-        elif approval.op in ("add_secret", "replace_value"):
-            assert approval.ref and sealed is not None
-            self._values.set(approval.ref, self._values.unseal(sealed))
         else:
             self._store.set_setting(REQUIRE_APPROVAL_KEY, "false")
         return self.get(approval_id)
+
+    def ask_again(self, approval_id: str, *, actor: str) -> None:
+        """Lift a refusal so the same binding is put to a person again.
+
+        Only a refused ``bind`` can be asked again; the next check of its
+        destination raises a fresh pending approval. Asking widens nothing —
+        the answer still takes a presence grant.
+        """
+        approval = self.get(approval_id)
+        if approval.op != "bind" or approval.status != "rejected":
+            raise ApprovalNotPending(approval_id, approval.status)
+        if not self._store.decide(
+            approval_id, "superseded", by=actor, at=self._stamp(), only_from="rejected"
+        ):
+            raise ApprovalNotPending(approval_id, self.get(approval_id).status)
 
     def reject(self, approval_id: str, *, actor: str) -> SecretApproval:
         """Refuse a pending approval. Anyone may: refusing only narrows."""

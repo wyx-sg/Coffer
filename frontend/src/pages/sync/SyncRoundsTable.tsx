@@ -10,8 +10,11 @@
 // drawer, asks first with the plan the daemon states (6.5.10).
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { RotateCcw } from "lucide-react";
 
 import { DataTable } from "@/components/DataTable";
+import { EmptyState } from "@/components/EmptyState";
+import { Button } from "@/components/ui/button";
 import { translateApiError } from "@/lib/api/errors";
 import type { SyncRound } from "@/lib/api/sync";
 import { SyncRollbackDialog } from "./SyncRollbackAction";
@@ -23,10 +26,11 @@ interface Props {
   runs: SyncRound[];
   isLoading: boolean;
   error: unknown;
+  onRetry: () => void;
   nextRoundAt: string | null;
 }
 
-export function SyncRoundsTable({ runs, isLoading, error, nextRoundAt }: Props) {
+export function SyncRoundsTable({ runs, isLoading, error, onRetry, nextRoundAt }: Props) {
   const { t } = useTranslation();
   const rows = useMemo(() => collapseRepeats(runs), [runs]);
   const [open, setOpen] = useState<SyncRunRow | null>(null);
@@ -36,7 +40,7 @@ export function SyncRoundsTable({ runs, isLoading, error, nextRoundAt }: Props) 
 
   return (
     <section className="space-y-2.5" aria-labelledby="sync-rounds-title">
-      <div className="flex min-h-[26px] flex-wrap items-center gap-x-2">
+      <div className="flex min-h-control-sm flex-wrap items-center gap-x-2">
         <h2 id="sync-rounds-title" className="text-sm font-semibold text-text">
           {t("sync.rounds.title")}
         </h2>
@@ -44,9 +48,17 @@ export function SyncRoundsTable({ runs, isLoading, error, nextRoundAt }: Props) 
       </div>
       {/* Rendered inside the tab, so a failing history never blanks the page. */}
       {error ? (
-        <p className="text-sm text-danger" role="alert">
-          {translateApiError(t, error)}
-        </p>
+        <EmptyState
+          tone="error"
+          size="compact"
+          title={t("sync.rounds.loadFailed")}
+          description={translateApiError(t, error)}
+          action={
+            <Button variant="outline" size="sm" onClick={onRetry}>
+              <RotateCcw aria-hidden /> {t("common.retry")}
+            </Button>
+          }
+        />
       ) : (
         <DataTable
           rows={rows}

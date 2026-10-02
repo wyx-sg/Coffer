@@ -20,12 +20,14 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ConfigValidationError, ResourceAlreadyExists
 from coffer.domain.resource import Kind
 from coffer.domain.scope import Scope
+from coffer.domain.vault.errors import VaultFileStale
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.vault.home import vault_root
 from tests.support.vault_stores import make_resource_repo
 
 
@@ -54,7 +56,7 @@ class _Store:
         self.values.pop(ref, None)
 
 
-async def _service(tmp_path, *, on_rename=None):
+async def _service(tmp_path, *, on_rename=None, on_delete=None):
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -67,6 +69,7 @@ async def _service(tmp_path, *, on_rename=None):
             supports_scope=True,
             secret_ref_extractor=_cited,
             on_rename=on_rename,
+            on_delete=on_delete,
         )
     }
     store = _Store()
@@ -171,5 +174,76 @@ async def test_renaming_to_the_current_name_is_a_silent_no_op(tmp_path):
         assert again.name == "same"
         trail = await audit.query(resource=r, limit=50)
         assert AuditEventType.RESOURCE_RENAMED.value not in [e.event_type for e in trail]
+    finally:
+        await engine.dispose()
+
+
+def _edit_on_disk(svc, uid: str) -> None:
+    """A person's edit to the resource's file that is not committed yet."""
+    path = vault_root() / svc._repo.files.by_uid()[uid].path
+    path.write_bytes(path.read_bytes() + b" ")
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="a kind whose name is a directory moves it with the rename"
+)
+async def test_a_file_that_cannot_be_written_is_refused_before_the_hook_moves_anything(tmp_path):
+    moved: list[tuple[str, str]] = []
+
+    def on_rename(resource, new_name):
+        moved.append((resource.name, new_name))
+
+    svc, _audit, _store, engine, _sm = await _service(tmp_path, on_rename=on_rename)
+    try:
+        a = await svc.register(kind="thing", name="a", config={}, actor="test")
+        _edit_on_disk(svc, a.uid)
+        with pytest.raises(VaultFileStale):
+            await svc.rename(a.uid, "b", actor="test")
+        assert moved == []
+        assert (await svc.get(a.uid)).name == "a"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="a kind whose name is a directory moves it with the rename"
+)
+async def test_a_write_that_fails_after_the_hook_moves_the_directory_back(tmp_path):
+    moved: list[tuple[str, str]] = []
+
+    def on_rename(resource, new_name):
+        moved.append((resource.name, new_name))
+
+    svc, _audit, _store, engine, _sm = await _service(tmp_path, on_rename=on_rename)
+    try:
+        a = await svc.register(kind="thing", name="a", config={}, actor="test")
+
+        async def refuse(uid: str, new_name: str):
+            raise VaultFileStale("resources/x.json", "raced")
+
+        svc._repo.rename = refuse  # the write fails after the pre-checks passed
+        with pytest.raises(VaultFileStale):
+            await svc.rename(a.uid, "b", actor="test")
+        assert moved == [("a", "b"), ("b", "a")]
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework",
+    scenario="a file that cannot be written stops a deletion before the cleanup runs",
+)
+async def test_a_file_that_cannot_be_removed_is_refused_before_the_cleanup_runs(tmp_path):
+    cleaned: list[str] = []
+    svc, _audit, _store, engine, _sm = await _service(
+        tmp_path, on_delete=lambda r: cleaned.append(r.name)
+    )
+    try:
+        a = await svc.register(kind="thing", name="a", config={}, actor="test")
+        _edit_on_disk(svc, a.uid)
+        with pytest.raises(VaultFileStale):
+            await svc.delete(a.uid, actor="test")
+        assert cleaned == []
+        assert (await svc.get(a.uid)).name == "a"
     finally:
         await engine.dispose()

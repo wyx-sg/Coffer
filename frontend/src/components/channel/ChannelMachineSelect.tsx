@@ -35,7 +35,7 @@ import { useMachines, useThisMachineId } from "@/lib/hooks/useMachines";
 import { machineOptions, type MachineOption } from "@/lib/machineBinding";
 import { toneClass } from "@/lib/statusColors";
 import { cn } from "@/lib/utils";
-import { bindingState } from "./channelBinding";
+import { bindingState } from "@/lib/channels/channelBinding";
 
 interface Props {
   /** The channel being bound — its identity, which the PATCH is addressed to. */

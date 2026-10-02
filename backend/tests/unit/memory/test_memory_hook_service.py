@@ -243,6 +243,30 @@ async def test_a_matching_command_is_denied_once_then_passes(rig: _Rig) -> None:
 
 
 @pytest.mark.asyncio
+async def test_two_parallel_fires_of_one_session_hold_only_one_command(rig: _Rig) -> None:
+    """ "Once per session": the claim is made before the note is read, so a second
+    fire arriving while the first awaits that read finds the trigger spent."""
+    import asyncio
+
+    await rig.arm("coffer/node-20-for-make-verify", command=r"^make\s+verify\b", unless="v20")
+
+    real = rig.memory.list_notes
+
+    async def slow(partition: str):  # type: ignore[no-untyped-def]
+        await asyncio.sleep(0.01)  # a real read yields; the in-memory fake would not
+        return await real(partition)
+
+    rig.memory.list_notes = slow  # type: ignore[method-assign]
+
+    outcomes = await asyncio.gather(
+        rig.fire(PRE_TOOL_USE, command="make verify"),
+        rig.fire(PRE_TOOL_USE, command="make verify"),
+    )
+
+    assert [o is not None for o in outcomes].count(True) == 1
+
+
+@pytest.mark.asyncio
 async def test_an_unarmed_trigger_holds_nothing(rig: _Rig) -> None:
     tid = await rig.arm("coffer/node-20-for-make-verify", command=r"^make\s+verify\b")
     await rig.triggers.disarm(tid, actor="user")

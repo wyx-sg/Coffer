@@ -33,7 +33,7 @@ coffer agent add [OPTIONS] TYPE
 
 Register the agent of TYPE — one per type, named by it.
 
-Without ``--config-dir`` it is registered at the type's standard directory; an agent installed but never run gets that directory created. To move a registered agent, use ``coffer agent edit TYPE --config-dir``.
+Without ``--config-dir`` it is registered at the type's standard directory; an agent installed but never run gets that directory created. To move a registered agent, use ``coffer agent edit NAME --config-dir``.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -43,14 +43,14 @@ Without ``--config-dir`` it is registered at the type's standard directory; an a
 ## agent show
 
 ```sh
-coffer agent show [OPTIONS] TYPE
+coffer agent show [OPTIONS] NAME
 ```
 
 Show one agent, with its Coffer connection part by part.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `TYPE` | argument | text | required | Agent type (claude-code \| codex) or uid |
+| `NAME` | argument | text | required | Agent name (claude-code \| codex) or uid |
 | `--json` | option | flag |  | JSON output for scripts |
 
 ## agent prompt
@@ -71,23 +71,22 @@ Offered while the program is not found, added or not — the same words the Agen
 ## agent edit
 
 ```sh
-coffer agent edit [OPTIONS] TYPE
+coffer agent edit [OPTIONS] NAME
 ```
 
 Change an agent's config directory or model binding.
 
-An agent's name is its type and it carries no title or description, so these are the whole of what can change. The model binding lives on the agent, not on the connection: an unbound agent projects no model and runs on its own default. A change here takes effect on disk the next time that agent's connection is activated (`coffer provider switch <name>`), which is what re-projects the config.
+An agent's name is its type and it carries no title or description, so these are the whole of what can change. The model binding lives on the agent, not on the connection: an unbound agent projects no model and runs on its own default. A change here takes effect on disk the next time that agent is switched onto its connection (`coffer provider switch <name> --agent <type>`), which is what re-projects the config.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `TYPE` | argument | text | required | Agent type (claude-code \| codex) or uid |
+| `NAME` | argument | text | required | Agent name (claude-code \| codex) or uid |
 | `--config-dir` | option | text |  | Use a different config directory |
 | `--model` | option | text |  | Model this agent answers with |
 | `--effort` | option | text |  | Reasoning effort level |
 | `--clear-effort` | option | flag |  | Unbind the effort |
 | `--tier` | option | text (repeatable) |  | Claude Code tier pin &lt;tier&gt;=&lt;model&gt; (opus, sonnet, haiku, fable); repeatable |
 | `--clear-tiers` | option | flag |  | Unbind every tier pin |
-| `--wire-api` | option | text |  | Codex wire api; `responses` is the only value it still loads |
 
 ## agent rm
 
@@ -162,7 +161,7 @@ The listing pages by cursor: a page with more after it ends with the --cursor va
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
+| `NAME` | argument | text | required | Agent name or uid |
 | `[ID]` | argument | text |  | A session id from the listing; omit to list sessions |
 | `--limit` | option | integer |  | Sessions to list (default 20) or turns to show (default 200) |
 | `--offset` | option | integer | `0` | With an ID: skip this many turns. |
@@ -176,14 +175,14 @@ The listing pages by cursor: a page with more after it ends with the --cursor va
 ## agent models
 
 ```sh
-coffer agent models [OPTIONS] AGENT_KEY
+coffer agent models [OPTIONS] TYPE
 ```
 
 List the models a picker offers for this agent, with their effort levels.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `AGENT_KEY` | argument | text | required | Agent type, e.g. claude_code or codex |
+| `TYPE` | argument | text | required | Agent type, e.g. claude_code or codex |
 | `--json` | option | flag |  | JSON output |
 
 ## agent hooks
@@ -196,7 +195,7 @@ List every hook the agent will run; Coffer's own is marked with \*.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
+| `NAME` | argument | text | required | Agent name or uid |
 | `--json` | option | flag |  | JSON output |
 
 ## agent config
@@ -221,7 +220,7 @@ Opens $EDITOR on the current content, or takes it from --from-file. Coffer valid
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
+| `NAME` | argument | text | required | Agent name or uid |
 | `KEY[/CHILD]` | argument | text | required | Config-file key (e.g. settings, config, instructions), or KEY/CHILD for one file inside a directory entry (e.g. subagents/reviewer.md) |
 | `--from-file` | option | text |  | Take the new content from PATH ('-' for stdin) instead of opening $EDITOR. |
 
@@ -235,7 +234,7 @@ Delete one file inside a directory entry (its content is kept as .bak).
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
+| `NAME` | argument | text | required | Agent name or uid |
 | `KEY/CHILD` | argument | text | required | One file inside a directory entry (e.g. subagents/x.md) |
 | `--force, --yes, -f, -y` | option | flag |  | Do not ask |
 
@@ -259,7 +258,7 @@ List the agent's installed plugins and known marketplaces.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
+| `NAME` | argument | text | required | Agent name or uid |
 | `--json` | option | flag |  | JSON output for scripts |
 
 ## agent plugin show
@@ -272,7 +271,7 @@ Show one plugin: its metadata, install dir and everything it contributes.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
+| `NAME` | argument | text | required | Agent name or uid |
 | `PLUGIN_ID` | argument | text | required | Plugin id (name@marketplace) |
 | `--json` | option | flag |  | JSON output |
 
@@ -286,7 +285,7 @@ Enable a plugin in the agent's config.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
+| `NAME` | argument | text | required | Agent name or uid |
 | `PLUGIN_ID` | argument | text | required | Plugin id (name@marketplace) |
 
 ## agent plugin disable
@@ -299,7 +298,7 @@ Disable a plugin in the agent's config.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
+| `NAME` | argument | text | required | Agent name or uid |
 | `PLUGIN_ID` | argument | text | required | Plugin id (name@marketplace) |
 
 ## agent plugin rm
@@ -312,6 +311,6 @@ Uninstall a plugin (Codex edits its config; Claude Code shells out to its own CL
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
+| `NAME` | argument | text | required | Agent name or uid |
 | `PLUGIN_ID` | argument | text | required | Plugin id (name@marketplace) |
 | `--force, --yes, -f, -y` | option | flag |  | Do not ask |

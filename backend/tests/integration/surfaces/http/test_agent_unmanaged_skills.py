@@ -4,7 +4,7 @@ See spec skill-manager "List unmanaged skills in an agent's skill locations" and
 every skill operation on REST, CLI and web".
 
 The agent is addressed by its immutable ``uid``
-(ADR resource-identity-is-an-immutable-uid); ``{skill}`` beside it is a
+(ADR identity-is-the-uid-inside-the-file); ``{skill}`` beside it is a
 DIRECTORY name on disk, not a Coffer resource, so it stays a name here — the
 folder has no resource row to have a uid. Adoption is the moment one is
 minted, which is why the adopt assertions below check the uid it returns.

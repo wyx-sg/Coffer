@@ -1,6 +1,6 @@
 """What this machine last learned about each Git-imported skill's source, in
 ``local/skill-source-status.json`` (spec skill-manager "Update a Git-imported
-skill from its source"; plan D10).
+skill from its source").
 
 The record is an observation made here — when this machine last checked, what
 it found — so it is local state keyed by the skill's uid: never in the vault,

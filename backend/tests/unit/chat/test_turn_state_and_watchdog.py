@@ -13,7 +13,6 @@ import pytest
 
 from coffer.application.chat.turn_orchestrator import (
     active_turns,
-    clear_active_turns,
     held_conversations,
 )
 from coffer.application.chat.turn_state import peek
@@ -27,6 +26,7 @@ from coffer.domain.chat.events import (
     TurnStarted,
 )
 from coffer.domain.chat.message import Role, TextBlock
+from tests.support.chat_turns import start_turn
 
 from .conftest import FakeAgentAdapter
 from .test_turn_orchestrator_with_fake_adapter import drain_queue, make_orchestrator
@@ -34,13 +34,6 @@ from .test_turn_orchestrator_with_fake_adapter import drain_queue, make_orchestr
 pytestmark = pytest.mark.asyncio
 
 _DONE = TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn")
-
-
-@pytest.fixture(autouse=True)
-def _clean() -> Any:
-    clear_active_turns()
-    yield
-    clear_active_turns()
 
 
 async def _settle() -> None:
@@ -88,7 +81,7 @@ async def test_a_turn_with_no_event_for_the_idle_window_is_cancelled_as_a_timeou
     orchestrator._idle_timeout = 0.05
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     events = await drain_queue(queue)
 
     terminals = [e for e in events if isinstance(e, (TurnDone, TurnError))]
@@ -118,7 +111,7 @@ async def test_events_inside_the_window_keep_a_turn_alive() -> None:
     orchestrator._idle_timeout = 0.1
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    events = await drain_queue(await orchestrator.start_turn(conv.id, "hi"))
+    events = await drain_queue(await start_turn(orchestrator, conv.id, "hi"))
 
     assert events[-1] == _DONE
     assert not any(isinstance(e, TurnError) for e in events)
@@ -132,7 +125,7 @@ async def test_a_disabled_watchdog_waits_indefinitely() -> None:
     orchestrator._idle_timeout = None
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     await asyncio.wait_for(adapter.stalled.wait(), timeout=1.0)
     await asyncio.sleep(0.1)  # far longer than the windows the tests above use
 
@@ -148,7 +141,7 @@ async def test_an_interrupt_during_the_window_is_still_an_interrupt() -> None:
     orchestrator._idle_timeout = 10.0
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
 
-    queue = await orchestrator.start_turn(conv.id, "hi")
+    queue = await start_turn(orchestrator, conv.id, "hi")
     await asyncio.wait_for(adapter.stalled.wait(), timeout=1.0)
     orchestrator.interrupt_turn(conv.id)
     events = await drain_queue(queue)
@@ -337,3 +330,47 @@ async def test_a_channel_message_that_cannot_start_hears_the_failure() -> None:
     assert len(handed) == 1
     events = await drain_queue(handed[0])
     assert events == [TurnError(code="INTERNAL_ERROR", message="failed to start queued turn")]
+
+
+async def test_a_failed_queued_start_is_told_live_but_not_replayed_to_a_late_subscriber() -> None:
+    from coffer.domain.chat.errors import AgentConfigRejected
+    from coffer.domain.chat.events import QueueChanged
+
+    from .conftest import FakeAgentProvider
+
+    release = asyncio.Event()
+
+    class _Gated(FakeAgentAdapter):
+        async def _yield_events(self) -> AsyncIterator[AgentEvent]:
+            yield TurnStarted()
+            await release.wait()
+            yield _DONE
+
+    provider = FakeAgentProvider(_Gated([]))
+    orchestrator, _conv, _msg, _prov = make_orchestrator(provider=provider)
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
+    live = orchestrator.subscribe(conv.id)
+
+    await orchestrator.enqueue_message(conv.id, "running")
+    await orchestrator.enqueue_message(conv.id, "second")
+    provider._build_error = AgentConfigRejected("missing_secret", "no secret")
+    release.set()
+    await _settle()
+
+    heard: list[AgentEvent] = []
+    while not live.empty():
+        item = live.get_nowait()
+        if item is not None:
+            heard.append(item)
+    assert TurnError(code="INTERNAL_ERROR", message="failed to start queued turn") in heard
+
+    # A page opened (or reconnected) afterwards sees the held queue, not a turn
+    # error it can do nothing about.
+    late = orchestrator.subscribe(conv.id)
+    replayed: list[AgentEvent] = []
+    while not late.empty():
+        item = late.get_nowait()
+        if item is not None:
+            replayed.append(item)
+    assert not any(isinstance(e, TurnError) for e in replayed)
+    assert replayed[-1] == QueueChanged(pending=["second"])

@@ -33,7 +33,7 @@ agent"), so there is nothing for a caller identity to narrow.
 **A collection is addressed by uid; a file is addressed by path.** ``curate``
 names the collection Resource's immutable uid, because a pass takes minutes and
 must keep meaning the same collection across a rename (ADR
-resource-identity-is-an-immutable-uid). The file routes below are the deliberate
+identity-is-the-uid-inside-the-file). The file routes below are the deliberate
 exception: their ``path`` and ``collection`` arguments are *filesystem* paths,
 whose first segment is the collection's directory — and a directory is named by
 the label, not by an identity. Converting them would mean asking a caller for a
@@ -62,10 +62,15 @@ from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeServic
 from coffer.application.upkeep_runs import UPKEEP_RUNS
 from coffer.domain.knowledge.converter import EmptyConversion, UnsupportedDocument
 from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER
+from coffer.domain.knowledge.errors import KnowledgeCurationHeld
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.errors import error_response
 from coffer.surfaces.http.event_dependencies import get_event_broker
-from coffer.surfaces.http.knowledge.curation_state import get_curation_runner, vault_write_lock
+from coffer.surfaces.http.knowledge.curation_state import (
+    curation_held,
+    get_curation_runner,
+    vault_write_lock,
+)
 from coffer.surfaces.http.knowledge.dependencies import (
     get_ingest_service,
     get_knowledge_service,
@@ -235,14 +240,19 @@ async def curate(
     curation with a sync round").
     """
     document = body.document if body is not None and body.document else None
-    rev = (await svc.collection(uid)).rev
+    # Held, never queued: a rewrite is not piled onto files a person is deciding
+    # between ("Never overlap a curation pass and a round"). The owner-machine
+    # gate is the sweep's alone — pressing the button is choosing this machine.
+    if await curation_held():
+        raise KnowledgeCurationHeld
+    await svc.collection(uid)  # an absent collection is refused before the pass starts
 
     async def progress(done: int, total: int) -> None:
         # Readable on ``GET /api/v1/upkeep/runs`` and announced on the event
         # stream, so a page shows n of m while this request is still open.
         UPKEEP_RUNS.progress(KIND_KNOWLEDGE, uid, done=done, total=total)
         with contextlib.suppress(Exception):
-            get_event_broker().publish(KIND_KNOWLEDGE, uid, rev)
+            get_event_broker().publish(KIND_KNOWLEDGE, uid)
 
     with UPKEEP_RUNS.guard(KIND_KNOWLEDGE, uid):
         result = await drain(

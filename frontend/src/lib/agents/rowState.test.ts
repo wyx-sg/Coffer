@@ -1,7 +1,7 @@
 // src/lib/agents/rowState.test.ts — the one state an agent reads as.
 import { describe, expect, test } from "vitest";
 
-import { agentRowState, agentRowTone, isAddableState, isReachableState } from "./rowState";
+import { agentRowState, agentRowTone, isAddableState } from "./rowState";
 
 describe("agentRowState", () => {
   test("a type not added reads by its detection state", () => {
@@ -34,7 +34,5 @@ describe("agentRowState", () => {
     expect(agentRowTone("not_added")).toBe("off");
     expect(isAddableState("never_run")).toBe(true);
     expect(isAddableState("config_left_behind")).toBe(false);
-    expect(isReachableState("connected")).toBe(true);
-    expect(isReachableState("not_found")).toBe(false);
   });
 });

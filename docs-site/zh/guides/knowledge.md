@@ -108,7 +108,7 @@ coffer knowledge list
 ### 从 CLI 提交：`coffer knowledge write` {#from-the-cli-coffer-knowledge-write}
 
 ```sh
-coffer knowledge write --in payments \
+coffer knowledge write --collection payments \
   --title "Session TTL" \
   --description "Where the session TTL is set and its current value." \
   --body "The TTL is 30 days, set in account-session's config key session.ttl_days."
@@ -211,7 +211,7 @@ coffer config set engine.upkeep.curate.enabled off
 
 ### 手动整理 {#curate-by-hand}
 
-手动整理会清空一个知识集的待处理项：它拿走开始时所有待处理的东西（先是收件箱条目，从最早的开始，然后是整理上次看过之后被编辑的文档），每项跑一轮，一个接一个，直到全部处理完。
+手动整理会清空一个知识集的待处理项：它拿走开始时所有待处理的东西（先是收件箱条目，从最早的开始，然后是整理上次看过之后被编辑的文档），每项跑一轮，一个接一个，直到全部处理完。它不受所有者机器限制（点按钮就是选择在这台机器上整理），但和扫描一样，当同步冲突或确认在等你处理时，会以 `KNOWLEDGE_CURATION_HELD`（409）被拒绝。收件箱条目按提交时间排序（条目自身的 `created_at`），从不按文件时间。
 
 ::: code-group
 
@@ -349,7 +349,7 @@ coffer knowledge restore payments/session-ownership.md 3f2a9c1
 
 ```sh
 coffer knowledge changes                 # every collection, newest first
-coffer knowledge changes --in payments   # one collection
+coffer knowledge changes --collection payments   # one collection
 coffer knowledge changes 8d41e07         # one change in full, with each document's diff
 ```
 
@@ -370,6 +370,7 @@ coffer knowledge undo 8d41e07
 在知识页面上，从**最近改动**打开这轮整理（或者在它写过的文档上方点**查看这轮整理改了什么**），然后选择**撤销这轮整理**；页面会先确认，列出每篇文档以及撤销会对它做什么。被拒绝的撤销会关闭确认，这轮整理的页面显示**未撤销**，并指出之后被改动的文档；撤销成功的一轮显示**已撤销**，附带撤销者和时间。
 
 - 如果之后有改动碰过这轮的某篇文档，撤销会以 `KNOWLEDGE_UNDO_CONFLICT` 拒绝并指出那篇文档，不写入任何东西。可以改为编辑或恢复那篇文档，或者在保留后续编辑的前提下手动撤销这轮：拒绝信息附带一段给智能体的提示词（在这轮整理的页面上提供，`coffer knowledge undo` 也会打印），写明这轮整理、它碰过的每篇文档、之后被编辑的文档，以及用来查看这轮做了什么的 `git -C ~/.coffer/vault show <version> -- knowledge`。智能体只编辑文件，Coffer 把它写的内容记为一次磁盘上的编辑。
+- 如果这一轮没有真正合并任何东西（没有模型、条目太大，或整理放弃了它），它创建的文档就是原样的条目，所以撤销也会把条目放回收件箱，你提交的内容不会丢。
 - 只有整理轮次能这样撤销（否则返回 `KNOWLEDGE_NOT_A_PASS`）。其他改动请恢复文档的早期版本。
 
 ## 删除文档和知识集 {#delete-documents-and-collections}
@@ -416,7 +417,7 @@ Knowledge → choose the collection → Danger zone → Delete… → type its n
 
 **待处理的条目一直没被整理。** 检查整理是否打开（`coffer config get engine.upkeep.curate.enabled`），这台机器是否是所有者或者没有设置所有者（`coffer config get engine.curate_owner`），以及 Coffer 自用模型是否已配置。运行 `coffer knowledge curate <collection>` 查看每轮的状态。
 
-**整理把一篇文档改坏了。** 用 `coffer knowledge changes --in <collection>` 找到那轮整理，用 `coffer knowledge changes <version>` 查看，再用 `coffer knowledge undo <version>` 撤销；或者用 `coffer knowledge restore` 只恢复那一篇文档。
+**整理把一篇文档改坏了。** 用 `coffer knowledge changes --collection <collection>` 找到那轮整理，用 `coffer knowledge changes <version>` 查看，再用 `coffer knowledge undo <version>` 撤销；或者用 `coffer knowledge restore` 只恢复那一篇文档。
 
 **智能体不用这些知识。** 检查 `coffer-guide` 技能是否已启用并对该智能体生效（`coffer skill scope coffer-guide`），以及知识集的 `README.md` 开头是否有一句话写明它的主题。
 

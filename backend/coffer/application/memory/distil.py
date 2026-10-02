@@ -85,6 +85,7 @@ converge in one pass.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -94,11 +95,17 @@ from coffer.application.engine_timeout import TimeoutReader, resolve_timeout
 from coffer.application.memory import distil_apply as applying
 from coffer.application.memory import distil_plan as planning
 from coffer.application.memory import distil_routing as routing
+from coffer.application.memory.distil_sources import (
+    SOURCES_GONE_REASON,
+    has_distil_work,
+    retire_sourceless,
+    undistilled,
+)
 from coffer.application.memory.index import render_index
 from coffer.domain.memory.note import Note
 from coffer.domain.memory.retired import RetiredNote
 from coffer.domain.memory.trigger import KIND_BLOCK, TriggerProposal
-from coffer.infrastructure.memory import raw_store, store
+from coffer.infrastructure.memory import store
 from coffer.infrastructure.memory.raw_store import StoredRawEntry
 
 logger = logging.getLogger(__name__)
@@ -133,81 +140,6 @@ class DistilResult:
     proposals: tuple[TriggerProposal, ...] = ()
 
 
-def undistilled(
-    partition: str, notes: Sequence[Note], retired: Sequence[RetiredNote]
-) -> tuple[StoredRawEntry, ...]:
-    """The entries under ``.raw/`` no pass has yet decided anything about.
-
-    See the module docstring's "Which entries are new": an entry is accounted
-    for once its id is in some note's provenance, or once a ``RETIRED.md``
-    record names it. Reads ``.raw/`` and writes nothing (see "Keep distil out of the raw
-    directory").
-
-    A retirement record names its entries in ``entry_ids`` whether it retired
-    a note or merely kept nothing from what it read. That is what makes both
-    cases converge in one pass: a retired note's own entries are excluded the
-    moment the note leaves, rather than surfacing as undistilled again and
-    having to be re-judged (and re-charged to the model) a round later.
-    """
-    accounted = {o.key for note in notes for o in note.origins}
-    accounted |= {entry_id for record in retired for entry_id in record.entry_ids}
-    return tuple(e for e in raw_store.list_raw_entries(partition) if e.entry_id not in accounted)
-
-
-def has_undistilled(partition: str) -> bool:
-    """Whether ``partition`` holds raw entries no pass has decided anything about.
-
-    What "Update memory in one action" distils after aggregating: a partition
-    this answers False for would get nothing from a pass but a rewritten index.
-    Reads only, like :func:`undistilled`.
-    """
-    return bool(undistilled(partition, store.list_notes(partition), store.read_retired(partition)))
-
-
-SOURCES_GONE_REASON = (
-    "Every raw entry this note was built from is gone from this partition's `.raw/` — "
-    "the agent no longer holds it, or it is now filed into another partition."
-)
-
-
-def retire_sourceless(
-    partition: str, notes: Sequence[Note], retired: Sequence[RetiredNote]
-) -> tuple[tuple[Note, ...], tuple[RetiredNote, ...], int]:
-    """Retire every note none of whose origins is left in ``.raw/``.
-
-    Returns the notes still standing, the full retirement list (what was
-    already recorded plus the new records) and how many were retired. Both
-    halves of each retirement happen here — the file leaves ``notes/`` and
-    ``RETIRED.md`` is rewritten — so the pass that follows starts from a
-    partition that already agrees with its sources (see "Retire a note whose
-    raw entries are all gone"). A note with no origins at all is left alone:
-    there is no provenance to judge it by.
-    """
-    present = {e.entry_id for e in raw_store.list_raw_entries(partition)}
-    standing: list[Note] = []
-    records: list[RetiredNote] = []
-    for note in notes:
-        if not note.origins or any(o.key in present for o in note.origins):
-            standing.append(note)
-            continue
-        store.delete_note(partition, note.slug)
-        records.append(
-            RetiredNote(
-                slug=note.slug,
-                title=note.title,
-                reason=SOURCES_GONE_REASON,
-                retired_at=planning.now(),
-                sources_gone=True,
-            )
-        )
-        logger.info("memory.distil.sources_gone; partition=%s slug=%s", partition, note.slug)
-    if not records:
-        return tuple(notes), tuple(retired), 0
-    every = (*retired, *records)
-    store.write_retired(partition, every)
-    return tuple(standing), every, len(records)
-
-
 def _write_index(partition: str, repository_path: str) -> None:
     """Rewrite ``MEMORY.md`` from what is on disk now. Every path ends here."""
     store.write_index(
@@ -216,6 +148,16 @@ def _write_index(partition: str, repository_path: str) -> None:
             store.list_notes(partition), partition=partition, repository_path=repository_path
         ),
     )
+
+
+def _prepare(
+    partition: str,
+) -> tuple[Sequence[Note], Sequence[RetiredNote], int, Sequence[StoredRawEntry]]:
+    """Retire the notes whose sources are gone, then say which entries are new."""
+    notes, retired, sourceless = retire_sourceless(
+        partition, store.list_notes(partition), store.read_retired(partition)
+    )
+    return notes, retired, sourceless, undistilled(partition, notes, retired)
 
 
 def _distil_mechanically(
@@ -309,14 +251,13 @@ async def distil_partition(
     settings change mid-pass takes effect from the next one. ``None`` is the
     built-in default (spec internal-engine "Carry the bound on one model call").
     """
-    notes, retired, sourceless = retire_sourceless(
-        partition, store.list_notes(partition), store.read_retired(partition)
-    )
-    entries = undistilled(partition, notes, retired)
+    # Disk work (parsing every note and raw entry, writing the retirements): off the loop.
+    notes, retired, sourceless, entries = await asyncio.to_thread(_prepare, partition)
 
     model = await model_selector.get_default() if model_selector is not None else None
     if model is None or completion is None:
-        return _distil_mechanically(
+        return await asyncio.to_thread(
+            _distil_mechanically,
             partition,
             notes=notes,
             retired=retired,
@@ -386,7 +327,7 @@ __all__ = [
     "SOURCES_GONE_REASON",
     "DistilResult",
     "distil_partition",
-    "has_undistilled",
+    "has_distil_work",
     "retire_sourceless",
     "undistilled",
 ]

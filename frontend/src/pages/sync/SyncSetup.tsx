@@ -19,6 +19,8 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useToast } from "@/components/ui/toast";
+import { translateApiError } from "@/lib/api/errors";
 import type { SyncStatus } from "@/lib/api/sync";
 import { useCheckRemote, useClearSyncRemote, useSaveSyncRemote } from "@/lib/hooks/useSync";
 import { useJoin } from "@/lib/hooks/useSyncStop";
@@ -37,6 +39,7 @@ import {
 
 export function SyncSetup({ status }: { status: SyncStatus }) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const check = useCheckRemote();
   const save = useSaveSyncRemote();
   const clear = useClearSyncRemote();
@@ -69,7 +72,10 @@ export function SyncSetup({ status }: { status: SyncStatus }) {
         onBack={() => {
           setDraft(formFromRemote(status.remote));
           check.reset();
-          clear.mutate();
+          // A refused DELETE leaves the preview where it is, so say why.
+          clear.mutate(undefined, {
+            onError: (error) => toast.error(translateApiError(t, error)),
+          });
         }}
       />
     );

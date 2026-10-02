@@ -1,9 +1,10 @@
 // src/lib/providers/usedBy.ts — who runs on a provider: agents (with their model), Coffer's engine, speech to text.
 //
-// An agent runs on provider P when P is the FIRST provider that is enabled,
-// active and reaches the agent's type — exactly how the agent's Model tab
-// (useAgentConnectionDraft) picks the active one, so the two pages never
-// disagree. Coffer's engine uses P when P carries `internal_default`, speech
+// An agent runs on provider P when its record names P (`connection_uid`) and P
+// is still enabled and reaches the agent's type — a pointer to a deleted,
+// switched-off or out-of-scope connection means the agent is on its own login.
+// The agent's Model tab (useAgentConnectionDraft) asks the same function, so
+// the two pages never disagree. Coffer's engine uses P when P carries `internal_default`, speech
 // to text when it carries `transcribe_default`; their models come from the
 // internal-engine settings. The list is read-only: every entry is changed
 // where it is set (the agent's Model tab, Settings › General).
@@ -33,9 +34,13 @@ export function activeProviderFor(
   agent: AgentOut,
   providers: readonly Provider[],
 ): Provider | null {
+  if (!agent.connection_uid) return null;
   return (
     providers.find(
-      (p) => p.enabled && p.is_active && (p.compatible_agents ?? []).includes(agent.type),
+      (p) =>
+        p.uid === agent.connection_uid &&
+        p.enabled &&
+        (p.compatible_agents ?? []).includes(agent.type),
     ) ?? null
   );
 }

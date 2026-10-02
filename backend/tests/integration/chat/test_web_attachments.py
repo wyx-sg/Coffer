@@ -23,7 +23,6 @@ from fastapi.testclient import TestClient
 
 from coffer.application.audit_service import AuditService
 from coffer.application.chat.attachments import ChatAttachmentService
-from coffer.application.chat.turn_orchestrator import clear_active_turns
 from coffer.domain.chat.attachment import MAX_ATTACHMENT_BYTES, Attachment
 from coffer.infrastructure.chat import persistence_models as _chat_models  # noqa: F401
 from coffer.infrastructure.chat.media_store import FileChatMediaStore
@@ -56,11 +55,9 @@ _PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
 
 @pytest.fixture(autouse=True)
 def _reset_turns() -> Generator[None, None, None]:
-    clear_active_turns()
     set_active_token(_TOKEN)
     yield
     set_active_token(None)
-    clear_active_turns()
 
 
 class _NoChannels:

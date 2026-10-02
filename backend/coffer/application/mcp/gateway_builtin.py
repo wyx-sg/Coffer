@@ -173,7 +173,7 @@ SESSION_CONTEXT_PROPERTIES = ("cwd",)
 #: The uid has its own, separate job in this session — gating what the agent can
 #: see, via ``is_active(resource.scope, session_agent_uid)`` — and that job is
 #: untouched. Letting one value serve both would be the "one field answering two
-#: questions" shape that ADR resource-identity-is-an-immutable-uid exists to
+#: questions" shape that ADR identity-is-the-uid-inside-the-file exists to
 #: remove: a label must follow a rename, an identity must not.
 AGENT_ARGUMENT = "agent"
 

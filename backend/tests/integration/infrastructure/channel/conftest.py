@@ -82,6 +82,8 @@ class FakeTelegram:
         self.fail_get_updates = 0  # answer getUpdates with HTTP 500 N times
         self.bad_payload_get_updates = False  # answer getUpdates ok:true with a non-list result
         self.html_error_sends = 0  # answer sendMessage with a non-JSON HTML body N times
+        #: One ``retry_after`` per sendMessage to refuse with HTTP 429, in order.
+        self.rate_limited_sends: list[int] = []
         #: Canned ``result`` per method for the ones with no bespoke branch
         #: below (getMe, getMyDescription, …) — consulted before the {} default.
         self.results: dict[str, Any] = {}
@@ -148,6 +150,15 @@ class FakeTelegram:
                 status_code=404, content={"ok": False, "description": "Not Found: method not found"}
             )
         if method in ("sendMessage", "sendRichMessage"):
+            if self.rate_limited_sends:
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "ok": False,
+                        "description": "Too Many Requests: retry after 0",
+                        "parameters": {"retry_after": self.rate_limited_sends.pop(0)},
+                    },
+                )
             if self.html_error_sends > 0:
                 # A gateway returns a 502 HTML page, not the Bot API JSON
                 # envelope — response.json() would raise JSONDecodeError.
@@ -316,6 +327,7 @@ def make_telegram_adapter(
     *,
     poll_timeout: int = 1,
     media_dir: Any = None,
+    knowledge_enabled: bool = True,
 ) -> TelegramAdapter:
     client = httpx.AsyncClient(transport=httpx.ASGITransport(app=fake.app), base_url="http://fake")
     return TelegramAdapter(
@@ -325,6 +337,7 @@ def make_telegram_adapter(
         base_url="http://fake",
         poll_timeout=poll_timeout,
         media_dir=media_dir,
+        knowledge_enabled=knowledge_enabled,
     )
 
 

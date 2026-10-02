@@ -22,10 +22,10 @@
 // `collection` are NAMES — the same strings the tree hands back. A caller that
 // holds a `CollectionOut` has both and picks by what it is asking for.
 //
-// Transport via the shared `call` (.agents/frontend.md §4); wire types in
+// Transport via the typed client (.agents/frontend.md §4); wire types in
 // `knowledgeTypes.ts`.
 
-import { call, enc } from "@/lib/api/call";
+import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type {
   ChangeDetailOut,
   ChangeOut,
@@ -47,13 +47,10 @@ import type {
 // Re-export the wire types so `import { … } from "./api"` sees one surface.
 export * from "./knowledgeTypes";
 
-/** `/api/v1/knowledge` — the root every knowledge route hangs off. */
-const ROOT = "/knowledge";
-
 // --- collections ------------------------------------------------------------
 
 export function listCollections(): Promise<CollectionListOut> {
-  return call<CollectionListOut>(`${ROOT}/collections`);
+  return unwrap(getApiClient().GET("/knowledge/collections"));
 }
 
 /**
@@ -65,7 +62,7 @@ export function createCollection(payload: {
   name: string;
   description?: string | null;
 }): Promise<CollectionOut> {
-  return call<CollectionOut>(`${ROOT}/collections`, { method: "POST", body: payload });
+  return unwrap(getApiClient().POST("/knowledge/collections", { body: payload }));
 }
 
 // --- catalogue --------------------------------------------------------------
@@ -80,13 +77,13 @@ export function createCollection(payload: {
  * dot-prefixed entries except the inbox").
  */
 export function getTree(path: string): Promise<TreeOut> {
-  return call<TreeOut>(`${ROOT}/tree?path=${enc(path)}`);
+  return unwrap(getApiClient().GET("/knowledge/tree", { params: { query: { path } } }));
 }
 
 /** One file, whole — a document or an inbox item (`inbox: true`). Carries the
  *  `fingerprint` a save hands back. */
 export function getFile(path: string): Promise<FileOut> {
-  return call<FileOut>(`${ROOT}/file?path=${enc(path)}`);
+  return unwrap(getApiClient().GET("/knowledge/file", { params: { query: { path } } }));
 }
 
 /**
@@ -98,7 +95,7 @@ export function getFile(path: string): Promise<FileOut> {
  * included.
  */
 export function saveFile(payload: FileSave): Promise<FileOut> {
-  return call<FileOut>(`${ROOT}/file`, { method: "PUT", body: payload });
+  return unwrap(getApiClient().PUT("/knowledge/file", { body: payload }));
 }
 
 /**
@@ -112,7 +109,7 @@ export function saveFile(payload: FileSave): Promise<FileOut> {
  * caller confirms first. 204, so nothing comes back.
  */
 export function deleteFile(path: string): Promise<void> {
-  return call<void>(`${ROOT}/file?path=${enc(path)}`, { method: "DELETE" });
+  return unwrapVoid(getApiClient().DELETE("/knowledge/file", { params: { query: { path } } }));
 }
 
 // --- curation ---------------------------------------------------------------
@@ -130,10 +127,12 @@ export function deleteFile(path: string): Promise<void> {
  * `UPKEEP_ALREADY_RUNNING` rather than queued.
  */
 export function curateCollection(uid: string, document?: string | null): Promise<CurationRunOut> {
-  return call<CurationRunOut>(`${ROOT}/collections/${enc(uid)}/curate`, {
-    method: "POST",
-    body: { document: document ?? null },
-  });
+  return unwrap(
+    getApiClient().POST("/knowledge/collections/{uid}/curate", {
+      params: { path: { uid } },
+      body: { document: document ?? null },
+    }),
+  );
 }
 
 // --- material -----------------------------------------------------------------
@@ -146,7 +145,7 @@ export function curateCollection(uid: string, document?: string | null): Promise
  * curation does.
  */
 export function submitMaterial(payload: MaterialIn): Promise<SubmissionOut> {
-  return call<SubmissionOut>(`${ROOT}/material`, { method: "POST", body: payload });
+  return unwrap(getApiClient().POST("/knowledge/material", { body: payload }));
 }
 
 // --- history ------------------------------------------------------------------
@@ -160,16 +159,24 @@ export function listChanges(params: {
   collection?: string | null;
   limit?: number;
 }): Promise<ChangesOut> {
-  const query = new URLSearchParams();
-  if (params.collection) query.set("collection", params.collection);
-  if (params.limit) query.set("limit", String(params.limit));
-  const qs = query.toString();
-  return call<ChangesOut>(`${ROOT}/changes${qs ? `?${qs}` : ""}`);
+  return unwrap(
+    getApiClient().GET("/knowledge/changes", {
+      params: {
+        query: {
+          // An empty collection or a zero limit is "not given", as before.
+          ...(params.collection ? { collection: params.collection } : {}),
+          ...(params.limit ? { limit: params.limit } : {}),
+        },
+      },
+    }),
+  );
 }
 
 /** One change in full: every document it touched, with its diff. */
 export function getChange(version: string): Promise<ChangeDetailOut> {
-  return call<ChangeDetailOut>(`${ROOT}/changes/${enc(version)}`);
+  return unwrap(
+    getApiClient().GET("/knowledge/changes/{version}", { params: { path: { version } } }),
+  );
 }
 
 /**
@@ -179,22 +186,28 @@ export function getChange(version: string): Promise<ChangeDetailOut> {
  * to one of them would be lost; nothing is written then.
  */
 export function undoPass(version: string): Promise<ChangeOut> {
-  return call<ChangeOut>(`${ROOT}/changes/${enc(version)}/undo`, { method: "POST" });
+  return unwrap(
+    getApiClient().POST("/knowledge/changes/{version}/undo", { params: { path: { version } } }),
+  );
 }
 
 /** A document's versions, newest first, each with its writer and time. */
 export function getHistory(path: string): Promise<DocumentHistoryOut> {
-  return call<DocumentHistoryOut>(`${ROOT}/history?path=${enc(path)}`);
+  return unwrap(getApiClient().GET("/knowledge/history", { params: { query: { path } } }));
 }
 
 /** What one version did to the document, against the version before it. */
 export function getVersionDiff(path: string, version: string): Promise<VersionDiffOut> {
-  return call<VersionDiffOut>(`${ROOT}/history/diff?path=${enc(path)}&version=${enc(version)}`);
+  return unwrap(
+    getApiClient().GET("/knowledge/history/diff", { params: { query: { path, version } } }),
+  );
 }
 
 /** A document's body as one version left it — what Compare with current reads. */
 export function getVersionBody(path: string, version: string): Promise<VersionBodyOut> {
-  return call<VersionBodyOut>(`${ROOT}/history/version?path=${enc(path)}&version=${enc(version)}`);
+  return unwrap(
+    getApiClient().GET("/knowledge/history/version", { params: { query: { path, version } } }),
+  );
 }
 
 /**
@@ -204,21 +217,27 @@ export function getVersionBody(path: string, version: string): Promise<VersionBo
  * collection's name (`KNOWLEDGE_COLLECTION_EXISTS`) is taken again.
  */
 export function restoreDeleted(version: string): Promise<ChangeOut> {
-  return call<ChangeOut>(`${ROOT}/changes/${enc(version)}/restore`, { method: "POST" });
+  return unwrap(
+    getApiClient().POST("/knowledge/changes/{version}/restore", {
+      params: { path: { version } },
+    }),
+  );
 }
 
 /** Rewrite a collection's description — the opening paragraph of its README.
  *  A collection has no title: its heading is its folder name. */
 export function describeCollection(uid: string, description: string): Promise<CollectionOut> {
-  return call<CollectionOut>(`${ROOT}/collections/${enc(uid)}/description`, {
-    method: "PUT",
-    body: { description },
-  });
+  return unwrap(
+    getApiClient().PUT("/knowledge/collections/{uid}/description", {
+      params: { path: { uid } },
+      body: { description },
+    }),
+  );
 }
 
 /** Put one version back, as a NEW version naming the user — the past is never rewritten. */
 export function restoreVersion(payload: { path: string; version: string }): Promise<FileOut> {
-  return call<FileOut>(`${ROOT}/history/restore`, { method: "POST", body: payload });
+  return unwrap(getApiClient().POST("/knowledge/history/restore", { body: payload }));
 }
 
 // --- ingestion ----------------------------------------------------------------
@@ -240,6 +259,11 @@ export function uploadFile(params: {
   form.append("file", params.file);
   form.append("collection", params.collection);
   // A FormData body goes out with no Content-Type: the browser sets the
-  // multipart boundary itself (see `call`).
-  return call<IngestedDocumentOut>(`${ROOT}/upload`, { method: "POST", body: form });
+  // multipart boundary itself. `body` only carries the generated type.
+  return unwrap(
+    getApiClient().POST("/knowledge/upload", {
+      body: { collection: params.collection, file: "" },
+      bodySerializer: () => form,
+    }),
+  );
 }

@@ -25,8 +25,7 @@ import os
 import secrets
 import socket
 import sys
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -117,22 +116,6 @@ def _release_spawn_lock(fd: int) -> None:
             fcntl.flock(fd, fcntl.LOCK_UN)
     with contextlib.suppress(OSError):
         os.close(fd)
-
-
-@contextmanager
-def _spawn_lock() -> Iterator[int]:
-    """Scoped form of the spawn lock: hold it for the body, release on exit.
-
-    Used where the critical section is fully contained in a ``with`` block.
-    :func:`acquire_or_existing` instead holds the lock past its own return (it
-    must stay held until the daemon is serving), so it uses the acquire/release
-    primitives directly rather than this context manager.
-    """
-    fd = _acquire_spawn_lock()
-    try:
-        yield fd
-    finally:
-        _release_spawn_lock(fd)
 
 
 def live_daemon() -> DaemonInfo | None:

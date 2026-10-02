@@ -20,6 +20,7 @@
 import { useEffect } from "react";
 
 import type { RoundStatus, SyncRound, SyncStatus } from "@/lib/api/sync";
+import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { useSyncStatus } from "@/lib/hooks/useSync";
 import { usePageLocation } from "@/lib/settingsModal";
 
@@ -118,7 +119,10 @@ export function useSyncAttention(): boolean {
   // The page the user is on — the one under the Settings modal while it is
   // open, so opening Settings over Sync does not raise the dot.
   const onSyncPage = usePageLocation().pathname === "/sync";
-  const { data, isError } = useSyncStatus();
+  // Asked only while the Sync feature is on: the sidebar mounts this on every
+  // page, and a switched-off feature's endpoints answer 404.
+  const syncOn = useFeatureEnabled("sync") === true;
+  const { data, isError } = useSyncStatus(syncOn);
   const marker = syncStatusMarker(data);
 
   useEffect(() => {
@@ -128,7 +132,7 @@ export function useSyncAttention(): boolean {
   // A daemon that cannot answer is not a sync problem, and the offline banner
   // already says so; stale cached data must not outlive it into a second
   // claim on the same screen.
-  if (isError || !marker) return false;
+  if (!syncOn || isError || !marker) return false;
   // While the page is open the user is looking at it — no dot over their own
   // reading, and no flicker between the render and the effect above.
   if (onSyncPage) return false;

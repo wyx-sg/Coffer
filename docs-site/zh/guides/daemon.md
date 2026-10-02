@@ -35,18 +35,17 @@ coffer daemon restart    # stop (if running), then start
 ```text
 status:  ready
 version: 0.2.0
-channel: stable
 port:    8000
 pid:     41822
 ```
 
-守护进程正常服务时 `status` 为 `ready`，关闭过程中为 `draining`。没有更早的阶段可看：守护进程启动完成后才打开端口。`channel` 是构建的发布通道，它决定[实验功能](/zh/guides/experimental-features)默认是否开启（目前没有任何实验功能）。脚本里可加 `--json`。
+守护进程正常服务时 `status` 为 `ready`，关闭过程中为 `draining`。没有更早的阶段可看：守护进程启动完成后才打开端口。四个[实验功能](/zh/guides/experimental-features)在你开启之前都是关闭的。脚本里可加 `--json`。
 
 没有守护进程运行时，`coffer daemon status` 打印 `status:  not running`（`--json` 下为 `{"status": "stopped"}`），退出码为 3。它不会启动守护进程，所以它的回答不会改变它所报告的对象；要启动请用 `coffer daemon start`。
 
 几个值得了解的行为：
 
-- `start` 判断「已在运行」靠的是询问守护进程，而不是检查 `daemon.json` 是否存在。崩溃后残留的发现文件不会阻止启动。
+- `start` 判断「已在运行」靠的是询问守护进程，而不是检查 `daemon.json` 是否存在。崩溃后残留的发现文件不会阻止启动。只有新的守护进程应答了状态调用，`start` 才报告成功；如果守护进程拒绝启动（需要先迁移保险库、git 太旧），它会说明原因并指向 `daemon.log`。
 - `start` 在拉起进程前先检查端口。如果端口被其他程序占用，你会立刻看到诊断，而不是等十秒超时（见[端口被占用时](#when-the-port-is-taken)）。
 - `stop` 在发信号前先确认记录的 pid 确实是 Coffer 守护进程。如果该 pid 已被其他进程复用，`stop` 会删除过期的 `daemon.json` 并说明情况，而不会误杀无关进程。
 - 在守护进程绑定前读取的设置（端口），要靠 `restart` 才能生效。

@@ -69,3 +69,30 @@ def test_resolver_failure_propagates() -> None:
 
     with pytest.raises(RuntimeError, match="keychain locked"):
         build_chat_model(_conn(Protocol.ANTHROPIC), resolver)
+
+
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="build the engine's chat model for an unclassified or keyless local connection",
+)
+def test_unknown_protocol_builds_an_openai_compatible_client() -> None:
+    model = build_chat_model(_conn(Protocol.UNKNOWN), lambda ref: "secret-key")
+    assert model.__class__.__name__ == "ChatOpenAI"
+
+
+def test_keyless_local_runtime_builds_with_a_placeholder_key() -> None:
+    from coffer.domain.provider.config import LocalRuntime
+
+    def resolver(ref: str) -> str:  # pragma: no cover - must not be called
+        raise AssertionError("a keyless connection resolves no secret")
+
+    model = build_chat_model(
+        _conn(
+            Protocol.ANTHROPIC,
+            base_url="http://127.0.0.1:11434",
+            secret_ref=None,
+            local_runtime=LocalRuntime(runtime="ollama"),
+        ),
+        resolver,
+    )
+    assert model.__class__.__name__ == "ChatAnthropic"

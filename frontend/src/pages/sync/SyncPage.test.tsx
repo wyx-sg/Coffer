@@ -55,6 +55,22 @@ const pill = () => screen.getByTestId("sync-pill");
 beforeEach(() => void seed(makeStatus()));
 afterEach(() => vi.clearAllMocks());
 
+describe("SyncPage — a failed status read", () => {
+  test("names the failure and offers Retry, which reads the status again", () => {
+    const refetch = vi.fn();
+    vi.mocked(useSyncStatus).mockReturnValue({
+      data: undefined,
+      isPending: false,
+      error: new Error("daemon said no"),
+      refetch,
+    } as unknown as ReturnType<typeof useSyncStatus>);
+    renderAt();
+    expect(screen.getByText("Couldn't load Sync")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(refetch).toHaveBeenCalled();
+  });
+});
+
 describe("SyncPage — tabs", () => {
   acceptance("vault-sync", "the Sync page opens on Status beside Machines and Remote", () => {
     const view = renderAt();

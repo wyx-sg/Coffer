@@ -10,9 +10,9 @@ import type {
   ChangeItem,
   ChangeSummaryLine,
   DiffLine,
-} from "@/components/change-preview/changeCounts";
+} from "@/lib/changePreview/changeCounts";
 import type { McpImportEntryIn, McpImportFile, McpImportPlan } from "@/lib/api/mcpImport";
-import type { McpEntryOut } from "@/lib/api/agents";
+import type { McpEntryOut } from "@/lib/api/agents-workspace";
 
 /** The agent type the change preview groups Coffer's own item under. */
 const COFFER_TARGET = "coffer";

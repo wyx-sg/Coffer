@@ -6,7 +6,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 import { AboutPage } from "./AboutPage";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 
@@ -105,7 +108,7 @@ describe("AboutPage", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     const text = writeText.mock.calls[0][0] as string;
     expect(text).toContain("Coffer: 0.7.42");
-    expect(text).toContain("Channel: stable");
+    expect(text).not.toMatch(/channel/i);
     expect(text).toMatch(/Host: browser/);
     expect(text).toContain("Daemon: running on port 8000");
     expect(text).toContain("Features: knowledge, sync");

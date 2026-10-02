@@ -16,8 +16,8 @@ import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { ChannelStatus } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
-import type { ChannelStateKey, ChannelView } from "./channelState";
-import { channelPlatform } from "./channelState";
+import type { ChannelStateKey, ChannelView } from "@/lib/channels/channelState";
+import { channelPlatform } from "@/lib/channels/channelState";
 import { useMachineName } from "./channelLabels";
 import { platformLabel } from "./PlatformMark";
 

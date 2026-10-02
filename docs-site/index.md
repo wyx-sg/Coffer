@@ -32,7 +32,7 @@ features:
     link: /guides/skills
     linkText: Skills
   - title: Knowledge every agent reads
-    details: Collections of plain Markdown that agents read with their own file tools and add to through coffer__write. An optional curation pass merges new material into the documents, with a history you can undo.
+    details: Collections of plain Markdown that agents read with their own file tools and add to through coffer__write. An optional curation pass folds new material into the documents, with a history you can undo.
     link: /guides/knowledge
     linkText: Knowledge
   - title: Memory shared across agents

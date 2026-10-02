@@ -54,7 +54,7 @@ async def _by_name(skill_svc: SkillService, name: str) -> Resource:
     """Resolve a skill LABEL to its row.
 
     The one-shot resolution a surface does at its front door
-    (ADR resource-identity-is-an-immutable-uid): a test states what it means in
+    (ADR identity-is-the-uid-inside-the-file): a test states what it means in
     the name a person would type, and converts once.
     """
     return await skill_svc._rs.get_by_name("skill", name)
@@ -398,13 +398,3 @@ async def test_delete_unknown_raises_not_found(tmp_path):
 
 
 # ----- guard -----
-
-
-@pytest.mark.asyncio
-async def test_unmanaged_methods_require_configured_deps(tmp_path):
-    """A SkillService built without the scan deps fails loudly, not quietly."""
-    skill_svc, _, _, _, _, graph = await _setup(tmp_path)
-    skill_svc._workspace_scan = None
-    with pytest.raises(RuntimeError, match="workspace_scan"):
-        await skill_svc.list_unmanaged("any-uid")
-    await graph.dispose()

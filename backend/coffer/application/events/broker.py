@@ -2,9 +2,8 @@
 
 Every change the daemon announces becomes one :class:`Envelope` with the next
 ``seq`` of this daemon run (the first is 1). An envelope says *what* changed —
-the kind, the resource's uid, the revision the write produced, ``upsert`` or
-``delete`` — never the new state: a client refetches through the typed
-endpoints.
+the kind, the resource's uid, ``upsert`` or ``delete`` — never the new state: a
+client refetches through the typed endpoints.
 
 Memory is bounded twice over:
 
@@ -46,7 +45,6 @@ class Envelope:
     seq: int
     kind: str
     id: str | None
-    rev: int | None
     op: ChangeOp
 
 
@@ -135,12 +133,10 @@ class EventBroker:
     def subscriber_count(self) -> int:
         return len(self._subscribers)
 
-    def publish(
-        self, kind: str, id: str | None, rev: int | None, op: ChangeOp = "upsert"
-    ) -> Envelope:
+    def publish(self, kind: str, id: str | None, op: ChangeOp = "upsert") -> Envelope:
         """Issue the next envelope, buffer it, and offer it to every subscriber."""
         self._seq += 1
-        envelope = Envelope(self._seq, kind, id, rev, op)
+        envelope = Envelope(self._seq, kind, id, op)
         self._buffer.append(envelope)
         for subscriber in tuple(self._subscribers):
             subscriber.offer(envelope)
@@ -148,7 +144,7 @@ class EventBroker:
 
     def publish_changed(self, changed: Changed) -> None:
         """A resource write's hint, as an envelope (a ``HintSink``)."""
-        self.publish(changed.kind, changed.uid, changed.rev, changed.op)
+        self.publish(changed.kind, changed.uid, changed.op)
 
     def subscribe(self, last_event_id: int | None = None) -> Subscription:
         """A new subscriber. With ``last_event_id`` it first receives every

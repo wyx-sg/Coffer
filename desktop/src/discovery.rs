@@ -62,6 +62,15 @@ fn http_status_is_ok(response_head: &str) -> bool {
     first.starts_with("HTTP/1.1 200") || first.starts_with("HTTP/1.0 200")
 }
 
+/// How long the liveness probe waits for the status answer. It must outlast
+/// the slowest status a warming daemon produces (it reads every agent's config
+/// and lists MCP resources; about 9 s has been measured), because a timeout is
+/// indistinguishable from "nobody is live": resolve would then spawn a second
+/// daemon and a restart would skip stopping a slow-but-alive one. It matches
+/// the CLI's probe (`bootstrap._LIVENESS_PROBE_TIMEOUT`, spec daemon "Decide
+/// liveness by the status call"). A dead port still fails at once, on connect.
+const LIVENESS_READ_TIMEOUT_SECS: u64 = 15;
+
 /// Liveness probe: does a *Coffer daemon* answer `GET /api/v1/daemon/status`
 /// with a 200 on `127.0.0.1:<port>`?
 ///
@@ -81,7 +90,9 @@ pub fn daemon_responds_ok(port: u16) -> bool {
     };
     if stream
         .set_write_timeout(Some(Duration::from_millis(500)))
-        .and_then(|_| stream.set_read_timeout(Some(Duration::from_millis(500))))
+        .and_then(|_| {
+            stream.set_read_timeout(Some(Duration::from_secs(LIVENESS_READ_TIMEOUT_SECS)))
+        })
         .is_err()
     {
         return false;

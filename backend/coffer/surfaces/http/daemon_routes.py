@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import secrets
 import signal
-import stat
 import sys
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
@@ -29,7 +28,8 @@ from coffer.application.log_reader import (
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.infrastructure.daemon import config as daemon_config
-from coffer.infrastructure.daemon import login_service
+from coffer.infrastructure.daemon import login_service, pid_lock
+from coffer.infrastructure.daemon.phase import get_daemon_phase, set_daemon_phase
 from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
 from coffer.infrastructure.vault.home import coffer_home, daemon_json_path
@@ -59,23 +59,10 @@ from coffer.surfaces.http.schemas import (
 
 router = APIRouter(prefix="/api/v1/daemon", tags=["daemon"])
 
-# Daemon lifecycle phase — written by app.py's lifespan, read by /status.
-# Lives here (the reader) so app.py stays under the 400-line guideline and
-# daemon_routes no longer needs a circular import of app at request time.
-# uvicorn serves only after the lifespan's startup half returns, so no request
-# can observe the daemon before it is ready: there is no "starting" phase.
-_DaemonPhase = Literal["ready", "draining"]
-
-_DAEMON_PHASE: _DaemonPhase = "ready"
-
-
-def get_daemon_phase() -> _DaemonPhase:
-    return _DAEMON_PHASE
-
-
-def set_daemon_phase(phase: _DaemonPhase) -> None:
-    global _DAEMON_PHASE
-    _DAEMON_PHASE = phase
+# Daemon lifecycle phase: owned by infrastructure.daemon.phase (the entry's
+# uvicorn server flips it to "draining" the moment shutdown begins, before the
+# lifespan's teardown), read here by /status.
+__all__ = ["get_daemon_phase", "router", "set_daemon_phase", "set_started_at"]
 
 
 _STARTED_AT = datetime.now(tz=UTC)
@@ -152,7 +139,6 @@ async def get_status(
         started_at=_STARTED_AT,
         port=daemon_port.get_port(),
         upstream_summary=upstream_summary,
-        channel=features.channel,
         features=features.enabled_map(),
         machine_id=daemon_config.read_cached_machine_id(),
         machine_name=daemon_config.read_machine_name(),
@@ -187,7 +173,7 @@ async def _connected_agents(connection: AgentConnectionService | None) -> int | 
         return None
 
 
-# === T035: shutdown / rotate-token ===
+# === shutdown / rotate-token ===
 
 
 def _daemon_json_path() -> Path:
@@ -197,37 +183,6 @@ def _daemon_json_path() -> Path:
 def _schedule_shutdown() -> None:
     """Send SIGTERM to ourselves; the daemon entry's signal handler does the cleanup."""
     os.kill(os.getpid(), signal.SIGTERM)
-
-
-def _atomic_write_0600(target: Path, contents: str) -> None:
-    """Write `contents` to `target` atomically with mode 0600.
-
-    Uses O_CREAT|O_EXCL with explicit mode bits so the file never exists
-    on-disk with broader-than-0600 permissions (the previous
-    pattern of ``write_text`` + ``chmod`` left the file readable by other
-    users with a non-restrictive umask for the window between the two calls).
-    """
-    tmp_path = target.with_suffix(target.suffix + ".tmp")
-    # Best-effort: clear any stale tmp from a previous crashed run so O_EXCL
-    # below succeeds. The unlink is itself permission-safe.
-    import contextlib as _contextlib
-
-    with _contextlib.suppress(FileNotFoundError):
-        tmp_path.unlink()
-    fd = os.open(
-        str(tmp_path),
-        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-        stat.S_IRUSR | stat.S_IWUSR,
-    )
-    try:
-        with os.fdopen(fd, "w") as f:
-            f.write(contents)
-    except Exception:
-        # On write failure, remove the partial tmp before re-raising.
-        with _contextlib.suppress(FileNotFoundError):
-            tmp_path.unlink()
-        raise
-    os.replace(str(tmp_path), str(target))
 
 
 @router.post(
@@ -241,13 +196,12 @@ async def rotate_token(
 ) -> TokenRotationOut:
     new_token = secrets.token_urlsafe(32)
     path = _daemon_json_path()
-    if not path.exists():
-        raise HTTPException(status_code=503, detail="daemon.json missing")
-    info = json.loads(path.read_text())
-    info["token"] = new_token
-    # Same atomic-replace + 0600 pattern as bootstrap.write. Use the helper
-    # so the tmp file never exists with mode wider than 0600.
-    _atomic_write_0600(path, json.dumps(info, indent=2))
+    try:
+        info = pid_lock.read(path)
+    except (OSError, ValueError, KeyError):
+        raise HTTPException(status_code=503, detail="daemon.json missing") from None
+    # The same atomic, 0600, unique-staging write the daemon publishes with.
+    pid_lock.write(path, replace(info, token=new_token))
     set_active_token(new_token)
     await audit.record(AuditEventType.TOKEN_ROTATED.value, actor=actor)
     return TokenRotationOut(token=new_token)

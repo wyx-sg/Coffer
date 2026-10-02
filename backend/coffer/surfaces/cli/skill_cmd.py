@@ -19,7 +19,7 @@ skill folders are rows of ``coffer scan``, acted on by ``coffer adopt`` and
 ``coffer discard``.
 
 Every command takes a name (or a uid) and resolves it once through
-``_resolve`` (ADR resource-identity-is-an-immutable-uid).
+``_resolve`` (ADR identity-is-the-uid-inside-the-file).
 """
 
 from __future__ import annotations

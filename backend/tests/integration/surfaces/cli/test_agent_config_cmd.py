@@ -9,7 +9,7 @@ patches ``click.edit`` reaches into that module, where the command is written.
 
 The in-process app mounts TWO routers. Each of these commands takes the agent's
 TYPE (its name) and resolves it to the uid the routes address
-(ADR resource-identity-is-an-immutable-uid) via
+(ADR identity-is-the-uid-inside-the-file) via
 ``GET /resources?kind=agent&name=``, which lives on the framework's resource
 router rather than on ``/agents``. Serving only ``agent_config_router`` would
 fail every command at resolution — and fail it with a 404 that reads like a

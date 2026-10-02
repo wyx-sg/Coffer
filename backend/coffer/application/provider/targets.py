@@ -1,59 +1,35 @@
-"""Which agents a connection projects into (ADR per-agent-resource-scope).
+"""Which agents a connection reaches, and which connection an agent is on
+(ADR per-agent-resource-scope; spec provider-switching).
 
-Four callers, two questions: the switch (``ProviderService``), the per-agent
-key lookup the turn machinery does and the projection reconcile target all
-want the effective projection; the management surface
-wants the configured reach. Before scope reached this kind the answer lived in the
-config as ``compatible_agents``; it is now the resource's framework-level
-``scope``, and this module is the single seam where the agent UIDS it holds are
-resolved into ``AgentType`` — keeping the provider's own config module
-independent of the agent kind.
+Two different questions live here and must not be confused:
 
-**The resolution needs the agent rows**, which is why every function here takes
-them. A scope names agents by uid (ADR resource-identity-is-an-immutable-uid)
-and a uid says nothing about the agent's type by itself; only the registry
-knows which product a uid is. That replaced a comparison of an agent's TYPE
-value against the scope list — one of the three private vocabularies the uid
-removed, and the one that made a provider scope mean something different from a
-skill scope while both were called ``scope.agents``.
+- **Reach** — which agents a connection MAY serve. It is the resource's
+  framework-level ``scope``, narrowed by its ``enabled`` switch, and this module
+  is the single seam where the agent UIDS a scope holds are resolved into
+  ``AgentType`` (ADR identity-is-the-uid-inside-the-file): a uid says nothing
+  about the agent's type by itself, only the registry knows, which is why
+  ``scoped_targets`` takes the agent rows.
+- **Choice** — which connection one agent actually runs on. That is a field of
+  the agent record (``AgentConfig.connection_uid``), so it can name at most one
+  connection by construction, and :func:`connection_for_agent` is the ONE
+  function that answers it. The projection reconcile target, the model proxy's
+  state, the chat model catalogue, the usage meter and the switch operations all
+  ask it, so no two of them can ever pick different connections for one agent.
 
-Projection stays keyed by TYPE rather than by the individual agent, because the
-file a projection writes is the agent PRODUCT's (``~/.claude/settings.json``),
-shared by every registered agent of that type, and ``is_active`` is one flag
-per type. So a type is in reach when a registered agent of that type is in
-scope — the same meaning the old type-valued list had, asked of the registry
-instead of assumed.
-
-There are two questions here, not one, and collapsing them loses information:
+Reach has two readings, and collapsing them loses information:
 
 - **Configured reach** (``scoped_targets``) — which agents this connection is
   set up to cover, whether or not it is switched on right now. This is what a
   management surface should show: blanking a connection's agent list because
   the user disabled it makes the list look erased, and re-enabling appear to
   restore data that was never lost.
-- **Effective projection** (``projection_targets``) — which agents it actually
-  writes a key for, i.e. the configured reach intersected with the user's
-  ``enabled`` switch. This is what the routing and reconcile paths want.
-
-Three inputs feed those, each answering something different:
-
-- ``scope`` — WHICH agents the connection may reach. ``None`` (unscoped) means
-  every agent, per the framework, and is what a credentialed connection is
-  created with.
-- ``enabled`` — the user's switch on the resource itself. It narrows the
-  effective projection to nothing, and deliberately does NOT narrow the
-  configured reach: ``enabled`` travels on the same payload, so a client that
-  wants the intersection can take it, while one that wants to render the
-  configured list still can.
-- ``is_active`` — NOT a narrowing at all, and deliberately not read by either.
-  It records whether this is the connection currently *projected* into the
-  agents it covers (at most one per agent type), which is a fact about the
-  agent's native config file, not about reach. The projection reconcile target exists
-  precisely because that flag can disagree with the file. Callers that want
-  "the active connection for this agent" intersect the two themselves.
+- **Effective reach** (:func:`reaches`) — one agent, and the user's ``enabled``
+  switch applied. What routing and the reconcile paths want.
 """
 
 from __future__ import annotations
+
+from collections.abc import Iterable
 
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
@@ -113,17 +89,45 @@ def scoped_targets(
     return [t for t in AgentType if t in reached]
 
 
-def projection_targets(
-    resource: Resource, cfg: ProviderConfig, agents: list[Resource]
-) -> list[AgentType]:
-    """The agent types ``resource`` actually projects a key into.
+def reaches(resource: Resource, cfg: ProviderConfig, agent: Resource) -> bool:
+    """Whether ``resource`` may serve ``agent`` right now: switched on, not a
+    keyless (ollama) connection, and its scope names the agent (an unscoped
+    connection names every agent). The agent's own ``enabled`` switch is its
+    caller's concern."""
+    if not resource.enabled or cfg.protocol is Protocol.OLLAMA:
+        return False
+    return is_active(resource.scope, agent.uid)
 
-    The configured reach, intersected with the user's ``enabled`` switch: a
-    disabled connection projects into nothing, whatever else it says.
+
+def connection_for_agent(
+    agent: Resource, connections: Iterable[Resource]
+) -> tuple[Resource, ProviderConfig] | None:
+    """The connection ``agent`` runs on, or ``None`` for its own built-in login.
+
+    Reads the agent's ``connection_uid`` and checks that the connection it names
+    still exists, parses, and :func:`reaches` the agent. A pointer that fails any
+    of those — a connection since deleted, switched off, re-scoped away from the
+    agent, or turned into an ollama one — is NOT followed: the agent is on its own
+    login as far as Coffer's routing is concerned, and the reconcile target
+    reports what that leaves behind in the agent's file rather than silently
+    re-routing it elsewhere. There is no tie-break to apply: the choice is one
+    field of one record.
     """
-    if not resource.enabled:
-        return []
-    return scoped_targets(resource, cfg, agents)
+    try:
+        uid = AgentConfig.model_validate(agent.config).connection_uid
+    except ValueError:
+        return None  # a row whose config no longer parses is surfaced by the agent routes
+    if uid is None:
+        return None
+    for resource in connections:
+        if resource.uid != uid:
+            continue
+        try:
+            cfg = ProviderConfig.model_validate(resource.config)
+        except ValueError:
+            return None
+        return (resource, cfg) if reaches(resource, cfg, agent) else None
+    return None
 
 
-__all__ = ["projection_targets", "scoped_targets"]
+__all__ = ["connection_for_agent", "reaches", "scoped_targets"]

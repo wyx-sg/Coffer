@@ -219,7 +219,7 @@ def test_no_memory_tool_is_listed_and_the_context_names_the_memory_root(
     text = r.json()["output"]["hookSpecificOutput"]["additionalContext"]
 
     # The root ``coffer path memory`` prints is the one the memory paths
-    # resolve, absolute, under the pinned ``COFFER_MEMORY_ROOT``.
+    # resolve, absolute, under the isolated ``HOME``.
     root = str(memory_paths.memory_root())
     assert root.startswith("/")
     assert root == str(home / ".coffer" / "derived" / "memory")

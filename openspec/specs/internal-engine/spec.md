@@ -14,15 +14,13 @@ rule that a pass with nothing configured is a clean no-op rather than an error.
 
 Coffer does work on its own behalf: it aggregates the agents' memory, lets a
 model rewrite that derived digest, lets a model derive the knowledge documents
-agents read from the sources a person writes, resolves a sync conflict, and
-transcribes a voice message. All of them need an endpoint to call and a model to
+agents read from the sources a person writes, and transcribes a voice message. All of them need an endpoint to call and a model to
 name, and none belongs to the agent the user is chatting with. The engine
 borrows its ENDPOINT and key from the connection flagged `internal_default` and
 owns its MODEL; speech-to-text has its own connection (flagged
 `transcribe_default`) and its own model, because the gateway that answers a chat
-completion commonly serves no transcription endpoint at all. The four consumers
-— vault-sync's conflict resolver, knowledge's curate, memory's distil and chat's
-voice transcription — supply their own prompts and own their own results; this
+completion commonly serves no transcription endpoint at all. The three consumers
+— knowledge's curate, memory's distil and chat's voice transcription — supply their own prompts and own their own results; this
 capability supplies the connection, the model, the timer and the bound.
 
 How long one call may take is the operator's number, because the right bound is
@@ -42,6 +40,8 @@ does (memory and knowledge); `GET /api/v1/upkeep/runs`, a cross-kind read of
 what is in flight; any model registry; and per-collection or per-partition
 timers. Coffer runs as a single-user tool behind the existing `X-Coffer-Token`
 gate.
+
+The engine keeps resolving its connection whatever the features say. While `models` is switched off the connection cannot be changed — Settings › General omits what depends on Models — while `knowledge` is off the curation pass skips its rounds, and while `memory` is off the distil and aggregate passes skip theirs; while `sync` is off, the curate-owner setting is ignored and the vault is treated as single-machine (spec [experimental-features](../experimental-features/spec.md) "Keep dependencies between features soft").
 
 ## Requirements
 
@@ -132,6 +132,11 @@ own: the engine builds its chat model from the resolved pair via
 - **THEN** each is the client for its connection's protocol, naming exactly the
   resolved model and pointed at the connection's own endpoint.
 
+#### Scenario: build the engine's chat model for an unclassified or keyless local connection
+- **GIVEN** a connection whose protocol is `unknown`, and a local-runtime connection with no secret,
+- **WHEN** the engine builds a chat model from each,
+- **THEN** the `unknown` one is built as an OpenAI-compatible client and the keyless local one is built with a placeholder key, instead of the pass failing.
+
 ### Requirement: Drop the engine model when its connection moves
 A change of the internal-default connection MUST DROP the engine model, unless
 the newly chosen connection's curated `models` already lists that id — a curated
@@ -159,7 +164,7 @@ kind-agnostic substrate rather than a facet of the connection registry.
 
 #### Scenario: consumers reach the engine without importing the provider kind
 - **GIVEN** the engine's consumers — knowledge's ingestion and curation,
-  memory's distil, vault-sync's conflict resolver and chat's voice transcription
+  memory's distil and chat's voice transcription
   — and the engine package itself,
 - **WHEN** their imports are read,
 - **THEN** none of them imports the provider kind's application package,

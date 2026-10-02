@@ -84,19 +84,16 @@ export function NewConversationDialog({ open, onOpenChange, agents, onStart }: P
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {agents.map((a) => (
-                    <SelectItem key={a.agent_key} value={a.agent_key} disabled={!a.available}>
-                      <span className="inline-flex items-center gap-2">
-                        <AgentBadge type={a.agent_key} size="sm" tooltip={false} />
-                        {a.display_name}
-                        {a.available ? null : (
-                          <span className="text-xs text-text-muted">
-                            {t("conversations.new.unavailable")}
-                          </span>
-                        )}
-                      </span>
-                    </SelectItem>
-                  ))}
+                  {agents
+                    .filter((a) => a.available)
+                    .map((a) => (
+                      <SelectItem key={a.agent_key} value={a.agent_key}>
+                        <span className="inline-flex items-center gap-2">
+                          <AgentBadge type={a.agent_key} size="sm" tooltip={false} />
+                          {a.display_name}
+                        </span>
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>

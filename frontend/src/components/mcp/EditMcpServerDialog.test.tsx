@@ -8,8 +8,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { EditMcpServerDialog } from "./EditMcpServerDialog";
 import type { components } from "@/lib/api/types";
 
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
-vi.mock("@/lib/api/secret", () => ({ secretsApi: { list: vi.fn() } }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
+// Only the stored-secret list is faked; set/remove stay real so the save path's
+// writes reach the mocked client.
+vi.mock("@/lib/api/secret", async (orig) => {
+  const actual = await orig<typeof import("@/lib/api/secret")>();
+  return { ...actual, secretsApi: { ...actual.secretsApi, list: vi.fn() } };
+});
 
 const { getApiClient } = await import("@/lib/api/client");
 const { secretsApi } = await import("@/lib/api/secret");

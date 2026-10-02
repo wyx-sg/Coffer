@@ -7,16 +7,14 @@
 // while a web chat page existed; the registry outlived the page.
 //
 // Wire types from the chat contract (where the route lives); transport via
-// the shared `call` (.agents/frontend.md §4).
+// the typed client (.agents/frontend.md §4).
 
-import { call } from "@/lib/api/call";
+import { getApiClient, unwrap } from "@/lib/api/client";
 import type { components } from "@/lib/api/generated/chat";
 
 /** One agent the turn platform offers. */
 export type AgentProviderInfo = components["schemas"]["AgentProviderOut"];
 
-export type AgentProviderListOut = components["schemas"]["AgentProviderListOut"];
-
 export const agentProvidersApi = {
-  list: () => call<AgentProviderListOut>("/agent-providers"),
+  list: () => unwrap(getApiClient().GET("/agent-providers")),
 };

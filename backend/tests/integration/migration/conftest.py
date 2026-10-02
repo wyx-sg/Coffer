@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from coffer.infrastructure.persistence.migrations_runner import upgrade_to
 from coffer.infrastructure.vault.instance import forget
-from coffer.surfaces.http.migrations_runner import upgrade_to
 
 from .legacy_home import LegacyHome, build_legacy_home
 

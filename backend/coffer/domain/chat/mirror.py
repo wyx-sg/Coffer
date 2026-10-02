@@ -48,7 +48,9 @@ class MirrorView:
     when it is."""
 
     deliverable: bool
-    platform: str
+    #: The channel's type key (``seatalk`` / ``telegram``); ``None`` once the
+    #: channel is deleted.
+    platform: str | None
     channel: str | None
     target: str
     reason: str | None

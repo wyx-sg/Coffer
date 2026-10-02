@@ -19,9 +19,9 @@ import {
   type ChangeItem,
   type ChangePreviewState,
   type ChangeSummaryLine,
-} from "./changeCounts";
+} from "@/lib/changePreview/changeCounts";
 
-export type { ChangeItem, ChangePreviewState } from "./changeCounts";
+export type { ChangeItem, ChangePreviewState } from "@/lib/changePreview/changeCounts";
 
 interface ChangePreviewProps {
   open: boolean;

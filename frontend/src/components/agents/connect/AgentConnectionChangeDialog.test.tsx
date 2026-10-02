@@ -8,7 +8,6 @@ import {
 } from "./AgentConnectionChangeDialog";
 import {
   fakeCallFor,
-  fakeClientFor,
   fakeDaemon,
   typeRow,
   type FakeDaemon,
@@ -16,18 +15,12 @@ import {
 import { renderWithDaemon } from "@/components/agents/list/renderWithDaemon";
 import { ApiError } from "@/lib/api/errors";
 import { acceptance } from "@/test/acceptance";
+import { fakeApi } from "@/test/fakeApi";
 
-vi.mock("@/lib/api/call", async (orig) => ({
-  ...(await orig<typeof import("@/lib/api/call")>()),
-  call: vi.fn(),
-}));
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
-const { call } = await import("@/lib/api/call");
-const { getApiClient } = await import("@/lib/api/client");
+const call = fakeApi();
 
 function use(d: FakeDaemon) {
-  vi.mocked(call).mockImplementation(fakeCallFor(d) as never);
-  vi.mocked(getApiClient).mockReturnValue(fakeClientFor(d) as never);
+  call.mockImplementation(fakeCallFor(d));
   return d;
 }
 

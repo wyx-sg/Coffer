@@ -161,12 +161,12 @@ of the master key's Keychain access group
 Cons: requires a paid Apple Developer account. The release job now carries every
 step — PyInstaller signs the three binaries and each library they collect with
 the Developer ID under the hardened runtime and the `keychain-access-groups`
-entitlement, the access group is stamped into `build_identity.py` and the shell,
+entitlement, the access group is stamped into `backend/coffer/infrastructure/secret/build_identity.py` and the shell,
 Tauri signs, notarises and staples the app, and the workflow notarises the CLI
 binaries and notarises and staples the `.dmg` — and each step runs only when its
 secrets are present (`scripts/release_plan.py`). Until the owner adds them the
 release is Option J's unsigned build, unchanged. `RELEASING.md` lists what to
-create; the OpenSpec change `add-desktop-tray-and-updater` records the design.
+create.
 
 ## Decision
 
@@ -190,11 +190,15 @@ under one `SHA256SUMS`.** Rules that follow:
   install starts, whichever tier it came from; the desktop shell is forbidden
   from writing `~/.coffer/bin/` (spec desktop-app "Reimplement no daemon route
   in the shell"). A source install skips it — `pip` already put the scripts on
-  `PATH`.
-- **The release channel is stamped before the freeze.** On a tag,
+  `PATH`. The same frozen start, before it migrates the history database,
+  copies `~/.coffer/runs.db` to `runs.db.pre-<revision>` (the three newest
+  are kept), so a bad upgrade leaves the previous state beside the live file.
+- **The build stamp is written before the freeze.** On a tag,
   `scripts/stamp_channel.py stable` rewrites `backend/coffer/build_channel.py`
   before `build_binaries.sh` runs, because PyInstaller freezes the module as it
-  is ([Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md)).
+  is. The stamp changes nothing a person sees: a tagged build only ignores the
+  developer-only switches for the allowed hosts and CORS origins, so the
+  hardening cannot be loosened by an environment variable on a shipped binary.
 - **The desktop leg reuses the CLI leg's binaries.** No second PyInstaller run.
 - **The spec files stay honest.** A path a spec names must exist and every
   `EXE` keeps `-X utf8` (`check_pyinstaller_specs.py`); the release refuses to

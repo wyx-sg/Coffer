@@ -52,13 +52,10 @@ class ProviderProjectionRequest:
     #: The agent's own binding (spec provider-switching "Take projected model
     #: keys from the agent's binding").
     binding: ModelBinding
-    wire_api: str | None
     #: The connection's curated text models, in order, with their facts.
     models: tuple[ProjectedModel, ...] = ()
     #: The connection is a model runtime on this machine.
     local: bool = False
-    #: ``base_url`` is the loopback proxy (``NO_PROXY`` must cover it).
-    loopback_proxy: bool = False
 
     @property
     def model_ids(self) -> tuple[str, ...]:
@@ -152,7 +149,6 @@ class ClaudeCodeProviderProjection:
                 replace_builtin_picker=not any(is_claude_model_id(m) for m in req.model_ids),
                 local=req.local,
                 local_context_window=chosen.context_window if chosen else None,
-                loopback_proxy=req.loopback_proxy,
             )
         )
 
@@ -198,7 +194,6 @@ class CodexProviderProjection:
             text,
             base_url=req.base_url,
             model=req.binding.model,
-            wire_api=req.wire_api or "responses",
             # The label Codex shows in its own picker — the name, not the uid.
             display_name=f"Coffer ({req.connection_name})",
             effort=effort,

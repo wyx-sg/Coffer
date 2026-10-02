@@ -2,7 +2,7 @@
 
 Every per-agent route is addressed by the agent's ``uid`` — the immutable
 identity minted server-side at registration — and never by its name
-(ADR resource-identity-is-an-immutable-uid). Only the collection routes
+(ADR identity-is-the-uid-inside-the-file). Only the collection routes
 (``GET``/``POST /api/v1/agents``, ``GET /api/v1/agents/candidates``) take no
 identity at all.
 
@@ -194,25 +194,67 @@ def test_agent_patch_config_dir(tmp_path, monkeypatch):
 
 
 def test_agent_patch_model_binding(tmp_path, monkeypatch):
-    """PATCH sets the per-agent model binding; a bad wire_api is rejected."""
+    """PATCH sets the per-agent model binding; the agent carries no wire_api."""
     app = _app(tmp_path, monkeypatch, 59609)
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
     with _client(app) as c:
         uid = _codex_uid(c, config_dir)
-        ok = c.patch(f"/api/v1/agents/{uid}", json={"model": "gpt-5", "wire_api": "responses"})
+        ok = c.patch(f"/api/v1/agents/{uid}", json={"model": "gpt-5"})
         assert ok.status_code == 200, ok.text
         assert ok.json()["model"] == "gpt-5"
-        assert ok.json()["wire_api"] == "responses"
-        bad = c.patch(f"/api/v1/agents/{uid}", json={"wire_api": "garbage"})
-        assert bad.status_code != 200  # validated, not silently persisted
-        # "chat" is refused like any other unknown value. It used to be the
-        # other half of this setting; Codex 0.139.0 will not load a config.toml
-        # carrying it, so accepting it here would hand the user a CLI that does
-        # not start and no way to see why.
-        dead = c.patch(f"/api/v1/agents/{uid}", json={"wire_api": "chat"})
-        assert dead.status_code != 200, dead.text
-        assert c.get(f"/api/v1/agents/{uid}").json()["wire_api"] == "responses"
+        assert "wire_api" not in ok.json()
+
+
+def _connection(c: TestClient) -> str:
+    r = c.post(
+        "/api/v1/providers",
+        json={
+            "name": "gw",
+            "protocol": "openai",
+            "base_url": "https://gw/v1",
+            "secret_value": "sk-x",
+        },
+    )
+    assert r.status_code == 201, r.text
+    return r.json()["uid"]
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="an agent reports the connection it runs on"
+)
+def test_agent_reports_the_connection_it_runs_on(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59611)
+    (tmp_path / "cx").mkdir()
+    (tmp_path / "cc").mkdir()
+    with _client(app) as c:
+        uid = _codex_uid(c, tmp_path / "cx")
+        other = c.post(
+            "/api/v1/agents", json={"type": "claude_code", "config_dir": str(tmp_path / "cc")}
+        )
+        assert other.status_code == 201, other.text
+        connection = _connection(c)
+        switched = c.post(f"/api/v1/providers/{connection}/activate", json={"agent_type": "codex"})
+        assert switched.status_code == 200, switched.text
+
+        assert c.get(f"/api/v1/agents/{uid}").json()["connection_uid"] == connection
+        assert c.get(f"/api/v1/agents/{other.json()['uid']}").json()["connection_uid"] is None
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="an agent's update does not switch its connection"
+)
+def test_agent_patch_does_not_switch_the_connection(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59612)
+    cfg = tmp_path / "cx"
+    cfg.mkdir()
+    with _client(app) as c:
+        uid = _codex_uid(c, cfg)
+        connection = _connection(c)
+        r = c.patch(f"/api/v1/agents/{uid}", json={"connection_uid": connection})
+        assert r.status_code == 200, r.text
+        assert r.json()["connection_uid"] is None
+        assert not (cfg / "config.toml").exists()
 
 
 def test_agent_candidates_get(tmp_path, monkeypatch):

@@ -144,7 +144,7 @@ async def test_dry_run_writes_nothing_and_remembers_nothing() -> None:
     assert repo.rows == []
     assert rec.first_seen("fake:a") is None
     assert rec.last_pass is None
-    assert rec.pending_hints == {}
+    assert not rec.pending_hints
 
 
 async def test_a_failed_audit_restores_the_write_and_fails_the_item() -> None:
@@ -251,9 +251,9 @@ async def test_a_hint_brings_a_pass_forward_for_the_kinds_targets_only() -> None
     rec.register(skill_t)
     loop = asyncio.create_task(rec.serve())
     try:
-        rec.hint(Changed("agent", "u1", 3))
-        rec.hint(Changed("agent", "u1", 2))  # an older revision never lowers it
-        assert rec.pending_hints == {("agent", "u1"): 3}
+        rec.hint(Changed("agent", "u1"))
+        rec.hint(Changed("agent", "u1"))  # a repeated hint is one pending pass
+        assert rec.pending_hints == {("agent", "u1")}
         for _ in range(200):
             if agent_t.applied:
                 break

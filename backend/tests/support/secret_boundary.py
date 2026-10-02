@@ -88,9 +88,11 @@ class InMemoryBoundaryStore:
         ]
         return sorted(rows, key=lambda a: (a.created_at, a.id), reverse=True)[:limit]
 
-    def decide(self, approval_id: str, status: str, *, by: str, at: str) -> bool:
+    def decide(
+        self, approval_id: str, status: str, *, by: str, at: str, only_from: str = "pending"
+    ) -> bool:
         a = self.approvals.get(approval_id)
-        if a is None or a.status != "pending":
+        if a is None or a.status != only_from:
             return False
         self.approvals[approval_id] = dataclasses.replace(
             a,

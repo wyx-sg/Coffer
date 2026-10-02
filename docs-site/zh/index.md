@@ -32,7 +32,7 @@ features:
     link: /zh/guides/skills
     linkText: 技能
   - title: 每个智能体都能读的知识
-    details: 由普通 Markdown 组成的知识集，智能体用自己的文件工具读取，并通过 coffer__write 往里添加。可选的整理流程会把新材料合并进已有文档，并保留可撤销的历史。
+    details: 由普通 Markdown 组成的知识集，智能体用自己的文件工具读取，并通过 coffer__write 往里添加。可选的整理流程会把新材料整理进已有文档，并保留可撤销的历史。
     link: /zh/guides/knowledge
     linkText: 知识
   - title: 跨智能体共享的记忆

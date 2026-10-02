@@ -1,6 +1,6 @@
 """coffer secret — manage encrypted secrets (via the daemon).
 
-Secrets are Fernet-encrypted into coffer's database; the master key lives in a
+Secrets are Fernet-encrypted into files in the vault; the master key lives in a
 signed release's Keychain access group (in a development build, in
 ``~/.coffer/master.key`` or, opt-in, the OS keychain).  Every subcommand goes
 through the daemon's HTTP API; secrets never appear in logs / audit /
@@ -133,14 +133,7 @@ def list_refs(
     the API.
     """
     verbose = (ctx.obj or {}).get("verbose", False)
-    try:
-        c, _info = _cli_client.client_or_exit()
-    except SystemExit:
-        if output_json:
-            typer.echo(_json.dumps({"refs": []}))
-        else:
-            typer.echo("(no known refs — daemon not reachable to enumerate)")
-        return
+    c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get("/secrets")
         _cli_client.check(r, verbose=verbose)

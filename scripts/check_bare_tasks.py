@@ -73,8 +73,12 @@ ALLOWED: dict[str, tuple[int, str]] = {
         "the event pump is awaited and cancelled by the turn that started it",
     ),
     "infrastructure/chat/codex_agent.py": (
-        3,
-        "the event pump and the eof/next-event race are awaited and cancelled in place",
+        1,
+        "the event pump is awaited and cancelled by the turn that started it",
+    ),
+    "infrastructure/chat/codex_stream.py": (
+        2,
+        "the eof/next-event race is awaited and cancelled in place",
     ),
     "infrastructure/daemon/entry.py": (
         1,

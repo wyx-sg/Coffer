@@ -16,10 +16,10 @@ from coffer.application.memory.kind import make_memory_kind
 from coffer.application.provider.kind import make_provider_kind
 from coffer.application.skill.kind import make_skill_kind
 from coffer.domain.resource import Kind
+from coffer.infrastructure.persistence.migrations_runner import run_migrations
 from coffer.infrastructure.vault.migration.classes import storage_of
 from coffer.infrastructure.vault.migration.errors import MigrationRequired
 from coffer.infrastructure.vault.migration.run import migrate
-from coffer.surfaces.http.migrations_runner import run_migrations
 
 from .conftest import UPGRADE
 from .legacy_home import UIDS, LegacyHome, resources

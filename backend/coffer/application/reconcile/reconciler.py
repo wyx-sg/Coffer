@@ -94,8 +94,8 @@ class Reconciler:
         self._targets: dict[str, ReconcileTarget] = {}
         self._lock = asyncio.Lock()
         self._wake = asyncio.Event()
-        #: Latest revision hinted per (kind, uid) since the last hinted pass.
-        self._pending: dict[tuple[str, str], int] = {}
+        #: The (kind, uid) pairs hinted since the last hinted pass.
+        self._pending: set[tuple[str, str]] = set()
         #: When each still-open difference was first seen by a writing pass —
         #: the "since" the attention list shows.
         self._first_seen: dict[str, datetime] = {}
@@ -124,8 +124,8 @@ class Reconciler:
         return self._last
 
     @property
-    def pending_hints(self) -> dict[tuple[str, str], int]:
-        return dict(self._pending)
+    def pending_hints(self) -> frozenset[tuple[str, str]]:
+        return frozenset(self._pending)
 
     def first_seen(self, change_id: str) -> datetime | None:
         return self._first_seen.get(change_id)
@@ -147,9 +147,7 @@ class Reconciler:
     def hint(self, changed: Changed) -> None:
         """Bring the next pass forward for the targets that follow
         ``changed.kind``. Never blocks and never raises."""
-        key = (changed.kind, changed.uid)
-        if changed.rev > self._pending.get(key, -1):
-            self._pending[key] = changed.rev
+        self._pending.add((changed.kind, changed.uid))
         self._wake.set()
 
     # --- passes --------------------------------------------------------------
@@ -174,7 +172,7 @@ class Reconciler:
             # Asked from inside a pass (a repair's write set off a kind hook):
             # waiting for the lock would wait on ourselves. Defer to a hint.
             for name in names:
-                self._pending[("target", name)] = 0
+                self._pending.add(("target", name))
             self._wake.set()
             now = datetime.now(tz=UTC)
             return PassReport(trigger, False, now, now, ())
@@ -250,7 +248,7 @@ class Reconciler:
 
     def _drain_hinted(self) -> tuple[str, ...]:
         self._wake.clear()
-        pending, self._pending = self._pending, {}
+        pending, self._pending = self._pending, set()
         names: set[str] = set()
         for kind, uid in pending:
             if kind == "target":

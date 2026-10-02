@@ -46,13 +46,18 @@ from typing import TYPE_CHECKING
 from coffer.application.agent.service import AgentService
 from coffer.application.builtin_tools import AgentDirectory, BuiltinToolRegistry
 from coffer.application.engine_ports import ModelSelectorPort
+from coffer.application.features import FeatureService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.memory.aggregate import AgentSource
 from coffer.application.memory.aggregate_worker import AggregateWorker
 from coffer.application.memory.delivery import DeliveryService
 from coffer.application.memory.delivery_reconcile import (
+    TARGET as DELIVERY_HOOK_TARGET,
+)
+from coffer.application.memory.delivery_reconcile import (
     ConnectedAgents,
     DeliveryHookTarget,
+    memory_switch_subscriber,
 )
 from coffer.application.memory.delivery_stats import DeliveryStatsService
 from coffer.application.memory.distil import DistilResult
@@ -69,11 +74,15 @@ from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.facets import AgentCatalog
+from coffer.domain.features import MEMORY
 from coffer.domain.internal_engine_config import AGGREGATE, DISTIL
+from coffer.domain.reconcile import Outcome, Trigger
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.infrastructure.memory import paths as memory_paths
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
+from coffer.surfaces.http.event_dependencies import announce_change
+from coffer.surfaces.http.guide_wiring import BuiltinGuide, follow_guide_features
 from coffer.surfaces.http.memory.dependencies import (
     set_memory_hook_service,
     set_memory_service,
@@ -123,16 +132,52 @@ class MemoryWiring:
 
 
 def register_delivery_hook_target(
-    reconciler: Reconciler, delivery: DeliveryService, connected: ConnectedAgents
+    reconciler: Reconciler,
+    delivery: DeliveryService,
+    features: FeatureService,
+    connected: ConnectedAgents,
 ) -> None:
     """Register the memory delivery hook with the reconciler.
 
-    Every pass — boot, period, hint, a person applying from the drift view —
-    then compares each installed hook's whole command with what this build
-    would install (spec memory "Repair stale delivery hooks"). ``connected`` is
-    the agent kind's answer to which agents carry Coffer's gateway entry.
+    Every pass — boot, period, hint, switch, a person applying from the drift
+    view — then compares each installed hook's whole command with what this
+    build would install (spec memory "Repair stale delivery hooks") and follows
+    the ``memory`` switch (spec experimental-features "Withdraw what a
+    switched-off feature put in front of agents"). ``connected`` is the agent
+    kind's answer to which agents carry Coffer's gateway entry.
     """
-    reconciler.register(DeliveryHookTarget(delivery=delivery, connected=connected))
+    reconciler.register(
+        DeliveryHookTarget(delivery=delivery, features=features, connected=connected)
+    )
+
+
+def follow_memory_switch(
+    reconciler: Reconciler, guide: BuiltinGuide, features: FeatureService
+) -> None:
+    """Run a delivery-hook pass, and re-render the ``coffer-guide`` skill,
+    whenever ``memory`` is switched.
+
+    The pass reads the state ``memory`` is in when it runs: off withdraws the
+    hook everywhere, on installs it into every connected agent that lacks it
+    (``Trigger.SWITCH`` is the warrant for that install) and rewrites stale
+    commands. Nothing here fails the switch: a pass that raises, or items that
+    fail, are logged.
+    """
+
+    async def _reconcile(_enabled: bool) -> None:
+        try:
+            report = await reconciler.run(targets=[DELIVERY_HOOK_TARGET], trigger=Trigger.SWITCH)
+        except Exception:
+            logger.exception("memory_delivery_switch.failed")
+            return
+        for failure in report.failures:
+            logger.warning("memory_delivery_switch %s: %s", failure.target, failure.error)
+        for result in report.results:
+            if result.outcome is Outcome.FAILED:
+                logger.warning("memory_delivery_switch %s: %s", result.change.id, result.error)
+
+    features.subscribe(memory_switch_subscriber(features, _reconcile))
+    follow_guide_features(guide, features)
 
 
 def wire_memory_kind(
@@ -162,6 +207,7 @@ def wire_memory_kind(
         model_selector=models,
         secret_resolver=secret_resolver,
         read_timeout=read_internal_engine_timeout,
+        announce=lambda uid: announce_change(KIND_MEMORY, uid),
     )
     set_memory_service(service)
 
@@ -172,7 +218,7 @@ def wire_memory_kind(
     # No tool: an agent finds a note by searching this directory with its own
     # tools, and the handshake names it.
     builtin_tools.register_directory(
-        AgentDirectory(name="memory", path=lambda: str(memory_paths.memory_root()))
+        AgentDirectory(name="memory", path=lambda: str(memory_paths.memory_root()), feature=MEMORY)
     )
 
     # The hook adapters are the delivery-hook entries of the agents'
@@ -212,11 +258,17 @@ def wire_memory_kind(
 
 
 def _upkeep_enabled(
-    engine_config: InternalEngineConfigService, pass_name: str
+    engine_config: InternalEngineConfigService, pass_name: str, features: FeatureService
 ) -> Callable[[], Awaitable[bool]]:
-    """Reads the pass's switch, every pass. See ``start_aggregate_worker``."""
+    """Reads the pass's switch, every pass. See ``start_aggregate_worker``.
+
+    The ``memory`` feature comes first: while it is off the pass skips its
+    round whatever its own switch says (spec experimental-features "Close every
+    surface of a switched-off feature")."""
 
     async def _enabled() -> bool:
+        if not features.is_enabled(MEMORY):
+            return False
         return (await engine_config.get()).upkeep(pass_name).enabled
 
     return _enabled
@@ -235,7 +287,7 @@ def _upkeep_interval(
 
 
 def start_aggregate_worker(
-    service: MemoryService, engine_config: InternalEngineConfigService
+    service: MemoryService, engine_config: InternalEngineConfigService, features: FeatureService
 ) -> asyncio.Task[None]:
     """Start the aggregation pass — a catch-up on boot, then on a timer.
 
@@ -243,7 +295,7 @@ def start_aggregate_worker(
 
     On by default: a pass reads the agents' own memory files and writes only
     the derived tree, and "Skip unchanged sources" makes a pass over unchanged
-    sources nearly free. The Sync button and ``coffer memory sync`` stay: this makes the
+    sources nearly free. The Update memory button and ``coffer memory sync`` stay: this makes the
     layer current without being asked, it does not replace asking.
 
     Both halves of "on a timer" are the operator's (spec internal-engine "Apply a
@@ -255,7 +307,7 @@ def start_aggregate_worker(
     """
     worker = AggregateWorker(
         aggregate=service.aggregate,
-        is_enabled=_upkeep_enabled(engine_config, AGGREGATE),
+        is_enabled=_upkeep_enabled(engine_config, AGGREGATE, features),
         read_interval=_upkeep_interval(engine_config, AGGREGATE),
     )
     return spawn_restarting(worker.run_forever, name="memory-aggregate")
@@ -275,6 +327,7 @@ def start_distil_worker(
     distil: DistilRunner,
     resource_svc: ResourceService,
     engine_config: InternalEngineConfigService,
+    features: FeatureService,
 ) -> asyncio.Task[None]:
     """Start the distil sweep — on by default, because the tree it rewrites is
     disposable ("Keep the memory tree derived and local": delete it and
@@ -287,9 +340,10 @@ def start_distil_worker(
         # one directory and claim the same upkeep-runs key, so
         # both must spell the partition the way that cannot change between
         # them reading it ("Run one distil pass per partition at a time", ADR
-        # resource-identity-is-an-immutable-uid).
-        # The pass resolves the row for the directory it rewrites.
-        return [r.uid for r in await resource_svc.list(kind=KIND_MEMORY, enabled=True)]
+        # identity-is-the-uid-inside-the-file).
+        # The pass resolves the row for the directory it rewrites. Every partition: a
+        # partition has no switch, so none is filtered by an enabled flag the kind never sets.
+        return [r.uid for r in await resource_svc.list(kind=KIND_MEMORY)]
 
     async def _scheduled(uid: str) -> DistilResult:
         """The sweep's own actor, fixed here rather than defaulted in the
@@ -302,7 +356,7 @@ def start_distil_worker(
     worker = DistilWorker(
         distil=_scheduled,
         list_partitions=_list_partitions,
-        is_enabled=_upkeep_enabled(engine_config, DISTIL),
+        is_enabled=_upkeep_enabled(engine_config, DISTIL, features),
         read_interval=_upkeep_interval(engine_config, DISTIL),
     )
     return spawn_restarting(worker.run_forever, name="memory-distil")

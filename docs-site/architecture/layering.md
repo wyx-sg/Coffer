@@ -36,7 +36,7 @@ flowchart TB
 | Layer | Holds | May import |
 | --- | --- | --- |
 | `domain/` | Entities, value objects and pure rules: resources, kinds, scope, audit event names, error codes, each kind's config schemas and domain logic. | The standard library and Pydantic. Nothing else from the project, and none of FastAPI, SQLAlchemy, `sqlite3`, httpx, `keyring` or anyio. |
-| `application/` | Use-case services, the ports (typed Python protocols) they need, background workers, the kind factories. | `domain/`. Not `surfaces/`, and not `infrastructure/` — with two named exceptions for the knowledge and memory file substrates. |
+| `application/` | Use-case services, the ports (typed Python protocols) they need, background workers, the kind factories. | `domain/`. Not `surfaces/`, and not `infrastructure/` — with three named exceptions: the knowledge and memory file substrates, and the binary deployer's one read of the vault's home. |
 | `infrastructure/` | Adapters: persistence, the secret store, subprocess and HTTP clients, git, file-tree I/O, LLM and agent SDK wrappers. | `domain/`, `application/` ports. Not `surfaces/`. |
 | `surfaces/` | Entry points: the FastAPI app and routes, the Typer CLI, the stdio shim, plus the composition root that wires everything. | Everything below. |
 
@@ -54,12 +54,12 @@ The rules are [import-linter](https://github.com/seddonym/import-linter) contrac
 | --- | --- |
 | Layered architecture: surfaces > application > domain | Imports flow inward only. A domain module never imports an application module; an application module never imports a surface. |
 | Infrastructure does not import surfaces | Adapters never reach back up into routes or CLI commands. This is why, for example, the daemon entry point reads `daemon.json` itself rather than asking a route module. |
-| Application does not import infrastructure | Application code depends on ports it defines. Exceptions: `application.knowledge` may import `infrastructure.knowledge`, and `application.memory` may import `infrastructure.memory`, because both substrates are thin file-I/O helpers with no engine behind them, where a port would be ceremony. |
+| Application does not import infrastructure | Application code depends on ports it defines. Exceptions: `application.knowledge` may import `infrastructure.knowledge`, and `application.memory` may import `infrastructure.memory`, because both substrates are thin file-I/O helpers with no engine behind them, where a port would be ceremony; and `application.binary_deploy` may read `infrastructure.vault.home`, the one module that names every path under `~/.coffer`. |
 | Domain is pure | Domain imports no other project layer and none of `fastapi`, `sqlalchemy`, `sqlite3`, `httpx`, `keyring` or `anyio`. |
 | keyring confined to infrastructure | Surfaces and application never import `keyring` directly. |
 | CLI does not access the keychain directly | `surfaces.cli` may not import `infrastructure.secret` at all. The CLI reaches secrets only through the daemon's HTTP API, so the daemon is the only reader of the master key on each machine. |
 | Cross-kind imports forbidden (one per kind) | Nine symmetric contracts — `mcp`, `agent`, `skill`, `knowledge`, `channel`, `chat`, `provider`, `memory`, `sync` — each forbidding that area's modules from importing any other area's modules. Named exceptions cover pure domain vocabulary only: `provider` and `memory` may read `domain.agent`, and `channel` may read `domain.chat`. `domain.knowledge` and `infrastructure.knowledge` are shared substrate. |
-| Kind-agnostic core does not import kind-specific code | The resource service and its scope and delete helpers, the audit service, the retention service and worker, the builtin tool registry, Coffer's own engine modules, the domain's resource, scope and audit modules, the shared infrastructure packages, the generic dependency providers and the generic routes may import no kind. The one sanctioned exception is Alembic's migration environment, which imports every kind's ORM models into one metadata. |
+| Kind-agnostic core does not import kind-specific code | The resource service and its scope, enable, delete, rename, title and kind helpers, the repository ports, the reconciler, the attention list and the event stream, the audit service, the retention service and worker, the builtin tool registry, Coffer's own engine modules, the domain's resource, reconcile, scope and audit modules, the shared infrastructure packages, the generic dependency providers and the generic routes may import no kind. Two sanctioned exceptions: Alembic's migration environment, which imports every kind's ORM models into one metadata, and the one-time vault migration, which reads every area to move its data. |
 | Engine confinement: markitdown | Only the channel attachment extractor and the knowledge upload converter may import `markitdown` (or `docling`). |
 | Dropped engines banned everywhere | `llama_index`, `mem0`, `chromadb`, `sentence_transformers`, `sqlite_vec` and `fastembed` may not be imported anywhere. Coffer embeds nothing, and a reintroduction has to be a deliberate change to this contract. |
 | LangGraph and LangChain confined to infrastructure/llm | Coffer's own model calls go through `infrastructure/llm/`. Domain, application, and the chat, MCP, channel, knowledge, persistence, secrets, daemon and logging infrastructure packages may not import `langgraph` or any `langchain*` package; they reach a model through injected ports. |
@@ -105,7 +105,7 @@ FastAPI dependencies are plain module-level setter and getter pairs over module-
 
 ```text
 backend/coffer/
-├── build_channel.py        # CHANNEL = "dev"; the release workflow stamps "stable"
+├── build_channel.py        # build stamp: COMMIT, and CHANNEL "dev" (the release workflow stamps "stable", which hardens host/CORS checks)
 ├── main.py                 # ASGI entry: create_app()
 ├── domain/                 # pure; imports nothing from other layers
 │   ├── resource.py         # Resource, Kind, name validation

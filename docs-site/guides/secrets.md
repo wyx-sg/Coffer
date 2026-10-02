@@ -154,11 +154,11 @@ Approve only a target you recognise. A command line you did not write, pointing 
 
 ### What needs no approval
 
-- **A secret you just supplied for it.** A value stored within the last five minutes under a ref that has never been sent anywhere is used at once. This is what every "add" dialog and `coffer mcp add` with a pasted token do, seconds apart. It does not apply to standalone secrets or to an older secret.
+- **A secret you just supplied for it.** A value stored on this machine in the last five minutes under a ref that has never been sent anywhere is approved when you register the server, channel or connection that cites it. This is what every "add" dialog and `coffer mcp add` with a pasted token do. A second place citing the same ref is a second place, and waits. It does not apply to standalone secrets.
 - **Everything that already worked when you upgraded.** The first time a daemon with approvals starts, every secret already in use is approved once for its current target.
 - **Anything, while the protection is off.**
 
-A binding is checked at the moment of use — when a server starts, a channel connects, a sync round pushes — so a change that arrives behind Coffer's back, such as a vault file edited by hand or a server another machine synced in, is caught too.
+A binding is also checked when you register or change the place that uses it, so an approval it needs appears right when you save, with the approvals dialog opening on the page you are on. A binding is checked at the moment of use — when a server starts, a channel connects, a sync round pushes — so a change that arrives behind Coffer's back, such as a vault file edited by hand or a server another machine synced in, is caught too.
 
 ### Answering one
 
@@ -174,7 +174,7 @@ coffer secret approvals --all        # decided ones too; --json for scripts
 coffer secret reject <id>
 ```
 
-An approval ends as `approved`, `rejected`, or `superseded` — when the resource it was for was deleted or has since moved to another target, which raises a fresh approval of its own.
+A rejection stands for that target: the secret stays withheld, and a server or command that meets it is told it was refused (`SECRET_BINDING_REJECTED`) rather than that something waits. Ask again from the Secrets page, where a refused change is listed under "N refused changes" with an **Ask again** button — or change the destination — to put the question to you afresh. An approval ends as `approved`, `rejected`, or `superseded` — when the resource it was for was deleted or has since moved to another target, which raises a fresh approval of its own.
 
 ### On the command line
 
@@ -231,7 +231,7 @@ coffer secret import               # move every finding (asks first; --yes skips
 coffer secret import --id <id>     # only this finding (repeatable)
 ```
 
-For each finding the import stores the value as `secret/<name>`, reads it back and compares, and only then replaces the value in its file with `coffer://secret/<name>`, atomically and keeping the file's mode. A name that already holds a different value is skipped and its file left untouched. A file that cannot be rewritten is reported as skipped with the value stored — the store has it, the file still holds it — while the other files are rewritten; importing the same finding again retries the file. No plaintext backup is kept. Each value stored is audited as `secret_imported`.
+For each finding the import stores the value as `secret/<name>`, reads it back and compares, and only then replaces the value in its file with `coffer://secret/<name>`, atomically and keeping the file's mode. A new name waits for your approval like any new standalone secret: the first import stores nothing and leaves the file as it is, and importing again after you approve moves it. A name that already holds a different value is skipped and its file left untouched. A file that cannot be rewritten is reported as skipped with the value stored — the store has it, the file still holds it — while the other files are rewritten; importing the same finding again retries the file. No plaintext backup is kept. Each value stored is audited as `secret_imported`.
 
 Then change the skill's commands to run under `coffer run`, for example `coffer run --env-file ~/.coffer/secrets/db.env -- ./query.sh`.
 

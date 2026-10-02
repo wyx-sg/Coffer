@@ -1,8 +1,8 @@
 // e2e/web/specs/shell_settings.spec.ts
 //
-// Settings as a modal over the current page (change revise-web-ui-ia): five
-// tabs grouped by what they manage (General, Security, Data, Daemon, About),
-// each at /settings/<tab>; the version menu's language switch; and no shutdown
+// Settings as a modal over the current page (change revise-web-ui-ia): six
+// tabs grouped by what they manage (General, Security, Data, Daemon, About,
+// Features), each at /settings/<tab>; the version menu's language switch; and no shutdown
 // control anywhere.
 
 import { expect, test } from "@playwright/test";
@@ -25,7 +25,7 @@ acceptance(
     const modal = page.getByTestId("settings-modal");
     await expect(modal).toBeVisible();
 
-    // Five tabs, in this order.
+    // Six tabs, in this order.
     const tabs = modal
       .getByRole("navigation", { name: "Settings sections" })
       .getByRole("link");
@@ -35,6 +35,7 @@ acceptance(
       "Data",
       "Daemon",
       "About",
+      "Features",
     ]);
 
     // Clicking a tab swaps the pane without closing the modal.
@@ -57,6 +58,31 @@ acceptance(
 );
 
 acceptance(
+  "experimental-features",
+  "a pinned feature's switch is disabled",
+  async ({ page }) => {
+    // The e2e daemon pins every experimental feature on (`COFFER_FEATURES`),
+    // so the tab lists the four in registry order, each with its Experimental
+    // mark, and every switch is disabled with the pin named as the reason.
+    await page.goto("/settings/features");
+    const pane = page.getByTestId("settings-pane-features");
+    for (const [key, name] of [
+      ["knowledge", "Knowledge"],
+      ["memory", "Memory"],
+      ["sync", "Sync"],
+      ["models", "Model providers"],
+    ]) {
+      const row = pane.getByTestId(`feature-${key}`);
+      await expect(row).toContainText("Experimental");
+      await expect(row).toContainText(/Pinned by COFFER_FEATURES/);
+      const toggle = row.getByRole("switch", { name });
+      await expect(toggle).toBeChecked();
+      await expect(toggle).toBeDisabled();
+    }
+  },
+);
+
+acceptance(
   "web-ui",
   "settings offers no shutdown control",
   async ({ page }) => {
@@ -70,6 +96,7 @@ acceptance(
       ["data", /^Vault$/], // DataSettings
       ["daemon", /^Startup$/], // DaemonSettings
       ["about", /^Coffer$/], // AboutPage
+      ["features", /^Features$/], // ExperimentalFeaturesSettings
     ];
     for (const [tab, heading] of panes) {
       await page.goto(`/settings/${tab}`);

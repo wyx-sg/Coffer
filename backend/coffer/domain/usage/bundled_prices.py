@@ -261,13 +261,6 @@ class BundledPrices:
             providers, version=version, supplement=supplement, updated=updated, refreshed=refreshed
         )
 
-    @property
-    def provider_count(self) -> int:
-        return len(self._providers)
-
-    def knows_provider(self, provider_id: str) -> bool:
-        return provider_id in self._by_id
-
     @classmethod
     def empty(cls) -> BundledPrices:
         """Only Coffer's own supplement — when the list file is missing."""

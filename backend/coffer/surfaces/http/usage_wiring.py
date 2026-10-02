@@ -25,7 +25,9 @@ from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
 from coffer.application.provider.prices import ProviderPriceResolver
 from coffer.application.provider.service import ProviderService
+from coffer.application.provider.targets import connection_for_agent
 from coffer.application.provider.usage_lookup import ProviderUsageLookup
+from coffer.application.retention_registry import PrunableRegistry, PrunableTable
 from coffer.application.runtime.supervisor import spawn
 from coffer.application.usage.ingest import UsageIngestService
 from coffer.application.usage.ports import (
@@ -103,6 +105,7 @@ def wire_usage(
     codex_reader: CodexRateLimitReader | None,
     spool_dir: Path | None = None,
     quota_background_enabled: Callable[[], Awaitable[bool]] | None = None,
+    is_enabled: Callable[[], bool] = lambda: True,
 ) -> UsageWiring:
     """Build the usage services and publish the ``/api/v1/usage`` dependencies.
 
@@ -117,6 +120,7 @@ def wire_usage(
         spool=FileSpoolReader(spool_dir),
         prices=price_lookup,
         failovers=failovers,
+        is_enabled=is_enabled,
     )
     query = UsageQueryService(repo=usage_repo, connection_names=connection_names)
     quota = QuotaService(
@@ -144,28 +148,31 @@ async def wire_model_usage(
     *,
     prices: ProviderPriceResolver,
     audit: AuditService,
+    is_enabled: Callable[[], bool] = lambda: True,
 ) -> UsageWiring:
     """The composition the lifespan uses: prices and names from the provider
     kind, Codex's quota read from a short-lived ``codex app-server`` under the
     agent's own home — in the background only while a Codex agent is on its
     own (subscription) login, since an agent on a connection has no quota to
-    show — failovers filed in the audit log, and both loops started."""
+    show — failovers filed in the audit log, and both loops started. ``is_enabled``
+    is whether the ``models`` feature is on: both loops skip their passes while it is
+    off (spec experimental-features "Close every surface of a switched-off
+    feature")."""
     lookup = ProviderUsageLookup(provider_svc, prices, audit)
     # The agent whose quota the reader pulls: the one ``codex app-server`` is.
     codex_type = AgentType(_CODEX_READER_AGENT)
 
     async def codex_on_its_own_login() -> bool:
+        if not is_enabled():
+            return False
         if os.environ.get(QUOTA_POLL_ENV, "").lower() == "off":
             return False
         rows = [a for a in await agents.list() if a.enabled]
         codex = [a for a in rows if AgentConfig.model_validate(a.config).type is codex_type]
         if not codex:
             return False
-        for conn in await provider_svc.list():
-            cfg = provider_svc._cfg(conn)
-            if cfg.is_active and codex_type in provider_svc._compat(conn, rows):
-                return False
-        return True
+        connections = await provider_svc.list()
+        return all(connection_for_agent(agent, connections) is None for agent in codex)
 
     wiring = wire_usage(
         sm,
@@ -176,15 +183,49 @@ async def wire_model_usage(
             resolve_env=agent_home_env_resolver(_CODEX_READER_AGENT)
         ),
         quota_background_enabled=codex_on_its_own_login,
+        is_enabled=is_enabled,
     )
     await wiring.start()
     return wiring
+
+
+def register_usage_retention(registry: PrunableRegistry) -> None:
+    """File the usage tables with the retention registry — the usage feature's
+    own registration, kept with its wiring rather than in the MCP composition.
+
+    Usage metering (ADR usage-is-metered-at-the-proxy-and-subscriptions-show-
+    only-official-quota): the per-request detail is a run log like the MCP
+    calls and follows THEIR window rather than growing a setting of its own;
+    the daily rollup the Usage page charts is kept for a year. The rollup's
+    ``day`` is a local ``YYYY-MM-DD`` string, which compares against the
+    cutoff instant as text — to the day, which is the rollup's resolution.
+    """
+    registry.register(
+        PrunableTable(
+            name="usage_requests",
+            timestamp_column="started_at",
+            default_retention_days=None,
+            display_name="Usage Requests",
+            description="Per-request model usage recorded by the model proxy.",
+            policy_name="mcp_invocations",
+        )
+    )
+    registry.register(
+        PrunableTable(
+            name="usage_daily",
+            timestamp_column="day",
+            default_retention_days=365,
+            display_name="Daily Usage",
+            description="Daily model usage and estimated cost per agent, connection and model.",
+        )
+    )
 
 
 __all__ = [
     "INGEST_INTERVAL_SECONDS",
     "QUOTA_POLL_ENV",
     "UsageWiring",
+    "register_usage_retention",
     "wire_model_usage",
     "wire_usage",
 ]

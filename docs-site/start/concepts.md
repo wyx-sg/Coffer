@@ -59,7 +59,7 @@ Architecture: [Resource framework](/architecture/resource-framework).
 
 ## uid and name
 
-Each resource has an immutable **uid**: an opaque 32-character hex string, created once, never reused, and identical on every machine that holds the resource. Its **name** is a label, unique within a kind, and it is what you type in the CLI. You can change it with `coffer <kind> edit <name> --name <new>`, except for an MCP server's or a skill's name, which is fixed because agents quote it, and an agent's, which is its type. Providers, channels, knowledge collections and memory partitions can also carry a **title**, up to 80 characters, that Coffer's pages and the CLI show in place of the name; agents, MCP servers and skills have none. Anything that must survive a rename refers to the uid. For example, the `--agent-uid` in an agent's MCP entry and the agent list in a resource's scope both store uids.
+Each resource has an immutable **uid**: an opaque 32-character hex string, created once, never reused, and identical on every machine that holds the resource. Its **name** is a label, unique within a kind, and it is what you type in the CLI. You can change it with `coffer <kind> edit <name> --name <new>`, except for an MCP server's or a skill's name, which is fixed because agents quote it, and an agent's, which is its type. Providers, channels and memory partitions can also carry a **title**, up to 80 characters, that Coffer's pages and the CLI show in place of the name; agents, MCP servers, skills and knowledge collections (shown by their folder name) have none. Anything that must survive a rename refers to the uid. For example, the `--agent-uid` in an agent's MCP entry and the agent list in a resource's scope both store uids.
 
 Architecture: [Resource framework](/architecture/resource-framework).
 
@@ -109,7 +109,7 @@ Guide: [Skills](/guides/skills).
 
 ## Knowledge collections and curation
 
-A **collection** is a folder under `~/.coffer/vault/knowledge/<collection>/` holding one tree of Markdown documents that you and Coffer write together. A document's path is its identity. You can edit documents in any editor, and agents read them with their own file tools, finding them through the catalogue in `coffer-guide`. New material, whether from `coffer__write`, an upload or a channel, first lands in the collection's hidden `.inbox/`. A **curation** pass run by Coffer's own model then merges it into the existing documents. With no model configured, each item becomes a document on its own.
+A **collection** is a folder under `~/.coffer/vault/knowledge/<collection>/` holding one tree of Markdown documents that you and Coffer write together. A document's path is its identity. You can edit documents in any editor, and agents read them with their own file tools, finding them through the catalogue in `coffer-guide`. New material, whether from `coffer__write`, an upload or a channel, first lands in the collection's hidden `.inbox/`. A **curation** pass run by Coffer's own model then folds it into the existing documents. With no model configured, each item becomes a document on its own.
 
 Guide: [Knowledge](/guides/knowledge). Architecture: [Knowledge](/architecture/knowledge).
 
@@ -145,7 +145,7 @@ Guide: [Activity and audit](/guides/activity). Architecture: [Observability](/ar
 
 ## Experimental features
 
-A capability that is not ready for everyone yet ships as an experimental feature: it can be switched on or off on each machine, and its default comes from the build's channel (off on a `stable` release, on on a `dev` build). Switching one off hides its pages, commands and `coffer__` tools but deletes nothing. When a feature is ready it graduates and loses its switch. No feature is experimental right now: Sync, Knowledge and Memory graduated at 1.0 and are always on.
+A capability that is not ready for everyone yet ships as an experimental feature: it starts switched off and you switch it on, machine by machine. Switching one off makes it look absent — its pages, commands and `coffer__` tools disappear — but deletes nothing. When a feature is ready it graduates and loses its switch. Four features are experimental: Knowledge, Memory, Sync and Model providers. Settings → Features lists them.
 
 Guide: [Experimental features](/guides/experimental-features).
 

@@ -1,5 +1,6 @@
 // frontend/src/lib/hooks/useSkills.ts — TanStack Query bindings for skills.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
@@ -10,8 +11,9 @@ import {
   skillFilesKey,
   skillsKey,
 } from "@/lib/api/queryKeys";
-import { skillsApi, type SkillImportRequest } from "@/lib/api/skills";
+import { skillsApi } from "@/lib/api/skills";
 import { useToast } from "@/components/ui/toast";
+import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
 /** Shared onError → toast handler for the single-use skill mutations. */
 function useSkillToastError() {
@@ -27,18 +29,6 @@ export function useSkills() {
   });
 }
 
-export function useImportSkill() {
-  const qc = useQueryClient();
-  const onError = useSkillToastError();
-  return useMutation({
-    mutationFn: (body: SkillImportRequest) => skillsApi.importLocal(body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: skillsKey });
-    },
-    onError,
-  });
-}
-
 /** Delete a skill. No toast: the confirmation renders a refusal inline (an
  *  agent's copy that is no longer Coffer's link) and stays open on it. */
 export function useRemoveSkill() {
@@ -49,6 +39,28 @@ export function useRemoveSkill() {
       qc.removeQueries({ queryKey: [...skillsKey, uid] });
       void qc.invalidateQueries({ queryKey: skillsKey });
     },
+  });
+}
+
+/** Delete several skills behind one confirmation: every delete is attempted,
+ *  one summary toast says how many landed (see `useBulkMutate`). */
+export function useBulkRemoveSkills() {
+  const bulk = useBulkMutate({ invalidate: [skillsKey] });
+  const { run } = bulk;
+  const removeAll = useCallback(
+    (skills: { uid: string }[]) => run(skills, (s) => skillsApi.remove(s.uid)),
+    [run],
+  );
+  return { run: removeAll, isPending: bulk.isPending };
+}
+
+/** Write a skill file's content, conditional on the fingerprint the read
+ *  returned. No toast and no invalidation: the editor owns the conflict UI and
+ *  re-seeds from the fingerprint the write returns. */
+export function useWriteSkillFile(uid: string) {
+  return useMutation({
+    mutationFn: (body: { path: string; content: string; expected_fingerprint: string }) =>
+      skillsApi.writeFileContent(uid, body),
   });
 }
 
@@ -81,6 +93,7 @@ export function useReadSkillFileNow() {
 // an archive", "Add skills from a Git repository") -----
 
 /** What to stage: a folder path, an uploaded archive, or a repository. */
+/** @ui-only mutation argument; never crosses the wire. */
 export type SkillStageInput =
   | { kind: "folder"; path: string }
   | { kind: "archive"; file: File }

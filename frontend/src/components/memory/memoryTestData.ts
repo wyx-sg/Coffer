@@ -76,6 +76,7 @@ export const NOTES: NoteListOut = {
       slug: "use-node-20",
       title: "Use Node 20 for frontend vitest",
       description: "22 and 24 exit 1 even when every test passes.",
+      file_path: "/Users/dev/.coffer/memory/partitions/coffer/notes/use-node-20.md",
     },
     {
       ...NOTE_BASE,
@@ -83,6 +84,7 @@ export const NOTES: NoteListOut = {
       slug: "daemon-port",
       title: "Daemon port is fixed at 8000",
       description: "Read from daemon-config.json before the DB opens.",
+      file_path: "/Users/dev/.coffer/memory/partitions/coffer/notes/daemon-port.md",
     },
   ],
 };

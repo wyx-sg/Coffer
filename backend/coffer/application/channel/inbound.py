@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 
 from coffer.application.audit_service import AuditService
@@ -81,6 +81,7 @@ class InboundProcessor:
         model_suggestions: ModelSuggestionPort,
         collections: CollectionCatalogPort,
         ingest: IngestPort,
+        knowledge_enabled: Callable[[], bool] = lambda: True,
     ) -> None:
         self._peers = peers
         self._threads = threads
@@ -101,6 +102,7 @@ class InboundProcessor:
             model_suggestions=model_suggestions,
             collections=collections,
             ingest=ingest,
+            knowledge_enabled=knowledge_enabled,
             running_in=self._running_in,
             running_in_chat=self._running_in_chat,
         )
@@ -113,28 +115,34 @@ class InboundProcessor:
             session=self._session,
         )
         # Each chat/thread's burst, held until quiet ("Take a burst of messages as one turn").
-        self._burst = InboundBurst(lambda ctx, item: self._turn_driver.submit(ctx[0], ctx[1], item))
+        self._burst = InboundBurst(
+            lambda ctx, item: self._turn_driver.submit(ctx[0], ctx[1], item),
+            lambda ctx, parts: self._turn_driver.mark_stopped(
+                ctx[0], ctx[1], [part.item for part in parts]
+            ),
+        )
         self._events = InboundEvents(
             peers=peers,
             commands=self._commands,
             safe_send=safe_send,
             stop_chat_sessions=self._stop_chat_sessions,
             session=self._session,
+            burst=self._burst,
             submit_reply=self._submit_reply,
         )
 
     # -- runtime registry ------------------------------------------------
 
     def bind(self, binding: ChannelBinding) -> None:
-        self._bindings[binding.resource.name] = binding
+        self._bindings[binding.resource.uid] = binding
 
-    def unbind(self, name: str) -> None:
-        self._bindings.pop(name, None)
-        self._burst.drop_channel(name)
+    def unbind(self, channel_uid: str) -> None:
+        self._bindings.pop(channel_uid, None)
+        self._burst.drop_channel(channel_uid)
         # A channel can have many live sessions (its DM, each group, each
         # thread within a group) — unbinding it must stop every one of them,
         # not just a single legacy session.
-        self._stop_sessions([key for key in self._sessions if key[0] == name])
+        self._stop_sessions([key for key in self._sessions if key[0] == channel_uid])
 
     def _stop_chat_sessions(self, channel: str, chat_id: str) -> None:
         """Stop ONE chat's live sessions (a group's main chat and each of its
@@ -161,8 +169,8 @@ class InboundProcessor:
                     self._turns.interrupt_turn(session.running_conversation_id)
                 session.running_conversation_id = None
 
-    def binding(self, name: str) -> ChannelBinding | None:
-        return self._bindings.get(name)
+    def binding(self, channel_uid: str) -> ChannelBinding | None:
+        return self._bindings.get(channel_uid)
 
     @property
     def turn_driver(self) -> TurnDriver:
@@ -170,8 +178,8 @@ class InboundProcessor:
         return self._turn_driver
 
     def shutdown(self) -> None:
-        for name in list(self._bindings):
-            self.unbind(name)
+        for channel_uid in list(self._bindings):
+            self.unbind(channel_uid)
         self._bindings.clear()
 
     # -- adapter callbacks -------------------------------------------------
@@ -189,13 +197,12 @@ class InboundProcessor:
             if peer is None:
                 await self._maybe_pair(binding, msg)
                 return
-            if peer.sender_id is not None and msg.sender_id and peer.sender_id != msg.sender_id:
-                # Right chat (e.g. a paired group), wrong member — ignore silently.
-                # Never fall through to pairing: an intruder must not be able to
-                # re-pair the channel by sending a code into the owner's chat. A
-                # message with no sender id (the transport could not supply one)
-                # falls back to the chat-id match already passed, so a quirk in one
-                # update shape never locks the owner out of their own channel.
+            if not msg.sender_id or peer.sender_id != msg.sender_id:
+                # Right chat, wrong member (or a message whose sender the transport
+                # could not name) — ignore silently, exactly as the group gate does:
+                # ownership that cannot be proven is not ownership. Never fall
+                # through to pairing: an intruder must not be able to re-pair the
+                # channel by sending a code into the owner's chat.
                 return
         # Which conversation this message joins; ``msg.thread_id`` stays where the
         # reply goes (see "Key conversation identity by channel, chat and thread").
@@ -215,7 +222,7 @@ class InboundProcessor:
             # "Save a sent document into a collection") — never the thread-history files
             # folded in below. One slot, first file only: the ingest service takes one
             # file per call (spec knowledge "Bound uploads and leave nothing behind on failure").
-            session = self._session(binding.resource.name, peer.chat_id, conv_thread)
+            session = self._session(binding.resource.uid, peer.chat_id, conv_thread)
             session.pending_document = attachments[0]
         # A command (or a near miss of one) is decided on the message's OWN text,
         # before any thread history is folded in (see ``inbound_commands``).
@@ -265,7 +272,7 @@ class InboundProcessor:
         )
         await self._turn_driver.acknowledge(binding, peer, item)
         self._burst.add(
-            (binding.resource.name, peer.chat_id, msg.thread_id),
+            (binding.resource.uid, peer.chat_id, msg.thread_id),
             (binding, peer),
             BurstPart(
                 origin=format_origin(msg, platform=binding.channel_type),
@@ -297,11 +304,13 @@ class InboundProcessor:
             InboundMessage(
                 channel=cb.channel,
                 chat_id=cb.chat_id,
-                sender_display="",
+                sender_display=cb.sender_display,
                 text=answer,
                 platform_message_id="",
                 timestamp=datetime.now(tz=UTC),
                 sender_id=cb.sender_id,
+                sender_mention_id=cb.sender_mention_id,
+                sender_mention_email=cb.sender_mention_email,
                 chat_kind=cb.chat_kind,
                 addressed=True,
                 thread_id=cb.thread_id,

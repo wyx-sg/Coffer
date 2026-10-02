@@ -9,7 +9,7 @@ import type { components } from "@/lib/api/types";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import type { InvocationSummary, ToolTiering } from "@/lib/hooks/useMcpServerPage";
 import { CLIENT_NAME_LIMIT } from "../capabilityRows";
-import { listingOf, relativeTime, shortTime, usageByTool, type ServerState } from "./serverState";
+import { listingOf, relativeTime, shortTime, usageByTool, type ServerState } from "@/lib/mcp/serverState";
 
 type ToolView = components["schemas"]["MCPToolView"];
 

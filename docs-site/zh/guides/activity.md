@@ -104,7 +104,7 @@ coffer log mcp --server filesystem          # one server
 coffer log mcp --status error --since 1d --json
 ```
 
-不带 `--server` 时，输出包括 Coffer 自己的内置工具调用（服务器为 `coffer`）以及已删除服务器的行（`deleted:<name>`）。`--limit` 接受 1–500。
+不带 `--server` 时，输出包括 Coffer 自己的内置工具调用（服务器为 `coffer`）以及已删除服务器的行（以其 uid 显示）。`--limit` 接受 1–500。
 
 每次调用处于四种状态之一：
 

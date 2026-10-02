@@ -21,9 +21,11 @@ from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.adapter_support import (
     ChannelNoteResolver,
     HomeEnvResolver,
+    ManagedCheck,
     MemoryContextComposer,
     ModelLister,
     compose_system_context,
+    require_managed,
 )
 from coffer.infrastructure.chat.claude_sdk_agent import (
     ClaudeSdkAgentAdapter,
@@ -75,6 +77,7 @@ class ClaudeSdkProvider:
         compose_memory_context: MemoryContextComposer | None = None,
         resolve_channel: ChannelNoteResolver | None = None,
         resolve_home_env: HomeEnvResolver | None = None,
+        is_managed: ManagedCheck | None = None,
         observe_quota: QuotaObserver | None = None,
         retrieve_memory: MemoryRetriever | None = None,
     ) -> None:
@@ -101,6 +104,9 @@ class ClaudeSdkProvider:
         # skills, MCP entry and settings Coffer put there. ``None`` ⇒ the
         # default dir, env untouched.
         self._resolve_home_env = resolve_home_env
+        # Whether an enabled agent of this type is managed by Coffer; chat offers
+        # and runs managed agents only. ``None`` ⇒ not asked.
+        self._is_managed = is_managed
         # Where Claude Code's ``rate_limit_event`` goes (the usage kind's quota
         # service, bound at the composition root). ``None`` ⇒ dropped.
         self._observe_quota = observe_quota
@@ -136,6 +142,7 @@ class ClaudeSdkProvider:
         await self._conversations.set_agent_config(conversation_id, config)
 
     async def build_adapter(self, conversation_id: str) -> AgentAdapter:
+        await require_managed(self._is_managed, self.agent_key)
         conv = await self._conversations.get(conversation_id)
         if conv is None:
             raise ConversationNotFound(conversation_id)
@@ -207,7 +214,9 @@ class ClaudeSdkProvider:
         return await self._transcriber_factory()
 
     async def availability(self) -> bool:
-        return self._which(self._binary) is not None
+        if self._which(self._binary) is None:
+            return False
+        return self._is_managed is None or await self._is_managed()
 
 
 __all__ = ["ClaudeSdkProvider"]

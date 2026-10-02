@@ -20,6 +20,7 @@ from coffer.application.upkeep_clock import PassClock
 from coffer.domain.audit import AuditEntry
 from coffer.domain.internal_engine_config import GlobalInternalEngineConfig
 from coffer.surfaces.http import internal_engine_routes
+from tests.support.waiting import wait_until
 
 _T0 = datetime(2026, 9, 30, 9, 0, tzinfo=UTC)
 
@@ -87,7 +88,7 @@ async def test_the_workers_record_their_wait_and_clear_it_while_a_pass_runs() ->
 
     worker = AggregateWorker(aggregate=_aggregate, interval_s=3600, clock=clock)
     task = asyncio.create_task(worker.run_forever())
-    await asyncio.sleep(0.05)
+    await wait_until(lambda: seen and clock.next_due("aggregate", 3600) is not None)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
@@ -104,7 +105,7 @@ async def test_the_workers_record_their_wait_and_clear_it_while_a_pass_runs() ->
         distil=_distil, list_partitions=_partitions, start_delay_s=30, clock=clock
     )
     task = asyncio.create_task(distil.run_forever())
-    await asyncio.sleep(0.01)
+    await wait_until(lambda: clock.next_due("distil", 6 * 3600) is not None)
     due = clock.next_due("distil", 6 * 3600)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):

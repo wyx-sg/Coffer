@@ -2,7 +2,7 @@
 //
 // No React and no i18n instance: callers pass `t` or a locale in, so the rules
 // are the same on the CLIs page and a skill's Requires tab.
-import type { StatusTone } from "@/components/status/statusTone";
+import type { StatusTone } from "@/lib/statusTone";
 import type { Cli, CliStatus } from "@/lib/api/clis";
 
 const TONE: Record<CliStatus, StatusTone> = {

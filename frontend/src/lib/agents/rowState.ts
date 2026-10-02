@@ -6,7 +6,7 @@
 // Detection wins: an added agent whose program is gone reads as config left
 // behind (its directory is still there) or not found (nothing is), because
 // nothing Coffer writes can reach it until it is back.
-import type { StatusTone } from "@/components/status/statusTone";
+import type { StatusTone } from "@/lib/statusTone";
 import type { AgentTypeOut, CofferConnection } from "@/lib/api/agents";
 
 export type AgentRowState =
@@ -69,9 +69,4 @@ export function agentRowStateKey(state: AgentRowState): string {
 /** Whether the state can be added from its row (the daemon's `addable` also has to agree). */
 export function isAddableState(state: AgentRowState): boolean {
   return state === "not_added" || state === "never_run";
-}
-
-/** Whether Coffer can reach the agent's files at all (its program is installed). */
-export function isReachableState(state: AgentRowState): boolean {
-  return state !== "not_installed" && state !== "config_left_behind" && state !== "not_found";
 }

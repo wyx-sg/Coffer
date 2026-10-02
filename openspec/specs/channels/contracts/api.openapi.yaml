@@ -106,6 +106,45 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Issue Pairing Code
+  /api/v1/channels/{uid}/restart:
+    post:
+      description: Stop and rebuild the channel's adapter, reading its secret afresh.
+      operationId: restart_channel_api_v1_channels__uid__restart_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestartOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Restart Channel
   /api/v1/channels/{uid}/status:
     get:
       operationId: channel_status_api_v1_channels__uid__status_get
@@ -186,6 +225,9 @@ components:
     ChannelStatusOut:
       properties:
         channel_type:
+          enum:
+          - telegram
+          - seatalk
           title: Channel Type
           type: string
         diagnostics:
@@ -227,6 +269,18 @@ components:
           - type: string
           - type: 'null'
           title: Runs On
+        settings:
+          anyOf:
+          - discriminator:
+              mapping:
+                seatalk: '#/components/schemas/SeaTalkChannelConfig'
+                telegram: '#/components/schemas/TelegramChannelConfig'
+              propertyName: channel_type
+            oneOf:
+            - $ref: '#/components/schemas/TelegramChannelConfig'
+            - $ref: '#/components/schemas/SeaTalkChannelConfig'
+          - type: 'null'
+          title: Settings
         title:
           anyOf:
           - type: string
@@ -249,6 +303,7 @@ components:
       - runs_here
       - title
       - handoff
+      - settings
       title: ChannelStatusOut
       type: object
     ErrorDetail:
@@ -365,4 +420,197 @@ components:
       - expires_at
       - pair_url
       title: PairingCodeOut
+      type: object
+    RestartOut:
+      properties:
+        running:
+          title: Running
+          type: boolean
+      required:
+      - running
+      title: RestartOut
+      type: object
+    SeaTalkChannelConfig:
+      additionalProperties: false
+      properties:
+        app_id:
+          maxLength: 128
+          minLength: 1
+          title: App Id
+          type: string
+        app_secret_ref:
+          maxLength: 256
+          minLength: 1
+          title: App Secret Ref
+          type: string
+        channel_type:
+          const: seatalk
+          default: seatalk
+          title: Channel Type
+          type: string
+        default_agent:
+          anyOf:
+          - maxLength: 64
+            type: string
+          - type: 'null'
+          title: Default Agent
+        default_agent_config:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Default Agent Config
+        directories:
+          items:
+            type: string
+          maxItems: 32
+          title: Directories
+          type: array
+        ignore_other_mentions:
+          default: false
+          title: Ignore Other Mentions
+          type: boolean
+        new_conversation_after_idle_hours:
+          default: 24.0
+          maximum: 8760.0
+          minimum: 0.0
+          title: New Conversation After Idle Hours
+          type: number
+        notify_after_seconds:
+          default: 90.0
+          maximum: 3600.0
+          minimum: 0.0
+          title: Notify After Seconds
+          type: number
+        require_mention:
+          default: true
+          title: Require Mention
+          type: boolean
+        runs_on:
+          anyOf:
+          - maxLength: 64
+            type: string
+          - type: 'null'
+          title: Runs On
+        show_steps:
+          default: true
+          title: Show Steps
+          type: boolean
+        wait_after_forward_seconds:
+          default: 5.0
+          maximum: 60.0
+          minimum: 0.0
+          title: Wait After Forward Seconds
+          type: number
+        wait_after_text_seconds:
+          default: 1.5
+          maximum: 60.0
+          minimum: 0.0
+          title: Wait After Text Seconds
+          type: number
+      required:
+      - default_agent
+      - default_agent_config
+      - require_mention
+      - ignore_other_mentions
+      - wait_after_text_seconds
+      - wait_after_forward_seconds
+      - show_steps
+      - notify_after_seconds
+      - new_conversation_after_idle_hours
+      - directories
+      - runs_on
+      - channel_type
+      - app_id
+      - app_secret_ref
+      title: SeaTalkChannelConfig
+      type: object
+    TelegramChannelConfig:
+      additionalProperties: false
+      properties:
+        bot_token_ref:
+          maxLength: 256
+          minLength: 1
+          title: Bot Token Ref
+          type: string
+        channel_type:
+          const: telegram
+          default: telegram
+          title: Channel Type
+          type: string
+        default_agent:
+          anyOf:
+          - maxLength: 64
+            type: string
+          - type: 'null'
+          title: Default Agent
+        default_agent_config:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Default Agent Config
+        directories:
+          items:
+            type: string
+          maxItems: 32
+          title: Directories
+          type: array
+        ignore_other_mentions:
+          default: false
+          title: Ignore Other Mentions
+          type: boolean
+        new_conversation_after_idle_hours:
+          default: 24.0
+          maximum: 8760.0
+          minimum: 0.0
+          title: New Conversation After Idle Hours
+          type: number
+        notify_after_seconds:
+          default: 90.0
+          maximum: 3600.0
+          minimum: 0.0
+          title: Notify After Seconds
+          type: number
+        require_mention:
+          default: true
+          title: Require Mention
+          type: boolean
+        runs_on:
+          anyOf:
+          - maxLength: 64
+            type: string
+          - type: 'null'
+          title: Runs On
+        show_steps:
+          default: true
+          title: Show Steps
+          type: boolean
+        wait_after_forward_seconds:
+          default: 5.0
+          maximum: 60.0
+          minimum: 0.0
+          title: Wait After Forward Seconds
+          type: number
+        wait_after_text_seconds:
+          default: 1.5
+          maximum: 60.0
+          minimum: 0.0
+          title: Wait After Text Seconds
+          type: number
+      required:
+      - default_agent
+      - default_agent_config
+      - require_mention
+      - ignore_other_mentions
+      - wait_after_text_seconds
+      - wait_after_forward_seconds
+      - show_steps
+      - notify_after_seconds
+      - new_conversation_after_idle_hours
+      - directories
+      - runs_on
+      - channel_type
+      - bot_token_ref
+      title: TelegramChannelConfig
       type: object

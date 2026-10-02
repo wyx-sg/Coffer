@@ -87,7 +87,7 @@ Coffer 写哪个文件由**智能体**决定，而不是由协议决定。对 `c
 2. 选一个**提供商**。只会提供已启用且对该智能体生效的提供商。
 3. 选一个**模型**（对 Claude Code，还要选 **Haiku** 档位的模型，它也负责后台任务）。默认预选接入地址返回的第一个模型。
 4. 点**测试连接**。在当前提供商和模型的测试通过之前，**确认切换**保持禁用。
-5. 点**确认切换**。Coffer 先把模型保存到智能体上，然后激活提供商——这是唯一会写智能体配置的一步。
+5. 点**确认切换**。Coffer 先把模型保存到智能体上，然后把该智能体切到这个提供商上——这是唯一会写智能体配置的一步。
 
 选择**内置登录**并确认，会把智能体切回它自己的登录；不需要测试。
 
@@ -97,16 +97,19 @@ Coffer 写哪个文件由**智能体**决定，而不是由协议决定。对 `c
 
 ```sh
 coffer agent edit claude-code --model sonnet --effort high --tier haiku=haiku
-coffer provider switch deepseek
-# switched to deepseek [openai] → claude_code, codex
+coffer provider switch deepseek --agent claude_code
+# switched claude_code to deepseek [openai]
+coffer provider switch deepseek       # no --agent: every registered, enabled agent it reaches
 
 coffer provider builtin claude_code   # Claude Code back on its own login
 coffer provider builtin codex         # Codex back on its own login
 ```
 
-`builtin` 接受要切回的智能体类型，`claude_code` 或 `codex`——而不是某种 wire，因为提供商通过生效范围对智能体生效，而 wire 并不指明智能体。它是幂等的。因为提供商的激活标志覆盖它切入的所有智能体，所以切回一种智能体类型，就会把提供商作为一个整体切回。
+智能体运行在哪个提供商上，是智能体自己的一个字段（`connection_uid`），所以一个智能体同一时间最多在一个提供商上，这个选择留在本机，不会同步。提供商被删除、被关闭或不再覆盖该智能体时，该智能体回到自己的登录。
 
-每种智能体类型最多只有一个激活的提供商。切到新的提供商时，它会从上一个提供商那里接管它生效的智能体，并从新提供商不覆盖的智能体上移除上一个的投射。如果提供商生效的智能体一个都没注册，切换仍会把它标为激活，并报告跳过的类型。
+`builtin` 接受要切回的智能体类型，`claude_code` 或 `codex`——而不是某种 wire，因为提供商通过生效范围对智能体生效，而 wire 并不指明智能体。它是幂等的，并且只切回这一个智能体：同样运行在这个提供商上的其他智能体不受影响。
+
+智能体运行在哪个提供商上，是智能体自己的设置，所以一个智能体最多只在一个提供商上，切换一个智能体也不会动另一个。把智能体切到一个对它不生效的提供商上（提供商或智能体被停用，或提供商的生效范围没有指明该智能体），会以 `PROVIDER_DOES_NOT_REACH_AGENT` 被拒绝。这个选择按机器设置：它是智能体记录的一部分，不会同步。
 
 模型保存在**智能体**上，而不是提供商上：提供商说明用哪个网关账号，智能体的绑定说明在那里跑哪个模型。没有绑定模型的智能体不会被写入模型键，使用它自己的默认模型。
 
@@ -216,7 +219,7 @@ coffer provider add ollama --protocol anthropic --base-url http://127.0.0.1:1143
 
 模型选择器为智能体提供什么，在一个地方决定，并提供给所有界面——对话页面、消息渠道的 `/model` 卡片，以及 `coffer agent models`：
 
-- 当智能体的激活提供商整理了**文本**模型时，就恰好是那些，按你的顺序；
+- 当智能体所在的提供商整理了**文本**模型时，就恰好是那些，按你的顺序；
 - 否则，是智能体自己的目录（见[智能体](/zh/guides/agents#models)）。
 
 非文本模型从不作为对话模型提供。只整理了非文本模型的提供商不提供任何对话模型。读取这个列表从不访问网络。
@@ -255,19 +258,19 @@ coffer provider rm deepseek
 
 - **轮换** key 会覆盖同一个 ref 下存的密钥；引用它的一切都不变。
 - **等待批准。** 为正在使用的 key 提供新的 `--secret`、为 key 已经发往某处的连接提供新的 `--base-url`，以及用另一个连接在用的 key 执行 `coffer provider add … --secret-ref`，都会被保存，但要等你在 Coffer 应用里批准。命令会打印 `waiting for approval in the Coffer app` 和审批 id，并以 `9` 退出；带 `--wait` 时则等待你的答复。在此之前继续使用旧的 key 和 URL。
-- **修改协议**在提供商开启期间会以 `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` 被拒绝。对它生效的每种智能体类型运行 `coffer provider builtin <agent_type>`（拒绝信息里会列出），编辑，然后再切换回来。
+- **修改协议**在有智能体运行在该提供商上期间会以 `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` 被拒绝。对运行在它上面的每个智能体运行 `coffer provider builtin <agent_type>`（拒绝信息里会列出），编辑，然后再切换回来。
 - **重命名**只改标签。uid、密钥 ref 和智能体的文件都保持不变；Codex 的 `name = "Coffer (<name>)"` 标签在下次切换时更新。
 - **删除**移除提供商，如果没有其他东西引用它的密钥，也删除密钥。
 
 ## 启动自检 {#boot-self-check}
 
-激活标志记录的是关于一个 Coffer 并不拥有的文件的事实：智能体的 CLI、其他工具、你自己，或从备份恢复，都可能改写它。守护进程每次启动时，Coffer 都会对照每个激活提供商生效的智能体做检查。如果智能体的配置里已经没有 Coffer 的键，Coffer 会清除激活标志，让所有界面都显示该智能体在用内置登录。它**不会**把投射写回去：上一个会话遗留的标志，不是把你的智能体重新路由到一个你可能已经不用的网关的理由。反过来——文件里有 Coffer 的键，但没有任何东西被标为激活——Coffer 不动这个文件。
+智能体记录的提供商，是关于一个 Coffer 并不拥有的文件的事实：智能体的 CLI、其他工具、你自己，或从备份恢复，都可能改写它。守护进程每次启动时，Coffer 都会检查每个运行在某个提供商上的智能体。如果智能体的配置里已经没有 Coffer 的键，Coffer 会清除该智能体的提供商，让所有界面都显示它在用内置登录。它**不会**把投射写回去：上一个会话遗留的选择，不是把你的智能体重新路由到一个你可能已经不用的网关的理由。反过来——文件里有 Coffer 的键，但智能体没有运行在任何提供商上——Coffer 不动这个文件。
 
-[保险库同步](/zh/guides/vault-sync)的一轮从另一台机器带来提供商改动后，Coffer 会在本机重新推导投射：对每个有已注册智能体的智能体类型，投射对它生效的激活提供商；如果没有，就移除 Coffer 的键。生效范围本身按机器设置，从不同步。
+[保险库同步](/zh/guides/vault-sync)的一轮从另一台机器带来提供商改动后，Coffer 会在本机按提供商现在的样子，重新投射每个运行在提供商上的智能体。在另一台机器上做的切换不会同步过来：智能体运行在哪个提供商上，和生效范围一样，按机器设置，从不同步。
 
 ## Coffer 自己的引擎 {#coffer-s-own-engine}
 
-Coffer 的部分工作运行在它自己的模型上：记忆整理、知识整理、同步冲突解决，以及消息渠道的语音转写。这个模型借用某个提供商的接入地址和 key，并指定自己的模型。什么都没配置时，知识整理和记忆提炼会退回到机械处理（见[知识](/zh/guides/knowledge#without-an-internal-model)和[记忆](/zh/guides/memory#how-the-passes-run)），同步冲突会等你来解决，语音消息会以音频文件的形式到达智能体。
+Coffer 的部分工作运行在它自己的模型上：记忆整理、知识整理，以及消息渠道的语音转写。这个模型借用某个提供商的接入地址和 key，并指定自己的模型。什么都没配置时，知识整理和记忆提炼会退回到机械处理（见[知识](/zh/guides/knowledge#without-an-internal-model)和[记忆](/zh/guides/memory#how-the-passes-run)），语音消息会以音频文件的形式到达智能体。
 
 **Web 界面：** 打开**设置 › 通用**，找到 **Coffer 自用模型**一节。它有两个选择器，每个都是先选提供商，再从该提供商的列表里选模型：
 
@@ -302,12 +305,12 @@ coffer config set transcribe.model whisper-1
 | 现象 | 原因 | 解决 |
 | --- | --- | --- |
 | 切换以 `CONFIG_FILE_STALE` 失败 | 在 Coffer 读和写之间，智能体的配置变了 | 再切换一次。 |
+| 切换以 `PROVIDER_DOES_NOT_REACH_AGENT` 失败 | 提供商或智能体被停用，或提供商的生效范围没有指明该智能体 | 启用它，或把该智能体加入它的生效范围，然后再切换。 |
 | 切换以 `PROVIDER_INTERNAL_ONLY` 失败 | 你试图把智能体切到一个 `ollama` 提供商上 | 改为把它用作内部引擎的默认值。 |
-| 智能体从中转收到 `503` "no connection is active" | 提供商被停用、不对任何智能体生效，或缺少 key | 检查提供商的生效范围和 key；`coffer proxy status` 显示中转本身的状态。 |
+| 智能体从中转收到 `503` "no connection is active" | 智能体所在的提供商被停用、不再对该智能体生效，或缺少 key | 检查提供商的生效范围和 key；`coffer proxy status` 显示中转本身的状态。 |
 | 智能体从中转收到 `401` | helper 没打印令牌，或打印了过期的令牌 | 自己运行智能体文件里的 `apiKeyHelper` / `auth` 命令；`coffer proxy rotate <agent>` 会签发新令牌。 |
 | `127.0.0.1:8001` 上没有任何响应 | 中转没在运行 | `coffer proxy status`；守护进程会在几秒内重启崩溃的中转。 |
-| 智能体页面显示内置登录 | Coffer 的定期检查发现智能体配置里已经没有投射，于是把连接标为未激活，而不是重新路由智能体 | 如果你仍想用这个提供商，再切换一次。 |
-| `responses` 以外的 `wire_api` 被拒绝 | Codex 拒绝加载其他任何值 | 保持 `responses`。 |
+| 智能体页面显示内置登录 | Coffer 的定期检查发现智能体配置里已经没有投射，于是清除了该智能体的提供商，而不是重新路由它 | 如果你仍想用这个提供商，再切换一次。 |
 
 ## 相关 {#related}
 

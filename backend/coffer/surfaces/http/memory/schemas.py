@@ -118,6 +118,9 @@ class NoteSummaryOut(BaseModel):
     #: The agents (resource names) this memory was learned from, read off its
     #: provenance — what the list shows beside each memory.
     agents: list[str] = Field(default_factory=list)
+    #: The absolute path of the note's own file (``notes/<slug>.md``), so a page can
+    #: open or reveal it without walking the partition's file tree to find it.
+    file_path: str = ""
 
 
 class NoteListOut(BaseModel):
@@ -214,23 +217,3 @@ class FileNodeOut(BaseModel):
 
 class FileTreeOut(BaseModel):
     root: FileNodeOut
-
-
-class FileContentOut(BaseModel):
-    """One file's content, read-only.
-
-    No fingerprint, unlike the skill kind's equivalent: a fingerprint exists to
-    make a later write conditional, and this family has no write. The tree under
-    ``~/.coffer/derived/memory/`` is derived ("Keep the memory tree derived and local") —
-    an edit here would be overwritten
-    by the next aggregation pass, so the surface does not offer one.
-    """
-
-    path: str
-    abs_path: str
-    folder_abs_path: str
-    #: Empty when ``binary`` is true.
-    content: str
-    truncated: bool
-    binary: bool
-    size: int

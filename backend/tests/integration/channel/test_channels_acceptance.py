@@ -33,7 +33,7 @@ from .conftest import (
 def _mark_running(env: ChannelEnv, resource: Resource, adapter: FakeChannelAdapter) -> None:
     """Make the runtime report ``adapter`` as this channel's live adapter, which
     is what notify and status read — without waiting on the reconciler."""
-    env.runtime._running[resource.name] = SimpleNamespace(adapter=adapter)
+    env.runtime._running[resource.uid] = SimpleNamespace(adapter=adapter)
 
 
 @pytest.mark.acceptance(
@@ -141,7 +141,7 @@ async def test_a_media_sentinel_from_a_thread_turn_is_sent_into_that_thread(
     chart.write_bytes(b"\x89PNG fake")
     env.provider.adapter = default_reply_adapter(f"Here it is.\nMEDIA:{chart}")
     resource = await env.register_channel("tg")
-    adapter = env.bind(resource, FakeChannelAdapter(supports_media=True, supports_groups=True))
+    adapter = env.bind(resource, FakeChannelAdapter(supports_media=True))
     await env.pair(resource, "owner", sender_id="owner-1")
 
     await env.processor.on_message(_thread_msg("draw me a chart", pm="p1"))

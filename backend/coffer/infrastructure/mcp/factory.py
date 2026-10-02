@@ -31,7 +31,7 @@ def build_upstream(
     every timeout message the user reads, and those would become unreadable if
     they carried a uuid. ``server.uid`` is the IDENTITY: the stdio adapter
     records a PID file per spawned child, and that file has to keep naming the
-    same server after a rename (ADR resource-identity-is-an-immutable-uid). The
+    same server after a rename (ADR identity-is-the-uid-inside-the-file). The
     HTTP adapter spawns nothing, so it is handed only the label. A custom-tool
     group (``http_api``) is served in-process from its config; its overlay is
     the one secret its auth header carries.

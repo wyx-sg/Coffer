@@ -64,8 +64,9 @@ Its secrets are secret refs: store each secret first with `coffer secret set`, t
 | `--wait-after-forward` | option | float (0-60) |  | Seconds to wait after a forwarded record or files with no text (default: 5; 0 = none) |
 | `--show-steps / --hide-steps` | option | boolean |  | List each step under the live status line while a turn runs (default: on) |
 | `--notify-after` | option | float (0-3600) |  | Ping the chat when a turn runs at least this many seconds (default: 90; 0 = never) |
+| `--new-conversation-after-idle-hours` | option | float (0-8760) |  | Open a new conversation when a chat was idle this many hours (default: 24; 0 = never) |
 | `--dir` | option | text (repeatable) |  | An absolute directory `/dir` may switch into (repeat for several; replaces the list) |
-| `--default-dir` | option | text |  | The directory new conversations start in (default: the agent's own) |
+| `--default-dir` | option | text |  | The absolute directory new conversations start in (default: ~/.coffer/content/workspace) |
 | `--title` | option | text |  | Display title (≤80 chars) |
 | `--description` | option | text |  |  |
 | `--wait` | option | flag |  | Wait for approval in the Coffer app instead of exiting |
@@ -76,7 +77,7 @@ Its secrets are secret refs: store each secret first with `coffer secret set`, t
 coffer channel edit [OPTIONS] NAME
 ```
 
-Change a channel's name, title, description, group gating, quiet windows, live status, completion ping, default directory or `/dir` directories.
+Change a channel's name, title, description, group gating, quiet windows, live status, completion ping, idle rollover, default directory or `/dir` directories.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -91,10 +92,11 @@ Change a channel's name, title, description, group gating, quiet windows, live s
 | `--wait-after-forward` | option | float (0-60) |  | Seconds to wait after a forwarded record or files with no text (default: 5; 0 = none) |
 | `--show-steps / --hide-steps` | option | boolean |  | List each step under the live status line while a turn runs (default: on) |
 | `--notify-after` | option | float (0-3600) |  | Ping the chat when a turn runs at least this many seconds (default: 90; 0 = never) |
+| `--new-conversation-after-idle-hours` | option | float (0-8760) |  | Open a new conversation when a chat was idle this many hours (default: 24; 0 = never) |
 | `--dir` | option | text (repeatable) |  | An absolute directory `/dir` may switch into (repeat for several; replaces the list) |
 | `--no-dirs` | option | flag |  | Allow no directories for `/dir` (clears the list) |
-| `--default-dir` | option | text |  | The directory new conversations start in (default: the agent's own) |
-| `--no-default-dir` | option | flag |  | Clear the default directory (the agent's own applies) |
+| `--default-dir` | option | text |  | The absolute directory new conversations start in (default: ~/.coffer/content/workspace) |
+| `--no-default-dir` | option | flag |  | Clear the default directory (the Coffer workspace applies) |
 
 ## channel rm
 
@@ -175,6 +177,20 @@ Takes effect without a restart: the binding is config, and both daemons reconcil
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Channel name |
 | `MACHINE_ID` | argument | text |  | machine_id to bind to (default: this machine) |
+
+## channel restart
+
+```sh
+coffer channel restart [OPTIONS] NAME
+```
+
+Stop the channel's adapter and start it again, reading its secret afresh.
+
+Use it when a channel is stuck connecting, or to take a SeaTalk connection back from another process. Replacing a secret with `coffer secret set` already restarts the adapter on its own.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Channel name |
 
 ## channel notify
 

@@ -6,7 +6,7 @@ A transport that cannot collapse a ``## Details`` section itself but has cards
 how long the details are, and two buttons — **Details** posts them as a reply in
 the card's thread, **As file** uploads them as a ``.md``. A card cannot carry a
 long text and a button's value is short, so the details are kept as a file under
-the temporary directory, keyed by a random id the buttons carry. A tap is
+the temporary directory (pruned after a day), keyed by a random id the buttons carry. A tap is
 owner-gated like every card tap; a missing file answers that the details are no
 longer available.
 """
@@ -19,6 +19,7 @@ import pathlib
 import re
 import secrets
 import tempfile
+import time
 from typing import TYPE_CHECKING
 
 from coffer.domain.channel.envelopes import ChoiceButton
@@ -26,11 +27,13 @@ from coffer.domain.channel.envelopes import ChoiceButton
 if TYPE_CHECKING:
     from coffer.application.channel.command_context import CommandContext
 
-__all__ = ["DETAILS_KINDS", "apply_details_tap", "details_buttons", "load_details", "save_details"]
+__all__ = ["DETAILS_KINDS", "apply_details_tap", "details_buttons", "save_details"]
 
 #: The callback kinds this card's buttons carry.
 DETAILS_KINDS = ("details", "detailsfile")
 _ID = re.compile(r"\A[0-9a-f]{16}\Z")
+#: How long a reply's details stay behind their card's buttons.
+_KEEP_SECONDS = 24 * 3600
 _GONE = "Those details are no longer available — ask again for them."
 
 
@@ -38,10 +41,20 @@ def _store() -> pathlib.Path:
     return pathlib.Path(tempfile.gettempdir()) / "coffer-channel-details"
 
 
+def _prune(store: pathlib.Path) -> None:
+    """Delete details nobody can still be tapping: older than a day."""
+    cutoff = time.time() - _KEEP_SECONDS
+    for old in store.glob("*.md"):
+        with contextlib.suppress(OSError):
+            if old.stat().st_mtime < cutoff:
+                old.unlink()
+
+
 def save_details(text: str) -> str:
     """Keep ``text`` for a later tap; return the id its buttons carry."""
     store = _store()
     store.mkdir(parents=True, exist_ok=True)
+    _prune(store)
     details_id = secrets.token_hex(8)
     (store / f"{details_id}.md").write_text(text, encoding="utf-8")
     return details_id
@@ -52,11 +65,6 @@ def _path(details_id: str) -> pathlib.Path | None:
         return None  # never a path built from anything but our own ids
     path = _store() / f"{details_id}.md"
     return path if path.is_file() else None
-
-
-def load_details(details_id: str) -> str | None:
-    path = _path(details_id)
-    return path.read_text(encoding="utf-8") if path is not None else None
 
 
 def details_buttons(details_id: str) -> list[ChoiceButton]:

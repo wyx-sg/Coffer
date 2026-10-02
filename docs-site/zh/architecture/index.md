@@ -142,7 +142,7 @@ Coffer 的大部分形态都来自少数几项决策。下面每一项都在它�
 | 记忆从每个智能体自己的文件只读聚合，从不回写。 | 每个智能体自己的记忆回路保持原样，Coffer 派生出的一切都可以删掉重建。 | [记忆](/zh/architecture/memory) |
 | 保险库是一个 git 仓库；同步 pull 和 push 它，应用干净的合并，遇到任何冲突就停。 | 只有共同的基线才能区分「从来没有」和「删掉了」，而且 Coffer 自己做的任何事都不需要撤销。你的远端始终是一个你可以查看的普通仓库。 | [保险库同步](/zh/architecture/vault-sync) |
 | 密钥是用一个主密钥加密的 Fernet 密文，主密钥默认存在一个 `0600` 文件里。 | Coffer 的构建没有签名，macOS 会对新构建碰到的每个钥匙串条目重新弹窗。一个文件里放一把密钥就没有弹窗了；钥匙串作为可选项保留。 | [安全模型](/zh/architecture/security#the-secret-store) |
-| 未完成的功能随每个构建发布，在 `stable` 上默认关闭，而不是放在分支上。 | 只有一条开发线，所有者测的正是用户在跑的东西。关闭一个功能只是隐藏它，数据保留。 | [分发与发布](/zh/architecture/distribution#experimental-features) |
+| 未完成的功能随每个构建发布，在你开启之前一直关闭，而不是放在分支上。 | 只有一条开发线，所有者测的正是用户在跑的东西。关闭一个功能只是隐藏它，数据保留。 | [分发与发布](/zh/architecture/distribution#experimental-features) |
 
 ### Coffer 刻意不做的事 {#what-coffer-deliberately-is-not}
 

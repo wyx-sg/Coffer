@@ -54,13 +54,13 @@ def _method_fact(install: InstallFacts) -> str:
     )
 
 
-def upgrade_handoff(version: str, channel: str, install: InstallFacts, machine: str) -> str:
+def upgrade_handoff(version: str, install: InstallFacts, machine: str) -> str:
     """The prompt that upgrades this Coffer the way it was installed."""
     return render_handoff(
         Handoff(
             task="Please upgrade Coffer on this machine to the latest release.",
             facts=(
-                f"Running now: Coffer {version}, on the {channel} channel.",
+                f"Running now: Coffer {version}.",
                 _method_fact(install),
                 f"This machine: {machine}.",
                 f"The upgrade steps for each install method are at {INSTALL_PAGE}#upgrade.",

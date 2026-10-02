@@ -5,7 +5,7 @@
 // `/resources/{uid}`. The name travels beside it only where a person reads it
 // (the rebind toast), which is why `useRebindChannel` takes both and the
 // fixtures below spell the two differently.
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
@@ -22,7 +22,10 @@ import { resourcesKey } from "@/lib/api/queryKeys";
 import type { ChannelStatus, PairingCode } from "@/lib/api/channels";
 
 // useChannels rides the generic resources API (openapi-fetch client) …
-vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+vi.mock("@/lib/api/client", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/client")>()),
+  getApiClient: vi.fn(),
+}));
 
 // onError → toast is the default for every mutation (.agents/frontend.md §5):
 // a failed pairing-code issue must announce itself, not fail silently.
@@ -53,20 +56,18 @@ function makeWrapper() {
   );
 }
 
-// … while status/pairing use the hand-written fetch module (channels.ts).
-function stubFetch(payload: unknown, ok = true, status = 200) {
-  const fetchMock = vi.fn().mockResolvedValue({
-    ok,
-    status,
-    json: async () => payload,
+/** The typed client answering one route with `data` (2xx) or an envelope (non-2xx). */
+function stubApi(data: unknown) {
+  const api = mockApiClient({
+    GET: vi.fn().mockResolvedValue({ data, error: undefined }),
+    POST: vi.fn().mockResolvedValue({ data, error: undefined }),
   });
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
+  getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
+  return api;
 }
 
 describe("useChannels hooks", () => {
   beforeEach(() => vi.clearAllMocks());
-  afterEach(() => vi.unstubAllGlobals());
 
   test("useChannels lists resources scoped to kind=channel", async () => {
     const api = mockApiClient({
@@ -104,14 +105,17 @@ describe("useChannels hooks", () => {
       runs_on: "machine-here",
       runs_here: true,
       handoff: null,
+      settings: null,
     };
-    const fetchMock = stubFetch(status);
+    const api = stubApi(status);
 
     const { result } = renderHook(() => useChannelStatus(TG.uid), { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.running).toBe(true);
-    expect(String(fetchMock.mock.calls[0][0])).toContain(`/channels/${TG.uid}/status`);
+    expect(api.GET).toHaveBeenCalledWith("/channels/{uid}/status", {
+      params: { path: { uid: TG.uid } },
+    });
   });
 
   test("useIssuePairingCode POSTs and returns the code", async () => {
@@ -120,15 +124,16 @@ describe("useChannels hooks", () => {
       expires_at: "2026-06-12T13:00:00Z",
       pair_url: "",
     };
-    const fetchMock = stubFetch(code);
+    const api = stubApi(code);
 
     const { result } = renderHook(() => useIssuePairingCode(TG.uid), { wrapper: makeWrapper() });
     act(() => result.current.mutate());
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.code).toBe("ABCD2345");
-    expect(String(fetchMock.mock.calls[0][0])).toContain(`/channels/${TG.uid}/pairing-code`);
-    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "POST" });
+    expect(api.POST).toHaveBeenCalledWith("/channels/{uid}/pairing-code", {
+      params: { path: { uid: TG.uid } },
+    });
   });
 
   test("useRebindChannel PATCHes the config with the new binding, keeping the rest", async () => {
@@ -166,7 +171,14 @@ describe("useChannels hooks", () => {
   test("useIssuePairingCode toasts an error when the request fails (not silent)", async () => {
     // An unmapped error code falls through to the server envelope message,
     // so the toast carries the real failure reason rather than being silent.
-    stubFetch({ error: { code: "ADAPTER_OFFLINE", message: "adapter offline" } }, false, 500);
+    const api = mockApiClient({
+      POST: vi.fn().mockResolvedValue({
+        data: undefined,
+        error: { error: { code: "ADAPTER_OFFLINE", message: "adapter offline" } },
+        response: new Response(null, { status: 500 }),
+      }),
+    });
+    getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
 
     const { result } = renderHook(() => useIssuePairingCode(TG.uid), { wrapper: makeWrapper() });
     act(() => result.current.mutate());
@@ -186,6 +198,7 @@ describe("useCreateChannel", () => {
    *  are no longer the same string. */
   function registeringApi() {
     return mockApiClient({
+      GET: vi.fn().mockResolvedValue({ data: { resources: [] }, error: undefined }),
       POST: vi.fn(async (path: string, init?: unknown) =>
         path === "/resources"
           ? { data: { uid: TG.uid, ...(init as { body: Record<string, unknown> }).body } }
@@ -254,9 +267,13 @@ describe("useCreateChannel", () => {
 
   test("toasts when registration fails", async () => {
     const api = mockApiClient({
+      GET: vi.fn().mockResolvedValue({ data: { resources: [] }, error: undefined }),
       POST: vi.fn(async (path: string) =>
         path === "/resources"
-          ? { error: { error: { code: "CONFIG_INVALID", message: "bad config" } } }
+          ? {
+              error: { error: { code: "CONFIG_INVALID", message: "bad config" } },
+              response: new Response(null, { status: 422 }),
+            }
           : { data: undefined, error: undefined },
       ) as ReturnType<typeof mockApiClient>["POST"],
     });
