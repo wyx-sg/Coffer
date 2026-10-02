@@ -266,6 +266,7 @@ make test-durations      # re-measure backend/.test_durations (CI shard balance)
 make verify-contract     # contract tier only
 make verify-benchmark    # every benchmark-marked test, including those too slow for verify
 make verify-e2e          # e2e tier only (Playwright: web + mcp projects)
+# ports busy? COFFER_E2E_WEB_PORT=5183 COFFER_E2E_PORT=18200 make verify-e2e
 make verify-acceptance   # audit spec.md scenarios vs test markers
 make verify-visual       # screenshot baseline: every route, light + dark (not in verify / verify-e2e)
 make verify-secrets      # gitleaks over the full history (skips without a gitleaks binary)

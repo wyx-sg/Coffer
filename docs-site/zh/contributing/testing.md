@@ -187,6 +187,8 @@ Playwright 会启动两个 Web 服务器：
 
 ::: warning 修改端口
 守护进程的开发 CORS 允许列表固定为 `http://localhost:5173` 和 `http://127.0.0.1:5173`。如果你从其他端口提供界面，还要把 `COFFER_CORS_ORIGINS` 设为那个来源，它会完全替换允许列表。不设的话，守护进程会以 `403 ORIGIN_NOT_ALLOWED` 拒绝每一个浏览器请求，页面报 "Failed to fetch"，`web` 的 spec 全部失败，尽管其实什么都没坏。
+
+如果另一个检出的开发服务器已经占着这两个端口，就把套件挪开：`COFFER_E2E_WEB_PORT=5183 COFFER_E2E_PORT=18200 make verify-e2e`。配置会自己传入对应的 `COFFER_CORS_ORIGINS`，并使用自己的 HOME 指针，两次运行不会共用同一个守护进程。
 :::
 
 CI 失败时，`e2e` job 会把 Playwright 报告和 trace，以及隔离守护进程的日志目录和 `daemon.json`，作为 workflow 产物上传。

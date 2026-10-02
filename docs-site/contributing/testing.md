@@ -187,6 +187,8 @@ Playwright starts two web servers:
 
 ::: warning Changing the ports
 The daemon's development CORS allowlist is fixed to `http://localhost:5173` and `http://127.0.0.1:5173`. If you serve the UI from any other port, also set `COFFER_CORS_ORIGINS` to that origin. It replaces the allowlist entirely. Without it, the daemon refuses every browser request with `403 ORIGIN_NOT_ALLOWED`, the page reports "Failed to fetch", and the `web` specs fail even though nothing is broken.
+
+When another checkout's dev server already holds those ports, move the suite: `COFFER_E2E_WEB_PORT=5183 COFFER_E2E_PORT=18200 make verify-e2e`. The config then passes the matching `COFFER_CORS_ORIGINS` itself and keeps its own HOME pointer, so the two runs don't share a daemon.
 :::
 
 On a CI failure, the `e2e` job uploads the Playwright report and traces, plus the isolated daemon's log directory and `daemon.json`, as workflow artifacts.

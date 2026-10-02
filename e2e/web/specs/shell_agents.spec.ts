@@ -25,7 +25,9 @@ beforeEachInjectToken();
 
 /** The isolated HOME start_daemon.sh chose (read when needed: it exists once the daemon is up). */
 function home(): string {
-  return fs.readFileSync("/tmp/coffer-e2e-home.path", "utf-8").trim();
+  return fs
+    .readFileSync(process.env.COFFER_E2E_HOME_FILE ?? "/tmp/coffer-e2e-home.path", "utf-8")
+    .trim();
 }
 
 /** A stand-in `codex` on the daemon's PATH, used only where no real one is found first. */
