@@ -269,3 +269,32 @@ def test_the_report_names_links_and_the_remote(legacy: LegacyHome) -> None:
     assert "empty branch" in notes
     assert "sync/" not in notes
     assert (legacy.home / ".claude/projects/p/memory").is_symlink()
+
+
+@pytest.mark.acceptance(spec="vault-storage", scenario="the upgrade carries every item")
+def test_the_check_expects_the_shape_the_upgrade_writes(legacy: LegacyHome) -> None:
+    """The upgrade moves "which connection an agent runs on" onto the agent and
+    drops ``wire_api`` and ``is_active``; the inventory it is checked against
+    states the same shape, so those deliberate changes are not reported as
+    differences."""
+    with sqlite3.connect(legacy.db) as conn:
+        for name, patch in (
+            ("anthropic", {"is_active": True}),
+            ("claude_code", {"wire_api": "responses"}),
+        ):
+            (raw,) = conn.execute(
+                "SELECT config_json FROM resources WHERE name=?", (name,)
+            ).fetchone()
+            conn.execute(
+                "UPDATE resources SET config_json=? WHERE name=?",
+                (json.dumps({**json.loads(raw), **patch}), name),
+            )
+    inventory = take_inventory(legacy.home, upgrade_db=UPGRADE)
+    report = _migrate(legacy)
+    assert report.outcome == "migrated", report.lines()
+    assert check(legacy.home, inventory) == []
+    agent = parse_resource(
+        (legacy.coffer / "local" / "resources" / "agent" / "claude_code.json").read_bytes()
+    )
+    assert agent.config["connection_uid"] == UIDS["anthropic"]
+    assert "wire_api" not in agent.config

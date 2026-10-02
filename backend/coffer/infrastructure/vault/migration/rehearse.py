@@ -73,7 +73,7 @@ def rehearse(
         _copy(source, coffer_home(home))
         before = hash_tree(coffer_home(home))
         with pointed_home(home):
-            inventory = take_inventory(home)
+            inventory = take_inventory(home, upgrade_db=upgrade_db)
         report = migrate(home, upgrade_db=upgrade_db, storage_of=storage_of, build=build)
         result = Rehearsal(report=report)
         if report.outcome == "migrated":

@@ -18,7 +18,7 @@ import sqlite3
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from coffer.domain.vault.document import DocumentInvalid, parse_resource
 from coffer.domain.vault.portability import expand_home
@@ -26,17 +26,22 @@ from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 from coffer.infrastructure.knowledge.fs import decode, render
 from coffer.infrastructure.secret.encrypted_store import ref_files
 from coffer.infrastructure.vault.home import coffer_home
+from coffer.infrastructure.vault.migration.connection_choice import settle_connection_choice
 from coffer.infrastructure.vault.migration.knowledge import CURATED_AT_KEY
 from coffer.infrastructure.vault.migration.legacy_db import read_legacy
 from coffer.infrastructure.vault.migration.places import (
     IN_PLACE,
     LEGACY_DB,
+    PRE_LAYOUT_REVISION,
     RUNS_DB,
     SIDE_FILES,
     TREE_MOVES,
     at,
 )
 from coffer.infrastructure.vault.reach_store import ReachStore, reach_path
+
+if TYPE_CHECKING:
+    from coffer.infrastructure.vault.migration.run import UpgradeDb
 
 #: The history tables whose rows must all reach ``runs.db``.
 HISTORY_TABLES = ("audit_log", "conversations", "chat_messages", "mcp_invocations")
@@ -107,9 +112,17 @@ def _count(db: Path, tables: tuple[str, ...]) -> dict[str, int]:
     return out
 
 
-def take_inventory(home: Path) -> Inventory:
+def take_inventory(home: Path, *, upgrade_db: UpgradeDb | None = None) -> Inventory:
     """What ``home`` holds before its upgrade. The database is read from a
-    scratch copy, so taking the inventory changes nothing in the home."""
+    scratch copy, so taking the inventory changes nothing in the home.
+
+    The upgrade reads the database at ``PRE_LAYOUT_REVISION``, after the
+    database's own migrations have rewritten what they rewrite (a secret
+    reference is renamed, a retired field is dropped) and before the layout
+    move. With ``upgrade_db`` the scratch copy is brought to that revision
+    first, so the inventory states what the upgrade will carry, not what an
+    older revision happened to hold. The connection choice then moves onto the
+    agents exactly as the upgrade moves it."""
     inv = Inventory()
     legacy = at(home, LEGACY_DB)
     if legacy.is_file():
@@ -119,8 +132,13 @@ def take_inventory(home: Path) -> Inventory:
                 source = legacy.with_name(legacy.name + side)
                 if source.is_file():
                     shutil.copy2(source, copy.with_name(copy.name + side))
+            if upgrade_db is not None:
+                from coffer.infrastructure.vault.migration.run import sqlite_url
+
+                upgrade_db(sqlite_url(copy), PRE_LAYOUT_REVISION)
             state = read_legacy(copy)
-            inv.resources = {r.uid: (r.kind, r.name, r.config) for r in state.resources}
+            resources = settle_connection_choice(state.resources)
+            inv.resources = {r.uid: (r.kind, r.name, r.config) for r in resources}
             inv.secrets = {str(c["ref"]) for c in state.secrets}
             inv.rows = _count(copy, HISTORY_TABLES)
     base = coffer_home(home)
