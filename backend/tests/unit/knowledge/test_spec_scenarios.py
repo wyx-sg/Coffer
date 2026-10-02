@@ -280,18 +280,29 @@ async def test_the_sweep_waits_for_a_converge_round_to_release_the_lock(
     root: pathlib.Path,
 ) -> None:
     inbox.submit_material("shopee", title="Waiting", description="d", body="b", actor="agent")
-    lock = asyncio.Lock()
+    asking = asyncio.Event()
+
+    class _WatchedLock(asyncio.Lock):
+        async def acquire(self) -> bool:
+            # Set only when the sweep has reached the lock, so "it waited" is
+            # observed rather than assumed from a sleep (the work before the
+            # lock runs in threads and takes as long as the machine is busy).
+            asking.set()
+            return await super().acquire()
+
+    lock = _WatchedLock()
     curated: list[Any] = []
     worker = _held_worker(lock, curated)
 
-    await lock.acquire()  # a converge round is writing the vault
+    await super(_WatchedLock, lock).acquire()  # a converge round is writing the vault
     tick = asyncio.create_task(worker.run_once())
-    await asyncio.sleep(0.05)
+    await asyncio.wait_for(asking.wait(), timeout=60)
+    await asyncio.sleep(0)
     assert curated == []
     assert not tick.done()
 
     lock.release()
-    await asyncio.wait_for(tick, timeout=5)
+    await asyncio.wait_for(tick, timeout=60)
     assert len(curated) == 1
     assert curated[0].material == "waiting.md"
 
