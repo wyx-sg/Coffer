@@ -74,18 +74,9 @@ describe("SkillLibrary", () => {
     expect(within(group("Built-in")!).getByTestId("skill-builtin-badge")).toBeInTheDocument();
   });
 
-  test("Kind filters built-in and custom; search and Reach apply to built-ins too", () => {
+  test("there is no Kind filter; search and Reach apply to built-ins too", () => {
     renderLibrary();
-    fireEvent.click(screen.getByRole("combobox", { name: "Kind" }));
-    fireEvent.click(screen.getByRole("option", { name: "Custom" }));
-    expect(group("Built-in")).toBeNull();
-    expect(group("In use")).not.toBeNull();
-    fireEvent.click(screen.getByRole("combobox", { name: "Kind" }));
-    fireEvent.click(screen.getByRole("option", { name: "Built-in" }));
-    expect(group("In use")).toBeNull();
-    expect(group("Built-in")).not.toBeNull();
-    fireEvent.click(screen.getByRole("combobox", { name: "Kind" }));
-    fireEvent.click(screen.getByRole("option", { name: "All" }));
+    expect(screen.queryByRole("combobox", { name: "Kind" })).toBeNull();
     fireEvent.change(screen.getByRole("textbox", { name: "Filter skills" }), {
       target: { value: "zzz" },
     });

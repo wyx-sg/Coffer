@@ -531,12 +531,6 @@
       "behindSearch": "Behind search",
       "bulkLabel": "Selected MCP servers",
       "selectAll": "Select all shown servers",
-      "kind": {
-        "label": "Kind",
-        "all": "All",
-        "builtin": "Built-in",
-        "custom": "Custom"
-      },
       "calledBy": "Called by",
       "calls_one": "call",
       "calls_other": "calls",
@@ -2544,12 +2538,6 @@
       "inUse": "In use",
       "unused": "Unused",
       "builtin": "Built-in"
-    },
-    "kind": {
-      "label": "Kind",
-      "all": "All",
-      "builtin": "Built-in",
-      "custom": "Custom"
     },
     "detail": {
       "updated": "Updated {{when}}",

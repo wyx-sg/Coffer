@@ -1,7 +1,7 @@
 // frontend/src/components/skills/SkillLibrary.tsx
 // The left pane of the Skills page: the library of managed skills, laid out
 // like the MCP servers list. A filter field (name + description); under it the
-// Reach and Kind (All / Built-in / Custom) filters and Check copies; then the
+// Reach filter and Check copies; then the
 // skills grouped In use (reaches at least one agent), Unused (off, or limited
 // to nobody) and, last, Built-in (what Coffer ships), a count on each heading.
 // Every filter applies to the built-in rows too. While rows are ticked the
@@ -13,7 +13,6 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
 
-import { ListKindFilter, type KindFilterValue } from "@/components/ListKindFilter";
 import { ReachFilter } from "@/components/reach/ReachFilter";
 import { SearchInput } from "@/components/SearchInput";
 import { SkillLibraryRow } from "@/components/skills/SkillLibraryRow";
@@ -67,20 +66,17 @@ export function SkillLibrary({
   const clis = useClis().data?.items ?? [];
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ReachFilterValue>("all");
-  const [kind, setKind] = useState<KindFilterValue>("all");
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
     const out: Record<SkillGroup, SkillOut[]> = { inUse: [], unused: [], builtin: [] };
     for (const s of skills) {
-      if (kind === "builtin" && !s.builtin) continue;
-      if (kind === "custom" && s.builtin) continue;
       if (!matchesReach(filter, s)) continue;
       if (q && !`${s.name} ${s.description}`.toLowerCase().includes(q)) continue;
       out[skillGroup(s)].push(s);
     }
     return out;
-  }, [skills, query, filter, kind]);
+  }, [skills, query, filter]);
   const shown = GROUP_ORDER.reduce((n, g) => n + groups[g].length, 0);
 
   // What select-all covers: the listed skills the filters show, never a built-in one.
@@ -122,16 +118,6 @@ export function SkillLibrary({
             />
             <div className="flex flex-wrap items-center gap-2">
               <ReachFilter value={filter} onChange={setFilter} compact />
-              <ListKindFilter
-                value={kind}
-                onChange={setKind}
-                words={{
-                  label: t("skills.kind.label"),
-                  all: t("skills.kind.all"),
-                  builtin: t("skills.kind.builtin"),
-                  custom: t("skills.kind.custom"),
-                }}
-              />
               <Button
                 variant="ghost"
                 size="sm"

@@ -531,12 +531,6 @@
       "behindSearch": "通过搜索",
       "bulkLabel": "已选的 MCP 服务器",
       "selectAll": "全选当前列出的服务器",
-      "kind": {
-        "label": "类型",
-        "all": "全部",
-        "builtin": "内置",
-        "custom": "自定义"
-      },
       "calledBy": "调用方",
       "calls_one": "次调用",
       "calls_other": "次调用",
@@ -2544,12 +2538,6 @@
       "inUse": "已启用",
       "unused": "未使用",
       "builtin": "内置"
-    },
-    "kind": {
-      "label": "类型",
-      "all": "全部",
-      "builtin": "内置",
-      "custom": "自定义"
     },
     "detail": {
       "updated": "更新于 {{when}}",

@@ -61,16 +61,14 @@ describe("McpServerList", () => {
     builtin.data = { name: "coffer", url: "http://127.0.0.1:8000/mcp", tool_count: 2 };
   });
 
-  test("the search has its own row; Reach and Kind share the next, labelled in the trigger", () => {
+  test("the search has its own row and Reach sits on the next, labelled in the trigger", () => {
     renderList();
     const search = screen.getByRole("textbox", { name: "Filter servers" });
     const reach = screen.getByRole("combobox", { name: "Reach" });
-    const kind = screen.getByRole("combobox", { name: "Kind" });
     const row = reach.parentElement?.parentElement;
-    expect(row).toBe(kind.parentElement);
     expect(row?.contains(search)).toBe(false);
     expect(reach).toHaveTextContent("Reach: All");
-    expect(kind).toHaveTextContent("Kind: All");
+    expect(screen.queryByRole("combobox", { name: "Kind" })).toBeNull();
   });
 
   test("a row's checkbox shows on hover or focus only, and on every row once any is ticked", () => {
