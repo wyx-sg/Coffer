@@ -41,8 +41,11 @@ export function useShellUpdates(): ShellUpdates {
   useEffect(() => {
     if (!inShell) return;
     let live = true;
+    // The first read must not overwrite a record that is newer than it: an
+    // announcement (or an action's answer) that lands before the read does is
+    // the later word.
     getUpdateStatus()
-      .then((s) => live && setStatus(s))
+      .then((s) => live && setStatus((current) => current ?? s))
       .catch((e: unknown) => live && setActionError(message(e)));
     const stop = onUpdateStatus((s) => live && setStatus(s));
     return () => {

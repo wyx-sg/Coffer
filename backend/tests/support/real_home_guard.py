@@ -107,6 +107,28 @@ _PATH_EVENTS: dict[str, tuple[int, ...]] = {
 #: Spawn events -> position of their ``env`` argument.
 _ENV_EVENTS: dict[str, int] = {"subprocess.Popen": 3, "os.exec": 2, "os.posix_spawn": 2}
 
+#: System tools that never read ``$HOME`` — they answer from the OS alone — so
+#: spawning one with a scrubbed env cannot reach the real home. Library code
+#: does exactly that on Linux: ``ctypes.util.find_library`` runs
+#: ``/sbin/ldconfig -p`` with ``env={"LC_ALL": "C", "LANG": "C"}``, the first
+#: time anything in the process looks a shared library up.
+_HOME_BLIND_PROGRAMS: frozenset[str] = frozenset({"ldconfig"})
+
+#: Variables a CI runner or a developer's terminal sets that change how the CLI
+#: renders, and so what a test reads back: ``FORCE_COLOR`` / ``PY_COLORS`` /
+#: ``TTY_COMPATIBLE`` make rich (and typer, which also reads
+#: ``GITHUB_ACTIONS``) treat a captured stream as a terminal — wrapping every
+#: token of an error panel in ANSI codes, and under ``TERM=dumb`` ignoring
+#: ``COLUMNS`` for a fixed 80-column table. ``COLUMNS`` / ``LINES`` are dropped
+#: because a rich ``Console`` built at import freezes the width it finds then.
+_TERMINAL_VARS: tuple[str, ...] = (
+    "FORCE_COLOR",
+    "PY_COLORS",
+    "TTY_COMPATIBLE",
+    "COLUMNS",
+    "LINES",
+)
+
 _GITCONFIG = "[user]\n\tname = Coffer Tests\n\temail = tests@coffer.invalid\n"
 
 
@@ -152,6 +174,12 @@ def isolate_process_env(fake_home: Path, real: tuple[str, ...]) -> None:
             del os.environ[name]
     for name in _DROPPED_VARS:
         os.environ.pop(name, None)
+    for name in _TERMINAL_VARS:
+        os.environ.pop(name, None)
+    # No colour, and never a terminal: typer forces one under GITHUB_ACTIONS
+    # unless told not to.
+    os.environ["NO_COLOR"] = "1"
+    os.environ["_TYPER_FORCE_DISABLE_TERMINAL"] = "1"
     os.environ["HOME"] = str(write_home_skeleton(fake_home))
 
 
@@ -233,6 +261,8 @@ class RealHomeGuard:
         env = args[env_index] if env_index < len(args) else None
         home = os.environ.get("HOME") if env is None else _env_home(env)
         if home is None:
+            if os.path.basename(os.fsdecode(args[0])) in _HOME_BLIND_PROGRAMS:
+                return None
             return f"spawned {args[0]!r} with no HOME in its env (it falls back to the real one)"
         if os.path.abspath(home) in self.homes:
             return f"spawned {args[0]!r} with HOME={home}, the real home"

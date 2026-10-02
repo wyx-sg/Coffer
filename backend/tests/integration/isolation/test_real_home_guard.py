@@ -144,6 +144,31 @@ def test_spawning_with_no_home_or_the_real_home_is_refused(env_home: str | None)
     assert ("no HOME" if env_home is None else "the real home") in caught[0].detail
 
 
+def test_terminal_rendering_variables_do_not_reach_the_cli_under_test() -> None:
+    """A CI runner forces colour and a width; a test that reads CLI output back
+    must see the same plain text everywhere."""
+    for name in ("FORCE_COLOR", "PY_COLORS", "TTY_COMPATIBLE", "COLUMNS", "LINES"):
+        assert name not in os.environ, name
+    assert os.environ["NO_COLOR"] == "1"
+    assert os.environ["_TYPER_FORCE_DISABLE_TERMINAL"] == "1"
+
+
+def test_a_home_blind_system_tool_may_run_with_a_scrubbed_env() -> None:
+    """``ctypes.util.find_library`` runs ``/sbin/ldconfig -p`` with an env of
+    its own on Linux; ldconfig reads the loader cache, never ``$HOME``."""
+    guard = _guard()
+    with guard.expect_violation() as caught:
+        assert (
+            guard._inspect(
+                "subprocess.Popen",
+                ("/sbin/ldconfig", ["/sbin/ldconfig", "-p"], None, {"LC_ALL": "C"}),
+                (0, 2),
+            )
+            is None
+        )
+    assert caught == []
+
+
 def test_a_swallowed_refusal_still_fails_the_test(tmp_path: pathlib.Path) -> None:
     """Code that tolerates an unreadable file would eat the PermissionError; the
     recorded violation must fail the test anyway. Proven on a nested run that

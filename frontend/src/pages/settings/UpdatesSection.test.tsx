@@ -57,6 +57,15 @@ function renderSection() {
   );
 }
 
+/** Press "Check for updates". The button is on screen, disabled, before the
+ * shell has answered with its record, and a press then does nothing — so wait
+ * for it to be enabled rather than for it to exist. */
+async function pressCheck() {
+  const button = await screen.findByRole("button", { name: /check for updates/i });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+}
+
 const CHECKED_AT = new Date(2026, 8, 30, 9, 15, 0).getTime();
 
 function record(over: Partial<UpdateStatus> = {}): UpdateStatus {
@@ -108,7 +117,7 @@ describe("UpdatesSection", () => {
       );
     });
     renderSection();
-    fireEvent.click(await screen.findByRole("button", { name: /check for updates/i }));
+    await pressCheck();
     expect(shell.check).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Coffer 1.0.1 is available")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /download and restart/i })).toBeEnabled();
@@ -148,7 +157,7 @@ describe("UpdatesSection", () => {
       }),
     );
     renderSection();
-    fireEvent.click(await screen.findByRole("button", { name: /check for updates/i }));
+    await pressCheck();
     expect(await screen.findByText("Couldn't check for updates")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(/timed out.*You are on 1\.0\.0/);
     // The last successful check's time is still the one shown.

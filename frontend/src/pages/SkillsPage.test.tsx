@@ -49,6 +49,11 @@ vi.mock("@/lib/api/agents", async (importOriginal) => ({
 vi.mock("@/lib/api/client", () => ({ getApiClient: () => h.client }));
 
 const { skillsApi } = await import("@/lib/api/skills");
+// The reading pane is a lazy chunk. Its first import transforms the pane's whole
+// module graph, which on a loaded CI runner takes longer than a findBy* waits —
+// so the test that opens it first failed there, not on a fast machine. Load it
+// once, before any test, so every test sees a warm module.
+await import("@/components/skills/SkillDetailPane");
 
 const CC = makeAgent();
 const CODEX = makeAgent({
