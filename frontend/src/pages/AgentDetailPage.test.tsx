@@ -153,13 +153,11 @@ describe("AgentDetailPage", () => {
     expect(screen.getByTestId("tab-body")).toHaveTextContent("overview");
   });
 
-  test("the header names the agent by its type, with its fixed name, version, directory and model", () => {
+  test("the header names the agent by its type and carries no detail line", () => {
     mockRoute();
     renderAt();
     expect(screen.getByRole("heading", { name: /Claude Code/ })).toBeInTheDocument();
-    expect(
-      screen.getByText("claude-code · v2.1.281 · ~/.claude · claude-opus-5-5"),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/v2\.1\.281/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Agents/ })).toHaveAttribute("href", "/agents");
   });
 

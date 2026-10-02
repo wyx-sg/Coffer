@@ -123,7 +123,7 @@ describe("SyncPage — tabs", () => {
 });
 
 describe("SyncPage — header", () => {
-  test("title, the add-a-Mac help, the pill, and the remote with a copy button", async () => {
+  test("title, the pill, and the remote with a copy button", async () => {
     const writeText = vi.fn(() => Promise.resolve());
     Object.assign(navigator, { clipboard: { writeText } });
     seed(
@@ -137,7 +137,6 @@ describe("SyncPage — header", () => {
     );
     renderAt();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Sync");
-    expect(screen.getByRole("button", { name: "How to add another Mac" })).toBeInTheDocument();
     expect(pill()).toHaveTextContent("In sync");
     expect(screen.getByText("git@github.com:me/vault.git")).toBeInTheDocument();
     expect(screen.getByText(/· main · every hour/)).toBeInTheDocument();

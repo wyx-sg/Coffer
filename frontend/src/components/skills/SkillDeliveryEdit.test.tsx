@@ -76,7 +76,8 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 const row = (name: string) => screen.findByTestId(`skill-delivery-${name}`);
-const headerText = () => document.querySelector("header")?.textContent ?? "";
+const headerText = () =>
+  document.querySelector("header:has([data-testid=skill-master-path])")?.textContent ?? "";
 
 describe("the delivery tab's switches", () => {
   test("every agent has a switch, on for the delivered and off for the rest", async () => {

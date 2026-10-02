@@ -82,12 +82,15 @@ export function OverviewModel({ agent }: { agent: AgentOut }) {
   );
 }
 
-export function OverviewDetails({ agent }: { agent: AgentOut }) {
+export function OverviewDetails({ agent, version }: { agent: AgentOut; version: string | null }) {
   const { t } = useTranslation();
   return (
     <Section title={t(`${K}.details.heading`)}>
       <dl className="flex flex-col">
         <InfoRow label={t("agents.type")}>{agentTypeLabel(agent.type)}</InfoRow>
+        <InfoRow label={t(`${K}.details.version`)} mono={!!version}>
+          {version ?? t("common.emptyValue")}
+        </InfoRow>
         <InfoRow label={t("agents.configDir")} mono>
           {agent.config_dir}
         </InfoRow>

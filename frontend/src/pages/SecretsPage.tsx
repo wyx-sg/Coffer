@@ -24,7 +24,6 @@ import { SecretsBrowser } from "@/components/secret/SecretsBrowser";
 import { SecretsMissingBanner } from "@/components/secret/SecretsMissingBanner";
 import { isMissingHere, refsWaiting } from "@/components/secret/secretRows";
 import { EmptyState } from "@/components/EmptyState";
-import { HelpTip } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import type { SecretRef } from "@/lib/api/secret";
@@ -68,7 +67,6 @@ export function SecretsPage() {
     <div className="space-y-6">
       <PageHeader
         title={t("secrets.title")}
-        badges={<HelpTip label={t("secrets.about.label")}>{t("secrets.about.body")}</HelpTip>}
         subtitle={t("secrets.subtitle")}
         actions={
           firstRun ? null : (

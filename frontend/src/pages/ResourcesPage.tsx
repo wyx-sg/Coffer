@@ -13,7 +13,6 @@ import { useTranslation } from "react-i18next";
 import { Plus, Server } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
-import { HelpTip } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { AddMcpServerDialog } from "@/components/mcp/AddMcpServerDialog";
@@ -133,14 +132,7 @@ export function ResourcesPage() {
       <div className="shrink-0 border-b border-border-subtle px-6 pb-4 pt-5">
         <PageHeader
           title={t("resources.title")}
-          badges={
-            <>
-              {list.data ? <span className="text-sm text-text-muted">{servers.length}</span> : null}
-              <HelpTip>
-                <p className="text-xs text-text-muted">{t("resources.subtitle")}</p>
-              </HelpTip>
-            </>
-          }
+          subtitle={t("resources.subtitle")}
           actions={
             <Button onClick={() => setAdd("paste")}>
               <Plus aria-hidden /> {t("resources.addServer")}

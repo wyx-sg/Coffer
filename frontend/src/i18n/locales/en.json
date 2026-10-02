@@ -211,7 +211,7 @@
   },
   "resources": {
     "title": "MCP servers",
-    "subtitle": "Coffer runs them and serves their tools to the agents you choose, through one endpoint.",
+    "subtitle": "MCP servers Coffer runs and serves to your agents through one endpoint.",
     "addServer": "Add server",
     "loadFailed": "Failed to load resources",
     "status": {
@@ -796,6 +796,7 @@
     "agentFallback": "an agent"
   },
   "activity": {
+    "subtitle": "The audit log, MCP calls and the daemon log.",
     "title": "Activity",
     "live": "Live",
     "notLive": "Not live",
@@ -2156,6 +2157,7 @@
       },
       "details": {
         "heading": "Details",
+        "version": "Version",
         "uid": "UID",
         "registered": "Added"
       },
@@ -2402,29 +2404,7 @@
       }
     },
     "list": {
-      "subtitle": "Claude Code and Codex on this Mac. Coffer finds them on its own; add one and it gets your MCP servers, skills and memory through one entry and one hook.",
-      "count_one": "{{count}} agent",
-      "count_other": "{{count}} agents",
-      "statusCount": {
-        "not_installed_one": "{{count}} not installed",
-        "not_installed_other": "{{count}} not installed",
-        "config_left_behind_one": "{{count}} config left behind",
-        "config_left_behind_other": "{{count}} config left behind",
-        "not_found_one": "{{count}} not found",
-        "not_found_other": "{{count}} not found",
-        "never_run_one": "{{count}} installed, never run",
-        "never_run_other": "{{count}} installed, never run",
-        "not_added_one": "{{count}} detected, not added",
-        "not_added_other": "{{count}} detected, not added",
-        "disabled_one": "{{count}} off",
-        "disabled_other": "{{count}} off",
-        "connected_one": "{{count}} connected",
-        "connected_other": "{{count}} connected",
-        "needs_repair_one": "{{count}} needs repair",
-        "needs_repair_other": "{{count}} need repair",
-        "not_connected_one": "{{count}} not connected",
-        "not_connected_other": "{{count}} not connected"
-      },
+      "subtitle": "Claude Code and Codex on this Mac, found automatically.",
       "addBoth": "Add both",
       "firstRunNote": "Add writes one MCP entry and one memory hook into each agent’s config; you review the exact lines before anything is written. Coffer looks for agents when this page opens, when the window comes back into focus, and every few minutes.",
       "footnote": "Counts are what reaches each agent. Choose who gets a resource on its own page:",
@@ -2552,6 +2532,7 @@
     }
   },
   "skills": {
+    "subtitle": "Skills Coffer manages: one master folder, linked into each agent you choose.",
     "builtinBadge": "Built-in",
     "title": "Skills",
     "loadFailed": "Failed to load skills",
@@ -2758,7 +2739,6 @@
         "orphan_master": "A folder in the skills store that Coffer doesn't know."
       }
     },
-    "help": "Only the skills Coffer manages: each is one master folder, linked into every agent you choose. An agent's own skills are on that agent's Skills tab, where they can be adopted.",
     "tryAgain": "Retry",
     "review": "Review…",
     "row": {
@@ -2906,6 +2886,7 @@
     }
   },
   "knowledge": {
+    "subtitle": "Documents you and Coffer write together, one collection each.",
     "title": "Knowledge",
     "loadFailed": "Couldn't load your collections",
     "nav": {
@@ -3276,7 +3257,7 @@
   },
   "memory": {
     "title": "Memory",
-    "subtitle": "What your agents learned, read from their own memory and distilled into one memory per subject. Read-only.",
+    "subtitle": "What your agents learned, distilled into one memory per subject. Read-only.",
     "update": "Update memory",
     "updating": "Updating…",
     "updateHint": "Reads every agent's latest memory, then distils what is new into Coffer's memories.",
@@ -3408,6 +3389,7 @@
     }
   },
   "conversations": {
+    "subtitle": "Your conversations with agents, including those from chat channels.",
     "bulk": {
       "label": "Selected conversations",
       "selected": "{{count}} selected",
@@ -3614,6 +3596,7 @@
     }
   },
   "channels": {
+    "subtitle": "Connect a chat app so your agents answer where you already talk.",
     "title": "Channels",
     "loadFailed": "Failed to load channels",
     "noMatches": "No channels match your search.",
@@ -3913,7 +3896,7 @@
       "waiting": "Waiting for your message…",
       "newCode": "New code",
       "newCodeAfterExpiry": "Generate a new code",
-    "cancel": "Cancel"
+      "cancel": "Cancel"
     },
     "removePerson": {
       "title": "Remove {{owner}} from {{name}}?",
@@ -4054,6 +4037,7 @@
     "bulkReach": "Reach for the selected"
   },
   "sync": {
+    "subtitle": "Keep this vault in step with a git remote you own.",
     "title": "Sync",
     "loadFailed": "Couldn't load Sync",
     "tabs": {
@@ -4527,16 +4511,6 @@
       "syncing": "Syncing…",
       "tryAgain": "Retry"
     },
-    "help": {
-      "label": "How to add another Mac",
-      "title": "Add another Mac",
-      "steps": {
-        "install": "Install Coffer on the other Mac.",
-        "open": "Open Sync there.",
-        "same": "Enter the same repository URL and branch as this Mac.",
-        "join": "Preview what joining would change, then join."
-      }
-    },
     "pill": {
       "setup": "Not set up",
       "syncing": "Syncing",
@@ -4945,6 +4919,7 @@
     }
   },
   "customTools": {
+    "subtitle": "HTTP API requests your agents call as tools.",
     "title": "Custom tools",
     "pendingApprovalSaved": "Saved. The secret waits for approval in the Coffer app before calls can use it.",
     "health": {
@@ -4955,9 +4930,6 @@
       "off": "Off"
     },
     "list": {
-      "counts": "{{groups}} · {{tools}}",
-      "groupCount_one": "{{count}} group",
-      "groupCount_other": "{{count}} groups",
       "toolCount_one": "{{count}} tool",
       "toolCount_other": "{{count}} tools",
       "filter": "Filter groups",
@@ -5252,7 +5224,6 @@
       "handBody": "Method, URL template, headers, body and arguments.",
       "handPoint": "Starts a new group; add more requests later"
     },
-    "pageHelp": "A custom tool is one HTTP API call that Coffer makes for your agents — no MCP server to run. Tools live in groups: a group has a fixed name agents see as <group>__<tool>, one base URL, an auth header whose value comes from a secret, and a default reach.",
     "reach": {
       "countOf": "{{count}} of {{total}} agents"
     },
@@ -5279,9 +5250,9 @@
     }
   },
   "clis": {
+    "subtitle": "Command-line tools your skills and MCP servers need, problems first.",
     "title": "CLIs",
     "addTool": "Add a command-line tool",
-    "help": "Every command-line tool your skills and MCP servers need, and the ones you add yourself, problems first. Open one to see everything its own help lists. Coffer never installs, updates or logs in for you: it hands the fix to your agent as a prompt, and Check again looks again.",
     "checkAgain": "Check again",
     "checking": "Checking…",
     "checkedAgo": "Checked {{when}}",
@@ -5431,14 +5402,10 @@
   },
   "secrets": {
     "title": "Secrets",
-    "subtitle": "API keys and tokens your MCP servers and providers use, encrypted in the vault on this Mac.",
+    "subtitle": "API keys and tokens, encrypted in the vault on this Mac.",
     "search": "Find a secret",
     "loadFailed": "Couldn't load secrets",
     "noMatch": "No secret matches this search.",
-    "about": {
-      "label": "About secrets",
-      "body": "Use a secret in a command: coffer run --secret github-token -- gh release create v2. The command runs with GITHUB_TOKEN set for it alone; repeat --secret for more, NAME=secret picks the variable name. It keeps the value out of files and shell history; it doesn't hide it from an agent that runs the command."
-    },
     "empty": {
       "title": "No secrets yet",
       "body": "Keep API keys and tokens here instead of in config files. Servers, providers, skills and channels refer to them by name; the value stays encrypted."
@@ -5755,6 +5722,7 @@
     }
   },
   "usage": {
+    "subtitle": "Model usage through Coffer's proxy, and subscription quota.",
     "title": "Usage",
     "updated": "Updated {{time}}",
     "refresh": "Refresh",
@@ -5960,7 +5928,7 @@
   },
   "providers": {
     "title": "Model providers",
-    "subtitle": "Model endpoints Coffer can route agents and its own engine through. Order is fallback priority.",
+    "subtitle": "Model endpoints your agents and Coffer use; order is fallback priority.",
     "loadFailed": "Couldn't load the model providers",
     "protocols": {
       "anthropic": "Anthropic",

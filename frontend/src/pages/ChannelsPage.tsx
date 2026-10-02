@@ -55,11 +55,7 @@ export function ChannelsPage() {
   const header = (
     <PageHeader
       title={t("channels.title")}
-      badges={
-        channels.length > 0 ? (
-          <span className="text-sm text-text-muted">{channels.length}</span>
-        ) : null
-      }
+      subtitle={t("channels.subtitle")}
       actions={
         <Button onClick={() => openAdd(null)}>
           <Plus aria-hidden /> {t("channels.add.button")}

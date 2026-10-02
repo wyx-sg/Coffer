@@ -87,7 +87,9 @@ export function KnowledgePage() {
       <PageHeader
         title={t("knowledge.title")}
         badges={list.length > 0 && modelSet ? <KnowledgeAutomaticPopover /> : null}
-        subtitle={list.length > 0 && modelSet === false ? <KnowledgeNoModelLine /> : null}
+        subtitle={
+          list.length > 0 && modelSet === false ? <KnowledgeNoModelLine /> : t("knowledge.subtitle")
+        }
         actions={
           list.length > 0 ? (
             <>

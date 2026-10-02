@@ -77,7 +77,7 @@ function OverviewBody({ agent, typeRow, actions }: Props) {
       </SectionStack>
       <SectionStack className="min-w-0 flex-1">
         <OverviewModel agent={agent} />
-        <OverviewDetails agent={agent} />
+        <OverviewDetails agent={agent} version={typeRow.version ?? agent.version ?? null} />
         <OverviewRecentSessions agent={agent} />
       </SectionStack>
     </div>

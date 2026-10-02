@@ -13,7 +13,6 @@ import { useTranslation } from "react-i18next";
 import { ArrowLeft, Boxes, Plus, RotateCcw } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
-import { HelpTip } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { Button } from "@/components/ui/button";
@@ -70,14 +69,7 @@ export function ProvidersSplit({ uid }: { uid?: string }) {
   const header = (
     <PageHeader
       title={t("providers.title")}
-      badges={
-        <>
-          {providers.data ? <span className="text-sm text-text-muted">{list.length}</span> : null}
-          <HelpTip>
-            <p className="text-xs text-text-muted">{t("providers.subtitle")}</p>
-          </HelpTip>
-        </>
-      }
+      subtitle={t("providers.subtitle")}
       actions={
         <Button onClick={() => setAdding("anthropic")}>
           <Plus aria-hidden /> {t("providers.add.open")}

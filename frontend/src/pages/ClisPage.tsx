@@ -14,7 +14,6 @@ import { useTranslation } from "react-i18next";
 import { Plus, RefreshCw, SquareTerminal } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
-import { HelpTip } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { AddCliDialog } from "@/components/clis/AddCliDialog";
@@ -99,14 +98,7 @@ export function ClisPage() {
       <div className="shrink-0 border-b border-border-subtle px-6 py-5 md:px-8">
         <PageHeader
           title={t("clis.title")}
-          badges={
-            <>
-              {data ? <span className="text-sm text-text-muted">{items.length}</span> : null}
-              <HelpTip>
-                <p className="text-xs">{t("clis.help")}</p>
-              </HelpTip>
-            </>
-          }
+          subtitle={t("clis.subtitle")}
           actions={
             <>
               <Button variant="outline" disabled={check.isPending} onClick={() => check.mutate()}>

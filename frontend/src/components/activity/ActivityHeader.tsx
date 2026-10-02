@@ -42,6 +42,7 @@ export function ActivityHeader({ tab, onTab, counts, live, specs, keep }: Props)
     <>
       <PageHeader
         title={t("activity.title")}
+        subtitle={t("activity.subtitle")}
         badges={
           <Tooltip>
             <TooltipTrigger asChild>

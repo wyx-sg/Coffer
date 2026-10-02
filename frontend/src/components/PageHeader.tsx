@@ -5,7 +5,6 @@
 // that sits beside it (a count, a status, "Unsaved changes"), and the page's
 // actions pushed to the right — and an optional subtitle under the row. Detail
 // pages keep one fixed action order: reach → test/refresh → edit → delete.
-// A hairline under the header sets it apart from the page body on every surface.
 import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -40,14 +39,14 @@ export function BackLink({ to, label }: { to: string; label: string }) {
 
 export function PageHeader({ title, subtitle, actions, badges, back }: Props) {
   return (
-    <header className="flex flex-col gap-1.5 border-b border-border-subtle pb-4">
+    <header className="flex flex-col gap-1.5">
       {back ? <BackLink to={back.to} label={back.label} /> : null}
       <div className="flex min-h-control-md flex-wrap items-center gap-x-2.5 gap-y-2">
         <h1 className="flex min-w-0 items-center gap-2.5 text-lg font-bold">{title}</h1>
         {badges}
         {actions ? <div className="ml-auto flex items-center gap-2">{actions}</div> : null}
       </div>
-      {subtitle ? <p className="max-w-prose text-sm text-text-subtle">{subtitle}</p> : null}
+      {subtitle ? <p className="truncate text-sm text-text-subtle">{subtitle}</p> : null}
     </header>
   );
 }

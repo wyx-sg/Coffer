@@ -12,7 +12,6 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 
-import { HelpTip } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { SkillAddDialog, type SkillAddSource } from "@/components/skills/SkillAddDialog";
@@ -80,14 +79,7 @@ export function SkillsPage() {
       <div className="shrink-0 border-b border-border-subtle px-6 py-3.5">
         <PageHeader
           title={t("skills.title")}
-          badges={
-            <>
-              {list.data ? <span className="text-sm text-text-muted">{skills.length}</span> : null}
-              <HelpTip>
-                <p className="text-xs">{t("skills.help")}</p>
-              </HelpTip>
-            </>
-          }
+          subtitle={t("skills.subtitle")}
           actions={
             <Button onClick={() => openAdd("folder")}>
               <Plus aria-hidden /> {t("skills.add")}

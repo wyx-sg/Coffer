@@ -9,7 +9,6 @@
 import { useTranslation } from "react-i18next";
 import { Check, Copy, RefreshCw, RotateCw } from "lucide-react";
 
-import { HelpTip } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusPill } from "@/components/status/StatusPill";
 import { Button } from "@/components/ui/button";
@@ -17,24 +16,6 @@ import type { SyncRemote } from "@/lib/api/sync";
 import { useCopyText } from "@/lib/hooks/useCopyText";
 import { primaryAction, type SyncState } from "./syncPageState";
 import { intervalPhrase } from "./syncTime";
-
-const HELP_STEPS = ["install", "open", "same", "join"] as const;
-
-function HowToAddAMac() {
-  const { t } = useTranslation();
-  return (
-    <HelpTip label={t("sync.help.label")}>
-      <div className="space-y-1.5 text-xs">
-        <p className="font-label text-text">{t("sync.help.title")}</p>
-        <ol className="list-decimal space-y-1 pl-4 text-text-muted">
-          {HELP_STEPS.map((step) => (
-            <li key={step}>{t(`sync.help.steps.${step}`)}</li>
-          ))}
-        </ol>
-      </div>
-    </HelpTip>
-  );
-}
 
 /** The pill in the header: a status tone, or the accent while something moves. */
 function SyncPill({ state }: { state: SyncState }) {
@@ -95,12 +76,8 @@ export function SyncHeader({ state, remote, onRun }: Props) {
   return (
     <div className="flex flex-col gap-1">
       <PageHeader
-        title={
-          <>
-            {t("sync.title")}
-            <HowToAddAMac />
-          </>
-        }
+        title={t("sync.title")}
+        subtitle={t("sync.subtitle")}
         badges={<SyncPill state={state} />}
         actions={
           setUp ? (

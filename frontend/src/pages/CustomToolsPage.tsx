@@ -7,7 +7,6 @@ import { useTranslation } from "react-i18next";
 import { Plus, Wrench } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
-import { HelpTip } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { AddCustomToolDialog } from "@/components/custom-tools/AddCustomToolDialog";
@@ -27,28 +26,13 @@ export function CustomToolsPage() {
   const [adding, setAdding] = useState<AddStart | null>(null);
   const groups = data ?? [];
   const firstRun = !isPending && !error && groups.length === 0;
-  const toolCount = groups.reduce((n, g) => n + g.tools.length, 0);
 
   return (
     <div className="relative -mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">
       <div className="shrink-0 border-b border-border-subtle px-6 py-3">
         <PageHeader
           title={t("customTools.title")}
-          badges={
-            <>
-              {groups.length > 0 ? (
-                <span className="text-sm text-text-muted">
-                  {t("customTools.list.counts", {
-                    groups: t("customTools.list.groupCount", { count: groups.length }),
-                    tools: t("customTools.list.toolCount", { count: toolCount }),
-                  })}
-                </span>
-              ) : null}
-              <HelpTip>
-                <p className="text-xs text-text-muted">{t("customTools.pageHelp")}</p>
-              </HelpTip>
-            </>
-          }
+          subtitle={t("customTools.subtitle")}
           actions={
             <Button onClick={() => setAdding({})}>
               <Plus aria-hidden />

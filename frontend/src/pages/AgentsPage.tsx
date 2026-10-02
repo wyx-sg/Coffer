@@ -13,7 +13,6 @@ import {
   AgentConnectionChangeDialog,
   type ConnectionChangeRequest,
 } from "@/components/agents/connect/AgentConnectionChangeDialog";
-import { AgentsStatusLine } from "@/components/agents/list/AgentsStatusLine";
 import { AgentsTable, type AgentListRow } from "@/components/agents/list/AgentsTable";
 import { useAgentRowState } from "@/components/agents/list/useAgentRowState";
 import { EmptyState } from "@/components/EmptyState";
@@ -48,12 +47,7 @@ export function AgentsPage() {
     <div className="space-y-6">
       <PageHeader
         title={t("agents.title")}
-        subtitle={
-          <span className="flex flex-col gap-2">
-            <span>{t("agents.list.subtitle")}</span>
-            {rows.length > 0 ? <AgentsStatusLine states={rows.map((r) => r.state)} /> : null}
-          </span>
-        }
+        subtitle={t("agents.list.subtitle")}
         actions={
           firstRun ? (
             <Button onClick={() => setChange({ kind: "add", rows: rows.map((r) => r.row) })}>

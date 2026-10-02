@@ -6,9 +6,9 @@
 // connection is partial, Check again while Codex has not approved Coffer's
 // hook, Enable when switched off, Add when not added — and a connected
 // agent's own next step, a new conversation (Disconnect is the Overview's
-// button, and previews what it removes). The ⋯ menu holds what has no button. Under the name, one mono line: the fixed
-// name, the version, the config directory and the model. No title or rename:
-// an agent is named by its type.
+// button, and previews what it removes). The ⋯ menu holds what has no button. No title or rename:
+// an agent is named by its type; its version and config directory are in the
+// Overview's Details.
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -28,10 +28,10 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/ui/menu";
-import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
+import { agentTypeLabel } from "@/lib/agents/display";
 import { hookAwaitsApproval, repairsOnlyHook } from "@/components/agents/overview/connectionCopy";
 import { agentRowStateKey, agentRowTone, type AgentRowState } from "@/lib/agents/rowState";
-import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
+import type { AgentTypeOut } from "@/lib/api/agents";
 import { useAgentConnection, useAgentHooks } from "@/lib/hooks/useAgents";
 import { cn } from "@/lib/utils";
 
@@ -39,7 +39,6 @@ type RowActions = ReturnType<typeof useAgentRowActions>;
 
 interface Props {
   typeRow: AgentTypeOut;
-  agent: AgentOut | undefined;
   rowActions: RowActions;
 }
 
@@ -122,7 +121,7 @@ function useHeaderAction(
   }
 }
 
-export function AgentDetailHeader({ typeRow, agent, rowActions }: Props) {
+export function AgentDetailHeader({ typeRow, rowActions }: Props) {
   const { t } = useTranslation();
   const name = agentTypeLabel(typeRow.type);
   const state = rowActions.state;
@@ -137,72 +136,57 @@ export function AgentDetailHeader({ typeRow, agent, rowActions }: Props) {
     checking: hooks.isFetching,
   });
   const busy = !!rowActions.pending;
-  const installed = typeRow.state === "installed_active" || typeRow.state === "installed_never_run";
-
-  const meta = [
-    agent?.name ?? typeRow.name,
-    installed
-      ? typeRow.version
-        ? `v${typeRow.version}`
-        : null
-      : t("agents.state.not_installed").toLowerCase(),
-    abbreviateHomePath(typeRow.config_dir),
-    agent?.model ?? null,
-  ].filter((part): part is string => !!part);
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <PageHeader
-        back={{ to: "/agents", label: t("agents.title") }}
-        title={
-          <span className="inline-flex items-center gap-2.5">
-            <AgentBadge type={typeRow.type} size="lg" state={badgeState(state)} tooltip={false} />
-            {name}
-          </span>
-        }
-        badges={
-          rowActions.pending ? (
-            <AgentPendingStatus pending={rowActions.pending} />
-          ) : (
-            <StatusWord tone={awaitingApproval ? "warn" : agentRowTone(state)}>
-              {t(stateWordKey(state, awaitingApproval))}
-            </StatusWord>
-          )
-        }
-        actions={
-          <div className="flex items-center gap-2">
-            {action?.to ? (
-              <Button variant="outline" size="sm" asChild>
-                <Link to={action.to}>
-                  <action.icon aria-hidden className="size-3.5" />
-                  {action.label}
-                </Link>
-              </Button>
-            ) : action ? (
-              <Button
-                size="sm"
-                variant={action.pending === undefined ? "default" : "outline"}
-                onClick={action.run}
-                disabled={action.pending || busy}
-                loading={busy}
-              >
-                <action.icon
-                  aria-hidden
-                  className={cn("size-3.5", action.pending && "animate-spin")}
-                />
+    <PageHeader
+      back={{ to: "/agents", label: t("agents.title") }}
+      title={
+        <span className="inline-flex items-center gap-2.5">
+          <AgentBadge type={typeRow.type} size="lg" state={badgeState(state)} tooltip={false} />
+          {name}
+        </span>
+      }
+      badges={
+        rowActions.pending ? (
+          <AgentPendingStatus pending={rowActions.pending} />
+        ) : (
+          <StatusWord tone={awaitingApproval ? "warn" : agentRowTone(state)}>
+            {t(stateWordKey(state, awaitingApproval))}
+          </StatusWord>
+        )
+      }
+      actions={
+        <div className="flex items-center gap-2">
+          {action?.to ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link to={action.to}>
+                <action.icon aria-hidden className="size-3.5" />
                 {action.label}
-              </Button>
-            ) : null}
-            {rowActions.actions.length > 0 ? (
-              <ActionMenu
-                label={t("agents.detail.moreActions", { name })}
-                actions={rowActions.actions}
+              </Link>
+            </Button>
+          ) : action ? (
+            <Button
+              size="sm"
+              variant={action.pending === undefined ? "default" : "outline"}
+              onClick={action.run}
+              disabled={action.pending || busy}
+              loading={busy}
+            >
+              <action.icon
+                aria-hidden
+                className={cn("size-3.5", action.pending && "animate-spin")}
               />
-            ) : null}
-          </div>
-        }
-      />
-      <p className="font-mono text-xs text-text-muted">{meta.join(" · ")}</p>
-    </div>
+              {action.label}
+            </Button>
+          ) : null}
+          {rowActions.actions.length > 0 ? (
+            <ActionMenu
+              label={t("agents.detail.moreActions", { name })}
+              actions={rowActions.actions}
+            />
+          ) : null}
+        </div>
+      }
+    />
   );
 }

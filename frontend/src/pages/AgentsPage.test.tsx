@@ -93,7 +93,6 @@ describe("AgentsPage", () => {
       );
       renderPage();
       const addBoth = await screen.findByRole("button", { name: "Add both" });
-      expect(screen.getByText("2 detected, not added")).toBeInTheDocument();
       expect(within(rowOf("Claude Code")).getByRole("button", { name: "Add" })).toBeInTheDocument();
       expect(within(rowOf("Codex")).getByRole("button", { name: "Add" })).toBeInTheDocument();
       expect(screen.getByText(/you review the exact lines/i)).toBeInTheDocument();
@@ -119,7 +118,9 @@ describe("AgentsPage", () => {
       ]);
       expect(writes()[0].body).toEqual({ type: "claude_code" });
       fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
-      await waitFor(() => expect(screen.getByText("2 connected")).toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.queryByRole("button", { name: "Add both" })).not.toBeInTheDocument(),
+      );
       expect(screen.queryByRole("button", { name: "Add both" })).not.toBeInTheDocument();
     },
   );

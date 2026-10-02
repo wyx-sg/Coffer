@@ -211,7 +211,7 @@
   },
   "resources": {
     "title": "MCP 服务器",
-    "subtitle": "Coffer 运行它们，并通过同一个端点把它们的工具提供给你选择的智能体。",
+    "subtitle": "Coffer 运行的 MCP 服务器，通过同一个端点提供给你的智能体。",
     "addServer": "添加服务器",
     "loadFailed": "加载资源失败",
     "status": {
@@ -796,6 +796,7 @@
     "agentFallback": "智能体"
   },
   "activity": {
+    "subtitle": "审计日志、MCP 调用和守护进程日志。",
     "title": "活动",
     "live": "实时",
     "notLive": "未实时更新",
@@ -2156,6 +2157,7 @@
       },
       "details": {
         "heading": "详情",
+        "version": "版本",
         "uid": "UID",
         "registered": "添加于"
       },
@@ -2402,29 +2404,7 @@
       }
     },
     "list": {
-      "subtitle": "这台 Mac 上的 Claude Code 和 Codex。Coffer 会自动找到它们；添加后，它们通过一个 MCP 条目和一个钩子获得你的 MCP 服务器、技能和记忆。",
-      "count_one": "{{count}} 个智能体",
-      "count_other": "{{count}} 个智能体",
-      "statusCount": {
-        "not_installed_one": "{{count}} 个未安装",
-        "not_installed_other": "{{count}} 个未安装",
-        "config_left_behind_one": "{{count}} 个配置残留",
-        "config_left_behind_other": "{{count}} 个配置残留",
-        "not_found_one": "{{count}} 个找不到",
-        "not_found_other": "{{count}} 个找不到",
-        "never_run_one": "{{count}} 个已安装，未运行过",
-        "never_run_other": "{{count}} 个已安装，未运行过",
-        "not_added_one": "{{count}} 个已检测到，未添加",
-        "not_added_other": "{{count}} 个已检测到，未添加",
-        "disabled_one": "{{count}} 个已关闭",
-        "disabled_other": "{{count}} 个已关闭",
-        "connected_one": "{{count}} 个已连接",
-        "connected_other": "{{count}} 个已连接",
-        "needs_repair_one": "{{count}} 个需要修复",
-        "needs_repair_other": "{{count}} 个需要修复",
-        "not_connected_one": "{{count}} 个未连接",
-        "not_connected_other": "{{count}} 个未连接"
-      },
+      "subtitle": "这台 Mac 上的 Claude Code 和 Codex，Coffer 自动发现。",
       "addBoth": "全部添加",
       "firstRunNote": "添加会在每个智能体的配置里写入一个 MCP 条目和一个记忆钩子；写入前你会先逐行查看。Coffer 会在打开本页、窗口重新获得焦点时以及每隔几分钟查找一次智能体。",
       "footnote": "数量是实际送达每个智能体的内容。要选择谁能用某个资源，请到它自己的页面：",
@@ -2552,6 +2532,7 @@
     }
   },
   "skills": {
+    "subtitle": "Coffer 管理的技能：一份主文件夹，链接到你选择的每个智能体。",
     "builtinBadge": "内置",
     "title": "技能",
     "loadFailed": "加载技能失败",
@@ -2758,7 +2739,6 @@
         "orphan_master": "技能库目录里一个 Coffer 不认识的文件夹。"
       }
     },
-    "help": "这里只列 Coffer 管理的技能：每个技能只有一份主文件夹，链接到你选择的每个智能体。智能体自己的技能在该智能体的“技能”标签页，可以在那里纳入托管。",
     "tryAgain": "重试",
     "review": "查看…",
     "row": {
@@ -2906,6 +2886,7 @@
     }
   },
   "knowledge": {
+    "subtitle": "你和 Coffer 共同编写的文档，每个集合一棵树。",
     "title": "知识",
     "loadFailed": "无法加载知识集",
     "nav": {
@@ -3276,7 +3257,7 @@
   },
   "memory": {
     "title": "记忆",
-    "subtitle": "你的智能体学到的东西：从它们自己的记忆里读出来，每个主题提炼成一条记忆条目。只读。",
+    "subtitle": "智能体学到的东西，按主题提炼成记忆条目，只读。",
     "update": "更新记忆",
     "updating": "正在更新…",
     "updateHint": "读取每个智能体最新的记忆，再把新增内容提炼进 Coffer 的记忆条目。",
@@ -3408,6 +3389,7 @@
     }
   },
   "conversations": {
+    "subtitle": "你与智能体的对话，包括来自消息渠道的。",
     "bulk": {
       "label": "已选对话",
       "selected": "已选 {{count}} 个",
@@ -3614,6 +3596,7 @@
     }
   },
   "channels": {
+    "subtitle": "接入聊天应用，让智能体在你常用的地方回复。",
     "title": "消息渠道",
     "loadFailed": "加载消息渠道失败",
     "noMatches": "没有匹配的消息渠道。",
@@ -4054,6 +4037,7 @@
     "bulkReach": "所选项的生效范围"
   },
   "sync": {
+    "subtitle": "让这份保险库与你自己的 git 远端保持同步。",
     "title": "同步",
     "loadFailed": "无法加载同步",
     "tabs": {
@@ -4527,16 +4511,6 @@
       "syncing": "正在同步…",
       "tryAgain": "重试"
     },
-    "help": {
-      "label": "如何添加另一台 Mac",
-      "title": "添加另一台 Mac",
-      "steps": {
-        "install": "在另一台 Mac 上安装 Coffer。",
-        "open": "在那台 Mac 上打开「同步」。",
-        "same": "填入与这台 Mac 相同的仓库地址和分支。",
-        "join": "先预览加入会改动什么，再加入。"
-      }
-    },
     "pill": {
       "setup": "未设置",
       "syncing": "同步中",
@@ -4945,6 +4919,7 @@
     }
   },
   "customTools": {
+    "subtitle": "你的智能体可以作为工具调用的 HTTP API 请求。",
     "title": "自定义工具",
     "pendingApprovalSaved": "已保存。密钥需要先在 Coffer 应用里批准，调用才能使用它。",
     "health": {
@@ -4955,8 +4930,6 @@
       "off": "已关闭"
     },
     "list": {
-      "counts": "{{groups}} · {{tools}}",
-      "groupCount_other": "{{count}} 个分组",
       "toolCount_other": "{{count}} 个工具",
       "filter": "筛选分组",
       "noMatch": "没有匹配的分组。",
@@ -4972,7 +4945,6 @@
       "loadFailed": "无法加载自定义工具",
       "pickTitle": "选择一个分组",
       "pickBody": "在左侧选择一个分组，查看它的定义和工具。",
-      "groupCount_one": "{{count}} 个分组",
       "toolCount_one": "{{count}} 个工具",
       "hostTools_one": "{{host}} · {{count}} 个工具",
       "allAgents": "全部智能体"
@@ -5252,7 +5224,6 @@
       "handBody": "方法、URL 模板、请求头、请求体和参数。",
       "handPoint": "新建一个分组；之后可以添加更多请求"
     },
-    "pageHelp": "自定义工具是 Coffer 替你的智能体发起的一次 HTTP API 调用——不必运行 MCP 服务器。工具按分组存放：分组有一个固定名称（智能体看到的是 <group>__<tool>）、一个 base URL、一个取值来自密钥的认证请求头，以及默认可用范围。",
     "reach": {
       "countOf": "{{total}} 个智能体中的 {{count}} 个"
     },
@@ -5279,9 +5250,9 @@
     }
   },
   "clis": {
+    "subtitle": "技能和 MCP 服务器需要的命令行工具，有问题的排在前面。",
     "title": "命令行工具",
     "addTool": "添加命令行工具",
-    "help": "这里列出你的技能和 MCP 服务器需要的命令行工具，以及你自己添加的，有问题的排在前面。打开一个就能看到它自己的帮助列出的全部内容。Coffer 从不替你安装、更新或登录：它把修复写成提示词交给你的智能体，点「重新检查」即重新查看。",
     "checkAgain": "重新检查",
     "checking": "正在检查…",
     "checkedAgo": "检查于 {{when}}",
@@ -5431,14 +5402,10 @@
   },
   "secrets": {
     "title": "密钥",
-    "subtitle": "MCP 服务器和模型提供商使用的 API 密钥与令牌，加密保存在这台 Mac 的保险库中。",
+    "subtitle": "API 密钥与令牌，加密保存在这台 Mac 的保险库中。",
     "search": "查找密钥",
     "loadFailed": "无法加载密钥",
     "noMatch": "没有匹配的密钥。",
-    "about": {
-      "label": "关于密钥",
-      "body": "在命令中使用密钥：coffer run --secret github-token -- gh release create v2。命令运行时只为它设置 GITHUB_TOKEN；多个密钥就重复 --secret，NAME=secret 指定变量名。这样值不会出现在文件和 shell 历史里；但它无法对运行该命令的智能体隐藏值。"
-    },
     "empty": {
       "title": "还没有密钥",
       "body": "把 API 密钥和令牌放在这里，而不是写在配置文件里。服务器、提供商、skill 和渠道按名称引用它们，值始终加密。"
@@ -5755,6 +5722,7 @@
     }
   },
   "usage": {
+    "subtitle": "经 Coffer 本地中转的模型用量与订阅额度。",
     "title": "用量",
     "updated": "更新于 {{time}}",
     "refresh": "刷新",
@@ -5960,7 +5928,7 @@
   },
   "providers": {
     "title": "模型提供商",
-    "subtitle": "Coffer 可以让智能体和自带引擎使用的模型端点。顺序即故障切换的优先级。",
+    "subtitle": "智能体和 Coffer 使用的模型端点，顺序即故障切换优先级。",
     "loadFailed": "无法加载模型提供商",
     "protocols": {
       "anthropic": "Anthropic",

@@ -215,7 +215,9 @@ describe("SecretsPage", () => {
     openMenu("sentry-token");
     expect(screen.getByRole("menuitem", { name: "Reveal in the Coffer app" })).toBeDisabled();
     // The row's Add value button is not repeated in the menu.
-    expect(screen.queryByRole("menuitem", { name: /^(Add|Replace) value/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: /^(Add|Replace) value/ }),
+    ).not.toBeInTheDocument();
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     fireEvent.click(within(row).getByRole("button", { name: "Add a value for sentry-token" }));
     const dialog = await screen.findByRole("dialog", { name: "Add a value for sentry-token" });

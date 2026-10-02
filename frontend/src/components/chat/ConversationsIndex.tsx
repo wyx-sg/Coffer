@@ -66,14 +66,7 @@ export function ConversationsIndex({
     <div className="space-y-5">
       <PageHeader
         title={t("conversations.title")}
-        badges={
-          c.listLoading || none ? null : (
-            <span className="text-sm font-normal text-text-muted">
-              {c.listConversations.length}
-              {c.hasMore ? "+" : ""}
-            </span>
-          )
-        }
+        subtitle={t("conversations.subtitle")}
         actions={newButton}
       />
       {none && !c.filters.archived && !isFiltered(c.filters) && c.titleSearch === "" ? (

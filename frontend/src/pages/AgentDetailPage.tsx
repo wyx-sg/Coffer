@@ -66,7 +66,7 @@ function AgentDetail({
   const rowActions = useAgentRowActions(typeRow);
   return (
     <div className="flex min-h-0 flex-col gap-4">
-      <AgentDetailHeader typeRow={typeRow} agent={route.agent} rowActions={rowActions} />
+      <AgentDetailHeader typeRow={typeRow} rowActions={rowActions} />
       {route.agent ? (
         <AgentDetailTabs agent={route.agent} typeRow={typeRow} rowActions={rowActions} />
       ) : (

@@ -110,6 +110,7 @@ export function UsagePage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title={t("usage.title")}
+        subtitle={t("usage.subtitle")}
         actions={
           <div className="flex items-center gap-2.5">
             {updatedAt > 0 ? (
