@@ -99,8 +99,17 @@ const api = () => getApiClient();
 
 export const syncApi = {
   status: (): Promise<SyncStatus> => unwrap(api().GET("/sync/status")),
-  runs: (limit = 500): Promise<SyncRunList> =>
-    unwrap(api().GET("/sync/runs", { params: { query: { limit } } })),
+  /** One page of the rounds, newest first, read from `cursor` (null for the first). */
+  runs: (
+    { cursor, limit }: { cursor: string | null; limit: number },
+    signal?: AbortSignal,
+  ): Promise<SyncRunList> =>
+    unwrap(
+      api().GET("/sync/runs", {
+        params: { query: { limit, cursor: cursor ?? undefined } },
+        signal,
+      }),
+    ),
   run: (): Promise<SyncRound> => unwrap(api().POST("/sync/run")),
 
   putRemote: (remote: SyncRemoteInput): Promise<SyncRemote> =>

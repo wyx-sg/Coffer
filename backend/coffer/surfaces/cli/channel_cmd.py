@@ -5,7 +5,7 @@ lifecycle verbs every kind's group shares (``_kind_verbs``); ``edit`` carries
 the two group-gating switches as this kind's own flags. ``add`` and ``show``
 are this kind's own: ``add`` takes a channel type's settings as flags and binds
 the channel to this machine, and ``show`` reports the channel's status beside
-its configuration. ``pair``, ``bind``, ``restart`` and ``notify`` are channel-specific.
+its configuration. ``pair``, ``unpair``, ``bind``, ``restart`` and ``notify`` are channel-specific.
 """
 
 from __future__ import annotations
@@ -41,6 +41,7 @@ from coffer.surfaces.cli._channel_options import (
     settings_config,
     with_default_dir,
 )
+from coffer.surfaces.cli._channel_people import pair, unpair
 from coffer.surfaces.cli._channel_show import agent_name, echo_channel
 from coffer.surfaces.cli._kind_verbs import (
     Column,
@@ -177,27 +178,6 @@ def add(
         settle(c, pending_for(c, uid, verbose=verbose), wait=wait, verbose=verbose)
 
 
-def pair(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Channel name"),
-) -> None:
-    """Issue a pairing code; send it to the bot from your own account."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, "channel", name, verbose=verbose)
-        r = c.post(f"/channels/{uid}/pairing-code")
-        _cli_client.check(r, verbose=verbose)
-    body = r.json()
-    typer.echo(f"pairing code: {body['code']}")
-    typer.echo(f"expires at:   {body['expires_at']}")
-    if body.get("pair_url"):
-        # "Pair by a one-tap start link": opening the link pairs in one tap; the
-        # code still works typed.
-        typer.echo(f"pair link:    {body['pair_url']}")
-    typer.echo("Send this code to the bot from the account that should own the channel.")
-
-
 def show(
     ctx: typer.Context,
     ref: str = typer.Argument(..., metavar="NAME", help="Name or uid"),
@@ -292,13 +272,13 @@ def notify(
     name: str = typer.Argument(..., help="Channel name"),
     text: str = typer.Argument(..., help="Message text"),
     chat: str | None = typer.Option(
-        None, "--chat", help="Paired chat id to push to (default: the owner's DM)"
+        None, "--chat", help="Paired chat id to push to (default: the first paired person's DM)"
     ),
 ) -> None:
     """Push a message to one of the channel's paired chats.
 
-    Without ``--chat`` it goes to the owner chat — the channel's earliest
-    pairing, which is the owner's DM. Naming a chat the channel is not paired
+    Without ``--chat`` it goes to the channel's first paired person's DM — its
+    earliest pairing. Naming a chat the channel is not paired
     to is refused rather than delivered somewhere else.
     """
     verbose = (ctx.obj or {}).get("verbose", False)
@@ -365,6 +345,7 @@ app.command("show")(show)
 app.command("add")(add)
 register_kind_verbs(app, dataclasses.replace(_CHANNEL, verbs=_CHANNEL.verbs - {"list"}))
 app.command("pair")(pair)
+app.command("unpair")(unpair)
 app.command("bind")(bind)
 app.command("restart")(restart)
 app.command("notify")(notify)

@@ -22,6 +22,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import re
+from collections.abc import Iterable
 from typing import Literal
 
 #: The store namespace standalone secrets live under.
@@ -39,7 +40,7 @@ ApprovalOp = Literal["bind", "add_secret", "replace_value", "disable_protection"
 ApprovalStatus = Literal["pending", "approved", "rejected", "superseded"]
 
 #: What a presence grant may authorise. Each is one operation on one target.
-GRANT_OPS: tuple[str, ...] = ("reveal", "approve", "export_master_key")
+GRANT_OPS: tuple[str, ...] = ("reveal", "approve", "approve_batch", "export_master_key")
 
 
 def is_valid_secret_name(name: str) -> bool:
@@ -157,6 +158,19 @@ class SecretApproval:
         if self.op == "replace_value":
             return f"replace the value of secret {self.ref!r}"
         return "turn off approval for new secret destinations"
+
+
+def batch_target(items: Iterable[tuple[str, str]]) -> str:
+    """The target a batch grant is signed over: a digest of exactly the
+    ``(approval id, target fingerprint)`` pairs the person was shown.
+
+    An id fixes the secret, the destination and the slot (a changed target is a
+    new approval), and the fingerprint fixes the target, so the digest names
+    everything approved. Sorted and newline-joined, so the order the page lists
+    them in does not matter; the desktop shell computes the same string.
+    """
+    lines = sorted(f"{approval_id}:{fingerprint}" for approval_id, fingerprint in items)
+    return "batch:" + hashlib.sha256("\n".join(lines).encode()).hexdigest()
 
 
 def grant_message(op: str, target: str, nonce: str) -> bytes:

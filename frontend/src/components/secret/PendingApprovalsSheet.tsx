@@ -10,6 +10,13 @@
 // Approve runs a presence check in the desktop shell, so a browser shows it
 // disabled, naming the app (spec desktop-app "Release plaintext and approvals
 // only after a presence check in the shell").
+//
+// With two or more waiting, each card has a checkbox (none selected to begin
+// with) and a bar offers "Approve selected…" and "Reject selected". Approving
+// opens a review step that lists every change the one confirmation covers; the
+// shell's presence check then approves exactly that list, and the same rows
+// show what happened to each (spec secret "Approve several bindings in one
+// confirmation").
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -20,10 +27,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { OPEN_APPROVALS_EVENT, usePendingApprovals } from "@/lib/hooks/useApprovals";
+import type { Approval, ApprovalBatchResult } from "@/lib/api/secret";
+import {
+  OPEN_APPROVALS_EVENT,
+  useApproveApprovals,
+  usePendingApprovals,
+  useRejectApprovals,
+} from "@/lib/hooks/useApprovals";
+import { useToast } from "@/components/ui/toast";
 import { useSecrets } from "@/lib/hooks/useSecrets";
 import { presenceAvailable } from "@/lib/tauri";
 import { ApprovalCard } from "./ApprovalCard";
+import { ApprovalsBatchBar } from "./ApprovalsBatchBar";
+import { ApprovalsBatchReview } from "./ApprovalsBatchReview";
 import { approvalsTitle } from "./secretRows";
 
 export function PendingApprovalsSheet() {
@@ -32,7 +48,17 @@ export function PendingApprovalsSheet() {
   const approvals = data?.approvals ?? [];
   // Ids the user has already seen and closed the sheet on.
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
-  const open = approvals.some((a) => !dismissed.has(a.id));
+  // Which of the waiting changes are ticked (none to begin with), and the batch
+  // being confirmed: what the review listed, then what became of each.
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const [batch, setBatch] = useState<{
+    approvals: Approval[];
+    results: ApprovalBatchResult[] | null;
+  } | null>(null);
+  const approveMany = useApproveApprovals();
+  const rejectMany = useRejectApprovals();
+  const { toast } = useToast();
+  const open = batch !== null || approvals.some((a) => !dismissed.has(a.id));
   // What each secret is used by — read only while something waits.
   const secrets = useSecrets(approvals.length > 0);
   const rows = secrets.data?.refs ?? [];
@@ -45,34 +71,105 @@ export function PendingApprovalsSheet() {
     return () => window.removeEventListener(OPEN_APPROVALS_EVENT, reopen);
   }, []);
 
+  const chosen = approvals.filter((a) => selected.has(a.id));
+  const toggle = (id: string, on: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  const onConfirmBatch = () => {
+    if (!batch) return;
+    approveMany.mutate(
+      batch.approvals.map((a) => a.id),
+      { onSuccess: (done) => setBatch({ ...batch, results: done.results }) },
+    );
+  };
+  const onRejectSelected = () =>
+    rejectMany.mutate(
+      chosen.map((a) => a.id),
+      {
+        onSuccess: (done) => {
+          setSelected(new Set());
+          toast.success(
+            t("secrets.approvals.batch.rejectedCount", {
+              count: done.results.filter((r) => r.outcome === "rejected").length,
+            }),
+          );
+        },
+      },
+    );
+  const finishBatch = () => {
+    setBatch(null);
+    setSelected(new Set());
+  };
+
   const onOpenChange = (next: boolean) => {
     if (next) return;
+    if (batch) {
+      // Leaving the review answers nothing; leaving the outcome is done with it.
+      finishBatch();
+      return;
+    }
     setDismissed((prev) => new Set([...prev, ...approvals.map((a) => a.id)]));
   };
   const single = approvals.length === 1;
+  const title = batch
+    ? batch.results
+      ? t("secrets.approvals.batch.resultTitle")
+      : t("secrets.approvals.batch.reviewTitle", { count: batch.approvals.length })
+    : approvalsTitle(t, approvals, rows);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[560px]">
         <DialogHeader>
-          <DialogTitle>{approvalsTitle(t, approvals, rows)}</DialogTitle>
-          <DialogDescription className={single ? "sr-only" : undefined}>
-            {inShell
-              ? t("secrets.approvals.hintShell")
-              : t("secrets.approvals.hintBrowser")}
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription className={single || batch ? "sr-only" : undefined}>
+            {inShell ? t("secrets.approvals.hintShell") : t("secrets.approvals.hintBrowser")}
           </DialogDescription>
         </DialogHeader>
-        <ul className="max-h-[60vh] space-y-3 overflow-y-auto">
-          {approvals.map((a) => (
-            <ApprovalCard
-              key={a.id}
-              approval={a}
-              row={rows.find((r) => r.ref === a.ref)}
-              inShell={inShell}
-              heading={single ? "title" : "card"}
-            />
-          ))}
-        </ul>
+        {batch ? (
+          <ApprovalsBatchReview
+            approvals={batch.approvals}
+            rows={rows}
+            results={batch.results}
+            busy={approveMany.isPending}
+            onBack={() => setBatch(null)}
+            onConfirm={onConfirmBatch}
+            onDone={finishBatch}
+          />
+        ) : (
+          <>
+            {single ? null : (
+              <ApprovalsBatchBar
+                total={approvals.length}
+                selected={chosen.length}
+                inShell={inShell}
+                busy={rejectMany.isPending}
+                onSelectAll={(all) =>
+                  setSelected(all ? new Set(approvals.map((a) => a.id)) : new Set())
+                }
+                onReview={() => setBatch({ approvals: chosen, results: null })}
+                onReject={onRejectSelected}
+              />
+            )}
+            <ul className="max-h-[60vh] space-y-3 overflow-y-auto">
+              {approvals.map((a) => (
+                <ApprovalCard
+                  key={a.id}
+                  approval={a}
+                  row={rows.find((r) => r.ref === a.ref)}
+                  inShell={inShell}
+                  heading={single ? "title" : "card"}
+                  selected={selected.has(a.id)}
+                  onSelectedChange={single ? undefined : (on) => toggle(a.id, on)}
+                />
+              ))}
+            </ul>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

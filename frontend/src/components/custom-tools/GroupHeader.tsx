@@ -1,6 +1,6 @@
 // src/components/custom-tools/GroupHeader.tsx — a group's header: name and health, where its tools come
-// from, the last 24 hours in one line, Edit group and the ⋯ menu (Edit group… · Re-import · Turn off ·
-// Delete group…).
+// from, the last 24 hours in one line, Edit group and the ⋯ menu (Delete group… — Re-import is in the
+// Definition section and on/off is its reach control, so the menu does not repeat them).
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Pencil, Wrench } from "lucide-react";
@@ -11,32 +11,16 @@ import { Button } from "@/components/ui/button";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import type { CustomToolGroup } from "@/lib/api/customTools";
 import { healthTone } from "@/lib/customTools/groups";
-import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
 
 interface Props {
   group: CustomToolGroup;
   onEdit: () => void;
-  onReimport: () => void;
   onDelete: () => void;
 }
 
-export function GroupHeader({ group, onEdit, onReimport, onDelete }: Props) {
+export function GroupHeader({ group, onEdit, onDelete }: Props) {
   const { t } = useTranslation();
-  const enable = useEnableResource();
-  const disable = useDisableResource();
-  const busy = enable.isPending || disable.isPending;
   const actions: MenuAction[] = [
-    { key: "edit", label: t("customTools.group.editMenu"), onSelect: onEdit },
-    ...(group.source
-      ? [{ key: "reimport", label: t("customTools.reimport.action"), onSelect: onReimport }]
-      : []),
-    {
-      key: "power",
-      label: group.enabled ? t("customTools.group.turnOff") : t("customTools.group.turnOn"),
-      disabled: busy,
-      onSelect: () =>
-        (group.enabled ? disable : enable).mutate({ kind: "mcp_server", uid: group.uid }),
-    },
     {
       key: "delete",
       label: t("customTools.group.deleteMenu"),

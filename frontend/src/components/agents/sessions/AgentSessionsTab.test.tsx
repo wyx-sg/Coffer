@@ -9,7 +9,7 @@
 // here writes. The hooks are mocked at the network boundary.
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
@@ -179,15 +179,12 @@ describe("AgentSessionsTab", () => {
     expect(vi.mocked(hooks.useTranscriptSession)).toHaveBeenCalledWith("agt_01cx", PATH_B, 0);
   });
 
-  test("typing in search forwards the query once it settles, from page 1", async () => {
+  test("the list has no search or filter controls, only a count above the rows", () => {
     stubList();
     renderTab();
-    fireEvent.change(screen.getByRole("textbox", { name: /search title or project/i }), {
-      target: { value: "login" },
-    });
-    await waitFor(() =>
-      expect(listCalls()).toContainEqual(expect.objectContaining({ q: "login" })),
-    );
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.getByText("2 sessions")).toBeInTheDocument();
   });
 
   test("Load more reads the next page with the cursor the last one returned", () => {
@@ -203,7 +200,8 @@ describe("AgentSessionsTab", () => {
     stubSession();
     renderTab(`?session=${encodeURIComponent(PATH_A)}`);
     expect(screen.getByRole("heading", { name: "Fix the login redirect bug" })).toBeInTheDocument();
-    expect(screen.getByText(/~\/repo · .* · 2 messages/)).toBeInTheDocument();
+    expect(document.querySelector("[data-truncated-path]")).toHaveTextContent("~/repo");
+    expect(screen.getByText("2 messages")).toBeInTheDocument();
     expect(screen.getByText("Turns 1–2 of 2")).toBeInTheDocument();
     const turns = within(screen.getByTestId("transcript-turns"));
     expect(turns.getByText("Codex")).toBeInTheDocument();
@@ -237,7 +235,7 @@ describe("AgentSessionsTab", () => {
     renderTab(`?session=${encodeURIComponent(PATH_A)}`);
     expect(screen.getByText(/couldn’t load this session/i)).toBeInTheDocument();
     expect(screen.getByText(/was moved or deleted after the list was read/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
     expect(refetch).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: /refresh list/i }));
     expect(refreshMock).toHaveBeenCalled();

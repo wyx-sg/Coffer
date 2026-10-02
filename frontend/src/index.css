@@ -111,6 +111,7 @@
 
     /* --- elevation: the one real shadow, plus the in-page lift ----------- */
     --shadow-overlay: 0 12px 32px rgba(22, 24, 29, 0.14), 0 0 0 1px rgba(22, 24, 29, 0.06);
+    --shadow-toast: 0 2px 8px rgba(22, 24, 29, 0.08), 0 0 0 1px rgba(22, 24, 29, 0.06);
     --shadow-lifted: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px rgb(var(--border));
     --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.2);
     --shadow-focus: 0 0 0 2px rgb(var(--focus-ring));
@@ -191,6 +192,7 @@
     --focus-ring: 116 128 242; /* #7480f2 */
 
     --shadow-overlay: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --shadow-toast: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.06);
   }
 
   /* Before theme.ts has run (one frame at most) a dark-system viewer would see
@@ -248,6 +250,22 @@
       scroll-behavior: auto !important;
     }
   }
+}
+
+/* Desktop window chrome: where the native title bar is replaced by traffic
+   lights floating over the page (src/lib/windowChrome.ts), the sidebar's top
+   row steps down by this much. Zero everywhere else. */
+:root {
+  --titlebar-inset: 0px;
+}
+:root[data-chrome="overlay"] {
+  --titlebar-inset: 44px;
+}
+/* The shell root is `h-[100vh]`; the full-bleed workspace pages are `h-screen`
+   inside a scroll area that starts below the strip, so they give the strip's
+   height back instead of overflowing by it. */
+:root[data-chrome="overlay"] .h-screen {
+  height: calc(100vh - var(--titlebar-inset));
 }
 
 @layer components {

@@ -118,7 +118,7 @@ export function DataRows<T>({
         return (
           <Fragment key={key}>
             <TableRow
-              className={cn(activate && ["cursor-pointer", ROW_FOCUS_CLASS])}
+              className={cn("group/row", activate && ["cursor-pointer", ROW_FOCUS_CLASS])}
               // A ticked row reads as selected (surface-selected).
               data-state={selection && selectedKeys.has(key) ? "selected" : undefined}
               tabIndex={activate ? 0 : undefined}
@@ -140,6 +140,7 @@ export function DataRows<T>({
                 <RowSelectCell
                   selectable={canSelect(row)}
                   checked={selectedKeys.has(key)}
+                  selecting={selectedKeys.size > 0}
                   ariaLabel={selection.ariaSelectRow(row)}
                   onToggle={() => onToggleSelect(key)}
                 />

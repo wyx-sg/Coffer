@@ -86,9 +86,9 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "discard": {"skill", "mcp"},
     # `test` re-queries capabilities, then reports health; `prompt` prints the
     # hand-off a server's page offers; `cap` toggles one tool, prompt or
-    # resource (spec mcp-gateway).
+    # resource and sets how a tool is exposed (spec mcp-gateway).
     "mcp": {*_LIFECYCLE, "add", "scope", "test", "handoff", "cap"},
-    "mcp cap": {"list", "enable", "disable"},
+    "mcp cap": {"list", "enable", "disable", "expose"},
     # Custom-tool groups (spec mcp-gateway "Manage custom tools on REST and the
     # command line"): an `mcp_server` of the `http_api` transport. `reimport`
     # previews then applies an OpenAPI re-read; `op` manages one tool.
@@ -127,7 +127,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # `edit` carries the group-gating switches; `pair`, `bind` and `notify`
     # are the channel's own acts (spec channels); `restart` is the explicit
     # reconnect of a channel's adapter.
-    "channel": {*_LIFECYCLE, "add", "scope", "pair", "bind", "notify", "restart"},
+    "channel": {*_LIFECYCLE, "add", "scope", "pair", "unpair", "bind", "notify", "restart"},
     # Exactly spec skill-manager "Cover skill management on REST, the CLI and
     # the web": `add <folder>` is the import, and the master folder is named
     # by `path skill <name>` rather than listed, printed or written here.
@@ -137,8 +137,11 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "skill": {*_LIFECYCLE - {"edit"}, "add", "update", "scope", "verify"},
     # The commands skills require (spec skill-manager "Serve required commands
     # on REST, the command line and the web"): read, probe again, and print
-    # the hand-off prompt for the person's agent.
-    "cli": {"list", "show", "check", "prompt"},
+    # the hand-off prompt for the person's agent; `add`, `edit` and `rm`
+    # declare a tool by hand, with no skill (spec skill-manager "Declare a
+    # command-line tool without a skill"), and `show` prints the interface
+    # read from the tool's help.
+    "cli": {"list", "show", "check", "prompt", "add", "edit", "rm"},
     # Exactly spec knowledge "Cover knowledge management on REST and the
     # CLI". Documents are listed, read, edited and deleted on disk under
     # `path knowledge`. A collection
@@ -367,6 +370,10 @@ _FILE_ROUTES_WITH_A_COMMAND: dict[str, str] = {
     "POST /sync/stop/files/answer": "sync resolve",
     "POST /sync/stop/files/editor": "sync edit",
     "GET /sync/stop/files/versions": "sync conflicts",
+    # A plugin's skill folder lives in the plugin cache; `agent plugin show`
+    # says where, and its files are read with ordinary file tools.
+    "GET /agents/{uid}/plugins/{plugin_id}/skills/{skill}/files": "agent plugin show",
+    "GET /agents/{uid}/plugins/{plugin_id}/skills/{skill}/files/content": "agent plugin show",
 }
 
 #: What makes a route file-backed: a path segment naming a file, a tree of

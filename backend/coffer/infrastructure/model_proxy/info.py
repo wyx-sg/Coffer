@@ -22,6 +22,12 @@ from pathlib import Path
 from coffer.infrastructure.daemon.atomic_write import write_json_0600
 from coffer.infrastructure.vault.home import PROXY_INFO_FILENAME, proxy_info_path
 
+#: The exit status a proxy ends with when it cannot bind its port because
+#: something else holds it. Distinct from the usage-error status argparse uses,
+#: so the supervisor can tell "this port is taken" from "this was started wrong"
+#: and name the cause instead of retrying a start that cannot succeed.
+EXIT_PORT_IN_USE = 3
+
 
 def info_path(coffer_dir: Path | None = None) -> Path:
     """``proxy.json`` under ``coffer_dir`` (default: ``HOME``'s, read at call time)."""

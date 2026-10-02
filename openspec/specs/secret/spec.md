@@ -441,7 +441,8 @@ and the ref was never bound anywhere, is not a standalone `secret/` name and
 was written on this machine within the last five minutes (see "Approve a secret's binding when its
 destination is registered") — or while the protection is switched off.
 Approving MUST
-take a presence grant (`POST /api/v1/secrets/approvals/{id}/approve`);
+take a presence grant (`POST /api/v1/secrets/approvals/{id}/approve`, or several at once
+under "Approve several bindings in one confirmation");
 refusing (`POST .../reject`) MUST NOT. `GET /api/v1/secrets/approvals`
 lists approvals, having first evaluated every current destination, and marks
 superseded those nothing asks for any more.
@@ -775,6 +776,70 @@ password); in a browser Approve MUST be disabled, naming the desktop app, while
 - **WHEN** the approvals window shows it
 - **THEN** Approve is disabled and says to approve in the Coffer desktop app
 - **AND** Reject is enabled and refuses the approval over REST
+
+### Requirement: Approve several bindings in one confirmation
+A person MUST be able to approve several pending approvals under one presence
+check, for the case that a change leaves a handful of destinations waiting at
+once. `POST /api/v1/secrets/approvals/approve` takes a list of `{id,
+fingerprint}` — each approval's id and the target fingerprint it was shown
+with — and ONE presence grant for the operation `approve_batch`, whose target is
+`batch:` followed by the SHA-256 of the sorted `id:fingerprint` lines of exactly
+that list. The daemon MUST recompute the target from the list it receives, so
+the set approved is the set the person was shown: a grant signed for another
+list, for a single approval, or by anyone but the desktop app is refused with
+`PRESENCE_GRANT_INVALID` and approves nothing, and a batch grant authorises no
+single approval. The daemon MUST then apply each item only if it is still
+pending, is not the switch that turns the protection off, and is still pinned to
+the fingerprint listed; every other item is skipped, left as it is, and
+reported with its reason (`changed`, `not_pending`, `not_found`,
+`not_batchable`, `failed`). Nothing outside the list is touched, and nothing is
+approved by any other path — no selection, default or "approve all" runs without
+the grant. Turning the protection off MUST still be approved on its own.
+`POST /api/v1/secrets/approvals/reject` refuses several at once and, like
+refusing one, takes no presence. `coffer secret approvals` stays list-only:
+approving is the desktop app's.
+
+In the desktop app the shell, not the page, decides what is covered: it reads
+each selected approval from the daemon, keeps those still waiting, names the
+first few in its own operating-system prompt and counts the rest, and signs over
+that list. The web UI MUST show, once two or more approvals wait, a checkbox on
+each, **Select all**, **Approve selected (N)…** and **Reject selected (N)**, with
+nothing selected to begin with. **Approve selected** opens a review that lists
+every change the confirmation covers — each as secret → destination (slot) and
+the target that receives it — and only its confirm button runs the shell's
+check; afterwards the same rows say, per change, approved or skipped and why.
+In a browser Approve selected MUST be disabled, naming the desktop app, while
+Reject selected stays available.
+
+#### Scenario: one confirmation approves every binding shown
+- **GIVEN** three pending approvals for three destinations that cite one secret
+- **WHEN** one `approve_batch` grant signed over exactly those three is sent with the three `{id, fingerprint}` pairs
+- **THEN** all three are approved, each destination receives the secret, and each approval is audited as approved
+
+#### Scenario: a batch grant covers exactly the bindings shown
+- **GIVEN** three pending approvals and a batch grant signed over two of them
+- **WHEN** it is sent with all three, or a single-approval grant or a swapped fingerprint is sent instead, or the batch grant is used to approve one approval alone
+- **THEN** each attempt is refused with `PRESENCE_GRANT_INVALID` and all three still wait
+
+#### Scenario: a binding whose target changed is skipped
+- **GIVEN** three pending approvals shown to a person, and one server whose command is changed before the confirmation
+- **WHEN** the batch grant over the three is sent
+- **THEN** the changed server's old approval is skipped as no longer pending and its new approval for the new command still waits, while the other two are approved
+
+#### Scenario: a fingerprint that is not the one shown is skipped
+- **GIVEN** a batch whose list names an approval with a fingerprint other than the one it is pinned to
+- **WHEN** the grant over that list is sent
+- **THEN** that item is skipped as `changed` and stays pending, and the others are approved
+
+#### Scenario: nothing in a batch is approved without a present human
+- **GIVEN** three pending approvals
+- **WHEN** the batch is sent with no grant, with a forged signature, or with a grant already used
+- **THEN** it is refused (`422` or `PRESENCE_GRANT_INVALID`) and nothing is approved
+
+#### Scenario: approving several waits for a review of every change
+- **GIVEN** three changes waiting, in the desktop app
+- **WHEN** the person ticks **Select all** and chooses **Approve selected (3)…**
+- **THEN** none is ticked to begin with, the review lists all three with their destinations and targets, and nothing is approved until the review's confirm button runs the presence check
 
 ### Requirement: Store every secret only as a ciphertext file
 The system MUST persist every secret only as Fernet ciphertext

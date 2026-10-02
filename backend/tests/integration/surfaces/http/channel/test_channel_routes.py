@@ -74,6 +74,11 @@ class _StubRuntime:
         #: channel uid -> (websocket state, last error)
         self.websockets: dict[str, tuple[str, str | None]] = {}
         self.restarted: list[str] = []
+        #: channel uid -> "pending" | "refused"
+        self.withheld: dict[str, str] = {}
+
+    def secret_withheld(self, channel_uid: str) -> str | None:
+        return self.withheld.get(channel_uid)
 
     async def restart(self, channel_uid: str) -> bool:
         self.restarted.append(channel_uid)
@@ -176,13 +181,16 @@ def _client(app: FastAPI, *, token: str | None = _TOKEN) -> AsyncClient:
     return AsyncClient(transport=ASGITransport(app), base_url="http://t", headers=headers)
 
 
-async def _pair(ctx: _Ctx, resource_uid: str, *, chat_id: str = "emp-1") -> None:
+async def _pair(
+    ctx: _Ctx, resource_uid: str, *, chat_id: str = "emp-1", display: str = "Yu"
+) -> None:
     await ctx.peers.upsert(
         ChannelPeer(
             resource_uid=resource_uid,
             chat_id=chat_id,
-            display_name="Yu",
+            display_name=display,
             paired_at=datetime.now(tz=UTC),
+            sender_id=chat_id,
         )
     )
     # The conversation pointer lives on the DM's thread row, not on the peer.
@@ -228,7 +236,14 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
     async with _client(ctx.app) as c:
         r = await c.get(f"/api/v1/channels/{ctx.tg_uid}/status")
     assert r.status_code == 200
-    assert r.json() == {
+    body = r.json()
+    # The commands the channel answers ride along, from the one roster: every word
+    # with its argument hint and both descriptions (the Overview lists them).
+    commands = body.pop("commands")
+    assert [c["name"] for c in commands][:3] == ["new", "stop", "model"]
+    assert {"name", "args", "description", "description_zh", "needs_knowledge"} <= set(commands[0])
+    assert next(c for c in commands if c["name"] == "kb")["needs_knowledge"] is True
+    assert body == {
         # Both travel: the uid is what a surface addresses the channel by, the
         # name is what it shows. A status that carried only the label would
         # leave every client that has to call back needing a second lookup.
@@ -238,9 +253,10 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
         "enabled": True,
         "running": False,
         "pending_pairing": False,
-        "peer": None,
+        "people": [],
         "inbound": None,  # telegram's inbound is its own polling, reported by `running`
         "diagnostics": [],  # nothing contradicts the configuration
+        "secret_approval": None,  # its secret is not waiting on anyone
         # The binding travels on the wire even when there is nothing to say:
         # a surface must be able to tell "bound elsewhere" from "stopped", and
         # a field that appeared only sometimes would make that a guess.
@@ -270,6 +286,21 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
 
 @pytest.mark.acceptance(
     spec="channels",
+    scenario="a channel whose secret waits for approval says so and starts once approved",
+)
+async def test_status_names_a_secret_waiting_for_approval(ctx: _Ctx) -> None:
+    ctx.runtime.withheld[ctx.st_uid] = "pending"
+    async with _client(ctx.app) as c:
+        r = await c.get(f"/api/v1/channels/{ctx.st_uid}/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["running"] is False
+    assert body["secret_approval"]["state"] == "pending"
+    assert body["secret_approval"]["secret_ref"]
+
+
+@pytest.mark.acceptance(
+    spec="channels",
     scenario="channel status reports runtime, pairing, and callback details",
 )
 async def test_status_reports_runtime_pairing_and_callback_details(ctx: _Ctx) -> None:
@@ -288,9 +319,11 @@ async def test_status_reports_runtime_pairing_and_callback_details(ctx: _Ctx) ->
     assert body["enabled"] is True
     assert body["running"] is True  # adapter live in the runtime
     assert body["pending_pairing"] is True  # unexpired code outstanding
-    assert body["peer"]["chat_id"] == "emp-1"
-    assert body["peer"]["display_name"] == "Yu"
-    assert body["peer"]["active_conversation_id"] == "conv-9"
+    (person,) = body["people"]
+    assert person["chat_id"] == "emp-1"
+    assert person["sender_id"] == "emp-1"
+    assert person["display_name"] == "Yu"
+    assert person["active_conversation_id"] == "conv-9"
     # The channel type's own inbound state: for SeaTalk, its websocket
     # connection, and nothing about a listener, port, path, URL or tunnel.
     assert body["inbound"] == {"websocket_state": "connected", "websocket_error": None}
@@ -337,8 +370,46 @@ async def test_management_surface_reports_status_owner_agent_and_health(ctx: _Ct
     body = r.json()
     assert body["enabled"] is True  # status
     assert body["running"] is True  # health — adapter live in the runtime
-    assert body["peer"]["display_name"] == "Yu"  # paired owner
-    assert body["peer"]["chat_id"] == "emp-1"
+    assert body["people"][0]["display_name"] == "Yu"  # paired owner
+    assert body["people"][0]["chat_id"] == "emp-1"
+
+
+async def test_several_people_are_listed_and_one_can_be_removed(ctx: _Ctx) -> None:
+    """Spec channels "Serve several paired people": the status lists everyone paired,
+    earliest first; removing one leaves the rest, and removing a stranger is a 404."""
+    await _pair(ctx, ctx.tg_uid, chat_id="emp-1", display="Yu")
+    await _pair(ctx, ctx.tg_uid, chat_id="emp-2", display="Ann")
+    async with _client(ctx.app) as c:
+        listed = (await c.get(f"/api/v1/channels/{ctx.tg_uid}/status")).json()
+        assert [p["display_name"] for p in listed["people"]] == ["Yu", "Ann"]
+
+        gone = await c.delete(f"/api/v1/channels/{ctx.tg_uid}/people/emp-1")
+        assert gone.status_code == 204
+        after = (await c.get(f"/api/v1/channels/{ctx.tg_uid}/status")).json()
+        assert [p["display_name"] for p in after["people"]] == ["Ann"]
+
+        again = await c.delete(f"/api/v1/channels/{ctx.tg_uid}/people/emp-1")
+        assert again.status_code == 404
+        assert again.json()["error"]["code"] == "CHANNEL_PERSON_NOT_FOUND"
+
+        # The last person may go: a channel with nobody paired is where every one starts.
+        assert (await c.delete(f"/api/v1/channels/{ctx.tg_uid}/people/emp-2")).status_code == 204
+        empty = (await c.get(f"/api/v1/channels/{ctx.tg_uid}/status")).json()
+        assert empty["people"] == []
+
+
+async def test_a_pairing_code_may_name_the_person_it_replaces(ctx: _Ctx) -> None:
+    await _pair(ctx, ctx.tg_uid, chat_id="emp-1")
+    async with _client(ctx.app) as c:
+        ok = await c.post(f"/api/v1/channels/{ctx.tg_uid}/pairing-code", json={"replaces": "emp-1"})
+        assert ok.status_code == 200
+        bad = await c.post(f"/api/v1/channels/{ctx.tg_uid}/pairing-code", json={"replaces": "x"})
+        assert bad.status_code == 404
+
+        # Cancelling takes the outstanding code away.
+        assert (await c.get(f"/api/v1/channels/{ctx.tg_uid}/status")).json()["pending_pairing"]
+        assert (await c.delete(f"/api/v1/channels/{ctx.tg_uid}/pairing-code")).status_code == 204
+        assert not (await c.get(f"/api/v1/channels/{ctx.tg_uid}/status")).json()["pending_pairing"]
 
 
 async def test_notify_delivers_to_paired_peer(ctx: _Ctx) -> None:

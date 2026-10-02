@@ -299,19 +299,19 @@ describe("MessageThread", () => {
     expect(texts).toEqual(["first send", "second send"]);
   });
 
-  test("readOnly hides the composer and shows a restore call-to-action", async () => {
+  test("readOnly hides the composer and shows an unarchive call-to-action", async () => {
     // spec chat "Open an archived conversation read-only": archived
-    // conversations open read-only; restoring re-enables chat.
+    // conversations open read-only; unarchiving re-enables chat.
     chatApiMock.listMessages.mockResolvedValue({
       messages: [makeMsg({ content: [contentBlock({ type: "text", text: "old message" })] })],
     });
-    const onRestore = vi.fn();
-    renderThread({ readOnly: true, onRestore });
+    const onUnarchive = vi.fn();
+    renderThread({ readOnly: true, onUnarchive });
     await waitFor(() => expect(screen.getByText("old message")).toBeInTheDocument());
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.getByText("This conversation is archived.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /restore/i }));
-    expect(onRestore).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /unarchive/i }));
+    expect(onUnarchive).toHaveBeenCalled();
   });
 
   test("the composer invites a message to the conversation's agent, by its name", async () => {

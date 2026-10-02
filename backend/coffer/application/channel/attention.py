@@ -9,6 +9,8 @@ machine runs is not this daemon's to report on:
   (``sdk_handoff``), and its reason names no command;
 - ``channel_disconnected`` — the websocket was kicked by another connection or
   failed; the reason carries the recorded error text;
+- ``channel_secret_approval`` — the adapter is not running because its secret
+  waits for the owner's approval (or was refused);
 - ``channel_not_running`` — the adapter is not running and no websocket state
   explains why (a Telegram adapter whose start failed).
 
@@ -77,7 +79,19 @@ class ChannelAttentionSource:
         ws_state = status.inbound.websocket_state if status.inbound is not None else None
         ws_error = status.inbound.websocket_error if status.inbound is not None else None
         handoff: str | None = None
-        if ws_state == "sdk_missing":
+        if status.secret_approval is not None and not status.running:
+            code, severity = "channel_secret_approval", Severity.WARNING
+            if status.secret_approval.state == "refused":
+                reason = (
+                    "Its secret was refused in the Coffer app, so it is not running. "
+                    "Ask again from the Secrets page."
+                )
+            else:
+                reason = (
+                    "Its secret waits for your approval in the Coffer app (Secrets page), "
+                    "so it is not running yet. Pairing and settings are kept."
+                )
+        elif ws_state == "sdk_missing":
             code, severity = "channel_sdk_missing", Severity.ERROR
             reason = "SeaTalk's WebSocket SDK is not on this machine, so it receives nothing."
             handoff = self._sdk_handoff(status.name) if self._sdk_handoff else None

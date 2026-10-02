@@ -1,8 +1,10 @@
 """One row per required command, and what state it is in.
 
-Rows aggregate every managed skill that declares the command: the minimum is
-the highest any of them asks for; the title, login check and login command
-come from the first skill (by name) that declares each. The launcher an
+Rows aggregate every managed skill that declares the command and the tool the
+person added by hand under that name (``DeclaredTool``; no skill needed): the
+minimum is the highest any of them asks for; the title and login check come
+from the hand-added declaration first, then from the first skill (by name) that
+declares each, and the login command from the first skill that gives one. The launcher an
 enabled stdio MCP server starts with is required too — by that server, under
 the command that provides it (``uv`` for ``uvx``, see :func:`launcher_cli`),
 with no minimum and no login. The status is
@@ -17,6 +19,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+from coffer.domain.skill.cli_declared import DeclaredTool
 from coffer.domain.skill.requirements import CommandRequirement
 from coffer.domain.versions import at_least, compare_versions
 
@@ -76,6 +79,9 @@ class RequiredCommand:
     needed_by: tuple[NeededBy, ...]
     #: The MCP servers started with this command (or a launcher it provides).
     needed_by_servers: tuple[ServerLauncher, ...] = ()
+    #: The person added this command by hand.
+    added: bool = False
+    description: str | None = None
 
 
 #: Launchers that ship inside another command: checking the CLI checks them.
@@ -109,9 +115,12 @@ class ProbeResult:
 
 
 def aggregate(
-    skills: Iterable[SkillRequirements], servers: Iterable[ServerLauncher] = ()
+    skills: Iterable[SkillRequirements],
+    servers: Iterable[ServerLauncher] = (),
+    declared: Iterable[DeclaredTool] = (),
 ) -> list[RequiredCommand]:
     """One :class:`RequiredCommand` per command, sorted by command name."""
+    by_declared = {d.command: d for d in declared}
     by_command: dict[str, list[tuple[str, str, CommandRequirement]]] = {}
     for skill in sorted(skills, key=lambda s: (s.skill_name, s.skill_uid)):
         for req in skill.requirements:
@@ -122,8 +131,13 @@ def aggregate(
         if cli is not None:
             by_server.setdefault(cli, []).append(server)
     return [
-        _row(command, by_command.get(command, ()), by_server.get(command, ()))
-        for command in sorted(by_command.keys() | by_server.keys())
+        _row(
+            command,
+            by_command.get(command, ()),
+            by_server.get(command, ()),
+            by_declared.get(command),
+        )
+        for command in sorted(by_command.keys() | by_server.keys() | by_declared.keys())
     ]
 
 
@@ -131,19 +145,23 @@ def _row(
     command: str,
     entries: Sequence[tuple[str, str, CommandRequirement]],
     servers: Sequence[ServerLauncher] = (),
+    declared: DeclaredTool | None = None,
 ) -> RequiredCommand:
     reqs = [req for _uid, _name, req in entries]
+    own = declared or DeclaredTool(command)
     return RequiredCommand(
         command=command,
-        title=next((r.title for r in reqs if r.title), None),
-        min_version=highest_minimum(r.min_version for r in reqs),
-        login_check=next((r.login_check for r in reqs if r.login_check), None),
+        title=own.title or next((r.title for r in reqs if r.title), None),
+        min_version=highest_minimum([own.min_version, *(r.min_version for r in reqs)]),
+        login_check=own.login_check or next((r.login_check for r in reqs if r.login_check), None),
         login=next((r.login for r in reqs if r.login), None),
         needed_by=tuple(
             NeededBy(skill_uid=uid, skill_name=name, min_version=r.min_version, why=r.why)
             for uid, name, r in entries
         ),
         needed_by_servers=tuple(servers),
+        added=declared is not None,
+        description=own.description,
     )
 
 

@@ -32,7 +32,25 @@ export interface paths {
         put?: never;
         /** Issue Pairing Code */
         post: operations["issue_pairing_code_api_v1_channels__uid__pairing_code_post"];
-        delete?: never;
+        /** Cancel Pairing Code */
+        delete: operations["cancel_pairing_code_api_v1_channels__uid__pairing_code_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/channels/{uid}/people/{sender_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Person */
+        delete: operations["remove_person_api_v1_channels__uid__people__sender_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -79,6 +97,27 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * ChannelCommandOut
+         * @description One slash command the channel answers (spec channels "Answer the
+         *     conversation commands from any paired chat"), from the one roster that also
+         *     feeds the help text and the platform menus.
+         */
+        ChannelCommandOut: {
+            /** Args */
+            args: string;
+            /** Description */
+            description: string;
+            /** Description Zh */
+            description_zh: string;
+            /** Name */
+            name: string;
+            /**
+             * Needs Knowledge
+             * @default false
+             */
+            needs_knowledge: boolean;
+        };
         /** ChannelDiagnosticOut */
         ChannelDiagnosticOut: {
             /** Code */
@@ -86,8 +125,12 @@ export interface components {
             /** Message */
             message: string;
         };
-        /** ChannelPeerOut */
-        ChannelPeerOut: {
+        /**
+         * ChannelPersonOut
+         * @description A person paired to the channel (spec channels "Serve several paired
+         *     people"): every one is answered with identical rights.
+         */
+        ChannelPersonOut: {
             /** Active Conversation Id */
             active_conversation_id: string | null;
             /** Chat Id */
@@ -99,6 +142,8 @@ export interface components {
              * Format: date-time
              */
             paired_at: string;
+            /** Sender Id */
+            sender_id: string;
         };
         /** ChannelStatusOut */
         ChannelStatusOut: {
@@ -107,6 +152,11 @@ export interface components {
              * @enum {string}
              */
             channel_type: "telegram" | "seatalk";
+            /**
+             * Commands
+             * @default []
+             */
+            commands: components["schemas"]["ChannelCommandOut"][];
             /**
              * Diagnostics
              * @default []
@@ -118,9 +168,10 @@ export interface components {
             inbound: components["schemas"]["InboundInfoOut"] | null;
             /** Name */
             name: string;
-            peer: components["schemas"]["ChannelPeerOut"] | null;
             /** Pending Pairing */
             pending_pairing: boolean;
+            /** People */
+            people: components["schemas"]["ChannelPersonOut"][];
             /** Running */
             running: boolean;
             /**
@@ -130,6 +181,7 @@ export interface components {
             runs_here: boolean;
             /** Runs On */
             runs_on: string | null;
+            secret_approval: components["schemas"]["SecretApprovalOut"] | null;
             /** Settings */
             settings: (components["schemas"]["TelegramChannelConfig"] | components["schemas"]["SeaTalkChannelConfig"]) | null;
             /** Title */
@@ -192,6 +244,11 @@ export interface components {
         NotifyOut: {
             /** Sent */
             sent: boolean;
+        };
+        /** PairingCodeIn */
+        PairingCodeIn: {
+            /** Replaces */
+            replaces?: string | null;
         };
         /** PairingCodeOut */
         PairingCodeOut: {
@@ -269,6 +326,23 @@ export interface components {
              * @default 1.5
              */
             wait_after_text_seconds: number;
+        };
+        /**
+         * SecretApprovalOut
+         * @description Why a channel's adapter is not running when its secret is the cause.
+         *
+         *     ``pending`` waits for the owner's approval in the Coffer app; ``refused``
+         *     was declined and stays so until asked again from the Secrets page. Names the
+         *     secret by ref, never carries its value.
+         */
+        SecretApprovalOut: {
+            /** Secret Ref */
+            secret_ref: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "pending" | "refused";
         };
         /** TelegramChannelConfig */
         TelegramChannelConfig: {
@@ -393,7 +467,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PairingCodeIn"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -403,6 +481,88 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PairingCodeOut"];
                 };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_pairing_code_api_v1_channels__uid__pairing_code_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_person_api_v1_channels__uid__people__sender_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+                sender_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {

@@ -12,6 +12,7 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, RefreshCw, Terminal } from "lucide-react";
 
+import { Section, SectionStack } from "@/components/Section";
 import { EmptyState } from "@/components/EmptyState";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { StatusWord } from "@/components/status/StatusWord";
@@ -64,75 +65,71 @@ export function SkillRequiresTab({ skill }: Props) {
   }
 
   return (
-    <section className="flex flex-col" aria-label={t("skills.requires.title")}>
-      <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle pb-2">
-        <h3 className="text-sm font-semibold">{t("skills.requires.title")}</h3>
-        <span className="text-xs text-text-muted">{t("skills.requires.declared")}</span>
-        <span className="ml-auto flex items-center gap-2">
-          {checked ? (
-            <span className="text-xs text-text-muted">
-              {t("clis.checkedAgo", { when: relativeTime(checked, i18n.language) })}
-            </span>
-          ) : null}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={check.isPending}
-            onClick={() => check.mutate()}
-          >
-            <RefreshCw aria-hidden className={check.isPending ? "animate-spin" : undefined} />
-            {check.isPending ? t("clis.checking") : t("clis.checkAgain")}
-          </Button>
-          <Link to="/clis" className="text-xs font-label text-accent-text hover:underline">
-            {t("skills.requires.openClis")}
-          </Link>
-        </span>
-      </div>
-
-      {error ? (
-        <p className="pt-2 text-xs text-danger">
-          {t("skills.requires.loadFailed")}: {translateApiError(t, error)}
-        </p>
-      ) : null}
-
-      {rows.length > 0 && secrets.length > 0 ? (
-        <h4 className="pt-3 text-xs font-semibold text-text-muted">
-          {t("skills.requires.commandsTitle")}
-        </h4>
-      ) : null}
-      <ul className="divide-y divide-border-subtle">
-        {rows.map(({ req, cli }) => {
-          const href = `/clis/${encodeURIComponent(req.command)}`;
-          return (
-            <li
-              key={req.command}
-              className="grid grid-cols-[8.5rem_minmax(0,1fr)_auto_auto] items-center gap-4 py-3"
-            >
-              <Link
-                to={href}
-                className="truncate font-mono text-sm font-label text-accent-text hover:underline"
-              >
-                {req.command}
-              </Link>
-              <StateWord cli={cli} />
-              {cli?.handoff ? <AgentHandoff prompt={cli.handoff.prompt} size="sm" /> : <span />}
-              <Link
-                to={href}
-                className="inline-flex items-center gap-1 text-xs font-label text-accent-text hover:underline"
-              >
-                {t("skills.requires.openInClis")}
-                <ArrowRight className="size-3" aria-hidden />
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-
+    <SectionStack>
       {rows.length > 0 ? (
-        <p className="pt-3 text-xs text-text-muted">{t("skills.requires.footnote")}</p>
+        <Section
+          title={t("skills.requires.commandsTitle")}
+          gap="snug"
+          labelled
+          help={`${t("skills.requires.declared")}. ${t("skills.requires.footnote")}`}
+          actions={
+            <span className="flex items-center gap-2">
+              {checked ? (
+                <span className="text-xs text-text-muted">
+                  {t("clis.checkedAgo", { when: relativeTime(checked, i18n.language) })}
+                </span>
+              ) : null}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={check.isPending}
+                onClick={() => check.mutate()}
+              >
+                <RefreshCw aria-hidden className={check.isPending ? "animate-spin" : undefined} />
+                {check.isPending ? t("clis.checking") : t("clis.checkAgain")}
+              </Button>
+              <Link to="/clis" className="text-xs font-label text-accent-text hover:underline">
+                {t("skills.requires.openClis")}
+              </Link>
+            </span>
+          }
+        >
+          {error ? (
+            <p className="text-xs text-danger">
+              {t("skills.requires.loadFailed")}: {translateApiError(t, error)}
+            </p>
+          ) : null}
+          <ul className="divide-y divide-border-subtle">
+            {rows.map(({ req, cli }) => {
+              const href = `/clis/${encodeURIComponent(req.command)}`;
+              return (
+                <li
+                  key={req.command}
+                  className="grid grid-cols-[8.5rem_minmax(0,1fr)_auto_auto] items-center gap-4 py-3"
+                >
+                  <Link
+                    to={href}
+                    className="truncate font-mono text-sm font-label text-accent-text hover:underline"
+                  >
+                    {req.command}
+                  </Link>
+                  <StateWord cli={cli} />
+                  {cli?.handoff ? <AgentHandoff prompt={cli.handoff.prompt} size="sm" /> : <span />}
+                  <Link
+                    to={href}
+                    className="inline-flex items-center gap-1 text-xs font-label text-accent-text hover:underline"
+                  >
+                    {t("skills.requires.openInClis")}
+                    <ArrowRight className="size-3" aria-hidden />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </Section>
       ) : null}
       {secrets.length > 0 ? <SecretRows secrets={secrets} /> : null}
-    </section>
+    </SectionStack>
   );
 }
 
@@ -142,8 +139,12 @@ export function SkillRequiresTab({ skill }: Props) {
 function SecretRows({ secrets }: { secrets: SkillOut["requires_secrets"] }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col pt-4" data-testid="skill-requires-secrets">
-      <h4 className="text-xs font-semibold text-text-muted">{t("skills.requires.secretsTitle")}</h4>
+    <Section
+      title={t("skills.requires.secretsTitle")}
+      help={t("skills.requires.secretsFootnote")}
+      gap="snug"
+      testId="skill-requires-secrets"
+    >
       <ul className="divide-y divide-border-subtle">
         {secrets.map((secret) => (
           <li
@@ -170,7 +171,6 @@ function SecretRows({ secrets }: { secrets: SkillOut["requires_secrets"] }) {
           </li>
         ))}
       </ul>
-      <p className="pt-3 text-xs text-text-muted">{t("skills.requires.secretsFootnote")}</p>
-    </div>
+    </Section>
   );
 }

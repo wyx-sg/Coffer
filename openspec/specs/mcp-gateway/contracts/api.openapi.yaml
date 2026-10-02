@@ -803,6 +803,16 @@ paths:
           - type: 'null'
           description: Only the calls made under this correlation id — one /mcp request's — the same id its audit rows and daemon log lines carry.
           title: Trace Id
+      - description: Free text, matched in any case against the tool, the error, the session, the outcome and the server's name.
+        in: query
+        name: q
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Free text, matched in any case against the tool, the error, the session, the outcome and the server's name.
+          title: Q
       - in: header
         name: x-coffer-token
         required: false
@@ -1435,6 +1445,114 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Tool Tiering
+      tags:
+      - mcp
+  /api/v1/resources/mcp_server/{uid}/tools/exposure:
+    patch:
+      description: Set one exposure mode on several tools in one write; nothing changes if any is unknown.
+      operationId: set_tools_exposure_api_v1_resources_mcp_server__uid__tools_exposure_patch
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolExposureBatchBody'
+        required: true
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Set Tools Exposure
+      tags:
+      - mcp
+  /api/v1/resources/mcp_server/{uid}/tools/{tool}/exposure:
+    patch:
+      description: 'Set how one tool is exposed to agents: ``auto``, ``listed`` or ``search``.'
+      operationId: set_tool_exposure_api_v1_resources_mcp_server__uid__tools__tool__exposure_patch
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: tool
+        required: true
+        schema:
+          title: Tool
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolExposureBody'
+        required: true
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Set Tool Exposure
       tags:
       - mcp
 components:
@@ -3098,6 +3216,74 @@ components:
       - tool
       title: ToolCallCountOut
       type: object
+    ToolExposureBatchBody:
+      properties:
+        mode:
+          enum:
+          - auto
+          - listed
+          - search
+          title: Mode
+          type: string
+        tools:
+          items:
+            type: string
+          minItems: 1
+          title: Tools
+          type: array
+      required:
+      - tools
+      - mode
+      title: ToolExposureBatchBody
+      type: object
+    ToolExposureBody:
+      properties:
+        mode:
+          enum:
+          - auto
+          - listed
+          - search
+          title: Mode
+          type: string
+      required:
+      - mode
+      title: ToolExposureBody
+      type: object
+    ToolExposureOut:
+      description: 'One tool''s exposure: what the person set, what agents get, and why.'
+      properties:
+        effective:
+          enum:
+          - listed
+          - search
+          title: Effective
+          type: string
+        mode:
+          enum:
+          - auto
+          - listed
+          - search
+          title: Mode
+          type: string
+        reason:
+          enum:
+          - pinned
+          - search_only
+          - within_budget
+          - top_by_use
+          - low_use
+          title: Reason
+          type: string
+        tool:
+          title: Tool
+          type: string
+      required:
+      - tool
+      - mode
+      - effective
+      - reason
+      title: ToolExposureOut
+      type: object
     ToolTieringOut:
       description: |-
         Which of this server's tools agents see listed and which only through search.
@@ -3130,6 +3316,11 @@ components:
         tool_count:
           title: Tool Count
           type: integer
+        tools:
+          items:
+            $ref: '#/components/schemas/ToolExposureOut'
+          title: Tools
+          type: array
       required:
       - enabled
       - budget
@@ -3138,6 +3329,7 @@ components:
       - tool_count
       - listed
       - behind_search
+      - tools
       title: ToolTieringOut
       type: object
     _MCPPromptArgument:

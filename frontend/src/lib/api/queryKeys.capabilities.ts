@@ -38,8 +38,23 @@ export const mcpAllInvocationsKey = (filters: Record<string, unknown>) =>
 /** The server page's reads: the last 24 hours, its own log, the tiering split. */
 export const mcpSummaryKey = (serverUid: string) => ["mcp", "summary", serverUid] as const;
 export const mcpLogKey = (serverUid: string) => ["mcp", "log", serverUid] as const;
-export const mcpTieringKey = (serverUid: string) => ["mcp", "tiering", serverUid] as const;
+/** Prefix of every server's tiering split (it is machine-wide: one server's change refreshes them all). */
+export const mcpTieringsKey = ["mcp", "tiering"] as const;
+export const mcpTieringKey = (serverUid: string) => [...mcpTieringsKey, serverUid] as const;
 
 // customTools — keyed on a group's NAME, fixed once made and its routes' only id.
 export const customToolsKey = ["customTools"] as const;
 export const customToolGroupKey = (name: string) => ["customTools", name] as const;
+
+// ---------------------------------------------------------------------------
+// clis — the command-line tools (/clis): required by skills or added by hand
+// ---------------------------------------------------------------------------
+
+export const clisKey = ["clis"] as const;
+/** One command. Keyed on the command itself: it is the row's only identity,
+ *  and no rename exists that could strand the entry. */
+export const cliKey = (command: string) => ["clis", command] as const;
+/** What was read from one tool's help; extends the tool's key. */
+export const cliInterfaceKey = (command: string) => ["clis", command, "interface"] as const;
+/** What a typed name or path finds, for the Add dialog. */
+export const cliPreviewKey = (command: string) => ["clis", "preview", command] as const;

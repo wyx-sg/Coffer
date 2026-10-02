@@ -102,7 +102,11 @@ async def put_secret_boundary_settings(
     """
     boundary = get_secret_boundary()
     if body.require_approval:
-        await asyncio.to_thread(boundary.enable_protections)
+        changed = await asyncio.to_thread(boundary.enable_protections)
+        if changed:
+            await audit.record(
+                AuditEventType.SECRET_PROTECTION_ENABLED.value, actor=actor, details={}
+            )
         return SecretBoundarySettingsOut(require_approval=True)
     if not await asyncio.to_thread(boundary.protections_on):
         return SecretBoundarySettingsOut(require_approval=False)

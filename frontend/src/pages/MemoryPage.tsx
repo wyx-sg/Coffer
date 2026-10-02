@@ -25,7 +25,7 @@ import { MemoryDeliveriesSection } from "@/components/memory/MemoryDeliveriesSec
 import { MemoryHeaderStatus, useMemoryUpdateRunning } from "@/components/memory/MemoryHeaderStatus";
 import { MemoryReadFailures } from "@/components/memory/MemoryReadFailures";
 import { MemoryPartitionsTable } from "@/components/memory/MemoryPartitionsTable";
-import { Section } from "@/components/Section";
+import { Section, SectionStack } from "@/components/Section";
 import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
 import { MemoryWelcomePanel } from "@/components/memory/MemoryWelcomePanel";
 import { PageHeader } from "@/components/PageHeader";
@@ -38,7 +38,6 @@ export function MemoryPage() {
   const { t } = useTranslation();
   const { data: partitions, isPending, error } = useMemoryPartitions();
   const rows = partitions ?? [];
-  const memories = rows.reduce((sum, p) => sum + p.note_count, 0);
   const firstRun = !isPending && !error && rows.length === 0;
   const updating = useMemoryUpdateRunning();
   // A distil pass or a read finishing emits a memory change event: refetch
@@ -72,37 +71,30 @@ export function MemoryPage() {
 
       {firstRun ? null : <MemoryReadFailures />}
 
-      {firstRun ? null : <MemoryDeliveriesSection />}
-
       {firstRun ? (
         <MemoryWelcomePanel />
       ) : (
-        <Section
-          as="h2"
-          gap="snug"
-          labelled
-          title={t("memory.partitions.title")}
-          meta={
-            rows.length > 0
-              ? `${t("memory.partitions.count", { count: rows.length })} · ${t(
-                  "memory.partitions.memories",
-                  { count: memories },
-                )}`
-              : undefined
-          }
-          testId="memory-partitions"
-        >
-          {error ? (
-            <EmptyState
-              icon={Brain}
-              tone="error"
-              title={t("memory.loadFailed")}
-              description={translateApiError(t, error)}
-            />
-          ) : (
-            <MemoryPartitionsTable rows={rows} isLoading={isPending} />
-          )}
-        </Section>
+        <SectionStack>
+          <MemoryDeliveriesSection />
+          <Section
+            as="h2"
+            gap="snug"
+            labelled
+            title={t("memory.partitions.title")}
+            testId="memory-partitions"
+          >
+            {error ? (
+              <EmptyState
+                icon={Brain}
+                tone="error"
+                title={t("memory.loadFailed")}
+                description={translateApiError(t, error)}
+              />
+            ) : (
+              <MemoryPartitionsTable rows={rows} isLoading={isPending} />
+            )}
+          </Section>
+        </SectionStack>
       )}
     </div>
   );

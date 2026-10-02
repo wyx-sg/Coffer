@@ -194,13 +194,10 @@ acceptance(
       page.getByRole("link", { name: /MCP servers/i }).first(),
     ).toBeVisible();
 
-    // Language lives in the version menu the sidebar footer opens, each
-    // locale named in its own language (board 1.2.06).
-    await page.getByTestId("sidebar-daemon").click();
-    await page
-      .getByTestId("version-menu")
-      .getByRole("radio", { name: /简体中文/ })
-      .click();
+    // Language lives in Settings › General (the sidebar footer is one Settings row).
+    await page.getByTestId("sidebar-settings").click();
+    await page.getByRole("group", { name: "Language" }).getByRole("button", { name: "中文" }).click();
+    await page.keyboard.press("Escape");
 
     // Sidebar labels switch to Chinese within the same frame.
     await expect(

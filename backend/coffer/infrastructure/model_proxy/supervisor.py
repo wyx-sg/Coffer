@@ -35,7 +35,7 @@ from coffer.application.runtime.supervisor import spawn
 from coffer.domain.model_proxy.state import CONTROL_TOKEN_HEADER, ProxyState
 from coffer.infrastructure.daemon.spawn import daemon_spawn_command
 from coffer.infrastructure.logging.files import log_dir
-from coffer.infrastructure.model_proxy.info import ProxyInfo, read_info
+from coffer.infrastructure.model_proxy.info import EXIT_PORT_IN_USE, ProxyInfo, read_info
 from coffer.infrastructure.platform.process import detached_popen_kwargs
 
 _logger = logging.getLogger(__name__)
@@ -43,7 +43,20 @@ _logger = logging.getLogger(__name__)
 SPAWN_TIMEOUT_SECONDS = 20.0
 DRAIN_TIMEOUT_SECONDS = 30.0
 _HTTP_TIMEOUT = httpx.Timeout(5.0, connect=2.0)
-_BACKOFF_MAX = 60.0
+#: Restart backoff: the wait after the first failed start, doubled for every
+#: failure that follows, up to the cap. A start that fails because the port is
+#: held, or the binary is broken, will fail the same way a minute later; the
+#: cap keeps trying without filling the log and spawning a process every few
+#: seconds.
+_BACKOFF_BASE = 5.0
+_BACKOFF_MAX = 600.0
+#: After this many failures in a row the supervisor reports the proxy as
+#: failing (``ProxyStatus.failing``) and says so once in the log; later retries
+#: are logged only when the cause changes.
+FAILING_AFTER = 3
+#: How long an idle supervisor (nothing is routed through the proxy, so none
+#: is running) waits before it asks again, unless a state push nudges it.
+_IDLE_RECHECK = 60.0
 
 
 @dataclass(frozen=True)
@@ -56,6 +69,10 @@ class ProxyStatus:
     last_error: str | None
     revision: int | None
     started_at: str | None
+    #: Consecutive failed attempts to start it; ``0`` while it is up or idle.
+    consecutive_failures: int = 0
+    #: The start has failed ``FAILING_AFTER`` times running; retries slow down.
+    failing: bool = False
 
 
 def default_proxy_command(port: int) -> list[str]:
@@ -100,7 +117,9 @@ class ProxySupervisor:
         interval: float = 5.0,
         spawn_timeout: float = SPAWN_TIMEOUT_SECONDS,
         drain_timeout: float = DRAIN_TIMEOUT_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        self._clock = clock
         self._state_provider = state_provider
         self.port = port
         self.coffer_dir = coffer_dir
@@ -119,6 +138,12 @@ class ProxySupervisor:
         self._lock = asyncio.Lock()
         self._dirty = False
         self._watchdog: asyncio.Task[None] | None = None
+        self._failures = 0
+        self._prefetched: ProxyState | None = None
+        #: No proxy is running because no agent is routed through one.
+        self._idle = False
+        #: Not before this time (``clock``) is another start attempted.
+        self._retry_at = 0.0
         self._http = httpx.AsyncClient(timeout=_HTTP_TIMEOUT, trust_env=False)
 
     # --- public ---------------------------------------------------------------------
@@ -128,11 +153,12 @@ class ProxySupervisor:
         start the watchdog. May wait up to ``drain_timeout`` for an old build's
         proxy to finish its streams — run it in a background task if that matters."""
         try:
-            await self._attach_or_spawn()
-            await self.refresh()
+            if await self._attach_or_spawn():
+                await self.refresh()
+            else:
+                self._go_idle()
         except Exception as exc:  # the watchdog keeps trying
-            self._last_error = f"{type(exc).__name__}: {exc}"
-            _logger.warning("model_proxy.supervisor_start_failed: %s", self._last_error)
+            self._record_failure(exc)
         if self._watchdog is None:
             self._watchdog = spawn(self._watch(), name="model-proxy-watchdog")
 
@@ -146,8 +172,10 @@ class ProxySupervisor:
             self._dirty = False
             info = self._info
             if info is None:
+                if self._idle:
+                    self._retry_at = 0.0  # something changed: ask again at the next tick
                 return
-            state = await self._state_provider()
+            state, self._prefetched = self._prefetched or await self._state_provider(), None
             try:
                 r = await self._http.put(
                     self._url(info, "/_coffer/state"),
@@ -184,6 +212,8 @@ class ProxySupervisor:
             last_error=self._last_error,
             revision=health.get("revision") if self._health else None,
             started_at=health.get("started_at") if self._health else None,
+            consecutive_failures=self._failures,
+            failing=self._failures >= FAILING_AFTER,
         )
 
     # --- attach / spawn ------------------------------------------------------------------
@@ -211,7 +241,10 @@ class ProxySupervisor:
         payload = r.json()
         return payload if isinstance(payload, dict) else None
 
-    async def _attach_or_spawn(self) -> None:
+    async def _attach_or_spawn(self) -> bool:
+        """Attach to a live proxy of this build, or spawn one. ``False`` when
+        there is none and none is needed: no agent is routed through the proxy,
+        so starting a process for it would only be a process nothing talks to."""
         info = read_info(self.coffer_dir)
         if info is not None:
             health = await self._probe(info)
@@ -222,10 +255,15 @@ class ProxySupervisor:
             ):
                 self._info, self._health = info, health
                 _logger.info("model_proxy.attached pid=%s port=%s", info.pid, info.port)
-                return
+                return True
             if health is not None:
                 await self._replace(info, health)
+        wanted = await self._state_provider()
+        if not wanted.routes:
+            return False
+        self._prefetched = wanted  # the push that follows the spawn sends this one
         await self._spawn()
+        return True
 
     async def _replace(self, info: ProxyInfo, health: dict[str, Any]) -> None:
         """Drain an old build's proxy and wait (bounded) for it to exit."""
@@ -270,6 +308,12 @@ class ProxySupervisor:
         deadline = time.monotonic() + self._spawn_timeout
         while time.monotonic() < deadline:
             if proc.poll() is not None:
+                if proc.returncode == EXIT_PORT_IN_USE:
+                    raise RuntimeError(
+                        f"model proxy could not bind 127.0.0.1:{self.port}: another process "
+                        "holds the port and it is not the proxy this daemon supervises "
+                        f"(see {log_path})"
+                    )
                 raise RuntimeError(f"model proxy exited at start (code {proc.returncode})")
             info = read_info(self.coffer_dir)
             if info is not None and info.pid == proc.pid:
@@ -284,31 +328,61 @@ class ProxySupervisor:
 
     # --- watchdog ---------------------------------------------------------------------
 
+    def _go_idle(self) -> None:
+        self._idle = True
+        self._failures = 0
+        self._retry_at = self._clock() + _IDLE_RECHECK
+
+    def _record_failure(self, exc: Exception) -> None:
+        """Count a failed start and push the next attempt out, doubling the wait
+        up to the cap. Said once when it begins and once when it turns into a
+        standing failure; after that the status carries it, the log does not."""
+        message = f"{type(exc).__name__}: {exc}"
+        changed = message != self._last_error
+        self._last_error = message
+        self._failures += 1
+        delay = min(_BACKOFF_BASE * 2 ** (self._failures - 1), _BACKOFF_MAX)
+        self._retry_at = self._clock() + delay
+        if self._failures == 1 or self._failures == FAILING_AFTER or changed:
+            _logger.warning(
+                "model_proxy.restart_failed: %s (attempt %d, next in %.0fs)",
+                message,
+                self._failures,
+                delay,
+            )
+
+    async def _tick(self) -> None:
+        """One watchdog step: probe, and when the proxy is gone and the backoff
+        has run out, attach or spawn it again."""
+        info = self._info
+        health = await self._probe(info) if info is not None else None
+        if health is not None:
+            self._health, self._failures, self._idle = health, 0, False
+            if health.get("revision") != self._pushed_revision:
+                await self.refresh()
+            return
+        self._health = None
+        if self._clock() < self._retry_at:
+            return
+        try:
+            attached = await self._attach_or_spawn()
+        except Exception as exc:
+            self._record_failure(exc)
+            return
+        if not attached:
+            self._go_idle()
+            return
+        self._failures, self._idle = 0, False
+        # Fed before it is counted: a status that says "restarted" then
+        # describes a proxy that already holds the current state.
+        await self.refresh()
+        self._restarts += 1
+        _logger.warning("model_proxy.restarted count=%s", self._restarts)
+
     async def _watch(self) -> None:
-        backoff = 1.0
         while True:
             await asyncio.sleep(self._interval)
-            info = self._info
-            health = await self._probe(info) if info is not None else None
-            if health is not None:
-                self._health, backoff = health, 1.0
-                if health.get("revision") != self._pushed_revision:
-                    await self.refresh()
-                continue
-            self._health = None
-            try:
-                await self._attach_or_spawn()
-            except Exception as exc:
-                self._last_error = f"{type(exc).__name__}: {exc}"
-                _logger.warning("model_proxy.restart_failed: %s", self._last_error)
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, _BACKOFF_MAX)
-                continue
-            # Fed before it is counted: a status that says "restarted" then
-            # describes a proxy that already holds the current state.
-            await self.refresh()
-            self._restarts += 1
-            _logger.warning("model_proxy.restarted count=%s", self._restarts)
+            await self._tick()
 
 
 __all__ = ["ProxyStatus", "ProxySupervisor", "default_proxy_command"]

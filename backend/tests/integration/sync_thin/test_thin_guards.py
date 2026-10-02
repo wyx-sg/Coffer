@@ -10,8 +10,10 @@ from pathlib import Path
 import pytest
 
 from coffer.application.sync.round_answers import confirm_hold, restore_held
+from coffer.application.sync.round_join import join, preview
 from coffer.application.sync.round_resume import resume
 from coffer.application.sync.round_rollback import SyncNothingToRollBack, plan, rollback
+from coffer.domain.sync.joins import JoinKind
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import RoundStatus
 from coffer.domain.sync.stops import HoldDirection
@@ -170,18 +172,72 @@ def test_a_remote_at_a_newer_layout_is_refused(pair: tuple[Machine, Machine]) ->
     assert mini.repo.head() == head
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a remote at another layout is refused")
-def test_a_remote_at_an_older_layout_is_refused_until_rebuilt(
+def _old_layout_remote(mac: Machine) -> str:
+    """The remote as the previous build left it: manifest schema 2 and a file
+    this vault does not have. Answers the old tip."""
+    mac.put("manifest.json", '{\n  "schema_version": 2\n}\n')
+    mac.put("knowledge/old/only-on-the-old-remote.md", "old\n")
+    assert mac.round().status is RoundStatus.PUSHED
+    return remote_ref(mac.remote) or ""
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a remote at an older layout is replaced by this vault"
+)
+def test_a_round_replaces_a_remote_at_an_older_layout(pair: tuple[Machine, Machine]) -> None:
+    mac, mini = pair
+    mini.put("knowledge/notes/mine.md", "mine\n")
+    mini.state.set_joined(False)
+    old_tip = _old_layout_remote(mac)
+    got = mini.round()
+    assert got.status is RoundStatus.PUSHED and got.join == "replace"
+    new_tip = remote_ref(mini.remote) or ""
+    assert new_tip != old_tip
+    # a fast-forward: the old history stays reachable from the new tip
+    assert mini.git.is_ancestor(old_tip, new_tip)
+    assert mini.repo.read(new_tip, "knowledge/old/only-on-the-old-remote.md") is None
+    assert mini.repo.read(new_tip, "knowledge/notes/mine.md") == b"mine\n"
+    assert mini.deps.layout_of(new_tip) == mini.deps.layout
+    assert mini.state.joined()
+    assert {c.path for c in got.pushed if c.status == "removed"} >= {
+        "knowledge/old/only-on-the-old-remote.md"
+    }
+    # the next round is an ordinary one
+    assert mini.round().status is RoundStatus.NOTHING_TO_DO
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a remote at an older layout is replaced by this vault"
+)
+def test_the_join_preview_reports_the_replace_and_the_join_does_it(
     pair: tuple[Machine, Machine],
 ) -> None:
     mac, mini = pair
-    mac.put("manifest.json", '{\n  "schema_version": 2\n}\n')
-    mac.round()
-    head = mini.repo.head()
+    old_tip = _old_layout_remote(mac)
+    mini.state.set_joined(False)
+    shown = preview(mini.engine, mini.remote, None)
+    assert shown.kind is JoinKind.REPLACE and shown.refused is None
+    assert shown.remote_tip == old_tip and shown.pulled == ()
+    assert "knowledge/old/only-on-the-old-remote.md" in shown.deleted
+    assert shown.deleted_total == len(shown.deleted) >= 1
+    assert shown.pushed_files > 0
+    got = join(mini.engine, mini.remote, None)
+    assert got.status is RoundStatus.PUSHED and got.join == "replace"
+    assert mini.deps.layout_of(remote_ref(mini.remote) or "") == mini.deps.layout
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a remote at an older layout is replaced by this vault"
+)
+def test_replacing_an_older_remote_still_refuses_a_plaintext_secret(
+    pair: tuple[Machine, Machine],
+) -> None:
+    mac, mini = pair
+    old_tip = _old_layout_remote(mac)
+    mini.put("knowledge/notes/leak.md", "api_key = sk-live-abcdefghijklmnopqrstuvwxyz0123456789\n")
     got = mini.round()
-    assert got.status is RoundStatus.REMOTE_TOO_OLD
-    assert got.detail is not None and "rebuild" in got.detail
-    assert mini.repo.head() == head
+    assert got.status is RoundStatus.PLAINTEXT_FOUND
+    assert remote_ref(mini.remote) == old_tip
 
 
 @pytest.mark.acceptance(

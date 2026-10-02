@@ -112,20 +112,6 @@ export function refsWaiting(approvals: readonly Approval[] | undefined): Set<str
   return out;
 }
 
-/** The rows matching `query` (name or ref, case-insensitive), split into used and unused. */
-export function groupRows(rows: SecretRef[], query: string) {
-  const q = query.trim().toLowerCase();
-  const matching = q
-    ? rows.filter(
-        (r) => r.ref.toLowerCase().includes(q) || displayName(r).toLowerCase().includes(q),
-      )
-    : rows;
-  return {
-    inUse: matching.filter((r) => !r.unreferenced),
-    unused: matching.filter((r) => r.unreferenced),
-  };
-}
-
 /** The citers a `409 SECRET_IN_USE` names (`details.resources`), as citers. */
 export function citersFromRefusal(details: unknown): Citer[] {
   const resources =

@@ -88,8 +88,11 @@ class PluginNotFound(CofferError):  # noqa: N818
 
     code = "PLUGIN_NOT_FOUND"
 
-    def __init__(self, plugin_id: str) -> None:
-        super().__init__(f"plugin not found: {plugin_id}")
+    def __init__(self, plugin_id: str, component: str | None = None) -> None:
+        # ``component`` ("skills/foo") names a skill, command, subagent or MCP
+        # server the plugin's package does not contain.
+        what = f"plugin component not found: {component} in {plugin_id}" if component else None
+        super().__init__(what or f"plugin not found: {plugin_id}")
         self.plugin_id = plugin_id
 
 

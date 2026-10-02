@@ -8,7 +8,7 @@
 //
 // A file that moved or was deleted after the list was read fails to load; the
 // reader says so in place and offers a retry and a fresh list.
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AgentTranscriptOutline } from "@/components/agents/AgentTranscriptOutline";
@@ -16,6 +16,7 @@ import { AgentTranscriptView } from "@/components/agents/AgentTranscriptView";
 import { projectName, timeRange } from "@/components/agents/sessions/sessionTime";
 import { FileActions } from "@/components/FileActions";
 import { Button } from "@/components/ui/button";
+import { TruncatedPath, TruncatedText } from "@/components/ui/truncated-text";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import { TRANSCRIPT_TURNS_PAGE_SIZE, useTranscriptSession } from "@/lib/hooks/useAgentTranscripts";
 
@@ -71,16 +72,29 @@ export function SessionReader({
     data.project_path ? abbreviateHomePath(data.project_path) : null,
     timeRange(data.started_at, data.last_activity_at),
     t("agents.sessionsTab.messages", { count: data.message_count }),
-  ].filter(Boolean);
+  ].filter((part): part is string => Boolean(part));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex shrink-0 flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <h3 className="break-words text-md font-semibold text-text">
-            {data.title ?? t("agents.sessionsTab.untitled")}
+          <h3 className="text-md font-semibold text-text">
+            <TruncatedText text={data.title ?? t("agents.sessionsTab.untitled")} />
           </h3>
-          <p className="break-all text-xs text-text-muted">{meta.join(" · ")}</p>
+          <p className="flex min-w-0 items-baseline gap-x-1.5 text-xs text-text-muted">
+            {meta.map((part, i) => (
+              <Fragment key={part}>
+                {i > 0 ? <span aria-hidden>·</span> : null}
+                {i === 0 && data.project_path ? (
+                  <span className="min-w-0">
+                    <TruncatedPath text={part} />
+                  </span>
+                ) : (
+                  <span className="shrink-0 whitespace-nowrap">{part}</span>
+                )}
+              </Fragment>
+            ))}
+          </p>
         </div>
         <FileActions filePath={data.source_path} />
       </div>
@@ -94,7 +108,7 @@ export function SessionReader({
         </p>
       ) : null}
       <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-[14rem_minmax(0,1fr)]">
-        <AgentTranscriptOutline messages={data.messages} />
+        <AgentTranscriptOutline messages={data.messages} offset={data.offset} />
         <AgentTranscriptView messages={data.messages} agentName={agentName} />
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">

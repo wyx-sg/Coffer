@@ -1,127 +1,131 @@
-// src/components/secret/SecretsTable.tsx — one group of secrets (in use, or unused) as a table.
+// src/components/secret/SecretsTable.tsx — the secrets as one table: name and owner, what uses it, when it was last used and created, and the ⋯ menu.
 //
-// Name (a standalone secret's name; any other ref as itself), what uses it,
-// when it was last used and created, and the ⋯ menu. Beside the name: "Missing
-// on this Mac" for a ref this Mac has no value for — cited but not stored, or
-// stored under another Mac's master key — whose Last used cell then offers Add
-// value; "Waiting for approval" while a new value, or a new destination, waits
-// in the Coffer app; and a mark for a value other local processes can read.
-import { KeyRound, TerminalSquare } from "lucide-react";
+// Name, Used by, Last used and Created sort (the header says which way). Only a batch of rows
+// is in the DOM — DataTable shows the first `BATCH` and loads more on request — while the
+// filters and the sort have already been applied to the whole set. A secret missing on this
+// Mac offers Add value in its Last used cell. In the by-owner view the owner is the group's
+// title, so the Used by column and the owner line leave.
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DataTable, type Column } from "@/components/DataTable";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { SecretRef } from "@/lib/api/secret";
+import type { SecretListState, SortKey } from "@/lib/secrets/listState";
+import { SecretNameCell } from "./SecretNameCell";
 import { SecretRowMenu, type SecretRowAction } from "./SecretRowMenu";
+import { SecretSortHeader } from "./SecretSortHeader";
 import { SecretUsedBy } from "./SecretUsedBy";
-import { displayName, hasPendingBinding, isMissingHere } from "./secretRows";
+import type { SecretItem } from "./secretListView";
+import { displayName, isMissingHere } from "./secretRows";
 import { lastUsedLabel, shortDate } from "./secretTimes";
 
+/** How many rows render at first, and each "Load more" adds. */
+export const BATCH = 50;
+
 interface Props {
-  rows: SecretRef[];
-  /** Refs whose new value, or whose adding, waits for approval. */
-  waiting: ReadonlySet<string>;
+  items: SecretItem[];
+  state: SecretListState;
+  onSort?: (column: SortKey) => void;
+  selected: ReadonlySet<string>;
+  onToggle: (ref: string, on: boolean) => void;
   isLoading?: boolean;
   emptyMessage: string;
-  onAction: (action: SecretRowAction, row: SecretRef) => void;
+  /** In a by-owner group: no Used by column, no owner line, no sortable headers. */
+  grouped?: boolean;
+  onAction: (action: SecretRowAction, row: SecretItem["row"]) => void;
 }
 
-function NameCell({ row, waiting }: { row: SecretRef; waiting: boolean }) {
-  const { t } = useTranslation();
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      <KeyRound className="size-3.5 shrink-0 text-text-muted" aria-hidden />
-      <span className="truncate font-mono text-xs text-text">{displayName(row)}</span>
-      {isMissingHere(row) ? (
-        <Badge variant="destructive" className="rounded-full">
-          {t("secrets.row.missing")}
-        </Badge>
-      ) : null}
-      {waiting || hasPendingBinding(row) ? (
-        <Badge variant="warning" className="rounded-full">
-          {t("secrets.row.pending")}
-        </Badge>
-      ) : null}
-      {row.readable_by_local_processes ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span
-              tabIndex={0}
-              aria-label={t("secrets.row.localReadable")}
-              className="inline-flex text-text-subtle"
-            >
-              <TerminalSquare className="size-3.5" aria-hidden />
-            </span>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-[260px]">
-            {t("secrets.row.localReadableHint")}
-          </TooltipContent>
-        </Tooltip>
-      ) : null}
-    </div>
-  );
-}
-
-export function SecretsTable({ rows, waiting, isLoading = false, emptyMessage, onAction }: Props) {
+export function SecretsTable({
+  items,
+  state,
+  onSort,
+  selected,
+  onToggle,
+  isLoading = false,
+  emptyMessage,
+  grouped = false,
+  onAction,
+}: Props) {
   const { t, i18n } = useTranslation();
-  const now = new Date();
-  const columns: Column<SecretRef>[] = [
-    {
-      key: "name",
-      header: t("secrets.cols.name"),
-      cell: (row) => <NameCell row={row} waiting={waiting.has(row.ref)} />,
-    },
-    {
-      key: "usedBy",
-      header: t("secrets.cols.usedBy"),
-      className: "w-[240px]",
-      cell: (row) => <SecretUsedBy row={row} />,
-    },
-    {
-      key: "lastUsed",
-      header: t("secrets.cols.lastUsed"),
-      className: "w-[120px]",
-      cell: (row) =>
-        isMissingHere(row) ? (
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label={t("secrets.row.addValueFor", { name: displayName(row) })}
-            onClick={() => onAction("replace", row)}
-          >
-            {t("secrets.row.addValue")}
-          </Button>
-        ) : (
+  const selecting = selected.size > 0;
+  const columns = useMemo(() => {
+    const now = new Date();
+    const head = (column: SortKey, title: string) =>
+      grouped || !onSort ? (
+        title
+      ) : (
+        <SecretSortHeader column={column} title={title} state={state} onSort={onSort} />
+      );
+    const cols: Column<SecretItem>[] = [
+      {
+        key: "name",
+        header: head("name", t("secrets.cols.name")),
+        cell: (item) => (
+          <SecretNameCell
+            item={item}
+            selecting={selecting}
+            checked={selected.has(item.row.ref)}
+            onCheckedChange={(on) => onToggle(item.row.ref, on)}
+            hideOwner={grouped}
+          />
+        ),
+      },
+      {
+        key: "usedBy",
+        header: head("usedBy", t("secrets.cols.usedBy")),
+        className: "w-[240px]",
+        cell: (item) => <SecretUsedBy row={item.row} />,
+      },
+      {
+        key: "lastUsed",
+        header: head("lastUsed", t("secrets.cols.lastUsed")),
+        className: "w-[120px]",
+        cell: ({ row }) =>
+          isMissingHere(row) ? (
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label={t("secrets.row.addValueFor", { name: displayName(row) })}
+              onClick={() => onAction("replace", row)}
+            >
+              {t("secrets.row.addValue")}
+            </Button>
+          ) : (
+            <span className="text-xs text-text-muted">
+              {lastUsedLabel(row.last_used_at, now, t, i18n.language)}
+            </span>
+          ),
+      },
+      {
+        key: "created",
+        header: head("created", t("secrets.cols.created")),
+        className: "w-[88px]",
+        cell: ({ row }) => (
           <span className="text-xs text-text-muted">
-            {lastUsedLabel(row.last_used_at, now, t, i18n.language)}
+            {row.created_at ? shortDate(row.created_at, i18n.language) : "—"}
           </span>
         ),
-    },
-    {
-      key: "created",
-      header: t("secrets.cols.created"),
-      className: "w-[88px]",
-      cell: (row) => (
-        <span className="text-xs text-text-muted">
-          {row.created_at ? shortDate(row.created_at, i18n.language) : "—"}
-        </span>
-      ),
-    },
-    {
-      key: "actions",
-      header: <span className="sr-only">{t("secrets.cols.actions")}</span>,
-      className: "w-[48px] text-right",
-      cell: (row) => <SecretRowMenu row={row} onAction={onAction} />,
-    },
-  ];
+      },
+      {
+        key: "actions",
+        header: <span className="sr-only">{t("secrets.cols.actions")}</span>,
+        className: "w-[48px] text-right",
+        cell: ({ row }) => <SecretRowMenu row={row} onAction={onAction} />,
+      },
+    ];
+    return grouped ? cols.filter((c) => c.key !== "usedBy") : cols;
+  }, [t, i18n.language, state, onSort, selected, selecting, onToggle, grouped, onAction]);
+
   return (
     <DataTable
-      rows={rows}
+      // A new filter or sort starts again at the first batch.
+      key={`${state.q}|${state.status}|${state.kind}|${state.sort}|${state.dir}`}
+      rows={items}
       columns={columns}
-      rowKey={(row) => row.ref}
+      rowKey={(item) => item.row.ref}
       isLoading={isLoading}
+      pageSize={BATCH}
+      fixed
       emptyMessage={emptyMessage}
     />
   );

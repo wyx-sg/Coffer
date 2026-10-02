@@ -67,6 +67,7 @@ from coffer.surfaces.http.mcp.invocation_routes import (
     aggregate_router as invocation_aggregate_router,
 )
 from coffer.surfaces.http.mcp.invocation_routes import router as invocation_router
+from coffer.surfaces.http.mcp.page_routes import router as page_router
 from coffer.surfaces.http.mcp.server_test_routes import router as server_test_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router
@@ -233,6 +234,7 @@ def _build_mcp_app(tmp_path: Any) -> tuple[FastAPI, Any]:
     fapp.include_router(invocation_router)
     fapp.include_router(invocation_aggregate_router)
     fapp.include_router(server_test_router)
+    fapp.include_router(page_router)
 
     fapp.dependency_overrides[get_resource_service] = lambda: resource_svc
     fapp.dependency_overrides[get_audit_service] = lambda: audit_svc

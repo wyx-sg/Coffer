@@ -96,7 +96,7 @@ describe("BulkReachActions", () => {
     mount();
     expect(trigger()).toHaveTextContent(/set reach/i);
     openPanel();
-    for (const label of [/^disabled$/i, /every agent/i, /only selected agents/i]) {
+    for (const label of [/^off$/i, /every agent/i, /only selected agents/i]) {
       expect(choice(label)).not.toBeChecked();
     }
   });
@@ -115,7 +115,7 @@ describe("BulkReachActions", () => {
     resources.disable.mockResolvedValue(undefined);
     const { onDone } = mount();
 
-    pick(/^disabled$/i);
+    pick(/^off$/i);
 
     await waitFor(() => expect(resources.disable).toHaveBeenCalledTimes(2));
     // The uid is the whole argument: the kind the row carries is for the
@@ -171,7 +171,7 @@ describe("BulkReachActions", () => {
     );
     const { onDone } = mount();
 
-    pick(/^disabled$/i);
+    pick(/^off$/i);
 
     // Both attempted — allSettled, not Promise.all.
     await waitFor(() => expect(resources.disable).toHaveBeenCalledTimes(2));
@@ -202,7 +202,7 @@ describe("BulkReachActions", () => {
     resources.disable.mockResolvedValue(undefined);
     mount();
 
-    pick(/^disabled$/i);
+    pick(/^off$/i);
 
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
     expect(toastSuccess.mock.calls[0][0]).toMatch(/2 succeeded/i);
@@ -214,7 +214,7 @@ describe("BulkReachActions", () => {
     const { qc } = mount({ invalidate: [["skills"]] });
     const invalidate = vi.spyOn(qc, "invalidateQueries");
 
-    pick(/^disabled$/i);
+    pick(/^off$/i);
 
     await waitFor(() => expect(invalidate).toHaveBeenCalled());
     const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
@@ -241,7 +241,7 @@ acceptance(
     expect(radios).toHaveLength(3);
     expect(radios.filter((r) => (r as HTMLInputElement).checked)).toHaveLength(0);
 
-    fireEvent.click(choice(/^disabled$/i));
+    fireEvent.click(choice(/^off$/i));
 
     await waitFor(() => expect(resources.disable).toHaveBeenCalledTimes(2));
     expect(resources.disable.mock.calls.map((c) => c[0]).sort()).toEqual(

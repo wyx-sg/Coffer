@@ -10,6 +10,7 @@
 // as Coffer's. Each direct entry's ⋯ menu (board 2.1.54) adds opening its file,
 // copying its command and removing it from the file. A config file that fails
 // to parse is named above the table and its entries stay read-only.
+import { AgentMcpEntryDialog } from "@/components/agents/mcp/AgentMcpEntryDialog";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Server } from "lucide-react";
@@ -17,17 +18,9 @@ import { Server } from "lucide-react";
 import { AgentAdoptMcpDialog } from "@/components/agents/AgentAdoptMcpDialog";
 import { AgentMcpTable } from "@/components/agents/mcp/AgentMcpTable";
 import { McpParseErrorAlert } from "@/components/agents/mcp/McpParseErrorAlert";
-import {
-  buildMcpRows,
-  entryCommand,
-  singleSource,
-  type OwnMcpRow,
-} from "@/components/agents/mcp/mcpRows";
+import { buildMcpRows, singleSource, type OwnMcpRow } from "@/components/agents/mcp/mcpRows";
 import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import type { MenuAction } from "@/components/ui/menu";
-import { useToast } from "@/components/ui/toast";
-import { useFsActions } from "@/lib/fsActions";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
 import { countByOwner } from "@/lib/agents/owner";
 import type { AgentOut } from "@/lib/api/agents";
@@ -41,8 +34,6 @@ import { useResources } from "@/lib/hooks/useResources";
 
 export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
-  const { toast } = useToast();
-  const fs = useFsActions();
   const servers = useResources("mcp_server");
   const entries = useAgentMcpEntries(agent.uid);
   const connection = useAgentConnection(agent.uid);
@@ -50,6 +41,7 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
   const removeEntry = useRemoveMcpEntry(agent.uid);
   const [adoptTarget, setAdoptTarget] = useState<OwnMcpRow | null>(null);
   const [removeTarget, setRemoveTarget] = useState<OwnMcpRow | null>(null);
+  const [viewTarget, setViewTarget] = useState<OwnMcpRow | null>(null);
   const agentLabel = agentTypeLabel(agent.type);
 
   const parseErrors = useMemo(() => entries.data?.parse_errors ?? [], [entries.data]);
@@ -78,46 +70,6 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
     return path ? abbreviateHomePath(path) : source;
   };
 
-  const rowMenu = (row: OwnMcpRow): MenuAction[] => {
-    const readOnly = row.state === "readOnly";
-    const file = whereLabel(row.entry.source);
-    const path = pathOf(row.entry.source);
-    const command = entryCommand(row.entry);
-    return [
-      {
-        key: "adopt",
-        label: t("agents.mcpTab.menu.adopt"),
-        disabled: readOnly || row.entry.matches_resource !== null,
-        onSelect: () => setAdoptTarget(row),
-      },
-      {
-        key: "open",
-        label: t("agents.mcpTab.menu.open", { file }),
-        disabled: !path,
-        onSelect: () =>
-          path &&
-          void fs.open(path, "").catch(() => toast.error(t("agents.mcpTab.openFileFailed"))),
-      },
-      {
-        key: "copy",
-        label: t("agents.mcpTab.menu.copyCommand"),
-        disabled: !command,
-        onSelect: () =>
-          void navigator.clipboard
-            ?.writeText(command)
-            .then(() => toast.success(t("common.copied")))
-            .catch(() => undefined),
-      },
-      {
-        key: "remove",
-        label: t("agents.mcpTab.menu.remove", { file }),
-        destructive: true,
-        separated: true,
-        disabled: readOnly,
-        onSelect: () => setRemoveTarget(row),
-      },
-    ];
-  };
   const oneFile = singleSource(rows);
   const summaryFile = oneFile ? whereLabel(oneFile) : t("agents.mcpTab.ownConfig");
 
@@ -160,17 +112,31 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
               />
             ))}
             <AgentMcpTable
-              agentType={agent.type}
               rows={visible}
               connected={connected}
               whereLabel={whereLabel}
               onAdopt={setAdoptTarget}
               onRemoveDuplicate={setRemoveTarget}
-              rowMenu={rowMenu}
+              onOpenEntry={setViewTarget}
             />
           </>
         )}
       </AgentKindTab>
+
+      <AgentMcpEntryDialog
+        agentUid={agent.uid}
+        agentLabel={agentLabel}
+        row={viewTarget}
+        onClose={() => setViewTarget(null)}
+        onAdopt={(row) => {
+          setViewTarget(null);
+          setAdoptTarget(row);
+        }}
+        onRemove={(row) => {
+          setViewTarget(null);
+          setRemoveTarget(row);
+        }}
+      />
 
       {adoptTarget ? (
         <AgentAdoptMcpDialog

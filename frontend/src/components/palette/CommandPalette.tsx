@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { DialogOverlay } from "@/components/ui/dialog";
+import { useHereOriginState } from "@/lib/origin";
 import { useOpenSettings } from "@/lib/settingsModal";
 import { cn } from "@/lib/utils";
 import { Kbd } from "@/components/ui/kbd";
@@ -75,6 +76,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 function PaletteBody({ close }: { close: () => void }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const origin = useHereOriginState();
   const openSettings = useOpenSettings();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -98,7 +100,7 @@ function PaletteBody({ close }: { close: () => void }) {
     rememberChoice(item);
     close();
     if (item.target.type === "settings") openSettings(item.target.tab);
-    else navigate(item.target.to);
+    else navigate(item.target.to, { state: origin });
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -119,7 +121,7 @@ function PaletteBody({ close }: { close: () => void }) {
   return (
     <>
       {model.liveKinds.map((kind) => (
-        <KindSource key={kind} kind={kind} onState={model.onKindState} />
+        <KindSource key={kind} kind={kind} query={query} onState={model.onKindState} />
       ))}
       <div className="flex h-12 shrink-0 items-center gap-2.5 border-b border-border-subtle px-4">
         <Search className="size-4 shrink-0 text-text-muted" aria-hidden />

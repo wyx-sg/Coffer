@@ -65,6 +65,7 @@ describe("AgentsPage", () => {
           },
         },
         models: { agt_a: "claude-opus-5-5" },
+        onConnection: ["agt_a"],
       }),
     );
     renderPage();
@@ -279,11 +280,10 @@ describe("AgentsPage", () => {
       .getAllByRole("menuitem")
       .map((i) => i.textContent);
     expect(items).toEqual([
-      "Open",
       "Use a different config directory…",
       "Reveal config directory",
       "Copy uid",
-      "Disable",
+      "Turn off",
       "Remove from Coffer",
     ]);
     expect(screen.queryByRole("textbox", { name: /name|title/i })).not.toBeInTheDocument();
@@ -315,5 +315,61 @@ describe("AgentsPage", () => {
     daemon.types = [typeRow({ type: "claude_code" }), typeRow({ type: "codex" })];
     fireEvent.click(screen.getByRole("button", { name: /retry/i }));
     expect(await screen.findByRole("button", { name: "Add both" })).toBeInTheDocument();
+  });
+
+  it("a built-in login shows the agent's own default, never a stale provider model", async () => {
+    setDaemon(
+      fakeDaemon({
+        types: [typeRow({ type: "codex", uid: "agt_c" })],
+        models: { agt_c: "agnes-2.0-flash" },
+        catalogue: { codex: ["gpt-5", "gpt-6-astra"] },
+        nativeDefaults: { codex: "gpt-6-astra" },
+      }),
+    );
+    renderPage();
+    const row = await screen.findByRole("row", { name: /Codex/ });
+    await waitFor(() => expect(row).toHaveTextContent("gpt-6-astra"));
+    expect(row).not.toHaveTextContent("agnes-2.0-flash");
+  });
+
+  it("says the agent chooses when its own config names no default", async () => {
+    setDaemon(
+      fakeDaemon({
+        types: [typeRow({ type: "codex", uid: "agt_c" })],
+        models: { agt_c: "agnes-2.0-flash" },
+        catalogue: { codex: ["gpt-5", "gpt-6-astra"] },
+      }),
+    );
+    renderPage();
+    const row = await screen.findByRole("row", { name: /Codex/ });
+    await waitFor(() => expect(row).toHaveTextContent("Chosen by the agent"));
+    expect(row).not.toHaveTextContent("gpt-5");
+    expect(row).not.toHaveTextContent("agnes-2.0-flash");
+  });
+
+  it("shows a pending state while a disconnect runs, and the row settles after", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const daemon = fakeDaemon({
+      types: [typeRow({ type: "claude_code", uid: "agt_a" })],
+      connections: {
+        agt_a: {
+          state: "connected",
+          parts: [{ key: "mcp", installed: true, detail: "/bin/coffer" }],
+        },
+      },
+      hold: (call) => (call.method === "DELETE" ? gate : undefined),
+    });
+    setDaemon(daemon);
+    renderPage();
+    const row = await screen.findByRole("row", { name: /Claude Code/ });
+    fireEvent.click(await within(row).findByRole("button", { name: "Disconnect" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(await within(dialog).findByRole("button", { name: /^disconnect/i }));
+    await waitFor(() => expect(within(row).getByText("Disconnecting…")).toBeInTheDocument());
+    // The dialog's modal layer hides the row from the accessibility tree.
+    expect(within(row).getByRole("button", { name: "Disconnect", hidden: true })).toBeDisabled();
+    release();
+    await waitFor(() => expect(within(row).queryByText("Disconnecting…")).not.toBeInTheDocument());
   });
 });

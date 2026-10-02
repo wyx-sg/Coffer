@@ -6,9 +6,11 @@
 // dialogs: send test, replace secret, run it here, re-pair, delete.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { ChannelPerson } from "@/lib/api/channels";
 import { translateApiError } from "@/lib/api/errors";
 import type { ResourceOut } from "@/lib/api/resources";
 import type { ChannelTab } from "@/lib/channels/tabs";
@@ -16,16 +18,17 @@ import {
   CHANNEL_KIND,
   useChannelAutoSave,
   useChannelView,
-  useIssuePairingCode,
   useRebindChannel,
   useReconnectChannel,
 } from "@/lib/hooks/useChannels";
+import { useRemoveChannelPerson } from "@/lib/hooks/useChannelPairing";
 import { useDeleteResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
 import { displayName } from "@/lib/resourceTitle";
 import { ChannelDetailHeader, type ChannelCommand } from "./ChannelDetailHeader";
 import { channelHeading, useMachineName } from "./channelLabels";
 import { ChannelOverviewTab } from "./ChannelOverviewTab";
-import { ChannelPairingCode } from "./ChannelPairingCode";
+import { ChannelPeopleDialogs } from "./ChannelPeopleDialogs";
+import { ChannelPairDialog } from "./ChannelPairDialog";
 import { ChannelReplaceSecretDialog } from "./ChannelReplaceSecretDialog";
 import { ChannelSendTestDialog } from "./ChannelSendTestDialog";
 import { ChannelSettingsTab } from "./ChannelSettingsTab";
@@ -33,7 +36,7 @@ import { channelPlatform } from "@/lib/channels/channelState";
 import { ChannelStatusBanner } from "./ChannelStatusBanner";
 import { platformLabel } from "./PlatformMark";
 
-type Dialog = "test" | "secret" | "delete" | "runHere" | "repair" | null;
+type Dialog = "test" | "secret" | "delete" | "runHere" | "remove" | null;
 
 interface Props {
   channel: ResourceOut;
@@ -45,35 +48,27 @@ interface Props {
 
 export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Props) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { status, view, selfId } = useChannelView(channel);
   const machineName = useMachineName();
-  const pairing = useIssuePairingCode(channel.uid);
+  const removePerson = useRemoveChannelPerson(channel.uid);
   const reconnect = useReconnectChannel(channel.uid);
   const rebind = useRebindChannel(channel.uid, displayName(channel));
   const enable = useEnableResource();
   const del = useDeleteResource();
   const { save } = useChannelAutoSave(channel);
   const [dialog, setDialog] = useState<Dialog>(null);
-  const [issuedAt, setIssuedAt] = useState(0);
+  // The pairing dialog (Add owner): open or not.
+  const [pairOpen, setPairOpen] = useState(false);
+  // The person the Remove… dialog is about.
+  const [target, setTarget] = useState<ChannelPerson | null>(null);
 
   const platform = channelPlatform(channel.config);
   const name = channelHeading(channel);
-  const peer = status.data?.peer ?? null;
-  // A code is spent once somebody paired after it was issued.
-  const consumed = peer !== null && new Date(peer.paired_at).getTime() >= issuedAt - 5_000;
-  const code = pairing.data && !consumed ? pairing.data : undefined;
-  const generate = () => {
-    setIssuedAt(Date.now());
-    return pairing.mutateAsync();
-  };
-  const pairingPanel = (
-    <ChannelPairingCode
-      platform={platform}
-      code={code}
-      isPending={pairing.isPending}
-      onGenerate={() => void generate().catch(() => undefined)}
-    />
-  );
+  const people = status.data?.people ?? [];
+  // The name the dialogs and the test message use: the first paired owner.
+  const firstOwner = people[0]?.display_name ?? "";
+  const openPair = () => setPairOpen(true);
   const setDialogOpen = (which: Dialog) => (open: boolean) => setDialog(open ? which : null);
   const runHere = () =>
     rebind.mutateAsync({
@@ -86,13 +81,15 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
     switch (command) {
       case "sendTest":
       case "replaceSecret":
-      case "delete":
-        setDialog(command === "sendTest" ? "test" : command === "delete" ? "delete" : "secret");
+        setDialog(command === "sendTest" ? "test" : "secret");
         return;
       case "reconnect":
       case "takeBack":
       case "retryStart":
         reconnect.mutate();
+        return;
+      case "openSecrets":
+        void navigate("/secrets");
         return;
       case "refresh":
         void status.refetch();
@@ -106,9 +103,6 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
       case "turnOn":
         enable.mutate({ kind: CHANNEL_KIND, uid: channel.uid });
         return;
-      case "changeMachine":
-        onTabChange("settings");
-        return;
     }
   };
 
@@ -117,7 +111,6 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
       <ChannelDetailHeader
         channel={channel}
         view={view}
-        hasPeer={peer !== null}
         busy={reconnect.isPending || rebind.isPending || enable.isPending}
         onCommand={onCommand}
       />
@@ -126,7 +119,7 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
         view={view}
         status={status.data}
         statusError={status.error ? translateApiError(t, status.error) : null}
-        pairing={pairingPanel}
+        onPair={openPair}
       />
 
       <Tabs value={tab} onValueChange={onTabChange}>
@@ -138,9 +131,11 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
           <ChannelOverviewTab
             channel={channel}
             status={status.data}
-            pairing={pairingPanel}
-            showPairing={view.state !== "notPaired" && (peer === null || code !== undefined)}
-            onRepair={() => setDialog("repair")}
+            onAdd={openPair}
+            onRemove={(person) => {
+              setTarget(person);
+              setDialog("remove");
+            }}
             onDefaultAgentChange={(agent) => void save({ default_agent: agent })}
           />
         </TabsContent>
@@ -163,7 +158,7 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
 
       <ChannelSendTestDialog
         uid={channel.uid}
-        owner={peer?.display_name ?? ""}
+        owner={firstOwner}
         open={dialog === "test"}
         onOpenChange={setDialogOpen("test")}
       />
@@ -182,24 +177,31 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
         pending={rebind.isPending}
         onConfirm={runHere}
       />
-      <ConfirmDialog
-        open={dialog === "repair"}
-        onOpenChange={setDialogOpen("repair")}
-        variant="default"
-        title={t("channels.repair.title", { name })}
-        description={t("channels.repair.body", { owner: peer?.display_name ?? "" })}
-        confirmLabel={t("channels.repair.confirm")}
-        pending={pairing.isPending}
-        onConfirm={generate}
+      <ChannelPairDialog
+        uid={channel.uid}
+        platform={platform}
+        open={pairOpen}
+        onOpenChange={setPairOpen}
+      />
+      <ChannelPeopleDialogs
+        dialog={dialog === "remove" ? dialog : null}
+        onOpenChange={(open) => setDialog(open ? dialog : null)}
+        channelName={name}
+        target={target}
+        isLastOwner={people.length <= 1}
+        removePending={removePerson.isPending}
+        onRemove={(senderId) => removePerson.mutateAsync(senderId)}
       />
       <ConfirmDialog
         open={dialog === "delete"}
         onOpenChange={setDialogOpen("delete")}
         title={t("channels.delete.title", { name })}
-        description={t(peer ? "channels.delete.body" : "channels.delete.bodyUnpaired", {
-          owner: peer?.display_name ?? "",
-          platform: platformLabel(platform),
-        })}
+        description={t(
+          people.length > 0 ? "channels.delete.body" : "channels.delete.bodyUnpaired",
+          {
+            platform: platformLabel(platform),
+          },
+        )}
         confirmLabel={t("channels.actions.delete")}
         pending={del.isPending}
         onConfirm={() => del.mutateAsync({ kind: CHANNEL_KIND, uid: channel.uid }).then(onDeleted)}

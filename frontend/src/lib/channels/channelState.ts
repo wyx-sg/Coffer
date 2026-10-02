@@ -25,6 +25,8 @@ export type ChannelStateKey =
   | "kicked"
   | "sdkMissing"
   | "connectFailed"
+  | "waitingApproval"
+  | "approvalRefused"
   | "stopped"
   | "notPaired"
   | "connected";
@@ -41,6 +43,7 @@ export type ChannelPrimaryAction =
   | "retryStart"
   | "refresh"
   | "replaceSecret"
+  | "openSecrets"
   | "runHere"
   | "runHereConfirm"
   | "turnOn"
@@ -79,6 +82,8 @@ const TONE: Record<ChannelStateKey, StatusTone> = {
   kicked: "err",
   sdkMissing: "err",
   connectFailed: "err",
+  waitingApproval: "warn",
+  approvalRefused: "err",
   stopped: "err",
   notPaired: "warn",
   connected: "ok",
@@ -96,6 +101,8 @@ const PRIMARY: Record<ChannelStateKey, ChannelPrimaryAction> = {
   kicked: "takeBack",
   sdkMissing: "retryStart",
   connectFailed: "replaceSecret",
+  waitingApproval: "openSecrets",
+  approvalRefused: "openSecrets",
   stopped: "replaceSecret",
   notPaired: null,
   connected: "sendTest",
@@ -111,13 +118,18 @@ function localState(status: ChannelStatus): ChannelStateKey {
   if (ws === "kicked") return "kicked";
   if (ws === "sdk_missing") return "sdkMissing";
   if (ws === "error") return "connectFailed";
+  // A secret waiting on the owner's approval is the cause of a stopped adapter
+  // that no connection state explains, so it is named before "stopped".
+  if (!status.running && status.secret_approval) {
+    return status.secret_approval.state === "refused" ? "approvalRefused" : "waitingApproval";
+  }
   if (!status.running) return "stopped";
   if (status.inbound && ws !== "connected") {
     // A first connection and a lost one look the same on the wire; the error
     // left behind by the last attempt is what tells them apart.
     return status.inbound.websocket_error ? "reconnecting" : "connecting";
   }
-  return status.peer === null ? "notPaired" : "connected";
+  return status.people.length === 0 ? "notPaired" : "connected";
 }
 
 function stateOf(input: ChannelStateInput, runsOn: string | null): ChannelStateKey {

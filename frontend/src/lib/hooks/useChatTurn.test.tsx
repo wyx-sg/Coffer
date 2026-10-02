@@ -974,7 +974,7 @@ describe("useChatTurn", () => {
     );
   });
 
-  test("invalidates the conversations list on send, so the auto-generated title appears", async () => {
+  test("refreshes the conversations list's head on send, so the auto-generated title appears", async () => {
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
@@ -988,6 +988,6 @@ describe("useChatTurn", () => {
       await result.current.send("hi");
     });
 
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["conversations"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["conversations", "lists", "head"] });
   });
 });

@@ -358,7 +358,7 @@ describe("McpServerPane", () => {
   test("All off turns every tool that is on off, one call each", async () => {
     api.post.mockResolvedValue({ data: undefined, error: undefined, response: { status: 204 } });
     renderPane(SENTRY, "/mcp-servers/sentry/tools");
-    expect(await screen.findByTestId("mcp-tools-on")).toHaveTextContent("4 of 5 on");
+    await screen.findByTestId("mcp-tools-shown");
     fireEvent.click(screen.getByRole("button", { name: /all off/i }));
     await waitFor(() => expect(api.post).toHaveBeenCalledTimes(4));
     expect(api.post.mock.calls[0][0]).toBe(
@@ -416,6 +416,13 @@ describe("McpServerPane", () => {
     const drawer = await screen.findByTestId("mcp-log-drawer");
     fireEvent.mouseDown(within(drawer).getByRole("tab", { name: /server log/i }));
     expect(await within(drawer).findByText(/has no log of its own/i)).toBeInTheDocument();
+  });
+
+  test("the ⋯ menu does not repeat Edit or Turn off, which are on the header", async () => {
+    renderPane();
+    fireEvent.click(await screen.findByRole("button", { name: /more actions for sentry/i }));
+    const items = screen.getAllByRole("menuitem").map((i) => i.textContent);
+    expect(items).toEqual(["Calls and server log", "Copy config as JSON", "Delete…"]);
   });
 
   test("Copy config as JSON carries the secret names, never a value", async () => {

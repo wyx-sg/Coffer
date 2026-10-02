@@ -282,7 +282,7 @@ describe("SkillAddDialog", () => {
     expect(vi.mocked(resourcesApi.disable)).not.toHaveBeenCalled();
   });
 
-  test("a failed clone shows git's message and offers Try again", async () => {
+  test("a failed clone shows git's message and offers Retry", async () => {
     api.stageGit
       .mockRejectedValueOnce(
         new ApiError("SKILL_SOURCE_UNREACHABLE", "fatal: repository 'https://x/y' not found"),
@@ -297,7 +297,7 @@ describe("SkillAddDialog", () => {
     expect(
       await screen.findByText("Couldn't reach x — check the URL or your network."),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("Found SKILL.md at the top level")).toBeInTheDocument();
   });
 

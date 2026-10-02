@@ -4,11 +4,10 @@ import i18next from "@/i18n";
 import type { TFunction } from "i18next";
 import type { components } from "@/lib/api/types";
 import {
-  auditSearchHaystack,
   daemonLogger,
-  daemonSearchHaystack,
   describeActivity,
   describeDaemonRecord,
+  eventTypesMatching,
 } from "./activityText";
 
 type AuditEntry = components["schemas"]["AuditEntryOut"];
@@ -31,13 +30,13 @@ function makeEntry(overrides: Partial<AuditEntry> & { event_type: string }): Aud
 }
 
 describe("describeActivity", () => {
-  test("resource_created → 'Registered <name>'", () => {
+  test("resource_created → 'Added <name>'", () => {
     expect(
       describeActivity(
         t,
         makeEntry({ event_type: "resource_created", resource_name: "filesystem" }),
       ),
-    ).toBe("Registered filesystem");
+    ).toBe("Added filesystem");
   });
 
   test("resource_updated → 'Reconfigured <name>'", () => {
@@ -46,16 +45,16 @@ describe("describeActivity", () => {
     ).toBe("Reconfigured github");
   });
 
-  test("resource_enabled → 'Enabled <name>'", () => {
+  test("resource_enabled → 'Turned on <name>'", () => {
     expect(
       describeActivity(t, makeEntry({ event_type: "resource_enabled", resource_name: "fs" })),
-    ).toBe("Enabled fs");
+    ).toBe("Turned on fs");
   });
 
-  test("resource_disabled → 'Disabled <name>'", () => {
+  test("resource_disabled → 'Turned off <name>'", () => {
     expect(
       describeActivity(t, makeEntry({ event_type: "resource_disabled", resource_name: "fs" })),
-    ).toBe("Disabled fs");
+    ).toBe("Turned off fs");
   });
 
   test("resource_deleted → 'Removed <name>'", () => {
@@ -113,6 +112,28 @@ describe("describeActivity", () => {
     );
   });
 
+  test("skill_bound / skill_unbound name the agent the skill was bound to or unbound from", () => {
+    const details = { agent: "claude_code" };
+    expect(
+      describeActivity(
+        t,
+        makeEntry({ event_type: "skill_bound", resource_name: "demo-cli", details }),
+      ),
+    ).toBe("Bound skill demo-cli to Claude Code");
+    expect(
+      describeActivity(
+        t,
+        makeEntry({ event_type: "skill_unbound", resource_name: "demo-cli", details }),
+      ),
+    ).toBe("Unbound skill demo-cli from Claude Code");
+  });
+
+  test("a skill binding row written without an agent still reads as a sentence", () => {
+    expect(
+      describeActivity(t, makeEntry({ event_type: "skill_unbound", resource_name: "demo-cli" })),
+    ).toBe("Unbound skill demo-cli from an agent");
+  });
+
   test("unknown event_type falls back to the raw event code", () => {
     expect(describeActivity(t, makeEntry({ event_type: "totally_unknown_event_xyz" }))).toBe(
       "totally_unknown_event_xyz",
@@ -127,6 +148,7 @@ describe("describeDaemonRecord", () => {
         timestamp: "2026-05-22T12:00:00Z",
         level: "warning",
         event: "auto_sync_failed",
+        offset: 0,
         record: { event: "auto_sync_failed" },
       }),
     ).toBe("auto_sync_failed");
@@ -138,35 +160,36 @@ describe("describeDaemonRecord", () => {
         timestamp: null,
         level: null,
         event: null,
+        offset: 0,
         record: { raw: "Traceback (most recent call last):" },
       }),
     ).toBe("Traceback (most recent call last):");
   });
 
   test("a record with neither still renders something readable", () => {
-    const line = describeDaemonRecord(t, { timestamp: null, level: null, event: null, record: {} });
+    const line = describeDaemonRecord(t, {
+      timestamp: null,
+      level: null,
+      event: null,
+      offset: 0,
+      record: {},
+    });
     expect(line).not.toBe("");
     expect(line).not.toContain("undefined");
   });
 });
 
-describe("auditSearchHaystack", () => {
-  test("covers the rendered line, the resource, the raw event code and the actor", () => {
-    const haystack = auditSearchHaystack(
-      t,
-      makeEntry({ event_type: "resource_created", resource_name: "Filesystem" }),
-    );
-    expect(haystack).toContain("registered filesystem");
-    expect(haystack).toContain("resource_created");
-    expect(haystack).toContain("api");
+describe("eventTypesMatching", () => {
+  test("finds the events whose sentence holds the text, in the reader's language", () => {
+    expect(eventTypesMatching(t, "unbound")).toEqual(["skill_unbound"]);
+    expect(eventTypesMatching(t, "UNBOUND skill")).toEqual(["skill_unbound"]);
+    expect(eventTypesMatching(t, "")).toEqual([]);
+    expect(eventTypesMatching(t, "no-event-says-this-xyz")).toEqual([]);
   });
 
-  test("the haystack is always lowercase", () => {
-    const haystack = auditSearchHaystack(
-      t,
-      makeEntry({ event_type: "resource_created", resource_name: "Filesystem" }),
-    );
-    expect(haystack).toBe(haystack.toLowerCase());
+  test("reads the other locale's wording when that is the reader's", async () => {
+    const zh = i18next.getFixedT("zh") as TFunction;
+    expect(eventTypesMatching(zh, "解绑")).toContain("skill_unbound");
   });
 });
 
@@ -177,57 +200,18 @@ describe("daemonLogger", () => {
         timestamp: null,
         level: null,
         event: null,
+        offset: 0,
         record: { logger: "coffer.sync" },
       }),
     ).toBe("coffer.sync");
     expect(
-      daemonLogger({ timestamp: null, level: null, event: null, record: { raw: "boom" } }),
+      daemonLogger({
+        timestamp: null,
+        level: null,
+        event: null,
+        offset: 0,
+        record: { raw: "boom" },
+      }),
     ).toBe("");
-  });
-});
-
-describe("daemonSearchHaystack", () => {
-  test("covers the message, the logger and the level", () => {
-    const haystack = daemonSearchHaystack(t, {
-      timestamp: "2026-05-22T12:00:00Z",
-      level: "ERROR",
-      event: "channel_send_failed",
-      record: { event: "channel_send_failed", level: "ERROR", logger: "coffer.channels" },
-    });
-    expect(haystack).toContain("channel_send_failed");
-    expect(haystack).toContain("coffer.channels");
-    expect(haystack).toContain("error");
-    expect(haystack).toBe(haystack.toLowerCase());
-  });
-
-  test("a line that was not JSON is searchable by its verbatim text", () => {
-    const haystack = daemonSearchHaystack(t, {
-      timestamp: null,
-      level: null,
-      event: null,
-      record: { raw: "Traceback (most recent call last):" },
-    });
-    expect(haystack).toContain("traceback");
-  });
-
-  test("a traceback folded into its record is still searchable", () => {
-    // The daemon attaches a traceback to the record that raised it, so those
-    // lines are no longer rows of their own — the search has to reach into
-    // them or the exception a user is looking for matches nothing.
-    const haystack = daemonSearchHaystack(t, {
-      timestamp: "2026-05-22T12:00:00Z",
-      level: "error",
-      event: "consolidate.store.failed",
-      record: {
-        event: "consolidate.store.failed",
-        level: "error",
-        continuation: [
-          "Traceback (most recent call last):",
-          "openai.RateLimitError: Error code: 429",
-        ],
-      },
-    });
-    expect(haystack).toContain("ratelimiterror");
-    expect(haystack).toContain("429");
   });
 });

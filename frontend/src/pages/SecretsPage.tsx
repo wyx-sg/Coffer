@@ -1,13 +1,14 @@
 // src/pages/SecretsPage.tsx — /secrets: every stored and cited secret with what uses it (spec web-ui "Manage stored secrets on the Secrets page").
 //
-// One list in two groups — in use, and not used by anything — searched by
-// name, under two banners: the changes waiting for approval, and the secrets
-// this Mac has no value for (with Import master key). Add secret stores a standalone secret; Find plaintext keys moves
+// One filterable, sortable list (search, status, owner type; or grouped by owner) under two
+// banners: the changes waiting for approval, and the secrets this Mac has no value for (with
+// Import master key). Each secret shows its own short name and who owns it in words. Add
+// secret stores a standalone secret; Find plaintext keys moves
 // values out of files into the store. Each row's ⋯ menu replaces, reveals (in
 // the desktop app only), copies its reference, opens Activity, or deletes —
 // which, for a secret something still uses, says what does instead. No value
 // is ever on this page until Reveal is chosen.
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { KeyRound, Plus, RotateCcw, ScanSearch } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -19,17 +20,16 @@ import { ReplaceSecretDialog } from "@/components/secret/ReplaceSecretDialog";
 import { RevealSecretDialog } from "@/components/secret/RevealSecretDialog";
 import { ScanSecretsDialog } from "@/components/secret/ScanSecretsDialog";
 import type { SecretRowAction } from "@/components/secret/SecretRowMenu";
-import { SecretsGroups } from "@/components/secret/SecretsGroups";
+import { SecretsBrowser } from "@/components/secret/SecretsBrowser";
 import { SecretsMissingBanner } from "@/components/secret/SecretsMissingBanner";
 import { isMissingHere, refsWaiting } from "@/components/secret/secretRows";
 import { EmptyState } from "@/components/EmptyState";
 import { HelpTip } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
-import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import type { SecretRef } from "@/lib/api/secret";
 import { translateApiError } from "@/lib/api/errors";
-import { usePendingApprovals } from "@/lib/hooks/useApprovals";
+import { usePendingApprovals, useRefusedApprovals } from "@/lib/hooks/useApprovals";
 import { useSecrets } from "@/lib/hooks/useSecrets";
 
 type Open = { dialog: "add" | "scan" } | { dialog: SecretRowAction; row: SecretRef } | null;
@@ -39,7 +39,11 @@ export function SecretsPage() {
   const secrets = useSecrets();
   const approvals = usePendingApprovals();
   const waiting = refsWaiting(approvals.data?.approvals);
-  const [query, setQuery] = useState("");
+  const refusedApprovals = useRefusedApprovals();
+  const refused = useMemo(
+    () => new Set((refusedApprovals.data?.approvals ?? []).flatMap((a) => (a.ref ? [a.ref] : []))),
+    [refusedApprovals.data],
+  );
   const [open, setOpen] = useState<Open>(null);
   const rows = secrets.data?.refs ?? [];
   const firstRun = !secrets.isPending && !secrets.error && rows.length === 0;
@@ -69,13 +73,6 @@ export function SecretsPage() {
         actions={
           firstRun ? null : (
             <div className="flex flex-wrap items-center gap-2">
-              <SearchInput
-                value={query}
-                onChange={setQuery}
-                ariaLabel={t("secrets.search")}
-                placeholder={t("secrets.search")}
-                className="w-[220px]"
-              />
               {scanButton}
               {addButton}
             </div>
@@ -107,10 +104,10 @@ export function SecretsPage() {
           secondaryAction={scanButton}
         />
       ) : (
-        <SecretsGroups
+        <SecretsBrowser
           rows={rows}
           waiting={waiting}
-          query={query}
+          refused={refused}
           isLoading={secrets.isPending}
           onAction={(dialog, row) => setOpen({ dialog, row })}
         />

@@ -93,14 +93,14 @@ class InboundEvents:
             # sender_id) and route the refusal back into the group/thread, not a
             # DM. A tap never bootstraps a group peer row — only the owner's
             # first @mention does — so an unrecorded group is ignored silently.
-            owner = await self.peers.owner_sender_id(binding.resource.uid)
-            if owner is None:
+            paired = await self.peers.sender_ids(binding.resource.uid)
+            if not paired:
                 return
-            if not cb.sender_id or cb.sender_id != owner:
+            if not cb.sender_id or cb.sender_id not in paired:
                 await self.safe_send(
                     binding,
                     cb.chat_id,
-                    "🚫 Not authorized — only this channel's owner can use me here.",
+                    "🚫 Not authorized — only people paired with this channel can use me here.",
                     thread_id=cb.thread_id,
                     chat_kind="group",
                 )

@@ -11,11 +11,11 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from coffer.surfaces.http.handoff_schemas import HandoffOut
 
-_GRANT_OPS = Literal["reveal", "approve", "export_master_key"]
+_GRANT_OPS = Literal["reveal", "approve", "approve_batch", "export_master_key"]
 
 
 class PresenceGrantIn(BaseModel):
@@ -87,8 +87,52 @@ class ApprovalOut(BaseModel):
     destination_label: str | None = None
     slot: str | None = None
     target: str | None = None
+    #: What the approval is pinned to; a batch approval names it so a target that
+    #: moved since the person looked is skipped, not approved.
+    target_fingerprint: str | None = None
     decided_at: str | None = None
     decided_by: str | None = None
+
+
+class BatchItemIn(BaseModel):
+    """One approval as the person was shown it."""
+
+    id: str = Field(min_length=1, max_length=64)
+    fingerprint: str = Field(default="", max_length=128)
+
+
+class BatchApproveIn(PresenceGrantIn):
+    """Approve every listed approval under one grant over exactly this list."""
+
+    items: list[BatchItemIn] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def _distinct(self) -> BatchApproveIn:
+        if len({i.id for i in self.items}) != len(self.items):
+            raise ValueError("an approval is listed twice")
+        return self
+
+
+class BatchRejectIn(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def _distinct(self) -> BatchRejectIn:
+        if len(set(self.ids)) != len(self.ids):
+            raise ValueError("an approval is listed twice")
+        return self
+
+
+class BatchResultOut(BaseModel):
+    id: str
+    outcome: Literal["approved", "rejected", "skipped"]
+    #: Why a skipped one was left as it is.
+    reason: Literal["changed", "not_pending", "not_found", "not_batchable", "failed"] | None = None
+    approval: ApprovalOut | None = None
+
+
+class BatchOut(BaseModel):
+    results: list[BatchResultOut]
 
 
 class ApprovalListOut(BaseModel):

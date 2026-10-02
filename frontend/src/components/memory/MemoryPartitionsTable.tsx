@@ -23,6 +23,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { DataTable, type Column } from "@/components/DataTable";
+import { TruncatedPath, TruncatedText } from "@/components/ui/truncated-text";
 import { DeletePartitionDialog } from "@/components/memory/DeletePartitionDialog";
 import { UnresolvableBadge } from "@/components/memory/UnresolvableBadge";
 import { ResourceLabel } from "@/components/resource/ResourceLabel";
@@ -50,51 +51,49 @@ export function MemoryPartitionsTable({ rows, isLoading = false }: Props) {
     {
       key: "name",
       header: t("memory.cols.name"),
-      className: "whitespace-nowrap",
-      cell: (r) => <ResourceLabel resource={r} />,
+      className: "w-[20%]",
+      cell: (r) => <ResourceLabel resource={r} truncate />,
     },
     {
       key: "path",
       header: t("memory.cols.path"),
-      className: "whitespace-nowrap",
-      cell: (r) => (
-        <span className="text-sm text-text-muted">
-          {r.repository_path ? abbreviateHomePath(r.repository_path) : t("memory.cols.global")}
-        </span>
-      ),
+      className: "w-[22%]",
+      cell: (r) =>
+        r.repository_path ? (
+          <TruncatedPath
+            text={abbreviateHomePath(r.repository_path)}
+            className="text-sm text-text-muted"
+          />
+        ) : (
+          <span className="text-sm text-text-muted">{t("memory.cols.global")}</span>
+        ),
     },
     {
       key: "sample",
       header: t("memory.cols.sample"),
-      className: "w-full min-w-[16rem]",
       cell: (r) => (
-        <span
-          className={
-            r.sample
-              ? "line-clamp-1 text-sm text-text"
-              : "line-clamp-1 text-sm text-text-subtle"
-          }
-        >
-          {sampleLine(t, r)}
-        </span>
+        <TruncatedText
+          text={sampleLine(t, r)}
+          className={r.sample ? "text-sm text-text" : "text-sm text-text-subtle"}
+        />
       ),
     },
     {
       key: "memories",
       header: t("memory.cols.memories"),
-      className: "whitespace-nowrap text-right",
+      className: "w-[96px] whitespace-nowrap text-right",
       cell: (r) => <span className="tabular-nums">{r.note_count}</span>,
     },
     {
       key: "sources",
       header: t("memory.cols.sources"),
-      className: "whitespace-nowrap",
+      className: "w-[140px] whitespace-nowrap",
       cell: (r) => <AgentSources agents={r.sources} everyone={everyone} />,
     },
     {
       key: "distil",
       header: t("memory.cols.distil"),
-      className: "whitespace-nowrap text-right",
+      className: "w-[170px] whitespace-nowrap text-right",
       cell: (r) =>
         r.unresolvable ? (
           <span className="inline-flex items-center gap-2">
@@ -115,6 +114,7 @@ export function MemoryPartitionsTable({ rows, isLoading = false }: Props) {
   return (
     <>
       <DataTable
+        fixed
         rows={rows}
         isLoading={isLoading}
         columns={columns}

@@ -117,7 +117,7 @@ describe("the button says what the reach is", () => {
   test("disabled reads as disabled", () => {
     seed();
     mount("disabled", { initialScope: only([CLAUDE]) });
-    expect(trigger()).toHaveTextContent(/disabled/i);
+    expect(trigger()).toHaveTextContent(/off/i);
   });
 
   test("an empty pick-list is NOT 'disabled' — it says no agent is selected", () => {
@@ -126,7 +126,7 @@ describe("the button says what the reach is", () => {
     seed();
     mount("restricted", { initialScope: only([]) });
     expect(trigger()).toHaveTextContent(/no agent selected/i);
-    expect(trigger()).not.toHaveTextContent(/disabled/i);
+    expect(trigger()).not.toHaveTextContent(/off/i);
   });
 
   test("a scope spelling 'every agent' the long way still reads as every agent", () => {
@@ -155,7 +155,7 @@ describe("the panel offers the states as choices", () => {
     seed();
     mount("everywhere");
     openPanel();
-    expect(choice(/^disabled$/i)).not.toBeChecked();
+    expect(choice(/^off$/i)).not.toBeChecked();
     expect(choice(/every agent/i)).toBeChecked();
     expect(choice(/only selected agents/i)).not.toBeChecked();
   });
@@ -164,7 +164,7 @@ describe("the panel offers the states as choices", () => {
     seed();
     mount(null);
     openPanel();
-    for (const label of [/^disabled$/i, /every agent/i, /only selected agents/i]) {
+    for (const label of [/^off$/i, /every agent/i, /only selected agents/i]) {
       expect(choice(label)).not.toBeChecked();
     }
   });
@@ -185,7 +185,7 @@ describe("disabled is its own choice, never inferred", () => {
     seed();
     const h = mount("everywhere");
     openPanel();
-    fireEvent.click(choice(/^disabled$/i));
+    fireEvent.click(choice(/^off$/i));
     expect(h.onDisabled).toHaveBeenCalledOnce();
     expect(h.onEverywhere).not.toHaveBeenCalled();
     expect(h.onRestricted).not.toHaveBeenCalled();
@@ -209,7 +209,7 @@ describe("disabled is its own choice, never inferred", () => {
     mount("restricted", { initialScope: only([]) });
     openPanel();
     expect(screen.getByText(/dormant/i)).toBeInTheDocument();
-    expect(choice(/^disabled$/i)).not.toBeChecked();
+    expect(choice(/^off$/i)).not.toBeChecked();
   });
 
   test("a disabled resource still shows the agent list it will come back to", () => {
@@ -218,7 +218,7 @@ describe("disabled is its own choice, never inferred", () => {
     seed();
     mount("disabled", { initialScope: only([CLAUDE]) });
     openPanel();
-    expect(choice(/^disabled$/i)).toBeChecked();
+    expect(choice(/^off$/i)).toBeChecked();
     expect(agentRow("claude").getByRole("checkbox")).toBeChecked();
     expect(screen.queryByText(/dormant/i)).not.toBeInTheDocument();
   });
@@ -411,7 +411,7 @@ describe("the panel stages the choice, then commits once on close", () => {
     openPanel();
     const row = agentRow(GHOST);
     expect(row.getByText(GHOST)).toBeInTheDocument();
-    expect(row.getByText(/not registered/i)).toBeInTheDocument();
+    expect(row.getByText(/not added/i)).toBeInTheDocument();
     expect(row.getByRole("checkbox")).toBeChecked();
     fireEvent.click(choice(/only selected agents/i));
     closePanel();
@@ -431,7 +431,7 @@ describe("the panel stages the choice, then commits once on close", () => {
     seed([]);
     mount(null);
     openPanel();
-    expect(screen.getByText(/no agents registered/i)).toBeInTheDocument();
+    expect(screen.getByText(/no agents added/i)).toBeInTheDocument();
   });
 
   test("the consumer's `note` is shown in the panel, and colours the button", () => {
@@ -492,7 +492,7 @@ describe("reach conventions (web-ui)", () => {
     expect(label("everywhere")).toMatch(/^every agent$/i);
     expect(label("restricted", only([CLAUDE, CODEX]))).toMatch(/^2 agents$/i);
     expect(label("restricted", only([]))).toMatch(/^no agent selected/i);
-    expect(label("disabled", only([CLAUDE]))).toMatch(/^disabled$/i);
+    expect(label("disabled", only([CLAUDE]))).toMatch(/^off$/i);
   });
 
   acceptance("web-ui", "the reach panel offers the reach states as one choice", () => {
@@ -504,7 +504,7 @@ describe("reach conventions (web-ui)", () => {
     // THEN it offers the three reach states, with the current one chosen.
     const radios = screen.getAllByRole("radio");
     expect(radios.map((r) => r.closest("label")?.textContent)).toEqual([
-      expect.stringMatching(/^disabled$/i),
+      expect.stringMatching(/^off$/i),
       expect.stringMatching(/every agent/i),
       expect.stringMatching(/only selected agents/i),
     ]);
@@ -530,11 +530,7 @@ describe("reach conventions (web-ui)", () => {
       const options = reachFilterOptions(t);
       expect(options.map((o) => o.value)).toEqual(["disabled", "everywhere", "restricted"]);
       expect(options.map((o) => o.label)).toEqual(panelLabels);
-      expect(options.map((o) => o.label)).toEqual([
-        "Disabled",
-        "Every agent",
-        "Only selected agents",
-      ]);
+      expect(options.map((o) => o.label)).toEqual(["Off", "Every agent", "Only selected agents"]);
 
       // The control a list mounts is headed Reach and offers All plus those states.
       render(<ReachFilter value="all" onChange={() => {}} />);

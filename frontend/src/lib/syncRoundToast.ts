@@ -28,7 +28,6 @@ const FAILED: ReadonlySet<RoundStatus> = new Set([
   "auth_failed",
   "paused_cloud_folder",
   "remote_too_new",
-  "remote_too_old",
   "failed",
 ]);
 

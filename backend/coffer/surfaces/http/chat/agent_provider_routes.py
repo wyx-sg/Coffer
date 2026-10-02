@@ -56,6 +56,9 @@ class AgentModelOut(BaseModel):
 
 class AgentModelsOut(BaseModel):
     models: list[AgentModelOut]
+    #: The model the agent's own config names as its default; null when it
+    #: names none and the agent chooses for itself.
+    default_model: str | None = None
 
 
 def _known(registry: AgentProviderRegistry, agent_key: str) -> None:
@@ -130,6 +133,7 @@ async def list_agent_models(
     _known(registry, agent_key)
     models = await catalogue.offered(agent_key)
     return AgentModelsOut(
+        default_model=await catalogue.native_default_model(agent_key),
         models=[
             AgentModelOut(
                 id=m.id,
@@ -139,5 +143,5 @@ async def list_agent_models(
                 default_effort=m.default_effort,
             )
             for m in models
-        ]
+        ],
     )

@@ -157,11 +157,27 @@ Show or set which agents a channel may drive (this machine only).
 coffer channel pair [OPTIONS] NAME
 ```
 
-Issue a pairing code; send it to the bot from your own account.
+Issue a pairing code; whoever sends it to the bot is added as a person.
+
+Everyone paired is answered with the same rights; strangers are not. With ``--replace`` the sender takes over that person's place instead of joining.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Channel name |
+| `--replace` | option | text |  | A paired person (id or name) whose place the new account takes |
+
+## channel unpair
+
+```sh
+coffer channel unpair [OPTIONS] NAME PERSON
+```
+
+Remove a paired person: their chats stop being answered; everyone else stays.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Channel name |
+| `PERSON` | argument | text | required | The paired person to remove (id or name) |
 
 ## channel bind
 
@@ -200,10 +216,10 @@ coffer channel notify [OPTIONS] NAME TEXT
 
 Push a message to one of the channel's paired chats.
 
-Without ``--chat`` it goes to the owner chat — the channel's earliest pairing, which is the owner's DM. Naming a chat the channel is not paired to is refused rather than delivered somewhere else.
+Without ``--chat`` it goes to the channel's first paired person's DM — its earliest pairing. Naming a chat the channel is not paired to is refused rather than delivered somewhere else.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Channel name |
 | `TEXT` | argument | text | required | Message text |
-| `--chat` | option | text |  | Paired chat id to push to (default: the owner's DM) |
+| `--chat` | option | text |  | Paired chat id to push to (default: the first paired person's DM) |

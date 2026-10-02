@@ -83,7 +83,7 @@ The plan is printed first. Rolling back is a new commit on this machine, which t
 coffer sync join [OPTIONS]
 ```
 
-Join the configured remote. What joining would do is printed first; joining never deletes a file on either side.
+Join the configured remote. What joining would do is printed first; joining never deletes a file on either side, except that this vault replaces a remote at an older layout (the old history stays in git).
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |

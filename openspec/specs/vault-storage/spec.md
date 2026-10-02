@@ -271,12 +271,20 @@ old home byte for byte from a finished or a half-finished upgrade and holds the
 home until `coffer migrate --resume`; `coffer migrate --rehearse` SHALL run the
 whole upgrade on a copy and leave the source untouched. A sync remote in the old
 layout MUST NOT be converted: it is refused until it is rebuilt from an upgraded
-machine.
+machine. When the home holds secrets, the report MUST say, by count only, that
+the upgrade carries no approvals, so each secret's first use at each destination
+(a provider, an MCP server, a channel, the sync remote) waits once for the
+person's approval in the Coffer app.
 
 #### Scenario: the upgrade carries every item
 - **GIVEN** a home at the single-database layout with resources of every kind, secrets, approvals, knowledge with history, skills, memory, triggers and media
 - **WHEN** `coffer migrate` runs
 - **THEN** every item is in its class directory with its uid, reach and bytes, and the knowledge history is readable in the vault
+
+#### Scenario: the report says carried secrets wait for approval
+- **GIVEN** a home at the single-database layout that holds secrets
+- **WHEN** `coffer migrate` finishes
+- **THEN** its report counts the secrets and says each one's first use at each destination waits once for approval in the Coffer app
 
 #### Scenario: the daemon refuses a home that was not upgraded
 - **GIVEN** a home that holds only `coffer.db`

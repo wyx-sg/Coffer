@@ -111,6 +111,7 @@ pub fn run() {
             secrets::reveal_secret,
             secrets::export_master_key_backup,
             secrets::approve_pending,
+            secrets::approve_pending_batch,
             updater::update_status,
             updater::check_for_updates,
             updater::install_update,

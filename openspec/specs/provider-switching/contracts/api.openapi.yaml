@@ -2205,6 +2205,12 @@ components:
       type: object
     ProxyStatusOut:
       properties:
+        consecutive_failures:
+          title: Consecutive Failures
+          type: integer
+        failing:
+          title: Failing
+          type: boolean
         last_error:
           anyOf:
           - type: string
@@ -2242,6 +2248,8 @@ components:
       - restarts
       - last_error
       - revision
+      - consecutive_failures
+      - failing
       title: ProxyStatusOut
       type: object
     ProxyTokenHintOut:

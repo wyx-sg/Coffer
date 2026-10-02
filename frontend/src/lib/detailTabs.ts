@@ -47,7 +47,7 @@ export function detailTabRedirect<T extends string>(
  *
  * The tab is the route's optional `:tab` segment (unknown → `defaultTab`);
  * `setTab` replace-navigates to the address of the next tab, keeping the
- * search params. While `enabled`, an unknown or default `:tab` segment is
+ * search params and the router state (a page's origin, `lib/origin.ts`). While `enabled`, an unknown or default `:tab` segment is
  * replaced by the bare address — a page whose subject has not resolved yet
  * passes `enabled: false`.
  */
@@ -58,18 +58,21 @@ export function useDetailTab<T extends string>(
   { enabled = true }: { enabled?: boolean } = {},
 ): [T, (next: string) => void] {
   const { tab: pathTab } = useParams<{ tab?: string }>();
-  const { search } = useLocation();
+  const { search, state } = useLocation();
   const navigate = useNavigate();
 
   const tab: T = (tabs as readonly string[]).includes(pathTab ?? "") ? (pathTab as T) : defaultTab;
 
   const redirect = enabled ? detailTabRedirect(basePath, pathTab, search, tabs, defaultTab) : null;
   useEffect(() => {
-    if (redirect !== null) navigate(redirect, { replace: true });
-  }, [redirect, navigate]);
+    if (redirect !== null) navigate(redirect, { replace: true, state });
+  }, [redirect, navigate, state]);
 
   const setTab = (next: string) =>
-    navigate(detailTabPath(basePath, next, tabs, defaultTab, search), { replace: true });
+    navigate(detailTabPath(basePath, next, tabs, defaultTab, search), {
+      replace: true,
+      state,
+    });
 
   return [tab, setTab];
 }

@@ -12,12 +12,12 @@ import {
   agentConfigFileKey,
   agentConfigFilesKey,
   agentHooksKey,
+  agentPluginKey,
+  agentPluginsKey,
   agentKey,
   agentMcpEntriesKey,
   agentConnectionKey,
   agentMcpEntryKey,
-  agentPluginKey,
-  agentPluginsKey,
   agentsKey,
   agentUnmanagedSkillsKey,
   resourcesByKindKey,
@@ -52,9 +52,13 @@ export function useAgent(uid: string) {
 // No onError toast on register / patch: the add dialog and the edit form each
 // render the failure inline next to the field it concerns (e.g. the 409 for an
 // already-registered config dir), so a toast would double-surface it.
+export const AGENT_REGISTER_KEY = ["agent", "register"] as const;
+export const agentConnectMutationKey = (uid: string) => ["agent", "connect", uid] as const;
+
 export function useRegisterAgent() {
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: AGENT_REGISTER_KEY,
     mutationFn: (body: AgentCreate) => agentsApi.register(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: agentsKey });
@@ -132,6 +136,7 @@ export function useAgentConnect(uid: string) {
   const qc = useQueryClient();
   const onError = useAgentToastError();
   return useMutation({
+    mutationKey: agentConnectMutationKey(uid),
     mutationFn: (connect: boolean) =>
       connect ? agentsApi.connect(uid) : agentsApi.disconnect(uid),
     onSuccess: (data) => {

@@ -1,8 +1,6 @@
 // src/components/custom-tools/GroupRow.tsx — one group in the list pane: name, what is wrong or where it
-// points, its reach, and — expanded — its tools with Open group.
-import { useState } from "react";
+// points, and its reach. The group's tools are on its own page, not in the row.
 import { useTranslation } from "react-i18next";
-import { ChevronRight } from "lucide-react";
 
 import { AgentBadgeGroup } from "@/components/agent/AgentBadgeGroup";
 import { pickableAgents } from "@/lib/reach/reachState";
@@ -53,15 +51,13 @@ function Reach({ group }: { group: CustomToolGroup }) {
 }
 
 export function GroupRow({ group, selected, onOpen }: Props) {
-  const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
   const sub = useSubline(group);
 
   return (
     <li>
       <div
         className={cn(
-          "flex min-h-[52px] items-center gap-2 rounded-lg pl-2.5 pr-1 transition-colors duration-fast",
+          "flex min-h-[52px] items-center gap-2 rounded-lg px-2.5 transition-colors duration-fast",
           selected ? "bg-surface-selected" : "hover:bg-surface-hover",
         )}
       >
@@ -91,47 +87,7 @@ export function GroupRow({ group, selected, onOpen }: Props) {
           </span>
           <Reach group={group} />
         </button>
-        <button
-          type="button"
-          aria-expanded={expanded}
-          aria-label={t(expanded ? "customTools.list.collapse" : "customTools.list.expand", {
-            name: group.name,
-          })}
-          className="inline-flex size-7 shrink-0 items-center justify-center rounded-item text-text-subtle hover:text-text"
-          onClick={() => setExpanded((v) => !v)}
-        >
-          <ChevronRight
-            aria-hidden
-            className={cn("size-3.5 transition-transform duration-fast", expanded && "rotate-90")}
-          />
-        </button>
       </div>
-      {expanded ? (
-        <ul className="mb-1 ml-6 space-y-1 py-1 pr-2">
-          {group.tools.map((tool) => (
-            <li key={tool.name} className="flex items-center gap-2 text-xs">
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-mono text-text">{tool.name}</span>
-                <span className="block truncate text-text-muted">
-                  {tool.method} {tool.path}
-                </span>
-              </span>
-              <span className="text-text-muted">
-                {tool.enabled ? t("customTools.tools.on") : t("customTools.tools.off")}
-              </span>
-            </li>
-          ))}
-          <li>
-            <button
-              type="button"
-              className="text-xs font-label text-accent-text hover:underline"
-              onClick={onOpen}
-            >
-              {t("customTools.list.openGroup")}
-            </button>
-          </li>
-        </ul>
-      ) : null}
     </li>
   );
 }

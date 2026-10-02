@@ -36,7 +36,7 @@ acceptance("web-ui", "the collapsed rail keeps Settings as a gear with a tooltip
 
   const gear = screen.getByTestId("sidebar-settings");
   // The gear alone: the word is gone from the rail, kept as its name.
-  expect(gear).toHaveAccessibleName("Settings");
+  expect(gear).toHaveAccessibleName(/^Settings/);
   expect(gear).not.toHaveTextContent("Settings");
   fireEvent.focus(gear);
   expect(await screen.findByRole("tooltip")).toHaveTextContent(/^Settings/);

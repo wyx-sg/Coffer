@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -139,6 +140,8 @@ class AuditService:
         limit: int = 50,
         cursor: str | None = None,
         trace_id: str | None = None,
+        q: str | None = None,
+        q_types: Sequence[str] = (),
     ) -> Page[AuditEntry]:
         """One page of :meth:`query`, newest first, continued by ``cursor``
         (spec resource-framework "Page growing lists by an opaque cursor").
@@ -154,6 +157,8 @@ class AuditService:
             "event_prefix": event_prefix,
             "since": since.isoformat() if since else None,
             "trace_id": trace_id,
+            "q": q,
+            "q_types": sorted(q_types),
         }
         after = time_and_id(decode_cursor(cursor, list_tag="audit", filters=filters), int)
         rows = await self._repo.query(
@@ -165,6 +170,8 @@ class AuditService:
             limit=limit + 1,
             after=after,
             trace_id=trace_id,
+            q=q,
+            q_types=q_types,
         )
         return paginate(
             rows,
@@ -183,6 +190,8 @@ class AuditService:
         event_prefix: str | None = None,
         since: datetime | None = None,
         trace_id: str | None = None,
+        q: str | None = None,
+        q_types: Sequence[str] = (),
     ) -> int:
         """How many entries match the filters :meth:`page` takes, across every
         page (spec resource-framework "Count a log's matching rows beside each
@@ -195,4 +204,6 @@ class AuditService:
             event_prefix=event_prefix,
             since=since,
             trace_id=trace_id,
+            q=q,
+            q_types=q_types,
         )

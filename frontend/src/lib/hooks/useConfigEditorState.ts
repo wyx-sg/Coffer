@@ -15,7 +15,7 @@
 // directly: it is parked as `pendingSelection` for the component to confirm
 // with the user, then applied (or dropped) through the two resolvers below.
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParamsKeepingState as useSearchParams } from "@/lib/hooks/useSearchParamsKeepingState";
 
 import { agentsApi } from "@/lib/api/agents";
 import {

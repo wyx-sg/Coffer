@@ -350,7 +350,9 @@ paths:
       - agents
   /api/v1/clis:
     get:
-      description: Every command a managed skill requires, problems first.
+      description: |-
+        Every command a skill or MCP server requires or the person added by
+        hand, problems first.
       operationId: list_clis_api_v1_clis_get
       parameters:
       - in: header
@@ -381,6 +383,57 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: List Clis
+      tags:
+      - clis
+    post:
+      description: |-
+        Add a command-line tool by hand, with no skill. 409 ``CLI_TOOL_EXISTS``
+        when it was already added; 400 ``CLI_TOOL_INVALID`` for a bad name, path,
+        version or login check.
+      operationId: add_cli_api_v1_clis_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CliAddIn'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Add Cli
       tags:
       - clis
   /api/v1/clis/check:
@@ -418,11 +471,102 @@ paths:
       summary: Check Clis
       tags:
       - clis
+  /api/v1/clis/preview:
+    post:
+      description: |-
+        What Coffer finds for a command name or path — where, which version,
+        whether it is already added or required — before anything is saved.
+      operationId: preview_cli_api_v1_clis_preview_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CliPreviewIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliPreviewOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Preview Cli
+      tags:
+      - clis
   /api/v1/clis/{command}:
+    delete:
+      description: |-
+        Drop the hand-added declaration. A skill or MCP server that requires the
+        command keeps it listed. 404 ``CLI_TOOL_NOT_DECLARED`` for a tool no one
+        added by hand.
+      operationId: remove_cli_api_v1_clis__command__delete
+      parameters:
+      - in: path
+        name: command
+        required: true
+        schema:
+          title: Command
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Remove Cli
+      tags:
+      - clis
     get:
       description: |-
-        One required command, with the hand-off prompt when it needs the
-        person; 404 ``CLI_NOT_REQUIRED`` when no skill or MCP server requires it.
+        One command, with the hand-off prompt when it needs the person; 404
+        ``CLI_NOT_KNOWN`` when no skill or MCP server requires it and it was not
+        added by hand.
       operationId: get_cli_api_v1_clis__command__get
       parameters:
       - in: path
@@ -459,6 +603,62 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Get Cli
+      tags:
+      - clis
+    patch:
+      description: |-
+        Change a tool added by hand; a field left out stays, ``null`` clears it.
+        404 ``CLI_TOOL_NOT_DECLARED`` for a tool no one added by hand.
+      operationId: edit_cli_api_v1_clis__command__patch
+      parameters:
+      - in: path
+        name: command
+        required: true
+        schema:
+          title: Command
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CliEditIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Edit Cli
       tags:
       - clis
   /api/v1/clis/{command}/check:
@@ -500,6 +700,91 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Check Cli
+      tags:
+      - clis
+  /api/v1/clis/{command}/interface:
+    get:
+      description: |-
+        The interface read from the tool's help, as kept for this version of
+        it. Never runs the tool: ``not_read`` until a POST reads it.
+      operationId: get_cli_interface_api_v1_clis__command__interface_get
+      parameters:
+      - in: path
+        name: command
+        required: true
+        schema:
+          title: Command
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliInterfaceOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Cli Interface
+      tags:
+      - clis
+    post:
+      description: |-
+        Run the tool's help — ``--help``, ``-h`` and each subcommand's, nothing
+        else — and keep the tree. May take up to 30 seconds.
+      operationId: read_cli_interface_api_v1_clis__command__interface_post
+      parameters:
+      - in: path
+        name: command
+        required: true
+        schema:
+          title: Command
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliInterfaceOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Read Cli Interface
       tags:
       - clis
   /api/v1/skills:
@@ -1731,6 +2016,242 @@ components:
       - type
       title: BuiltinSourceOut
       type: object
+    CliAddIn:
+      description: |-
+        Declare a tool by hand. ``command`` is a command name (``jq``) or the
+        absolute path of an executable (``/opt/tools/bin/jq``; the file name is
+        the command). ``login_check`` is a command line that starts with the tool,
+        like ``gh auth status``.
+      properties:
+        command:
+          maxLength: 512
+          minLength: 1
+          title: Command
+          type: string
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        login_check:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Login Check
+        min_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Min Version
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+      required:
+      - command
+      title: CliAddIn
+      type: object
+    CliEditIn:
+      description: Change a hand-added tool; a field left out stays, ``null`` clears it.
+      properties:
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        login_check:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Login Check
+        min_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Min Version
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+      title: CliEditIn
+      type: object
+    CliHelpArgumentOut:
+      properties:
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        name:
+          title: Name
+          type: string
+        required:
+          title: Required
+          type: boolean
+      required:
+      - name
+      - description
+      - required
+      title: CliHelpArgumentOut
+      type: object
+    CliHelpNodeOut:
+      description: |-
+        One command of the tool: the tool itself (empty ``path``) or a
+        subcommand. ``raw`` is the help as the tool printed it.
+      properties:
+        arguments:
+          items:
+            $ref: '#/components/schemas/CliHelpArgumentOut'
+          title: Arguments
+          type: array
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        options:
+          items:
+            $ref: '#/components/schemas/CliHelpOptionOut'
+          title: Options
+          type: array
+        path:
+          items:
+            type: string
+          title: Path
+          type: array
+        raw:
+          title: Raw
+          type: string
+        structured:
+          title: Structured
+          type: boolean
+        subcommands:
+          items:
+            $ref: '#/components/schemas/CliHelpSubcommandOut'
+          title: Subcommands
+          type: array
+        truncated:
+          title: Truncated
+          type: boolean
+        usage:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Usage
+      required:
+      - path
+      - usage
+      - description
+      - subcommands
+      - options
+      - arguments
+      - raw
+      - structured
+      - error
+      - truncated
+      title: CliHelpNodeOut
+      type: object
+    CliHelpOptionOut:
+      properties:
+        default:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Default
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        metavar:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Metavar
+        names:
+          items:
+            type: string
+          title: Names
+          type: array
+        required:
+          title: Required
+          type: boolean
+      required:
+      - names
+      - metavar
+      - description
+      - default
+      - required
+      title: CliHelpOptionOut
+      type: object
+    CliHelpSubcommandOut:
+      properties:
+        name:
+          title: Name
+          type: string
+        summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Summary
+      required:
+      - name
+      - summary
+      title: CliHelpSubcommandOut
+      type: object
+    CliInterfaceOut:
+      description: |-
+        ``not_read`` carries no nodes: nothing has been run for this version of
+        the tool yet (a GET never runs it; POST reads it).
+      properties:
+        discovered_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Discovered At
+        incomplete:
+          title: Incomplete
+          type: boolean
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        nodes:
+          items:
+            $ref: '#/components/schemas/CliHelpNodeOut'
+          title: Nodes
+          type: array
+        status:
+          enum:
+          - not_read
+          - ok
+          - unavailable
+          - no_help
+          title: Status
+          type: string
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+      required:
+      - status
+      - message
+      - version
+      - discovered_at
+      - incomplete
+      - nodes
+      title: CliInterfaceOut
+      type: object
     CliListOut:
       properties:
         items:
@@ -1810,6 +2331,9 @@ components:
       type: object
     CliOut:
       properties:
+        added:
+          title: Added
+          type: boolean
         checked_at:
           format: date-time
           title: Checked At
@@ -1817,6 +2341,11 @@ components:
         command:
           title: Command
           type: string
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
         handoff:
           anyOf:
           - $ref: '#/components/schemas/HandoffOut'
@@ -1864,6 +2393,8 @@ components:
       required:
       - command
       - title
+      - description
+      - added
       - status
       - path
       - version
@@ -1874,6 +2405,47 @@ components:
       - needed_by_servers
       - checked_at
       title: CliOut
+      type: object
+    CliPreviewIn:
+      properties:
+        command:
+          maxLength: 512
+          minLength: 1
+          title: Command
+          type: string
+      required:
+      - command
+      title: CliPreviewIn
+      type: object
+    CliPreviewOut:
+      description: What Coffer found for a name or path, before anything is saved.
+      properties:
+        added:
+          title: Added
+          type: boolean
+        command:
+          title: Command
+          type: string
+        path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Path
+        required:
+          title: Required
+          type: boolean
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+      required:
+      - command
+      - path
+      - version
+      - added
+      - required
+      title: CliPreviewOut
       type: object
     CliServerOut:
       description: |-

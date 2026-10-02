@@ -21,6 +21,8 @@ import {
   type SyncRound,
 } from "@/lib/api/sync";
 import { useToast } from "@/components/ui/toast";
+import { FIRST_PAGE, MORE_PAGE, useInfiniteList } from "@/lib/hooks/useInfiniteList";
+import { invalidateSync } from "@/lib/syncInvalidate";
 import { roundToast } from "@/lib/syncRoundToast";
 import {
   agentsKey,
@@ -48,9 +50,20 @@ export function useSyncStatus(enabled = true) {
   });
 }
 
-/** Every round, newest first. `enabled` is false while another tab is in front. */
+/**
+ * The rounds, newest first: 30, then 50 more as the reader reaches the end of
+ * the table. A refresh after a round re-reads the first page only
+ * (`invalidateSync`). `enabled` is false while another tab is in front.
+ */
 export function useSyncRuns(enabled = true) {
-  return useQuery({ queryKey: syncRunsKey, queryFn: () => syncApi.runs(), enabled });
+  return useInfiniteList<SyncRound>({
+    queryKey: syncRunsKey,
+    enabled,
+    fetchPage: async (cursor, signal) => {
+      const page = await syncApi.runs({ cursor, limit: cursor ? MORE_PAGE : FIRST_PAGE }, signal);
+      return { items: page.rounds, next: page.next_cursor ?? null, total: page.total };
+    },
+  });
 }
 
 /**
@@ -61,7 +74,7 @@ export function useSyncRuns(enabled = true) {
 function useRoundInvalidation() {
   const qc = useQueryClient();
   return () => {
-    void qc.invalidateQueries({ queryKey: syncKey });
+    invalidateSync(qc);
     void qc.invalidateQueries({ queryKey: resourcesKey });
     void qc.invalidateQueries({ queryKey: skillsKey });
     void qc.invalidateQueries({ queryKey: agentsKey });
@@ -114,7 +127,7 @@ export function useSaveSyncRemote() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: (remote: SyncRemoteInput) => syncApi.putRemote(remote),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: syncKey }),
+    onSuccess: () => invalidateSync(qc),
     onError: (error) => toast.error(translateApiError(t, error)),
   });
 }
@@ -124,7 +137,7 @@ export function useClearSyncRemote() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => syncApi.clearRemote(),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: syncKey }),
+    onSuccess: () => invalidateSync(qc),
   });
 }
 

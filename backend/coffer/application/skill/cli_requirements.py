@@ -1,10 +1,11 @@
-"""The command-line tools managed skills and MCP servers require: read,
-checked, handed off.
+"""The command-line tools Coffer knows: the ones managed skills and MCP servers
+require and the ones the person added by hand; read, checked, handed off.
 
 ``CliRequirementService`` reads every managed skill's master SKILL.md at check
-time (so an edit made in the user's editor is picked up by the next read) and
-the launcher of every enabled stdio MCP server (``McpLaunchersPort``, supplied
-by the composition root), aggregates one row per command
+time (so an edit made in the user's editor is picked up by the next read), the
+launcher of every enabled stdio MCP server (``McpLaunchersPort``, supplied
+by the composition root) and the tools added by hand
+(``DeclaredToolsPort``), aggregates one row per command
 (``domain/skill/cli_status.py``), and probes
 each command through a :class:`CommandProbePort` in a worker thread. Results
 are cached per command until the user asks to check again or the daemon
@@ -32,7 +33,8 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 from coffer.application.skill.cli_handoff import cli_handoff
-from coffer.domain.skill.cli_errors import CliNotRequired
+from coffer.domain.skill.cli_declared import DeclaredTool
+from coffer.domain.skill.cli_errors import CliNotKnown
 from coffer.domain.skill.cli_status import (
     STATUS_ORDER,
     CliStatus,
@@ -54,6 +56,11 @@ class CommandProbePort(Protocol):
     def locate(self, command: str) -> str | None: ...
 
     def version(self, path: str) -> str | None: ...
+
+    def fingerprint(self, path: str) -> str | None:
+        """What identifies this build of the file (its size and mtime), so a
+        reinstalled tool is read again; ``None`` when it cannot be read."""
+        ...
 
     def login_ok(self, argv: Sequence[str]) -> bool | None:
         """Exit 0 → ``True``, any other exit → ``False``, could not run or
@@ -78,6 +85,18 @@ class McpLaunchersPort(Protocol):
     """The enabled stdio MCP servers and the launcher each starts with."""
 
     async def stdio_launchers(self) -> Sequence[ServerLauncher]: ...
+
+
+class DeclaredToolsPort(Protocol):
+    """The tools the person added by hand (a vault state document)."""
+
+    def all(self) -> list[DeclaredTool]: ...
+
+
+class CliPathsPort(Protocol):
+    """Where this machine found a tool added by an absolute path."""
+
+    def get(self, command: str) -> str | None: ...
 
 
 @dataclass(frozen=True)
@@ -125,6 +144,8 @@ class CliRequirementService:
         probe: CommandProbePort,
         machine: Callable[[], str],
         servers: McpLaunchersPort | None = None,
+        declared: DeclaredToolsPort | None = None,
+        paths: CliPathsPort | None = None,
         secret_set: Callable[[str], bool] | None = None,
         clock: Callable[[], datetime] = _now,
     ) -> None:
@@ -132,6 +153,8 @@ class CliRequirementService:
         #: Whether a secret NAME is in the store; ``None`` when not wired.
         self._secret_set = secret_set
         self._servers = servers
+        self._declared = declared
+        self._paths = paths
         self._probe = probe
         self._machine = machine
         self._clock = clock
@@ -153,6 +176,13 @@ class CliRequirementService:
 
     async def check(self, command: str) -> CliView:
         return await self._one(command, force=True)
+
+    def forget(self, command: str) -> None:
+        """Drop the cached probe: the declaration or the tool changed."""
+        self._cache.pop(command, None)
+
+    def fingerprint(self, path: str) -> str | None:
+        return self._probe.fingerprint(path)
 
     async def missing_secrets(self) -> tuple[MissingSecret, ...]:
         """Every (skill, secret) whose declared secret is not set, by skill
@@ -182,7 +212,8 @@ class CliRequirementService:
             parsed.append(SkillRequirements(doc.uid, doc.name, result.requirements))
             warnings.extend(SkillWarning(doc.uid, doc.name, w) for w in result.warnings)
         servers = await self._servers.stdio_launchers() if self._servers else ()
-        return aggregate(parsed, servers), warnings
+        added = self._declared.all() if self._declared else ()
+        return aggregate(parsed, servers, added), warnings
 
     async def _listing(self, *, force: bool) -> CliListing:
         required, warnings = await self._required()
@@ -197,7 +228,7 @@ class CliRequirementService:
         required, _warnings = await self._required()
         row = next((r for r in required if r.command == command), None)
         if row is None:
-            raise CliNotRequired(command)
+            raise CliNotKnown(command)
         await self._probe_rows([row], force=force)
         return self._view(row)
 
@@ -218,7 +249,10 @@ class CliRequirementService:
         return cached is None or cached.login_check != row.login_check
 
     def _probe_one(self, row: RequiredCommand, *, run_login: bool) -> ProbeResult:
-        path = self._probe.locate(row.command)
+        hint = self._paths.get(row.command) if self._paths else None
+        path = self._probe.locate(hint or row.command) or (
+            self._probe.locate(row.command) if hint else None
+        )
         if path is None:
             return ProbeResult(None, None, None, self._clock(), row.login_check)
         version = self._probe.version(path)
@@ -245,9 +279,11 @@ class CliRequirementService:
 
 __all__ = [
     "CliListing",
+    "CliPathsPort",
     "CliRequirementService",
     "CliView",
     "CommandProbePort",
+    "DeclaredToolsPort",
     "McpLaunchersPort",
     "MissingSecret",
     "SkillDocument",

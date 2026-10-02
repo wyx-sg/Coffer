@@ -56,10 +56,9 @@ class RoundDeps:
     #: push (spec vault-sync "Refuse to push a plaintext secret").
     find_plaintext: Callable[[str], Sequence[tuple[int, str]]] | None = None
     clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC)
-    #: The one layout a remote may carry. Above it is a newer Coffer's; below
-    #: it is a remote no migrated machine has rebuilt yet. Both are refused:
-    #: a remote is never converted in place, it is rebuilt from the first
-    #: migrated machine and the others join it as new.
+    #: The layout this build writes. A remote above it is a newer Coffer's and
+    #: is refused; one below it is replaced by this vault (never converted in
+    #: place).
     layout: int = 3
     lock: threading.Lock = field(default_factory=threading.Lock)
 

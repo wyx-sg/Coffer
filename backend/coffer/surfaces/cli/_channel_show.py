@@ -78,12 +78,16 @@ def echo_channel(
         here = bool(body.get("runs_here"))
         typer.echo(f"runs on:  {binding_label(binding, runs_here=here, known=known)}")
     typer.echo(f"pairing:  {'code pending' if body['pending_pairing'] else 'no pending code'}")
-    peer = body.get("peer")
-    if peer:
-        typer.echo(f"peer:     {peer['display_name']} (chat {peer['chat_id']})")
-        typer.echo(f"conv:     {peer.get('active_conversation_id') or '-'}")
+    people = body.get("people") or []
+    if people:
+        for person in people:
+            typer.echo(
+                f"person:   {person['display_name']} ({person['sender_id']}, "
+                f"chat {person['chat_id']}, paired {person['paired_at']})"
+            )
+            typer.echo(f"conv:     {person.get('active_conversation_id') or '-'}")
     else:
-        typer.echo("peer:     not paired")
+        typer.echo("person:   nobody paired")
     inbound = body.get("inbound")
     if inbound:
         echo_inbound(inbound)

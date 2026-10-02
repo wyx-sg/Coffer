@@ -4,8 +4,10 @@
 // /mcp/invocations`) page newest-first by an opaque cursor and carry `total`,
 // the count of every row matching the filters (spec resource-framework "Page
 // growing lists by an opaque cursor", "Count a log's matching rows beside
-// each page"). The daemon log (`GET /daemon/logs`) is a bounded tail with no
-// cursor: one read is all there is.
+// each page"). The daemon log (`GET /daemon/logs`) pages the same way, by a
+// byte offset into the file; its `total` is the matching records of the file's
+// recent tail and is only computed when asked for (`withTotal`). Every function
+// takes the abort signal of its query, so a stale request is cancelled.
 import { getApiClient, unwrap } from "@/lib/api/client";
 import type { components } from "@/lib/api/types";
 
@@ -20,8 +22,11 @@ export const MAX_PAGE = 500;
 export interface AuditParams {
   since?: string;
   kind?: string;
-  name?: string;
   eventType?: string;
+  /** Free text, matched by the database. */
+  q?: string;
+  /** With `q`: event types whose localized wording matched it (composed client-side). */
+  qTypes?: string[];
 }
 
 /** @ui-only The server-side filters the invocation route takes. */
@@ -30,6 +35,7 @@ export interface CallParams {
   uid?: string;
   status?: "ok" | "error" | "timeout" | "denied";
   agentUid?: string;
+  q?: string;
 }
 
 /** @ui-only The server-side filters the daemon log route takes. */
@@ -37,6 +43,7 @@ export interface DaemonParams {
   since?: string;
   /** Severity floor; "" is every level. */
   level?: string;
+  q?: string;
 }
 
 /** @ui-only One log and its server-side filters. */
@@ -49,16 +56,19 @@ export function fetchAuditPage(
   params: AuditParams,
   limit: number,
   cursor?: string | null,
+  signal?: AbortSignal,
 ): Promise<AuditListOut> {
   return unwrap(
     getApiClient().GET("/audit", {
+      signal,
       params: {
         query: {
           limit,
           since: params.since || undefined,
           kind: params.kind || undefined,
-          name: params.name || undefined,
           event_type: params.eventType || undefined,
+          q: params.q || undefined,
+          q_type: params.q && params.qTypes?.length ? params.qTypes : undefined,
           cursor: cursor || undefined,
         },
       },
@@ -70,9 +80,11 @@ export function fetchCallPage(
   params: CallParams,
   limit: number,
   cursor?: string | null,
+  signal?: AbortSignal,
 ): Promise<InvocationListOut> {
   return unwrap(
     getApiClient().GET("/mcp/invocations", {
+      signal,
       params: {
         query: {
           limit,
@@ -80,6 +92,7 @@ export function fetchCallPage(
           uid: params.uid || undefined,
           status: params.status || undefined,
           agent_uid: params.agentUid || undefined,
+          q: params.q || undefined,
           cursor: cursor || undefined,
         },
       },
@@ -87,14 +100,26 @@ export function fetchCallPage(
   );
 }
 
-export function fetchDaemonTail(
+/** One page of the daemon log, newest first; `withTotal` also counts the recent tail. */
+export function fetchDaemonPage(
   params: DaemonParams,
-  limit: number = MAX_PAGE,
+  limit: number,
+  cursor?: string | null,
+  signal?: AbortSignal,
+  withTotal = false,
 ): Promise<DaemonLogListOut> {
   return unwrap(
     getApiClient().GET("/daemon/logs", {
+      signal,
       params: {
-        query: { limit, since: params.since || undefined, level: params.level || undefined },
+        query: {
+          limit,
+          since: params.since || undefined,
+          level: params.level || undefined,
+          q: params.q || undefined,
+          cursor: cursor || undefined,
+          with_total: withTotal || undefined,
+        },
       },
     }),
   );

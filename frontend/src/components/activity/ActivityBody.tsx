@@ -4,7 +4,8 @@
 // (spec web-ui "Query only the visible Activity tab and isolate failures");
 // nothing yet says what to do next, and filters that match nothing offer to
 // clear them. Otherwise the rows, with the line above them saying what the
-// list holds, and under them "Load older" (design 6.1.01, 6.1.02, 6.1.10).
+// list holds, and under them the next page — loaded when scrolled to, or by
+// "Load more" (design 6.1.01, 6.1.02, 6.1.10).
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AlertCircle, RotateCw, ScrollText } from "lucide-react";
@@ -18,7 +19,7 @@ import { everyLogFailed, failedNames, listSummary } from "@/lib/activity/feedTex
 import type { ActivityRecord, ActivityTab } from "@/lib/activity/records";
 import type { ActivityFeed } from "@/lib/hooks/useActivityFeed";
 import { ActivityList } from "./ActivityList";
-import { OlderHint } from "./ActivityNotices";
+import { LoadOlder } from "./ActivityNotices";
 import type { AgentLook } from "./activityCells";
 
 interface Props {
@@ -81,6 +82,9 @@ export function ActivityBody({
       />
     );
   }
+  // Everything loaded so far is hidden by a client-side filter or the merge
+  // frontier, and older records exist: keep reading rather than say "none".
+  if (feed.rows.length === 0 && feed.hasOlder) return <LoadOlder feed={feed} />;
   if (feed.rows.length === 0) {
     return narrowed ? (
       <EmptyState
@@ -126,25 +130,7 @@ export function ActivityBody({
         windowLabel={windowLabel}
         renderExpanded={renderExpanded}
       />
-      {tab === "daemon" ? null : (
-        <div className="flex flex-wrap items-center gap-3 px-3 py-4">
-          {feed.hasOlder ? (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={feed.loadOlder}
-                disabled={feed.isLoadingOlder}
-              >
-                {feed.isLoadingOlder ? t("activity.loadingOlder") : t("activity.loadOlder")}
-              </Button>
-              <OlderHint oldest={feed.rows.at(-1)} />
-            </>
-          ) : (
-            <span className="text-xs text-text-subtle">{t("activity.end")}</span>
-          )}
-        </div>
-      )}
+      <LoadOlder feed={feed} />
     </>
   );
 }

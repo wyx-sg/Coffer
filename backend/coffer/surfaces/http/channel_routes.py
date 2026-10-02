@@ -11,9 +11,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, Field
 
+from coffer.domain.channel.commands import COMMAND_ROSTER
 from coffer.domain.channel.config import ChannelConfig
 from coffer.domain.channel_type import ChannelType
 from coffer.surfaces.http.auth import require_token
@@ -50,11 +51,24 @@ class PairingCodeOut(BaseModel):
     pair_url: str = ""
 
 
-class ChannelPeerOut(BaseModel):
-    chat_id: str
+class ChannelPersonOut(BaseModel):
+    """A person paired to the channel (spec channels "Serve several paired
+    people"): every one is answered with identical rights."""
+
+    #: The person's stable platform identity — what a removal or a re-pair names.
+    sender_id: str
     display_name: str
+    #: When this person was first paired.
     paired_at: datetime
+    #: Their direct chat.
+    chat_id: str
     active_conversation_id: str | None
+
+
+class PairingCodeIn(BaseModel):
+    #: The paired person whose identity the claimant takes over (re-pair).
+    #: Omitted, the claimant is added beside everyone already paired.
+    replaces: str | None = None
 
 
 class InboundInfoOut(BaseModel):
@@ -74,6 +88,33 @@ class ChannelDiagnosticOut(BaseModel):
     message: str
 
 
+class SecretApprovalOut(BaseModel):
+    """Why a channel's adapter is not running when its secret is the cause.
+
+    ``pending`` waits for the owner's approval in the Coffer app; ``refused``
+    was declined and stays so until asked again from the Secrets page. Names the
+    secret by ref, never carries its value.
+    """
+
+    state: Literal["pending", "refused"]
+    secret_ref: str
+
+
+class ChannelCommandOut(BaseModel):
+    """One slash command the channel answers (spec channels "Answer the
+    conversation commands from any paired chat"), from the one roster that also
+    feeds the help text and the platform menus."""
+
+    #: Without the leading slash.
+    name: str
+    #: A short argument hint (`[agent]`), or "".
+    args: str
+    description: str
+    description_zh: str
+    #: Offered only while the `knowledge` feature is on.
+    needs_knowledge: bool = False
+
+
 class ChannelStatusOut(BaseModel):
     #: The channel's identity — what every route addresses.
     uid: str
@@ -84,11 +125,15 @@ class ChannelStatusOut(BaseModel):
     enabled: bool
     running: bool
     pending_pairing: bool
-    peer: ChannelPeerOut | None
+    #: Everyone paired to the channel, earliest first. Empty: not paired yet.
+    people: list[ChannelPersonOut]
     #: A SeaTalk channel's websocket connection; null for telegram, whose
     #: inbound is the adapter's own polling and is reported by ``running``.
     inbound: InboundInfoOut | None
     diagnostics: list[ChannelDiagnosticOut] = []
+    #: Set while the channel's secret waits for the owner's approval (or was
+    #: refused): the real reason behind ``running: false``. ``null`` otherwise.
+    secret_approval: SecretApprovalOut | None = None
     # The machine whose daemon runs this channel's adapter (spec channels
     # "Bind each channel to the one machine that runs it"), and whether that machine is the one
     # answering this request. Both travel, because ``running: false`` is two
@@ -112,6 +157,9 @@ class ChannelStatusOut(BaseModel):
     #: of its configuration, so a surface never carries a copy of the defaults.
     #: ``null`` only for a stored configuration that no longer validates.
     settings: ChannelConfig | None = None
+    #: Every command the channel answers, in the roster's order — the Overview
+    #: lists them so nobody has to type /help to learn them.
+    commands: list[ChannelCommandOut] = []
 
 
 class NotifyIn(BaseModel):
@@ -132,24 +180,38 @@ class RestartOut(BaseModel):
 
 
 @router.post("/{uid}/pairing-code", response_model=PairingCodeOut)
-async def issue_pairing_code(uid: str, actor: str = Depends(get_actor)) -> PairingCodeOut:
-    code, expires_at, pair_url = await get_channel_service().issue_pairing_code(uid, actor=actor)
+async def issue_pairing_code(
+    uid: str, body: PairingCodeIn | None = None, actor: str = Depends(get_actor)
+) -> PairingCodeOut:
+    code, expires_at, pair_url = await get_channel_service().issue_pairing_code(
+        uid, actor=actor, replaces=body.replaces if body else None
+    )
     return PairingCodeOut(code=code, expires_at=expires_at, pair_url=pair_url)
+
+
+@router.delete("/{uid}/pairing-code", status_code=204, response_class=Response)
+async def cancel_pairing_code(uid: str) -> None:
+    await get_channel_service().cancel_pairing_code(uid)
+
+
+@router.delete("/{uid}/people/{sender_id}", status_code=204, response_class=Response)
+async def remove_person(uid: str, sender_id: str, actor: str = Depends(get_actor)) -> None:
+    await get_channel_service().remove_person(uid, sender_id, actor=actor)
 
 
 @router.get("/{uid}/status", response_model=ChannelStatusOut)
 async def channel_status(uid: str) -> ChannelStatusOut:
     status = await get_channel_service().status(uid)
-    peer = (
-        ChannelPeerOut(
-            chat_id=status.peer.chat_id,
-            display_name=status.peer.display_name,
-            paired_at=status.peer.paired_at,
-            active_conversation_id=status.peer_conversation_id,
+    people = [
+        ChannelPersonOut(
+            sender_id=p.sender_id,
+            display_name=p.display_name,
+            paired_at=p.paired_at,
+            chat_id=p.chat_id,
+            active_conversation_id=p.active_conversation_id,
         )
-        if status.peer is not None
-        else None
-    )
+        for p in status.people
+    ]
     inbound = (
         InboundInfoOut(
             websocket_state=status.inbound.websocket_state,  # type: ignore[arg-type]
@@ -166,14 +228,32 @@ async def channel_status(uid: str) -> ChannelStatusOut:
         enabled=status.enabled,
         running=status.running,
         pending_pairing=status.pending_pairing,
-        peer=peer,
+        people=people,
         inbound=inbound,
         diagnostics=[
             ChannelDiagnosticOut(code=d.code, message=d.message) for d in status.diagnostics
         ],
+        secret_approval=(
+            SecretApprovalOut(
+                state=status.secret_approval.state,  # type: ignore[arg-type]
+                secret_ref=status.secret_approval.secret_ref,
+            )
+            if status.secret_approval is not None
+            else None
+        ),
         runs_on=status.runs_on,
         runs_here=status.runs_here,
         settings=status.settings,
+        commands=[
+            ChannelCommandOut(
+                name=c.name,
+                args=c.args,
+                description=c.description,
+                description_zh=c.description_zh,
+                needs_knowledge=c.needs_knowledge,
+            )
+            for c in COMMAND_ROSTER
+        ],
         handoff=handoff_out(
             sdk_missing_handoff(status.name)
             if inbound is not None and inbound.websocket_state == "sdk_missing"

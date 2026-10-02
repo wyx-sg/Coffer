@@ -12,6 +12,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { AgentSkillsTab } from "./AgentSkillsTab";
+import { pathText } from "@/test/truncatedPath";
 import { ToastProvider } from "@/components/ui/toast";
 import type { AgentOut } from "@/lib/api/agents";
 import type { UnmanagedSkillOut } from "@/lib/api/agents-workspace";
@@ -159,7 +160,7 @@ describe("AgentSkillsTab", () => {
 
     const guide = row("coffer-guide");
     expect(within(guide).getByText("Built in")).toBeInTheDocument();
-    expect(within(guide).getByText("~/.claude/skills/coffer-guide")).toBeInTheDocument();
+    expect(within(guide).getByText(pathText("~/.claude/skills/coffer-guide"))).toBeInTheDocument();
     expect(within(guide).getByText("Linked")).toBeInTheDocument();
     expect(within(guide).getByText("Coffer’s")).toBeInTheDocument();
 
@@ -242,14 +243,33 @@ describe("AgentSkillsTab", () => {
     ).toHaveAttribute("href", "/skills/release-notes");
   });
 
-  test("Open file opens the SKILL.md of a Coffer skill and of an invalid folder", async () => {
+  test("a Coffer skill has no Open file button; an invalid folder's file opens from its menu", async () => {
     stub([GUIDE], [BROKEN]);
     renderTab();
-    fireEvent.click(await screen.findByRole("button", { name: "Open file: coffer-guide" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open file: migrate-old" }));
-    await waitFor(() => expect(openMock).toHaveBeenCalledTimes(2));
-    expect(openMock).toHaveBeenCalledWith("/Users/me/.claude/skills/coffer-guide/SKILL.md", "");
+    await screen.findByRole("button", { name: "More for migrate-old" });
+    expect(screen.queryByRole("button", { name: "Open file: coffer-guide" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open file: migrate-old" })).toBeNull();
+    const more = screen.getByRole("button", { name: "More for migrate-old" });
+    fireEvent.click(more);
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Open file" }));
+    await waitFor(() => expect(openMock).toHaveBeenCalledTimes(1));
     expect(openMock).toHaveBeenCalledWith("/Users/me/.claude/skills/migrate-old/SKILL.md", "");
+  });
+
+  test("the ⋯ menu does not repeat the row's Adopt or Remove duplicate button", async () => {
+    stub(
+      [skill("pdf")],
+      [
+        own("pdf", { location: "agents_dir", path: "/Users/me/.agents/skills/pdf" }),
+        own("release-notes"),
+      ],
+    );
+    renderTab();
+    fireEvent.click(await screen.findByRole("button", { name: "More for pdf" }));
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Open file"]);
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    fireEvent.click(await screen.findByRole("button", { name: "More for release-notes" }));
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).not.toContain("Adopt");
   });
 
   test("Remove duplicate deletes the agent's copy of a skill Coffer delivers, after a confirm", async () => {
@@ -259,7 +279,7 @@ describe("AgentSkillsTab", () => {
     );
     renderTab();
     expect(await screen.findByText("Duplicate of pdf in Coffer")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Remove duplicate: pdf" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete duplicate: pdf" }));
 
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText(/~\/\.agents\/skills\/pdf/)).toBeInTheDocument();

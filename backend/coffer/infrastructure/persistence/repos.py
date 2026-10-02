@@ -8,15 +8,17 @@ vault document (``internal_engine_repo``); what stays here is history.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from coffer.domain.audit import AuditEntry
 from coffer.infrastructure.persistence.keyset import newest_first_after
 from coffer.infrastructure.persistence.models import AuditLogModel
+from coffer.infrastructure.persistence.textsearch import contains_any
 
 # === SqlAlchemyAuditRepo (T023) ===
 
@@ -51,6 +53,8 @@ def _audit_filtered(
     event_prefix: str | None,
     since: datetime | None,
     trace_id: str | None = None,
+    q: str | None = None,
+    q_types: Sequence[str] = (),
 ) -> Select[Any]:
     """The one WHERE both an audit page and its count read, so they cannot disagree."""
     if trace_id is not None:
@@ -73,6 +77,21 @@ def _audit_filtered(
         stmt = stmt.where(AuditLogModel.event_type.startswith(event_prefix))
     if since is not None:
         stmt = stmt.where(AuditLogModel.timestamp >= since)
+    if q:
+        # Free text: the raw event code, the resource's name, the actor and the
+        # details a row carries — plus the events whose localized wording the
+        # caller matched itself (``q_types``), since the sentence a reader sees
+        # is composed in the client.
+        match = contains_any(
+            (
+                AuditLogModel.event_type,
+                AuditLogModel.resource_name,
+                AuditLogModel.actor,
+                AuditLogModel.details_json,
+            ),
+            q,
+        )
+        stmt = stmt.where(or_(match, AuditLogModel.event_type.in_(q_types)) if q_types else match)
     return stmt
 
 
@@ -114,6 +133,8 @@ class SqlAlchemyAuditRepo:
         limit: int = 50,
         after: tuple[datetime, int] | None = None,
         trace_id: str | None = None,
+        q: str | None = None,
+        q_types: Sequence[str] = (),
     ) -> list[AuditEntry]:
         async with self._sm() as session:
             # Newest first with the id as the tie-break, so ``after`` (the last
@@ -133,6 +154,8 @@ class SqlAlchemyAuditRepo:
                 event_prefix=event_prefix,
                 since=since,
                 trace_id=trace_id,
+                q=q,
+                q_types=q_types,
             )
             stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
@@ -147,6 +170,8 @@ class SqlAlchemyAuditRepo:
         event_prefix: str | None = None,
         since: datetime | None = None,
         trace_id: str | None = None,
+        q: str | None = None,
+        q_types: Sequence[str] = (),
     ) -> int:
         """How many rows :meth:`query` would page through with these filters."""
         async with self._sm() as session:
@@ -158,5 +183,7 @@ class SqlAlchemyAuditRepo:
                 event_prefix=event_prefix,
                 since=since,
                 trace_id=trace_id,
+                q=q,
+                q_types=q_types,
             )
             return int((await session.execute(stmt)).scalar_one())

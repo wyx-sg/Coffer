@@ -44,12 +44,29 @@ const APPLIED = [
   { path: "resources/channel/seatalk.yaml", status: "modified" as const },
 ];
 
-function seedRuns(rounds: SyncRound[], state: { isLoading?: boolean; error?: unknown } = {}) {
+function seedRuns(
+  rounds: SyncRound[],
+  state: {
+    isLoading?: boolean;
+    error?: unknown;
+    total?: number;
+    hasMore?: boolean;
+    loadMore?: () => void;
+    refetch?: () => void;
+  } = {},
+) {
   vi.mocked(useSyncRuns).mockReturnValue({
-    data: state.isLoading || state.error ? undefined : { rounds, total: rounds.length },
+    items: rounds,
+    total: state.total ?? rounds.length,
+    totalIsFloor: false,
+    hasMore: state.hasMore ?? false,
+    loadMore: state.loadMore ?? vi.fn(),
     isLoading: Boolean(state.isLoading),
+    isLoadingMore: false,
+    isRefreshing: false,
     error: state.error ?? null,
-  } as unknown as ReturnType<typeof useSyncRuns>);
+    refetch: state.refetch ?? vi.fn(),
+  } as ReturnType<typeof useSyncRuns>);
 }
 
 function seedRollback(mutate = vi.fn(), error: unknown = null) {
@@ -427,6 +444,9 @@ describe("SyncStatusTab — Rounds", () => {
     ]);
     renderTab(makeStatus());
     expect(screen.getByText("Rounds")).toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByTestId("sync-rounds")).getByRole("button", { name: "More info" }),
+    );
     expect(
       screen.getByText(
         "Each round pulls, applies, then pushes. Rounds with nothing to do are folded.",
@@ -444,6 +464,19 @@ describe("SyncStatusTab — Rounds", () => {
     expect(second).toHaveTextContent("Sign-in failed · nothing pulled or pushed");
     expect(within(second).getAllByRole("cell")[2]).toHaveTextContent("—");
     expect(third).toHaveTextContent("Yesterday 22:20");
+  });
+
+  test("a long history shows how many of its rounds are loaded and loads the next page on request", () => {
+    const loadMore = vi.fn();
+    seedRuns([makeRound({ id: 9, status: "pulled", applied: APPLIED })], {
+      total: 130,
+      hasMore: true,
+      loadMore,
+    });
+    renderTab(makeStatus());
+    expect(screen.getByText("Showing 1 of 130")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    expect(loadMore).toHaveBeenCalledTimes(1);
   });
 
   test("an empty history says so; a failing one fails inside the tab", () => {
@@ -571,7 +604,7 @@ describe("SyncStatusTab — rolling a round back", () => {
     renderTab(makeStatus());
     fireEvent.click(rollbackButtons()[0]);
     const dialog = within(screen.getByRole("dialog"));
-    fireEvent.click(dialog.getByRole("button", { name: /^(roll back|try again)$/i }));
+    fireEvent.click(dialog.getByRole("button", { name: /^(roll back|retry)$/i }));
     expect(dialog.getByRole("alert")).toHaveTextContent(/snapshot is gone/);
   });
 });

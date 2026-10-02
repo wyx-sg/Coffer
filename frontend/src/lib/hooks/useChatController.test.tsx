@@ -9,14 +9,21 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 
 vi.mock("./useConversations", () => ({
-  useConversations: () => ({ data: [], isPending: false }),
-  useArchivedConversations: () => ({ data: [], isPending: false }),
   useConversation: () => ({ data: null, isPending: false }),
   useCreateConversation: () => createConv,
   useRenameConversation: () => ({ mutate: vi.fn() }),
   useDeleteConversation: () => ({ mutate: vi.fn(), isPending: false }),
   useArchiveConversation: () => ({ mutate: vi.fn(), isPending: false }),
   useUnarchiveConversation: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+vi.mock("./useConversationList", () => ({
+  useConversationList: () => ({
+    items: [],
+    isLoading: false,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+  }),
 }));
 vi.mock("./useAgentProviders", () => ({
   useAgentProviders: () => ({

@@ -18,6 +18,7 @@ import { clock } from "@/lib/conversations/time";
 import { FilesChangedCard } from "./FilesChangedCard";
 import { AttachmentChip } from "./AttachmentChip";
 import { ToolCallCard } from "./ToolCallCard";
+import { ToolCallGroup, type ToolCall } from "./ToolCallGroup";
 import { MarkdownContent } from "./MarkdownContent";
 
 interface Props {
@@ -57,6 +58,35 @@ function buildSegments(blocks: ContentBlock[]): Segment[] {
     }
   });
   return segments;
+}
+
+/** Runs of this many consecutive tool calls fold into one group row. */
+const GROUP_MIN = 3;
+
+type Row =
+  | { kind: "text"; key: string; text: string }
+  | { kind: "tool"; key: string; call: ToolCall }
+  | { kind: "group"; key: string; calls: ToolCall[] };
+
+/** Fold each run of GROUP_MIN or more consecutive tool segments into one group. */
+function groupSegments(segments: Segment[]): Row[] {
+  const rows: Row[] = [];
+  let run: ToolCall[] = [];
+  const flush = () => {
+    if (run.length >= GROUP_MIN)
+      rows.push({ kind: "group", key: `group-${run[0].key}`, calls: run });
+    else run.forEach((call) => rows.push({ kind: "tool", key: call.key, call }));
+    run = [];
+  };
+  for (const seg of segments) {
+    if (seg.kind === "tool") run.push({ key: seg.key, use: seg.use, result: seg.result });
+    else {
+      flush();
+      rows.push(seg);
+    }
+  }
+  flush();
+  return rows;
 }
 
 function attachmentBlocks(blocks: ContentBlock[]): ContentBlock[] {
@@ -105,6 +135,7 @@ function MessageBubbleImpl({ message, live, undeliveredTo, agentKey, agentName }
   // Assistant (persisted or live)
   const blocks = isLive ? live!.blocks : (message?.content ?? []);
   const segments = buildSegments(blocks);
+  const rows = groupSegments(segments);
   const files = filesChanged(blocks);
   const failed = !isLive && message?.status === "failed";
   // A persisted streaming placeholder (turn still running server-side, seen
@@ -128,12 +159,18 @@ function MessageBubbleImpl({ message, live, undeliveredTo, agentKey, agentName }
         </div>
       ) : null}
       <div className={cn("min-w-0 space-y-2.5", agentKey && "pl-[30px]")}>
-        {segments.map((seg) =>
-          seg.kind === "tool" ? (
-            <ToolCallCard key={seg.key} toolUse={seg.use} toolResult={seg.result} />
+        {rows.map((row, i) =>
+          row.kind === "group" ? (
+            <ToolCallGroup
+              key={row.key}
+              calls={row.calls}
+              trailing={(isLive && live!.streaming && i === rows.length - 1) || serverStreaming}
+            />
+          ) : row.kind === "tool" ? (
+            <ToolCallCard key={row.key} toolUse={row.call.use} toolResult={row.call.result} />
           ) : (
-            <div key={seg.key} className="text-sm leading-relaxed text-text">
-              <MarkdownContent content={seg.text} />
+            <div key={row.key} className="text-sm leading-relaxed text-text">
+              <MarkdownContent content={row.text} />
             </div>
           ),
         )}

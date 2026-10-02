@@ -32,6 +32,7 @@ a file Coffer could not inspect would clear a choice on no evidence.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import pathlib
 from collections.abc import Awaitable, Callable, Sequence
@@ -170,7 +171,10 @@ class ProviderProjectionTarget:
                 # a projection write (mkdir -p).
                 continue
             try:
-                seen = self._judge(row, cfg, facet, connection_for_agent(row, connections), by_uid)
+                # Reads and parses the agent's own config files: off the loop.
+                seen = await asyncio.to_thread(
+                    self._judge, row, cfg, facet, connection_for_agent(row, connections), by_uid
+                )
             except Exception as exc:  # unreadable or unparseable: never guessed from
                 _log.warning("provider_projection: %s left alone: %r", row.name, exc)
                 continue

@@ -15,7 +15,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import type { CollectionOut } from "@/lib/api/knowledge";
-import { timeAgo } from "@/lib/agents/hookRows";
+import { timeAgo } from "@/lib/timeAgo";
 import { collectionPath } from "@/lib/knowledge/routes";
 import { curatingLabel } from "@/lib/knowledge/text";
 import { useKnowledgeChanges } from "@/lib/hooks/useKnowledgeHistory";

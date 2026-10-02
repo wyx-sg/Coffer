@@ -11,12 +11,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
-import {
-  getChannelStatus,
-  issuePairingCode,
-  notifyChannel,
-  restartChannel,
-} from "@/lib/api/channels";
+import { getChannelStatus, notifyChannel, restartChannel } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { describeChannel, type ChannelView } from "@/lib/channels/channelState";
 import {
@@ -184,20 +179,6 @@ export function useChannelAutoSave(channel: ResourceOut) {
   return { save, state };
 }
 
-/** Issue a pairing code; refreshes the status (pending_pairing) on success. */
-export function useIssuePairingCode(uid: string) {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: () => issuePairingCode(uid),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: channelStatusKey(uid) });
-    },
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}
-
 /**
  * Apply an edit to a channel: rotate the changed secrets into their existing
  * refs, then PATCH the mutable config (bound agent, SeaTalk app id). The
@@ -266,7 +247,7 @@ export function useRebindChannel(uid: string, name: string) {
   });
 }
 
-/** Push a test message to the channel's paired peer (notify capability). */
+/** Push a test message to the channel's first paired owner (notify capability). */
 export function useNotifyChannel(uid: string) {
   const { t } = useTranslation();
   const { toast } = useToast();

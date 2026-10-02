@@ -6,6 +6,9 @@
 // Join button.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+
+import { ApiError } from "@/lib/api/errors";
 
 import type { JoinPreview } from "@/lib/api/sync";
 import { SyncJoinPreview } from "./SyncJoinPreview";
@@ -32,6 +35,7 @@ function preview(over: Partial<JoinPreview> = {}): JoinPreview {
     differ: ["knowledge/a.md", "skills/x/SKILL.md"],
     pushed: [{ area: "skills", files: 22 }],
     deleted: [],
+    deleted_total: 0,
     conflicts: [],
     same_name: [],
     refused: null,
@@ -91,5 +95,57 @@ describe("SyncJoinPreview", () => {
     render(<SyncJoinPreview onBack={onBack} backPending={false} />);
     expect(screen.getByRole("alert")).toHaveTextContent(/layout 3/);
     expect(screen.getByRole("button", { name: "Join and pull" })).toBeDisabled();
+  });
+
+  test("a remote at an older layout is replaced: what goes up, what goes away, one button", () => {
+    seed(
+      preview({
+        kind: "replace",
+        pulled: [],
+        pulled_files: 0,
+        same: 0,
+        differ: [],
+        pushed: [{ area: "knowledge", files: 12 }],
+        pushed_files: 12,
+        deleted: ["knowledge/old/a.md", "knowledge/old/b.md"],
+        deleted_total: 150,
+      }),
+    );
+    render(<SyncJoinPreview onBack={onBack} backPending={false} />);
+    expect(screen.getByText("This Mac’s vault replaces the remote")).toBeInTheDocument();
+    expect(screen.getByText(/The remote holds an older layout/)).toBeInTheDocument();
+    const shown = within(screen.getByTestId("sync-join-preview"));
+    expect(shown.getByTestId("sync-join-pushed")).toHaveTextContent("Knowledge 12");
+    expect(shown.getByTestId("sync-join-deleted")).toHaveTextContent(
+      "150 files only the old remote had go away",
+    );
+    expect(shown.getByTestId("sync-join-deleted")).toHaveTextContent("and 148 more");
+    expect(shown.getByTestId("sync-join-kept")).toHaveTextContent("Nothing is lost from git");
+    expect(shown.getByTestId("sync-join-others")).toHaveTextContent("must upgrade");
+    expect(screen.queryByRole("button", { name: "Join and pull" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Replace the remote" }));
+    expect(join).toHaveBeenCalled();
+  });
+
+  test("a push token waiting for approval says so, offers Secrets, and checks again", () => {
+    const refetch = vi.fn();
+    mocked(hooks.useJoinPreview).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new ApiError("SECRET_BINDING_PENDING", "waiting for approval"),
+      refetch,
+    });
+    render(
+      <MemoryRouter>
+        <SyncJoinPreview onBack={onBack} backPending={false} />
+      </MemoryRouter>,
+    );
+    const waiting = within(screen.getByTestId("sync-join-waiting"));
+    expect(waiting.getByText("The push token is waiting for approval")).toBeInTheDocument();
+    expect(waiting.getByRole("link", { name: "Open Secrets" })).toHaveAttribute("href", "/secrets");
+    expect(screen.queryByTestId("sync-join-preview")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Join and pull" })).toBeDisabled();
+    fireEvent.click(waiting.getByRole("button", { name: "Check again" }));
+    expect(refetch).toHaveBeenCalled();
   });
 });

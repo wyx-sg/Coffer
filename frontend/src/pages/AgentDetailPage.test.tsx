@@ -13,15 +13,6 @@ import type { AgentRowState } from "@/lib/agents/rowState";
 import { AgentDetailPage } from "./AgentDetailPage";
 
 vi.mock("@/lib/hooks/useAgentRoute", () => ({ useAgentRoute: vi.fn() }));
-vi.mock("@/lib/hooks/useAgentCounts", () => ({
-  useAgentCounts: vi.fn(() => ({
-    skills: { coffer: 12, own: 4 },
-    mcp: { coffer: 5, own: 3, duplicates: 1 },
-    plugins: { total: 3, enabled: 2, marketplaces: 2 },
-    hooks: { total: 7, coffer: 1, files: 3 },
-    sessions: 412,
-  })),
-}));
 const { change, enable, stub } = vi.hoisted(() => ({
   change: vi.fn(),
   enable: vi.fn(),
@@ -96,7 +87,7 @@ function mockRoute(opts: { added?: boolean; rowState?: AgentRowState; typeRow?: 
   } as unknown as ReturnType<typeof routeMod.useAgentRoute>);
   vi.mocked(actionsMod.useAgentRowActions).mockReturnValue({
     state: opts.rowState ?? "connected",
-    actions: [{ key: "disconnect", label: "Disconnect", onSelect: () => change("disconnect") }],
+    actions: [{ key: "copy-uid", label: "Copy uid", onSelect: vi.fn() }],
     primary: null,
     dialogs: null,
     open: { change, enable, configDir: vi.fn(), remove: vi.fn() },
@@ -134,13 +125,13 @@ describe("AgentDetailPage", () => {
     expect(tabs).toEqual([
       "Overview",
       "Model",
-      "Skills16",
-      "MCP servers8",
-      "Plugins3",
-      "Hooks7",
-      "Config files",
+      "Skills",
+      "MCP servers",
+      "Plugins",
+      "Hooks",
       "Memory",
-      "Sessions412",
+      "Sessions",
+      "Config files",
     ]);
     expect(screen.getByRole("tab", { name: /Skills/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByTestId("tab-body")).toHaveTextContent("skills");
@@ -176,19 +167,18 @@ describe("AgentDetailPage", () => {
     mockRoute({ rowState: "not_connected" });
     const { unmount } = renderAt();
     expect(screen.getByText("Not connected")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Connect to Coffer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
     expect(change).toHaveBeenCalledWith("connect");
     unmount();
 
-    // Connected: Disconnect from Coffer is in the header's ⋯ menu (it opens a
-    // preview of what it removes before anything is written).
+    // Connected: the header's action is a new conversation; Disconnect is the
+    // Overview's button, not repeated in the ⋯ menu.
     mockRoute({ rowState: "connected" });
     const connected = renderAt();
     expect(screen.getByText("Connected to Coffer")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Connect to Coffer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "More actions for Claude Code" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Disconnect" }));
-    expect(change).toHaveBeenCalledWith("disconnect");
+    expect(screen.queryByRole("menuitem", { name: "Disconnect" })).not.toBeInTheDocument();
     connected.unmount();
 
     // Partial: reads Needs repair and offers Repair (which puts the rest back).
@@ -198,10 +188,10 @@ describe("AgentDetailPage", () => {
     expect(screen.getByRole("button", { name: "Repair" })).toBeInTheDocument();
   });
 
-  test("a disabled agent offers Enable", () => {
+  test("a disabled agent offers Turn on", () => {
     mockRoute({ rowState: "disabled" });
     renderAt();
-    fireEvent.click(screen.getByRole("button", { name: "Enable" }));
+    fireEvent.click(screen.getByRole("button", { name: "Turn on" }));
     expect(enable).toHaveBeenCalled();
   });
 

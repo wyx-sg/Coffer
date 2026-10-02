@@ -1,16 +1,22 @@
-// src/components/Section.tsx — the one titled block of a page or pane: a small
-// heading with a muted meta line and/or trailing controls beside it, the content
-// under them. The Memory overview, a provider's Overview, an agent's Overview
-// and the agent Model tab all draw it.
+// src/components/Section.tsx — the one titled block of a page or pane, and the
+// stack that separates several of them.
+//
+// A Section is a heading (one size everywhere), an optional "?" help tip beside
+// it that holds the explanation, trailing controls on the right, and the
+// content. It prints no sentence under the title and no count beside it: what
+// the block is for rides in `help`, how many it holds is in the content. A
+// SectionStack lays Sections one above the other with a hairline between each,
+// so every pane that stacks blocks divides them the same way.
 import type { ReactNode } from "react";
 
+import { HelpTip } from "@/components/HelpTip";
 import { cn } from "@/lib/utils";
 
 interface Props {
   title: string;
-  /** Muted text beside the title, e.g. "Last 7 days" or "5 partitions · 79 memories". */
-  meta?: ReactNode;
-  /** Raw slot after the title (and meta): a help tip, a count, a link carrying its own `ml-auto`. */
+  /** What the block is for — shown in a "?" tip beside the title, never inline. */
+  help?: ReactNode;
+  /** Raw slot after the title (and help tip), e.g. a link carrying its own `ml-auto`. Not for counts. */
   aside?: ReactNode;
   /** Right-aligned controls on the title's row — a "Change" or "All 412" link. */
   actions?: ReactNode;
@@ -29,7 +35,7 @@ const GAPS = { tight: "gap-1.5", snug: "gap-2", normal: "gap-2.5" } as const;
 
 export function Section({
   title,
-  meta,
+  help,
   aside,
   actions,
   gap = "normal",
@@ -47,11 +53,34 @@ export function Section({
     >
       <div className="flex min-h-control-sm items-center gap-2">
         <Heading className="text-sm font-semibold text-text">{title}</Heading>
-        {meta ? <span className="text-xs text-text-muted">{meta}</span> : null}
+        {help ? <HelpTip>{help}</HelpTip> : null}
         {aside}
         {actions ? <span className="ml-auto inline-flex items-center gap-2">{actions}</span> : null}
       </div>
       {children}
     </section>
+  );
+}
+
+/** Sections one above the other, a hairline between each (the right-hand panes' one divider style). */
+export function SectionStack({
+  children,
+  className,
+  testId,
+}: {
+  children: ReactNode;
+  className?: string;
+  testId?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col divide-y divide-border [&>*]:py-5 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0",
+        className,
+      )}
+      data-testid={testId}
+    >
+      {children}
+    </div>
   );
 }

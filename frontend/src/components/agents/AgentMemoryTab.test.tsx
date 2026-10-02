@@ -13,6 +13,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 import { AgentMemoryTab } from "./AgentMemoryTab";
+import { pathText } from "@/test/truncatedPath";
 import type { AgentOut } from "@/lib/api/agents";
 import type { NativeMemoryStore } from "@/lib/api/agentNativeMemory";
 
@@ -75,14 +76,42 @@ function stubNative(items: NativeMemoryStore[] = [COFFER_STORE], extra: object =
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentMemoryTab", () => {
+  test("a store with no memory is not listed, and the rest are searched by project name", () => {
+    const empty: NativeMemoryStore = {
+      project: "scratch",
+      path: "/tmp/work/hello",
+      memory_dir: "/Users/xing/.claude/projects/-tmp-work-hello/memory",
+      item_count: 0,
+    };
+    const other: NativeMemoryStore = {
+      project: "Other",
+      path: "/Users/xing/Other",
+      memory_dir: "/Users/xing/.claude/projects/-Users-xing-Other/memory",
+      item_count: 3,
+    };
+    stubNative([empty, COFFER_STORE, other]);
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
+    expect(screen.queryByText(/work\/hello/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole("row")).toHaveLength(3); // header + two stores
+    fireEvent.change(screen.getByRole("textbox", { name: "Search projects" }), {
+      target: { value: "other" },
+    });
+    expect(screen.getAllByRole("row")).toHaveLength(2);
+    expect(screen.getByText("~/Other")).toBeInTheDocument();
+  });
+
   test("lists the native stores with project, path and item count", () => {
     stubNative();
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     expect(vi.mocked(nativeHooks.useAgentNativeMemory)).toHaveBeenCalledWith("agt_01cc");
-    expect(screen.getByRole("heading", { name: "Native memory stores · 1" })).toBeInTheDocument();
-    expect(screen.getByText(/coffer reads them to build shared memory/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Native memory stores" })).toBeInTheDocument();
+    // The explanation rides in the help tip, not under the title.
+    expect(screen.getByRole("button", { name: "More info" })).toBeInTheDocument();
+    expect(screen.queryByText(/coffer reads them to build shared memory/i)).not.toBeInTheDocument();
     expect(screen.getByText("~/Coffer")).toBeInTheDocument();
-    expect(screen.getByText("~/.claude/projects/-Users-xing-Coffer/memory")).toBeInTheDocument();
+    expect(
+      screen.getByText(pathText("~/.claude/projects/-Users-xing-Coffer/memory")),
+    ).toBeInTheDocument();
     expect(screen.getByText("49")).toBeInTheDocument();
   });
 

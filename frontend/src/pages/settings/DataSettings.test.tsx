@@ -128,7 +128,8 @@ describe("DataSettings", () => {
     expect(within(vault).getByText("~/.coffer/vault")).toBeInTheDocument();
     expect(within(vault).getByRole("button", { name: /open folder/i })).toBeInTheDocument();
     const local = screen.getByTestId("settings-data-local");
-    expect(within(local).getByText(/not synced — back it up yourself/i)).toBeInTheDocument();
+    fireEvent.click(within(local).getByRole("button", { name: "More info" }));
+    expect(screen.getByText(/not synced — back it up yourself/i)).toBeInTheDocument();
     expect(within(local).getByText("~/.coffer/chat-media")).toBeInTheDocument();
     expect(within(local).getByRole("button", { name: /open folder/i })).toBeInTheDocument();
     const history = screen.getByTestId("settings-data-history");
@@ -166,7 +167,8 @@ describe("DataSettings", () => {
     render(wrap(<DataSettings />));
     const vault = await screen.findByTestId("settings-data-vault");
     expect(await within(vault).findByText(/1,382 versions/)).toBeInTheDocument();
-    expect(within(vault).getByText(/Synced — a git repository/)).toBeInTheDocument();
+    fireEvent.click(within(vault).getByRole("button", { name: "More info" }));
+    expect(screen.getByText(/Synced — a git repository/)).toBeInTheDocument();
     expect(within(vault).queryByText("Latest version")).toBeNull();
   });
 
@@ -182,6 +184,8 @@ describe("DataSettings", () => {
       },
     });
     render(wrap(<DataSettings />));
+    const vault = await screen.findByTestId("settings-data-vault");
+    fireEvent.click(within(vault).getByRole("button", { name: "More info" }));
     expect(await screen.findByText(/makes it a git repository/i)).toBeInTheDocument();
   });
 
@@ -238,7 +242,7 @@ describe("DataSettings", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
-  test("a retention save that fails says so, marks the row and offers Try again", async () => {
+  test("a retention save that fails says so, marks the row and offers Retry", async () => {
     const patch = vi.fn().mockResolvedValue({
       data: undefined,
       error: { error: { code: "INTERNAL_ERROR", message: "database is locked", details: {} } },
@@ -257,7 +261,7 @@ describe("DataSettings", () => {
     expect(screen.getByTestId("settings-data-other-retention")).toHaveTextContent(
       "Other retention settings: coffer config",
     );
-    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(2));
   });
 });

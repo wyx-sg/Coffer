@@ -63,11 +63,16 @@ async def run_round() -> RoundOut:
 @router.get("/runs", response_model=SyncRunListOut)
 async def list_runs(
     limit: int = Query(default=50, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
+    cursor: str | None = Query(
+        default=None,
+        description="The previous page's next_cursor; any other value is 400 CURSOR_INVALID.",
+    ),
 ) -> SyncRunListOut:
     """Every round this machine ran, newest first."""
-    page = await get_sync_service().rounds(limit=limit, offset=offset)
-    return SyncRunListOut(rounds=[round_out(r) for r in page.rounds], total=page.total)
+    page = await get_sync_service().rounds(limit=limit, cursor=cursor)
+    return SyncRunListOut(
+        rounds=[round_out(r) for r in page.rounds], total=page.total, next_cursor=page.next_cursor
+    )
 
 
 @router.get("/runs/{run_id}", response_model=RoundOut)

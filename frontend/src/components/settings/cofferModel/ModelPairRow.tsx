@@ -105,7 +105,7 @@ export function ModelPairRow(props: ModelPairRowProps) {
   const modelValue = props.offLabel && model === "" ? OFF_VALUE : model;
 
   return (
-    <div className="border-t border-border-subtle first:border-t-0">
+    <div>
       <SettingRow label={props.title} description={props.description} status={state} align="start">
         <Select
           // The VALUE is the connection's uid — what the route takes — and the

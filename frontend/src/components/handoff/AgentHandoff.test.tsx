@@ -2,7 +2,7 @@
 //
 // Real QueryClientProvider; only the agent-providers api is mocked.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
@@ -51,13 +51,10 @@ describe("AgentHandoff", () => {
     expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
   });
 
-  test("Ask an agent opens New conversation, then the draft with the prompt", async () => {
+  test("Ask an agent opens the draft with the prompt, no dialog first", async () => {
     renderHandoff(true);
     fireEvent.click(await screen.findByRole("button", { name: "Ask an agent" }));
-    const dialog = await screen.findByRole("dialog");
-    const start = within(dialog).getByRole("button", { name: "Start" });
-    await waitFor(() => expect(start).toBeEnabled());
-    fireEvent.click(start);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(await screen.findByTestId("draft")).toHaveTextContent(`claude_code: ${PROMPT}`);
   });
 

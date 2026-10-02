@@ -38,6 +38,7 @@ from coffer.infrastructure.agent.codex_rpc_models import CodexRpcModelDiscovery
 from coffer.infrastructure.agent.model_discovery import (
     ChainedModelDiscovery,
     NativeConfigModelDiscovery,
+    NativeDefaultModel,
 )
 from coffer.infrastructure.chat.codex_app_server import default_app_server_session
 from coffer.infrastructure.chat.media_store import FileChatMediaStore, default_chat_media_dir
@@ -298,6 +299,7 @@ def wire_chat(
             ]
         ),
         provider_models=_ActiveProviderModels(resources=resource_service),
+        native_default=NativeDefaultModel(),
     )
 
     # 8. Register dependency providers. The catalogue is published twice on

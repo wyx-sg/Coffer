@@ -42,10 +42,24 @@ _AGENT_UID_HELP = (
     "Only the calls made by this agent's sessions — the uid its shim reported. "
     "Calls from a session that reported no agent match no value."
 )
+_Q_HELP = (
+    "Free text, matched in any case against the tool, the error, the session, "
+    "the outcome and the server's name."
+)
 _TRACE_ID_HELP = (
     "Only the calls made under this correlation id — one /mcp request's — the "
     "same id its audit rows and daemon log lines carry."
 )
+
+
+async def _uids_named(resources: ResourceService, text: str) -> list[str]:
+    """The uids of the MCP servers whose name or title contains ``text``."""
+    needle = text.lower()
+    return [
+        r.uid
+        for r in await resources.list(kind="mcp_server")
+        if needle in r.name.lower() or needle in (r.title or "").lower()
+    ]
 
 
 async def _page(
@@ -58,6 +72,8 @@ async def _page(
     limit: int,
     cursor: str | None,
     trace_id: str | None = None,
+    q: str | None = None,
+    q_resources: ResourceService | None = None,
 ) -> tuple[Page[MCPInvocation], int]:
     """One newest-first page, continued by ``cursor`` (spec resource-framework
     "Page growing lists by an opaque cursor").
@@ -76,8 +92,12 @@ async def _page(
         "since": since.isoformat() if since else None,
         "agent_uid": agent_uid,
         "trace_id": trace_id,
+        "q": q,
     }
     tag = "mcp_invocations"
+    # The log stores a server's uid, the page shows its current name: a search
+    # for a server's name finds its calls through the uids that name matches.
+    q_uids = await _uids_named(q_resources, q) if q and q_resources is not None else ()
     after = time_and_id(decode_cursor(cursor, list_tag=tag, filters=filters), int)
     rows = await repo.query(
         resource_uid=resource_uid,
@@ -87,6 +107,8 @@ async def _page(
         limit=limit + 1,
         after=after,
         trace_id=trace_id,
+        q=q,
+        q_resource_uids=q_uids,
     )
     total = await repo.count(
         resource_uid=resource_uid,
@@ -94,6 +116,8 @@ async def _page(
         since=since,
         agent_uid=agent_uid,
         trace_id=trace_id,
+        q=q,
+        q_resource_uids=q_uids,
     )
     page = paginate(
         rows, limit, list_tag=tag, filters=filters, key=lambda r: position_of(r.timestamp, r.id)
@@ -202,6 +226,7 @@ async def list_all_invocations(
     ),
     agent_uid: str | None = Query(default=None, description=_AGENT_UID_HELP),
     trace_id: str | None = Query(default=None, description=_TRACE_ID_HELP),
+    q: str | None = Query(default=None, description=_Q_HELP),
     repo: MCPInvocationRepo = Depends(get_invocation_repo),  # noqa: B008
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> InvocationListOut:
@@ -228,5 +253,7 @@ async def list_all_invocations(
         limit=limit,
         cursor=cursor,
         trace_id=trace_id,
+        q=q or None,
+        q_resources=resource_service,
     )
     return await _project(page, total, resource_service)

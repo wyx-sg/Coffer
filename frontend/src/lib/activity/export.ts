@@ -1,14 +1,14 @@
 // src/lib/activity/export.ts — "Export filtered records…": every record of the visible tab that matches its filters, as JSON or CSV.
 //
 // The export is not a dump of what happens to be loaded: it pages each log
-// the tab reads through its own route with the same server-side filters,
+// the tab reads through its own route with the same server-side filters (the free text included),
 // applies the same client-side predicate the list applies, and writes
 // exactly those records (spec web-ui "Export the filtered Activity records
 // from the overflow menu"). A cap keeps a runaway log from freezing the tab.
 import {
   fetchAuditPage,
   fetchCallPage,
-  fetchDaemonTail,
+  fetchDaemonPage,
   MAX_PAGE,
   type SourceParams,
 } from "@/lib/api/activity";
@@ -27,9 +27,6 @@ import {
 const EXPORT_CAP = 10_000;
 
 async function readAll(spec: SourceParams): Promise<ActivityRecord[]> {
-  if (spec.source === "daemon") {
-    return fromDaemonTail((await fetchDaemonTail(spec.params, MAX_PAGE)).records);
-  }
   const out: ActivityRecord[] = [];
   let cursor: string | null = null;
   do {
@@ -37,10 +34,14 @@ async function readAll(spec: SourceParams): Promise<ActivityRecord[]> {
       const page = await fetchAuditPage(spec.params, MAX_PAGE, cursor);
       out.push(...page.entries.map(fromAudit));
       cursor = page.next_cursor;
-    } else {
+    } else if (spec.source === "call") {
       const page = await fetchCallPage(spec.params, MAX_PAGE, cursor);
       out.push(...page.invocations.map(fromCall));
       cursor = page.next_cursor;
+    } else {
+      const page = await fetchDaemonPage(spec.params, MAX_PAGE, cursor);
+      out.push(...fromDaemonTail(page.records));
+      cursor = page.next_cursor ?? null;
     }
   } while (cursor && out.length < EXPORT_CAP);
   return out;

@@ -240,7 +240,7 @@ def test_a_remote_that_shares_history_is_still_joined_explicitly(tmp_path: Path)
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="a token waiting for approval is a sign-in problem"
 )
-def test_a_token_waiting_for_approval_is_a_recorded_sign_in_problem(tmp_path: Path) -> None:
+def test_a_token_waiting_for_approval_is_recorded_as_waiting_not_refused(tmp_path: Path) -> None:
     (mac,) = joined(tmp_path, "Mac")
     mac.remotes.put(SyncRemote(url=mac.url, secret_ref="sync/github-token"))
     mac.token.error = SecretBindingPending(["a1"], ["sync"])
@@ -249,9 +249,9 @@ def test_a_token_waiting_for_approval_is_a_recorded_sign_in_problem(tmp_path: Pa
     assert "sync/github-token" in (got.detail or "")
     problem = mac.run(mac.service.status()).problem
     assert problem is not None
-    assert (problem.kind, problem.secret_ref) == ("auth_failed", "sync/github-token")
+    assert (problem.kind, problem.secret_ref) == ("waiting_approval", "sync/github-token")
     items = mac.run(SyncAttentionSource(sync=mac.service).items())
-    assert [i.reason_code for i in items] == ["sync_auth_failed"]
+    assert [i.reason_code for i in items] == ["sync_waiting_approval"]
 
 
 @pytest.mark.acceptance(

@@ -1,10 +1,10 @@
-// src/components/agents/AgentHooksTab.test.tsx — the agent's Hooks tab, one table of every hook it runs.
+// src/components/agents/AgentHooksTab.test.tsx — the agent's Hooks tab: every hook it runs, grouped by event.
 //
 // Spec agent-registry "List every hook in the agent's native config": each
-// declared hook is a row with its event, command, file and matcher, owned by
-// Coffer when it carries Coffer's marker; Coffer's own row reads its health,
-// Codex's trust and its last fire, and offers Repair when out of date or
-// missing. Only the network boundary (`agentsApi`) and the fs transport are mocked.
+// declared hook is listed under its event with its command, matcher and file,
+// marked Coffer when it carries Coffer's marker; Coffer's own hook has its health,
+// Codex's trust and its last fire said once in a status block, with Repair when
+// out of date or missing. Only the network boundary (`agentsApi`) is mocked.
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -17,10 +17,6 @@ import type { AgentHooksOut, AgentOut, CofferHook, NativeHook } from "@/lib/api/
 import { acceptance } from "@/test/acceptance";
 
 vi.mock("@/lib/api/agents", () => ({ agentsApi: { hooks: vi.fn() } }));
-const openMock = vi.fn(() => Promise.resolve());
-vi.mock("@/lib/fsActions", () => ({
-  useFsActions: () => ({ open: openMock, reveal: vi.fn(() => Promise.resolve()) }),
-}));
 const { agentsApi } = await import("@/lib/api/agents");
 const api = vi.mocked(agentsApi);
 
@@ -121,7 +117,8 @@ function renderTab(
   );
 }
 
-const rowOf = async (text: string) => (await screen.findByText(text)).closest("tr") as HTMLElement;
+const eventOf = async (event: string) => within(await screen.findByTestId(`hook-event-${event}`));
+const status = async () => within(await screen.findByTestId("coffer-hook-status"));
 
 afterEach(() => vi.clearAllMocks());
 
@@ -132,26 +129,24 @@ describe("AgentHooksTab", () => {
     expect(
       await screen.findByText("4 hooks in 3 files · 1 is Coffer’s · 3 the agent’s own"),
     ).toBeInTheDocument();
-    // Coffer's row: owned by Coffer, current, with its last fire.
-    const coffer = await rowOf(COFFER_CMD);
-    expect(within(coffer).getByText("SessionStart")).toBeInTheDocument();
-    expect(within(coffer).getByText("Coffer’s")).toBeInTheDocument();
-    expect(within(coffer).getByText("Current")).toBeInTheDocument();
-    expect(within(coffer).getByText(/^fired 2 hours ago$/)).toBeInTheDocument();
-    expect(within(coffer).getByText("~/.claude/settings.json")).toBeInTheDocument();
-    expect(within(coffer).getByText("matcher Any")).toBeInTheDocument();
-    // The agent's own: Active, no invented fire time; a plugin's hook names its plugin.
-    const own = await rowOf("~/.claude/hooks/block-destructive.sh");
-    expect(within(own).getByText("Active")).toBeInTheDocument();
-    expect(within(own).getByText("The agent’s own")).toBeInTheDocument();
-    expect(within(own).getByText("matcher Bash")).toBeInTheDocument();
-    expect(within(own).queryByText(/fired/)).not.toBeInTheDocument();
-    expect(
-      within(await rowOf("${CLAUDE_PLUGIN_ROOT}/hooks/check-secrets.sh")).getByText(
-        "superpowers · hooks.json",
-      ),
-    ).toBeInTheDocument();
-    // A current hook offers no Repair.
+    // Grouped by event: Coffer's hook under SessionStart, marked; a healthy one has no status block.
+    const session = await eventOf("SessionStart");
+    expect(session.getByText(COFFER_CMD)).toBeInTheDocument();
+    expect(session.getByText("Coffer")).toBeInTheDocument();
+    expect(session.getByText(/matcher Any/)).toBeInTheDocument();
+    expect(session.getByText(/~\/\.claude\/settings\.json/)).toBeInTheDocument();
+    expect(screen.queryByTestId("coffer-hook-status")).not.toBeInTheDocument();
+    // The agent's own, with its matcher; a plugin's hook names its plugin.
+    const pre = await eventOf("PreToolUse");
+    expect(pre.getByText("~/.claude/hooks/block-destructive.sh")).toBeInTheDocument();
+    expect(pre.getByText(/matcher Bash/)).toBeInTheDocument();
+    expect(pre.queryByText("Coffer")).not.toBeInTheDocument();
+    expect(pre.getByText(/superpowers · hooks\.json/)).toBeInTheDocument();
+    expect((await eventOf("Stop")).getByText("afplay Glass.aiff")).toBeInTheDocument();
+    // Events come in the order the agent fires them; no row opens a file.
+    const titles = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(titles).toEqual(["SessionStart", "PreToolUse", "Stop"]);
+    expect(screen.queryByRole("button", { name: /open/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /repair/i })).not.toBeInTheDocument();
     expect(
       screen.getByText(
@@ -181,19 +176,16 @@ describe("AgentHooksTab", () => {
       expect(
         await screen.findByText("4 hooks in 3 files · 1 is Coffer’s · 3 the agent’s own"),
       ).toBeInTheDocument();
-      // One row for all four entries, never the events joined into one string.
-      expect(screen.getAllByText(COFFER_CMD)).toHaveLength(1);
-      const row = await rowOf(COFFER_CMD);
-      expect(within(row).getByText("Memory hook · 4 events")).toBeInTheDocument();
-      for (const event of ["PostToolUse", "PreToolUse", "SessionStart", "UserPromptSubmit"]) {
-        expect(within(row).getByText(event)).toBeInTheDocument();
+      // One hook, listed under each event it sits on — never the events joined into one string.
+      for (const event of ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse"]) {
+        expect((await eventOf(event)).getByText(COFFER_CMD)).toBeInTheDocument();
       }
-      expect(within(row).getByText("matcher Bash")).toBeInTheDocument();
+      expect(screen.getAllByText(COFFER_CMD)).toHaveLength(4);
       expect(screen.queryByText(/PostToolUse,PreToolUse/)).not.toBeInTheDocument();
     },
   );
 
-  test("a missing Coffer hook lists its events as chips too", async () => {
+  test("a missing Coffer hook is said once in the status block, not per event", async () => {
     renderTab({
       items: [],
       coffer_hook: {
@@ -203,10 +195,10 @@ describe("AgentHooksTab", () => {
       },
       parse_errors: [],
     });
-    const row = await rowOf(en.agents.hooksTab.missing.title);
-    expect(within(row).getByText("Memory hook · 4 events")).toBeInTheDocument();
-    expect(within(row).getByText("UserPromptSubmit")).toBeInTheDocument();
-    expect(screen.queryByText(/PostToolUse,PreToolUse/)).not.toBeInTheDocument();
+    const block = await status();
+    expect(block.getByText(en.agents.hooksTab.missing.title)).toBeInTheDocument();
+    expect(block.getByText("Missing")).toBeInTheDocument();
+    expect(screen.getAllByText(en.agents.hooksTab.missing.title)).toHaveLength(1);
   });
 
   acceptance("agent-registry", "report a stale Coffer hook", async () => {
@@ -219,14 +211,14 @@ describe("AgentHooksTab", () => {
       },
       { onRepair },
     );
-    const row = await rowOf("coffer memory hook --agent-uid agt_stale");
-    expect(await within(row).findByText("Out of date")).toBeInTheDocument();
-    expect(within(row).getByText(/^fired /)).toBeInTheDocument();
-    fireEvent.click(within(row).getByRole("button", { name: "Repair Coffer’s memory hook" }));
+    const block = await status();
+    expect(await block.findByText("Out of date")).toBeInTheDocument();
+    expect(block.getByText(/^fired /)).toBeInTheDocument();
+    fireEvent.click(block.getByRole("button", { name: "Repair Coffer’s memory hook" }));
     expect(onRepair).toHaveBeenCalledTimes(1);
   });
 
-  test("a missing Coffer hook gets its own row with Repair, and no Open file", async () => {
+  test("a missing Coffer hook offers Repair, and no Open file", async () => {
     const onRepair = vi.fn();
     renderTab(
       {
@@ -239,15 +231,13 @@ describe("AgentHooksTab", () => {
     expect(
       await screen.findByText("1 hook in 1 file · Coffer’s hook missing · 1 the agent’s own"),
     ).toBeInTheDocument();
-    const row = await rowOf(en.agents.hooksTab.missing.title);
+    const block = await status();
     expect(
-      within(row).getByText(
-        "Taken out of ~/.codex/hooks.json, so Codex starts sessions without memory.",
-      ),
+      block.getByText("Taken out of ~/.codex/hooks.json, so Codex starts sessions without memory."),
     ).toBeInTheDocument();
-    expect(within(row).getByText("Missing")).toBeInTheDocument();
-    expect(within(row).queryByRole("button", { name: /open/i })).not.toBeInTheDocument();
-    fireEvent.click(within(row).getByRole("button", { name: /repair/i }));
+    expect(block.getByText("Missing")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /open/i })).not.toBeInTheDocument();
+    fireEvent.click(block.getByRole("button", { name: /repair/i }));
     expect(onRepair).toHaveBeenCalled();
   });
 
@@ -262,11 +252,11 @@ describe("AgentHooksTab", () => {
       { items: [COFFER_ROW], coffer_hook: { ...COFFER, trust: "untrusted" }, parse_errors: [] },
       { type: "codex" },
     );
-    const row = await rowOf(COFFER_CMD);
-    expect(await within(row).findByText("Untrusted")).toBeInTheDocument();
-    expect(within(row).getByText("not approved in Codex")).toBeInTheDocument();
-    expect(within(row).getByText("Codex hasn’t approved this hook")).toBeInTheDocument();
-    expect(within(row).getByRole("button", { name: "Copy /hooks" })).toBeInTheDocument();
+    const block = await status();
+    expect(await block.findByText("Untrusted")).toBeInTheDocument();
+    expect(block.getByText("not approved in Codex")).toBeInTheDocument();
+    expect(block.getByText("Codex hasn’t approved this hook")).toBeInTheDocument();
+    expect(block.getByRole("button", { name: "Copy /hooks" })).toBeInTheDocument();
   });
 
   test.each([
@@ -277,7 +267,7 @@ describe("AgentHooksTab", () => {
       { items: [COFFER_ROW], coffer_hook: { ...COFFER, trust }, parse_errors: [] },
       { type: "codex" },
     );
-    expect(await within(await rowOf(COFFER_CMD)).findByText(word)).toBeInTheDocument();
+    expect(await (await status()).findByText(word)).toBeInTheDocument();
   });
 
   test("a hook that never fired explains why, re-reads and opens Activity", async () => {
@@ -285,27 +275,21 @@ describe("AgentHooksTab", () => {
       { items: [COFFER_ROW], coffer_hook: { ...COFFER, last_fired_at: null }, parse_errors: [] },
       { type: "codex" },
     );
-    const row = await rowOf(COFFER_CMD);
-    expect(await within(row).findByText("Never fired")).toBeInTheDocument();
-    expect(within(row).getByText(en.agents.hooksTab.neverFired.title)).toBeInTheDocument();
+    const block = await status();
+    expect(await block.findByText("Never fired")).toBeInTheDocument();
+    expect(block.getByText(en.agents.hooksTab.neverFired.title)).toBeInTheDocument();
     expect(
-      within(row).getByText(/this Codex build doesn’t load ~\/\.claude\/settings\.json/),
+      block.getByText(/this Codex build doesn’t load ~\/\.claude\/settings\.json/),
     ).toBeInTheDocument();
 
-    fireEvent.click(within(row).getByRole("button", { name: "Check again" }));
+    fireEvent.click(block.getByRole("button", { name: "Check again" }));
     await waitFor(() => expect(api.hooks).toHaveBeenCalledTimes(2));
-    fireEvent.click(within(row).getByRole("button", { name: "Open Activity" }));
+    fireEvent.click(block.getByRole("button", { name: "Open Activity" }));
     expect(await screen.findByTestId("activity")).toBeInTheDocument();
   });
 
-  test("Open file opens the declaring file in the editor", async () => {
-    renderTab({ items: OWN_ROWS, coffer_hook: null, parse_errors: [] });
-    fireEvent.click(await screen.findByRole("button", { name: `Open ${LOCAL}` }));
-    await waitFor(() => expect(openMock).toHaveBeenCalledWith(LOCAL, expect.anything()));
-  });
-
   // Spec agent-registry "Filter an agent's installed kinds by owner" (the scenario itself is on the Skills tab).
-  test("the owner filter narrows the table to Coffer's hook and keeps it in the URL", async () => {
+  test("the owner filter narrows the list to Coffer's hook and keeps it in the URL", async () => {
     renderTab({ items: [COFFER_ROW, ...OWN_ROWS], coffer_hook: COFFER, parse_errors: [] });
     await screen.findByText(COFFER_CMD);
     fireEvent.click(screen.getByRole("radio", { name: "Coffer’s" }));

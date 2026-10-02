@@ -14,6 +14,8 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { History } from "lucide-react";
 
+import { HelpTip } from "@/components/HelpTip";
+import { Section, SectionStack } from "@/components/Section";
 import { EmptyState } from "@/components/EmptyState";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { KnowledgeChangeRow } from "@/components/knowledge/KnowledgeChangeRow";
@@ -66,7 +68,7 @@ export function KnowledgeRecentChanges({ collections, modelSet }: Props) {
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex shrink-0 flex-wrap items-center gap-3 px-8 pt-5">
         <h2 className="text-[16px] font-bold">{t("knowledge.recent.title")}</h2>
-        <span className="text-xs text-text-muted">{t("knowledge.recent.window")}</span>
+        <HelpTip>{t("knowledge.recent.window")}</HelpTip>
         <span className="ml-auto flex flex-wrap items-center gap-2">
           <Select
             value={collection ?? ALL}
@@ -97,7 +99,7 @@ export function KnowledgeRecentChanges({ collections, modelSet }: Props) {
       </header>
 
       <div className="min-h-0 flex-1 overflow-auto px-8 pb-7 pt-3.5">
-        <div className="flex max-w-[760px] flex-col gap-[18px]">
+        <SectionStack className="max-w-[760px]">
           {modelSet !== false && changes.data ? (
             <KnowledgeWaitingList waiting={changes.data.waiting} collections={collections} />
           ) : null}
@@ -124,10 +126,11 @@ export function KnowledgeRecentChanges({ collections, modelSet }: Props) {
             <EmptyState icon={History} title={t("knowledge.recent.empty")} />
           ) : (
             groupByDay(shown).map(([day, group]) => (
-              <section key={day} className="flex flex-col gap-2">
-                <h3 className="flex min-h-[26px] items-center text-sm font-semibold">
-                  {day === "today" || day === "yesterday" ? t(`knowledge.recent.${day}`) : day}
-                </h3>
+              <Section
+                key={day}
+                title={day === "today" || day === "yesterday" ? t(`knowledge.recent.${day}`) : day}
+                gap="snug"
+              >
                 <ul className="flex flex-col">
                   {group.map((c) => (
                     <KnowledgeChangeRow
@@ -139,10 +142,10 @@ export function KnowledgeRecentChanges({ collections, modelSet }: Props) {
                     />
                   ))}
                 </ul>
-              </section>
+              </Section>
             ))
           )}
-        </div>
+        </SectionStack>
       </div>
     </div>
   );

@@ -33,6 +33,8 @@ export interface AgentCounts {
   sessions?: number;
   /** Native memory stores. */
   memoryStores?: number;
+  /** Config files and folders the agent has on disk (the ones that exist). */
+  configFiles?: number;
 }
 
 /** Whether a resource with these reach fields reaches the agent `uid` (an unscoped one reaches every agent). */

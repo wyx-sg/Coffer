@@ -1,10 +1,11 @@
-// src/components/chat/FilesChangedCard.tsx — "Files changed · n" under an
+// src/components/chat/FilesChangedCard.tsx — "Files changed" under an
 // agent's reply: each file its tool calls wrote, with the lines added and
 // removed (lib/conversations/filesChanged). Nothing renders for a reply that
 // changed no file.
 import { useTranslation } from "react-i18next";
 import { FileText } from "lucide-react";
 
+import { Section } from "@/components/Section";
 import { LineCounts } from "@/components/change-preview/LineCounts";
 import type { FileChange } from "@/lib/conversations/filesChanged";
 
@@ -12,13 +13,12 @@ export function FilesChangedCard({ files }: { files: FileChange[] }) {
   const { t } = useTranslation();
   if (files.length === 0) return null;
   return (
-    <section
-      className="overflow-hidden rounded-lg border border-border-subtle bg-surface-raised text-xs"
-      aria-label={t("conversations.files.title", { count: files.length })}
+    <Section
+      title={t("conversations.files.title")}
+      gap="tight"
+      labelled
+      className="overflow-hidden rounded-lg border border-border-subtle bg-surface-raised text-xs [&>div:first-child]:border-b [&>div:first-child]:border-border-subtle [&>div:first-child]:px-3"
     >
-      <h3 className="border-b border-border-subtle px-3 py-2 font-semibold text-text-muted">
-        {t("conversations.files.title", { count: files.length })}
-      </h3>
       <ul>
         {files.map((f) => (
           <li
@@ -31,6 +31,6 @@ export function FilesChangedCard({ files }: { files: FileChange[] }) {
           </li>
         ))}
       </ul>
-    </section>
+    </Section>
   );
 }

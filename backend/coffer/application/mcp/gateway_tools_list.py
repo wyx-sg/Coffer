@@ -19,7 +19,7 @@ of and a caller reading one should be able to see the other.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime
 from typing import Any
 
@@ -52,6 +52,7 @@ async def build_tools_listing(
     ensure_subscribed: Callable[[str], Awaitable[None]],
     servers: list[str],
     hidden: frozenset[str] = frozenset(),
+    exposure: Mapping[str, str] | None = None,
     builtin: BuiltinToolRegistry,
     invocations: MCPInvocationRepoPort,
     tiering: TieringConfig,
@@ -62,6 +63,8 @@ async def build_tools_listing(
     outcome = await list_tools_across(discovery, ensure_subscribed, servers, hidden)
     tools = list(outcome.items)
     append_builtin_tools(tools, builtin)
-    tiered = await apply_tiering(tools, invocations=invocations, config=tiering, clock=clock)
+    tiered = await apply_tiering(
+        tools, invocations=invocations, config=tiering, clock=clock, exposure=exposure
+    )
     degraded.record(outcome.failed_servers)
     return ToolsListing(tiered.listed, tiered.hidden_count, outcome.failed_servers)

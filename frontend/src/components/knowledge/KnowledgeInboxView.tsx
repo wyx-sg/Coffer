@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import type { CollectionOut } from "@/lib/api/knowledge";
-import { timeAgo } from "@/lib/agents/hookRows";
+import { timeAgo } from "@/lib/timeAgo";
 import { agentLabel } from "@/lib/knowledge/changes";
 import { collectionPath } from "@/lib/knowledge/routes";
 import { curatingLabel } from "@/lib/knowledge/text";

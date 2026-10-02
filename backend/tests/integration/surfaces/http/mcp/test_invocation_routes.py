@@ -558,3 +558,36 @@ async def test_total_counts_every_matching_row_on_every_page(inv_client: tuple) 
     ).json()
     assert per_server["total"] == 5
     assert (await client.get("/api/v1/mcp/invocations")).json()["total"] == 7
+
+
+# ---------------------------------------------------------------------------
+# Free-text search is the database's
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_q_matches_the_tool_the_error_and_the_servers_current_name(
+    inv_client: tuple,
+) -> None:
+    client, _engine, repo, _rsvc, uids = inv_client
+    await repo.insert(_make_invocation(uids["fs"], capability_key="read_file", offset_seconds=30))
+    await repo.insert(_make_invocation(uids["fs"], capability_key="write_file", offset_seconds=20))
+    await repo.insert(
+        _make_invocation(uids["jira"], capability_key="search", status="error", offset_seconds=10)
+    )
+
+    by_tool = (await client.get("/api/v1/mcp/invocations", params={"q": "WRITE"})).json()
+    by_error = (await client.get("/api/v1/mcp/invocations", params={"q": "boom"})).json()
+    by_server = (await client.get("/api/v1/mcp/invocations", params={"q": "jira"})).json()
+    paged = (await client.get("/api/v1/mcp/invocations", params={"q": "file", "limit": 1})).json()
+
+    assert [i["capability_key"] for i in by_tool["invocations"]] == ["write_file"]
+    assert [i["capability_key"] for i in by_error["invocations"]] == ["search"]
+    assert [i["capability_key"] for i in by_server["invocations"]] == ["search"]
+    assert by_server["total"] == 1
+    assert paged["total"] == 2 and paged["next_cursor"] is not None
+    # The cursor belongs to the query it was issued for.
+    other = await client.get(
+        "/api/v1/mcp/invocations", params={"q": "jira", "limit": 1, "cursor": paged["next_cursor"]}
+    )
+    assert other.status_code == 400

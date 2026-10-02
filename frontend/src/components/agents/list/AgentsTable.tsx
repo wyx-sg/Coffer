@@ -39,19 +39,22 @@ export function AgentsTable({ rows, isLoading }: Props) {
     {
       key: "agent",
       header: t("agents.list.col.agent"),
+      // Bounded: in an auto-layout table the one column without a width takes
+      // the slack, and that is the config directory, not the name.
+      className: "w-[240px] max-w-[260px]",
       cell: ({ row }) => <AgentNameCell row={row} />,
     },
     {
       key: "config",
       header: t("agents.list.col.configDir"),
-      className: "w-[118px]",
+      className: "min-w-[140px]",
       cell: ({ row }) => <ConfigDirCell row={row} />,
     },
     {
       key: "model",
       header: t("agents.list.col.model"),
-      className: "w-[132px]",
-      cell: ({ row }) => <ModelCell uid={row.uid} />,
+      className: "w-[160px]",
+      cell: ({ row }) => <ModelCell uid={row.uid} type={row.type} />,
     },
     {
       key: "skills",
@@ -68,7 +71,7 @@ export function AgentsTable({ rows, isLoading }: Props) {
     {
       key: "plugins",
       header: t("agents.list.col.plugins"),
-      className: "w-[50px]",
+      className: "w-[44px]",
       cell: ({ row }) => <CountCell uid={row.uid} kind="plugins" />,
     },
     {

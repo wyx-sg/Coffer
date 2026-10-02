@@ -36,7 +36,6 @@ interface Props {
   onTabChange: (tab: string) => void;
   showCopies: boolean;
   onCloseCopies: () => void;
-  onCheckCopies: () => void;
   selected: SkillOut[];
   onClearSelection: () => void;
   onAdd: (source: SkillAddSource) => void;
@@ -82,7 +81,6 @@ export function SkillsReadingPane(props: Props) {
           tab={props.tab}
           onTabChange={props.onTabChange}
           onDeleted={props.onDeleted}
-          onCheckCopies={props.onCheckCopies}
         />
       </Suspense>
     );

@@ -40,7 +40,7 @@ from coffer.domain.sync.handoffs import (
     scrub_git_text,
 )
 from coffer.domain.sync.remote import SyncRemote
-from coffer.domain.sync.rounds import AppliedChange, RoundRecord, RoundStatus
+from coffer.domain.sync.rounds import APPROVAL_WAIT, AppliedChange, RoundRecord, RoundStatus
 from coffer.domain.sync.stops import ConflictFile, HoldDirection, Stop, StopKind
 from coffer.domain.vault.layout import KNOWLEDGE, MACHINES, MANIFEST, RESOURCES, SKILLS
 
@@ -59,7 +59,6 @@ _PROBLEMS = {
     RoundStatus.PLAINTEXT_FOUND: "plaintext_found",
     RoundStatus.PAUSED_CLOUD_FOLDER: "cloud_folder",
     RoundStatus.REMOTE_TOO_NEW: "layout",
-    RoundStatus.REMOTE_TOO_OLD: "layout",
     RoundStatus.FAILED: "failed",
 }
 
@@ -300,6 +299,15 @@ def _problem(last: RoundRecord, remote: SyncRemote) -> Problem | None:
     if kind is None:
         return None
     message = scrub_git_text(last.detail or last.status.value.replace("_", " "))
+    if kind == "auth_failed" and APPROVAL_WAIT in message:
+        # Not a refused sign-in: the token waits for a person in the desktop
+        # app, so the fix is to approve it there.
+        return Problem(
+            kind="waiting_approval",
+            message=message,
+            secret_ref=remote.secret_ref,
+            since=last.finished_at,
+        )
     return Problem(
         kind=kind,
         message=message,

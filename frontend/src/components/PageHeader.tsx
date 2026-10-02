@@ -1,13 +1,15 @@
 // src/components/PageHeader.tsx — the one page header for every surface.
 //
 // The boards draw one header (1.2 App shell, every list and detail board): an
-// optional "← list" link above, then one row — the title (18/650), anything
+// optional "← list" link above (in the desktop shell it moves into the title bar), then one row — the title (18/650), anything
 // that sits beside it (a count, a status, "Unsaved changes"), and the page's
 // actions pushed to the right — and an optional subtitle under the row. Detail
 // pages keep one fixed action order: reach → test/refresh → edit → delete.
 import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+
+import { InTitleBar } from "@/components/shell/titleBarSlot";
 
 interface Props {
   title: ReactNode;
@@ -20,18 +22,25 @@ interface Props {
   back?: { to: string; label: string };
 }
 
+/** The "← label" link — also used alone by a page whose header is its own. */
+export function BackLink({ to, label }: { to: string; label: string }) {
+  return (
+    <InTitleBar>
+      <Link
+        to={to}
+        className="inline-flex items-center gap-1 self-start text-xs text-text-subtle transition-colors duration-fast hover:text-text"
+      >
+        <ArrowLeft className="size-3.5" aria-hidden />
+        {label}
+      </Link>
+    </InTitleBar>
+  );
+}
+
 export function PageHeader({ title, subtitle, actions, badges, back }: Props) {
   return (
     <header className="flex flex-col gap-1.5">
-      {back ? (
-        <Link
-          to={back.to}
-          className="inline-flex items-center gap-1 self-start text-xs text-text-subtle transition-colors duration-fast hover:text-text"
-        >
-          <ArrowLeft className="size-3.5" aria-hidden />
-          {back.label}
-        </Link>
-      ) : null}
+      {back ? <BackLink to={back.to} label={back.label} /> : null}
       <div className="flex min-h-control-md flex-wrap items-center gap-x-2.5 gap-y-2">
         <h1 className="flex min-w-0 items-center gap-2.5 text-lg font-bold">{title}</h1>
         {badges}

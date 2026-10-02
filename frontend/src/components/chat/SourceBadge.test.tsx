@@ -64,7 +64,7 @@ describe("SourceBadge", () => {
         <SourceBadge conversation={makeConversation({ channel_binding: makeBinding() })} />
       </TooltipProvider>,
     );
-    expect(screen.getByText("ST")).toBeInTheDocument();
+    expect(document.querySelector('[data-platform="seatalk"] img')).not.toBeNull();
     expect(screen.getByText("SeaTalk · DM")).toBeInTheDocument();
   });
 });

@@ -10,32 +10,25 @@ import sys
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 import coffer
 from coffer import build_channel
 from coffer.application.agent.connection_service import AgentConnectionService
 from coffer.application.audit_service import AuditService
 from coffer.application.features import FeatureService
-from coffer.application.log_reader import (
-    at_least,
-    matches_level,
-    parse_log_lines,
-    tail_lines,
-)
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon import login_service, pid_lock
 from coffer.infrastructure.daemon.phase import get_daemon_phase, set_daemon_phase
-from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
 from coffer.infrastructure.vault.home import coffer_home, daemon_json_path
 from coffer.surfaces.http import daemon_port
 from coffer.surfaces.http.agent_dependencies import get_agent_connection_service_optional
 from coffer.surfaces.http.auth import require_token, set_active_token
+from coffer.surfaces.http.daemon_log_routes import router as log_router
 from coffer.surfaces.http.daemon_runtime import runtime_health
 from coffer.surfaces.http.dependencies import (
     get_actor,
@@ -48,8 +41,6 @@ from coffer.surfaces.http.feature_dependencies import (
 )
 from coffer.surfaces.http.mcp.dependencies import get_health_repo_optional
 from coffer.surfaces.http.schemas import (
-    DaemonLogListOut,
-    DaemonLogRecordOut,
     DaemonResidencyIn,
     DaemonResidencyOut,
     DaemonStatusOut,
@@ -58,6 +49,7 @@ from coffer.surfaces.http.schemas import (
 )
 
 router = APIRouter(prefix="/api/v1/daemon", tags=["daemon"])
+router.include_router(log_router)
 
 # Daemon lifecycle phase: owned by infrastructure.daemon.phase (the entry's
 # uvicorn server flips it to "draining" the moment shutdown begins, before the
@@ -267,74 +259,3 @@ async def put_residency(
 async def shutdown_daemon() -> Response:
     _schedule_shutdown()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# === daemon log tail ===
-
-
-def _lift(record: dict[str, Any], key: str) -> str | None:
-    """A parsed field as a string, or None when the line did not carry it."""
-    return str(record[key]) if key in record else None
-
-
-@router.get(
-    "/logs",
-    response_model=DaemonLogListOut,
-    # The router itself is unauthenticated so /status can serve as a readiness
-    # probe; log contents are not probe material, so this route carries its own
-    # token dependency.
-    dependencies=[Depends(require_token)],
-)
-async def list_daemon_logs(
-    since: datetime | None = Query(default=None),  # noqa: B008
-    errors_only: bool = Query(default=False),
-    #: Severity floor: everything at or above it survives. "Errors only" was
-    #: the only choice this surface offered, which made a warning — the level
-    #: most worth noticing before something breaks — visible only by reading
-    #: the whole file. ``errors_only`` stays for callers that already send it.
-    level: str = Query(default=""),
-    limit: int = Query(default=100, ge=1, le=500),
-    trace_id: str | None = Query(
-        default=None,
-        description="Only the lines written under this correlation id (a request's or a turn's).",
-    ),
-) -> DaemonLogListOut:
-    """The tail of ``daemon.log``, newest-first — the same record ``coffer log daemon``
-    reads, for the human looking at the Activity page.
-
-    The file interleaves several writers' formats (see ``log_reader``); they
-    are normalised there onto the same fields, so every row here carries the
-    time, level and logger its line actually stated."""
-    # The lexical prefilter below only holds while both sides are UTC: the log
-    # writes `…Z`, so a `since` carrying `+08:00` would compare as a later
-    # string than the very instant it names and cut the window at the top.
-    # Normalise here, once, rather than per line. A naive `since` is read as
-    # UTC, which is the only clock the log keeps.
-    if since is not None:
-        since = since.replace(tzinfo=UTC) if since.tzinfo is None else since.astimezone(UTC)
-    since_iso = since.isoformat() if since is not None else None
-    records: list[DaemonLogRecordOut] = []
-    log_file = log_dir() / "daemon.log"
-    # Parse oldest-first — a traceback is folded into the record above it —
-    # then walk the result backwards to serve the page newest-first.
-    for record in reversed(parse_log_lines(tail_lines(log_file))):
-        if len(records) >= limit:
-            break
-        if not matches_level(record, errors_only) or not at_least(record, level):
-            continue
-        if trace_id is not None and record.get("trace_id") != trace_id:
-            continue
-        at = str(record.get("timestamp", ""))
-        # Cheap prefilter: ISO-8601 sorts lexically, so a string compare
-        # is enough and costs no parsing per line.
-        if since_iso is not None and at and at < since_iso:
-            break
-        records.append(
-            DaemonLogRecordOut(
-                timestamp=_lift(record, "timestamp"),
-                level=_lift(record, "level"),
-                event=_lift(record, "event"),
-                record=record,
-            )
-        )
-    return DaemonLogListOut(records=records, path=str(log_file))

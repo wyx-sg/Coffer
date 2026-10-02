@@ -27,7 +27,7 @@ export function ModalitySelect({ value, onChange, disabled, label }: Props) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as Modality)} disabled={disabled}>
       <SelectTrigger
-        className="h-7 w-32 text-xs"
+        className="h-control-sm w-full text-xs"
         aria-label={t("providers.models.typeOf", { id: label })}
       >
         <SelectValue />

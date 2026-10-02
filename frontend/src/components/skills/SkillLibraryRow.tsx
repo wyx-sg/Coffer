@@ -1,13 +1,13 @@
 // frontend/src/components/skills/SkillLibraryRow.tsx
 // One row of the Skills library: the skill's name (with "Built-in" beside
-// Coffer's own), a second line that is its description unless something needs
-// saying (lib/skills/attention.ts — its master is gone, a folder is in the way
-// of an agent's link, a command it needs is missing, its Git source is
-// unreachable or has an update), and its reach on the right — Off, All agents,
+// Coffer's own), a second line only when something needs saying
+// (lib/skills/attention.ts — its master is gone, a folder is in the way of an
+// agent's link, a command it needs is missing, its Git source is unreachable
+// or has an update; the description is on the skill's own page, not in the
+// list), and its reach on the right — Off, All agents,
 // or the badges of the agents it is restricted to. The checkbox feeds the
 // selection bar; it shows on hover, and on every row while any is ticked. The
-// built-in row's is disabled, since the bar's one destructive action would
-// have to refuse it.
+// built-in row has none: it is never part of a bulk action.
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -113,21 +113,22 @@ export function SkillLibraryRow({
         current ? "bg-surface-selected" : "hover:bg-surface-hover",
       )}
     >
-      <span
-        className={cn(
-          "shrink-0 items-center",
-          selecting
-            ? "inline-flex"
-            : "hidden group-focus-within:inline-flex group-hover:inline-flex",
-        )}
-      >
-        <Checkbox
-          checked={checked}
-          disabled={skill.builtin}
-          onChange={(e) => onCheckedChange(e.target.checked)}
-          aria-label={`${t("common.bulk.selectRow")}: ${skill.name}`}
-        />
-      </span>
+      {skill.builtin ? null : (
+        <span
+          className={cn(
+            "shrink-0 items-center",
+            selecting || checked
+              ? "inline-flex"
+              : "hidden group-focus-within:inline-flex group-hover:inline-flex",
+          )}
+        >
+          <Checkbox
+            checked={checked}
+            onChange={(e) => onCheckedChange(e.target.checked)}
+            aria-label={`${t("common.bulk.selectRow")}: ${skill.name}`}
+          />
+        </span>
+      )}
       <Link
         to={to}
         onClick={onOpen}
@@ -146,11 +147,7 @@ export function SkillLibraryRow({
               </span>
             ) : null}
           </span>
-          {attention ? (
-            <Subline item={attention} agents={agents} />
-          ) : (
-            <span className="truncate text-xs text-text-muted">{skill.description}</span>
-          )}
+          {attention ? <Subline item={attention} agents={agents} /> : null}
         </span>
         <span className="shrink-0">
           <ReachMark skill={skill} agents={agents} />

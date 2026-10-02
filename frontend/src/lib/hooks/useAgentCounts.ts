@@ -17,6 +17,7 @@ import {
 import { useAgentNativeMemory } from "@/lib/hooks/useAgentNativeMemory";
 import { useAgentTranscripts } from "@/lib/hooks/useAgentTranscripts";
 import {
+  useAgentConfigFiles,
   useAgentHooks,
   useAgentMcpEntries,
   useAgentPlugins,
@@ -36,6 +37,7 @@ export function useAgentCounts(uid: string): AgentCounts {
   // One row is enough: the listing's `total` is the whole count.
   const sessions = useAgentTranscripts(uid, { limit: 1 });
   const memory = useAgentNativeMemory(uid);
+  const configFiles = useAgentConfigFiles(uid);
 
   return useMemo<AgentCounts>(() => {
     if (!uid) return {};
@@ -52,6 +54,7 @@ export function useAgentCounts(uid: string): AgentCounts {
       hooks: hookCounts(hooks.data),
       sessions: sessions.data?.total,
       memoryStores: memory.data?.items.length,
+      configFiles: configFiles.data?.filter((f) => f.exists).length,
     };
   }, [
     uid,
@@ -63,5 +66,6 @@ export function useAgentCounts(uid: string): AgentCounts {
     hooks.data,
     sessions.data,
     memory.data,
+    configFiles.data,
   ]);
 }

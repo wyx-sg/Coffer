@@ -11,10 +11,11 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Sparkles } from "lucide-react";
 
+import { Section } from "@/components/Section";
 import { KnowledgeWriterMark } from "@/components/knowledge/KnowledgeWriterMark";
 import { Button } from "@/components/ui/button";
 import type { CollectionOut, WaitingItemOut } from "@/lib/api/knowledge";
-import { timeAgo } from "@/lib/agents/hookRows";
+import { timeAgo } from "@/lib/timeAgo";
 import { agentLabel } from "@/lib/knowledge/changes";
 import { collectionPath } from "@/lib/knowledge/routes";
 import { curatingLabel } from "@/lib/knowledge/text";
@@ -39,33 +40,27 @@ export function KnowledgeWaitingList({ waiting, collections }: Props) {
   const busy = run !== null || curate.isPending;
 
   return (
-    <section className="flex flex-col gap-2" aria-label={t("knowledge.recent.waitingTitle")}>
-      <div className="flex min-h-[26px] items-center gap-2">
-        <h3 className="text-sm font-semibold">{t("knowledge.recent.waitingTitle")}</h3>
-        {busy ? (
-          <span className="text-xs text-text-subtle">{curatingLabel(t, run)}</span>
-        ) : waiting.length > 0 ? (
-          <span className="text-xs text-text-subtle">
-            {t("knowledge.recent.waitingCount", { count: waiting.length })} ·{" "}
-            {t("knowledge.inbox.automatic")}
-          </span>
-        ) : null}
-        {waiting.length > 0 && !busy ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-auto"
-            onClick={() => curate.mutate(targets)}
-          >
+    <Section
+      title={t("knowledge.recent.waitingTitle")}
+      help={t("knowledge.inbox.automatic")}
+      gap="snug"
+      labelled
+      aside={
+        busy ? <span className="text-xs text-text-subtle">{curatingLabel(t, run)}</span> : null
+      }
+      actions={
+        waiting.length > 0 && !busy ? (
+          <Button variant="ghost" size="sm" onClick={() => curate.mutate(targets)}>
             <Sparkles aria-hidden />
             {t("knowledge.curate.now")}
           </Button>
-        ) : null}
-      </div>
+        ) : null
+      }
+    >
       {waiting.length === 0 ? (
         <p className="text-xs text-text-subtle">{t("knowledge.recent.nothingWaiting")}</p>
       ) : (
-        <ul className="divide-y divide-border-subtle overflow-hidden rounded-lg border border-border bg-surface-raised">
+        <ul className="divide-y divide-border-subtle">
           {waiting.map((w) => {
             const uid = uidOf.get(w.collection);
             const writer = w.submitted_by === "user" ? "user" : "agent";
@@ -97,6 +92,6 @@ export function KnowledgeWaitingList({ waiting, collections }: Props) {
           })}
         </ul>
       )}
-    </section>
+    </Section>
   );
 }

@@ -14,11 +14,13 @@ interface Props {
   onChange: (next: string | null) => void;
   /** Read-only: the binding cannot carry an effort (yet), or nothing writes it. */
   readOnly?: boolean;
+  /** Grey the whole control out (it is not the agent's to set), not just lock it. */
+  disabledLook?: boolean;
   /** The muted line under the control. */
   hint: string;
 }
 
-export function EffortControl({ levels, value, onChange, readOnly, hint }: Props) {
+export function EffortControl({ levels, value, onChange, readOnly, disabledLook, hint }: Props) {
   const { t } = useTranslation();
   const label = (level: string) =>
     KNOWN_LEVELS.includes(level) ? t(`agents.modelTab.effort.levels.${level}`) : level;
@@ -26,12 +28,13 @@ export function EffortControl({ levels, value, onChange, readOnly, hint }: Props
   const current = value ?? DEFAULT;
 
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
+    <div className={cn("flex min-w-0 flex-col gap-1.5", disabledLook && "opacity-60")}>
       <span className="text-xs font-label text-text">{t("agents.modelTab.effort.label")}</span>
       <div
         role="radiogroup"
         aria-label={t("agents.modelTab.effort.label")}
         aria-readonly={readOnly || undefined}
+        aria-disabled={disabledLook || undefined}
         className="inline-flex flex-wrap gap-0.5 self-start rounded-md border border-border-subtle bg-surface-sunken p-[3px]"
       >
         {options.map((option) => {
@@ -45,7 +48,7 @@ export function EffortControl({ levels, value, onChange, readOnly, hint }: Props
               disabled={readOnly}
               onClick={() => onChange(option === DEFAULT ? null : option)}
               className={cn(
-                "h-6 rounded-sm px-2.5 text-xs font-label outline-none transition-colors duration-fast focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-default",
+                "h-6 rounded-sm px-2.5 text-xs font-label outline-none transition-colors duration-fast focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-not-allowed",
                 checked
                   ? "bg-surface-raised text-text shadow-lifted"
                   : "text-text-muted enabled:hover:text-text",

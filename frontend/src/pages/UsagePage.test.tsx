@@ -332,7 +332,7 @@ describe("subscription quota", () => {
     expect(
       screen.getByText(/codex app-server exited before answering\. Last tried \d\d:\d\d\./),
     ).toBeInTheDocument();
-    fireEvent.click(within(quotaSection()).getByRole("button", { name: "Try again" }));
+    fireEvent.click(within(quotaSection()).getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
     expect(post).toHaveBeenCalledWith("/usage/quota/refresh");
     expect(within(quotaSection()).getByText("No reading")).toBeInTheDocument();

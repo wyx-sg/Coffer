@@ -59,13 +59,11 @@ describe("SyncDeletionReviewPage", () => {
       "14 files2 foldersdeleted on Mac mini",
     );
     const [chat, pdf] = screen.getAllByTestId("sync-held-group");
-    expect(within(chat!).getByRole("heading")).toHaveTextContent(
-      "Knowledge · archive/chat-bot · 12 of 20 files",
-    );
+    expect(within(chat!).getByRole("heading")).toHaveTextContent("Knowledge · archive/chat-bot");
     // Six paths are listed, the other six counted.
     expect(within(chat!).getAllByRole("listitem")).toHaveLength(7);
     expect(chat).toHaveTextContent("…and 6 more");
-    expect(within(pdf!).getByRole("heading")).toHaveTextContent("Skills · pdf-tools-old · 2 files");
+    expect(within(pdf!).getByRole("heading")).toHaveTextContent("Skills · pdf-tools-old");
     expect(pdf).toHaveTextContent("skills/pdf-tools-old/scripts/extract.py");
   });
 

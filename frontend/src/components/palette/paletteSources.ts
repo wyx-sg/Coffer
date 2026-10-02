@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useChannels } from "@/lib/hooks/useChannels";
-import { useConversations } from "@/lib/hooks/useConversations";
+import { useConversationSearch } from "@/lib/hooks/useConversationList";
 import { useCustomToolGroups } from "@/lib/hooks/useCustomTools";
 import { useClis } from "@/lib/hooks/useClis";
 import { isFeatureOn } from "@/lib/hooks/useFeatures";
@@ -100,9 +100,10 @@ const useCliObjects = (): KindState => {
   return kindState({ status: q.status, data: items });
 };
 // A conversation is named by its title; one without a title by its first line.
-const useConversationObjects = (): KindState => {
+// Asked by the text typed (a small title search), never for the whole list.
+const useConversationObjects = (text: string): KindState => {
   const { t } = useTranslation();
-  const q = useConversations();
+  const q = useConversationSearch(text);
   const items = useMemo(
     () =>
       q.data?.map((c) => ({
@@ -138,7 +139,8 @@ const useSecretObjects = (): KindState => {
   return kindState({ status: q.status, data: items });
 };
 
-export const KIND_LIST_HOOKS: Record<ObjectKind, () => KindState> = {
+/** Each kind's list hook; `text` is what the palette's box holds (only conversations ask by it). */
+export const KIND_LIST_HOOKS: Record<ObjectKind, (text: string) => KindState> = {
   agent: useAgentObjects,
   provider: useProviderObjects,
   conversation: useConversationObjects,

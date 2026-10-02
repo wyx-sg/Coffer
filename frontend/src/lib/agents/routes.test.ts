@@ -3,9 +3,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   AGENT_TABS,
-  agentMcpEntryPath,
   agentMemoryStorePath,
-  agentPluginPath,
   agentSessionPath,
   agentTabPath,
   isAgentType,
@@ -21,9 +19,9 @@ describe("agent addresses", () => {
       "mcp-servers",
       "plugins",
       "hooks",
-      "config",
       "memory",
       "sessions",
+      "config",
     ]);
   });
 
@@ -34,12 +32,6 @@ describe("agent addresses", () => {
   });
 
   test("pages opened from a tab are nested under it", () => {
-    expect(agentMcpEntryPath("codex", "gh", "config.toml")).toBe(
-      "/agents/codex/mcp-servers/gh?source=config.toml",
-    );
-    expect(agentPluginPath("claude_code", "sp@market")).toBe(
-      "/agents/claude_code/plugins/sp%40market",
-    );
     expect(unmanagedSkillPath("codex", "skills", "a b")).toBe(
       "/agents/codex/skills/unmanaged/skills/a%20b",
     );

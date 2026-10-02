@@ -110,7 +110,7 @@ describe("CustomToolsPage", () => {
       failure: null,
     });
     renderAt("/custom-tools/billing");
-    const tools = await screen.findByRole("region", { name: /Tools · 2 of 2 on/ });
+    const tools = await screen.findByRole("region", { name: "Tools" });
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
     const definition = screen.getByRole("region", { name: "Definition" });
     expect(within(definition).getByText("billing__<tool>")).toBeInTheDocument();
@@ -118,8 +118,12 @@ describe("CustomToolsPage", () => {
     expect(within(definition).getByText("billing-token")).toBeInTheDocument();
     expect(within(definition).getByTestId("scope-control")).toHaveTextContent("Every agent");
     expect(within(definition).getByRole("button", { name: "Re-import" })).toBeInTheDocument();
+    // The header's ⋯ menu holds only Delete: Edit, Re-import and on/off are visible controls.
+    fireEvent.click(screen.getByRole("button", { name: /more actions for billing/i }));
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Delete group…"]);
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
     expect(screen.getByText(/58 calls/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open in Activity" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View in Activity" })).toBeInTheDocument();
     expect(within(tools).getByText("GET /invoices/{id}")).toBeInTheDocument();
     expect(within(tools).getByText("Override")).toBeInTheDocument();
 

@@ -10,13 +10,8 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 
-import {
-  useChannels,
-  useChannelStatus,
-  useCreateChannel,
-  useIssuePairingCode,
-  useRebindChannel,
-} from "./useChannels";
+import { useChannels, useChannelStatus, useCreateChannel, useRebindChannel } from "./useChannels";
+import { useIssuePairingCode } from "./useChannelPairing";
 import { mockApiClient } from "@/test/mockApiClient";
 import { resourcesKey } from "@/lib/api/queryKeys";
 import type { ChannelStatus, PairingCode } from "@/lib/api/channels";
@@ -97,10 +92,12 @@ describe("useChannels hooks", () => {
       title: null,
       channel_type: "telegram",
       diagnostics: [],
+      secret_approval: null,
       enabled: true,
       running: true,
       pending_pairing: false,
-      peer: null,
+      commands: [],
+      people: [],
       inbound: null,
       runs_on: "machine-here",
       runs_here: true,
@@ -133,6 +130,17 @@ describe("useChannels hooks", () => {
     expect(result.current.data?.code).toBe("ABCD2345");
     expect(api.POST).toHaveBeenCalledWith("/channels/{uid}/pairing-code", {
       params: { path: { uid: TG.uid } },
+    });
+  });
+
+  test("useIssuePairingCode names the person a code replaces", async () => {
+    const api = stubApi({ code: "ABCD2345", expires_at: "2026-06-12T13:00:00Z", pair_url: "" });
+    const { result } = renderHook(() => useIssuePairingCode(TG.uid), { wrapper: makeWrapper() });
+    act(() => result.current.mutate("alex"));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(api.POST).toHaveBeenCalledWith("/channels/{uid}/pairing-code", {
+      params: { path: { uid: TG.uid } },
+      body: { replaces: "alex" },
     });
   });
 

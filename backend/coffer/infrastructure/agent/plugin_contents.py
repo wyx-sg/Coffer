@@ -23,7 +23,7 @@ from typing import Any
 
 import yaml
 
-from coffer.domain.agent.plugin_bundle import PluginComponent, PluginContents
+from coffer.domain.agent.plugin_bundle import PluginComponent, PluginContents, PluginPart
 
 _FENCE = "---"
 
@@ -83,22 +83,52 @@ def _skills(path: pathlib.Path) -> tuple[PluginComponent, ...]:
     )
 
 
-def _markdown_components(
+def _markdown_files(
     path: pathlib.Path, *, named_by_frontmatter: bool
-) -> tuple[PluginComponent, ...]:
-    """One component per ``*.md`` file. A subagent is known by its frontmatter
-    ``name`` (falling back to the file stem); a command by its file stem, which
-    is what the user types after the slash."""
+) -> list[tuple[pathlib.Path, PluginComponent]]:
+    """Every ``*.md`` file of ``path`` with its component. A subagent is known
+    by its frontmatter ``name`` (falling back to the file stem); a command by
+    its file stem, which is what the user types after the slash."""
     try:
         files = [p for p in path.iterdir() if p.is_file() and p.suffix == ".md"]
     except OSError:
-        return ()
-    out: list[PluginComponent] = []
+        return []
+    out: list[tuple[pathlib.Path, PluginComponent]] = []
     for f in files:
         fm = _frontmatter(f)
         name = (_text(fm.get("name")) if named_by_frontmatter else None) or f.stem
-        out.append(PluginComponent(name=name, description=_text(fm.get("description"))))
-    return tuple(sorted(out, key=lambda c: c.name))
+        out.append((f, PluginComponent(name=name, description=_text(fm.get("description")))))
+    return out
+
+
+def _markdown_components(
+    path: pathlib.Path, *, named_by_frontmatter: bool
+) -> tuple[PluginComponent, ...]:
+    pairs = _markdown_files(path, named_by_frontmatter=named_by_frontmatter)
+    return tuple(sorted((c for _f, c in pairs), key=lambda c: c.name))
+
+
+def find_skill(root: pathlib.Path, name: str) -> PluginComponent | None:
+    """The plugin's ``skills/<name>/`` component, or ``None``. Matches against
+    the folders the package really holds, so ``name`` never builds a path."""
+    return next((c for c in _skills(root / "skills") if c.name == name), None)
+
+
+def find_markdown(root: pathlib.Path, kind: str, name: str) -> tuple[str, PluginComponent] | None:
+    """``(path relative to root, component)`` of the command (``commands``) or
+    subagent (``agents``) called ``name``, or ``None``."""
+    for f, comp in _markdown_files(root / kind, named_by_frontmatter=kind == "agents"):
+        if comp.name == name:
+            return f"{kind}/{f.name}", comp
+    return None
+
+
+def read_mcp_server(root: pathlib.Path, name: str) -> dict[str, Any] | None:
+    """The ``.mcp.json`` entry of server ``name`` exactly as written, or ``None``."""
+    data = _load_json(root / ".mcp.json")
+    servers = data.get("mcpServers") if isinstance(data, dict) else None
+    entry = servers.get(name) if isinstance(servers, dict) else None
+    return entry if isinstance(entry, dict) else None
 
 
 def _load_json(path: pathlib.Path) -> object:
@@ -122,3 +152,22 @@ def _mcp_servers(path: pathlib.Path) -> tuple[str, ...]:
     if isinstance(servers, dict):
         return tuple(sorted(str(k) for k in servers))
     return ()
+
+
+def find_part(root: pathlib.Path, kind: str, name: str) -> PluginPart | None:
+    """Resolve one skill / command / subagent / MCP server of the package at
+    ``root`` by name; ``None`` when the package holds no such thing."""
+    if kind == "skills":
+        skill = find_skill(root, name)
+        return (
+            PluginPart(kind, name, str(root), f"skills/{name}", skill.description)
+            if skill
+            else None
+        )
+    if kind in ("commands", "agents"):
+        found = find_markdown(root, kind, name)
+        return PluginPart(kind, name, str(root), found[0], found[1].description) if found else None
+    if kind == "mcp-servers":
+        config = read_mcp_server(root, name)
+        return PluginPart(kind, name, str(root), ".mcp.json", config=config) if config else None
+    return None

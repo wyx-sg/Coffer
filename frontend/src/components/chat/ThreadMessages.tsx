@@ -27,7 +27,7 @@ export function ThreadMessages({
   notDeliveredTo,
 }: Props) {
   return (
-    <div className="mx-auto w-full max-w-[720px] space-y-5">
+    <div className="mx-auto w-full max-w-[960px] space-y-5">
       {messages.map((msg) => (
         <MessageBubble
           key={msg.id}

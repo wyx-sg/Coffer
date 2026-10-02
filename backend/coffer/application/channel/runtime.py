@@ -29,17 +29,20 @@ from typing import TYPE_CHECKING
 from coffer.application.channel.inbound import ChannelBinding, InboundProcessor
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.ports import AdapterCallbacks, ChannelAdapter
+from coffer.application.channel.runtime_binding import make_binding
 from coffer.application.channel.runtime_supervision import (
     FAILURE_RETRY_SECONDS,
     Desired,
     Latch,
     MaterializeFn,
     reconcile_websockets,
+    secret_stamps,
 )
 from coffer.application.channel.supervision_ports import WebSocketControllerPort
 from coffer.application.channel.wanted import Gate, Routing
 from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.resource import Resource
+from coffer.domain.secret_errors import SecretBindingPending, SecretBindingRejected
 
 if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
@@ -57,8 +60,6 @@ AdapterFactory = Callable[[str, dict[str, object]], Awaitable[ChannelAdapter]]
 #: (``None`` when the ref holds nothing). Rotating a secret keeps its ref, so
 #: neither the config nor the ref says the value moved; this does.
 SecretRevision = Callable[[str], str | None]
-
-_SECRET_REF_FIELDS = ("bot_token_ref", "app_secret_ref")
 
 
 @dataclass
@@ -106,6 +107,11 @@ class ChannelRuntime:
         self._gate = Gate(machine_id_provider=machine_id)
         self._running: dict[str, _Running] = {}
         self._failed_at: dict[str, float] = {}
+        # Why a channel's adapter did not start when the cause is its secret
+        # waiting on (or refused by) the owner's approval in the Coffer app:
+        # ``pending`` | ``refused``. Absent once the adapter starts, the channel
+        # is no longer wanted, or the start failed for any other reason.
+        self._withheld: dict[str, str] = {}
         self._websocket_latches: dict[str, Latch[tuple[str, str, str]]] = {}
         # Serialises a reconcile pass with an explicit ``restart``: both stop and
         # start adapters, and two of them interleaved would start one twice.
@@ -116,6 +122,11 @@ class ChannelRuntime:
 
     def is_running(self, channel_uid: str) -> bool:
         return channel_uid in self._running
+
+    def secret_withheld(self, channel_uid: str) -> str | None:
+        """``pending`` or ``refused`` while the channel's secret binding is the
+        reason its adapter is not running, else ``None``."""
+        return self._withheld.get(channel_uid)
 
     def adapter(self, channel_uid: str) -> ChannelAdapter | None:
         entry = self._running.get(channel_uid)
@@ -204,6 +215,8 @@ class ChannelRuntime:
     async def _reconcile(self) -> None:
         try:
             desired = await self._enabled_channels()
+            for channel_uid in set(self._withheld) - set(desired):
+                del self._withheld[channel_uid]
             for channel_uid in list(self._running):
                 # Re-fetch per iteration: evict() can pop entries while a
                 # prior _stop_adapter await is in flight.
@@ -298,9 +311,20 @@ class ChannelRuntime:
                     on_stop=self._processor.on_stop,
                 )
             )
-        except Exception:
+        except Exception as exc:
             self._failed_at[channel_uid] = time.monotonic()
-            _logger.exception("channel.adapter.start_failed", extra={"channel": resource.name})
+            if isinstance(exc, SecretBindingPending):
+                # Not a fault: the secret awaits (or was refused) approval; the
+                # next retry finds the approval if it came meanwhile.
+                state = "refused" if isinstance(exc, SecretBindingRejected) else "pending"
+                self._withheld[channel_uid] = state
+                _logger.warning(
+                    "channel.adapter.secret_withheld",
+                    extra={"channel": resource.name, "state": state},
+                )
+            else:
+                self._withheld.pop(channel_uid, None)
+                _logger.exception("channel.adapter.start_failed", extra={"channel": resource.name})
             if adapter is not None:
                 # Close whatever the factory built (httpx client, tasks) so
                 # the 30s retry ladder doesn't leak one client per attempt.
@@ -314,29 +338,8 @@ class ChannelRuntime:
                 await adapter.stop()
             return
         self._failed_at.pop(channel_uid, None)
-        self._processor.bind(
-            ChannelBinding(
-                resource=resource,
-                channel_type=parsed.channel_type,
-                # The parsed config's ``default_agent`` is an agent UID; what
-                # the turn platform routes on is the key the gate resolved it
-                # to (``wanted.Routing``). Reading the uid straight off the
-                # parsed config here is exactly the mistake the single crossing
-                # exists to make impossible.
-                default_agent=routing.default_agent,
-                default_agent_config=parsed.default_agent_config,
-                adapter=adapter,
-                require_mention=parsed.require_mention,
-                ignore_other_mentions=parsed.ignore_other_mentions,
-                wait_after_text_seconds=parsed.wait_after_text_seconds,
-                wait_after_forward_seconds=parsed.wait_after_forward_seconds,
-                show_steps=parsed.show_steps,
-                notify_after_seconds=parsed.notify_after_seconds,
-                new_conversation_after_idle_hours=parsed.new_conversation_after_idle_hours,
-                agent_scope=routing.agent_scope,
-                directories=tuple(parsed.directories),
-            )
-        )
+        self._withheld.pop(channel_uid, None)
+        self._processor.bind(make_binding(resource, parsed, routing, adapter))
         self._running[channel_uid] = _Running(
             adapter=adapter,
             config_hash=self._binding_hash(channel_uid, resource),
@@ -363,17 +366,6 @@ class ChannelRuntime:
             secret_revision=self._secret_revision,
         )
 
-    def _secret_stamps(self, resource: Resource) -> dict[str, str | None]:
-        """The revision of each secret the channel's config points at."""
-        if self._secret_revision is None:
-            return {}
-        stamps: dict[str, str | None] = {}
-        for field in _SECRET_REF_FIELDS:
-            ref = resource.config.get(field)
-            if isinstance(ref, str) and ref:
-                stamps[ref] = self._secret_revision(ref)
-        return stamps
-
     def _binding_hash(self, channel_uid: str, resource: Resource) -> str:
         """What a running channel is compared against to decide whether to
         rebuild it. The routing is part of it, not just config: the routing
@@ -389,7 +381,7 @@ class ChannelRuntime:
                 "knowledge": self._knowledge_enabled(),
                 # A rotated secret keeps its ref, so the config above does not
                 # move; the adapter read the value once when it was built.
-                "secrets": self._secret_stamps(resource),
+                "secrets": secret_stamps(resource.config, self._secret_revision),
             },
             sort_keys=True,
             default=str,

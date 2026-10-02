@@ -220,7 +220,8 @@ describe("SyncResolveConflictsPage", () => {
       const { unmount } = show(SKILL);
       const block = within(screen.getByTestId("sync-conflict-merge"));
       expect(block.getByText("Merge with an agent")).toBeInTheDocument();
-      expect(block.getByText(/edits the marked-up copies; Coffer commits/)).toBeInTheDocument();
+      fireEvent.click(block.getByRole("button", { name: "More info" }));
+      expect(screen.getByText(/edits the marked-up copies; Coffer commits/)).toBeInTheDocument();
       expect(block.getByTestId("handoff")).toHaveTextContent(prompt);
       fireEvent.click(block.getByRole("button", { name: "I merged it" }));
       expect(merged).toHaveBeenCalled();

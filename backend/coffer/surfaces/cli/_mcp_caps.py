@@ -1,4 +1,4 @@
-"""``coffer mcp cap list|enable|disable`` — one server's tools, prompts and resources.
+"""``coffer mcp cap list|enable|disable|expose`` — one server's tools, prompts and resources.
 
 A capability is named on the command line by a typed ref — ``tool:<name>``,
 ``prompt:<name>`` or ``resource:<uri>`` — so one command toggles any mix of
@@ -10,6 +10,12 @@ nothing refuses the whole command with nothing changed.
 (``mcp__coffer__<server>__<tool>``) is longer than the 64 characters model
 provider APIs accept (spec mcp-gateway "Flag tools whose client-visible name is
 too long"). The flag only informs: the tool stays enabled and listed.
+
+``cap expose <server> auto|listed|search tool:<name>...`` sets how tools are
+exposed to agents: ``listed`` pins them into the tool list, ``search`` leaves
+them to ``coffer__search_tools``, ``auto`` lets usage decide (spec mcp-gateway
+"Choose how each tool is exposed"). ``cap list`` shows each tool's setting and
+what agents get.
 
 Like the rest of ``coffer mcp``, these take the server's NAME and resolve it to a
 uid once per command (ADR identity-is-the-uid-inside-the-file).
@@ -64,6 +70,13 @@ def _read(c: httpx.Client, uid: str, *, verbose: bool) -> dict[str, Any]:
     return r.json()  # type: ignore[no-any-return]
 
 
+def _tiering(c: httpx.Client, uid: str, *, verbose: bool) -> dict[str, dict[str, Any]]:
+    """The server's tools' exposure, by tool name."""
+    r = c.get(f"/resources/mcp_server/{uid}/tiering")
+    _cli_client.check(r, verbose=verbose)
+    return {row["tool"]: row for row in r.json().get("tools") or []}
+
+
 def _parse_ref(ref: str) -> tuple[str, str]:
     type_, sep, key = ref.partition(":")
     if not sep or type_ not in _TYPES or not key:
@@ -102,12 +115,16 @@ def cap_list(
     with c:
         uid = resolve_uid(c, "mcp_server", server, verbose=verbose)
         caps = _read(c, uid, verbose=verbose)
+        exposure = _tiering(c, uid, verbose=verbose) if "tool" in types else {}
     grouped: dict[str, list[dict[str, Any]]] = {}
     for t in types:
         plural, key_field = _TYPES[t]
         rows = []
         for item in caps.get(plural) or []:
             row = {**item, "ref": f"{t}:{item[key_field]}"}
+            if t == "tool":
+                row["exposure"] = (exposure.get(item["original_name"]) or {}).get("mode")
+                row["effective"] = (exposure.get(item["original_name"]) or {}).get("effective")
             if t != "resource":
                 row["name_too_long"] = _too_long(item)
                 if row["name_too_long"]:
@@ -120,9 +137,16 @@ def cap_list(
     _render(server, grouped)
 
 
+def _exposure_cell(row: dict[str, Any]) -> str:
+    mode, effective = row.get("exposure"), row.get("effective")
+    if mode is None:
+        return "—"
+    return f"{mode} ({effective})" if mode == "auto" and effective else str(mode)
+
+
 def _render(server: str, grouped: dict[str, list[dict[str, Any]]]) -> None:
     table = Table(title=f"{server} capabilities")
-    for col in ("Ref", "Enabled", "Name length", "Description"):
+    for col in ("Ref", "Enabled", "Exposure", "Name length", "Description"):
         table.add_column(col)
     flagged = 0
     for rows in grouped.values():
@@ -135,6 +159,7 @@ def _render(server: str, grouped: dict[str, list[dict[str, Any]]]) -> None:
             table.add_row(
                 row["ref"],
                 "yes" if row["enabled"] else "no",
+                _exposure_cell(row),
                 shown,
                 (row.get("description") or "")[:60],
             )
@@ -198,3 +223,41 @@ def cap_disable(
 ) -> None:
     """Disable capabilities, each named by a typed ref."""
     _toggle(ctx, server, refs, enable=False)
+
+
+_TOOL_REFS = typer.Argument(..., metavar="tool:<name>...", help="Tools to set")
+
+
+@cap_app.command("expose")
+def cap_expose(
+    ctx: typer.Context,
+    server: str = typer.Argument(..., help="Server name"),
+    mode: str = typer.Argument(..., help="auto | listed | search"),
+    refs: list[str] = _TOOL_REFS,
+) -> None:
+    """Set how tools are exposed: listed (pinned), search (search only) or auto (by usage)."""
+    verbose = verbose_of(ctx)
+    if mode not in ("auto", "listed", "search"):
+        typer.echo(f"mode is auto, listed or search, got {mode!r}", err=True)
+        raise typer.Exit(2)
+    tools = []
+    for ref in refs:
+        type_, key = _parse_ref(ref)
+        if type_ != "tool":
+            typer.echo(f"only a tool has an exposure, got {ref!r}", err=True)
+            raise typer.Exit(2)
+        tools.append(key)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        uid = resolve_uid(c, "mcp_server", server, verbose=verbose)
+        r = c.patch(
+            f"/resources/mcp_server/{uid}/tools/exposure", json={"tools": tools, "mode": mode}
+        )
+        if r.status_code == 404:
+            typer.echo(
+                f"{server} offers no such tool among {', '.join(refs)} — nothing changed", err=True
+            )
+            raise typer.Exit(4)
+        _cli_client.check(r, verbose=verbose)
+    for tool in tools:
+        typer.echo(f"exposure {mode}: {server} tool:{tool}")

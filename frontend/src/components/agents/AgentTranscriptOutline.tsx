@@ -57,9 +57,12 @@ export function outlineOf(messages: TranscriptMessage[]): OutlineEntry[] {
 
 export function AgentTranscriptOutline({
   messages,
+  offset = 0,
   className,
 }: {
   messages: TranscriptMessage[];
+  /** How many turns of the session come before this window — so an entry carries its place in the whole conversation. */
+  offset?: number;
   className?: string;
 }) {
   const { t } = useTranslation();
@@ -78,7 +81,7 @@ export function AgentTranscriptOutline({
             <li key={entry.index}>
               <button
                 type="button"
-                className="w-full break-words rounded px-2 py-1 text-left text-xs text-muted-foreground hover:bg-surface-hover hover:text-text"
+                className="flex w-full items-baseline gap-2 rounded px-2 py-1 text-left text-xs text-muted-foreground hover:bg-surface-hover hover:text-text"
                 title={entry.label}
                 onClick={() => {
                   // `block: "start"` puts the chosen turn at the top of the
@@ -89,7 +92,10 @@ export function AgentTranscriptOutline({
                     ?.scrollIntoView({ block: "start", behavior: "smooth" });
                 }}
               >
-                {entry.label}
+                <span className="w-8 shrink-0 text-right text-2xs tabular-nums text-text-subtle">
+                  {offset + entry.index + 1}
+                </span>
+                <span className="min-w-0 flex-1 truncate">{entry.label}</span>
               </button>
             </li>
           ))}

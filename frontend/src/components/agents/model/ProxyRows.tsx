@@ -58,7 +58,7 @@ export function ProxyRows({ agent, model, onProvider }: Props) {
         });
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border-subtle px-3 py-2.5">
+    <div className="flex flex-col gap-2">
       <Row label={t("agents.modelTab.proxy.fallbackLabel")}>{fallback}</Row>
       <Row label={t("agents.modelTab.proxy.tokenLabel")}>
         <span className="flex flex-wrap items-center gap-2">

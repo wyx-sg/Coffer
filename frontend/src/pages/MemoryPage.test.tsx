@@ -14,6 +14,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { COFFER, DELIVERIES, GLOBAL, GONE } from "@/components/memory/memoryTestData";
 import type { DeliveryOverviewOut, PartitionOut } from "@/lib/api/memoryTypes";
 import { acceptance } from "@/test/acceptance";
+import { pathText } from "@/test/truncatedPath";
 import { AgentMemoryTab } from "@/components/agents/AgentMemoryTab";
 import type { AgentOut } from "@/lib/api/agents";
 import { MemoryPage } from "./MemoryPage";
@@ -102,7 +103,9 @@ describe("MemoryPage", () => {
     renderPage();
     const block = await screen.findByTestId("memory-deliveries");
     expect(within(block).getByText("Delivered at session start")).toBeInTheDocument();
-    expect(within(block).getByText("Last 7 days")).toBeInTheDocument();
+    // The window rides in the help tip, not beside the title.
+    expect(within(block).queryByText("Last 7 days")).not.toBeInTheDocument();
+    expect(within(block).getByRole("button", { name: "More info" })).toBeInTheDocument();
 
     const claude = await within(block).findByTestId("memory-delivery-claude_code");
     expect(claude).toHaveTextContent("Claude Code");
@@ -169,7 +172,7 @@ describe("MemoryPage", () => {
       </QueryClientProvider>,
     );
     expect(await screen.findByText("49")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Native memory stores · 1" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Native memory stores" })).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/hook|repair|stale/i);
   });
 
@@ -230,9 +233,9 @@ describe("MemoryPage", () => {
     renderPage();
     const section = await screen.findByTestId("memory-partitions");
     await within(section).findByRole("table");
-    expect(within(section).getByText("3 partitions · 20 memories")).toBeInTheDocument();
+    expect(within(section).queryByText("3 partitions · 20 memories")).not.toBeInTheDocument();
     expect(within(section).getByText("Every project")).toBeInTheDocument();
-    expect(within(section).getByText("~/work/coffer")).toBeInTheDocument();
+    expect(within(section).getByText(pathText("~/work/coffer"))).toBeInTheDocument();
     for (const header of ["Partition", "Path", "Sample memory", "Memories", "Sources", "Distil"]) {
       expect(within(section).getByRole("columnheader", { name: header })).toBeInTheDocument();
     }

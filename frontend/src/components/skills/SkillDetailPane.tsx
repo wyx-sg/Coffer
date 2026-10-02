@@ -37,7 +37,6 @@ interface Props {
   tab: SkillTab;
   onTabChange: (tab: string) => void;
   onDeleted: () => void;
-  onCheckCopies?: () => void;
 }
 
 function Count({ n }: { n: number }) {
@@ -48,7 +47,7 @@ function Count({ n }: { n: number }) {
   ) : null;
 }
 
-export function SkillDetailPane({ skill, tab, onTabChange, onDeleted, onCheckCopies }: Props) {
+export function SkillDetailPane({ skill, tab, onTabChange, onDeleted }: Props) {
   const { t } = useTranslation();
   const copies = useSkillCopies();
   const clis = useClis().data?.items ?? [];
@@ -58,14 +57,12 @@ export function SkillDetailPane({ skill, tab, onTabChange, onDeleted, onCheckCop
 
   const attention = skillAttention(skill, clis, copies.data?.entries);
   const masterMissing = attention.some((a) => a.kind === "masterMissing");
-  const checkCopies = onCheckCopies ?? (() => void copies.refetch());
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <SkillDetailHeader
         skill={skill}
         masterMissing={masterMissing}
-        onCheckCopies={checkCopies}
         onDeleted={onDeleted}
       />
 

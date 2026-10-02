@@ -54,7 +54,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer agent`](/reference/cli/agent) | Manage registered AI agents |
 | [`coffer channel`](/reference/cli/channel) | Manage messaging channels (Telegram, SeaTalk) |
 | [`coffer skill`](/reference/cli/skill) | Manage skills (AgentSkills standard) |
-| [`coffer cli`](/reference/cli/cli) | Check the command-line tools skills and MCP servers require |
+| [`coffer cli`](/reference/cli/cli) | Add and check command-line tools, and read their interface |
 | [`coffer knowledge`](/reference/cli/knowledge) | Manage Coffer's knowledge collections, the Markdown under ~/.coffer/vault/knowledge/&lt;collection&gt;/ (`coffer path knowledge` prints it). |
 | [`coffer memory`](/reference/cli/memory) | Browse and manage Coffer's memory layer |
 | [`coffer provider`](/reference/cli/provider) | Manage LLM connections and switch agents onto them |

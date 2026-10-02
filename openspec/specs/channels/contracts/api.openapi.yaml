@@ -61,6 +61,39 @@ paths:
           description: Any other error, as Coffer's error envelope.
       summary: Notify Channel
   /api/v1/channels/{uid}/pairing-code:
+    delete:
+      operationId: cancel_pairing_code_api_v1_channels__uid__pairing_code_delete
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Cancel Pairing Code
     post:
       operationId: issue_pairing_code_api_v1_channels__uid__pairing_code_post
       parameters:
@@ -86,6 +119,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/PairingCodeIn'
+              - type: 'null'
+              title: Body
       responses:
         '200':
           content:
@@ -106,6 +147,54 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Issue Pairing Code
+  /api/v1/channels/{uid}/people/{sender_id}:
+    delete:
+      operationId: remove_person_api_v1_channels__uid__people__sender_id__delete
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: sender_id
+        required: true
+        schema:
+          title: Sender Id
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Remove Person
   /api/v1/channels/{uid}/restart:
     post:
       description: Stop and rebuild the channel's adapter, reading its secret afresh.
@@ -185,6 +274,36 @@ paths:
       summary: Channel Status
 components:
   schemas:
+    ChannelCommandOut:
+      description: |-
+        One slash command the channel answers (spec channels "Answer the
+        conversation commands from any paired chat"), from the one roster that also
+        feeds the help text and the platform menus.
+      properties:
+        args:
+          title: Args
+          type: string
+        description:
+          title: Description
+          type: string
+        description_zh:
+          title: Description Zh
+          type: string
+        name:
+          title: Name
+          type: string
+        needs_knowledge:
+          default: false
+          title: Needs Knowledge
+          type: boolean
+      required:
+      - name
+      - args
+      - description
+      - description_zh
+      - needs_knowledge
+      title: ChannelCommandOut
+      type: object
     ChannelDiagnosticOut:
       properties:
         code:
@@ -198,7 +317,10 @@ components:
       - message
       title: ChannelDiagnosticOut
       type: object
-    ChannelPeerOut:
+    ChannelPersonOut:
+      description: |-
+        A person paired to the channel (spec channels "Serve several paired
+        people"): every one is answered with identical rights.
       properties:
         active_conversation_id:
           anyOf:
@@ -215,12 +337,16 @@ components:
           format: date-time
           title: Paired At
           type: string
+        sender_id:
+          title: Sender Id
+          type: string
       required:
-      - chat_id
+      - sender_id
       - display_name
       - paired_at
+      - chat_id
       - active_conversation_id
-      title: ChannelPeerOut
+      title: ChannelPersonOut
       type: object
     ChannelStatusOut:
       properties:
@@ -230,6 +356,12 @@ components:
           - seatalk
           title: Channel Type
           type: string
+        commands:
+          default: []
+          items:
+            $ref: '#/components/schemas/ChannelCommandOut'
+          title: Commands
+          type: array
         diagnostics:
           default: []
           items:
@@ -250,13 +382,14 @@ components:
         name:
           title: Name
           type: string
-        peer:
-          anyOf:
-          - $ref: '#/components/schemas/ChannelPeerOut'
-          - type: 'null'
         pending_pairing:
           title: Pending Pairing
           type: boolean
+        people:
+          items:
+            $ref: '#/components/schemas/ChannelPersonOut'
+          title: People
+          type: array
         running:
           title: Running
           type: boolean
@@ -269,6 +402,10 @@ components:
           - type: string
           - type: 'null'
           title: Runs On
+        secret_approval:
+          anyOf:
+          - $ref: '#/components/schemas/SecretApprovalOut'
+          - type: 'null'
         settings:
           anyOf:
           - discriminator:
@@ -296,14 +433,16 @@ components:
       - enabled
       - running
       - pending_pairing
-      - peer
+      - people
       - inbound
       - diagnostics
+      - secret_approval
       - runs_on
       - runs_here
       - title
       - handoff
       - settings
+      - commands
       title: ChannelStatusOut
       type: object
     ErrorDetail:
@@ -401,6 +540,15 @@ components:
       required:
       - sent
       title: NotifyOut
+      type: object
+    PairingCodeIn:
+      properties:
+        replaces:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Replaces
+      title: PairingCodeIn
       type: object
     PairingCodeOut:
       properties:
@@ -524,6 +672,28 @@ components:
       - app_id
       - app_secret_ref
       title: SeaTalkChannelConfig
+      type: object
+    SecretApprovalOut:
+      description: |-
+        Why a channel's adapter is not running when its secret is the cause.
+
+        ``pending`` waits for the owner's approval in the Coffer app; ``refused``
+        was declined and stays so until asked again from the Secrets page. Names the
+        secret by ref, never carries its value.
+      properties:
+        secret_ref:
+          title: Secret Ref
+          type: string
+        state:
+          enum:
+          - pending
+          - refused
+          title: State
+          type: string
+      required:
+      - state
+      - secret_ref
+      title: SecretApprovalOut
       type: object
     TelegramChannelConfig:
       additionalProperties: false

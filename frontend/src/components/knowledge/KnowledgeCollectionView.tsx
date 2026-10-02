@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { FolderOpen, Library, Pencil, Plus, Upload } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
+import { SectionStack } from "@/components/Section";
 import { KnowledgeDeleteCollection } from "@/components/knowledge/KnowledgeDeleteCollection";
 import { KnowledgePaneBar } from "@/components/knowledge/KnowledgePaneBar";
 import { KnowledgeStatsLine } from "@/components/knowledge/KnowledgeStatsLine";
@@ -80,7 +81,7 @@ export function KnowledgeCollectionView({ collection, modelSet, onAdd, onUpload 
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto px-10 py-[22px]">
-          <div className="flex max-w-[680px] flex-col gap-[22px]">
+          <SectionStack className="max-w-[680px]">
             <div className="flex flex-col gap-2">
               <h2 className="font-mono text-lg font-medium">{collection.name}</h2>
               {editing ? (
@@ -95,7 +96,7 @@ export function KnowledgeCollectionView({ collection, modelSet, onAdd, onUpload 
             </div>
             <KnowledgeStatsLine collection={collection} modelSet={modelSet} />
             <KnowledgeDeleteCollection collection={collection} />
-          </div>
+          </SectionStack>
         </div>
       )}
     </div>

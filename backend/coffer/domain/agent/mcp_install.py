@@ -35,6 +35,7 @@ from coffer.domain.agent.mcp_entries import (
     _json_container,
     _parse_json,
     _parse_toml,
+    _parse_toml_readonly,
 )
 from coffer.domain.agent.mcp_injection import McpEntryStyle, default_container_key
 
@@ -171,7 +172,7 @@ def is_installed(fmt: ConfigFileFormat, text: str, *, container_key: str | None 
         servers = _json_container(_parse_json(text), ck)
         return isinstance(servers, MutableMapping) and COFFER_SERVER_KEY in servers
     if fmt is ConfigFileFormat.TOML:
-        servers = _parse_toml(text).get(ck)
+        servers = _parse_toml_readonly(text).get(ck)
         # isinstance guard so a scalar `mcp_servers` containing the substring
         # "coffer" can't false-positive via `in`.
         return isinstance(servers, MutableMapping) and COFFER_SERVER_KEY in servers
@@ -187,7 +188,7 @@ def installed_command(
         return None
     if fmt is ConfigFileFormat.JSON:
         return _coffer_command(_json_container(_parse_json(text), ck)[COFFER_SERVER_KEY])
-    return _coffer_command(_parse_toml(text)[ck][COFFER_SERVER_KEY])
+    return _coffer_command(_parse_toml_readonly(text)[ck][COFFER_SERVER_KEY])
 
 
 def installed_entry(
@@ -209,7 +210,7 @@ def installed_entry(
     if fmt is ConfigFileFormat.JSON:
         entry = _json_container(_parse_json(text), ck)[COFFER_SERVER_KEY]
     else:
-        entry = _parse_toml(text)[ck][COFFER_SERVER_KEY]
+        entry = _parse_toml_readonly(text)[ck][COFFER_SERVER_KEY]
     args = entry.get("args") if isinstance(entry, MutableMapping) else None
     return {
         "command": _coffer_command(entry),
@@ -237,7 +238,7 @@ def installed_agent_uid(
     if fmt is ConfigFileFormat.JSON:
         entry = _json_container(_parse_json(text), ck)[COFFER_SERVER_KEY]
     else:
-        entry = _parse_toml(text)[ck][COFFER_SERVER_KEY]
+        entry = _parse_toml_readonly(text)[ck][COFFER_SERVER_KEY]
     if not isinstance(entry, MutableMapping):
         return None
     args = entry.get("args")

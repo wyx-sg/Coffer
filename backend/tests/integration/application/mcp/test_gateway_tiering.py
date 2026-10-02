@@ -106,3 +106,36 @@ async def test_search_tools_is_never_hidden():
     result = await apply_tiering(tools, invocations=_Invocations(), config=cfg, clock=_clock)
 
     assert "coffer__search_tools" in [t["name"] for t in result.listed]
+
+
+@pytest.mark.asyncio
+async def test_overrides_beat_usage_in_the_listing():
+    tools = _tools(80)
+    cfg = TieringConfig(enabled=True, budget=2, window_days=90)
+    inv = _Invocations({("jira", "t70"): 9, ("jira", "t71"): 8})
+
+    result = await apply_tiering(
+        tools,
+        invocations=inv,
+        config=cfg,
+        clock=_clock,
+        exposure={"jira__t3": "listed", "jira__t70": "search"},
+    )
+
+    # t3 is pinned, t70 is demoted despite being the busiest, t71 fills the last slot.
+    assert [t["name"] for t in result.listed] == ["jira__t3", "jira__t71"]
+
+
+@pytest.mark.asyncio
+async def test_fail_open_ignores_overrides_too():
+    cfg = TieringConfig(enabled=True, budget=2, window_days=90)
+
+    result = await apply_tiering(
+        _tools(5),
+        invocations=_Invocations(fail=True),
+        config=cfg,
+        clock=_clock,
+        exposure={"jira__t0": "search"},
+    )
+
+    assert len(result.listed) == 5

@@ -205,7 +205,12 @@ function ConnectionAction({
   const { t } = useTranslation();
   if (state === "connected") {
     return (
-      <Button variant="ghost" size="sm" onClick={() => actions.onConnection("disconnect")}>
+      <Button
+        variant="ghost"
+        size="sm"
+        loading={actions.busy}
+        onClick={() => actions.onConnection("disconnect")}
+      >
         <Unlink aria-hidden />
         {t(`${K}.action.disconnect`)}
       </Button>
@@ -213,13 +218,13 @@ function ConnectionAction({
   }
   if (state === "disabled") {
     return (
-      <Button size="sm" onClick={actions.onEnable}>
+      <Button size="sm" loading={actions.busy} onClick={actions.onEnable}>
         {t(`${K}.action.enable`)}
       </Button>
     );
   }
   return (
-    <Button size="sm" onClick={() => actions.onConnection("connect")}>
+    <Button size="sm" loading={actions.busy} onClick={() => actions.onConnection("connect")}>
       {state === "needs_repair" ? <Wrench aria-hidden /> : null}
       {t(
         `${K}.action.${state === "needs_repair" ? (hookOnly ? "repairHook" : "repair") : "connect"}`,

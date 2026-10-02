@@ -53,6 +53,19 @@ MaterializeFn = Callable[[dict[str, str], SecretDestination], Awaitable[dict[str
 #: calls it.
 
 
+_SECRET_REF_FIELDS = ("bot_token_ref", "app_secret_ref")
+
+
+def secret_stamps(
+    config: dict[str, object], revision: Callable[[str], str | None] | None
+) -> dict[str, str | None]:
+    """The revision of each secret a channel's config points at."""
+    if revision is None:
+        return {}
+    refs = (config.get(field) for field in _SECRET_REF_FIELDS)
+    return {ref: revision(ref) for ref in refs if isinstance(ref, str) and ref}
+
+
 @dataclass
 class Latch[T]:
     """What one reconciler remembers between ticks.

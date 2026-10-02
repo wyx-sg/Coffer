@@ -1,12 +1,13 @@
 // src/components/clis/CliField.tsx — a titled section of read-only rows on a CLI's page, and one row of it.
 import type { ReactNode } from "react";
 
-export function CliSection({ title, children }: { title: ReactNode; children: ReactNode }) {
+import { Section } from "@/components/Section";
+
+export function CliSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="space-y-2">
-      <h3 className="text-sm font-label">{title}</h3>
+    <Section title={title} gap="snug" labelled>
       <div className="paper-card divide-y divide-border-subtle">{children}</div>
-    </section>
+    </Section>
   );
 }
 

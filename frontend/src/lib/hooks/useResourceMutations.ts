@@ -30,11 +30,16 @@ function invalidateFor(qc: ReturnType<typeof useQueryClient>, kind: string): voi
   }
 }
 
+/** Mutation keys, so a row can show that its own enable / disable is running. */
+export const ENABLE_KEY = ["resource", "enable"] as const;
+export const DISABLE_KEY = ["resource", "disable"] as const;
+
 export function useEnableResource() {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
+    mutationKey: ENABLE_KEY,
     mutationFn: ({ uid }: ResourceWriteInput) => resourcesApi.enable(uid),
     onSuccess: (_data, { kind }) => invalidateFor(qc, kind),
     onError: (error) => toast.error(translateApiError(t, error)),
@@ -46,6 +51,7 @@ export function useDisableResource() {
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
+    mutationKey: DISABLE_KEY,
     mutationFn: ({ uid }: ResourceWriteInput) => resourcesApi.disable(uid),
     onSuccess: (_data, { kind }) => invalidateFor(qc, kind),
     onError: (error) => toast.error(translateApiError(t, error)),

@@ -7,7 +7,7 @@
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState";
-import { HelpTip } from "@/components/HelpTip";
+import { Section } from "@/components/Section";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { QuotaList } from "@/lib/api/usage";
@@ -40,15 +40,19 @@ export function QuotaSection({
 }: Props) {
   const { t } = useTranslation();
   return (
-    <section aria-label={t("usage.quota.title")} className="flex flex-col gap-2">
-      <div className="flex min-h-7 flex-wrap items-center gap-2">
-        <h2 className="text-sm font-semibold text-text">{t("usage.quota.title")}</h2>
-        <HelpTip label={t("usage.quota.helpLabel")}>
+    <Section
+      as="h2"
+      gap="snug"
+      labelled
+      title={t("usage.quota.title")}
+      help={
+        <>
+          <p className="text-xs">{t("usage.quota.subtitle")}</p>
           <p className="text-xs">{t("usage.quota.help1")}</p>
           <p className="text-xs">{t("usage.quota.help2")}</p>
-        </HelpTip>
-        <span className="text-xs text-text-muted">{t("usage.quota.subtitle")}</span>
-      </div>
+        </>
+      }
+    >
       <div className="overflow-hidden rounded-xl border border-border bg-surface-raised">
         {isLoading ? (
           <div className="flex flex-col gap-3 p-4" data-testid="quota-loading">
@@ -82,6 +86,6 @@ export function QuotaSection({
           </ul>
         )}
       </div>
-    </section>
+    </Section>
   );
 }

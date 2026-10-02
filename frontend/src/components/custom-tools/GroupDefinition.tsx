@@ -2,6 +2,7 @@
 // see, its reach, base URL, the auth header and the secret it is bound to, and the spec it came from.
 import { useTranslation } from "react-i18next";
 
+import { Section } from "@/components/Section";
 import { ScopeControl } from "@/components/ScopeControl";
 import { Badge } from "@/components/ui/badge";
 import type { CustomToolGroup } from "@/lib/api/customTools";
@@ -26,10 +27,7 @@ export function GroupDefinition({ group, onReimport }: Props) {
     ) : null;
 
   return (
-    <section aria-labelledby="ct-definition" className="space-y-1">
-      <h2 id="ct-definition" className="text-sm font-semibold">
-        {t("customTools.definition.title")}
-      </h2>
+    <Section title={t("customTools.definition.title")} as="h2" gap="tight" labelled>
       <div>
         <DefinitionRow
           label={t("customTools.definition.agentsSee")}
@@ -89,6 +87,6 @@ export function GroupDefinition({ group, onReimport }: Props) {
           />
         ) : null}
       </div>
-    </section>
+    </Section>
   );
 }

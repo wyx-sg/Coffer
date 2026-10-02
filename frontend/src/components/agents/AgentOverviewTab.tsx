@@ -12,6 +12,7 @@ import { agentRowState } from "@/lib/agents/rowState";
 import { useAgentConnection, useAgentHooks } from "@/lib/hooks/useAgents";
 import { useResource } from "@/lib/hooks/useResources";
 
+import { SectionStack } from "@/components/Section";
 import { AgentNotFoundCard } from "./overview/AgentNotFoundCard";
 import { ConfigLeftBehindCard } from "./overview/ConfigLeftBehindCard";
 import { OverviewConnection } from "./overview/OverviewConnection";
@@ -26,6 +27,8 @@ export interface OverviewActions {
   onChangeConfigDir: () => void;
   /** "Remove from Coffer" / "Remove from list" (the confirm dialog is the integrator's). */
   onRemove: () => void;
+  /** Connect / disconnect / enable is running on the agent: its buttons wait. */
+  busy?: boolean;
 }
 
 interface Props {
@@ -55,7 +58,7 @@ function OverviewBody({ agent, typeRow, actions }: Props) {
 
   return (
     <div className="flex flex-col gap-10 lg:flex-row">
-      <div className="flex min-w-0 flex-[1.35_1_0] flex-col gap-6">
+      <SectionStack className="min-w-0 flex-[1.35_1_0]">
         <OverviewConnection
           agent={agent}
           typeRow={typeRow}
@@ -71,12 +74,12 @@ function OverviewBody({ agent, typeRow, actions }: Props) {
           disabled={!enabled}
           notConnected={state === "not_connected"}
         />
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-[22px]">
+      </SectionStack>
+      <SectionStack className="min-w-0 flex-1">
         <OverviewModel agent={agent} />
         <OverviewDetails agent={agent} />
         <OverviewRecentSessions agent={agent} />
-      </div>
+      </SectionStack>
     </div>
   );
 }

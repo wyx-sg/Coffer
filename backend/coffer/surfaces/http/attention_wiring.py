@@ -12,6 +12,8 @@ ever report its own error.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from coffer.application.agent.attention import AgentAttentionSource
 from coffer.application.agent.auto_detect import AutoDetectService
 from coffer.application.agent.connection_service import AgentConnectionService
@@ -20,6 +22,7 @@ from coffer.application.channel.attention import ChannelAttentionSource
 from coffer.application.channel.service import ChannelService
 from coffer.application.mcp.attention import McpAttentionSource
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.attention import SecretAttentionSource
 from coffer.application.skill.cli_attention import CliAttentionSource
 from coffer.application.skill.cli_requirements import CliRequirementService
 from coffer.application.sync.attention import SyncAttentionSource
@@ -40,6 +43,7 @@ def build_attention_sources(
     channel_service: ChannelService | None,
     health_repo: MCPServerHealthRepo | None,
     cli_service: CliRequirementService | None = None,
+    protections_on: Callable[[], bool] | None = None,
 ) -> list[AttentionSource]:
     """Every kind's source, in the order the Overview groups them."""
     sources: list[AttentionSource] = []
@@ -65,6 +69,8 @@ def build_attention_sources(
         sources.append(SyncAttentionSource(sync=sync_service))
     if cli_service is not None:
         sources.append(CliAttentionSource(cli_service))
+    if protections_on is not None:
+        sources.append(SecretAttentionSource(protections_on))
     return sources
 
 
@@ -82,6 +88,7 @@ def lifespan_attention_sources(
     from coffer.surfaces.http.channel_routes import get_channel_service
     from coffer.surfaces.http.cli_dependencies import get_cli_requirement_service_optional
     from coffer.surfaces.http.mcp.dependencies import get_health_repo_optional
+    from coffer.surfaces.http.secret_boundary_wiring import get_secret_boundary
 
     return build_attention_sources(
         resource_svc=resource_svc,
@@ -92,6 +99,7 @@ def lifespan_attention_sources(
         channel_service=get_channel_service(),
         health_repo=get_health_repo_optional(),
         cli_service=get_cli_requirement_service_optional(),
+        protections_on=lambda: get_secret_boundary().protections_on(),
     )
 
 

@@ -11,9 +11,11 @@ import type { Cli } from "@/lib/api/clis";
 import { readHandoffState } from "@/lib/conversations/handoff";
 import { acceptance } from "@/test/acceptance";
 import {
+  DEMO_INTERFACE,
   GCLOUD_LOGGED_OUT,
   GH_OUTDATED,
   JQ_MISSING,
+  NOT_READ,
   UV_MISSING_FOR_SERVER,
   UV_READY,
 } from "@/test/cliFixtures";
@@ -24,6 +26,12 @@ vi.mock("@/lib/api/clis", () => ({
     list: vi.fn(),
     checkAll: vi.fn(),
     get: vi.fn(),
+    add: vi.fn(),
+    preview: vi.fn(),
+    edit: vi.fn(),
+    remove: vi.fn(),
+    interface: vi.fn(),
+    readInterface: vi.fn(),
   },
 }));
 vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
@@ -55,6 +63,7 @@ function renderPage(path = "/clis") {
           <Routes>
             <Route path="/clis" element={<ClisPage />} />
             <Route path="/clis/:command" element={<ClisPage />} />
+            <Route path="/clis/:command/:tab" element={<ClisPage />} />
             <Route path="/conversations/new" element={<Draft />} />
             <Route path="*" element={null} />
           </Routes>
@@ -88,6 +97,8 @@ function paneTitle(): string {
 beforeEach(() => {
   // The daemon's order: missing, outdated, logged out, ready.
   api.list.mockResolvedValue(listOf([JQ_MISSING, GH_OUTDATED, GCLOUD_LOGGED_OUT, UV_READY]));
+  api.interface.mockResolvedValue(NOT_READ);
+  api.readInterface.mockResolvedValue(DEMO_INTERFACE);
   listAgents.mockResolvedValue({
     agents: [{ agent_key: "claude_code", display_name: "Claude Code", available: true }],
   });
@@ -145,12 +156,9 @@ describe("ClisPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
     expect(writeText).toHaveBeenCalledWith(JQ_MISSING.handoff?.prompt);
 
-    // Ask an agent: pick one, then the draft opens with the prompt, unsent.
+    // Ask an agent: the draft opens at once with the prompt, unsent.
     fireEvent.click(await screen.findByRole("button", { name: "Ask an agent" }));
-    const dialog = await screen.findByRole("dialog");
-    const start = within(dialog).getByRole("button", { name: "Start" });
-    await waitFor(() => expect(start).toBeEnabled());
-    fireEvent.click(start);
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(await screen.findByTestId("draft")).toHaveTextContent(JQ_MISSING.handoff?.prompt ?? "");
     unmount();
 
@@ -213,7 +221,6 @@ describe("ClisPage", () => {
     expect(banner).toHaveTextContent(
       "duckdb can't start, and data-profiling fails at the step that calls uv.",
     );
-    expect(screen.getByText("1 MCP server · 1 skill")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "duckdb" })).toHaveAttribute(
       "href",
       "/mcp-servers/duckdb",
@@ -228,21 +235,24 @@ describe("ClisPage", () => {
     expect(screen.getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
   });
 
-  test("a command no skill requires says so", async () => {
+  test("a command nothing knows says so", async () => {
     const { ApiError } = await import("@/lib/api/errors");
-    api.get.mockRejectedValue(new ApiError("CLI_NOT_REQUIRED", "nope"));
+    api.get.mockRejectedValue(new ApiError("CLI_NOT_KNOWN", "nope"));
     renderPage("/clis/nothing");
     expect(await screen.findByText("Couldn't open this command")).toBeInTheDocument();
-    expect(screen.getByText("No skill or MCP server requires this command")).toBeInTheDocument();
+    expect(
+      screen.getByText("No skill, MCP server or added tool is called that"),
+    ).toBeInTheDocument();
   });
 
-  test("no skill declares requires: shows the empty state with the docs link", async () => {
+  test("no tool and no requires: shows the empty state with Add and the docs link", async () => {
     api.list.mockResolvedValue({
       items: [],
       warnings: [{ skill_uid: "sk-x", skill_name: "x", message: "entry 1 is not understood" }],
     });
     renderPage();
-    expect(await screen.findByText("No skill requires a command yet")).toBeInTheDocument();
+    expect(await screen.findByText("No command-line tools yet")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Add a command-line tool" })).toHaveLength(2);
     expect(screen.getByRole("link", { name: /How requires: works/ })).toHaveAttribute(
       "href",
       expect.stringContaining("/guides/clis"),

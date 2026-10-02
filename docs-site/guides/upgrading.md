@@ -19,6 +19,8 @@ daemon and run `coffer migrate` once to move it into ~/.coffer/vault
 
 The error code is `VAULT_MIGRATION_REQUIRED`. Nothing has been changed at that point. The daemon never migrates your home in your place, because the upgrade moves the trees and the database a running daemon holds open.
 
+After the upgrade, one thing looks like a fault and is not: **every secret waits once for your approval**. The upgrade carries your secrets across but no approvals, and a secret goes to a destination only after you approve it there. So the first time a provider, an MCP server, a channel or the sync remote needs its secret, it waits for you in the Coffer app (the [Secrets page](/guides/secrets#approvals)) and stays idle until you approve — a channel, for example, shows "waiting for approval" instead of connecting, with its pairing and settings kept. Approve each one once; it starts by itself on its next attempt, with no restart.
+
 ## Before you start
 
 - **Stop the daemon.** Quit the desktop app if you use it, then run `coffer daemon stop`. `coffer migrate` refuses while a daemon runs.
@@ -64,6 +66,7 @@ Every move is recorded in `local/migration.json` as it happens, so a rollback ca
 - **Links into moved trees.** Links in `~/.claude` and `~/.codex` that point into the old locations. The skill links Coffer delivered are repaired when the daemon next starts and reconciles; a link you made yourself, you re-point.
 - **Nested git repositories** inside moved trees.
 - **Your sync remote must be rebuilt**, if you had one (below).
+- **Secrets waiting for approval.** When the home holds secrets, the report counts them and says that each one's first use at each destination waits once for your approval in the Coffer app.
 
 Then start Coffer as usual. `coffer path` prints the new roots.
 

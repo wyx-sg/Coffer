@@ -16,12 +16,13 @@ import { useTranslation } from "react-i18next";
 import { secretsApi } from "@/lib/api/secret";
 import { translateApiError } from "@/lib/api/errors";
 import {
+  attentionKey,
   secretsKey,
   pendingApprovalsKey,
   refusedApprovalsKey,
   secretBoundaryKey,
 } from "@/lib/api/queryKeys";
-import { approvePending, onApprovalsEvent } from "@/lib/tauri";
+import { approvePending, approvePendingBatch, onApprovalsEvent } from "@/lib/tauri";
 import { useToast } from "@/components/ui/toast";
 
 const POLL_MS = 15_000;
@@ -103,5 +104,70 @@ export function useApproveApproval() {
     // and a failed apply may still have moved it.
     onSettled: () => void qc.invalidateQueries({ queryKey: secretsKey }),
     onError: (e) => toast.error(translateApiError(t, e)),
+  });
+}
+
+/** Approve several approvals through one presence check in the desktop shell. */
+export function useApproveApprovals() {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (ids: string[]) => approvePendingBatch(ids),
+    // Settled, as for one: a cancelled prompt leaves everything pending.
+    onSettled: () => void qc.invalidateQueries({ queryKey: secretsKey }),
+    onError: (e) => toast.error(translateApiError(t, e)),
+  });
+}
+
+/** Refuse several approvals; needs no presence. */
+export function useRejectApprovals() {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (ids: string[]) => secretsApi.rejectApprovals(ids),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: secretsKey }),
+    onError: (e) => toast.error(translateApiError(t, e)),
+  });
+}
+
+/** Turn the approval requirement back on. Needs no presence: it only narrows. */
+export function useTurnOnProtection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => secretsApi.setSecretBoundary(true),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: secretsKey });
+      void qc.invalidateQueries({ queryKey: attentionKey });
+    },
+  });
+}
+
+/**
+ * Turn the approval requirement off: ask the daemon (which records a
+ * "turn protection off" approval), then apply it through the desktop shell's
+ * presence check. A check that is cancelled or fails refuses the approval it
+ * just made, so nothing is left waiting and the requirement stays on. Throws
+ * outside the shell: a browser tab cannot turn it off.
+ */
+export function useTurnOffProtection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const asked = await secretsApi.setSecretBoundary(false);
+      const id = asked?.pending_approval_id;
+      if (!id) return;
+      try {
+        await approvePending(id);
+      } catch (e) {
+        await secretsApi.rejectApproval(id).catch(() => undefined);
+        throw e;
+      }
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: secretsKey });
+      void qc.invalidateQueries({ queryKey: attentionKey });
+    },
   });
 }

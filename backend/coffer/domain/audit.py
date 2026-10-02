@@ -22,6 +22,9 @@ class AuditEventType(StrEnum):
     RESOURCE_SCOPE_UPDATED = "resource_scope_updated"
     CAPABILITY_ENABLED = "capability_enabled"
     CAPABILITY_DISABLED = "capability_disabled"
+    # spec mcp-gateway "Choose how each tool is exposed": tools pinned into
+    # the listing, left to search, or handed back to the usage ranking.
+    TOOL_EXPOSURE_CHANGED = "tool_exposure_changed"
     TOKEN_ROTATED = "token_rotated"
     # spec daemon "Change residency from the settings page or the command line":
     # autostart installed or removed
@@ -50,6 +53,7 @@ class AuditEventType(StrEnum):
     SECRET_APPROVAL_REQUESTED = "secret_approval_requested"
     SECRET_APPROVAL_APPROVED = "secret_approval_approved"
     SECRET_APPROVAL_REJECTED = "secret_approval_rejected"
+    SECRET_PROTECTION_ENABLED = "secret_protection_enabled"
     SECRET_IMPORTED = "secret_imported"
     # spec agent-registry
     AGENT_CONFIG_FILE_WRITTEN = "agent_config_file_written"
@@ -73,6 +77,10 @@ class AuditEventType(StrEnum):
     SKILL_DRIFT_REMEDIATED = "skill_drift_remediated"
     SKILL_ADOPTED = "skill_adopted"
     SKILL_UNMANAGED_DELETED = "skill_unmanaged_deleted"
+    # spec skill-manager "Declare a command-line tool without a skill"
+    CLI_TOOL_ADDED = "cli_tool_added"
+    CLI_TOOL_EDITED = "cli_tool_edited"
+    CLI_TOOL_REMOVED = "cli_tool_removed"
     # spec knowledge
     KNOWLEDGE_WRITTEN = "knowledge_written"
     KNOWLEDGE_DELETED = "knowledge_deleted"
@@ -93,6 +101,7 @@ class AuditEventType(StrEnum):
     # spec channels
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"
+    CHANNEL_PERSON_REMOVED = "channel_person_removed"
     # spec vault-storage: a person's edit found on disk and committed as a
     # ``disk`` write, and a version of a vault file or folder put back.
     VAULT_FILE_EDITED = "vault_file_edited"

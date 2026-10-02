@@ -3,6 +3,7 @@
 // ago it was last active; the open session is marked. The last page loaded
 // offers "Load more" while the server has a cursor for the next one.
 import { useTranslation } from "react-i18next";
+import { MessageSquare } from "lucide-react";
 
 import { ageOf, projectName } from "@/components/agents/sessions/sessionTime";
 import { Button } from "@/components/ui/button";
@@ -67,17 +68,23 @@ export function SessionListPage({
             onClick={() => onOpen(s.source_path)}
             aria-current={s.source_path === selected ? "true" : undefined}
             className={cn(
-              "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
+              "flex w-full items-start gap-2.5 rounded-md px-2 py-2 text-left transition-colors",
               s.source_path === selected
                 ? "bg-surface-selected text-text"
                 : "hover:bg-surface-hover hover:text-text",
             )}
           >
+            <span
+              aria-hidden
+              className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-chip text-text-subtle"
+            >
+              <MessageSquare className="size-3.5" strokeWidth={1.75} />
+            </span>
             <span className="min-w-0 flex-1">
-              <span className="block break-words text-sm text-text">
+              <span className="line-clamp-2 break-words text-sm font-label text-text">
                 {s.title ?? t("agents.sessionsTab.untitled")}
               </span>
-              <span className="block text-2xs text-text-muted">
+              <span className="mt-0.5 block truncate text-2xs text-text-muted">
                 {t("agents.sessionsTab.rowMeta", {
                   project: projectName(s.project_path) ?? t("common.emptyValue"),
                   count: s.message_count,

@@ -141,12 +141,15 @@ paths:
   /api/v1/daemon/logs:
     get:
       description: |-
-        The tail of ``daemon.log``, newest-first — the same record ``coffer log daemon``
+        One page of ``daemon.log``, newest-first — the same record ``coffer log daemon``
         reads, for the human looking at the Activity page.
 
         The file interleaves several writers' formats (see ``log_reader``); they
         are normalised there onto the same fields, so every row here carries the
-        time, level and logger its line actually stated.
+        time, level and logger its line actually stated. A page reads a small
+        window of bytes from the end of the file (or from the cursor's offset) and
+        parses only that (see ``log_page``); the work follows the page, not the
+        file.
       operationId: list_daemon_logs_api_v1_daemon_logs_get
       parameters:
       - in: query
@@ -181,6 +184,35 @@ paths:
           minimum: 1
           title: Limit
           type: integer
+      - description: The previous page's next_cursor. Bound to the filters it was issued with; any other value is 400 CURSOR_INVALID.
+        in: query
+        name: cursor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: The previous page's next_cursor. Bound to the filters it was issued with; any other value is 400 CURSOR_INVALID.
+          title: Cursor
+      - description: Only the records whose message, logger, level or folded lines hold this text.
+        in: query
+        name: q
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Only the records whose message, logger, level or folded lines hold this text.
+          title: Q
+      - description: Also count the matching records in the file's recent tail (a bounded read).
+        in: query
+        name: with_total
+        required: false
+        schema:
+          default: false
+          description: Also count the matching records in the file's recent tail (a bounded read).
+          title: With Total
+          type: boolean
       - description: Only the lines written under this correlation id (a request's or a turn's).
         in: query
         name: trace_id
@@ -851,6 +883,11 @@ components:
       type: object
     DaemonLogListOut:
       properties:
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
         path:
           title: Path
           type: string
@@ -859,8 +896,20 @@ components:
             $ref: '#/components/schemas/DaemonLogRecordOut'
           title: Records
           type: array
+        total:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Total
+        total_is_floor:
+          default: false
+          title: Total Is Floor
+          type: boolean
       required:
       - records
+      - next_cursor
+      - total
+      - total_is_floor
       - path
       title: DaemonLogListOut
       type: object
@@ -888,6 +937,9 @@ components:
           - type: string
           - type: 'null'
           title: Level
+        offset:
+          title: Offset
+          type: integer
         record:
           additionalProperties: true
           title: Record
@@ -901,6 +953,7 @@ components:
       - timestamp
       - level
       - event
+      - offset
       - record
       title: DaemonLogRecordOut
       type: object

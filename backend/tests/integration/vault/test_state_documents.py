@@ -102,7 +102,7 @@ async def test_channel_pairings_follow_a_rename_in_the_same_commit() -> None:
     await peers.upsert(ChannelPeer(channel.uid, "dm", "Owner", now, sender_id="s1"))
     await peers.upsert(ChannelPeer(channel.uid, "grp", "Group", now))
     assert (await peers.owner_peer(channel.uid)).chat_id == "dm"  # type: ignore[union-attr]
-    assert await peers.owner_sender_id(channel.uid) == "s1"
+    assert await peers.sender_ids(channel.uid) == {"s1"}
     await svc.rename(channel.uid, "tg2", actor="user")
     last = vault_repository().log(limit=1)[0]
     assert {p.path for p in last.paths} == {

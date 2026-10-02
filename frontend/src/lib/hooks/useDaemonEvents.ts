@@ -38,13 +38,18 @@ interface Options {
   enabled?: boolean;
 }
 
+// Whether the last stream was open. A page that mounts after another (every
+// navigation) starts from this, so "Live" does not flash to "not live" for
+// the moment its own connection takes to open; a `closed` message clears it.
+let lastLive = false;
+
 /**
  * Subscribe while mounted. Returns whether the stream is open right now, which
  * a page shows as its "Live" mark.
  */
 export function useDaemonEvents({ onMessage, enabled = true }: Options = {}): { live: boolean } {
   const qc = useQueryClient();
-  const [live, setLive] = useState(false);
+  const [live, setLive] = useState(lastLive);
   const listener = useRef(onMessage);
   listener.current = onMessage;
 
@@ -52,14 +57,18 @@ export function useDaemonEvents({ onMessage, enabled = true }: Options = {}): { 
     if (!enabled) return;
     const controller = new AbortController();
     void followDaemonEvents((message) => {
-      if (message.type === "open") setLive(true);
-      else if (message.type === "closed") setLive(false);
+      if (message.type === "open") {
+        lastLive = true;
+        setLive(true);
+      } else if (message.type === "closed") {
+        lastLive = false;
+        setLive(false);
+      }
       invalidateFor(qc, message);
       listener.current?.(message);
     }, controller.signal);
     return () => {
       controller.abort();
-      setLive(false);
     };
   }, [qc, enabled]);
 

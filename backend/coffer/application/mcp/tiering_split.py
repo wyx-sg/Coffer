@@ -3,7 +3,8 @@
 The MCP server page's "Tools reach agents" (spec mcp-gateway "Forward tools,
 resources and prompts"). The gateway decides per session from a live,
 per-session discovery cache that a page read cannot see, so this runs the SAME
-policy (``gateway_tiering.apply_tiering``, fail-open included) over the tool
+policy (``gateway_tiering.apply_tiering``, fail-open and the person's per-tool
+exposure overrides included) over the tool
 lists discovery last saved for every enabled server on this machine. It is a
 machine-wide view — the catalogue of every enabled server, not the slice one
 agent's reach sees — which is what "most behind search" means to the person
@@ -19,6 +20,7 @@ from datetime import datetime
 from coffer.application.mcp.gateway_tiering import apply_tiering
 from coffer.application.mcp.ports import MCPInvocationRepoPort
 from coffer.application.mcp.tiering_config import TieringConfig
+from coffer.application.mcp.tool_exposure import ToolExposureState, explain
 
 
 @dataclass(frozen=True)
@@ -29,6 +31,8 @@ class TieringSplit:
     listed_count: int
     listed: list[str]
     behind_search: list[str]
+    #: This server's tools, each with the person's setting, the effective state and why.
+    tools: list[ToolExposureState]
 
 
 async def tiering_split(
@@ -38,14 +42,22 @@ async def tiering_split(
     invocations: MCPInvocationRepoPort,
     config: TieringConfig,
     clock: Callable[[], datetime],
+    exposure: Mapping[str, str] | None = None,
 ) -> TieringSplit:
     """Split ``server``'s tools in ``catalogue`` (server name → its enabled tools)."""
     tools = [{"name": f"{name}__{tool}"} for name, names in catalogue.items() for tool in names]
-    result = await apply_tiering(tools, invocations=invocations, config=config, clock=clock)
+    overrides = dict(exposure or {})
+    result = await apply_tiering(
+        tools, invocations=invocations, config=config, clock=clock, exposure=overrides
+    )
     listed_names = {str(t["name"]) for t in result.listed}
     own = catalogue.get(server, [])
     listed = [tool for tool in own if f"{server}__{tool}" in listed_names]
     behind = [tool for tool in own if f"{server}__{tool}" not in listed_names]
+    auto_hidden = any(
+        str(t["name"]) not in listed_names and overrides.get(str(t["name"]), "auto") == "auto"
+        for t in tools
+    )
     return TieringSplit(
         enabled=config.enabled,
         budget=config.budget,
@@ -53,6 +65,7 @@ async def tiering_split(
         listed_count=len(tools) - result.hidden_count,
         listed=listed,
         behind_search=behind,
+        tools=explain(server, own, overrides, listed_names, auto_hidden=auto_hidden),
     )
 
 

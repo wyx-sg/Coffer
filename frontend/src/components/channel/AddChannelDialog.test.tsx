@@ -42,7 +42,7 @@ vi.mock("@/lib/hooks/useMachines", () => ({ useThisMachineId: vi.fn() }));
 // mocked above, and what this suite is about is what the form SENDS.
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn() }));
 // Step 3 issues a pairing code and polls the new channel's status.
-const pairing = vi.hoisted(() => ({ peer: null as unknown }));
+const pairing = vi.hoisted(() => ({ people: [] as unknown[] }));
 vi.mock("@/lib/api/channels", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/channels")>()),
   issuePairingCode: vi.fn(async () => ({
@@ -50,7 +50,7 @@ vi.mock("@/lib/api/channels", async (orig) => ({
     expires_at: new Date(Date.now() + 59 * 60_000).toISOString(),
     pair_url: "https://t.me/example_bot?start=R9WD6HNC",
   })),
-  getChannelStatus: vi.fn(async () => ({ peer: pairing.peer })),
+  getChannelStatus: vi.fn(async () => ({ people: pairing.people })),
 }));
 const navigateMock = vi.fn();
 vi.mock("react-router-dom", async (orig) => ({
@@ -169,7 +169,7 @@ const refFor = (secret: string) =>
   expect.stringMatching(new RegExp(`^channel/[0-9a-f]{32}/${secret}$`));
 
 beforeEach(() => {
-  pairing.peer = null;
+  pairing.people = [];
   stubMachineId(HERE);
   stubAgents([CLAUDE, CODEX]);
 });
@@ -247,7 +247,7 @@ describe("the agent the channel drives", () => {
     fillTelegram();
     submit();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/register an agent first/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/add an agent first/i);
     expect(api.POST).not.toHaveBeenCalled();
   });
 });
@@ -452,12 +452,15 @@ describe("the three steps", () => {
     expect(screen.getByText("Waiting for your message…")).toBeInTheDocument();
 
     // The owner sends it; the next status poll reports the pairing.
-    pairing.peer = {
-      display_name: "Alex Chen",
-      chat_id: "c-1",
-      paired_at: new Date().toISOString(),
-      active_conversation_id: null,
-    };
+    pairing.people = [
+      {
+        sender_id: "alex",
+        display_name: "Alex Chen",
+        chat_id: "c-1",
+        paired_at: new Date().toISOString(),
+        active_conversation_id: null,
+      },
+    ];
     expect(await screen.findByText("Paired with Alex Chen", {}, { timeout: 7000 })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
     expect(navigateMock).toHaveBeenCalledWith(`/channels/${NEW_UID}`);

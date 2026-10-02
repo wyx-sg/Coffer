@@ -1,19 +1,23 @@
-// src/pages/ClisPage.tsx — the CLIs page (/clis, /clis/:command): every command a managed skill requires, beside the selected one.
+// src/pages/ClisPage.tsx — the CLIs page (/clis, /clis/:command[/:tab]): every command-line tool, beside the selected one.
 //
-// Spec web-ui "Show every CLI a skill requires on the CLIs page". The header
-// counts the commands and holds Check again, which re-probes every one. The
+// Spec web-ui "Show every CLI a skill requires on the CLIs page". A tool is
+// listed because a skill or MCP server requires it, or because the person added
+// it by hand (Add a command-line tool: no skill needed). The header counts the
+// tools and holds Add and Check again, which re-probes every one. The
 // list pane groups them into Needs you (problems first, the daemon's order)
 // and Ready; the detail pane shows the command in the address, or the first
 // row when there is none. A command that needs the person offers the daemon's
 // prompt for their agent — nothing installs or logs in from here.
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, SquareTerminal } from "lucide-react";
+import { Plus, RefreshCw, SquareTerminal } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { HelpTip } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
+import { AddCliDialog } from "@/components/clis/AddCliDialog";
 import { CliPane } from "@/components/clis/CliPane";
 import { ClisEmptyState } from "@/components/clis/ClisEmptyState";
 import { ClisList } from "@/components/clis/ClisList";
@@ -28,6 +32,7 @@ export function ClisPage() {
   const { command } = useParams<{ command?: string }>();
   const { data, isPending, error, refetch } = useClis();
   const check = useCheckClis();
+  const [adding, setAdding] = useState(false);
   const items = data?.items ?? [];
   const warnings = data?.warnings ?? [];
   const selected = command ?? items[0]?.command ?? null;
@@ -52,7 +57,7 @@ export function ClisPage() {
     body = (
       <div className="space-y-3 overflow-y-auto px-6 py-6 md:px-8">
         <ClisWarnings warnings={warnings} />
-        <ClisEmptyState />
+        <ClisEmptyState onAdd={() => setAdding(true)} />
       </div>
     );
   } else {
@@ -80,6 +85,7 @@ export function ClisPage() {
                 key={selected}
                 command={selected}
                 listed={items.find((c) => c.command === selected)}
+                onRemoved={() => navigate("/clis")}
               />
             ) : null}
           </div>
@@ -102,14 +108,25 @@ export function ClisPage() {
             </>
           }
           actions={
-            <Button variant="outline" disabled={check.isPending} onClick={() => check.mutate()}>
-              <RefreshCw aria-hidden className={check.isPending ? "animate-spin" : undefined} />
-              {check.isPending ? t("clis.checking") : t("clis.checkAgain")}
-            </Button>
+            <>
+              <Button variant="outline" disabled={check.isPending} onClick={() => check.mutate()}>
+                <RefreshCw aria-hidden className={check.isPending ? "animate-spin" : undefined} />
+                {check.isPending ? t("clis.checking") : t("clis.checkAgain")}
+              </Button>
+              <Button onClick={() => setAdding(true)}>
+                <Plus aria-hidden />
+                {t("clis.addTool")}
+              </Button>
+            </>
           }
         />
       </div>
       {body}
+      <AddCliDialog
+        open={adding}
+        onOpenChange={setAdding}
+        onSaved={(c) => navigate(`/clis/${encodeURIComponent(c)}`)}
+      />
     </div>
   );
 }

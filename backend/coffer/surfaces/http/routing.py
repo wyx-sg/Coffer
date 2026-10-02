@@ -28,6 +28,7 @@ from coffer.surfaces.http.agent_mcp_import_routes import router as agent_mcp_imp
 from coffer.surfaces.http.agent_native_memory_routes import (
     router as agent_native_memory_router,
 )
+from coffer.surfaces.http.agent_plugin_part_routes import router as agent_plugin_part_router
 from coffer.surfaces.http.agent_routes import router as agent_router
 from coffer.surfaces.http.agent_transcript_routes import router as agent_transcript_router
 from coffer.surfaces.http.agent_unmanaged_skill_routes import (
@@ -38,6 +39,7 @@ from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.channel_routes import router as channel_router
 from coffer.surfaces.http.chat.agent_provider_routes import router as agent_provider_router
 from coffer.surfaces.http.chat.attachment_routes import router as chat_attachment_router
+from coffer.surfaces.http.chat.conversation_batch_routes import router as chat_batch_router
 from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
 from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
 from coffer.surfaces.http.cli_routes import router as cli_router
@@ -117,6 +119,7 @@ def include_all_routers(app: FastAPI) -> None:
         agent_connection_router,
         agent_hooks_router,
         agent_workspace_router,
+        agent_plugin_part_router,
         agent_native_memory_router,
         agent_transcript_router,
         agent_unmanaged_skill_router,
@@ -143,6 +146,7 @@ def include_all_routers(app: FastAPI) -> None:
         agent_provider_router,
         model_router,
         chat_conversation_router,  # the web Chat page's own REST surface
+        chat_batch_router,  # archive / unarchive / delete several at once
         chat_turn_router,  # … and its turn/SSE half
         chat_attachment_router,  # … and the composer's file uploads
         channel_router,  # spec channels

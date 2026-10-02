@@ -10,6 +10,8 @@ import { AlertTriangle, ArrowUp, RotateCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
+import { LoadMoreFooter } from "@/components/ui/load-more";
+import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import {
   answered,
@@ -21,7 +23,7 @@ import {
 import type { ActivityRecord } from "@/lib/activity/records";
 import { clockTime } from "@/lib/activity/recordText";
 import type { ActivityFeed } from "@/lib/hooks/useActivityFeed";
-import { PAGE_SIZE } from "@/lib/hooks/useActivitySource";
+import { MORE_PAGE } from "@/lib/hooks/useInfiniteList";
 import { useRetentionPolicies } from "@/lib/hooks/useRetention";
 
 /** A log that failed on a tab whose other logs still answered. */
@@ -92,7 +94,7 @@ export function OlderHint({ oldest }: { oldest: ActivityRecord | undefined }) {
   return (
     <span className="text-xs text-text-subtle">
       {t("activity.older.hint", {
-        count: PAGE_SIZE,
+        count: MORE_PAGE,
         before: clockTime(oldest?.at ?? null).slice(0, 5),
         calls: keptFor(t, days("mcp_invocations")),
         changes: keptFor(t, days("audit_log")),
@@ -102,5 +104,37 @@ export function OlderHint({ oldest }: { oldest: ActivityRecord | undefined }) {
       </Link>
       .
     </span>
+  );
+}
+
+/**
+ * Under the rows: the next page loads when this scrolls into view (a skeleton
+ * row stands in for it), and "N loaded · Load more" is the same thing by hand.
+ */
+export function LoadOlder({ feed }: { feed: ActivityFeed }) {
+  const { t } = useTranslation();
+  const loaded = feed.rows.length;
+  return (
+    <div className="flex flex-col gap-3 px-3 py-4">
+      {feed.isLoadingOlder ? (
+        <div className="flex flex-col gap-2" aria-busy="true">
+          <Skeleton className="h-6 w-full" />
+          <Skeleton className="h-6 w-full" />
+        </div>
+      ) : null}
+      {feed.hasOlder ? (
+        <LoadMoreFooter
+          autoLoad
+          loaded={loaded}
+          hasMore
+          loading={feed.isLoadingOlder}
+          onMore={feed.loadOlder}
+          moreLabel={t("activity.loadOlder")}
+          hint={<OlderHint oldest={feed.rows.at(-1)} />}
+        />
+      ) : (
+        <span className="text-xs text-text-subtle">{t("activity.end")}</span>
+      )}
+    </div>
   );
 }

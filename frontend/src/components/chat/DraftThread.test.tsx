@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -76,6 +76,7 @@ function renderDraft(overrides: Partial<React.ComponentProps<typeof DraftThread>
       <MemoryRouter>
         <DraftThread
           agents={agents}
+          listPath="/conversations"
           agentKey="claude_code"
           onAgentChange={vi.fn()}
           onSend={onSend}
@@ -212,9 +213,57 @@ describe("DraftThread", () => {
   });
 
   test("names the folder the turn will run in — Coffer's workspace when none was chosen", () => {
-    // The folder is chosen in New conversation; the draft only shows it.
     renderDraft();
-    expect(screen.getByText("Coffer’s workspace")).toBeInTheDocument();
-    expect(screen.queryByRole("textbox", { name: /working directory/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Workspace" })).toHaveTextContent(
+      "Coffer’s workspace",
+    );
+  });
+
+  test("the workspace is a picker: Coffer's workspace, recent folders, a typed path", () => {
+    localStorage.setItem(
+      "coffer.conversations.recentWorkingDirs",
+      JSON.stringify(["/Users/me/a", "/Users/me/b"]),
+    );
+    const onCwdChange = vi.fn();
+    renderDraft({ cwd: "/Users/me/a", onCwdChange });
+    fireEvent.click(screen.getByRole("button", { name: "Workspace" }));
+
+    const list = screen.getByRole("list", { name: "Workspace" });
+    expect(
+      within(list)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Coffer’s workspace", "~/a", "~/b"]);
+    expect(screen.getByRole("button", { name: "Choose a folder…" })).toBeInTheDocument();
+
+    fireEvent.click(within(list).getByRole("button", { name: "~/b" }));
+    expect(onCwdChange).toHaveBeenLastCalledWith("/Users/me/b");
+  });
+
+  test("Coffer's workspace and a typed path can be chosen", () => {
+    const onCwdChange = vi.fn();
+    renderDraft({ cwd: "/Users/me/a", onCwdChange });
+    fireEvent.click(screen.getByRole("button", { name: "Workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Coffer’s workspace" }));
+    expect(onCwdChange).toHaveBeenLastCalledWith(null);
+
+    fireEvent.click(screen.getByRole("button", { name: "Workspace" }));
+    expect(screen.getByRole("button", { name: "Use" })).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Or type a folder path" }), {
+      target: { value: "  /srv/project " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Use" }));
+    expect(onCwdChange).toHaveBeenLastCalledWith("/srv/project");
+  });
+
+  test("an agent that cannot run is not offered", () => {
+    renderDraft({
+      agents: [
+        { agent_key: "claude_code", display_name: "Claude Code", available: true },
+        { agent_key: "codex", display_name: "Codex", available: false },
+      ],
+    });
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Agent" }), { key: "ArrowDown" });
+    expect(screen.queryByRole("option", { name: "Codex" })).not.toBeInTheDocument();
   });
 });

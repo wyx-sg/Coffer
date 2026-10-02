@@ -45,7 +45,11 @@ class CommandProbe:
         self._login_timeout = login_timeout
 
     def locate(self, command: str) -> str | None:
-        """The command as the agent's ``PATH`` resolves it, symlinks followed."""
+        """The command as the agent's ``PATH`` resolves it, symlinks followed.
+        An absolute path is the file itself, when it can be run."""
+        if os.path.isabs(command):
+            file = pathlib.Path(command)
+            return str(file.resolve()) if file.is_file() and os.access(file, os.X_OK) else None
         found = shutil.which(executable_name(command), path=self._user_path())
         if found is None:
             return None
@@ -53,6 +57,13 @@ class CommandProbe:
             return str(pathlib.Path(found).resolve())
         except OSError:
             return None
+
+    def fingerprint(self, path: str) -> str | None:
+        try:
+            st = pathlib.Path(path).stat()
+        except OSError:
+            return None
+        return f"{st.st_size}:{st.st_mtime_ns}"
 
     def version(self, path: str) -> str | None:
         """What ``<path> --version`` prints, read up to ``MAX_VERSION_OUTPUT``

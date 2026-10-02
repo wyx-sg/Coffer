@@ -39,6 +39,28 @@ def test_status_run_and_history(pair: tuple[Box, Box]) -> None:
         assert missing.json()["error"]["code"] == "SYNC_ROUND_NOT_FOUND"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="every round is recorded with what it moved")
+def test_history_pages_by_cursor_without_repeating_or_skipping(pair: tuple[Box, Box]) -> None:
+    mac, _mini = pair
+    with client_for(mac) as c:
+        ids = [c.post("/sync/run").json()["id"] for _ in range(5)]
+        first = c.get("/sync/runs", params={"limit": 2}).json()
+        assert [r["id"] for r in first["rounds"]] == ids[:2:-1] and first["total"] >= 5
+        # A round finishing at the head between two reads does not shift page 2.
+        newest = c.post("/sync/run").json()["id"]
+        second = c.get("/sync/runs", params={"limit": 2, "cursor": first["next_cursor"]}).json()
+        assert [r["id"] for r in second["rounds"]] == ids[2:0:-1]
+        assert newest not in [r["id"] for r in second["rounds"]]
+        seen = [r["id"] for r in first["rounds"] + second["rounds"]]
+        cursor = second["next_cursor"]
+        while cursor:
+            page = c.get("/sync/runs", params={"limit": 2, "cursor": cursor}).json()
+            seen += [r["id"] for r in page["rounds"]]
+            cursor = page["next_cursor"]
+        assert len(seen) == len(set(seen)) == c.get("/sync/runs").json()["total"] - 1
+        assert c.get("/sync/runs", params={"cursor": "junk"}).status_code == 400
+
+
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="keeping this machine's version continues the round"
 )

@@ -25,7 +25,8 @@ from typing import Any
 from coffer.application.sync import round_plaintext
 from coffer.application.sync.round_deps import RoundDeps
 from coffer.application.sync.round_guard import hold_for, invalid_files
-from coffer.application.sync.round_layout import layout_refusal
+from coffer.application.sync.round_layout import is_older, layout_refusal
+from coffer.application.sync.round_replace import replace
 from coffer.application.sync.round_trees import (
     conflict_files,
     identity_conflicts,
@@ -33,19 +34,12 @@ from coffer.application.sync.round_trees import (
     settle_secrets,
 )
 from coffer.domain.sync.remote import SyncRemote
-from coffer.domain.sync.rounds import RoundRecord, RoundStatus
+from coffer.domain.sync.rounds import PROBLEM_STATUS, RoundRecord, RoundStatus
 from coffer.domain.sync.stops import ConflictFile, HoldDirection, Stop, StopKind
 from coffer.domain.vault.errors import VaultFileStale
-from coffer.domain.vault.remote_errors import RemoteFailed, RemoteProblem
+from coffer.domain.vault.remote_errors import RemoteFailed
 from coffer.domain.vault.writers import OP_UPDATE, WRITER_DAEMON, CommitMeta
 from coffer.domain.vault.writes import CommitResult, Expect
-
-PROBLEM_STATUS = {
-    RemoteProblem.UNREACHABLE: RoundStatus.UNREACHABLE,
-    RemoteProblem.AUTH_FAILED: RoundStatus.AUTH_FAILED,
-    RemoteProblem.PUSH_REJECTED: RoundStatus.PUSH_FAILED,
-    RemoteProblem.OTHER: RoundStatus.FAILED,
-}
 
 
 class Recorder:
@@ -115,6 +109,11 @@ class RoundEngine:
         refused = layout_refusal(d, tip)
         if refused is not None:
             return rec(refused[0], detail=refused[1])
+        if is_older(d, tip):
+            # This vault is the source of truth: it replaces a remote at an
+            # older layout, joined or not (spec vault-sync "Replace a remote
+            # at an older layout").
+            return replace(self, rec, remote, token, local, tip)
         base = d.git.merge_base(local, tip)
         if base is None:
             d.state.set_joined(False)

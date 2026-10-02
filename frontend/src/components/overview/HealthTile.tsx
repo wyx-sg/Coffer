@@ -13,6 +13,7 @@ import { StatusWord } from "@/components/status/StatusWord";
 import type { StatusTone } from "@/lib/statusTone";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 
@@ -132,7 +133,9 @@ export function HealthTile({ to, label, icon, state }: Props) {
               <span className="truncate text-sm text-text-muted">{state.content.unit}</span>
             ) : null}
           </p>
-          {state.content.summary ? (
+          {typeof state.content.summary === "string" && state.content.summary ? (
+            <TruncatedText text={state.content.summary} className="text-xs text-text-muted" />
+          ) : state.content.summary ? (
             <div className="truncate text-xs text-text-muted">{state.content.summary}</div>
           ) : null}
         </>

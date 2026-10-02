@@ -32,7 +32,6 @@ const STATUS_TONE: Record<RoundStatus, Tone> = {
   unreachable: "error",
   auth_failed: "error",
   remote_too_new: "error",
-  remote_too_old: "error",
   failed: "error",
 };
 

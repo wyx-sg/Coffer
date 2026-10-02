@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -37,10 +38,29 @@ async def test_rounds_are_stored_and_read_back_newest_first(tmp_path: Path) -> N
     second = await repo.append(_round(2, RoundStatus.PUSH_FAILED))
     assert first.id is not None and second.id == first.id + 1
     assert [r.id for r in await repo.recent(10)] == [second.id, first.id]
-    assert [r.id for r in await repo.recent(1, offset=1)] == [first.id]
+    after = (datetime.fromisoformat(second.finished_at), second.id)
+    assert [r.id for r in await repo.recent(1, after)] == [first.id]
+    assert await repo.recent(5, (datetime.fromisoformat(first.finished_at), first.id)) == []
     got = await repo.get(second.id)  # type: ignore[arg-type]
     assert got == second
     assert got is not None and got.pulled[0].machine == "Mac" and got.detail == "git said no"
     assert await repo.get(999) is None
     assert await repo.count() == 2
+    await engine.dispose()
+
+
+async def test_a_stored_round_with_an_unknown_status_is_refused(tmp_path: Path) -> None:
+    """Strict reads: a removed status is migrated away, never tolerated on read."""
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'runs.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    repo = SyncRunRepo(session_maker(engine))
+    stored = await repo.append(_round(1))
+    async with engine.begin() as conn:
+        await conn.exec_driver_sql(
+            "UPDATE sync_runs SET status = 'remote_too_old', "
+            "payload_json = replace(payload_json, '\"pulled\"', '\"remote_too_old\"')"
+        )
+    with pytest.raises(ValueError, match="remote_too_old"):
+        await repo.get(stored.id)  # type: ignore[arg-type]
     await engine.dispose()

@@ -4,6 +4,7 @@ import { render, screen, waitFor, fireEvent, within } from "@testing-library/rea
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConversationsPage } from "./ConversationsPage";
+import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { makeBinding, makeConversation } from "@/test/conversationFixtures";
 import { acceptance } from "@/test/acceptance";
@@ -121,23 +122,23 @@ function renderPage(
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <QueryClientProvider client={qc}>
-        <TooltipProvider>
-          <Routes>
-            <Route path="/conversations" element={page} />
-            <Route path="/conversations/:id" element={page} />
-          </Routes>
-        </TooltipProvider>
+        <ToastProvider>
+          <TooltipProvider>
+            <Routes>
+              <Route path="/conversations" element={page} />
+              <Route path="/conversations/:id" element={page} />
+            </Routes>
+          </TooltipProvider>
+        </ToastProvider>
       </QueryClientProvider>
     </MemoryRouter>,
   );
 }
 
-/** New conversation → Start: the draft, with its composer. */
+/** New conversation: straight to the draft, with its composer (no dialog). */
 async function openDraft() {
   fireEvent.click(await screen.findByRole("button", { name: /new conversation/i }));
-  const start = await screen.findByRole("button", { name: /^start$/i });
-  await waitFor(() => expect(start).toBeEnabled());
-  fireEvent.click(start);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   return screen.findByRole("textbox", { name: /message input/i });
 }
 
@@ -272,8 +273,8 @@ describe("ConversationsPage list", () => {
   });
 
   test("the archived list says how to continue an archived conversation", async () => {
-    chatApiMock.listConversations.mockImplementation(async (archived?: boolean) => ({
-      conversations: archived
+    chatApiMock.listConversations.mockImplementation(async (opts: { archived?: boolean }) => ({
+      conversations: opts.archived
         ? [makeConv({ id: "old", title: "Old work", archived_at: "2026-02-01T00:00:00Z" })]
         : [makeConv({ title: "From the web" })],
     }));
@@ -281,7 +282,7 @@ describe("ConversationsPage list", () => {
     expect(await screen.findByText("Old work")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Archived conversations are read-only. Open one and choose Restore from its ⋯ menu to continue it.",
+        "Archived conversations are read-only. Open one and choose Unarchive to continue it.",
       ),
     ).toBeInTheDocument();
   });
@@ -320,7 +321,7 @@ describe("ConversationsPage draft", () => {
     );
   });
 
-  test("the working directory chosen in New conversation is carried into the create", async () => {
+  test("the last folder is the draft's default and is carried into the create", async () => {
     localStorage.setItem("coffer.conversations.lastWorkingDir", "/Users/me/project");
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
@@ -354,6 +355,43 @@ describe("ConversationsPage draft", () => {
         agent_config: { model: "claude-opus-4-8" },
       }),
     );
+  });
+
+  test("New conversation opens the draft with no dialog and no request", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
+    chatApiMock.getConversation.mockResolvedValue(makeConv());
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderPage("/conversations");
+
+    await openDraft();
+    expect(await screen.findByText("New conversation with Claude Code")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(chatApiMock.createConversation).not.toHaveBeenCalled();
+  });
+
+  test("the folder and agent last used are the next draft's defaults", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    chatApiMock.createConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
+    renderPage("/conversations/new", [
+      { agent_key: "claude_code", display_name: "Claude Code", available: true },
+      { agent_key: "codex", display_name: "Codex", available: true },
+    ]);
+    // Choose a typed folder on the draft, then send.
+    fireEvent.click(await screen.findByRole("button", { name: "Workspace" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: /folder path/i }), {
+      target: { value: "/Users/me/other" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Use" }));
+    send(await screen.findByRole("textbox", { name: /message input/i }), "hi");
+    await waitFor(() =>
+      expect(chatApiMock.createConversation).toHaveBeenCalledWith({
+        agent_key: "claude_code",
+        agent_config: { cwd: "/Users/me/other" },
+      }),
+    );
+    expect(localStorage.getItem("coffer.conversations.lastWorkingDir")).toBe("/Users/me/other");
+    expect(localStorage.getItem("coffer.conversations.lastAgent")).toBe("claude_code");
   });
 
   test("the draft with no managed agent available says how to get one", async () => {
@@ -468,17 +506,71 @@ describe("ConversationsPage open conversation", () => {
     expect(chatApiMock.createConversation).not.toHaveBeenCalled();
   });
 
-  test("/conversations/:id opens that conversation beside the list, headed by its source", async () => {
+  test("/conversations/:id opens that conversation full width, headed by its source, with no list beside it", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv(), channelConv] });
     chatApiMock.getConversation.mockResolvedValue(channelConv);
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderPage("/conversations/conv-st");
     expect(await screen.findByRole("heading", { name: "Daily Sentry triage" })).toBeInTheDocument();
-    // The list and the thread load on their own queries; wait for each.
-    expect(await screen.findByRole("link", { name: /Test Conv/ })).toBeInTheDocument();
     expect(
       await screen.findByText(/send a message to start the conversation/i),
     ).toBeInTheDocument();
+    // No list column: not the other conversation, not the filters, not a search box.
+    expect(screen.queryByRole("link", { name: /Test Conv/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /source/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: /search conversations/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("the back link returns to the list with its filters in the URL", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv(), channelConv] });
+    chatApiMock.getConversation.mockResolvedValue(channelConv);
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderPage("/conversations/conv-st?source=seatalk");
+    // The open conversation has settled (the link is the one it stays mounted with).
+    await screen.findByRole("heading", { name: "Daily Sentry triage" });
+    fireEvent.click(screen.getByRole("link", { name: "Conversations" }));
+    // The list again, still narrowed to SeaTalk.
+    expect(await screen.findByRole("link", { name: /Daily Sentry triage/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Test Conv/ })).not.toBeInTheDocument();
+  });
+
+  test("a page opened from elsewhere goes back there", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [channelConv] });
+    chatApiMock.getConversation.mockResolvedValue(channelConv);
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderPage({
+      pathname: "/conversations/conv-st",
+      state: { from: { to: "/conversations?agent=codex", label: "Overview" } },
+    });
+    const back = await screen.findByRole("link", { name: "Back to Overview" });
+    expect(back).toHaveAttribute("href", "/conversations?agent=codex");
+  });
+
+  test("the draft is full width too, with the same back link", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
+    renderPage("/conversations/new?agent=codex");
+    expect(await screen.findByText("New conversation with Claude Code")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Conversations" })).toHaveAttribute(
+      "href",
+      "/conversations?agent=codex",
+    );
+    expect(screen.queryByRole("link", { name: /Test Conv/ })).not.toBeInTheDocument();
+  });
+
+  test("the list groups conversations under time headings", async () => {
+    const now = new Date();
+    chatApiMock.listConversations.mockResolvedValue({
+      conversations: [
+        makeConv({ id: "a", title: "Fresh one", updated_at: now.toISOString() }),
+        makeConv({ id: "b", title: "Ancient one", updated_at: "2020-01-01T00:00:00Z" }),
+      ],
+    });
+    renderPage("/conversations");
+    expect(await screen.findByText("Today")).toBeInTheDocument();
+    expect(screen.getByText("Earlier")).toBeInTheDocument();
+    expect(screen.queryByText("Yesterday")).not.toBeInTheDocument();
   });
 
   test("deleting a conversation from its menu asks for confirmation first", async () => {
@@ -539,10 +631,30 @@ describe("ConversationsPage open conversation", () => {
 
     expect(await screen.findByText("old question")).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /message input/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /restore/i })).toBeInTheDocument();
+    // The header says it is archived and offers Unarchive; so does the notice.
+    expect(screen.getByRole("button", { name: "Unarchive" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /unarchive to continue/i })).toBeInTheDocument();
+    expect(screen.getAllByText("Archived").length).toBeGreaterThan(0);
+    // The ⋯ menu does not repeat the header's Unarchive button.
+    fireEvent.click(screen.getByRole("button", { name: "More actions for this conversation" }));
+    expect(screen.queryByRole("menuitem", { name: "Unarchive" })).not.toBeInTheDocument();
   });
 
-  test("restoring an archived thread unarchives it and re-enables the composer", async () => {
+  test("the header's Unarchive brings an archived conversation back", async () => {
+    chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
+    chatApiMock.getConversation.mockResolvedValue(
+      makeConv({ archived_at: "2026-02-01T00:00:00Z" }),
+    );
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    chatApiMock.unarchiveConversation.mockResolvedValue(makeConv({ archived_at: null }));
+    renderPage("/conversations/conv-1");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Unarchive" }));
+    await waitFor(() => expect(chatApiMock.unarchiveConversation).toHaveBeenCalled());
+    expect(await screen.findByText("Conversation unarchived")).toBeInTheDocument();
+  });
+
+  test("unarchiving an archived thread re-enables the composer", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     chatApiMock.getConversation
       .mockResolvedValueOnce(makeConv({ archived_at: "2026-02-01T00:00:00Z" }))
@@ -551,7 +663,7 @@ describe("ConversationsPage open conversation", () => {
     chatApiMock.unarchiveConversation.mockResolvedValue(makeConv({ archived_at: null }));
     renderPage("/conversations/conv-1");
 
-    fireEvent.click(await screen.findByRole("button", { name: /restore to continue/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /unarchive to continue/i }));
 
     await waitFor(() => expect(chatApiMock.unarchiveConversation).toHaveBeenCalled());
     expect(chatApiMock.unarchiveConversation.mock.calls[0][0]).toBe("conv-1");
@@ -571,7 +683,6 @@ describe("ConversationsPage open conversation", () => {
 
     // The way out: New conversation, then the draft's composer.
     fireEvent.click(screen.getByRole("button", { name: /start a new conversation/i }));
-    fireEvent.click(await screen.findByRole("button", { name: /^start$/i }));
     expect(await screen.findByRole("textbox", { name: /message input/i })).toBeInTheDocument();
   });
 });
@@ -596,7 +707,7 @@ describe("ConversationsPage hand-off", () => {
 
     const box = await screen.findByRole("textbox", { name: /message input/i });
     await waitFor(() => expect(box).toHaveValue("Install jq 1.6."));
-    expect(screen.getByText("/Users/me/work")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Workspace" })).toHaveTextContent("~/work");
     // Pre-filled, not sent: no conversation exists and no turn has run.
     await new Promise((r) => setTimeout(r, 20));
     expect(chatApiMock.createConversation).not.toHaveBeenCalled();

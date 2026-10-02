@@ -171,6 +171,7 @@ def approval_out(approval: SecretApproval) -> ApprovalOut:
         destination_label=approval.destination_label,
         slot=approval.slot,
         target=approval.target,
+        target_fingerprint=approval.target_fingerprint,
         decided_at=approval.decided_at,
         decided_by=approval.decided_by,
     )

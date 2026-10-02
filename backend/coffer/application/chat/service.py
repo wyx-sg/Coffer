@@ -115,11 +115,16 @@ class ChatService:
         return await self._conversations.list(archived=archived)
 
     async def page_conversations(
-        self, *, archived: bool = False, limit: int = 100, cursor: str | None = None
+        self,
+        *,
+        archived: bool = False,
+        limit: int = 100,
+        cursor: str | None = None,
+        q: str | None = None,
     ) -> Page[Conversation]:
         """One page of :meth:`list_conversations`, continued by ``cursor``."""
         return await page_conversations(
-            self._conversations, archived=archived, limit=limit, cursor=cursor
+            self._conversations, archived=archived, limit=limit, cursor=cursor, q=q
         )
 
     async def get_conversation(self, conversation_id: str) -> Conversation:

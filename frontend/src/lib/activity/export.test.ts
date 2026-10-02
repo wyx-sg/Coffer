@@ -49,6 +49,29 @@ test("the export pages through the route and keeps only what the predicate accep
   expect(get.mock.calls[1][1].params.query.cursor).toBe("c1");
 });
 
+test("the daemon log is paged by cursor too, with the same free text", async () => {
+  const line = (offset: number) => ({
+    offset,
+    timestamp: `2026-09-29T14:0${offset}:00Z`,
+    level: "warning",
+    event: "slow",
+    record: {},
+  });
+  const get = vi
+    .fn()
+    .mockResolvedValueOnce({ data: { records: [line(2)], next_cursor: "c1", path: "/d.log" } })
+    .mockResolvedValueOnce({ data: { records: [line(1)], next_cursor: null, path: "/d.log" } });
+  vi.mocked(getApiClient).mockReturnValue({ GET: get } as never);
+
+  const records = await collectForExport(
+    [{ source: "daemon", params: { level: "warning", q: "slow" } }],
+    () => true,
+  );
+  expect(records.map((r) => r.key)).toEqual(["daemon:2", "daemon:1"]);
+  expect(get.mock.calls[0][1].params.query).toMatchObject({ level: "warning", q: "slow" });
+  expect(get.mock.calls[1][1].params.query.cursor).toBe("c1");
+});
+
 test("CSV has a header, one row per record and quotes what needs quoting", () => {
   const csv = toCsv([fromCall(call(1, "error"))]);
   const lines = csv.trim().split("\r\n");

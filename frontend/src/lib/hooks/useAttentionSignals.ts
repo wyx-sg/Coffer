@@ -18,7 +18,7 @@
 // - Sync keeps its own signal, cleared by visiting the page rather than by the
 //   situation changing (spec vault-sync "Say a vault needs a human where the
 //   user already is"): one situation, so a count of one.
-// - CLIs count the required commands that are missing, too old or not logged
+// - CLIs count the required commands (not a tool added by hand that nothing needs) that are missing, too old or not logged
 //   in, from the CLIs list itself (the rows the attention list reports as
 //   kind `cli`, which is why that kind is not counted twice below).
 // - Knowledge has no signal: items waiting in a collection's inbox are the
@@ -72,7 +72,11 @@ export function useAttentionSignals(): AttentionSignals {
     ? countByEntry(attention.data.items ?? [])
     : {};
   if (sync) signals["/sync"] = { count: 1, tone: "warning" };
-  const clisNeedingYou = (clis.data?.items ?? []).filter((cli) => cli.status !== "ready").length;
+  // A tool added by hand that nothing requires is a plain status, not a need.
+  const clisNeedingYou = (clis.data?.items ?? []).filter(
+    (cli) =>
+      cli.status !== "ready" && (cli.needed_by.length > 0 || cli.needed_by_servers.length > 0),
+  ).length;
   if (clisNeedingYou > 0) signals["/clis"] = { count: clisNeedingYou, tone: "warning" };
   return signals;
 }

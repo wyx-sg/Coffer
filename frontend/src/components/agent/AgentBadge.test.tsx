@@ -65,7 +65,7 @@ describe("AgentBadge", () => {
     );
     const missing = tileOf(screen.getByRole("img", { name: "Codex, not installed" }));
     expect(missing).toHaveClass("border-dashed", "bg-transparent");
-    const off = tileOf(screen.getByRole("img", { name: "Claude Code, disabled" }));
+    const off = tileOf(screen.getByRole("img", { name: "Claude Code, off" }));
     expect(off).toHaveClass("bg-neutral-soft");
     expect(off.parentElement).toHaveClass("opacity-disabled");
   });

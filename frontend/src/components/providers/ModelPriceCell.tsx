@@ -14,7 +14,7 @@ import { formatPriceDate } from "@/lib/providers/priceDate";
 const TAG =
   "inline-flex h-[18px] items-center whitespace-nowrap rounded-sm bg-chip px-1.5 text-2xs font-label text-text-muted";
 const LINK =
-  "text-2xs font-label text-accent-text outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring";
+  "text-xs font-label text-accent-text outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring";
 
 /** "$1.25", or "—" for a rate nothing states. */
 function formatRate(value: number | null | undefined, lang: string): string {
@@ -68,7 +68,7 @@ export function ModelPriceCell({ id, price, onEdit, onReset, disabled }: Props) 
             })
           : t("providers.prices.source.bundled");
   return (
-    <span className="inline-flex flex-wrap items-center justify-end gap-1.5 text-xs text-text">
+    <span className="inline-flex items-center justify-end gap-1.5 whitespace-nowrap text-xs text-text">
       {onEdit ? (
         <button
           type="button"

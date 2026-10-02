@@ -5,7 +5,8 @@
 // and the Overview card.
 //
 // The actions are the ones the agent's Skills table used to carry per row, and
-// they behave the same way here: open folder goes through the loopback daemon to
+// they behave the same way here — Adopt is the one button, Open folder and
+// Delete sit behind the ⋯: open folder goes through the loopback daemon to
 // the OS file manager; adopt is refused up front for a folder that cannot be
 // adopted (invalid, or a foreign link) and on success moves to the new managed
 // skill's own page, since this folder no longer exists as an unmanaged entry;
@@ -18,10 +19,14 @@ import { AlertTriangle, FolderOpen, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { InfoRow } from "@/components/agents/overview/OverviewParts";
+import { Section, SectionStack } from "@/components/Section";
 import { Card, CardContent } from "@/components/ui/card";
+import { ActionMenu } from "@/components/ui/menu";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import type { UnmanagedSkillDetailOut } from "@/lib/api/agents-workspace";
+import type { Origin } from "@/lib/origin";
 import { useFsActions } from "@/lib/fsActions";
 import { useAdoptUnmanagedSkill, useDeleteUnmanagedSkill } from "@/lib/hooks/useAgents";
 
@@ -52,11 +57,14 @@ export function UnmanagedSkillActions({
   agentUid,
   skill,
   backTo,
+  adoptedFrom,
 }: {
   agentUid: string;
   skill: Skill;
   /** Where a successful delete returns to: the agent's Skills tab. */
   backTo: string;
+  /** What an adopted skill's page names as the way back: the agent's Skills tab. */
+  adoptedFrom: Origin;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -74,15 +82,6 @@ export function UnmanagedSkillActions({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() =>
-          void open(skill.path, "").catch(() => toast.error(t("agents.skillsTab.openFolderFailed")))
-        }
-      >
-        <FolderOpen className="mr-1.5 size-3.5" /> {t("agents.skillsTab.openFolder")}
-      </Button>
       {/* The wrapper carries the disabled reason — a disabled button fires no
           pointer events, so it cannot show a title of its own. */}
       <span title={adoptHint}>
@@ -96,7 +95,9 @@ export function UnmanagedSkillActions({
               {
                 onSuccess: (ref) => {
                   toast.success(t("agents.skillsTab.adoptSuccess", { name: ref.name }));
-                  navigate(`/skills/${encodeURIComponent(ref.name)}`);
+                  navigate(`/skills/${encodeURIComponent(ref.name)}`, {
+                    state: { from: adoptedFrom },
+                  });
                 },
               },
             )
@@ -105,14 +106,29 @@ export function UnmanagedSkillActions({
           {t("agents.skillsTab.adopt")}
         </Button>
       </span>
-      <Button
-        variant="outline"
-        size="sm"
-        className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-        onClick={() => setDeleteOpen(true)}
-      >
-        <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
-      </Button>
+      {/* The one button is Adopt; the rest sit behind the ⋯. */}
+      <ActionMenu
+        label={t("agents.kindTab.moreFor", { name: skill.name })}
+        actions={[
+          {
+            key: "open-folder",
+            label: t("agents.skillsTab.openFolder"),
+            icon: FolderOpen,
+            onSelect: () =>
+              void open(skill.path, "").catch(() =>
+                toast.error(t("agents.skillsTab.openFolderFailed")),
+              ),
+          },
+          {
+            key: "delete",
+            label: t("common.delete"),
+            icon: Trash2,
+            destructive: true,
+            separated: true,
+            onSelect: () => setDeleteOpen(true),
+          },
+        ]}
+      />
 
       <ConfirmDialog
         open={deleteOpen}
@@ -157,28 +173,25 @@ export function UnmanagedSkillInvalidNotice({ reason }: { reason: string | null 
 export function UnmanagedSkillOverview({ skill }: { skill: Skill }) {
   const { t } = useTranslation();
   return (
-    <Card>
-      <CardContent className="space-y-4 py-6">
-        {skill.description ? (
-          <p className="max-w-prose text-sm text-muted-foreground">{skill.description}</p>
-        ) : null}
-        <dl className="grid gap-y-3 text-sm sm:grid-cols-[12rem_1fr]">
-          <dt className="text-muted-foreground">{t("agents.skillsTab.unmanagedDetail.path")}</dt>
-          <dd className="break-all font-mono text-xs">{skill.path}</dd>
-
-          <dt className="text-muted-foreground">
-            {t("agents.skillsTab.unmanagedDetail.location")}
-          </dt>
-          <dd>
+    <SectionStack>
+      {skill.description ? (
+        <p className="max-w-prose text-sm leading-relaxed text-text">{skill.description}</p>
+      ) : null}
+      <Section
+        title={t("agents.overviewTab.details.heading")}
+        help={t("agents.skillsTab.unmanagedDetail.readOnlyHint")}
+      >
+        <dl className="flex flex-col">
+          <InfoRow label={t("agents.skillsTab.unmanagedDetail.path")} mono>
+            {skill.path}
+          </InfoRow>
+          <InfoRow label={t("agents.skillsTab.unmanagedDetail.location")}>
             {skill.location === "agents_dir"
               ? t("agents.skillsTab.locationAgentsDir")
               : t("agents.skillsTab.locationSkills")}
-          </dd>
+          </InfoRow>
         </dl>
-        <p className="text-xs text-muted-foreground">
-          {t("agents.skillsTab.unmanagedDetail.readOnlyHint")}
-        </p>
-      </CardContent>
-    </Card>
+      </Section>
+    </SectionStack>
   );
 }

@@ -109,7 +109,10 @@ _STATUS: dict[str, int] = {
     "SKILL_FILE_STALE": 409,
     # The commands skills require (spec skill-manager "Serve required
     # commands on REST, the command line and the web").
-    "CLI_NOT_REQUIRED": 404,
+    "CLI_NOT_KNOWN": 404,
+    "CLI_TOOL_NOT_DECLARED": 404,
+    "CLI_TOOL_EXISTS": 409,
+    "CLI_TOOL_INVALID": 400,
     # skill sources (spec skill-manager "Add skills from an archive", "Add
     # skills from a Git repository", "Update a Git-imported skill from its
     # source"): an expired stage is a missing thing; git failing to fetch is
@@ -171,6 +174,7 @@ _STATUS: dict[str, int] = {
     "ATTACHMENT_EXPIRED": 410,
     # channels (spec channels)
     "CHANNEL_NOT_PAIRED": 409,
+    "CHANNEL_PERSON_NOT_FOUND": 404,
     "CHANNEL_NOT_RUNNING": 409,
     "CHANNEL_SEND_FAILED": 502,
     # provider switching (spec provider-switching)

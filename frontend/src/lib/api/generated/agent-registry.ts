@@ -420,6 +420,112 @@ export interface paths {
         patch: operations["patch_plugin_api_v1_agents__uid__plugins__plugin_id__patch"];
         trace?: never;
     };
+    "/api/v1/agents/{uid}/plugins/{plugin_id}/agents/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Plugin Subagent */
+        get: operations["get_plugin_subagent_api_v1_agents__uid__plugins__plugin_id__agents__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/plugins/{plugin_id}/commands/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Plugin Command */
+        get: operations["get_plugin_command_api_v1_agents__uid__plugins__plugin_id__commands__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/plugins/{plugin_id}/mcp-servers/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Plugin Mcp Server */
+        get: operations["get_plugin_mcp_server_api_v1_agents__uid__plugins__plugin_id__mcp_servers__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/plugins/{plugin_id}/skills/{skill}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Plugin Skill */
+        get: operations["get_plugin_skill_api_v1_agents__uid__plugins__plugin_id__skills__skill__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/plugins/{plugin_id}/skills/{skill}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Plugin Skill Files */
+        get: operations["list_plugin_skill_files_api_v1_agents__uid__plugins__plugin_id__skills__skill__files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/plugins/{plugin_id}/skills/{skill}/files/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Plugin Skill File
+         * @description One file of a plugin's skill. A path resolving outside the skill's folder
+         *     (``..``, absolute, escaping symlink) is refused with 400 before anything is read.
+         */
+        get: operations["read_plugin_skill_file_api_v1_agents__uid__plugins__plugin_id__skills__skill__files_content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/{uid}/transcripts": {
         parameters: {
             query?: never;
@@ -543,6 +649,8 @@ export interface components {
         };
         /** AgentModelsOut */
         AgentModelsOut: {
+            /** Default Model */
+            default_model: string | null;
             /** Models */
             models: components["schemas"]["AgentModelOut"][];
         };
@@ -878,6 +986,10 @@ export interface components {
             args: string[];
             /** Command */
             command: string | null;
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
             /** Cwd */
             cwd: string | null;
             /** Enabled */
@@ -1254,6 +1366,33 @@ export interface components {
             /** Skills */
             skills: components["schemas"]["PluginComponentOut"][];
         };
+        /**
+         * PluginDocumentOut
+         * @description A plugin's command or subagent: its markdown file, whole.
+         */
+        PluginDocumentOut: {
+            /** Content */
+            content: string;
+            /** Description */
+            description: string | null;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** PluginMcpServerOut */
+        PluginMcpServerOut: {
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+        };
         /** PluginOut */
         PluginOut: {
             /** Author */
@@ -1285,6 +1424,15 @@ export interface components {
         PluginPatch: {
             /** Enabled */
             enabled: boolean;
+        };
+        /** PluginSkillOut */
+        PluginSkillOut: {
+            /** Description */
+            description: string | null;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
         };
         /** PluginsOut */
         PluginsOut: {
@@ -1364,6 +1512,54 @@ export interface components {
             title: string;
             /** Uid */
             uid: string | null;
+        };
+        /** SkillFileContentOut */
+        SkillFileContentOut: {
+            /** Abs Path */
+            abs_path: string;
+            /** Binary */
+            binary: boolean;
+            /** Content */
+            content: string;
+            /** Fingerprint */
+            fingerprint: string;
+            /** Folder Abs Path */
+            folder_abs_path: string;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** SkillFileNodeOut */
+        SkillFileNodeOut: {
+            /** Abs Path */
+            abs_path: string;
+            /** Children */
+            children: components["schemas"]["SkillFileNodeOut"][];
+            /** Folder Abs Path */
+            folder_abs_path: string;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number | null;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "file" | "dir";
+        };
+        /** SkillFileTreeOut */
+        SkillFileTreeOut: {
+            root: components["schemas"]["SkillFileNodeOut"];
         };
         /**
          * TranscriptMessageOut
@@ -2790,6 +2986,272 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_plugin_subagent_api_v1_agents__uid__plugins__plugin_id__agents__name__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+                plugin_id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginDocumentOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_plugin_command_api_v1_agents__uid__plugins__plugin_id__commands__name__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+                plugin_id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginDocumentOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_plugin_mcp_server_api_v1_agents__uid__plugins__plugin_id__mcp_servers__name__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+                plugin_id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginMcpServerOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_plugin_skill_api_v1_agents__uid__plugins__plugin_id__skills__skill__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+                plugin_id: string;
+                skill: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginSkillOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_plugin_skill_files_api_v1_agents__uid__plugins__plugin_id__skills__skill__files_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+                plugin_id: string;
+                skill: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillFileTreeOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_plugin_skill_file_api_v1_agents__uid__plugins__plugin_id__skills__skill__files_content_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+                plugin_id: string;
+                skill: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillFileContentOut"];
+                };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {

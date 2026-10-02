@@ -11,7 +11,7 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { SettingRow } from "@/components/settings/SettingsLayout";
 import { BURST_WAIT_MAX, BURST_WAIT_MIN, parseBurstWait } from "./channelTurnSettings";
 
 /** The two batching windows, as typed (seconds). */
@@ -37,33 +37,34 @@ function SecondsRow({
   const errorId = `${id}-error`;
   const invalid = parseBurstWait(value) === null;
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <div className="flex items-center gap-2">
-        <Input
-          id={id}
-          type="number"
-          inputMode="decimal"
-          step={0.5}
-          min={BURST_WAIT_MIN}
-          max={BURST_WAIT_MAX}
-          className="w-28"
-          value={value}
-          aria-invalid={invalid ? true : undefined}
-          aria-describedby={invalid ? `${helpId} ${errorId}` : helpId}
-          onChange={(e) => onValueChange(e.target.value)}
-        />
-        <span className="text-sm text-muted-foreground">{t("channels.edit.burst.unit")}</span>
-      </div>
-      <p id={helpId} className="text-xs text-muted-foreground">
-        {help}
-      </p>
-      {invalid ? (
-        <p id={errorId} className="text-xs text-destructive" role="alert">
-          {t("channels.edit.burst.invalid", { min: BURST_WAIT_MIN, max: BURST_WAIT_MAX })}
-        </p>
-      ) : null}
-    </div>
+    <SettingRow
+      label={label}
+      labelFor={id}
+      description={help}
+      descriptionId={helpId}
+      status={
+        invalid ? (
+          <p id={errorId} className="text-xs text-danger" role="alert">
+            {t("channels.edit.burst.invalid", { min: BURST_WAIT_MIN, max: BURST_WAIT_MAX })}
+          </p>
+        ) : null
+      }
+    >
+      <Input
+        id={id}
+        type="number"
+        inputMode="decimal"
+        step={0.5}
+        min={BURST_WAIT_MIN}
+        max={BURST_WAIT_MAX}
+        className="w-28"
+        value={value}
+        aria-invalid={invalid ? true : undefined}
+        aria-describedby={invalid ? `${helpId} ${errorId}` : helpId}
+        onChange={(e) => onValueChange(e.target.value)}
+      />
+      <span className="text-sm text-text-muted">{t("channels.edit.burst.unit")}</span>
+    </SettingRow>
   );
 }
 
@@ -77,8 +78,7 @@ export function EditChannelBurstFields({
   const { t } = useTranslation();
 
   return (
-    <fieldset className="space-y-3">
-      <legend className="mb-2 text-sm font-medium">{t("channels.edit.burst.title")}</legend>
+    <>
       <SecondsRow
         label={t("channels.edit.burst.waitAfterText")}
         help={t("channels.edit.burst.waitAfterTextHint")}
@@ -91,6 +91,6 @@ export function EditChannelBurstFields({
         value={draft.waitAfterForward}
         onValueChange={(waitAfterForward) => onChange({ waitAfterForward })}
       />
-    </fieldset>
+    </>
   );
 }

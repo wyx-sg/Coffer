@@ -1,7 +1,7 @@
 // src/lib/activity/filters.ts — Activity's filters: their state, which logs a tab reads under them, and the client-side predicate.
 //
-// The server-side half of a filter (time window, a call's server, a single
-// agent and status, the daemon's level floor) travels in each log's request
+// The server-side half of a filter (time window, free text, a call's server, a
+// single agent and status, the daemon's level floor) travels in each log's request
 // (`useActivityFeed.sourceParams`); this module is the half the routes cannot
 // apply and the rules both halves share. Pure functions only.
 //
@@ -9,17 +9,14 @@
 // it matches any of the chosen values, and choosing none is "Any".
 import type { TFunction } from "i18next";
 
-import { auditSearchHaystack, daemonSearchHaystack } from "./activityText";
 import {
   TAB_SOURCES,
-  callServerLabel,
   recordLogger,
   recordTimeMs,
   type ActivityRecord,
   type ActivitySource,
   type ActivityTab,
   type AuditEntry,
-  type Invocation,
 } from "./records";
 
 /**
@@ -87,7 +84,7 @@ export interface ActivityFilters {
   timeRange: string;
   from: string;
   to: string;
-  /** Free text over what each row shows. */
+  /** Free text; each log's route applies it (debounced, one request per pause in typing). */
   search: string;
   /** Who: `agent:<uid>` and `actor:<who group>` values; empty is any. */
   by: string[];
@@ -185,27 +182,6 @@ export interface FilterContext {
   serverNames: ReadonlyMap<string, string>;
 }
 
-function callHaystack(call: Invocation, ctx: FilterContext): string {
-  return [
-    callServerLabel(call),
-    call.capability_key,
-    `${callServerLabel(call)}.${call.capability_key}`,
-    call.status,
-    call.error_message ?? "",
-    call.session_id ?? "",
-    call.agent_uid ? (ctx.agentNames.get(call.agent_uid) ?? "") : "",
-  ]
-    .join(" ")
-    .toLowerCase();
-}
-
-/** The lowercased text a free-text search matches for one record. */
-function recordHaystack(r: ActivityRecord, ctx: FilterContext): string {
-  if (r.source === "change") return auditSearchHaystack(ctx.t, r.entry);
-  if (r.source === "call") return callHaystack(r.call, ctx);
-  return daemonSearchHaystack(ctx.t, r.log);
-}
-
 /** The agent uid a change was made by, when its actor names one. */
 function changeAgent(entry: AuditEntry, agentNames: ReadonlyMap<string, string>): string | null {
   if (actorWho(entry.actor) !== null) return null;
@@ -249,10 +225,10 @@ export function tally(
 
 /**
  * The client-side half of the filters: what the routes cannot narrow by
- * themselves (free text, the custom range's upper bound, who, a change's
- * server, the kinds, a logger). The server-side half — time window, a call's
- * server, a single agent and status, the daemon's level floor — is in the
- * request.
+ * themselves (the custom range's upper bound, who, a change's server, the
+ * kinds, a logger). The server-side half — the time window, the free text, a
+ * call's server, a single agent and status, the daemon's level floor — is in
+ * the request, so a page of results is the first page of what matches.
  */
 export function matchesFilters(
   r: ActivityRecord,
@@ -281,7 +257,5 @@ export function matchesFilters(
     if (!allChanges && !kinds.includes(kind)) return false;
   }
   if (tab === "daemon" && f.logger !== "any" && recordLogger(r) !== f.logger) return false;
-  const query = f.search.trim().toLowerCase();
-  if (query && !recordHaystack(r, ctx).includes(query)) return false;
   return true;
 }

@@ -55,6 +55,19 @@ export function skeletonCount(pageSize: number): number {
   return Math.max(1, Math.min(MAX_SKELETON_ROWS, pageSize));
 }
 
+/** A list that grows by cursor (`useInfiniteList`): the caller passes every row
+ * loaded so far, and the table shows them all, a skeleton row while the next
+ * page loads, and the shared load-more footer (it also loads on scroll). */
+export interface InfiniteRows {
+  /** Rows loaded so far, as the server counts them (rows shown may be fewer if the caller folds). */
+  loaded: number;
+  total?: number;
+  hasMore: boolean;
+  /** A later page is loading. */
+  loading: boolean;
+  onMore: () => void;
+}
+
 /** Server-driven pagination: the caller passes one page of `rows` and owns the
  * page/pageSize state. When set, client-side search/filter/slice are skipped. */
 export interface ServerPagination {

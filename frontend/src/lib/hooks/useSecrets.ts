@@ -15,6 +15,7 @@ import {
   secretsListKey,
   pendingApprovalsKey,
 } from "@/lib/api/queryKeys";
+import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { revealSecret } from "@/lib/tauri";
 import { useToast } from "@/components/ui/toast";
 
@@ -55,6 +56,17 @@ export function useDeleteSecret() {
     onSuccess: refresh,
     // No toast: the delete dialog shows the refusal, and who still uses it, inline.
   });
+}
+
+const BULK_DELETE_REFRESH = [secretsKey, pendingApprovalsKey];
+
+/** Delete several refs at once: each is refused or deleted on its own, and one summary toast says how many went. */
+export function useBulkDeleteSecrets() {
+  const bulk = useBulkMutate({ invalidate: BULK_DELETE_REFRESH });
+  return {
+    isPending: bulk.isPending,
+    run: (refs: string[]) => bulk.run(refs, (ref) => secretsApi.remove(ref)),
+  };
 }
 
 /** The plaintext secrets found in files. Read only while `enabled` (the dialog is open). */

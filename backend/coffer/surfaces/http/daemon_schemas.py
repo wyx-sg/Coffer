@@ -168,11 +168,22 @@ class DaemonLogRecordOut(BaseModel):
     #: The message — the ``event`` field of one of Coffer's own lines, or the
     #: text another writer put after its level.
     event: str | None = None
+    #: Where the record starts in the file, in bytes: the line's identity. The
+    #: file only grows at its end, so it names the same record on every read.
+    offset: int
     record: dict[str, Any]
 
 
 class DaemonLogListOut(BaseModel):
     records: list[DaemonLogRecordOut]
+    #: Where the next, older page begins; ``null`` when no older record is left.
+    #: Opaque, and bound to the filters it was issued with.
+    next_cursor: str | None = None
+    #: With ``with_total``: how many records match in the file's recent tail
+    #: (the last 512 KB, a bounded read). ``null`` when not asked for.
+    total: int | None = None
+    #: The tail held more than the count covers, so ``total`` is a floor.
+    total_is_floor: bool = False
     #: The absolute path of the file the tail was read from, so the Activity
     #: page can name it and open it with ``POST /fs/open``.
     path: str

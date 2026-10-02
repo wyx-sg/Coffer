@@ -36,7 +36,12 @@ import uvicorn
 from coffer.infrastructure.daemon.config import effective_proxy_port
 from coffer.infrastructure.daemon.port_alloc import PortInUse, bind_fixed_socket
 from coffer.infrastructure.model_proxy.app import ModelProxyApp, now_iso
-from coffer.infrastructure.model_proxy.info import ProxyInfo, remove_info_if_owned, write_info
+from coffer.infrastructure.model_proxy.info import (
+    EXIT_PORT_IN_USE,
+    ProxyInfo,
+    remove_info_if_owned,
+    write_info,
+)
 from coffer.infrastructure.model_proxy.spool import UsageSpool
 
 _logger = logging.getLogger(__name__)
@@ -108,7 +113,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             f"Coffer's model proxy could not bind 127.0.0.1:{port}: the port is in use.",
             file=sys.stderr,
         )
-        raise SystemExit(2) from None
+        raise SystemExit(EXIT_PORT_IN_USE) from None
     pid = os.getpid()
     version = _version()
     started_at = now_iso()

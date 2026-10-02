@@ -91,7 +91,7 @@ export function MemoryWelcomePanel() {
         gap="snug"
         labelled
         title={t("memory.welcome.found")}
-        meta={t("memory.welcome.foundMeta")}
+        help={t("memory.welcome.foundMeta")}
       >
         <ul
           className="overflow-hidden rounded-lg border border-border-subtle bg-surface-raised"

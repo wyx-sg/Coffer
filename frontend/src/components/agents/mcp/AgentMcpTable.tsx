@@ -3,17 +3,16 @@
 // Board 2.1.23. A direct entry's name opens its read-only detail page under
 // this tab; its row offers Adopt, or Remove duplicate when Coffer already
 // serves an equivalent server. A Coffer server's row offers Manage, which opens
-// the server's own page. Rows of a config file that failed to parse keep their
+// the server's own page, as does its name (the page names this tab as the way back). Rows of a config file that failed to parse keep their
 // actions disabled (board 2.1.27). Commands and paths wrap; nothing is cut.
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Import, Settings2, Trash2 } from "lucide-react";
 
 import { DataTable, type Column } from "@/components/DataTable";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { StatusWord } from "@/components/status/StatusWord";
 import { TableActionButton } from "@/components/table/TableActionButton";
-import { ActionMenu, type MenuAction } from "@/components/ui/menu";
-import { agentMcpEntryPath } from "@/lib/agents/routes";
 import { entryCommand, type McpRow, type OwnMcpRow, type OwnMcpState } from "./mcpRows";
 
 const STATE_LABEL: Record<OwnMcpState, string> = {
@@ -23,7 +22,6 @@ const STATE_LABEL: Record<OwnMcpState, string> = {
 };
 
 interface Props {
-  agentType: string;
   rows: McpRow[];
   /** Whether the agent's Coffer connection has its gateway entry; undefined while unread. */
   connected: boolean | undefined;
@@ -31,18 +29,17 @@ interface Props {
   whereLabel: (source: string) => string;
   onAdopt: (row: OwnMcpRow) => void;
   onRemoveDuplicate: (row: OwnMcpRow) => void;
-  /** The ⋯ menu of a direct entry: Adopt · Open file · Copy command · Remove. */
-  rowMenu: (row: OwnMcpRow) => MenuAction[];
+  /** A direct entry's name: its JSON opens in a dialog. */
+  onOpenEntry: (row: OwnMcpRow) => void;
 }
 
 export function AgentMcpTable({
-  agentType,
   rows,
   connected,
   whereLabel,
   onAdopt,
   onRemoveDuplicate,
-  rowMenu,
+  onOpenEntry,
 }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -51,51 +48,66 @@ export function AgentMcpTable({
   const columns: Column<McpRow>[] = [
     {
       key: "server",
+      className: "w-[24%]",
       header: t("agents.mcpTab.cols.server"),
       cell: (row) =>
         row.owner === "coffer" ? (
-          <span className="break-all font-medium text-text">{row.name}</span>
+          <Link
+            to={`/mcp-servers/${encodeURIComponent(row.name)}`}
+            className="block min-w-0 font-medium text-text hover:underline"
+          >
+            <TruncatedText text={row.name} />
+          </Link>
         ) : (
           <div className="min-w-0 space-y-0.5">
-            <Link
-              to={agentMcpEntryPath(agentType, row.name, row.entry.source)}
-              className="break-all font-medium text-text hover:underline"
+            <button
+              type="button"
+              onClick={() => onOpenEntry(row)}
+              className="block w-full min-w-0 text-left font-medium text-text hover:underline"
             >
-              {row.name}
-            </Link>
+              <TruncatedText text={row.name} />
+            </button>
             {row.entry.matches_resource !== null ? (
-              <p className={muted}>
-                {t("agents.mcpTab.duplicateOf", { name: row.entry.matches_resource })}
-              </p>
+              <TruncatedText
+                className={muted}
+                text={t("agents.mcpTab.duplicateOf", { name: row.entry.matches_resource })}
+              />
             ) : row.entry.secret_keys.length > 0 ? (
-              <p className={muted}>
-                {t("agents.mcpTab.secretsInEnv", { count: row.entry.secret_keys.length })}
-              </p>
+              <TruncatedText
+                className={muted}
+                text={t("agents.mcpTab.secretsInEnv", { count: row.entry.secret_keys.length })}
+              />
             ) : null}
           </div>
         ),
     },
     {
       key: "command",
+      className: "w-[26%]",
       header: t("agents.mcpTab.cols.command"),
       cell: (row) =>
         row.owner === "coffer" ? (
           <span className={muted}>{t("agents.mcpTab.gateway")}</span>
         ) : (
-          <span className="break-all font-mono text-xs text-text">{entryCommand(row.entry)}</span>
+          <TruncatedText mono text={entryCommand(row.entry)} className="text-xs text-text" />
         ),
     },
     {
       key: "where",
       header: t("agents.mcpTab.cols.where"),
       cell: (row) => (
-        <span className="break-all font-mono text-xs text-text-muted">
-          {row.owner === "coffer" ? t("agents.mcpTab.cofferEntry") : whereLabel(row.entry.source)}
-        </span>
+        <TruncatedText
+          mono
+          className="text-xs text-text-muted"
+          text={
+            row.owner === "coffer" ? t("agents.mcpTab.cofferEntry") : whereLabel(row.entry.source)
+          }
+        />
       ),
     },
     {
       key: "state",
+      className: "w-[150px]",
       header: t("agents.mcpTab.cols.state"),
       cell: (row) => {
         if (row.owner === "coffer") {
@@ -107,10 +119,10 @@ export function AgentMcpTable({
           );
         }
         return (
-          <div className="space-y-0.5">
+          <div className="min-w-0 space-y-0.5">
             <StatusWord tone="warn">{t(STATE_LABEL[row.state])}</StatusWord>
             {row.state === "readOnly" ? (
-              <p className={muted}>{t("agents.mcpTab.readOnlyReason")}</p>
+              <TruncatedText className={muted} text={t("agents.mcpTab.readOnlyReason")} />
             ) : null}
           </div>
         );
@@ -118,6 +130,7 @@ export function AgentMcpTable({
     },
     {
       key: "owner",
+      className: "w-[84px]",
       header: t("agents.mcpTab.cols.owner"),
       cell: (row) => (
         <span className="whitespace-nowrap text-xs text-text-muted">
@@ -128,7 +141,7 @@ export function AgentMcpTable({
     {
       key: "actions",
       header: <span className="sr-only">{t("agents.mcpTab.cols.actions")}</span>,
-      className: "text-right",
+      className: "w-[210px] text-right",
       cell: (row) => {
         if (row.owner === "coffer") {
           return (
@@ -161,10 +174,6 @@ export function AgentMcpTable({
                 onClick={() => onAdopt(row)}
               />
             )}
-            <ActionMenu
-              label={t("agents.kindTab.moreFor", { name: row.name })}
-              actions={rowMenu(row)}
-            />
           </span>
         );
       },
@@ -173,6 +182,7 @@ export function AgentMcpTable({
 
   return (
     <DataTable
+      fixed
       rows={rows}
       columns={columns}
       rowKey={(row) => row.key}

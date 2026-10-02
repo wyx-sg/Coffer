@@ -173,6 +173,14 @@ acceptance("skill-manager", "a skill opens on its files with SKILL.md rendered",
   );
 });
 
+test("the Files tab's tree and viewer sit in a split with a draggable divider", async () => {
+  renderSkillsPage("/skills/hello");
+  const divider = await screen.findByRole("separator", {}, { timeout: 5_000 });
+  expect(divider).toHaveAttribute("aria-orientation", "vertical");
+  expect(divider).toHaveAttribute("aria-valuenow");
+  expect(screen.queryByRole("button", { name: /hide/i })).toBeNull();
+});
+
 acceptance("skill-manager", "the delivery tab shows each agent's copy", async () => {
   h.skills = [
     makeSkill({
@@ -228,14 +236,13 @@ acceptance(
     expect(within(header).getByTestId("skill-builtin-badge")).toHaveTextContent("Built-in");
     fireEvent.click(within(header).getByRole("button", { name: "More actions for coffer-guide" }));
     expect(await screen.findByRole("menuitem", { name: "Delete…" })).toBeDisabled();
-    expect(screen.getByRole("menuitem", { name: "Turn off" })).toBeEnabled();
     expect(screen.getByTestId("skill-builtin-banner")).toHaveTextContent(
       "Coffer writes this skill itself",
     );
-    // Its row wears the mark too, and its box can't be ticked for the bulk delete.
-    const list = screen.getByRole("list", { name: "Library" });
+    // Its row wears the mark too, and has no box: it is never part of a bulk action.
+    const list = screen.getByTestId("skill-library");
     expect(within(list).getByTestId("skill-builtin-badge")).toBeInTheDocument();
-    expect(within(list).getByRole("checkbox", { name: /coffer-guide/ })).toBeDisabled();
+    expect(within(list).queryByRole("checkbox", { name: /coffer-guide/ })).not.toBeInTheDocument();
     // Its files are read-only.
     expect(await screen.findByRole("heading", { name: "Say hello" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
@@ -287,9 +294,7 @@ describe("SkillDetailPane", () => {
     ];
     renderSkillsPage("/skills/hello/delivery");
     await waitFor(() =>
-      expect(screen.getByTestId("skill-delivery-codex")).toHaveTextContent(
-        "The agent is switched off.",
-      ),
+      expect(screen.getByTestId("skill-delivery-codex")).toHaveTextContent("The agent is off."),
     );
   });
 
@@ -307,7 +312,6 @@ describe("SkillDetailPane", () => {
         ],
       }),
     ];
-    vi.mocked(skillsApi.verify).mockResolvedValueOnce({ entries: [] });
     vi.mocked(skillsApi.verify).mockResolvedValue({
       entries: [
         {
@@ -322,6 +326,8 @@ describe("SkillDetailPane", () => {
     renderSkillsPage("/skills/hello/delivery");
     const row = await screen.findByTestId("skill-delivery-codex");
     expect(row).toHaveTextContent("Linked");
+    // Opening the page reads nothing: the copies are checked only on request.
+    expect(skillsApi.verify).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Check again" }));
     await waitFor(() => expect(row).toHaveTextContent("Points elsewhere"));
     expect(row).toHaveTextContent("Coffer points it back on its next pass.");

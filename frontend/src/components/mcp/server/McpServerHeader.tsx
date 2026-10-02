@@ -3,8 +3,9 @@
 // An icon tile tinted by the state, the fixed name in mono with the state
 // pill, one truncated line `transport · command or URL`; and the actions in
 // the one detail order — reach, then the state's own next step (Test, Test
-// again, Turn on, Replace secret), Edit, and the "⋯" menu: Edit… · Calls and
-// server log · Copy config as JSON · Turn off / Turn on · Delete….
+// again, Turn on, Replace secret), Edit, and the "⋯" menu: Calls and server
+// log · Copy config as JSON · Delete…. Edit is the visible button and on/off is
+// the reach control's, so the menu does not repeat them.
 import { useTranslation } from "react-i18next";
 import {
   CircleAlert,
@@ -91,12 +92,8 @@ export function McpServerHeader({
   }
 
   const actions: MenuAction[] = [
-    { key: "edit", label: t("mcp.page.menu.edit"), onSelect: () => onEdit() },
     { key: "log", label: t("mcp.page.menu.log"), onSelect: onOpenLog },
     { key: "copy", label: t("mcp.page.menu.copyConfig"), onSelect: onCopyConfig },
-    off
-      ? { key: "on", label: t("mcp.page.turnOn"), onSelect: () => onTurn(true) }
-      : { key: "off", label: t("mcp.page.menu.turnOff"), onSelect: () => onTurn(false) },
     {
       key: "delete",
       label: t("mcp.page.menu.delete"),

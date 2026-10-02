@@ -22,7 +22,6 @@ NEEDS_PERSON = frozenset(
         "plaintext_found",
         "paused_cloud_folder",
         "remote_too_new",
-        "remote_too_old",
         "failed",
     }
 )

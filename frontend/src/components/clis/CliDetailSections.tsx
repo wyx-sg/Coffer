@@ -4,13 +4,14 @@
 // pane's header hands those to an agent). Needed by lists the MCP servers
 // started with the command — each opening that server's page — and the skills
 // that declare it, each opening that skill's Requires tab. When both kinds
-// need it, each row carries its kind.
+// need it, each row carries its kind. A tool added by hand that nothing needs
+// shows "—" there.
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import { SectionStack } from "@/components/Section";
 import { Badge } from "@/components/ui/badge";
 import type { Cli } from "@/lib/api/clis";
-import { neededByCount } from "@/lib/clis/format";
 import { CliField, CliSection } from "./CliField";
 
 interface Props {
@@ -30,16 +31,12 @@ function NeededBy({ cli }: Props) {
   const mixed = cli.needed_by_servers.length > 0 && cli.needed_by.length > 0;
   const linkClass = "font-mono text-sm text-accent-text hover:underline";
   return (
-    <CliSection
-      title={
-        <>
-          {t("clis.detail.sections.neededBy")}
-          <span className="ml-2 font-normal text-text-muted">
-            {neededByCount(t, cli, "heading")}
-          </span>
-        </>
-      }
-    >
+    <CliSection title={t("clis.detail.sections.neededBy")}>
+      {cli.needed_by.length === 0 && cli.needed_by_servers.length === 0 ? (
+        <CliField label={t("clis.detail.addedByYou")}>
+          <span className="text-xs text-text-muted">—</span>
+        </CliField>
+      ) : null}
       {cli.needed_by_servers.map((server) => (
         <CliField
           key={server.server_uid}
@@ -94,7 +91,7 @@ export function CliDetailSections({ cli }: Props) {
   const loginState = cli.login.state ?? (cli.login.check === null ? "not_needed" : null);
 
   return (
-    <div className="grid items-start gap-7 lg:grid-cols-2">
+    <SectionStack>
       <CliSection title={t("clis.detail.sections.command")}>
         <CliField label={t("clis.detail.foundAt")}>
           {cli.path ? (
@@ -123,6 +120,6 @@ export function CliDetailSections({ cli }: Props) {
       </CliSection>
 
       <NeededBy cli={cli} />
-    </div>
+    </SectionStack>
   );
 }

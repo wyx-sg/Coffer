@@ -16,11 +16,13 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { useAgentHandoff } from "@/components/handoff/useAgentHandoff";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { StatusDot } from "@/components/status/StatusDot";
 import { Button } from "@/components/ui/button";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import type { AttentionItem } from "@/lib/hooks/useAttention";
 import { actionPage, itemActionLabelKey, itemPage, severityTone } from "@/lib/overview/attention";
+import { useHereOriginState } from "@/lib/origin";
 import { kindMeta } from "@/lib/overview/kinds";
 import { describeSince } from "@/lib/overview/time";
 import { cn } from "@/lib/utils";
@@ -46,6 +48,7 @@ interface Props {
 
 export function NeedsYouRow({ item, agentType, ignored = false, onIgnore, onRestore }: Props) {
   const { t } = useTranslation();
+  const origin = useHereOriginState();
   const meta = kindMeta(item.kind);
   const KindIcon = meta.icon;
   const since = describeSince(item.since);
@@ -79,6 +82,7 @@ export function NeedsYouRow({ item, agentType, ignored = false, onIgnore, onRest
       </span>
       <Link
         to={itemPage(item, agentType)}
+        state={origin}
         className={cn(CELL, "group flex min-w-0 flex-col gap-0.5")}
       >
         <span
@@ -94,7 +98,7 @@ export function NeedsYouRow({ item, agentType, ignored = false, onIgnore, onRest
           {t(meta.labelKey)}
         </span>
       </Link>
-      <p className={cn(CELL, "min-w-0 text-sm text-text")}>{item.reason}</p>
+      <TruncatedText text={item.reason} className={cn(CELL, "min-w-0 text-sm text-text")} />
       <p className={cn(CELL, "whitespace-nowrap text-xs text-text-subtle")}>
         {since ? <SinceText since={since} iso={item.since ?? ""} /> : null}
       </p>
@@ -102,6 +106,7 @@ export function NeedsYouRow({ item, agentType, ignored = false, onIgnore, onRest
         <Button asChild variant="outline">
           <Link
             to={actionPage(item, agentType)}
+            state={origin}
             aria-label={t("overview.needsYou.actionFor", { action, name: item.title })}
           >
             {action}
@@ -110,7 +115,6 @@ export function NeedsYouRow({ item, agentType, ignored = false, onIgnore, onRest
         {menu.length ? (
           <ActionMenu label={t("overview.needsYou.moreFor", { name: item.title })} actions={menu} />
         ) : null}
-        {handoff.dialog}
       </div>
     </li>
   );

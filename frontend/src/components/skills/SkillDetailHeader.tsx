@@ -22,7 +22,6 @@ interface Props {
   skill: SkillOut;
   /** Its master folder is gone (a Check copies finding). */
   masterMissing?: boolean;
-  onCheckCopies: () => void;
   /** Called once the delete has landed, to leave the address of a skill that is gone. */
   onDeleted: () => void;
 }
@@ -99,7 +98,6 @@ function MetaLine({ skill, masterMissing }: { skill: SkillOut; masterMissing: bo
 export function SkillDetailHeader({
   skill,
   masterMissing = false,
-  onCheckCopies,
   onDeleted,
 }: Props) {
   const { t } = useTranslation();
@@ -131,7 +129,7 @@ export function SkillDetailHeader({
         ) : null}
         <span className="ml-auto inline-flex items-center gap-1.5">
           <ScopeControl kind="skill" uid={skill.uid} enabled={skill.enabled} scope={skill.scope} />
-          <SkillActionsMenu skill={skill} onCheckCopies={onCheckCopies} onDeleted={onDeleted} />
+          <SkillActionsMenu skill={skill} onDeleted={onDeleted} />
         </span>
       </div>
       {skill.description ? (

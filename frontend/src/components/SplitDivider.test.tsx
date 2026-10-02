@@ -104,4 +104,29 @@ describe("SplitDivider", () => {
     );
     expect(screen.getByRole("separator")).not.toHaveAttribute("aria-valuemax");
   });
+
+  test("with onPreview a drag previews each move and commits once on release", () => {
+    const onPreview = vi.fn();
+    const onChange = vi.fn();
+    render(
+      <SplitDivider
+        value={220}
+        min={200}
+        max={300}
+        onPreview={onPreview}
+        onChange={onChange}
+        onReset={() => {}}
+        label="Resize the sidebar"
+      />,
+    );
+    fireEvent.pointerDown(sep(), { button: 0, pointerId: 1, clientX: 100 });
+    fireEvent.pointerMove(sep(), { pointerId: 1, clientX: 130 });
+    fireEvent.pointerMove(sep(), { pointerId: 1, clientX: 900 });
+    expect(onPreview.mock.calls).toEqual([[250], [300]]);
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.pointerUp(sep(), { pointerId: 1, clientX: 900 });
+    expect(onChange.mock.calls).toEqual([[300]]);
+    fireEvent.keyDown(sep(), { key: "ArrowLeft" });
+    expect(onChange).toHaveBeenLastCalledWith(204);
+  });
 });

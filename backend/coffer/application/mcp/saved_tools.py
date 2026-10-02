@@ -18,6 +18,7 @@ from coffer.application.mcp.gateway_tiering import apply_tiering
 from coffer.application.mcp.gateway_tool_gate import hidden_tool_names
 from coffer.application.mcp.ports import MCPCapabilityPreferenceRepoPort, MCPInvocationRepoPort
 from coffer.application.mcp.tiering_config import TieringConfig
+from coffer.application.mcp.tool_exposure import exposure_overrides
 from coffer.application.resource_service import ResourceService
 from coffer.domain.resource import Resource
 
@@ -67,7 +68,13 @@ async def saved_hidden_count(
             for name, enabled in await current_tools(prefs, server)
             if enabled and f"{server.name}__{name}" not in hidden
         ]
-        result = await apply_tiering(tools, invocations=invocations, config=config, clock=clock)
+        result = await apply_tiering(
+            tools,
+            invocations=invocations,
+            config=config,
+            clock=clock,
+            exposure=await exposure_overrides(prefs, rows),
+        )
     except Exception:
         return 0
     return result.hidden_count

@@ -38,12 +38,12 @@ function wrapper({ children }: PropsWithChildren) {
 
 afterEach(() => vi.clearAllMocks());
 
-test("choosing Disabled reports the draft", () => {
+test("choosing Off reports the draft", () => {
   const onChange = vi.fn();
   render(<SkillAddReach value={EVERY_AGENT} onChange={onChange} />, { wrapper });
   expect(screen.getByText("0 of 0 agents · you can change it any time")).toBeInTheDocument();
   fireEvent.click(within(screen.getByTestId("skill-add-reach")).getByRole("button"));
-  fireEvent.click(screen.getByRole("radio", { name: /Disabled/ }));
+  fireEvent.click(screen.getByRole("radio", { name: /Off/ }));
   expect(onChange).toHaveBeenCalledWith({ mode: "disabled", scope: null });
 });
 

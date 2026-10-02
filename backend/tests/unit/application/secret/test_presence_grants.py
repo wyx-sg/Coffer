@@ -28,6 +28,16 @@ def test_the_grant_key_and_signatures_match_the_shared_vector() -> None:
     )
 
 
+def test_the_batch_target_matches_the_shared_vector_whatever_the_order() -> None:
+    from coffer.domain.secrets import batch_target
+
+    want = "batch:53e1eee92f2845fea31f392664f71343ccd188245a4ef042c22d86f32e08ee2d"
+    assert batch_target([("b2", "fp2"), ("a1", "fp1")]) == want
+    assert batch_target([("a1", "fp1"), ("b2", "fp2")]) == want
+    assert batch_target([("a1", "fp1")]) != want
+    assert batch_target([("a1", "fp1"), ("b2", "fpX")]) != want
+
+
 def _grants(clock: list[float]) -> tuple[PresenceGrants, bytes]:
     gk = derive_grant_key(_KEY)
     return PresenceGrants(lambda: gk, clock=lambda: clock[0]), gk

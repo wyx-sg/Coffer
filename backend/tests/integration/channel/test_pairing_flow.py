@@ -114,17 +114,16 @@ async def _pair_owner_with_a_group(env: ChannelEnv) -> tuple[Resource, FakeChann
 
 @pytest.mark.acceptance(spec="channels", scenario="pairing from another account replaces the owner")
 async def test_pairing_from_another_account_replaces_the_owner(env: ChannelEnv) -> None:
-    """spec channels "Pair exactly one owner with a single-use code": the code
-    "binds its sender as the channel's sole peer, replacing any previous peer".
-    Every trace of the previous owner's authority goes; the new owner gets all of
-    it — DM gate, notify default target, group owner gate."""
+    """A code issued to re-pair a person ("Serve several paired people") hands that
+    person's place to its sender. Every trace of the previous person's authority
+    goes; the new one gets all of it — DM gate, notify default target, group gate."""
     resource, adapter = await _pair_owner_with_a_group(env)
-    code, _ = env.pairing.issue(resource.uid)
+    code, _ = env.pairing.issue(resource.uid, replaces="old-1")
     await env.processor.on_message(inbound("tg", "new-dm", code, sender_id="new-1"))
 
     peers = await env.peers.list_by_resource(resource.uid)
     assert [(p.chat_id, p.sender_id) for p in peers] == [("new-dm", "new-1")]
-    assert await env.peers.owner_sender_id(resource.uid) == "new-1"
+    assert await env.peers.sender_ids(resource.uid) == {"new-1"}
 
     # (1) The old owner's DM no longer passes the owner gate: no reply, no turn.
     conversations_before = len(await env.chat.list_conversations())
@@ -163,8 +162,8 @@ async def test_pairing_from_another_account_replaces_the_owner(env: ChannelEnv) 
 
 
 async def test_re_pairing_from_the_same_account_keeps_its_groups(env: ChannelEnv) -> None:
-    """Re-pairing by the same owner (same sender, from a chat not yet paired) is
-    not an ownership change: the new chat pairs and nothing the owner already
+    """Re-pairing by the same person (same sender, from a chat not yet paired) is
+    not a change of person: the new chat pairs and nothing the person already
     had — DM, groups, group gate — is dropped."""
     resource, adapter = await _pair_owner_with_a_group(env)
     code, _ = env.pairing.issue(resource.uid)
@@ -178,7 +177,7 @@ async def test_re_pairing_from_the_same_account_keeps_its_groups(env: ChannelEnv
         ("old-dm", "old-1"),
         ("old-dm-2", "old-1"),
     ]
-    assert await env.peers.owner_sender_id(resource.uid) == "old-1"
+    assert await env.peers.sender_ids(resource.uid) == {"old-1"}
     assert len(await env.audit_entries("channel_paired", resource)) == 2
 
 
@@ -200,17 +199,17 @@ async def test_a_claim_from_a_message_with_no_sender_pairs_nobody(env: ChannelEn
     assert await env.peers.owner_peer(resource.uid) is not None
 
 
-async def test_a_failed_owner_swap_leaves_the_previous_owner_in_place(
+async def test_a_failed_person_swap_leaves_the_previous_person_in_place(
     env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Replacing the owner is one write: if saving the new owner fails, the
-    previous owner's rows are not already gone — a channel is never left with
-    no owner at all."""
+    """Replacing a person is one write: if saving the new one fails, the
+    previous person's rows are not already gone — a re-pair never leaves the
+    channel with nobody it was answering."""
     resource, _ = await _pair_owner_with_a_group(env)
     before = sorted(
         (p.chat_id, p.sender_id) for p in await env.peers.list_by_resource(resource.uid)
     )
-    code, _ = env.pairing.issue(resource.uid)
+    code, _ = env.pairing.issue(resource.uid, replaces="old-1")
 
     def _refuse_write(self: Transaction, *_args: object, **_kwargs: object) -> None:
         raise RuntimeError("disk full")
@@ -233,4 +232,4 @@ async def test_a_failed_owner_swap_leaves_the_previous_owner_in_place(
 
     after = sorted((p.chat_id, p.sender_id) for p in await env.peers.list_by_resource(resource.uid))
     assert after == before == [("grp-1", "old-1"), ("old-dm", "old-1")]
-    assert await env.peers.owner_sender_id(resource.uid) == "old-1"
+    assert await env.peers.sender_ids(resource.uid) == {"old-1"}

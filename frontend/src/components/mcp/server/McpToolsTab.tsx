@@ -1,18 +1,24 @@
 // src/components/mcp/server/McpToolsTab.tsx — the open server's Tools tab: All tools · N of M on, Search tools, All on · All off, the table (design 4.1.25, 4.1.06).
 //
-// The same table as the Overview's, every tool in the server's own order and
-// the first TAB_SHOWN of them, with the filter finding the rest. A list rebuilt
+// The same table as the Overview's, every tool in the server's own order,
+// rendered 50 at a time ("Showing N of M", Show more) while the search runs over
+// all of them. The toolbar's menu sets the exposure of the filtered tools. A list rebuilt
 // from the saved switches (the server could not be reached) says so: the
 // switches still apply when it answers.
 import { useState } from "react";
+import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import { useTranslation } from "react-i18next";
 
+import { Section } from "@/components/Section";
 import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { mcpCapabilitiesKey, mcpTieringKey } from "@/lib/api/queryKeys";
 import type { components } from "@/lib/api/types";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
+import { useSetToolExposure } from "@/lib/hooks/useMcpToolExposure";
+import { useShowMore } from "@/lib/hooks/useShowMore";
+import type { ToolExposureMode } from "@/lib/api/mcpServers";
 import { capabilitiesApi } from "@/lib/hooks/useMcpCapabilityMutations";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import type { InvocationSummary, ToolTiering } from "@/lib/hooks/useMcpServerPage";
@@ -22,9 +28,6 @@ import type { ServerState } from "@/lib/mcp/serverState";
 import { cacheNote, countsUsage, toolRows } from "./toolRows";
 
 type CapabilityListOut = components["schemas"]["CapabilityListOut"];
-
-/** How many rows the tab lists before "Filter to find the rest". */
-const TAB_SHOWN = 10;
 
 interface Props {
   serverUid: string;
@@ -60,6 +63,20 @@ export function McpToolsTab({
     ? rows.filter((r) => `${r.key} ${r.description ?? ""}`.toLowerCase().includes(q))
     : rows;
   const fromCache = capabilities?.from_cache ?? false;
+  const page = useShowMore(matching, q);
+  const exposure = useSetToolExposure();
+  const exposureActions: MenuAction[] = (
+    [
+      ["auto", "bulkAuto"],
+      ["listed", "bulkListed"],
+      ["search", "bulkSearch"],
+    ] as const
+  ).map(([mode, key]: readonly [ToolExposureMode, string]) => ({
+    key: mode,
+    label: t(`mcp.exposure.${key}`, { count: matching.length }),
+    disabled: exposure.isPending || matching.length === 0,
+    onSelect: () => exposure.mutate({ serverUid, tools: matching.map((r) => r.key), mode }),
+  }));
 
   const setAll = (op: "enable" | "disable") =>
     void bulk.run(
@@ -73,15 +90,11 @@ export function McpToolsTab({
     );
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-semibold text-text">{t("mcp.page.allTools")}</h3>
-        {rows.length > 0 ? (
-          <span className="text-xs text-text-muted" data-testid="mcp-tools-on">
-            {t("mcp.page.toolsOn", { on, total: rows.length })}
-          </span>
-        ) : null}
-        <span className="ml-auto inline-flex items-center gap-1">
+    <Section
+      title={t("mcp.page.allTools")}
+      gap="snug"
+      actions={
+        <span className="inline-flex items-center gap-1">
           <SearchInput
             value={query}
             onChange={setQuery}
@@ -89,6 +102,9 @@ export function McpToolsTab({
             ariaLabel={t("mcp.page.searchTools")}
             className="w-48"
           />
+          {tiering?.enabled ? (
+            <ActionMenu label={t("mcp.exposure.bulk")} actions={exposureActions} />
+          ) : null}
           <Button
             variant="link"
             size="sm"
@@ -109,7 +125,8 @@ export function McpToolsTab({
             {t("mcp.page.allOff")}
           </Button>
         </span>
-      </div>
+      }
+    >
       {pending ? (
         <Skeleton className="h-40 w-full" />
       ) : rows.length === 0 ? (
@@ -124,19 +141,26 @@ export function McpToolsTab({
           ) : (
             <McpToolTable
               serverUid={serverUid}
-              rows={matching.slice(0, TAB_SHOWN)}
-              showListing={rows.some((r) => r.listing !== null)}
+              rows={page.shown}
+              showListing={rows.some((r) => r.exposure !== null || r.listing !== null)}
               fromCache={fromCache}
               label={t("mcp.server.tabs.tools")}
             />
           )}
-          {matching.length > TAB_SHOWN ? (
-            <p className="px-2 text-xs text-text-muted">
-              {t("mcp.page.showingOf", { shown: TAB_SHOWN, total: matching.length })}
+          {matching.length > 0 ? (
+            <p className="flex items-center gap-2 px-2 text-xs text-text-muted">
+              <span data-testid="mcp-tools-shown">
+                {t("mcp.page.showingOf", { shown: page.shown.length, total: page.total })}
+              </span>
+              {page.hasMore ? (
+                <Button variant="link" size="sm" onClick={page.showMore}>
+                  {t("mcp.page.showMore", { count: page.next })}
+                </Button>
+              ) : null}
             </p>
           ) : null}
         </>
       )}
-    </div>
+    </Section>
   );
 }

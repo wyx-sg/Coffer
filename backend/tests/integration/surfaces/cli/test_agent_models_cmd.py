@@ -57,6 +57,9 @@ class _Catalogue:
             ]
         return []
 
+    async def native_default_model(self, agent_key: str) -> str | None:
+        return None
+
 
 @pytest.fixture
 def models_daemon(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -118,7 +121,8 @@ def test_models_json_prints_the_route_response(models_daemon: None) -> None:
                 "efforts": [],
                 "default_effort": None,
             },
-        ]
+        ],
+        "default_model": None,
     }
 
 

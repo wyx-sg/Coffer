@@ -11,7 +11,7 @@
 //! Python tests carry.
 
 use hmac::{Hmac, Mac};
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -27,6 +27,8 @@ const GRANT_PREFIX: &str = "coffer-presence-grant/v1";
 pub enum GrantOp {
     Reveal,
     Approve,
+    /// Several approvals under one grant, signed over [`batch_target`].
+    ApproveBatch,
     ExportMasterKey,
 }
 
@@ -35,9 +37,21 @@ impl GrantOp {
         match self {
             GrantOp::Reveal => "reveal",
             GrantOp::Approve => "approve",
+            GrantOp::ApproveBatch => "approve_batch",
             GrantOp::ExportMasterKey => "export_master_key",
         }
     }
+}
+
+/// The target a batch grant is signed over: a digest of exactly the
+/// `(approval id, target fingerprint)` pairs the person was shown, sorted so the
+/// order does not matter. The daemon computes the same string from the list it
+/// is sent, so the set it approves is the set that was shown.
+pub fn batch_target(items: &[(String, String)]) -> String {
+    let mut lines: Vec<String> = items.iter().map(|(id, fp)| format!("{id}:{fp}")).collect();
+    lines.sort();
+    let digest = Sha256::digest(lines.join("\n").as_bytes());
+    format!("batch:{}", hex::encode(digest))
 }
 
 /// `HMAC-SHA256(key = master key text, msg = label)`. Derived on demand from a
@@ -116,6 +130,22 @@ mod tests {
         assert_ne!(
             approved,
             sign(MASTER, GrantOp::Approve, "gh/token", "nonce-123")
+        );
+    }
+
+    /// The vector `backend/tests/unit/application/secret/test_presence_grants.py` carries.
+    // acceptance(spec = "desktop-app", scenario = "a presence grant signs exactly the approved operation")
+    #[test]
+    fn a_batch_target_is_the_daemons_digest_whatever_the_order() {
+        let want = "batch:53e1eee92f2845fea31f392664f71343ccd188245a4ef042c22d86f32e08ee2d";
+        let a = ("a1".to_owned(), "fp1".to_owned());
+        let b = ("b2".to_owned(), "fp2".to_owned());
+        assert_eq!(batch_target(&[b.clone(), a.clone()]), want);
+        assert_eq!(batch_target(&[a.clone(), b.clone()]), want);
+        assert_ne!(batch_target(&[a.clone()]), want);
+        assert_ne!(
+            batch_target(&[a, ("b2".to_owned(), "fpX".to_owned())]),
+            want
         );
     }
 

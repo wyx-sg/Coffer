@@ -1,5 +1,5 @@
-"""The owner gate for a group message: who may drive a turn from a shared chat
-(spec channels "Act in a group only on an addressed message from the owner" and
+"""The person gate for a group message: who may drive a turn from a shared chat
+(spec channels "Act in a group only on an addressed message from a paired person" and
 "Configure when the bot answers in a group").
 
 Split out of ``inbound`` for that module's size budget. Application layer only.
@@ -21,7 +21,7 @@ async def group_peer(
     peers: ChannelPeerRepoPort, binding: ChannelBinding, msg: InboundMessage
 ) -> ChannelPeer | None:
     """The group's peer row when ``msg`` may drive a turn, else ``None`` (after
-    answering a non-owner, the one refusal said aloud)."""
+    answering an unpaired sender, the one refusal said aloud)."""
     if binding.require_mention and not msg.addressed:
         # Un-addressed group chatter (no @mention/reply-to-bot) is
         # never a turn — a bot must not speak up uninvited in a group
@@ -35,13 +35,12 @@ async def group_peer(
         # reply), before the owner gate, so a bot in a busy group never butts in
         # regardless of who sent it.
         return None
-    owner = await peers.owner_sender_id(binding.resource.uid)
-    if owner is None:
-        # The channel has never been paired (no DM/group has a known
-        # owner sender id yet) — a group @mention cannot bootstrap
-        # pairing; only the paired DM/pairing-code flow can.
+    paired = await peers.sender_ids(binding.resource.uid)
+    if not paired:
+        # Nobody is paired (no DM/group has a known sender id yet) — a group
+        # @mention cannot bootstrap pairing; only the DM/pairing-code flow can.
         return None
-    if not msg.sender_id or msg.sender_id != owner:
+    if not msg.sender_id or msg.sender_id not in paired:
         # A group chat is shared, unlike a DM's 1:1 chat_id match — an
         # empty sender_id here (the transport failed to supply one)
         # must never fall through as "assume it's the owner": that
@@ -56,14 +55,14 @@ async def group_peer(
             await safe_send(
                 binding,
                 msg.chat_id,
-                "🚫 Not authorized — only this channel's owner can use me here.",
+                "🚫 Not authorized — only people paired with this channel can use me here.",
                 thread_id=msg.thread_id,
                 chat_kind="group",
             )
         return None
     peer = await peers.get_by_chat(binding.resource.uid, msg.chat_id)
     if peer is None:
-        # First @mention from the owner in this group/thread — record
+        # First @mention from a paired person in this group/thread — record
         # a peer row for it so future turns (and /commands) resolve a
         # conversation scoped to this chat, not the owner's DM.
         peer = ChannelPeer(
@@ -71,7 +70,7 @@ async def group_peer(
             chat_id=msg.chat_id,
             display_name=msg.sender_display,
             paired_at=datetime.now(tz=UTC),
-            sender_id=owner,
+            sender_id=msg.sender_id,
         )
         await peers.upsert(peer)
     return peer

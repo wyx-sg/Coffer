@@ -17,13 +17,20 @@ import { acceptance } from "@/test/acceptance";
 import { PendingApprovalsSheet } from "./PendingApprovalsSheet";
 
 vi.mock("@/lib/api/secret", () => ({
-  secretsApi: { pendingApprovals: vi.fn(), rejectApproval: vi.fn(), list: vi.fn() },
+  secretsApi: {
+    pendingApprovals: vi.fn(),
+    rejectApproval: vi.fn(),
+    rejectApprovals: vi.fn(),
+    list: vi.fn(),
+  },
 }));
 const approvePending = vi.fn();
+const approvePendingBatch = vi.fn();
 let inShell = false;
 vi.mock("@/lib/tauri", () => ({
   presenceAvailable: () => inShell,
   approvePending: (id: string) => approvePending(id),
+  approvePendingBatch: (ids: string[]) => approvePendingBatch(ids),
   onApprovalsEvent: () => () => {},
 }));
 
@@ -31,6 +38,7 @@ const { secretsApi } = await import("@/lib/api/secret");
 const listMock = vi.mocked(secretsApi.pendingApprovals);
 const rejectMock = vi.mocked(secretsApi.rejectApproval);
 const secretsMock = vi.mocked(secretsApi.list);
+const rejectManyMock = vi.mocked(secretsApi.rejectApprovals);
 
 function approval(over: Partial<Approval> = {}): Approval {
   return {
@@ -46,6 +54,7 @@ function approval(over: Partial<Approval> = {}): Approval {
     destination_uid: null,
     slot: null,
     target: null,
+    target_fingerprint: null,
     decided_at: null,
     decided_by: null,
     ...over,
@@ -177,5 +186,110 @@ describe("PendingApprovalsSheet", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /close/i }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+  describe("several at once", () => {
+    const three = () => [
+      approval({
+        id: "a",
+        op: "bind",
+        ref: "secret/github-token",
+        destination_kind: "mcp_server",
+        destination_label: "alpha",
+        slot: "TOKEN",
+        target: "stdio alpha.sh",
+      }),
+      approval({
+        id: "b",
+        op: "bind",
+        ref: "secret/github-token",
+        destination_kind: "mcp_server",
+        destination_label: "beta",
+        slot: "TOKEN",
+        target: "stdio beta.sh",
+      }),
+      approval({ id: "c", op: "add_secret", ref: "secret/npm-publish-token" }),
+    ];
+    beforeEach(() => {
+      inShell = true;
+      listMock.mockResolvedValue({ approvals: three() });
+    });
+
+    acceptance("secret", "approving several waits for a review of every change", async () => {
+      renderSheet();
+      const dialog = await screen.findByRole("dialog", { name: "3 changes waiting for approval" });
+      // Nothing is ticked to begin with, so approving is a deliberate act.
+      expect(within(dialog).getByRole("button", { name: /Approve selected \(0\)/ })).toBeDisabled();
+      fireEvent.click(within(dialog).getByRole("checkbox", { name: /Select all/ }));
+      fireEvent.click(within(dialog).getByRole("button", { name: /Approve selected \(3\)/ }));
+
+      // The review lists every change the one confirmation covers; nothing ran yet.
+      const review = await screen.findByRole("dialog", { name: "Approve these 3 changes?" });
+      const rows = within(review).getAllByTestId("batch-review-row");
+      expect(rows).toHaveLength(3);
+      expect(rows[0]).toHaveTextContent("alpha");
+      expect(rows[0]).toHaveTextContent("stdio alpha.sh");
+      expect(rows[1]).toHaveTextContent("beta");
+      expect(rows[2]).toHaveTextContent("Approve the new secret npm-publish-token?");
+      expect(approvePendingBatch).not.toHaveBeenCalled();
+      expect(approvePending).not.toHaveBeenCalled();
+    });
+
+    test("one confirmation approves exactly the ticked changes and each outcome is shown", async () => {
+      approvePendingBatch.mockResolvedValue({
+        results: [
+          { id: "a", outcome: "approved", reason: null, approval: null },
+          { id: "c", outcome: "skipped", reason: "changed", approval: null },
+        ],
+      });
+      renderSheet();
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.click(within(dialog).getAllByRole("checkbox", { name: /^Select (?!all)/ })[0]);
+      fireEvent.click(within(dialog).getAllByRole("checkbox", { name: /^Select (?!all)/ })[2]);
+      fireEvent.click(within(dialog).getByRole("button", { name: /Approve selected \(2\)/ }));
+      const review = await screen.findByRole("dialog", { name: "Approve these 2 changes?" });
+      fireEvent.click(within(review).getByRole("button", { name: "Approve all 2…" }));
+
+      await waitFor(() => expect(approvePendingBatch).toHaveBeenCalledTimes(1));
+      expect(approvePendingBatch).toHaveBeenCalledWith(["a", "c"]);
+      const done = await screen.findByRole("dialog", { name: "Approval finished" });
+      const rows = within(done).getAllByTestId("batch-review-row");
+      expect(rows[0]).toHaveTextContent("Approved");
+      expect(rows[1]).toHaveTextContent("it changed after you looked");
+    });
+
+    test("backing out of the review approves nothing", async () => {
+      renderSheet();
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.click(within(dialog).getByRole("checkbox", { name: /Select all/ }));
+      fireEvent.click(within(dialog).getByRole("button", { name: /Approve selected/ }));
+      const review = await screen.findByRole("dialog", { name: "Approve these 3 changes?" });
+      fireEvent.click(within(review).getByRole("button", { name: "Back" }));
+      expect(
+        await screen.findByRole("dialog", { name: "3 changes waiting for approval" }),
+      ).toBeInTheDocument();
+      expect(approvePendingBatch).not.toHaveBeenCalled();
+    });
+
+    test("in a browser Approve selected is disabled but Reject selected works", async () => {
+      inShell = false;
+      rejectManyMock.mockResolvedValue({
+        results: [{ id: "b", outcome: "rejected", reason: null, approval: null }],
+      });
+      renderSheet();
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.click(within(dialog).getAllByRole("checkbox", { name: /^Select (?!all)/ })[1]);
+      expect(within(dialog).getByRole("button", { name: /Approve selected \(1\)/ })).toBeDisabled();
+      fireEvent.click(within(dialog).getByRole("button", { name: /Reject selected \(1\)/ }));
+      await waitFor(() => expect(rejectManyMock).toHaveBeenCalledWith(["b"]));
+      expect(approvePendingBatch).not.toHaveBeenCalled();
+    });
+
+    test("a single waiting change has no selection controls", async () => {
+      listMock.mockResolvedValue({ approvals: [approval()] });
+      renderSheet();
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).queryByTestId("approvals-batch-bar")).not.toBeInTheDocument();
+      expect(within(dialog).queryByRole("checkbox")).not.toBeInTheDocument();
+    });
   });
 });

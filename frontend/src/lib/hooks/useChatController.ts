@@ -13,8 +13,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import {
-  useConversations,
-  useArchivedConversations,
   useConversation,
   useCreateConversation,
   useRenameConversation,
@@ -22,12 +20,20 @@ import {
   useArchiveConversation,
   useUnarchiveConversation,
 } from "@/lib/hooks/useConversations";
+import { useConversationList } from "@/lib/hooks/useConversationList";
+import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useChatTurn } from "@/lib/hooks/useChatTurn";
 import { useConversationFilters } from "@/lib/hooks/useConversationFilters";
 import { filterConversations } from "@/lib/conversations/filters";
+import { readOrigin } from "@/lib/origin";
 import { readHandoffState } from "@/lib/conversations/handoff";
-import { rememberWorkingDir } from "@/lib/conversations/lastWorkingDir";
+import {
+  defaultDraftAgent,
+  readLastWorkingDir,
+  rememberAgent,
+  rememberWorkingDir,
+} from "@/lib/conversations/draftMemory";
 import type { ChatAttachment } from "@/lib/api/chat";
 import type { ComposerRestore } from "@/lib/hooks/useComposerRestore";
 
@@ -60,7 +66,7 @@ export function useChatController() {
   const routeId = isDraft ? undefined : routeParam;
   const { filters, setFilters, search } = useConversationFilters();
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  // The draft's choices, null until New conversation (or a selector) sets them —
+  // The draft's choices, null until a selector (or a hand-off) sets them —
   // the defaults are derived below. They are carried into the create call rather
   // than set after the fact because the FIRST turn is the one a user most wants
   // to pitch, and by the time the conversation exists that turn is running.
@@ -88,10 +94,15 @@ export function useChatController() {
     navigate(`${pathname}${locationSearch}`, { replace: true, state: null });
   }, [handoffState, pathname, locationSearch, navigate]);
 
-  const { data: conversations = [], isPending: convLoading } = useConversations();
-  const { data: archivedConversations = [], isPending: archivedLoading } = useArchivedConversations(
-    filters.archived,
-  );
+  // The title search is the server's: typed text waits for a pause, then the
+  // list starts again from its first page for it.
+  const [titleSearch, setTitleSearch] = useState("");
+  const q = useDebouncedValue(titleSearch.trim());
+  const active = useConversationList({ archived: false, q });
+  const archivedList = useConversationList({ archived: true, q, enabled: filters.archived });
+  const conversations = active.items;
+  const archivedConversations = archivedList.items;
+  const convLoading = active.isLoading;
   const { data: agents = [] } = useAgentProviders();
   const createConv = useCreateConversation();
   const renameConv = useRenameConversation();
@@ -135,9 +146,11 @@ export function useChatController() {
   // Conversations run only on Coffer-managed agents (claude_code / codex); with
   // none available the draft shows how to get one instead of a composer.
   const firstAvailableAgent = agents.find((a) => a.available)?.agent_key ?? null;
+  // The defaults are the agent and folder the last conversation used (the first
+  // agent that can run, Coffer's workspace, when there is none to remember).
   const effectiveDraft: DraftConfig = draftConfig ?? {
-    agentKey: firstAvailableAgent ?? "",
-    cwd: null,
+    agentKey: defaultDraftAgent(agents),
+    cwd: readLastWorkingDir(),
     model: null,
     effort: null,
   };
@@ -145,9 +158,10 @@ export function useChatController() {
   const listPath = `/conversations${search}`;
   const pathFor = (id: string) => `/conversations/${encodeURIComponent(id)}${search}`;
 
-  /** New conversation's Start: open the draft with the agent and folder chosen. */
-  const startDraft = (config: { agentKey: string; cwd: string | null }) => {
-    setDraftConfig({ ...config, model: null, effort: null });
+  /** New conversation: straight to the draft, on the remembered defaults; what is
+   *  chosen (agent, folder, model, effort) is chosen on the draft itself. */
+  const openDraft = () => {
+    setDraftConfig(null);
     setDraftPrefill(null);
     navigate(pathFor(DRAFT_ID));
   };
@@ -169,9 +183,13 @@ export function useChatController() {
         {
           onSuccess: (created) => {
             rememberWorkingDir(effectiveDraft.cwd);
+            rememberAgent(effectiveDraft.agentKey);
             setPendingFirst({ convId: created.id, text, attachments });
             setDraftConfig(null);
-            navigate(pathFor(created.id));
+            // The conversation inherits where the draft was opened from.
+            navigate(pathFor(created.id), {
+              state: readOrigin(location.state) ? location.state : null,
+            });
             resolve(true);
           },
           onError: () => resolve(false),
@@ -190,7 +208,7 @@ export function useChatController() {
     });
   };
 
-  // Archive asks nothing first: it loses nothing, and Restore brings it back.
+  // Archive asks nothing first: it loses nothing, and Unarchive brings it back.
   const archiveConversation = (id: string) => {
     archiveConv.mutate(id, {
       onSuccess: () => {
@@ -199,7 +217,8 @@ export function useChatController() {
     });
   };
 
-  const listed = filters.archived ? archivedConversations : conversations;
+  const view = filters.archived ? archivedList : active;
+  const listed = view.items;
 
   return {
     agents,
@@ -211,13 +230,21 @@ export function useChatController() {
     allConversations: listed,
     /** The current view (active or archived) narrowed by the URL filters. */
     listConversations: filterConversations(listed, filters),
-    listLoading: filters.archived ? archivedLoading : convLoading,
+    listLoading: view.isLoading,
+    /** More conversations exist past the loaded pages (the filters are applied to what is loaded). */
+    hasMore: view.hasMore,
+    loadMore: view.loadMore,
+    isLoadingMore: view.isLoadingMore,
+    /** The title search box's text, and the settled text the server was asked for. */
+    titleSearch,
+    setTitleSearch,
+    searching: q !== "",
     isDraft,
     routeId,
     activeConv,
     activeLoading,
     activeNotFound,
-    /** The open conversation is archived: read-only until restored. */
+    /** The open conversation is archived: read-only until unarchived. */
     activeArchived: !!activeConv?.archived_at,
     activeAgent,
     turn,
@@ -227,9 +254,10 @@ export function useChatController() {
     // effort are cleared rather than carried over.
     setDraftAgent: (agentKey: string) =>
       setDraftConfig({ ...effectiveDraft, agentKey, model: null, effort: null }),
+    setDraftCwd: (cwd: string | null) => setDraftConfig({ ...effectiveDraft, cwd }),
     setDraftModel: (model: string | null) => setDraftConfig({ ...effectiveDraft, model }),
     setDraftEffort: (effort: string | null) => setDraftConfig({ ...effectiveDraft, effort }),
-    startDraft,
+    openDraft,
     selectConversation,
     sendDraft,
     refusedFirst: refusedFirst?.convId === activeConv?.id ? refusedFirst : null,
@@ -252,8 +280,8 @@ export function useChatController() {
     confirmDelete,
     deletePending: deleteConv.isPending,
     archiveConversation,
-    restoreConversation: (id: string) => unarchiveConv.mutate(id),
-    restorePending: unarchiveConv.isPending,
+    unarchiveConversation: (id: string) => unarchiveConv.mutate(id),
+    unarchivePending: unarchiveConv.isPending,
   };
 }
 

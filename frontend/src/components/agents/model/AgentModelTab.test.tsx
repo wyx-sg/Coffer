@@ -119,7 +119,21 @@ async function options(name: RegExp, expectOne?: string): Promise<string[]> {
   return out;
 }
 
-const card = (name: RegExp) => screen.findByRole("radio", { name });
+/** The second card, once the providers have loaded and it can be chosen. */
+async function openCustom() {
+  const radio = await screen.findByRole("radio", { name: /custom provider/i });
+  await waitFor(() => expect(radio).toBeEnabled());
+  fireEvent.click(radio);
+}
+
+/** Choose a custom provider the way a person does: the second card, then the searchable list. */
+async function pickProvider(name: RegExp) {
+  await openCustom();
+  fireEvent.click(await screen.findByRole("combobox", { name: /custom provider/i }));
+  fireEvent.click(await screen.findByRole("option", { name }));
+}
+const expandTiers = () =>
+  fireEvent.click(screen.getByRole("button", { name: /advanced: tier mapping/i }));
 const confirmBtn = () => screen.getByRole("button", { name: /confirm switch/i });
 
 beforeEach(() => {
@@ -179,8 +193,8 @@ describe("AgentModelTab", () => {
         listed: text("claude-opus-4-8", "claude-haiku-4-5"),
       });
       renderTab({ ...CLAUDE, model: "claude-opus-4-8", connection_uid: "u-official" });
-      await screen.findByRole("combobox", { name: /^model$/i });
-      const opts = await options(/^model$/i, "claude-haiku-4-5");
+      await screen.findByRole("combobox", { name: /^default model$/i });
+      const opts = await options(/^default model$/i, "claude-haiku-4-5");
       // The connection's INTROSPECTED models; an id is chosen, never typed.
       expect(opts).toEqual(["claude-opus-4-8", "claude-haiku-4-5"]);
       expect(opts.some((o) => /custom/i.test(o))).toBe(false);
@@ -208,10 +222,11 @@ describe("AgentModelTab", () => {
         tier_models: { opus: "agnes-2.0" },
         connection_uid: "u-agnes",
       });
-      await screen.findByRole("combobox", { name: /^model$/i });
+      await screen.findByRole("combobox", { name: /^default model$/i });
       // Every chat slot — the Model and each tier — offers the text id only,
       // and a curated connection is never probed.
-      expect(await options(/^model$/i, "agnes-2.0")).toEqual(["agnes-2.0"]);
+      expect(await options(/^default model$/i, "agnes-2.0")).toEqual(["agnes-2.0"]);
+      expandTiers();
       expect(await options(/^opus$/i, "agnes-2.0")).toEqual(["agnes-2.0"]);
       expect(calls((p) => p === "/models/list-models")).toHaveLength(0);
     },
@@ -242,8 +257,8 @@ describe("AgentModelTab", () => {
     expect(screen.getByText("Current")).toBeInTheDocument();
     // The default is shown, not offered; no tiers on the built-in login.
     expect(await screen.findByText("claude-opus-5-5 · Claude Code’s default")).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: /^model$/i })).toBeNull();
-    expect(screen.queryByText("Model per tier")).toBeNull();
+    expect(screen.queryByRole("combobox", { name: /^default model$/i })).toBeNull();
+    expect(screen.queryByText("Advanced: tier mapping")).toBeNull();
     expect(screen.getByText("Nothing to apply")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /confirm switch/i })).toBeNull();
   });
@@ -257,10 +272,12 @@ describe("AgentModelTab", () => {
       ],
     });
     renderTab();
-    await card(/live/);
-    expect(screen.queryByRole("radio", { name: /switched-off/ })).toBeNull();
-    expect(screen.queryByRole("radio", { name: /gpt/ })).toBeNull();
-    expect(screen.getByText(/api\.example\.com · key in Coffer’s vault/)).toBeInTheDocument();
+    await openCustom();
+    fireEvent.click(await screen.findByRole("combobox", { name: /custom provider/i }));
+    const names = (await screen.findAllByRole("option")).map((o) => o.textContent ?? "");
+    expect(names).toHaveLength(1);
+    expect(names[0]).toMatch(/live/);
+    expect(names[0]).toMatch(/api\.example\.com · key in Coffer’s vault/);
   });
 
   // Picking a connection stages a model and the tier suggestion; test, then confirm.
@@ -273,10 +290,11 @@ describe("AgentModelTab", () => {
       ],
     });
     renderTab();
-    fireEvent.click(await card(/gateway/));
+    await pickProvider(/gateway/);
     // A pick is a draft: nothing written, confirm waits for a test.
     expect(calls((_p, m) => m === "PATCH")).toHaveLength(0);
     expect(confirmBtn()).toBeDisabled();
+    expandTiers();
     expect(screen.getByRole("combobox", { name: /^haiku$/i })).toHaveTextContent("claude-haiku-5");
     expect(screen.getByRole("combobox", { name: /^fable$/i })).toHaveTextContent("claude-fable-1");
     // The review names the file and the tier pins before anything is written.
@@ -312,7 +330,8 @@ describe("AgentModelTab", () => {
     async () => {
       serve({ providers: [conn("kimi", { models: text("kimi-k3", "kimi-k3-mini") })] });
       renderTab();
-      fireEvent.click(await card(/kimi/));
+      await pickProvider(/kimi/);
+      expandTiers();
       for (const tier of [/^opus$/i, /^sonnet$/i, /^haiku$/i])
         expect(screen.getByRole("combobox", { name: tier })).toHaveTextContent("kimi-k3");
       expect(screen.queryByRole("combobox", { name: /^fable$/i })).toBeNull();
@@ -322,7 +341,7 @@ describe("AgentModelTab", () => {
   test("a failed test keeps confirm disabled and shows the message", async () => {
     serve({ providers: [conn("agnes", { models: text("agnes-2.0") })], testOk: false });
     renderTab();
-    fireEvent.click(await card(/agnes/));
+    await pickProvider(/agnes/);
     fireEvent.click(screen.getByRole("button", { name: /test connection/i }));
     expect(await screen.findByText("invalid key")).toBeInTheDocument();
     expect(confirmBtn()).toBeDisabled();
@@ -354,7 +373,7 @@ describe("AgentModelTab", () => {
         .getAllByRole("radio")
         .map((r) => r.textContent),
     ).toEqual(["Model default", "Low", "Medium", "High"]);
-    expect(screen.queryByText("Model per tier")).toBeNull();
+    expect(screen.queryByText("Advanced: tier mapping")).toBeNull();
     expect(screen.queryByRole("spinbutton")).toBeNull();
   });
 
@@ -370,8 +389,8 @@ describe("AgentModelTab", () => {
   test("switching to the built-in login confirms without a test", async () => {
     serve({ providers: [conn("official", { models: text("m1") })] });
     renderTab({ ...CLAUDE, model: "m1", connection_uid: "u-official" });
-    await card(/official/);
-    fireEvent.click(await card(/built-in login/i));
+    await screen.findByRole("combobox", { name: /custom provider/i });
+    fireEvent.click(await screen.findByRole("radio", { name: /built-in login/i }));
     const review = screen.getByRole("region", { name: /review the switch/i });
     expect(within(review).getByText("apiKeyHelper")).toBeInTheDocument();
     fireEvent.click(confirmBtn());
@@ -389,7 +408,7 @@ describe("AgentModelTab", () => {
       },
     });
     renderTab();
-    fireEvent.click(await card(/agnes/));
+    await pickProvider(/agnes/);
     fireEvent.click(screen.getByRole("button", { name: /test connection/i }));
     await waitFor(() => expect(confirmBtn()).toBeEnabled());
     fireEvent.click(confirmBtn());
@@ -400,7 +419,7 @@ describe("AgentModelTab", () => {
     fireEvent.click(screen.getByRole("button", { name: /reload preview/i }));
     await waitFor(() => expect(calls((p) => p === "/providers").length).toBeGreaterThan(before));
     expect(screen.queryByText(/Switch refused/)).toBeNull();
-    expect(screen.getByRole("radio", { name: /agnes/ })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("combobox", { name: /custom provider/i })).toHaveTextContent("agnes");
   });
 
   acceptance(
@@ -428,13 +447,14 @@ describe("AgentModelTab", () => {
         ],
       });
       const claude = renderTab({ ...CLAUDE, model: "kimi-k3", connection_uid: "u-kimi" });
-      expect(await screen.findByRole("radio", { name: /kimi/ })).toHaveAttribute(
-        "aria-checked",
-        "true",
+      expect(await screen.findByRole("combobox", { name: /custom provider/i })).toHaveTextContent(
+        "kimi",
       );
-      expect(screen.getByRole("combobox", { name: /^model$/i })).toHaveTextContent("kimi-k3");
+      expect(screen.getByRole("combobox", { name: /^default model$/i })).toHaveTextContent(
+        "kimi-k3",
+      );
       expect(screen.getByRole("radiogroup", { name: "Effort" })).toBeInTheDocument();
-      expect(screen.getByText("Model per tier")).toBeInTheDocument();
+      expect(screen.getByText("Advanced: tier mapping")).toBeInTheDocument();
       noOtherSetting();
       claude.unmount();
 
@@ -448,13 +468,14 @@ describe("AgentModelTab", () => {
         ],
       });
       renderTab({ ...CODEX, model: "gpt-oss", connection_uid: "u-openai" });
-      expect(await screen.findByRole("radio", { name: /openai/ })).toHaveAttribute(
-        "aria-checked",
-        "true",
+      expect(await screen.findByRole("combobox", { name: /custom provider/i })).toHaveTextContent(
+        "openai",
       );
-      expect(screen.getByRole("combobox", { name: /^model$/i })).toHaveTextContent("gpt-oss");
+      expect(screen.getByRole("combobox", { name: /^default model$/i })).toHaveTextContent(
+        "gpt-oss",
+      );
       expect(screen.queryByRole("radiogroup", { name: "Effort" })).toBeNull();
-      expect(screen.queryByText("Model per tier")).toBeNull();
+      expect(screen.queryByText("Advanced: tier mapping")).toBeNull();
       noOtherSetting();
     },
   );
@@ -462,7 +483,8 @@ describe("AgentModelTab", () => {
   acceptance("provider-switching", "an edited tier resets to the suggestion", async () => {
     serve({ providers: [conn("kimi", { models: text("kimi-k3", "kimi-k3-mini") })] });
     renderTab();
-    fireEvent.click(await card(/kimi/));
+    await pickProvider(/kimi/);
+    expandTiers();
     const haiku = () => screen.getByRole("combobox", { name: /^haiku$/i });
     fireEvent.keyDown(haiku(), { key: "ArrowDown" });
     fireEvent.click(await screen.findByRole("option", { name: "kimi-k3-mini" }));
@@ -500,7 +522,81 @@ describe("AgentModelTab", () => {
     );
     expect(await screen.findByText("claude-opus-5-5 · Claude Code’s default")).toBeInTheDocument();
     expect(await screen.findByRole("radiogroup", { name: "Effort" })).toBeInTheDocument();
-    expect(screen.queryByText("Model per tier")).toBeNull();
+    expect(screen.queryByText("Advanced: tier mapping")).toBeNull();
     expect(screen.queryByRole("combobox", { name: /^haiku$/i })).toBeNull();
+  });
+
+  test("exactly two provider cards; the custom one is disabled when there is no provider", async () => {
+    serve({ providers: [] });
+    renderTab();
+    await screen.findByText("No other compatible provider yet");
+    expect(
+      screen.getAllByRole("radio").filter((r) => r.closest('[aria-label="Provider"]')),
+    ).toHaveLength(2);
+    expect(screen.getByRole("radio", { name: /custom provider/i })).toBeDisabled();
+    expect(screen.queryByRole("combobox", { name: /custom provider/i })).toBeNull();
+  });
+
+  test("many providers stay in one searchable list", async () => {
+    const many = Array.from({ length: 12 }, (_, i) => conn(`prov-${i}`));
+    serve({ providers: many });
+    renderTab();
+    await openCustom();
+    fireEvent.click(await screen.findByRole("combobox", { name: /custom provider/i }));
+    expect(await screen.findAllByRole("option")).toHaveLength(12);
+    fireEvent.change(screen.getByRole("textbox", { name: /search/i }), {
+      target: { value: "prov-11" },
+    });
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    expect(
+      screen.getAllByRole("radio").filter((r) => r.closest('[aria-label="Provider"]')),
+    ).toHaveLength(2);
+  });
+
+  test("on the built-in login Model and Effort are greyed out with the reason", async () => {
+    serve({
+      catalogue: [
+        {
+          id: "claude-opus-5-5",
+          label: "Opus",
+          description: "",
+          efforts: ["low", "high"],
+          default_effort: "high",
+        },
+      ],
+    });
+    renderTab();
+    expect(
+      await screen.findByText("Set in Claude Code itself — use /model in a session."),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("Set in Claude Code itself — use /effort in a session."),
+    ).toBeInTheDocument();
+    const effort = screen.getByRole("radiogroup", { name: "Effort" });
+    for (const r of within(effort).getAllByRole("radio")) expect(r).toBeDisabled();
+  });
+
+  test("tier mapping is collapsed with a summary; Effort says what to do before a model is chosen", async () => {
+    serve({ providers: [conn("kimi", { models: text("kimi-k3") })] });
+    renderTab();
+    await pickProvider(/kimi/);
+    expect(screen.getByRole("button", { name: /advanced: tier mapping/i })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(screen.getByText("Suggested by Coffer")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /^opus$/i })).toBeNull();
+    expandTiers();
+    expect(screen.getByRole("combobox", { name: /^opus$/i })).toBeInTheDocument();
+  });
+
+  test("with no model yet Effort asks for one instead of saying it is hidden", async () => {
+    serve({ providers: [conn("open")], listed: [] });
+    renderTab();
+    await pickProvider(/open/);
+    expect(
+      await screen.findByText("Choose a default model to see its reasoning levels."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Effort is hidden/)).toBeNull();
   });
 });

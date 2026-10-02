@@ -17,6 +17,7 @@ import { Link } from "react-router-dom";
 import { StatusPill } from "@/components/status/StatusPill";
 import type { StoppedRound, SyncHold } from "@/lib/api/sync";
 import { useSyncStatus } from "@/lib/hooks/useSync";
+import { Section } from "@/components/Section";
 import { useSyncStop } from "@/lib/hooks/useSyncStop";
 import { areaLabel, clock, otherMachine, share } from "./syncConflictFormat";
 
@@ -28,13 +29,13 @@ function ConflictsCard({ round }: { round: StoppedRound }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
   return (
-    <section className={CARD} data-testid="sync-conflicts" aria-labelledby="sync-conflicts-title">
-      <h3
-        id="sync-conflicts-title"
-        className="flex min-h-9 items-center px-3.5 text-xs font-semibold text-text-muted"
-      >
-        {t("sync.conflicts.title")}
-      </h3>
+    <Section
+      title={t("sync.conflicts.title")}
+      gap="tight"
+      labelled
+      testId="sync-conflicts"
+      className={`${CARD} [&>div:first-child]:px-3.5`}
+    >
       <ul>
         {round.files.map((file) => (
           <li key={file.path} className="border-t border-border-subtle">
@@ -65,7 +66,7 @@ function ConflictsCard({ round }: { round: StoppedRound }) {
           </li>
         ))}
       </ul>
-    </section>
+    </Section>
   );
 }
 

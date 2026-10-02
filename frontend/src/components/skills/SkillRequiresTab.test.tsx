@@ -82,7 +82,7 @@ describe("SkillRequiresTab", () => {
       ]);
       expect(within(rows[i]).getByRole("link", { name: /Open in CLIs/ })).toBeInTheDocument();
     }
-    expect(screen.getByText(/Hand a command that needs you to your agent/)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /more info/i }).length).toBeGreaterThan(0);
 
     fireEvent.click(within(rows[1]).getByRole("link", { name: "gcloud" }));
     expect(screen.getByTestId("where")).toHaveTextContent("/clis/gcloud");

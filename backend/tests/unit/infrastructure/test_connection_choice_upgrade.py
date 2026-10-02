@@ -111,3 +111,15 @@ def test_every_converted_config_loads_under_the_current_models() -> None:
             assert AgentConfig.model_validate(r.config).connection_uid == conn.uid
         else:
             ProviderConfig.model_validate(r.config)
+
+
+def test_an_agent_without_a_chosen_connection_loses_its_old_model_binding() -> None:
+    binding = {"model": "agnes-2.0-flash", "effort": "low", "tier_models": {"haiku": "x"}}
+    claude = _agent(_CLAUDE, "claude_code", **binding)
+    codex = _agent(_CODEX, "codex", **binding)
+    only_claude = _connection("a", active=True, scope=Scope(agents=[_CLAUDE]))
+    out = _settled([claude, codex, only_claude])
+    assert out["claude-code"]["model"] == "agnes-2.0-flash"
+    for key in binding:
+        assert key not in out["codex"]
+    AgentConfig.model_validate(out["codex"])

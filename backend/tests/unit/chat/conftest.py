@@ -72,8 +72,11 @@ class FakeConversationRepo:
         archived: bool = False,
         limit: int | None = None,
         after: tuple[datetime, str] | None = None,
+        title_contains: str | None = None,
     ) -> list[Conversation]:
         rows = [c for c in self._store.values() if (c.archived_at is not None) == archived]
+        if title_contains:
+            rows = [c for c in rows if title_contains.casefold() in (c.title or "").casefold()]
         rows.sort(key=lambda c: (c.updated_at, c.id), reverse=True)
         if after is not None:
             rows = [c for c in rows if (c.updated_at, c.id) < after]

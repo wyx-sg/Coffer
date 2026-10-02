@@ -6,6 +6,7 @@ import App from "./App";
 import { queryClient } from "./lib/queryClient";
 import { credentialDesktopHost, followLanguageInShell } from "./lib/tauri";
 import { followUpdatePreferenceInShell } from "./lib/shellUpdates";
+import { applyWindowChrome } from "./lib/windowChrome";
 import { initTheme } from "./lib/theme";
 import i18n from "./i18n"; // Initialises i18next before render
 import "./index.css";
@@ -38,6 +39,7 @@ import "highlight.js/styles/github.css"; // Code-block syntax theme (chat markdo
 function bootstrap(): void {
   // Resolve light / dark onto <html data-theme> before the first paint.
   initTheme();
+  applyWindowChrome();
   void credentialDesktopHost(() => queryClient.invalidateQueries());
   // The desktop tray is labelled in the interface language; it cannot read
   // the choice itself, so the page reports it now and on every switch.

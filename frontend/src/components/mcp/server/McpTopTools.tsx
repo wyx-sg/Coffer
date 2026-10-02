@@ -1,7 +1,8 @@
 // src/components/mcp/server/McpTopTools.tsx — the Overview's "Most-called tools": the busiest few, with "Show all N in Tools" (design 4.1.02–4.1.06).
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import { Section } from "@/components/Section";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { components } from "@/lib/api/types";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
@@ -48,23 +49,13 @@ export function McpTopTools({
   tiering,
   toolsHref,
 }: Props) {
+  const location = useLocation();
   const { t } = useTranslation();
   const rows = toolRows(capabilities?.tools, summary, tiering, countsUsage(state));
-  const on = rows.filter((r) => r.enabled).length;
   const fromCache = capabilities?.from_cache ?? false;
 
   return (
-    <section className="flex flex-col gap-2" aria-labelledby="mcp-top-tools">
-      <div className="flex items-baseline gap-2">
-        <h3 id="mcp-top-tools" className="text-sm font-semibold text-text">
-          {t("mcp.page.mostCalled")}
-        </h3>
-        {rows.length > 0 ? (
-          <span className="text-xs text-text-muted">
-            {t("mcp.page.toolsOn", { on, total: rows.length })}
-          </span>
-        ) : null}
-      </div>
+    <Section title={t("mcp.page.mostCalled")} gap="snug" labelled>
       {pending ? (
         <Skeleton className="h-24 w-full" />
       ) : rows.length === 0 ? (
@@ -82,12 +73,16 @@ export function McpTopTools({
             label={t("mcp.page.mostCalled")}
           />
           {rows.length > SHOWN ? (
-            <Link to={toolsHref} className="px-2 pt-1 text-xs text-accent hover:underline">
+            <Link
+              to={toolsHref}
+              state={location.state}
+              className="px-2 pt-1 text-xs text-accent hover:underline"
+            >
               {t("mcp.page.showAllInTools", { count: rows.length })}
             </Link>
           ) : null}
         </>
       )}
-    </section>
+    </Section>
   );
 }

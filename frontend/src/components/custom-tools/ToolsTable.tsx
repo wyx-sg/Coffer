@@ -3,6 +3,7 @@
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus } from "lucide-react";
 
+import { Section } from "@/components/Section";
 import { AgentBadgeGroup } from "@/components/agent/AgentBadgeGroup";
 import { pickableAgents } from "@/lib/reach/reachState";
 import { Badge } from "@/components/ui/badge";
@@ -58,17 +59,12 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
     });
 
   return (
-    <section
-      aria-label={t("customTools.tools.title", { on, total: group.tools.length })}
-      className="space-y-1"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="flex items-baseline gap-2 text-sm font-semibold">
-          {t("customTools.tools.heading")}
-          <span className="text-xs font-normal text-text-muted">
-            {t("customTools.tools.onCount", { on, total: group.tools.length })}
-          </span>
-        </h2>
+    <Section
+      title={t("customTools.tools.heading")}
+      as="h2"
+      gap="tight"
+      labelled
+      actions={
         <div className="flex items-center gap-1.5 text-xs">
           <button
             type="button"
@@ -88,7 +84,8 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
             {t("customTools.tools.allOff")}
           </button>
         </div>
-      </div>
+      }
+    >
       <div role="table" aria-label={t("customTools.tools.heading")}>
         <div
           role="row"
@@ -188,6 +185,6 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
           {t("customTools.tools.addRequest")}
         </Button>
       </div>
-    </section>
+    </Section>
   );
 }

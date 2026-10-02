@@ -3,18 +3,22 @@
 // "Filter servers" (name, title and command or URL), then the servers grouped
 // by what needs the user — Needs attention (failing, launcher missing, secret
 // missing, each with its reason), Healthy, Not checked yet, Off — with a count
-// each, then Built-in (Coffer's own `coffer` server, read-only), and the
-// selection bar while rows are ticked. Each row reads its own
+// each, then Built-in (Coffer's own `coffer` server, read-only). Search, Reach
+// and Kind (All / Built-in / Custom) filter every row, the built-in one
+// included. While rows are ticked the selection bar takes the filters' place
+// at the top. Each row reads its own
 // status and tiering (both cheap, persisted reads), so the grouping is done
 // here from the cached answers the rows share.
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ListKindFilter, type KindFilterValue } from "@/components/ListKindFilter";
 import { ReachFilter } from "@/components/reach/ReachFilter";
 import { SearchInput } from "@/components/SearchInput";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useAgents } from "@/lib/hooks/useAgents";
+import { useBuiltinMcpServer } from "@/lib/hooks/useMcpAddFlow";
 import { useMcpServerListReads } from "@/lib/hooks/useMcpServerPage";
 import { matchesReach, type ReachFilterValue } from "@/lib/reachFilter";
 import { McpBuiltinRow } from "./McpBuiltinRow";
@@ -45,6 +49,8 @@ export function McpServerList({
   const { data: agents = [] } = useAgents();
   const [query, setQuery] = useState("");
   const [reach, setReach] = useState<ReachFilterValue>("all");
+  const [kind, setKind] = useState<KindFilterValue>("all");
+  const { data: builtin } = useBuiltinMcpServer();
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
 
   const { details, splits } = useMcpServerListReads(servers.map((s) => s.uid));
@@ -55,6 +61,7 @@ export function McpServerList({
     const out = new Map<ServerGroup, number[]>(GROUP_ORDER.map((g) => [g, []]));
     servers.forEach((s, i) => {
       const haystack = `${s.name} ${s.title ?? ""} ${transportOf(s.config).target}`.toLowerCase();
+      if (kind === "builtin") return;
       if (q && !haystack.includes(q)) return;
       if (!matchesReach(reach, s)) return;
       out.get(serverState(s, detailOf(i)).group)?.push(i);
@@ -62,8 +69,28 @@ export function McpServerList({
     return out;
     // detailOf reads `details`, whose answers are what change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [servers, query, reach, details]);
+  }, [servers, query, reach, kind, details]);
 
+  // Coffer's own server: always on, for every agent, so Reach "On everywhere" matches it.
+  const showBuiltin =
+    !!builtin &&
+    kind !== "custom" &&
+    matchesReach(reach, { enabled: true, scope: null }) &&
+    (query.trim() === "" ||
+      `${builtin.name} ${builtin.url}`.toLowerCase().includes(query.trim().toLowerCase()));
+
+  // What select-all covers: the listed servers the filters show (never the built-in one).
+  const visibleUids = [...groups.values()].flat().map((i) => servers[i].uid);
+  const allVisiblePicked = visibleUids.length > 0 && visibleUids.every((u) => picked.has(u));
+  const toggleAll = (on: boolean) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      for (const u of visibleUids) {
+        if (on) next.add(u);
+        else next.delete(u);
+      }
+      return next;
+    });
   const selected = servers.filter((s) => picked.has(s.uid));
   const toggle = (uid: string, on: boolean) =>
     setPicked((prev) => {
@@ -72,20 +99,41 @@ export function McpServerList({
       else next.delete(uid);
       return next;
     });
-  const shown = [...groups.values()].reduce((n, g) => n + g.length, 0);
+  const shown = [...groups.values()].reduce((n, g) => n + g.length, 0) + (showBuiltin ? 1 : 0);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="px-3 pb-2.5 pt-3.5">
-        <SearchInput
-          value={query}
-          onChange={setQuery}
-          placeholder={t("mcp.page.filter")}
-          ariaLabel={t("mcp.page.filter")}
-        />
-        <div className="mt-2.5">
-          <ReachFilter value={reach} onChange={setReach} />
-        </div>
+      <div className="flex flex-col gap-2.5 px-3 pb-2.5 pt-3.5">
+        {selected.length > 0 ? (
+          <McpServersBulkBar
+            servers={selected}
+            allChecked={allVisiblePicked}
+            onToggleAll={toggleAll}
+            onDone={() => setPicked(new Set())}
+          />
+        ) : (
+          <>
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder={t("mcp.page.filter")}
+              ariaLabel={t("mcp.page.filter")}
+            />
+            <div className="flex items-center gap-2">
+              <ReachFilter value={reach} onChange={setReach} compact />
+              <ListKindFilter
+                value={kind}
+                onChange={setKind}
+                words={{
+                  label: t("mcp.page.kind.label"),
+                  all: t("mcp.page.kind.all"),
+                  builtin: t("mcp.page.kind.builtin"),
+                  custom: t("mcp.page.kind.custom"),
+                }}
+              />
+            </div>
+          </>
+        )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {isLoading ? (
@@ -94,7 +142,9 @@ export function McpServerList({
               <Skeleton key={i} className="h-10 w-full" />
             ))}
           </div>
-        ) : shown === 0 && servers.length > 0 && (query.trim() !== "" || reach !== "all") ? (
+        ) : shown === 0 &&
+          servers.length > 0 &&
+          (query.trim() !== "" || reach !== "all" || kind !== "all") ? (
           <p className="px-2.5 py-3 text-xs text-text-muted">{t("mcp.page.noMatches")}</p>
         ) : (
           GROUP_ORDER.map((group) => {
@@ -118,6 +168,7 @@ export function McpServerList({
                         agents={agents}
                         to={hrefFor(s.name)}
                         current={s.name === selectedName}
+                        selecting={selected.length > 0}
                         checked={picked.has(s.uid)}
                         onCheckedChange={(on) => toggle(s.uid, on)}
                       />
@@ -128,13 +179,10 @@ export function McpServerList({
             );
           })
         )}
-        {isLoading ? null : (
-          <McpBuiltinRow query={query} to={hrefFor(BUILTIN_NAME)} current={builtinSelected} />
+        {isLoading || !showBuiltin || !builtin ? null : (
+          <McpBuiltinRow server={builtin} to={hrefFor(BUILTIN_NAME)} current={builtinSelected} />
         )}
       </div>
-      {selected.length > 0 ? (
-        <McpServersBulkBar servers={selected} onDone={() => setPicked(new Set())} />
-      ) : null}
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { RotateCcw } from "lucide-react";
 
 import { DataTable } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
+import { Section } from "@/components/Section";
 import { Button } from "@/components/ui/button";
 import { translateApiError } from "@/lib/api/errors";
 import type { SyncRound } from "@/lib/api/sync";
@@ -24,13 +25,28 @@ import { collapseRepeats, type SyncRunRow } from "./syncRunRows";
 
 interface Props {
   runs: SyncRound[];
+  /** The count of every round, and the cursor paging over them. */
+  total?: number;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  onLoadMore: () => void;
   isLoading: boolean;
   error: unknown;
   onRetry: () => void;
   nextRoundAt: string | null;
 }
 
-export function SyncRoundsTable({ runs, isLoading, error, onRetry, nextRoundAt }: Props) {
+export function SyncRoundsTable({
+  runs,
+  total,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
+  isLoading,
+  error,
+  onRetry,
+  nextRoundAt,
+}: Props) {
   const { t } = useTranslation();
   const rows = useMemo(() => collapseRepeats(runs), [runs]);
   const [open, setOpen] = useState<SyncRunRow | null>(null);
@@ -39,13 +55,13 @@ export function SyncRoundsTable({ runs, isLoading, error, onRetry, nextRoundAt }
   const columns = syncRunColumns(t, { runs, nextRoundAt, onRollback: setRollingBack });
 
   return (
-    <section className="space-y-2.5" aria-labelledby="sync-rounds-title">
-      <div className="flex min-h-control-sm flex-wrap items-center gap-x-2">
-        <h2 id="sync-rounds-title" className="text-sm font-semibold text-text">
-          {t("sync.rounds.title")}
-        </h2>
-        <span className="text-xs text-text-subtle">{t("sync.rounds.hint")}</span>
-      </div>
+    <Section
+      title={t("sync.rounds.title")}
+      help={t("sync.rounds.hint")}
+      as="h2"
+      labelled
+      testId="sync-rounds"
+    >
       {/* Rendered inside the tab, so a failing history never blanks the page. */}
       {error ? (
         <EmptyState
@@ -66,6 +82,13 @@ export function SyncRoundsTable({ runs, isLoading, error, onRetry, nextRoundAt }
           rowKey={(row) => row.id}
           onRowClick={setOpen}
           isLoading={isLoading}
+          infinite={{
+            loaded: runs.length,
+            total,
+            hasMore,
+            loading: isLoadingMore,
+            onMore: onLoadMore,
+          }}
           emptyMessage={t("sync.rounds.empty")}
         />
       )}
@@ -79,6 +102,6 @@ export function SyncRoundsTable({ runs, isLoading, error, onRetry, nextRoundAt }
         }}
       />
       <SyncRollbackDialog run={rollingBack} onClose={() => setRollingBack(null)} />
-    </section>
+    </Section>
   );
 }

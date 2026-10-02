@@ -5,6 +5,7 @@
 // menu beside them exports exactly that as CSV. Before any API-key usage
 // exists the section is only its empty state, without controls to narrow
 // nothing; an empty range after that says only the range is empty.
+import { Section } from "@/components/Section";
 import { Info, KeyRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -167,11 +168,13 @@ export function UsageSection({
   })();
 
   return (
-    <section aria-label={t("usage.providers.title")} className="flex flex-col gap-2">
-      <div className="flex min-h-7 flex-wrap items-center gap-x-2 gap-y-2.5">
-        <h2 className="text-sm font-semibold text-text">{t("usage.providers.title")}</h2>
-        <span className="text-xs text-text-muted">{t("usage.providers.subtitle")}</span>
-      </div>
+    <Section
+      as="h2"
+      gap="snug"
+      labelled
+      title={t("usage.providers.title")}
+      help={t("usage.providers.subtitle")}
+    >
       {firstRun ? null : (
         <div className="flex flex-wrap items-center gap-2">
           <RangeControl query={query} detailDays={detailDays} onChange={onQueryChange} />
@@ -204,6 +207,6 @@ export function UsageSection({
         </div>
       )}
       {body}
-    </section>
+    </Section>
   );
 }

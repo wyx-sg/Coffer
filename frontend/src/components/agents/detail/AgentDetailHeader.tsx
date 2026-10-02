@@ -5,8 +5,8 @@
 // connected, Repair (naming the memory hook when only it is off) when the
 // connection is partial, Check again while Codex has not approved Coffer's
 // hook, Enable when switched off, Add when not added — and a connected
-// agent's own next step, a new conversation; Disconnect is in the ⋯
-// menu and previews what it removes. Under the name, one mono line: the fixed
+// agent's own next step, a new conversation (Disconnect is the Overview's
+// button, and previews what it removes). The ⋯ menu holds what has no button. Under the name, one mono line: the fixed
 // name, the version, the config directory and the model. No title or rename:
 // an agent is named by its type.
 import { Link } from "react-router-dom";
@@ -23,6 +23,7 @@ import {
 
 import { AgentBadge, type AgentBadgeState } from "@/components/agent/AgentBadge";
 import type { useAgentRowActions } from "@/components/agents/list/useAgentRowActions";
+import { AgentPendingStatus } from "@/components/agents/list/AgentPendingStatus";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
@@ -135,6 +136,7 @@ export function AgentDetailHeader({ typeRow, agent, rowActions }: Props) {
     checkAgain: () => void hooks.refetch(),
     checking: hooks.isFetching,
   });
+  const busy = !!rowActions.pending;
   const installed = typeRow.state === "installed_active" || typeRow.state === "installed_never_run";
 
   const meta = [
@@ -159,9 +161,13 @@ export function AgentDetailHeader({ typeRow, agent, rowActions }: Props) {
           </span>
         }
         badges={
-          <StatusWord tone={awaitingApproval ? "warn" : agentRowTone(state)}>
-            {t(stateWordKey(state, awaitingApproval))}
-          </StatusWord>
+          rowActions.pending ? (
+            <AgentPendingStatus pending={rowActions.pending} />
+          ) : (
+            <StatusWord tone={awaitingApproval ? "warn" : agentRowTone(state)}>
+              {t(stateWordKey(state, awaitingApproval))}
+            </StatusWord>
+          )
         }
         actions={
           <div className="flex items-center gap-2">
@@ -177,7 +183,8 @@ export function AgentDetailHeader({ typeRow, agent, rowActions }: Props) {
                 size="sm"
                 variant={action.pending === undefined ? "default" : "outline"}
                 onClick={action.run}
-                disabled={action.pending}
+                disabled={action.pending || busy}
+                loading={busy}
               >
                 <action.icon
                   aria-hidden

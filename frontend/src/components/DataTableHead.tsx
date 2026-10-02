@@ -34,9 +34,10 @@ export function DataTableHead<T>({
 }: Props<T>) {
   return (
     <TableHeader>
-      <TableRow className="h-auto hover:bg-transparent">
+      <TableRow className="group/row h-auto hover:bg-transparent">
         {hasSelection ? (
           <SelectAllHeadCell
+            selecting={allSelected || someSelected}
             checked={allSelected}
             indeterminate={someSelected}
             ariaLabel={ariaSelectAll ?? ""}

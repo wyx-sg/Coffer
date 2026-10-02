@@ -3,7 +3,7 @@
 // The Conversations page against the real daemon (spec chat "Show every
 // conversation on the Conversations page", "Show where a reply will also be
 // sent"): the list with each row's source badge and the source filter, a
-// conversation opened beside the list, New conversation's dialog opening the
+// conversation opened beside the list, New conversation opening the
 // draft, and a channel conversation's reply box saying where a reply also goes
 // and marking a reply the channel has not received yet.
 //
@@ -162,15 +162,13 @@ test.describe("Conversations page", () => {
     try {
       await page.goto("/conversations");
       await page.getByRole("button", { name: /new conversation/i }).first().click();
-      const dialog = page.getByRole("dialog", { name: /new conversation/i });
-      await expect(dialog.getByLabel("Working directory")).toBeVisible();
-      // Codex: with no login in the isolated HOME its turn fails fast, locally.
-      await dialog.getByRole("combobox", { name: "Agent" }).click();
-      await page.getByRole("option", { name: /codex/i }).click();
-      await expect(dialog.getByRole("button", { name: /^start$/i })).toBeEnabled();
-      await dialog.getByRole("button", { name: /^start$/i }).click();
-
+      // No dialog: straight to the draft, where agent and workspace are chosen.
       await expect(page).toHaveURL(/\/conversations\/new$/);
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Workspace" })).toBeVisible();
+      // Codex: with no login in the isolated HOME its turn fails fast, locally.
+      await page.getByRole("combobox", { name: "Agent" }).click();
+      await page.getByRole("option", { name: /codex/i }).click();
       const box = page.getByRole("textbox", { name: /message input/i });
       await box.fill("hello from the draft");
       await box.press("Enter");

@@ -6,6 +6,7 @@
 // first; on the Tools tab, in the gateway's order.
 import { useTranslation } from "react-i18next";
 
+import { Section } from "@/components/Section";
 import type { McpBuiltinServer } from "@/lib/api/mcpBuiltin";
 import { cn } from "@/lib/utils";
 
@@ -23,13 +24,12 @@ export function McpBuiltinTools({ tools, summary, top = false }: Props) {
   const rows = top ? [...tools].sort((a, b) => calls(b.name) - calls(a.name)) : tools;
   const seen = tools.map((tool) => tool.qualified_name);
   return (
-    <section className="flex flex-col gap-2" aria-labelledby="mcp-builtin-tools">
-      <h3 id="mcp-builtin-tools" className="flex items-baseline gap-2 text-sm font-semibold">
-        {top ? t("mcp.builtin.mostCalled") : t("mcp.builtin.allTools")}
-        <span className="text-xs font-book text-text-muted">
-          {t("mcp.builtin.alwaysOn", { count: tools.length })}
-        </span>
-      </h3>
+    <Section
+      title={top ? t("mcp.builtin.mostCalled") : t("mcp.builtin.allTools")}
+      help={t("mcp.builtin.alwaysOnHelp")}
+      gap="snug"
+      labelled
+    >
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border-subtle text-left text-2xs font-semibold text-text-muted">
@@ -64,6 +64,6 @@ export function McpBuiltinTools({ tools, summary, top = false }: Props) {
           count: seen.length,
         })}
       </p>
-    </section>
+    </Section>
   );
 }

@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
 import { agentSessionPath, agentTabPath } from "@/lib/agents/routes";
 import type { AgentOut } from "@/lib/api/agents";
+import { useAgentDefaultModel, useAgentModels } from "@/lib/hooks/useAgentModels";
 import { useAgentTranscripts } from "@/lib/hooks/useAgentTranscripts";
 import { cn, formatDateTime } from "@/lib/utils";
 
@@ -46,6 +47,15 @@ export function OverviewModel({ agent }: { agent: AgentOut }) {
   // feature; with it off they are not shown.
   const models = useFeatureEnabled("models") === true;
   const provider = useProviderLabel(agent);
+  // What the agent runs when a conversation picks nothing: the model Coffer set
+  // on it; on its own login, the model its own config names. Neither → it
+  // chooses for itself, which is said in words, not guessed from a list.
+  const onConnection = !!agent.connection_uid;
+  const nativeModel = useAgentDefaultModel(onConnection ? "" : agent.type).data ?? null;
+  const model = agent.model ?? nativeModel;
+  const catalogue = useAgentModels(agent.type).data;
+  const effort =
+    agent.effort ?? (model ? catalogue?.find((m) => m.id === model)?.default_effort : null) ?? null;
   return (
     <Section
       title={t(`${K}.model.heading`)}
@@ -61,11 +71,11 @@ export function OverviewModel({ agent }: { agent: AgentOut }) {
             {provider ?? <Skeleton className="h-4 w-40" />}
           </InfoRow>
         ) : null}
-        <InfoRow label={t(`${K}.model.model`)} mono={!!agent.model}>
-          {agent.model ?? t(`${K}.model.perConversation`)}
+        <InfoRow label={t(`${K}.model.model`)} mono={!!model}>
+          {model ?? t(`${K}.model.auto`)}
         </InfoRow>
         <InfoRow label={t(`${K}.model.effort`)}>
-          {agent.effort ? capitalize(agent.effort) : t(`${K}.model.defaultEffort`)}
+          {effort ? capitalize(effort) : t(`${K}.model.auto`)}
         </InfoRow>
       </dl>
     </Section>
@@ -101,11 +111,9 @@ export function OverviewRecentSessions({ agent }: { agent: AgentOut }) {
     <Section
       title={t(`${K}.sessions.heading`)}
       actions={
-        <SideLink to={agentTabPath(agent.type, "sessions")}>
-          {t(`${K}.sessions.all`, { count: list.data?.total ?? sessions.length })}
-        </SideLink>
+        <SideLink to={agentTabPath(agent.type, "sessions")}>{t(`${K}.sessions.all`)}</SideLink>
       }
-      className="gap-1"
+      gap="tight"
     >
       <ul className="flex flex-col">
         {sessions.slice(0, 3).map((s, i) => {

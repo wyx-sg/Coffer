@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 
 import {
-  useConversations,
   useConversation,
   useCreateConversation,
   useRenameConversation,
@@ -64,47 +63,6 @@ function makeWrapper() {
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
 }
-
-describe("useConversations", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  test("returns list of conversations on success", async () => {
-    const conv = makeConversation();
-    chatApiMock.listConversations.mockResolvedValue({ conversations: [conv] });
-
-    const { result } = renderHook(() => useConversations(), {
-      wrapper: makeWrapper(),
-    });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toHaveLength(1);
-    expect(result.current.data?.[0].id).toBe("conv-1");
-  });
-
-  test("returns empty array when no conversations", async () => {
-    chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-
-    const { result } = renderHook(() => useConversations(), {
-      wrapper: makeWrapper(),
-    });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toHaveLength(0);
-  });
-
-  test("throws on API error", async () => {
-    chatApiMock.listConversations.mockRejectedValue(new Error("network failure"));
-
-    const { result } = renderHook(() => useConversations(), {
-      wrapper: makeWrapper(),
-    });
-
-    await waitFor(() => expect(result.current.isError).toBe(true));
-    expect((result.current.error as Error).message).toContain("network failure");
-  });
-});
 
 describe("useConversation", () => {
   beforeEach(() => {

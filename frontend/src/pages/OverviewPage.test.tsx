@@ -386,6 +386,21 @@ describe("overview lists what needs the user, most severe first", () => {
     expect(within(codex).queryByText(/Since/)).toBeNull();
   });
 
+  test("a long needs-you list scrolls inside its own window", async () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({
+      ...ITEMS[0],
+      uid: `m-${i}`,
+      title: `srv-${i}`,
+    }));
+    install({ attention: { ...EMPTY_ATTENTION, items: many } });
+    renderPage();
+    await within(needsYou()).findByText("srv-0");
+    const list = screen.getByTestId("needs-you-scroll");
+    expect(list).toHaveClass("overflow-y-auto");
+    expect(list.className).toMatch(/max-h-/);
+    expect(within(list).getAllByRole("listitem")).toHaveLength(20);
+  });
+
   test("a source that could not be checked says so above the rows", async () => {
     install({
       attention: {
@@ -517,41 +532,35 @@ function gatedRequests(get: ReturnType<typeof install>): string[] {
 }
 
 describe("overview hides an area whose backend or feature is off", () => {
-  acceptance(
-    "web-ui",
-    "overview hides an area whose backend or feature is off",
-    async () => {
-      const get = install({ features: ALL_OFF });
-      renderPage();
-      const region = health();
-      const tools = await within(region).findByRole("link", { name: "Custom tools" });
-      // Only the always-on areas have a tile while every feature is off.
-      for (const name of ["Knowledge", "Memory", "Model providers", "Sync", "Usage"]) {
-        expect(within(region).queryByRole("link", { name })).toBeNull();
-      }
-      await waitFor(() =>
-        expect(tools).toHaveTextContent("31 requests · 0 errors in the last 24 h"),
-      );
-      const clis = within(region).getByRole("link", { name: "CLIs" });
-      await waitFor(() => expect(clis).toHaveTextContent("Needed by 2 skills · gh, jq"));
-      const secrets = within(region).getByRole("link", { name: "Secrets" });
-      await waitFor(() => expect(secrets).toHaveTextContent("1 unused"));
-      const names = within(region)
-        .getAllByRole("link")
-        .map((a) => a.getAttribute("aria-label"));
-      expect(names).toEqual([
-        "Agents",
-        "MCP servers",
-        "Skills",
-        "Channels",
-        "Custom tools",
-        "CLIs",
-        "Secrets",
-      ]);
-      // Nothing of a switched-off feature was asked for, so nothing can have failed.
-      expect(gatedRequests(get)).toEqual([]);
-    },
-  );
+  acceptance("web-ui", "overview hides an area whose backend or feature is off", async () => {
+    const get = install({ features: ALL_OFF });
+    renderPage();
+    const region = health();
+    const tools = await within(region).findByRole("link", { name: "Custom tools" });
+    // Only the always-on areas have a tile while every feature is off.
+    for (const name of ["Knowledge", "Memory", "Model providers", "Sync", "Usage"]) {
+      expect(within(region).queryByRole("link", { name })).toBeNull();
+    }
+    await waitFor(() => expect(tools).toHaveTextContent("31 requests · 0 errors in the last 24 h"));
+    const clis = within(region).getByRole("link", { name: "CLIs" });
+    await waitFor(() => expect(clis).toHaveTextContent("Needed by 2 skills · gh, jq"));
+    const secrets = within(region).getByRole("link", { name: "Secrets" });
+    await waitFor(() => expect(secrets).toHaveTextContent("1 unused"));
+    const names = within(region)
+      .getAllByRole("link")
+      .map((a) => a.getAttribute("aria-label"));
+    expect(names).toEqual([
+      "Agents",
+      "MCP servers",
+      "Skills",
+      "Channels",
+      "Custom tools",
+      "CLIs",
+      "Secrets",
+    ]);
+    // Nothing of a switched-off feature was asked for, so nothing can have failed.
+    expect(gatedRequests(get)).toEqual([]);
+  });
 
   test("with every feature on, each area has its tile", async () => {
     install();

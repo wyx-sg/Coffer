@@ -106,6 +106,7 @@ class ConversationRepo:
         archived: bool = False,
         limit: int | None = None,
         after: tuple[datetime, str] | None = None,
+        title_contains: str | None = None,
     ) -> list[Conversation]:
         """Conversations newest activity first with the id breaking ties.
         ``archived=False`` is the active threads,
@@ -122,6 +123,9 @@ class ConversationRepo:
                 if archived
                 else ConversationModel.archived_at.is_(None)
             )
+            if title_contains:
+                esc = title_contains.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                stmt = stmt.where(ConversationModel.title.ilike(f"%{esc}%", escape="\\"))
             if after is not None:
                 stmt = stmt.where(
                     newest_first_after(ConversationModel.updated_at, ConversationModel.id, after)

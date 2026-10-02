@@ -3,12 +3,14 @@
 // Shared by the Agents list row and the agent detail page (header menu and
 // the Overview's own buttons, through `open`), so a state offers the same
 // action wherever the agent is shown. Nothing here assumes the list: the row
-// is the agent's type row, and `includeOpen` adds the menu's Open item where
-// the page is not already the agent's own. An agent whose program is not found
+// is the agent's type row, and `inList` says the menu sits on a list row (whose
+// click already opens the agent) rather than on the agent's own page, where an
+// agent not found shows Change config directory and Remove as buttons. The
+// menu never repeats a visible control: Disconnect and Enable are the row's
+// button, the header's or the Overview tab's. An agent whose program is not found
 // offers the daemon's install prompt: Copy prompt as its action, and Ask an
 // agent in the menu while another managed agent is available.
 import { useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Copy, Plug, Plus, Power, Unplug, Wrench, type LucideIcon } from "lucide-react";
 
@@ -19,10 +21,10 @@ import {
 import { useAgentHandoff } from "@/components/handoff/useAgentHandoff";
 import type { MenuAction } from "@/components/ui/menu";
 import { useToast } from "@/components/ui/toast";
-import { agentTabPath } from "@/lib/agents/routes";
 import type { AgentRowState } from "@/lib/agents/rowState";
 import type { AgentTypeOut } from "@/lib/api/agents";
 import { useFsActions } from "@/lib/fsActions";
+import { useAgentPending, type AgentPending } from "@/lib/hooks/useAgentPending";
 import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
 import { AgentConfigDirDialog } from "./AgentConfigDirDialog";
 import { AgentRemoveDialog } from "./AgentRemoveDialog";
@@ -40,6 +42,8 @@ export interface AgentRowActions {
   actions: MenuAction[];
   primary: AgentPrimaryAction | null;
   dialogs: ReactNode;
+  /** Long work running on this agent now (connect, disconnect, enable, …), from wherever it started. */
+  pending: AgentPending | null;
   open: {
     change: (kind: "add" | "connect" | "disconnect") => void;
     configDir: () => void;
@@ -50,15 +54,16 @@ export interface AgentRowActions {
 
 export function useAgentRowActions(
   row: AgentTypeOut,
-  opts: { includeOpen?: boolean } = {},
+  opts: { inList?: boolean } = {},
 ): AgentRowActions {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const navigate = useNavigate();
   const fs = useFsActions();
   const enableMutation = useEnableResource();
   const disableMutation = useDisableResource();
   const { state = "checking", enabled } = useAgentRowState(row);
+  const pending = useAgentPending(row);
+  const busy = pending !== null;
   const [change, setChange] = useState<ConnectionChangeRequest | null>(null);
   const [configDirOpen, setConfigDirOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
@@ -76,7 +81,7 @@ export function useAgentRowActions(
     change: (kind) => setChange(kind === "add" ? { kind, rows: [row] } : { kind, row }),
     configDir: () => setConfigDirOpen(true),
     remove: () => setRemoveOpen(true),
-    enable: () => uid && enableMutation.mutate({ uid, kind: "agent" }),
+    enable: () => uid && !busy && enableMutation.mutate({ uid, kind: "agent" }),
   };
 
   let primary: AgentPrimaryAction | null = null;
@@ -125,21 +130,19 @@ export function useAgentRowActions(
 
   const dirExists = row.state === "installed_active" || row.state === "config_only";
   const actions: MenuAction[] = [];
-  if (opts.includeOpen && uid) {
-    actions.push({
-      key: "open",
-      label: t("agents.rowMenu.open"),
-      onSelect: () => navigate(agentTabPath(row.type, "overview")),
-    });
-  }
   if (installPrompt && handoff.canAsk) {
     actions.push({ key: "ask-agent", label: t("handoff.askAgent"), onSelect: handoff.ask });
   }
-  actions.push({
-    key: "config-dir",
-    label: t("agents.rowMenu.configDir"),
-    onSelect: open.configDir,
-  });
+  // On the page of an agent not found, the card offers these two as buttons.
+  const cardHasThem = state === "not_found" && !opts.inList;
+  if (!cardHasThem) {
+    actions.push({
+      key: "config-dir",
+      label: t("agents.rowMenu.configDir"),
+      onSelect: open.configDir,
+      disabled: busy,
+    });
+  }
   if (dirExists) {
     actions.push({
       key: "reveal",
@@ -155,40 +158,52 @@ export function useAgentRowActions(
       onSelect: () => copy(uid),
     });
   }
-  if (state === "connected" || state === "needs_repair") {
+  // A connected agent's Disconnect is already a button (the row's, or the Overview's).
+  if (state === "needs_repair") {
     actions.push({
       key: "disconnect",
       label: t("agents.rowMenu.disconnect"),
       onSelect: () => open.change("disconnect"),
+      disabled: busy,
     });
   }
   if (uid) {
-    actions.push(
-      enabled
-        ? {
-            key: "disable",
-            label: t("agents.rowMenu.disable"),
-            onSelect: () => disableMutation.mutate({ uid, kind: "agent" }),
-          }
-        : { key: "enable", label: t("agents.rowMenu.enable"), onSelect: open.enable },
-      {
+    // A disabled agent's Enable is the row's / header's button; Turn off only
+    // while it is on.
+    if (enabled) {
+      actions.push({
+        key: "disable",
+        label: t("agents.rowMenu.disable"),
+        onSelect: () => disableMutation.mutate({ uid, kind: "agent" }),
+        disabled: busy,
+      });
+    } else if (state !== "disabled") {
+      actions.push({
+        key: "enable",
+        label: t("agents.rowMenu.enable"),
+        onSelect: open.enable,
+        disabled: busy,
+      });
+    }
+    if (!cardHasThem) {
+      actions.push({
         key: "remove",
         label: t("agents.rowMenu.remove"),
         destructive: true,
         separated: true,
         onSelect: open.remove,
-      },
-    );
+        disabled: busy,
+      });
+    }
   }
 
   const dialogs = (
     <>
       <AgentConnectionChangeDialog request={change} onClose={() => setChange(null)} />
-      {installPrompt ? handoff.dialog : null}
       <AgentConfigDirDialog row={row} open={configDirOpen} onOpenChange={setConfigDirOpen} />
       {uid ? <AgentRemoveDialog row={row} open={removeOpen} onOpenChange={setRemoveOpen} /> : null}
     </>
   );
 
-  return { state, actions, primary, dialogs, open };
+  return { state, actions, primary, dialogs, pending, open };
 }

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from coffer.application.agent.mcp_entry_service import ParseErrorInfo
-from coffer.domain.agent.plugin_bundle import PluginContents, PluginDetail
+from coffer.domain.agent.plugin_bundle import PluginContents, PluginDetail, PluginPart
 from coffer.domain.agent.plugin_state import MarketplaceInfo
 
 
@@ -28,6 +28,8 @@ class PluginDetailReader(Protocol):
     def read(self, install_path: str) -> PluginDetail | None: ...
 
     def read_contents(self, install_path: str) -> PluginContents | None: ...
+
+    def find_part(self, root: str, kind: str, name: str) -> PluginPart | None: ...
 
 
 class PluginCliRunner(Protocol):

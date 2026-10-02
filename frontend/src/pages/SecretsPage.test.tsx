@@ -96,6 +96,7 @@ const PENDING = {
   destination_uid: null,
   slot: null,
   target: null,
+  target_fingerprint: null,
   decided_at: null,
   decided_by: null,
 };
@@ -144,10 +145,9 @@ afterEach(() => {
 describe("SecretsPage", () => {
   acceptance("web-ui", "the secrets page lists each secret with what uses it", async () => {
     renderPage();
-    await screen.findByText(GITHUB.ref);
-    const inUse = screen.getByRole("region", { name: /In use/ });
-    const githubRow = within(inUse).getByText(GITHUB.ref).closest("tr")!;
-    const openaiRow = within(inUse).getByText(OPENAI.ref).closest("tr")!;
+    await screen.findByText("GITHUB_TOKEN");
+    const githubRow = screen.getByText("GITHUB_TOKEN").closest("tr")!;
+    const openaiRow = screen.getByText("api_key").closest("tr")!;
     expect(within(githubRow).queryByText("Missing on this Mac")).not.toBeInTheDocument();
     expect(within(openaiRow).getByText("Missing on this Mac")).toBeInTheDocument();
 
@@ -160,21 +160,21 @@ describe("SecretsPage", () => {
   test("a citer whose feature is off is named without a link to its missing page", async () => {
     kindPageOpen = false;
     renderPage();
-    await screen.findByText(GITHUB.ref);
-    const inUse = screen.getByRole("region", { name: /In use/ });
-    const openaiRow = within(inUse).getByText(OPENAI.ref).closest("tr")!;
+    await screen.findByText("GITHUB_TOKEN");
+    const openaiRow = screen.getByText("api_key").closest("tr")!;
     fireEvent.click(within(openaiRow).getByRole("button", { name: /is used by 1 thing/ }));
     expect(await screen.findByText("Model provider")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "OpenAI" })).toBeNull();
   });
 
-  test("a secret nothing uses is listed apart, never used, as safe to delete", async () => {
+  test("a secret nothing uses is found under Not used, never used", async () => {
     renderPage();
-    const unused = await screen.findByRole("region", { name: /Not used by anything/ });
-    expect(within(unused).getByText("old-openai-key")).toBeInTheDocument();
-    expect(within(unused).getByText("Nothing")).toBeInTheDocument();
-    expect(within(unused).getByText("Never")).toBeInTheDocument();
-    expect(unused).toHaveTextContent("safe to delete");
+    await screen.findByText("old-openai-key");
+    fireEvent.click(screen.getByRole("button", { name: "Not used 1" }));
+    const row = screen.getByText("old-openai-key").closest("tr")!;
+    expect(within(row).getByText("Nothing")).toBeInTheDocument();
+    expect(within(row).getByText("Never")).toBeInTheDocument();
+    expect(screen.queryByText("GITHUB_TOKEN")).not.toBeInTheDocument();
   });
 
   test("each row says when it was last used and created, and copies its reference", async () => {
@@ -214,6 +214,8 @@ describe("SecretsPage", () => {
     expect(within(row).getByText("Missing on this Mac")).toBeInTheDocument();
     openMenu("sentry-token");
     expect(screen.getByRole("menuitem", { name: "Reveal in the Coffer app" })).toBeDisabled();
+    // The row's Add value button is not repeated in the menu.
+    expect(screen.queryByRole("menuitem", { name: /^(Add|Replace) value/ })).not.toBeInTheDocument();
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     fireEvent.click(within(row).getByRole("button", { name: "Add a value for sentry-token" }));
     const dialog = await screen.findByRole("dialog", { name: "Add a value for sentry-token" });
@@ -223,7 +225,7 @@ describe("SecretsPage", () => {
     expect(api.set).toHaveBeenCalledWith("secret/sentry-token", "sntr");
   });
 
-  test("search narrows both groups by name", async () => {
+  test("search narrows the list by name", async () => {
     renderPage();
     await screen.findByText("old-openai-key");
     fireEvent.change(screen.getByRole("textbox", { name: "Find a secret" }), {
@@ -231,7 +233,7 @@ describe("SecretsPage", () => {
     });
     expect(screen.getByText("seatalk-app-secret")).toBeInTheDocument();
     expect(screen.queryByText("old-openai-key")).not.toBeInTheDocument();
-    expect(screen.queryByText(GITHUB.ref)).not.toBeInTheDocument();
+    expect(screen.queryByText("GITHUB_TOKEN")).not.toBeInTheDocument();
   });
 
   acceptance("web-ui", "a secret in use cannot be deleted from the secrets page", async () => {
@@ -390,6 +392,7 @@ describe("SecretsPage", () => {
         destination_uid: null,
         slot: null,
         target: null,
+        target_fingerprint: null,
         decided_at: null,
         decided_by: null,
       },

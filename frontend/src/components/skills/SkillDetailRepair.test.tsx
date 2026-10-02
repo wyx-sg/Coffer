@@ -106,10 +106,13 @@ acceptance(
       ],
     });
     api.resolveCopy.mockResolvedValue(h.skills[0]);
-    renderSkillsPage("/skills/hello");
+    renderSkillsPage("/skills/hello/delivery");
 
+    // Nothing is read on opening; the person asks with Check again.
+    fireEvent.click(await screen.findByRole("button", { name: "Check again" }));
     const banner = await screen.findByTestId("skill-banner-folder");
     expect(banner).toHaveTextContent("Coffer left Codex's folder alone — it needs you");
+    expect(api.verify).toHaveBeenCalledTimes(1);
     fireEvent.click(within(banner).getByRole("button", { name: "Review…" }));
 
     const dialog = await screen.findByRole("dialog");
@@ -144,11 +147,11 @@ acceptance(
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete skill" }));
     expect(await within(dialog).findByText("Couldn't delete hello")).toBeInTheDocument();
     expect(dialog).toHaveTextContent("is no longer a Coffer link, so Coffer won't remove it");
-    expect(within(dialog).getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Retry" })).toBeInTheDocument();
   },
 );
 
-test("the skill menu carries the page note's actions", async () => {
+test("the skill menu carries the page note's actions, not the reach button's or the Delivery tab's", async () => {
   renderSkillsPage("/skills/hello");
   fireEvent.click(await screen.findByRole("button", { name: "More actions for hello" }));
   const items = await screen.findAllByRole("menuitem");
@@ -156,8 +159,6 @@ test("the skill menu carries the page note's actions", async () => {
     "Open in editor",
     "Reveal in Finder",
     "Copy master path",
-    "Check agents' copies",
-    "Turn off",
     "Delete…",
   ]);
 });
@@ -169,7 +170,7 @@ acceptance("web-ui", "a skill whose master folder is gone offers the ways forwar
     "The master folder is gone",
   );
   expect(screen.getByRole("radio", { name: /Restore it from History/ })).toBeDisabled();
-  fireEvent.click(screen.getByRole("radio", { name: /Remove the skill/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Remove hello…" }));
+  fireEvent.click(screen.getByRole("radio", { name: /Delete the skill/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Delete hello…" }));
   expect(await screen.findByRole("dialog", { name: "Delete hello?" })).toBeInTheDocument();
 });

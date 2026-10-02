@@ -109,7 +109,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 /** Every sidebar entry, in sidebar order. */
 export const NAV_ENTRIES: readonly NavEntry[] = NAV_GROUPS.flatMap((g) => g.entries);
 
-export type SettingsTabId = "general" | "security" | "data" | "daemon" | "about" | "features";
+export type SettingsTabId = "general" | "security" | "data" | "daemon" | "features" | "about";
 
 export interface SettingsTab {
   id: SettingsTabId;
@@ -119,16 +119,16 @@ export interface SettingsTab {
 
 /** The Settings modal's six tabs, in order (spec web-ui "Organise Settings
  *  into six tabs"), the same in every build. Each is addressable at
- *  `/settings/<id>`; Features, last, is where the experimental features are
- *  switched (spec experimental-features "Switch a feature from the settings page
- *  or the command line"). */
+ *  `/settings/<id>`; Features is where the experimental features are switched
+ *  (spec experimental-features "Switch a feature from the settings page or the
+ *  command line"), and About, last, says what is installed. */
 export const SETTINGS_TABS: readonly SettingsTab[] = [
   { id: "general", labelKey: "settings.tabs.general", icon: SlidersHorizontal },
   { id: "security", labelKey: "settings.tabs.security", icon: ShieldCheck },
   { id: "data", labelKey: "settings.tabs.data", icon: Database },
   { id: "daemon", labelKey: "settings.tabs.daemon", icon: DaemonIcon },
-  { id: "about", labelKey: "settings.tabs.about", icon: Info },
   { id: "features", labelKey: "settings.tabs.features", icon: FlaskConical },
+  { id: "about", labelKey: "settings.tabs.about", icon: Info },
 ];
 
 export function settingsPath(tab: SettingsTabId = "general"): string {

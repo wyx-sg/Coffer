@@ -140,6 +140,19 @@ def test_get_mcp_entry_returns_full_config_and_masks_secrets(tmp_path, monkeypat
         for value in (ENV_SECRET, ENV_PLAIN, BEARER, NESTED_SECRET):
             assert value not in r.text
 
+        # The whole entry as the file holds it — its own key names and shape —
+        # with every credential-bearing value masked.
+        assert body["config"] == {
+            "command": "uvx",
+            "args": ["mcp-fetch", "--verbose"],
+            "cwd": "/srv/fetcher",
+            "startup_timeout_sec": 30,
+            "env_vars": ["HOME", "LANG"],
+            "bearer_token": "••••••",
+            "env": {"API_TOKEN": "••••••", "PLAIN": "••••••"},
+            "extra_auth": {"client_secret": "••••••"},
+        }
+
         r = c.get(f"/api/v1/agents/{uid}/mcp-entries/search")
         assert r.status_code == 200, r.text
         search = r.json()
@@ -149,6 +162,10 @@ def test_get_mcp_entry_returns_full_config_and_masks_secrets(tmp_path, monkeypat
         assert search["secret_keys"] == ["Authorization"]
         assert search["cwd"] is None
         assert HEADER_SECRET not in r.text
+        assert search["config"] == {
+            "url": "https://search.example/mcp",
+            "http_headers": {"Authorization": "••••••"},
+        }
 
 
 def test_get_mcp_entry_reports_an_equivalent_registered_server(tmp_path, monkeypatch):

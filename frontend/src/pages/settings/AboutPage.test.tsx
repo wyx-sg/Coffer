@@ -58,6 +58,17 @@ describe("AboutPage", () => {
     expect(screen.getByText(/github\.com\/wyx-sg\/Coffer/)).toBeInTheDocument();
   });
 
+  test("links the documentation in the interface language", () => {
+    getApiClientMock.mockReturnValue({
+      GET: vi.fn().mockReturnValue(new Promise(() => {})),
+    } as unknown as ReturnType<typeof getApiClient>);
+    render(<AboutPage />, { wrapper: wrap });
+    expect(screen.getByRole("link", { name: "Open the docs" })).toHaveAttribute(
+      "href",
+      "https://wyx-sg.github.io/Coffer/",
+    );
+  });
+
   // The About half of the scenario; e2e shell_settings.spec.ts visits every tab
   // for the shutdown control.
   acceptance("web-ui", "settings offers no shutdown control", async () => {

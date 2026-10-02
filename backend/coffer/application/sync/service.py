@@ -31,6 +31,7 @@ from pathlib import Path
 from coffer.application.audit_service import AuditService
 from coffer.application.sync import round_answers, round_join, round_resume, round_rollback
 from coffer.application.sync.round_engine import RoundEngine
+from coffer.application.sync.round_paging import page_rounds
 from coffer.application.sync.round_ports import RemoteStorePort, RoundHistoryPort, TokenPort
 from coffer.application.sync.service_key import KeyMixin
 from coffer.application.sync.service_machines import MachinesMixin
@@ -51,7 +52,7 @@ from coffer.domain.secret_errors import SecretBindingPending, SecretMissing
 from coffer.domain.sync.errors import SyncNoRemote, SyncRoundNotFound
 from coffer.domain.sync.joins import JoinPreview
 from coffer.domain.sync.remote import SyncRemote
-from coffer.domain.sync.rounds import RoundRecord, RoundStatus
+from coffer.domain.sync.rounds import APPROVAL_WAIT, RoundRecord, RoundStatus
 from coffer.domain.sync.stops import Answer, ConflictFile, Stop
 
 _log = logging.getLogger(__name__)
@@ -219,8 +220,8 @@ class SyncService(PlaintextMixin, RemoteMixin, MachinesMixin, StatusMixin, KeyMi
         except SecretBindingPending:
             return failed(
                 RoundStatus.AUTH_FAILED,
-                f"the push token {remote.secret_ref} is waiting for approval in the "
-                "Coffer desktop app before it may be sent to this remote",
+                f"the push token {remote.secret_ref} {APPROVAL_WAIT} "
+                "before it may be sent to this remote",
             )
         except SecretMissing:
             return failed(
@@ -335,9 +336,10 @@ class SyncService(PlaintextMixin, RemoteMixin, MachinesMixin, StatusMixin, KeyMi
         found = await self._history.recent(1)
         return found[0] if found else None
 
-    async def rounds(self, *, limit: int, offset: int = 0) -> RoundPage:
-        rows = await self._history.recent(limit, offset)
-        return RoundPage(tuple(rows), await self._history.count())
+    async def rounds(self, *, limit: int, cursor: str | None = None) -> RoundPage:
+        """One page of the history, newest first. Keyset, not offset: a round
+        finishing at the head between two reads must not shift later pages."""
+        return await page_rounds(self._history, limit, cursor)
 
     async def round(self, round_id: int) -> RoundRecord:
         found = await self._history.get(round_id)

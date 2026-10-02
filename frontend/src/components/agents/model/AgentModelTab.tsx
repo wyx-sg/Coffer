@@ -7,6 +7,7 @@
 import { useTranslation } from "react-i18next";
 import { Loader2, PlugZap } from "lucide-react";
 
+import { SectionStack } from "@/components/Section";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import type { AgentOut } from "@/lib/api/agents";
@@ -29,7 +30,7 @@ export function AgentModelTab({ agent }: Props) {
 
   return (
     <div className="flex flex-col gap-8 lg:flex-row">
-      <div className="flex min-w-0 flex-[1.2_1_0] flex-col gap-[22px]">
+      <SectionStack className="min-w-0 flex-[1.2_1_0]">
         <ProviderChoices
           agentType={agent.type}
           connections={c.compatible}
@@ -52,13 +53,14 @@ export function AgentModelTab({ agent }: Props) {
               size="sm"
               onClick={c.runTest}
               disabled={!c.draftModel || c.testPending || c.busy}
+              aria-busy={c.testPending || undefined}
             >
               {c.testPending ? (
                 <Loader2 className="animate-spin" aria-hidden />
               ) : (
                 <PlugZap aria-hidden />
               )}
-              {t("agents.modelTab.test")}
+              {t(c.testPending ? "agents.modelTab.testing" : "agents.modelTab.test")}
             </Button>
             {c.testResult ? (
               <span role="status">
@@ -69,7 +71,7 @@ export function AgentModelTab({ agent }: Props) {
             ) : null}
           </div>
         ) : null}
-      </div>
+      </SectionStack>
       <div className="min-w-0 flex-[1_1_0] lg:self-start">
         <SwitchReview agent={agent} draft={c} />
       </div>

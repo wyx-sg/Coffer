@@ -18,21 +18,32 @@ import { reachFilterOptions, type ReachFilterValue } from "@/lib/reachFilter";
 interface Props {
   value: ReachFilterValue;
   onChange: (value: ReachFilterValue) => void;
+  /** Sits beside a search field: no visible label; the trigger reads
+   *  "Reach: All" itself, and the name stays as its aria-label and tooltip. */
+  compact?: boolean;
 }
 
-export function ReachFilter({ value, onChange }: Props) {
+export function ReachFilter({ value, onChange, compact = false }: Props) {
   const { t } = useTranslation();
+  const label = t("resources.cols.reach");
+  const optionLabel =
+    value === "all"
+      ? t("resources.status.all")
+      : (reachFilterOptions(t).find((o) => o.value === value)?.label ?? value);
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs font-semibold text-text-muted" aria-hidden>
-        {t("resources.cols.reach")}
-      </span>
+      {compact ? null : (
+        <span className="text-xs font-semibold text-text-muted" aria-hidden>
+          {label}
+        </span>
+      )}
       <Select value={value} onValueChange={(v) => onChange(v as ReachFilterValue)}>
         <SelectTrigger
-          aria-label={t("resources.cols.reach")}
+          aria-label={label}
+          title={compact ? label : undefined}
           className="h-control-sm w-auto text-xs"
         >
-          <SelectValue />
+          {compact ? <SelectValue>{`${label}: ${optionLabel}`}</SelectValue> : <SelectValue />}
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">{t("resources.status.all")}</SelectItem>

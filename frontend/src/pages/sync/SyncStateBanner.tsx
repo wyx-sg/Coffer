@@ -160,6 +160,7 @@ export function SyncStateBanner({ status, state, runs, startedAt, onRun }: Props
     case "plaintext_found":
     case "unreachable":
     case "auth_failed":
+    case "waiting_approval":
     case "cloud_folder":
     case "git_missing":
     case "layout":

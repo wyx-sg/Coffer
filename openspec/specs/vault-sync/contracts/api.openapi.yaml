@@ -733,14 +733,16 @@ paths:
           minimum: 1
           title: Limit
           type: integer
-      - in: query
-        name: offset
+      - description: The previous page's next_cursor; any other value is 400 CURSOR_INVALID.
+        in: query
+        name: cursor
         required: false
         schema:
-          default: 0
-          minimum: 0
-          title: Offset
-          type: integer
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: The previous page's next_cursor; any other value is 400 CURSOR_INVALID.
+          title: Cursor
       - in: header
         name: x-coffer-token
         required: false
@@ -1504,7 +1506,9 @@ components:
         What joining would do. ``empty``: the remote is empty and this vault is
         pushed whole; ``new``: the union is taken, nothing deleted, differing
         files left here until chosen; ``returning``: a three-way merge from the
-        commit this machine last converged at.
+        commit this machine last converged at; ``replace``: the remote holds an
+        older layout and this vault replaces it (``deleted`` lists, capped, what
+        goes away; ``deleted_total`` counts it).
       properties:
         conflicts:
           items:
@@ -1516,6 +1520,9 @@ components:
             type: string
           title: Deleted
           type: array
+        deleted_total:
+          title: Deleted Total
+          type: integer
         differ:
           items:
             type: string
@@ -1526,6 +1533,7 @@ components:
           - empty
           - new
           - returning
+          - replace
           title: Kind
           type: string
         pulled:
@@ -1582,6 +1590,7 @@ components:
       - differ
       - pushed
       - deleted
+      - deleted_total
       - conflicts
       - same_name
       - refused
@@ -1802,6 +1811,7 @@ components:
           enum:
           - unreachable
           - auth_failed
+          - waiting_approval
           - push_failed
           - plaintext_found
           - cloud_folder
@@ -2092,7 +2102,6 @@ components:
       - auth_failed
       - paused_cloud_folder
       - remote_too_new
-      - remote_too_old
       - plaintext_found
       - rolled_back
       - failed
@@ -2311,6 +2320,11 @@ components:
     SyncRunListOut:
       description: A page of the history, newest first, and how many rounds it holds.
       properties:
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
         rounds:
           items:
             $ref: '#/components/schemas/RoundOut'
@@ -2322,6 +2336,7 @@ components:
       required:
       - rounds
       - total
+      - next_cursor
       title: SyncRunListOut
       type: object
     SyncStatusOut:

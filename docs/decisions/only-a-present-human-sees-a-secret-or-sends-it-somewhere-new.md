@@ -83,8 +83,10 @@ before**.
    ([The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read](master-key-lives-in-the-macos-keychain.md)),
    so the daemon starts and restarts unattended; presence gates the
    operation, not the key. The grant is a one-time challenge bound to one
-   operation (`reveal`, `approve`, `export_master_key`) and one target (the ref,
-   the approval, the folder), valid for two minutes and consumed by its first
+   operation (`reveal`, `approve`, `approve_batch`, `export_master_key`) and one
+   target (the ref, the approval, the folder, or, for several approvals at once,
+   a digest of exactly the approvals and targets the person was shown, so one
+   check approves that list and nothing else), valid for two minutes and consumed by its first
    redeem whether or not the signature verifies. The desktop app runs the
    LocalAuthentication check first — a fresh context per operation, the prompt
    naming the operation and its target — and only then fetches the challenge and

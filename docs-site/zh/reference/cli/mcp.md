@@ -173,7 +173,7 @@ coffer mcp cap [OPTIONS] COMMAND [ARGS]...
 
 List and toggle a server's tools, prompts and resources
 
-子命令：`list`, `enable`, `disable`。
+子命令：`list`, `enable`, `disable`, `expose`。
 
 ## mcp cap list
 
@@ -216,3 +216,17 @@ Disable capabilities, each named by a typed ref.
 | --- | --- | --- | --- | --- |
 | `SERVER` | 参数 | text | 必填 | Server name |
 | `REF...` | 参数 | text（可变个数） | 必填 | tool:&lt;name&gt; \| prompt:&lt;name&gt; \| resource:&lt;uri&gt; |
+
+## mcp cap expose
+
+```sh
+coffer mcp cap expose [OPTIONS] SERVER MODE tool:<name>...
+```
+
+Set how tools are exposed: listed (pinned), search (search only) or auto (by usage).
+
+| 名称 | 类别 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `SERVER` | 参数 | text | 必填 | Server name |
+| `MODE` | 参数 | text | 必填 | auto \| listed \| search |
+| `TOOL:<NAME>...` | 参数 | text（可变个数） | 必填 | Tools to set |

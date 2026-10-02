@@ -44,7 +44,31 @@ describe("describeChannel", () => {
     ["sdk missing", ws("sdk_missing"), "sdkMissing", "attention", "err", "retryStart"],
     ["error", ws("error", "bad id"), "connectFailed", "attention", "err", "replaceSecret"],
     ["stopped", { running: false, inbound: null }, "stopped", "attention", "err", "replaceSecret"],
-    ["not paired", { peer: null }, "notPaired", "attention", "warn", null],
+    [
+      "secret waiting for approval",
+      {
+        running: false,
+        inbound: null,
+        secret_approval: { state: "pending", secret_ref: "channel/x/secret" },
+      },
+      "waitingApproval",
+      "attention",
+      "warn",
+      "openSecrets",
+    ],
+    [
+      "secret refused",
+      {
+        running: false,
+        inbound: null,
+        secret_approval: { state: "refused", secret_ref: "channel/x/secret" },
+      },
+      "approvalRefused",
+      "attention",
+      "err",
+      "openSecrets",
+    ],
+    ["not paired", { people: [] }, "notPaired", "attention", "warn", null],
   ])("%s", (_label, status, state, group, tone, primary) => {
     expect(describeChannel(input(status as Partial<ChannelStatus>))).toMatchObject({
       state,

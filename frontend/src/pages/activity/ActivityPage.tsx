@@ -6,6 +6,11 @@
 // calls and Daemon log narrow to one record each, with the columns and
 // filters that record affords. Each tab shows its count.
 //
+// Everything opens small: each log the tab reads gives its newest 30 records,
+// and the next 50 load when the list is scrolled to its end (or on "Load
+// more"). Search and filters are asked of the logs themselves, never applied
+// over what happens to be loaded.
+//
 // Live without a control (spec web-ui "Stream new Activity records while the
 // list is at the top"): new records stream in at the top while the reader is
 // at the top with nothing open; once they scroll down or open a record,
@@ -15,7 +20,7 @@
 //
 // A record opens in a drawer beside the list; on the Daemon log it expands in
 // place under its own line instead (design 6.1.09).
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ActivityBody } from "@/components/activity/ActivityBody";
@@ -30,6 +35,7 @@ import { useActivityFeed } from "@/lib/hooks/useActivityFeed";
 import { useActivityLookups } from "@/lib/hooks/useActivityLookups";
 import { useActivityView } from "@/lib/hooks/useActivityView";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
+import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 
 /** Within this many pixels of the top counts as "at the top". */
 const TOP_SLACK = 8;
@@ -42,9 +48,16 @@ export function ActivityPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const lookups = useActivityLookups();
+  // The search box is the reader's immediately; the logs are asked once they
+  // pause typing, and the request for the text before it is abandoned.
+  const search = useDebouncedValue(filters.search);
+  const feedFilters = useMemo(
+    () => (search === filters.search ? filters : { ...filters, search }),
+    [filters, search],
+  );
   const feed = useActivityFeed({
     tab,
-    filters,
+    filters: feedFilters,
     t,
     agentNames: lookups.agentNames,
     serverNames: lookups.serverNames,

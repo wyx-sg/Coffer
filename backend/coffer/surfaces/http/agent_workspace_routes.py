@@ -20,6 +20,7 @@ from coffer.application.agent.mcp_entry_service import McpEntryDetail, ParseErro
 from coffer.application.agent.plugin_views import PluginDetailView, PluginView
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.mcp_entries import McpEntry, masked_extra, secret_env_keys
+from coffer.domain.agent.mcp_entry_redact import redacted_config
 from coffer.domain.agent.plugin_bundle import PluginComponent
 from coffer.domain.agent.plugin_state import MarketplaceInfo
 from coffer.domain.errors import ResourceAlreadyExists
@@ -70,6 +71,9 @@ class McpEntryDetailOut(McpEntryOut):
     path: str
     cwd: str | None
     extra: list[McpEntryFieldOut]
+    # The entry exactly as the agent's file holds it (one JSON object), every
+    # env/header value and secret-looking value replaced by a mask.
+    config: dict[str, Any]
 
 
 class ParseErrorOut(BaseModel):
@@ -185,6 +189,7 @@ def _entry_detail_out(d: McpEntryDetail) -> McpEntryDetailOut:
         **_entry_out(d.entry).model_dump(),
         path=d.path,
         cwd=d.entry.cwd,
+        config=redacted_config(d.entry.raw),
         extra=[
             McpEntryFieldOut(key=f.key, value=f.value, masked=f.masked)
             for f in masked_extra(d.entry.extra)

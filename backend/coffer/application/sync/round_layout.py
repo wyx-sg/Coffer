@@ -12,22 +12,20 @@ from coffer.domain.sync.rounds import RoundStatus
 def layout_refusal(d: RoundDeps, tip: str) -> tuple[RoundStatus, str] | None:
     """Why a remote at ``tip`` cannot be converged with, or ``None``.
 
-    A remote carries exactly this build's layout or it is refused, in either
-    direction: a newer one is another Coffer's, and an older one is rebuilt
-    from a migrated machine rather than converted here (ADR
-    every-vault-file-carries-its-format-version)."""
+    A remote written by a newer Coffer is refused: this build would misread
+    it. A remote at an older layout is not refused: this vault replaces it
+    (see ``is_older`` and ``round_replace``)."""
     layout = d.layout_of(tip)
-    if layout is None or layout == d.layout:
-        return None
-    if layout > d.layout:
+    if layout is not None and layout > d.layout:
         return (
             RoundStatus.REMOTE_TOO_NEW,
             f"the remote's layout {layout} is newer than this build's {d.layout}; "
             "upgrade Coffer on this machine",
         )
-    return (
-        RoundStatus.REMOTE_TOO_OLD,
-        f"the remote is at layout {layout}, older than this build's {d.layout}; rebuild it "
-        "from a machine that has been upgraded (clear it and let that machine push), "
-        "then join it from here",
-    )
+    return None
+
+
+def is_older(d: RoundDeps, tip: str) -> bool:
+    """The remote at ``tip`` holds an older layout than this build's."""
+    layout = d.layout_of(tip)
+    return layout is not None and layout < d.layout

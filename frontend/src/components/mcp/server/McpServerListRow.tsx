@@ -4,7 +4,8 @@
 // refused · since 14:02", "Secret missing · LINEAR_API_KEY", "uvx is not
 // installed"), else its transport and tool count — and its reach on the
 // right: Off, All agents, or the badges of the agents it is limited to. The
-// checkbox feeds the selection bar.
+// checkbox feeds the selection bar; like the Skills library's it shows on
+// hover or focus, and on every row while any is ticked.
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -19,7 +20,13 @@ import type { ToolTiering } from "@/lib/hooks/useMcpServerPage";
 import { toneTextClass } from "@/lib/statusColors";
 import { STATUS_TONE } from "@/lib/statusTone";
 import { cn } from "@/lib/utils";
-import { serverState, shortTime, transportOf, type ServerState, secretLabel } from "@/lib/mcp/serverState";
+import {
+  serverState,
+  shortTime,
+  transportOf,
+  type ServerState,
+  secretLabel,
+} from "@/lib/mcp/serverState";
 
 interface Props {
   resource: ResourceOut;
@@ -28,6 +35,8 @@ interface Props {
   agents: readonly AgentOut[];
   to: string;
   current: boolean;
+  /** Any row is ticked: every checkbox shows. */
+  selecting?: boolean;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
 }
@@ -108,6 +117,7 @@ export function McpServerListRow({
   agents,
   to,
   current,
+  selecting = false,
   checked,
   onCheckedChange,
 }: Props) {
@@ -121,11 +131,20 @@ export function McpServerListRow({
         current ? "bg-surface-selected" : "hover:bg-surface-hover",
       )}
     >
-      <Checkbox
-        checked={checked}
-        onChange={(e) => onCheckedChange(e.target.checked)}
-        aria-label={`${t("common.bulk.selectRow")}: ${resource.name}`}
-      />
+      <span
+        className={cn(
+          "shrink-0 items-center",
+          selecting || checked
+            ? "inline-flex"
+            : "hidden group-focus-within:inline-flex group-hover:inline-flex",
+        )}
+      >
+        <Checkbox
+          checked={checked}
+          onChange={(e) => onCheckedChange(e.target.checked)}
+          aria-label={`${t("common.bulk.selectRow")}: ${resource.name}`}
+        />
+      </span>
       <Link
         to={to}
         aria-current={current ? "page" : undefined}
@@ -133,9 +152,7 @@ export function McpServerListRow({
       >
         <StatusDot tone={state.tone} />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className={"truncate font-mono text-xs font-label"}>
-            {label}
-          </span>
+          <span className={"truncate font-mono text-xs font-label"}>{label}</span>
           <Subline state={state} resource={resource} detail={detail} tiering={tiering} />
         </span>
         <span className="shrink-0">

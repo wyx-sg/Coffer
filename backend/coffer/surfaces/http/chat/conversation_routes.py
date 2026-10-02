@@ -218,14 +218,18 @@ async def list_conversations(
             "archived) it was issued for; any other value is 400 CURSOR_INVALID."
         ),
     ),
+    q: str | None = Query(
+        default=None,
+        max_length=200,
+        description="Title contains this text (case-insensitive); a cursor is bound to it.",
+    ),
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
     mirror: ChannelMirrorPort | None = Depends(get_channel_mirror),  # noqa: B008
 ) -> ConversationListOut:
-    """List conversations, newest activity first, paged by cursor.
-    ``?archived=true`` returns the archived threads; the default lists active
-    ones only. The conversation id breaks ties."""
-    page = await svc.page_conversations(archived=archived, limit=limit, cursor=cursor)
+    """Conversations newest activity first (id breaks ties), paged by cursor;
+    ``archived=true`` lists the archived ones, ``q`` filters by title."""
+    page = await svc.page_conversations(archived=archived, limit=limit, cursor=cursor, q=q)
     extras = await _extras(page.items, svc, resources, mirror)
     return ConversationListOut(
         conversations=[_conv_out(c, extras) for c in page.items],

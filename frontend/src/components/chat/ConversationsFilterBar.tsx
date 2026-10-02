@@ -6,6 +6,7 @@
 import { useTranslation } from "react-i18next";
 import { Archive, X } from "lucide-react";
 
+import { SearchInput } from "@/components/SearchInput";
 import { SkillSegmented } from "@/components/skills/SkillSegmented";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +29,9 @@ interface Props {
   channelLabel: string | null;
   /** The platform of the channel in `filters.channel`, for the source switch. */
   channelSource?: SourceFilter | null;
+  /** The title search's text; the server is asked for it once typing pauses. */
+  search: string;
+  onSearch: (text: string) => void;
 }
 
 export function ConversationsFilterBar({
@@ -36,6 +40,8 @@ export function ConversationsFilterBar({
   agents,
   channelLabel,
   channelSource = null,
+  search,
+  onSearch,
 }: Props) {
   const { t } = useTranslation();
   const sources: { value: SourceFilter; label: string }[] = [
@@ -45,13 +51,15 @@ export function ConversationsFilterBar({
     { value: "telegram", label: "Telegram" },
   ];
 
+  const sourceValue = filters.channel ? (channelSource ?? "all") : filters.source;
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className={"flex flex-wrap items-center gap-2"}>
       {/* A channel's link narrows further than its platform: the switch keeps
           showing that platform, and picking any source drops the channel. */}
       <SkillSegmented
         label={t("conversations.filters.source")}
-        value={filters.channel ? (channelSource ?? "all") : filters.source}
+        value={sourceValue}
         options={sources}
         onChange={(source) => onChange({ ...filters, source, channel: null })}
       />
@@ -60,7 +68,7 @@ export function ConversationsFilterBar({
         onValueChange={(v) => onChange({ ...filters, agent: v === ALL_AGENTS ? null : v })}
       >
         <SelectTrigger
-          className="h-control-sm w-40 text-xs"
+          className={"h-control-sm w-40 text-xs"}
           aria-label={t("conversations.filters.agent")}
         >
           <SelectValue />
@@ -88,10 +96,16 @@ export function ConversationsFilterBar({
           </Button>
         </span>
       ) : null}
+      <SearchInput
+        value={search}
+        onChange={onSearch}
+        ariaLabel={t("conversations.filters.search")}
+        placeholder={t("conversations.filters.search")}
+        className="ml-auto w-56"
+      />
       <Button
         variant="ghost"
         size="sm"
-        className="ml-auto"
         aria-pressed={filters.archived}
         onClick={() => onChange({ ...filters, archived: !filters.archived })}
       >

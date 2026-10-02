@@ -61,12 +61,15 @@ export interface paths {
         };
         /**
          * List Daemon Logs
-         * @description The tail of ``daemon.log``, newest-first — the same record ``coffer log daemon``
+         * @description One page of ``daemon.log``, newest-first — the same record ``coffer log daemon``
          *     reads, for the human looking at the Activity page.
          *
          *     The file interleaves several writers' formats (see ``log_reader``); they
          *     are normalised there onto the same fields, so every row here carries the
-         *     time, level and logger its line actually stated.
+         *     time, level and logger its line actually stated. A page reads a small
+         *     window of bytes from the end of the file (or from the cursor's offset) and
+         *     parses only that (see ``log_page``); the work follows the page, not the
+         *     file.
          */
         get: operations["list_daemon_logs_api_v1_daemon_logs_get"];
         put?: never;
@@ -371,10 +374,19 @@ export interface components {
         };
         /** DaemonLogListOut */
         DaemonLogListOut: {
+            /** Next Cursor */
+            next_cursor: string | null;
             /** Path */
             path: string;
             /** Records */
             records: components["schemas"]["DaemonLogRecordOut"][];
+            /** Total */
+            total: number | null;
+            /**
+             * Total Is Floor
+             * @default false
+             */
+            total_is_floor: boolean;
         };
         /**
          * DaemonLogRecordOut
@@ -395,6 +407,8 @@ export interface components {
             event: string | null;
             /** Level */
             level: string | null;
+            /** Offset */
+            offset: number;
             /** Record */
             record: {
                 [key: string]: unknown;
@@ -844,6 +858,12 @@ export interface operations {
                 errors_only?: boolean;
                 level?: string;
                 limit?: number;
+                /** @description The previous page's next_cursor. Bound to the filters it was issued with; any other value is 400 CURSOR_INVALID. */
+                cursor?: string | null;
+                /** @description Only the records whose message, logger, level or folded lines hold this text. */
+                q?: string | null;
+                /** @description Also count the matching records in the file's recent tail (a bounded read). */
+                with_total?: boolean;
                 /** @description Only the lines written under this correlation id (a request's or a turn's). */
                 trace_id?: string | null;
             };

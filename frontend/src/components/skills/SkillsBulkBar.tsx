@@ -1,44 +1,44 @@
 // frontend/src/components/skills/SkillsBulkBar.tsx
-// The library's selection bar, under the filter while rows are ticked (canvas
-// 4.3.29): how many are selected, their reach (the same three-state choice
-// every row carries, written to each), Delete, and × to clear the selection.
-// The built-in skill never reaches here — its checkbox is disabled, because
-// the bar's one destructive action would have to refuse it.
+// The library's selection bar, at the top of the column while rows are ticked
+// (canvas 4.3.29) in the place of the filters — the same bar the MCP servers
+// list shows (ListSelectionBar): select-all, how many are selected, Clear, and
+// here the selection's reach (the same three-state choice every row carries,
+// written to each) and Delete. The built-in skill never reaches here: it has
+// no checkbox and select-all skips it.
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
 
+import { ListSelectionBar } from "@/components/ListSelectionBar";
 import { BulkReachActions } from "@/components/reach/BulkReachActions";
 import { SkillBulkDelete } from "@/components/skills/SkillBulkDelete";
-import { Button } from "@/components/ui/button";
 import { skillsKey } from "@/lib/api/queryKeys";
 import type { SkillOut } from "@/lib/api/skills";
 
 interface Props {
   skills: SkillOut[];
-  /** Clears the selection once a bulk write has settled (or on ×). */
+  /** Every listed skill the filters show (built-in excluded) is ticked. */
+  allChecked: boolean;
+  onToggleAll: (on: boolean) => void;
+  /** Clears the selection once a bulk write has settled (or on Clear). */
   onDone: () => void;
 }
 
-export function SkillsBulkBar({ skills, onDone }: Props) {
+export function SkillsBulkBar({ skills, allChecked, onToggleAll, onDone }: Props) {
   const { t } = useTranslation();
   return (
-    <div
-      role="region"
-      aria-label={t("skills.bulk.label")}
-      className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-sunken py-1.5 pl-3 pr-1.5"
+    <ListSelectionBar
+      label={t("skills.bulk.label")}
+      selectAllLabel={t("skills.selectAll")}
+      count={skills.length}
+      allChecked={allChecked}
+      onToggleAll={onToggleAll}
+      onClear={onDone}
     >
-      <span className="mr-auto text-xs font-label text-text">
-        {t("common.bulk.selected", { count: skills.length })}
-      </span>
       <BulkReachActions
         rows={skills.map((s) => ({ kind: "skill", uid: s.uid }))}
         invalidate={[skillsKey]}
         onDone={onDone}
       />
       <SkillBulkDelete skills={skills} onDone={onDone} label={t("common.delete")} />
-      <Button variant="ghost" size="icon-sm" aria-label={t("common.clear")} onClick={onDone}>
-        <X aria-hidden />
-      </Button>
-    </div>
+    </ListSelectionBar>
   );
 }

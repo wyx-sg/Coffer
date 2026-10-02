@@ -14,112 +14,26 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import suppress
-from datetime import UTC, datetime
-from typing import Any, Literal
+from datetime import datetime
+from typing import Literal
 
-from sqlalchemy import TIMESTAMP, Index, Integer, Select, String, Text, case, func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
-from sqlalchemy.orm import Mapped, mapped_column
 
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.mcp.capability import MCPInvocation
+from coffer.infrastructure.mcp.invocation_rows import (
+    MCPInvocationModel,
+    filtered,
+    inv_to_domain,
+    inv_to_model,
+)
 from coffer.infrastructure.mcp.invocation_summary import InvocationSummary, summarize
-from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.keyset import newest_first_after
 
 _logger = logging.getLogger(__name__)
-
-
-class MCPInvocationModel(Base):
-    __tablename__ = "mcp_invocations"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    #: WHICH server, by identity (migration 0097). The log is history, so it has
-    #: to survive the rename that a name-keyed column would have split it across.
-    #: Not a foreign key: a deleted server's invocations stay readable, and two
-    #: reserved non-uid values live here — see ``domain.mcp.capability``.
-    resource_uid: Mapped[str] = mapped_column(String, nullable=False)
-    capability_type: Mapped[str] = mapped_column(String, nullable=False)
-    capability_key: Mapped[str] = mapped_column(String, nullable=False)
-    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[str] = mapped_column(String, nullable=False)
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    session_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    #: The calling agent's uid, as its session reported it (migration 0110).
-    #: Not a foreign key, for the same reason ``resource_uid`` is not one: a
-    #: deleted agent's calls stay in the history.
-    agent_uid: Mapped[str | None] = mapped_column(String, nullable=True)
-    trace_id: Mapped[str | None] = mapped_column(String, nullable=True)
-
-    __table_args__ = (
-        Index("idx_invocations_trace", "trace_id"),
-        Index("idx_invocations_resource", "resource_uid", "timestamp"),
-        Index("idx_invocations_time", "timestamp"),
-        Index("idx_invocations_session", "session_id", "timestamp"),
-        Index("idx_invocations_agent", "agent_uid", "timestamp"),
-    )
-
-
-def _tz(dt: datetime) -> datetime:
-    """Re-attach UTC if SQLite stripped the tzinfo on read-back."""
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
-
-
-def _filtered(
-    stmt: Select[Any],
-    *,
-    resource_uid: str | None,
-    status: str | None,
-    since: datetime | None,
-    agent_uid: str | None,
-    trace_id: str | None = None,
-) -> Select[Any]:
-    """The one WHERE both the page and its count read, so they cannot disagree."""
-    if trace_id is not None:
-        stmt = stmt.where(MCPInvocationModel.trace_id == trace_id)
-    if resource_uid is not None:
-        stmt = stmt.where(MCPInvocationModel.resource_uid == resource_uid)
-    if status is not None:
-        stmt = stmt.where(MCPInvocationModel.status == status)
-    if since is not None:
-        stmt = stmt.where(MCPInvocationModel.timestamp >= since)
-    if agent_uid is not None:
-        stmt = stmt.where(MCPInvocationModel.agent_uid == agent_uid)
-    return stmt
-
-
-def _inv_to_domain(row: MCPInvocationModel) -> MCPInvocation:
-    return MCPInvocation(
-        id=row.id,
-        timestamp=_tz(row.timestamp),
-        resource_uid=row.resource_uid,
-        capability_type=row.capability_type,  # type: ignore[arg-type]
-        capability_key=row.capability_key,
-        duration_ms=row.duration_ms,
-        status=row.status,  # type: ignore[arg-type]
-        error_message=row.error_message,
-        session_id=row.session_id,
-        agent_uid=row.agent_uid,
-        trace_id=row.trace_id,
-    )
-
-
-def _inv_to_model(inv: MCPInvocation) -> MCPInvocationModel:
-    return MCPInvocationModel(
-        timestamp=inv.timestamp,
-        resource_uid=inv.resource_uid,
-        capability_type=inv.capability_type,
-        capability_key=inv.capability_key,
-        duration_ms=inv.duration_ms,
-        status=inv.status,
-        error_message=inv.error_message,
-        session_id=inv.session_id,
-        agent_uid=inv.agent_uid,
-        trace_id=inv.trace_id,
-    )
 
 
 class MCPInvocationRepo:
@@ -206,6 +120,8 @@ class MCPInvocationRepo:
         limit: int = 50,
         after: tuple[datetime, int] | None = None,
         trace_id: str | None = None,
+        q: str | None = None,
+        q_resource_uids: Sequence[str] = (),
     ) -> list[MCPInvocation]:
         async with self._sm() as session:
             # Newest first, the id breaking ties, so ``after`` (the previous
@@ -217,17 +133,19 @@ class MCPInvocationRepo:
                 stmt = stmt.where(
                     newest_first_after(MCPInvocationModel.timestamp, MCPInvocationModel.id, after)
                 )
-            stmt = _filtered(
+            stmt = filtered(
                 stmt,
                 resource_uid=resource_uid,
                 status=status,
                 since=since,
                 agent_uid=agent_uid,
                 trace_id=trace_id,
+                q=q,
+                q_resource_uids=q_resource_uids,
             )
             stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
-            return [_inv_to_domain(r) for r in rows]
+            return [inv_to_domain(r) for r in rows]
 
     async def count(
         self,
@@ -237,16 +155,20 @@ class MCPInvocationRepo:
         since: datetime | None = None,
         agent_uid: str | None = None,
         trace_id: str | None = None,
+        q: str | None = None,
+        q_resource_uids: Sequence[str] = (),
     ) -> int:
         """How many rows match these filters across every page (no cursor)."""
         async with self._sm() as session:
-            stmt = _filtered(
+            stmt = filtered(
                 select(func.count()).select_from(MCPInvocationModel),
                 resource_uid=resource_uid,
                 status=status,
                 since=since,
                 agent_uid=agent_uid,
                 trace_id=trace_id,
+                q=q,
+                q_resource_uids=q_resource_uids,
             )
             return int((await session.execute(stmt)).scalar_one())
 
@@ -349,18 +271,18 @@ class MCPInvocationRepo:
                 .limit(1)
             )
             row = (await session.execute(stmt)).scalar_one_or_none()
-        return _inv_to_domain(row) if row is not None else None
+        return inv_to_domain(row) if row is not None else None
 
     async def _commit_one(self, inv: MCPInvocation) -> None:
         async with self._sm() as session:
-            session.add(_inv_to_model(inv))
+            session.add(inv_to_model(inv))
             await session.commit()
 
     async def _commit_batch(self, batch: list[MCPInvocation]) -> None:
         if not batch:
             return
         async with self._sm() as session:
-            session.add_all([_inv_to_model(inv) for inv in batch])
+            session.add_all([inv_to_model(inv) for inv in batch])
             await session.commit()
 
     async def _run(self) -> None:

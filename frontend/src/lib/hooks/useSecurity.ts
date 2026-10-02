@@ -8,12 +8,8 @@ import { useToast } from "@/components/ui/toast";
 import { resetApiClient } from "@/lib/api/client";
 import { translateApiError } from "@/lib/api/errors";
 import { fsApi } from "@/lib/api/fs";
-import {
-  secretsKey,
-  secretSettingsKey,
-  syncKey,
-  syncKeyFingerprintKey,
-} from "@/lib/api/queryKeys";
+import { invalidateSync } from "@/lib/syncInvalidate";
+import { secretsKey, secretSettingsKey, syncKeyFingerprintKey } from "@/lib/api/queryKeys";
 import { securityApi } from "@/lib/api/security";
 import { getCofferBaseUrl, setDaemonConnection } from "@/lib/auth";
 import { exportMasterKeyBackup } from "@/lib/tauri";
@@ -92,7 +88,7 @@ export function useImportKeyFile() {
     mutationFn: ({ material, passphrase }: { material: string; passphrase: string | null }) =>
       securityApi.importKey(material, passphrase),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: syncKey });
+      invalidateSync(qc);
       void qc.invalidateQueries({ queryKey: secretsKey });
       void qc.invalidateQueries({ queryKey: secretSettingsKey });
     },

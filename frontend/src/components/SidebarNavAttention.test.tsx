@@ -124,7 +124,15 @@ acceptance("web-ui", "an entry without a signal never carries a badge", async ()
     },
   });
   vi.mocked(clisApi.list).mockResolvedValue({
-    items: [{ command: "gh", status: "outdated", needed_by: [] }],
+    items: [
+      {
+        command: "gh",
+        status: "outdated",
+        needed_by: ["code-review"],
+        needed_by_servers: [],
+        added: false,
+      },
+    ],
     warnings: [],
   } as never);
   renderNav("/");

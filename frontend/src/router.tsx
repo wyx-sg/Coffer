@@ -104,8 +104,10 @@ const pageRoutes: RouteObject[] = gateRoutes([
     element: lazyPage(() => import("./pages/CustomToolsPage"), "CustomToolsPage"),
   },
   { path: "clis", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
-  // One required command, by the command itself, open beside the list.
+  // One command-line tool, by the command itself, open beside the list; its
+  // tab (Overview bare, Commands) is the path.
   { path: "clis/:command", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
+  { path: "clis/:command/:tab", element: lazyPage(() => import("./pages/ClisPage"), "ClisPage") },
   { path: "agents", element: <AgentsPage /> },
   // An agent's pages are addressed by its TYPE (one agent per type), the
   // detail page's tab by the path (`/agents/<type>/<tab>`, Overview bare),
@@ -129,17 +131,6 @@ const pageRoutes: RouteObject[] = gateRoutes([
   {
     path: "agents/:type/skills/unmanaged/:location/:name",
     element: lazyPage(() => import("./pages/UnmanagedSkillDetailPage"), "UnmanagedSkillDetailPage"),
-  },
-  // A direct (unmanaged) MCP server of the agent, from the MCP servers tab:
-  // the entry's name, and `?source=` for the file when two share that name.
-  {
-    path: "agents/:type/mcp-servers/:entry",
-    element: lazyPage(() => import("./pages/AgentMcpEntryPage"), "AgentMcpEntryPage"),
-  },
-  // A plugin, from the Plugins tab (`<name>@<marketplace>`, one segment).
-  {
-    path: "agents/:type/plugins/:pluginId",
-    element: lazyPage(() => import("./pages/AgentPluginPage"), "AgentPluginPage"),
   },
   // The Channels page is the list beside the open channel, so all three
   // addresses render the same page (the tab is the optional last segment).

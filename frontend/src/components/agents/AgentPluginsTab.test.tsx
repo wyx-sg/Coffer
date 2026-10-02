@@ -18,7 +18,12 @@ import type { PluginOut, PluginsResponse } from "@/lib/api/agents-workspace";
 import { acceptance } from "@/test/acceptance";
 
 vi.mock("@/lib/api/agents", () => ({
-  agentsApi: { plugins: vi.fn(), togglePlugin: vi.fn(), uninstallPlugin: vi.fn() },
+  agentsApi: {
+    plugins: vi.fn(),
+    plugin: vi.fn(),
+    togglePlugin: vi.fn(),
+    uninstallPlugin: vi.fn(),
+  },
 }));
 // No managed agent to ask: a hand-off offers Copy prompt only.
 vi.mock("@/lib/hooks/useAgentProviders", () => ({ useAgentProviders: () => ({ data: [] }) }));
@@ -123,7 +128,7 @@ describe("AgentPluginsTab", () => {
     expect(within(sp).getByText("superpowers-marketplace")).toBeInTheDocument();
     expect(within(sp).getByText(SUPERPOWERS.description!)).toBeInTheDocument();
     expect(within(sp).getByText("Enabled")).toBeInTheDocument();
-    expect(within(await rowOf("code-review")).getByText("Disabled")).toBeInTheDocument();
+    expect(within(await rowOf("code-review")).getByText("Off")).toBeInTheDocument();
     expect(within(await rowOf("frontend-design")).getByText("Cache missing")).toBeInTheDocument();
     expect(screen.getByText(en.agents.pluginsTab.footnote.claude)).toBeInTheDocument();
   });
@@ -184,16 +189,27 @@ describe("AgentPluginsTab", () => {
   });
 
   acceptance("agent-registry", "open a plugin's detail page from the Plugins tab", async () => {
-    // The Plugins-tab half of the scenario: rows do not expand, and the
-    // plugin's name opens its page under this tab. The page half is in
-    // AgentPluginPage.test.tsx.
+    // Rows do not expand; the plugin's name opens a dialog saying what it is and
+    // which skills, commands and MCP servers it provides (names only).
+    api.plugin.mockResolvedValue({
+      plugin: SUPERPOWERS,
+      install_path: "/Users/me/.claude/plugins/cache/m/superpowers/1.0.0",
+      marketplace_source: null,
+      can_uninstall: true,
+      skills: [{ name: "brainstorming", description: null }],
+      commands: [],
+      agents: [],
+      hooks: ["SessionStart"],
+      mcp_servers: ["docs"],
+    } as never);
     renderTab({ items: [SUPERPOWERS] });
-    const link = await screen.findByRole("link", { name: "superpowers" });
+    const name = await screen.findByRole("button", { name: "superpowers" });
     expect(document.querySelector("tr[aria-expanded]")).toBeNull();
-    fireEvent.click(link);
-    expect(await screen.findByTestId("landed")).toHaveTextContent(
-      `/agents/claude_code/plugins/${encodeURIComponent(SUPERPOWERS.id)}`,
-    );
+    fireEvent.click(name);
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("brainstorming")).toBeInTheDocument();
+    expect(within(dialog).getByText("SessionStart")).toBeInTheDocument();
+    expect(within(dialog).getByText("docs")).toBeInTheDocument();
   });
 
   // Spec agent-registry "Filter an agent's installed kinds by owner" (the scenario itself is on the Skills tab).

@@ -101,7 +101,10 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
-| `CLI_NOT_REQUIRED` | 404 | 没有任何托管技能在其 `requires:` 中声明该命令。 | 用 `coffer cli list` 列出所需的命令。 |
+| `CLI_NOT_KNOWN` | 404 | 没有托管技能需要该命令，也没有以该名字添加的命令行工具。 | 用 `coffer cli list` 列出已知的命令。 |
+| `CLI_TOOL_EXISTS` | 409 | 已经添加过同名的命令行工具。 | 用 `coffer cli edit` 修改它，或先移除。 |
+| `CLI_TOOL_INVALID` | 400 | 命令名、最低版本或登录检查不合法。 | 使用普通的命令名或绝对路径；字段见 `message`。 |
+| `CLI_TOOL_NOT_DECLARED` | 404 | 该命令行工具不是手动添加的，因此不能在这里编辑或移除。 | 技能需要的命令要在技能里修改，不在这里。 |
 
 ## 智能体与智能体工作目录 {#agents-and-agent-workspaces}
 
@@ -195,6 +198,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `ATTACHMENT_TOO_LARGE` | 413 | 网页输入框上传的文件超过了消息中给出的单文件上限。 | 附上更小的文件。 |
 | `ATTACHMENT_TYPE_UNSUPPORTED` | 415 | 没有智能体能在一轮对话中使用这种类型的文件（视频、压缩包、可执行文件和其他二进制文件）。 | 附上图片、文档、音频或文本文件。 |
 | `CHANNEL_NOT_PAIRED` | 409 | 该消息渠道没有可发送的已配对聊天。 | 配对它：`coffer channel pair <name>`。见[消息渠道](/zh/guides/channels)。 |
+| `CHANNEL_PERSON_NOT_FOUND` | 404 | 该消息渠道上没有与所指名字匹配的已配对的人。 | 用 `coffer channel show <name>` 列出已配对的人，再用其中一个的 id。 |
 | `CHANNEL_NOT_RUNNING` | 409 | 该消息渠道的适配器没有运行（已禁用或仍在启动）。 | 启用该渠道并等待它连上。 |
 | `CHANNEL_SEND_FAILED` | 502 | 消息平台拒绝了发送或发送失败。 | 阅读 `message`；检查机器人的令牌和权限。 |
 

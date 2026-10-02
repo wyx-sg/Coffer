@@ -7,9 +7,9 @@
 // modes: client (default — caller passes ALL rows; filter and grow in memory)
 // and server (caller passes ONE page + a `serverPagination` descriptor and
 // drives search through `search.value`/`search.onChange`; each page it hands
-// over is kept and shown under the ones before — DataTableLoadMore.tsx).
-// Row rendering (data rows, skeleton rows, the empty state) lives in
-// DataTableBody.tsx.
+// over is kept and shown under the ones before — DataTableLoadMore.tsx); and
+// infinite (cursor-paged: every row passed is shown, see `InfiniteRows`).
+// Row rendering (data, skeleton, empty state) lives in DataTableBody.tsx.
 import { useMemo, useState, type ReactNode } from "react";
 
 import { DataTableToolbar } from "@/components/DataTableToolbar";
@@ -19,11 +19,13 @@ import { useTableSelection } from "@/components/DataTableSelection";
 import { TableBulkBar, usePageSelectAll } from "@/components/DataTableBulk";
 import { DataTableLoadMore, useLoadMore } from "@/components/DataTableLoadMore";
 import { useDefaultPageSize } from "@/lib/preferences";
+import { LoadMoreFooter } from "@/components/ui/load-more";
 import { Table, TableBody } from "@/components/ui/table";
 import {
   skeletonCount,
   type Column,
   type FilterDef,
+  type InfiniteRows,
   type ListLoading,
   type ServerPagination,
   type TableSelection,
@@ -65,6 +67,11 @@ interface Props<T> extends ListLoading {
   pageSize?: number;
   /** When set, page on demand against the server instead of slicing in memory. */
   serverPagination?: ServerPagination;
+  infinite?: InfiniteRows;
+  /** Fixed table layout: columns take the widths their `className` sets (e.g.
+   *  `w-[36%]`) and the rest share what is left, so no cell stretches the table.
+   *  Pair it with `TruncatedText` / `TruncatedPath` in cells that can be long. */
+  fixed?: boolean;
   emptyMessage: string;
   /** Rendered under the empty message, e.g. the primary "create" button. */
   emptyAction?: ReactNode;
@@ -84,8 +91,10 @@ export function DataTable<T>({
   isSelectable,
   pageSize,
   serverPagination,
+  infinite,
   emptyMessage,
   emptyAction,
+  fixed = false,
   isLoading = false,
 }: Props<T>) {
   const server = serverPagination;
@@ -131,7 +140,7 @@ export function DataTable<T>({
   const size = server ? server.pageSize : (pageSize ?? globalDefault);
   const resetKey = `${query}␟${JSON.stringify(filterVals)}␟${size}`;
   const loadMore = useLoadMore({ rows: filtered, rowKey, size, server, resetKey });
-  const pageRows = loadMore.shown;
+  const pageRows = infinite ? filtered : loadMore.shown;
   const total = loadMore.total;
   // Selection derives from the *filtered* set so bulk actions only touch
   // matching rows (in server mode: the rows loaded so far).
@@ -175,7 +184,11 @@ export function DataTable<T>({
       ) : null}
 
       <div className="overflow-hidden rounded-xl border border-border bg-surface-raised">
-        <Table containerClassName={BODY_MAX_HEIGHT} aria-busy={isLoading || undefined}>
+        <Table
+          containerClassName={BODY_MAX_HEIGHT}
+          className={fixed ? "table-fixed" : undefined}
+          aria-busy={isLoading || undefined}
+        >
           <DataTableHead
             columns={columns}
             hasSelection={Boolean(selection)}
@@ -208,18 +221,30 @@ export function DataTable<T>({
                 onToggleSelect={sel.toggle}
               />
             )}
+            {infinite?.loading ? <SkeletonRows count={1} colCount={colCount} /> : null}
           </TableBody>
         </Table>
       </div>
 
-      <DataTableLoadMore
-        shown={pageRows.length}
-        total={total}
-        size={size}
-        hasMore={loadMore.hasMore}
-        loading={Boolean(server) && isLoading}
-        onMore={loadMore.more}
-      />
+      {infinite ? (
+        <LoadMoreFooter
+          loaded={infinite.loaded}
+          total={infinite.total}
+          hasMore={infinite.hasMore}
+          loading={infinite.loading}
+          onMore={infinite.onMore}
+          autoLoad
+        />
+      ) : (
+        <DataTableLoadMore
+          shown={pageRows.length}
+          total={total}
+          size={size}
+          hasMore={loadMore.hasMore}
+          loading={Boolean(server) && isLoading}
+          onMore={loadMore.more}
+        />
+      )}
     </div>
   );
 }

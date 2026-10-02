@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowLeft, Boxes, Plus, RotateCcw } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
+import { HelpTip } from "@/components/HelpTip";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,14 @@ export function ProvidersSplit({ uid }: { uid?: string }) {
   const header = (
     <PageHeader
       title={t("providers.title")}
+      badges={
+        <>
+          {providers.data ? <span className="text-sm text-text-muted">{list.length}</span> : null}
+          <HelpTip>
+            <p className="text-xs text-text-muted">{t("providers.subtitle")}</p>
+          </HelpTip>
+        </>
+      }
       actions={
         <Button onClick={() => setAdding("anthropic")}>
           <Plus aria-hidden /> {t("providers.add.open")}
@@ -78,6 +87,7 @@ export function ProvidersSplit({ uid }: { uid?: string }) {
   );
 
   let body;
+  let split = false;
   if (providers.error) {
     body = (
       <EmptyState
@@ -100,14 +110,16 @@ export function ProvidersSplit({ uid }: { uid?: string }) {
       />
     );
   } else {
+    split = true;
     const missing = !!uid && !provider && !detail.isPending && !providers.isPending;
     body = (
       <SplitView
         storageKey="providers.list"
         defaultListWidth={292}
         label={t("splitView.resizeList")}
-        className="min-h-[560px] overflow-hidden rounded-xl border border-border bg-surface-raised"
-        detailClassName="overflow-y-auto px-7 py-5"
+        className="min-h-0 flex-1"
+        listClassName="overflow-y-auto"
+        detailClassName="overflow-y-auto"
         list={
           <ProviderList
             providers={list}
@@ -118,49 +130,65 @@ export function ProvidersSplit({ uid }: { uid?: string }) {
           />
         }
         detail={
-          missing ? (
-            <EmptyState
-              icon={Boxes}
-              tone={detail.error ? "error" : "default"}
-              title={t("providers.detail.notFound")}
-              description={detail.error ? translateApiError(t, detail.error) : undefined}
-              action={
-                <Button asChild variant="outline">
-                  <Link to="/model-providers">
-                    <ArrowLeft aria-hidden /> {t("providers.detail.backToList")}
-                  </Link>
-                </Button>
-              }
-            />
-          ) : provider ? (
-            <ProviderDetail
-              provider={provider}
-              use={usageOf(provider)}
-              endpoint={endpoint}
-              status={status}
-              engineModel={engine.data?.model ?? null}
-              transcribeModel={engine.data?.transcribe_model ?? null}
-            />
-          ) : (
-            <div className="flex flex-col gap-4" aria-busy="true">
-              <Skeleton className="h-8 w-64" />
-              <Skeleton className="h-40 w-full" />
-            </div>
-          )
+          <div className="px-7 pb-5 pt-5">
+            {missing ? (
+              <EmptyState
+                icon={Boxes}
+                tone={detail.error ? "error" : "default"}
+                title={t("providers.detail.notFound")}
+                description={detail.error ? translateApiError(t, detail.error) : undefined}
+                action={
+                  <Button asChild variant="outline">
+                    <Link to="/model-providers">
+                      <ArrowLeft aria-hidden /> {t("providers.detail.backToList")}
+                    </Link>
+                  </Button>
+                }
+              />
+            ) : provider ? (
+              <ProviderDetail
+                provider={provider}
+                use={usageOf(provider)}
+                endpoint={endpoint}
+                status={status}
+                engineModel={engine.data?.model ?? null}
+                transcribeModel={engine.data?.transcribe_model ?? null}
+              />
+            ) : (
+              <div className="flex flex-col gap-4" aria-busy="true">
+                <Skeleton className="h-8 w-64" />
+                <Skeleton className="h-40 w-full" />
+              </div>
+            )}
+          </div>
         }
       />
     );
   }
 
-  return (
+  const dialog = (
+    <AddProviderDialog
+      preset={adding}
+      onClose={() => setAdding(null)}
+      onCreated={(p) => navigate(`/model-providers/${encodeURIComponent(p.uid)}`)}
+    />
+  );
+  // The split is a full-bleed workspace whose two panes scroll on their own
+  // (like Skills, MCP servers and Channels); welcome and error states are an
+  // ordinary page.
+  return split ? (
+    <>
+      <div className="-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">
+        <div className="shrink-0 border-b border-border-subtle px-6 pb-4 pt-5">{header}</div>
+        {body}
+      </div>
+      {dialog}
+    </>
+  ) : (
     <div className="flex flex-col gap-4">
       {header}
       {body}
-      <AddProviderDialog
-        preset={adding}
-        onClose={() => setAdding(null)}
-        onCreated={(p) => navigate(`/model-providers/${encodeURIComponent(p.uid)}`)}
-      />
+      {dialog}
     </div>
   );
 }

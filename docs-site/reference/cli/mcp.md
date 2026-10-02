@@ -173,7 +173,7 @@ coffer mcp cap [OPTIONS] COMMAND [ARGS]...
 
 List and toggle a server's tools, prompts and resources
 
-Subcommands: `list`, `enable`, `disable`.
+Subcommands: `list`, `enable`, `disable`, `expose`.
 
 ## mcp cap list
 
@@ -216,3 +216,17 @@ Disable capabilities, each named by a typed ref.
 | --- | --- | --- | --- | --- |
 | `SERVER` | argument | text | required | Server name |
 | `REF...` | argument | text (variadic) | required | tool:&lt;name&gt; \| prompt:&lt;name&gt; \| resource:&lt;uri&gt; |
+
+## mcp cap expose
+
+```sh
+coffer mcp cap expose [OPTIONS] SERVER MODE tool:<name>...
+```
+
+Set how tools are exposed: listed (pinned), search (search only) or auto (by usage).
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `SERVER` | argument | text | required | Server name |
+| `MODE` | argument | text | required | auto \| listed \| search |
+| `TOOL:<NAME>...` | argument | text (variadic) | required | Tools to set |

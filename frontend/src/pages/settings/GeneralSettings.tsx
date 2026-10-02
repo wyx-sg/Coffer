@@ -127,7 +127,7 @@ export function GeneralSettings() {
   return (
     <div className="flex flex-col gap-5">
       <p className="text-sm text-text-muted">{t("settings.general.intro")}</p>
-      <div className="flex flex-col gap-7">
+      <div className="flex flex-col gap-6">
         <SettingsSection title={t("settings.general.appearance")}>
           <SettingRow
             label={t("settings.general.language")}

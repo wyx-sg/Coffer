@@ -16,6 +16,8 @@ import { translateApiError } from "@/lib/api/errors";
 import { fsApi } from "@/lib/api/fs";
 import { syncApi, type ConflictAnswer, type JoinChoice } from "@/lib/api/sync";
 import { syncKey } from "@/lib/api/queryKeys";
+import { invalidateSync } from "@/lib/syncInvalidate";
+import { isApprovalWait } from "@/lib/syncApproval";
 import { useToast } from "@/components/ui/toast";
 import { useRoundMutation } from "@/lib/hooks/useSync";
 
@@ -38,7 +40,7 @@ export function useAnswerFile() {
   return useMutation({
     mutationFn: ({ path, answer }: { path: string; answer: ConflictAnswer }) =>
       syncApi.answerFile(path, answer),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: syncKey }),
+    onSuccess: () => invalidateSync(qc),
   });
 }
 
@@ -71,7 +73,7 @@ export function useMarkMerged() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => syncApi.markMerged(),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: syncKey }),
+    onSuccess: () => invalidateSync(qc),
   });
 }
 
@@ -106,7 +108,15 @@ export function useRestoreHold() {
 
 /** What joining would do, applying nothing — asked while this machine has not joined. */
 export function useJoinPreview(enabled: boolean) {
-  return useQuery({ queryKey: syncJoinPreviewKey, queryFn: () => syncApi.joinPreview(), enabled });
+  return useQuery({
+    queryKey: syncJoinPreviewKey,
+    queryFn: () => syncApi.joinPreview(),
+    enabled,
+    // The push token can wait for approval in the desktop app: ask again when
+    // the person comes back to this window, and meanwhile every few seconds.
+    refetchOnWindowFocus: true,
+    refetchInterval: (query) => (isApprovalWait(query.state.error) ? 5_000 : false),
+  });
 }
 
 /** Join the remote, after its preview was shown. */
@@ -126,7 +136,7 @@ export function useChooseJoin() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: (choices: JoinChoice[]) => syncApi.chooseJoin(choices),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: syncKey }),
+    onSuccess: () => invalidateSync(qc),
     onError: (error) => toast.error(translateApiError(t, error)),
   });
 }

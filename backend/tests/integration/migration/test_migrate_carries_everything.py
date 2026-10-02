@@ -204,7 +204,7 @@ def test_history_rows_are_in_runs_db_keyed_to_uids(legacy: LegacyHome) -> None:
     _migrate(legacy)
     assert not legacy.db.exists()
     with sqlite3.connect(legacy.coffer / "runs.db") as conn:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0138",)
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0139",)
         assert conn.execute("SELECT id, resource_uid FROM audit_log ORDER BY id").fetchall() == [
             (1, UIDS["github"]),
             (2, UIDS["tg"]),
@@ -262,12 +262,18 @@ def test_stamps_are_stripped_and_settled_documents_recorded(legacy: LegacyHome) 
     assert set(curation) == {"notes/team/on-call.md"}, "the edited runbook is still pending"
 
 
+@pytest.mark.acceptance(
+    spec="vault-storage", scenario="the report says carried secrets wait for approval"
+)
 def test_the_report_names_links_and_the_remote(legacy: LegacyHome) -> None:
     report = _migrate(legacy)
     notes = "\n".join(report.notices)
     assert ".claude/projects/p/memory" in notes
     assert "empty branch" in notes
     assert "sync/" not in notes
+    # Carried secrets are not yet approved anywhere: say so, with a count only.
+    assert "waits once for your approval in the Coffer app" in notes
+    assert "secrets were carried over" in notes
     assert (legacy.home / ".claude/projects/p/memory").is_symlink()
 
 

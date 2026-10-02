@@ -177,6 +177,51 @@ def test_the_conversation_list_pages_by_cursor() -> None:
     set_active_token(None)
 
 
+@pytest.mark.acceptance(spec="chat", scenario="the conversation list pages by cursor")
+def test_the_conversation_list_searches_titles_and_pages_the_matches() -> None:
+    chat_svc, orchestrator = _make_services()
+    app = _build_app(chat_svc, orchestrator)
+    set_active_token(_TOKEN)
+
+    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
+        titles = ["Deploy plan", "lunch", "deploy notes", "DEPLOY 100%", "other"]
+        made = []
+        for title in titles:
+            conv_id = client.post(
+                "/api/v1/chat/conversations", json={"agent_key": "builtin"}
+            ).json()["id"]
+            client.patch(f"/api/v1/chat/conversations/{conv_id}", json={"title": title})
+            made.append(conv_id)
+        base = datetime(2026, 9, 1, tzinfo=UTC)
+        for minutes, conv_id in enumerate(made):
+            asyncio.run(chat_svc._conversations.touch(conv_id, base + timedelta(minutes=minutes)))
+
+        def get(**params: object) -> dict:
+            return client.get("/api/v1/chat/conversations", params=params).json()
+
+        first = get(q="deploy", limit=2)
+        assert [c["title"] for c in first["conversations"]] == ["DEPLOY 100%", "deploy notes"]
+        assert first["next_cursor"]
+        rest = get(q="deploy", limit=2, cursor=first["next_cursor"])
+        assert [c["title"] for c in rest["conversations"]] == ["Deploy plan"]
+        assert rest["next_cursor"] is None
+
+        # A wildcard is text, not a pattern; blank q is no filter.
+        assert [c["title"] for c in get(q="100%")["conversations"]] == ["DEPLOY 100%"]
+        assert get(q="%")["conversations"][0]["title"] == "DEPLOY 100%"
+        assert len(get(q="%")["conversations"]) == 1
+        assert len(get(q="  ")["conversations"]) == 5
+
+        # A cursor issued for one q does not page another.
+        refused = client.get(
+            "/api/v1/chat/conversations", params={"q": "lunch", "cursor": first["next_cursor"]}
+        )
+        assert refused.status_code == 400
+        assert refused.json()["error"]["code"] == "CURSOR_INVALID"
+
+    set_active_token(None)
+
+
 @pytest.mark.acceptance(spec="chat", scenario="archive and restore a conversation")
 def test_archive_and_unarchive_filter_the_list() -> None:
     chat_svc, orchestrator = _make_services()

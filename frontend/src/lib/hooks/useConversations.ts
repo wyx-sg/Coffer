@@ -14,7 +14,6 @@ import {
 import { platformName, undeliveredMessageIds } from "@/lib/chat/mirror";
 import {
   agentConfigKey,
-  archivedConversationsKey,
   conversationKey,
   conversationsKey as CONVERSATIONS_KEY,
   messagesKey,
@@ -31,28 +30,6 @@ function useConversationToastError() {
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
-
-// Conversations are not on the daemon's change feed (they are not resources),
-// so the list re-reads itself while the page is visible: a channel's new
-// conversation, a Running mark and the latest line keep up without a reload.
-const LIST_REFRESH_MS = 10_000;
-
-export function useConversations() {
-  return useQuery({
-    queryKey: CONVERSATIONS_KEY,
-    queryFn: async () => (await chatApi.listConversations(false)).conversations,
-    refetchInterval: LIST_REFRESH_MS,
-    refetchIntervalInBackground: false,
-  });
-}
-
-export function useArchivedConversations(enabled = true) {
-  return useQuery({
-    queryKey: archivedConversationsKey,
-    queryFn: async () => (await chatApi.listConversations(true)).conversations,
-    enabled,
-  });
-}
 
 export function useConversation(id: string) {
   return useQuery({
@@ -166,8 +143,8 @@ export function useDeleteConversation() {
   });
 }
 
-/** Archive (move to the archived list) or restore. Both lists are refreshed. */
-function useArchiveMutation(fn: (id: string) => Promise<Conversation>) {
+/** Archive (move to the archived list) or unarchive. Both lists are refreshed. */
+function useArchiveMutation(fn: (id: string) => Promise<Conversation>, onDone?: () => void) {
   const qc = useQueryClient();
   const onError = useConversationToastError();
   return useMutation({
@@ -175,6 +152,7 @@ function useArchiveMutation(fn: (id: string) => Promise<Conversation>) {
     onSuccess: (updated: Conversation) => {
       qc.setQueryData(conversationKey(updated.id), updated);
       void qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
+      onDone?.();
     },
     onError,
   });
@@ -185,5 +163,9 @@ export function useArchiveConversation() {
 }
 
 export function useUnarchiveConversation() {
-  return useArchiveMutation(chatApi.unarchiveConversation);
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useArchiveMutation(chatApi.unarchiveConversation, () =>
+    toast.success(t("conversations.history.unarchived")),
+  );
 }

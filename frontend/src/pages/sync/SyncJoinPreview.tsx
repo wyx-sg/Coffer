@@ -6,8 +6,10 @@
 // would do — applying nothing — and states it before the button: what comes
 // down, by area; how many files are already the same; which differ (left here
 // until a person chooses, never overwritten or pushed); what goes up; and that
-// nothing is deleted. A refused join (another layout, not a vault) shows the daemon's reason, no Join button.
-import type { ReactNode } from "react";
+// nothing is deleted. A remote at an older layout is REPLACED by this Mac's
+// vault (spec vault-sync "Replace a remote at an older layout"). A refused
+// join (a newer layout, not a vault) shows the daemon's reason, no Join button;
+// a push token still waiting for approval says so and offers Secrets.
 import { useTranslation } from "react-i18next";
 import { ArrowDown } from "lucide-react";
 
@@ -17,51 +19,19 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { JoinPreview } from "@/lib/api/sync";
 import { useJoin, useJoinPreview } from "@/lib/hooks/useSyncStop";
-import { cn } from "@/lib/utils";
+import { isApprovalWait } from "@/lib/syncApproval";
+import { SyncApprovalWait } from "./SyncApprovalWait";
+import { JoinLine } from "./SyncJoinLine";
+import { SyncReplaceLines } from "./SyncReplaceLines";
 import { areaSummary } from "./syncJoinAreas";
 import { roundMoment } from "./syncMachineTimes";
-
-function Line({
-  mark,
-  title,
-  body,
-  tone,
-  testId,
-}: {
-  mark: string;
-  title: ReactNode;
-  body?: ReactNode;
-  tone?: "warn" | "err";
-  testId?: string;
-}) {
-  return (
-    <li
-      className="flex gap-3 border-t border-border-subtle py-2.5 first:border-t-0"
-      data-testid={testId}
-    >
-      <span
-        aria-hidden
-        className={cn(
-          "w-4 shrink-0 text-center font-mono text-sm",
-          tone === "warn" ? "text-warning" : tone === "err" ? "text-danger" : "text-text-muted",
-        )}
-      >
-        {mark}
-      </span>
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-sm font-label text-text">{title}</span>
-        {body ? <span className="text-xs text-text-muted">{body}</span> : null}
-      </div>
-    </li>
-  );
-}
 
 function Lines({ preview }: { preview: JoinPreview }) {
   const { t } = useTranslation();
   const other = preview.pushed_by ?? t("sync.join.otherMacs");
   return (
     <ul className="flex flex-col" data-testid="sync-join-preview">
-      <Line
+      <JoinLine
         mark="+"
         testId="sync-join-pulled"
         title={t("sync.join.pulled", { count: preview.pulled_files })}
@@ -71,13 +41,13 @@ function Lines({ preview }: { preview: JoinPreview }) {
             : undefined
         }
       />
-      <Line
+      <JoinLine
         mark="="
         title={t("sync.join.same", { count: preview.same })}
         body={t("sync.join.sameBody")}
       />
       {preview.differ.length > 0 ? (
-        <Line
+        <JoinLine
           mark="≠"
           tone="warn"
           testId="sync-join-differ"
@@ -86,27 +56,27 @@ function Lines({ preview }: { preview: JoinPreview }) {
         />
       ) : null}
       {preview.conflicts.length > 0 ? (
-        <Line
+        <JoinLine
           mark="!"
           tone="err"
           title={t("sync.join.conflicts", { count: preview.conflicts.length })}
           body={preview.conflicts.join(", ")}
         />
       ) : null}
-      <Line
+      <JoinLine
         mark="↑"
         testId="sync-join-pushed"
         title={t("sync.join.pushed", { count: preview.pushed_files })}
         body={preview.pushed_files > 0 ? t("sync.join.pushedBody", { who: other }) : undefined}
       />
       {preview.deleted.length === 0 ? (
-        <Line
+        <JoinLine
           mark="−"
           title={t("sync.join.nothingDeleted")}
           body={t("sync.join.nothingDeletedBody")}
         />
       ) : (
-        <Line
+        <JoinLine
           mark="−"
           tone="err"
           testId="sync-join-deleted"
@@ -130,6 +100,8 @@ export function SyncJoinPreview({
   const join = useJoin();
   const data = preview.data;
   const refused = data?.refused ?? null;
+  const waiting = isApprovalWait(preview.error);
+  const replace = data?.kind === "replace";
 
   return (
     <Card className="max-w-[680px]" data-testid="sync-join">
@@ -150,7 +122,7 @@ export function SyncJoinPreview({
                     : "—",
                 })
               : null}{" "}
-            {t("sync.join.lead")}
+            {replace ? t("sync.join.replaceLead") : t("sync.join.lead")}
           </p>
         </div>
       </div>
@@ -160,6 +132,8 @@ export function SyncJoinPreview({
             <Skeleton className="h-8 w-full" />
             <Skeleton className="h-8 w-full" />
           </div>
+        ) : waiting ? (
+          <SyncApprovalWait onRetry={() => void preview.refetch()} />
         ) : preview.error ? (
           <LoadError
             className="py-2"
@@ -167,7 +141,11 @@ export function SyncJoinPreview({
             onRetry={() => void preview.refetch()}
           />
         ) : data ? (
-          <Lines preview={data} />
+          replace ? (
+            <SyncReplaceLines preview={data} />
+          ) : (
+            <Lines preview={data} />
+          )
         ) : null}
         {refused ? (
           <p className="py-2 text-sm text-danger" role="alert">
@@ -182,7 +160,13 @@ export function SyncJoinPreview({
           loading={join.isPending}
           onClick={() => join.mutate()}
         >
-          {join.isPending ? t("sync.join.joining") : t("sync.join.join")}
+          {replace
+            ? join.isPending
+              ? t("sync.join.replacing")
+              : t("sync.join.replace")
+            : join.isPending
+              ? t("sync.join.joining")
+              : t("sync.join.join")}
         </Button>
         <Button
           type="button"

@@ -206,7 +206,7 @@ describe("AgentOverviewTab — connection card", () => {
     expect(acts.onConnection).toHaveBeenCalledWith("disconnect");
   });
 
-  test("not connected: names the files it would write and offers Connect to Coffer", async () => {
+  test("not connected: names the files it would write and offers Connect", async () => {
     world.connection = {
       state: "disconnected",
       parts: CONNECTED.parts.map((p) => ({ ...p, installed: false, detail: null })),
@@ -215,7 +215,7 @@ describe("AgentOverviewTab — connection card", () => {
     expect(await screen.findByText("Not connected")).toBeInTheDocument();
     expect(screen.getByText(/You review the exact lines/)).toBeInTheDocument();
     expect(screen.getAllByText("Missing")).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: "Connect to Coffer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
     expect(acts.onConnection).toHaveBeenCalledWith("connect");
   });
 
@@ -230,13 +230,13 @@ describe("AgentOverviewTab — connection card", () => {
     expect(acts.onConnection).toHaveBeenCalledWith("connect");
   });
 
-  test("disabled: parts read Idle, MCP and Skills serve nothing, offers Enable", async () => {
+  test("disabled: parts read Idle, MCP and Skills serve nothing, offers Turn on", async () => {
     world.enabled = false;
     const acts = renderTab();
-    expect(await screen.findByText("Disabled")).toBeInTheDocument();
+    expect(await screen.findByText("Off")).toBeInTheDocument();
     expect(screen.getAllByText("Idle")).toHaveLength(2);
-    expect(await screen.findAllByText(/None while disabled/)).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: "Enable" }));
+    expect(await screen.findAllByText(/None while off/)).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Turn on" }));
     expect(acts.onEnable).toHaveBeenCalled();
   });
 
@@ -310,10 +310,10 @@ describe("AgentOverviewTab — summary, model, details, sessions", () => {
     },
   );
 
-  test("Codex says Effort too, and a null effort reads Model default", async () => {
+  test("Codex says Default effort too, and a null effort reads Chosen by the agent", async () => {
     renderTab({ agent: { type: "codex", effort: null }, typeRow: { type: "codex" } });
-    expect(await screen.findByText("Effort")).toBeInTheDocument();
-    expect(screen.getByText("Model default")).toBeInTheDocument();
+    expect(await screen.findByText("Default effort")).toBeInTheDocument();
+    expect(screen.getAllByText("Chosen by the agent").length).toBeGreaterThan(0);
   });
 
   test("details carry type, config directory, uid and registered date", async () => {
@@ -329,7 +329,7 @@ describe("AgentOverviewTab — summary, model, details, sessions", () => {
     const row = await screen.findByRole("link", { name: /Fix SeaTalk reconnect/ });
     expect(row).toHaveAttribute("href", "/agents/claude_code/sessions?session=%2Fs%2F1.jsonl");
     expect(within(row).getByText("5h")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "All 412" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "All" })).toHaveAttribute(
       "href",
       "/agents/claude_code/sessions",
     );

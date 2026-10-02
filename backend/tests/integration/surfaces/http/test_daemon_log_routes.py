@@ -17,7 +17,7 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from coffer.surfaces.http import daemon_routes
+from coffer.surfaces.http import daemon_log_routes
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.daemon_routes import router as daemon_router
@@ -39,7 +39,7 @@ def _write_log(monkeypatch, tmp_path: Path, lines: list[str] | None) -> None:
     log_dir.mkdir(exist_ok=True)
     if lines is not None:
         (log_dir / "daemon.log").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    monkeypatch.setattr(daemon_routes, "log_dir", lambda: log_dir)
+    monkeypatch.setattr(daemon_log_routes, "log_dir", lambda: log_dir)
 
 
 def _client(*, token: str | None = "test-token") -> AsyncClient:
@@ -298,7 +298,10 @@ async def test_a_missing_log_file_is_an_empty_list_not_a_500(monkeypatch, tmp_pa
     async with _client() as c:
         r = await c.get("/api/v1/daemon/logs")
     assert r.status_code == 200
-    assert r.json() == {"records": [], "path": str(tmp_path / "logs" / "daemon.log")}
+    body = r.json()
+    assert body["records"] == []
+    assert body["next_cursor"] is None
+    assert body["path"] == str(tmp_path / "logs" / "daemon.log")
 
 
 @pytest.mark.asyncio
@@ -363,3 +366,113 @@ async def test_no_writer_left_in_the_file_speaks_three_letter_levels(monkeypatch
     assert record["timestamp"] is None
     assert record["level"] is None
     assert record["event"] == line or record["record"].get("raw") == line
+
+
+# --- paging: a page reads a window, and the cursor continues it ---
+
+
+@pytest.mark.asyncio
+async def test_pages_continue_by_cursor_without_repeat_or_gap(monkeypatch, tmp_path) -> None:
+    now = datetime.now(tz=UTC)
+    _write_log(
+        monkeypatch,
+        tmp_path,
+        [_json_line("info", f"line-{n}", at=now - timedelta(seconds=300 - n)) for n in range(300)],
+    )
+    seen: list[str] = []
+    async with _client() as c:
+        cursor = None
+        for _ in range(20):
+            params = {"limit": 40, **({"cursor": cursor} if cursor else {})}
+            body = (await c.get("/api/v1/daemon/logs", params=params)).json()
+            seen += [rec["event"] for rec in body["records"]]
+            cursor = body["next_cursor"]
+            if cursor is None:
+                break
+    assert seen == [f"line-{n}" for n in reversed(range(300))]
+
+
+@pytest.mark.asyncio
+async def test_a_cursor_for_other_filters_is_refused(monkeypatch, tmp_path) -> None:
+    _write_log(monkeypatch, tmp_path, [_json_line("info", f"l{n}") for n in range(50)])
+    async with _client() as c:
+        first = (await c.get("/api/v1/daemon/logs", params={"limit": 5})).json()
+        assert first["next_cursor"]
+        wrong = await c.get(
+            "/api/v1/daemon/logs",
+            params={"limit": 5, "cursor": first["next_cursor"], "level": "error"},
+        )
+        garbage = await c.get("/api/v1/daemon/logs", params={"cursor": "not-a-cursor"})
+    assert wrong.status_code == 400 and wrong.json()["error"]["code"] == "CURSOR_INVALID"
+    assert garbage.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_q_searches_the_message_the_logger_and_a_folded_traceback(
+    monkeypatch, tmp_path
+) -> None:
+    _write_log(
+        monkeypatch,
+        tmp_path,
+        [
+            _json_line("info", "alpha started"),
+            "Traceback (most recent call last):",
+            "ValueError: kaboom-in-a-trace",
+            _json_line("warning", "beta slow"),
+        ],
+    )
+    async with _client() as c:
+        by_message = (await c.get("/api/v1/daemon/logs", params={"q": "ALPHA"})).json()
+        by_trace = (await c.get("/api/v1/daemon/logs", params={"q": "kaboom"})).json()
+    assert [r["event"] for r in by_message["records"]] == ["alpha started"]
+    assert len(by_trace["records"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_with_total_counts_the_recent_tail_and_is_off_by_default(
+    monkeypatch, tmp_path
+) -> None:
+    _write_log(
+        monkeypatch,
+        tmp_path,
+        [_json_line("warning" if n % 2 else "info", f"l{n}") for n in range(20)],
+    )
+    async with _client() as c:
+        plain = (await c.get("/api/v1/daemon/logs", params={"level": "warning"})).json()
+        counted = (
+            await c.get(
+                "/api/v1/daemon/logs", params={"level": "warning", "limit": 1, "with_total": True}
+            )
+        ).json()
+    assert plain["total"] is None
+    assert counted["total"] == 10 and counted["total_is_floor"] is False
+    assert len(counted["records"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_big_log_is_read_by_window_not_whole(monkeypatch, tmp_path) -> None:
+    from coffer.application import log_page
+
+    now = datetime.now(tz=UTC)
+    _write_log(
+        monkeypatch,
+        tmp_path,
+        [_json_line("info", f"n{n}" + "x" * 200, at=now) for n in range(20_000)],
+    )
+    read: list[int] = []
+    real = log_page._read
+    monkeypatch.setattr(log_page, "_read", lambda p, a, b: (read.append(b - a), real(p, a, b))[1])
+    async with _client() as c:
+        body = (await c.get("/api/v1/daemon/logs", params={"limit": 30})).json()
+    assert len(body["records"]) == 30
+    assert sum(read) <= log_page.FIRST_WINDOW
+
+
+@pytest.mark.asyncio
+async def test_every_record_carries_the_byte_offset_it_starts_at(monkeypatch, tmp_path) -> None:
+    lines = [_json_line("info", f"l{n}") for n in range(5)]
+    _write_log(monkeypatch, tmp_path, lines)
+    async with _client() as c:
+        body = (await c.get("/api/v1/daemon/logs")).json()
+    expected = [sum(len(x) + 1 for x in lines[:n]) for n in reversed(range(5))]
+    assert [rec["offset"] for rec in body["records"]] == expected

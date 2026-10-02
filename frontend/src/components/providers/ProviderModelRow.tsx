@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { Switch } from "@/components/ui/switch";
 import type { Modality } from "@/lib/api/providers";
 import { ModalitySelect } from "./ModalitySelect";
@@ -31,25 +32,28 @@ export function ProviderModelRow({
 }: Props) {
   const { t } = useTranslation();
   return (
-    <div className="flex min-h-11 items-center gap-3 px-3 py-1.5 [&+&]:border-t [&+&]:border-border-subtle">
+    <div
+      data-testid="model-row"
+      className="grid min-h-row grid-cols-[auto_minmax(0,1fr)_auto_128px] items-center gap-3 py-2"
+    >
       <Switch
         checked={on}
         onCheckedChange={onToggle}
         disabled={disabled}
         aria-label={t("providers.models.offered", { id })}
       />
-      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        <span className="truncate font-mono text-xs text-text">{id}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        <TruncatedText text={id} mono className="text-xs text-text" />
         {tags.map((tag) => (
           <span
             key={tag}
-            className="inline-flex h-[18px] items-center whitespace-nowrap rounded-sm bg-chip px-1.5 text-2xs font-label text-text-muted"
+            className="inline-flex h-[18px] shrink-0 items-center whitespace-nowrap rounded-sm bg-chip px-1.5 text-2xs font-label text-text-muted"
           >
             {tag}
           </span>
         ))}
       </span>
-      {price ? <span className="shrink-0">{price}</span> : null}
+      <span className="justify-self-end">{price}</span>
       <ModalitySelect value={modality} onChange={onModality} disabled={disabled} label={id} />
     </div>
   );

@@ -89,10 +89,10 @@ acceptance(
     await expect(nav.getByRole("link")).toHaveCount(15);
 
     // Settings is not an entry: a labelled row sits at the bottom of the
-    // sidebar, above the daemon status.
+    // sidebar, carrying the daemon status.
     await expect(nav.getByRole("link", { name: /^Settings$/i })).toHaveCount(0);
     await expect(page.getByTestId("sidebar-settings")).toHaveText("Settings");
-    await expect(page.getByTestId("sidebar-daemon")).toHaveAccessibleName(
+    await expect(page.getByTestId("sidebar-settings")).toHaveAccessibleName(
       /Daemon running on port \d+/,
     );
 
@@ -130,7 +130,7 @@ acceptance(
     // restart the daemon, and the retries clear the state on their own.
     await expect(banner.getByText("coffer daemon start")).toBeVisible();
     // The footer agrees with the banner: it reads offline, never running.
-    await expect(page.getByTestId("sidebar-daemon")).toHaveAccessibleName(
+    await expect(page.getByTestId("sidebar-settings")).toHaveAccessibleName(
       /Daemon offline/,
     );
   },

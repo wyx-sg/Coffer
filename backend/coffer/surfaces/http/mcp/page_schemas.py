@@ -114,6 +114,26 @@ class McpServerLogOut(BaseModel):
     truncated: bool = False
 
 
+class ToolExposureOut(BaseModel):
+    """One tool's exposure: what the person set, what agents get, and why."""
+
+    tool: str
+    #: The person's setting: ``auto`` (usage decides), ``listed`` (pinned) or ``search``.
+    mode: Literal["auto", "listed", "search"]
+    #: What agents get now: listed in ``tools/list`` or reached through search.
+    effective: Literal["listed", "search"]
+    reason: Literal["pinned", "search_only", "within_budget", "top_by_use", "low_use"]
+
+
+class ToolExposureBody(BaseModel):
+    mode: Literal["auto", "listed", "search"]
+
+
+class ToolExposureBatchBody(BaseModel):
+    tools: list[str] = Field(min_length=1)
+    mode: Literal["auto", "listed", "search"]
+
+
 class ToolTieringOut(BaseModel):
     """Which of this server's tools agents see listed and which only through search.
 
@@ -131,3 +151,5 @@ class ToolTieringOut(BaseModel):
     tool_count: int
     listed: list[str] = Field(default_factory=list)
     behind_search: list[str] = Field(default_factory=list)
+    #: This server's enabled tools with their exposure and the reason for it.
+    tools: list[ToolExposureOut] = Field(default_factory=list)

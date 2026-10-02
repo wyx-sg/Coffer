@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 
+import { Section } from "@/components/Section";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,11 +29,8 @@ export function KnowledgeDeleteCollection({ collection }: { collection: Collecti
   const [typed, setTyped] = useState("");
 
   return (
-    <section className="flex flex-col gap-2">
-      <h3 className="flex min-h-[26px] items-center text-sm font-semibold">
-        {t("knowledge.deleteCollection.zone")}
-      </h3>
-      <div className="flex min-h-14 items-center gap-6 rounded-lg border border-border bg-surface-raised px-4 py-2.5">
+    <Section title={t("knowledge.deleteCollection.zone")} gap="snug">
+      <div className="flex min-h-14 items-center gap-6">
         <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
           <span className="text-sm font-medium">{t("knowledge.deleteCollection.confirm")}</span>
           <span className="text-xs leading-[1.45] text-text-subtle">
@@ -86,6 +84,6 @@ export function KnowledgeDeleteCollection({ collection }: { collection: Collecti
           />
         </label>
       </ConfirmDialog>
-    </section>
+    </Section>
   );
 }

@@ -243,6 +243,13 @@ def _notices(home: Path, state: LegacyState) -> list[str]:
             "empty branch or remote, and join every other machine to it as new after it "
             "migrates"
         )
+    if state.secrets:
+        notes.append(
+            f"{len(state.secrets)} secrets were carried over, but a secret has to be approved "
+            "before it goes to a destination (a provider, MCP server, channel or sync remote): "
+            "its first use at each one waits once for your approval in the Coffer app, and "
+            "until then that provider, server, channel or remote stays idle"
+        )
     return notes
 
 

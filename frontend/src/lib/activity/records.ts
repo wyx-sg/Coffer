@@ -61,25 +61,19 @@ function borrowedTimestamp(records: readonly DaemonLogRecord[], index: number): 
 }
 
 /**
- * The daemon log tail as records. The route gives a line no id, so its key is
- * its time and message plus how many identical lines precede it in the same
- * tail — stable across two reads of the same file, so a poll recognises what
- * it has already shown.
+ * One page of the daemon log as records. The route names where each line
+ * starts in the file (`offset`), which is its identity: the file only grows at
+ * its end, so the same line has the same key on every read, whichever page it
+ * arrives on. A line with no time of its own (a traceback's header) borrows
+ * from the nearest record in the page, as above.
  */
 export function fromDaemonTail(records: readonly DaemonLogRecord[]): ActivityRecord[] {
-  const seen = new Map<string, number>();
-  const out: ActivityRecord[] = [];
-  // Count occurrences oldest-first, so a new line at the head does not shift
-  // the keys of the lines below it.
-  for (let i = records.length - 1; i >= 0; i -= 1) {
-    const log = records[i];
-    const at = log.timestamp || borrowedTimestamp(records, i);
-    const base = `${at ?? ""}|${log.event ?? ""}|${String(log.record?.raw ?? "")}`;
-    const n = seen.get(base) ?? 0;
-    seen.set(base, n + 1);
-    out.push({ source: "daemon", key: `daemon:${base}|${n}`, at, log });
-  }
-  return out.reverse();
+  return records.map((log, i) => ({
+    source: "daemon",
+    key: `daemon:${log.offset}`,
+    at: log.timestamp || borrowedTimestamp(records, i),
+    log,
+  }));
 }
 
 function timeMs(at: string | null): number {

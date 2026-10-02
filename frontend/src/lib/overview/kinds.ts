@@ -9,6 +9,7 @@ import {
   Boxes,
   Brain,
   CircleDot,
+  KeyRound,
   Library,
   Radio,
   RefreshCw,
@@ -39,6 +40,7 @@ const KINDS: Record<string, KindMeta> = {
   sync: { labelKey: "overview.kinds.sync", icon: RefreshCw, identifier: false },
   reconcile: { labelKey: "overview.kinds.reconcile", icon: Workflow, identifier: false },
   cli: { labelKey: "overview.kinds.cli", icon: SquareTerminal, identifier: true },
+  secret: { labelKey: "overview.kinds.secret", icon: KeyRound, identifier: false },
   custom_tool: { labelKey: "overview.kinds.custom_tool", icon: Wrench, identifier: true },
 };
 

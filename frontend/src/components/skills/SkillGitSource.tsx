@@ -13,6 +13,7 @@ import { useState, type ReactNode } from "react";
 import { Pencil, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { Section } from "@/components/Section";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import type { GitImportSource, SkillOut, SkillSourceStatus } from "@/lib/api/skills";
@@ -86,25 +87,30 @@ function GitSourceBlock({ skill, source }: { skill: SkillOut; source: GitImportS
   const folder = folderLabel(source.subpath);
 
   return (
-    <section aria-label={t("skillSources.source.title")} className="flex min-w-0 flex-col">
-      <div className="flex min-h-9 items-center gap-1">
-        <h3 className="text-sm font-semibold text-text">{t("skillSources.source.title")}</h3>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="ml-auto"
-          disabled={checking}
-          onClick={() => check.mutate(skill.uid)}
-        >
-          <RefreshCw aria-hidden className={checking ? "animate-spin" : undefined} />
-          {checking ? t("skillSources.source.checking") : t("skillSources.source.checkNow")}
-        </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={() => setChanging(true)}>
-          <Pencil aria-hidden />
-          {t("skills.source.change")}
-        </Button>
-      </div>
+    <Section
+      title={t("skillSources.source.title")}
+      gap="snug"
+      labelled
+      className="min-w-0"
+      actions={
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={checking}
+            onClick={() => check.mutate(skill.uid)}
+          >
+            <RefreshCw aria-hidden className={checking ? "animate-spin" : undefined} />
+            {checking ? t("skillSources.source.checking") : t("skillSources.source.checkNow")}
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setChanging(true)}>
+            <Pencil aria-hidden />
+            {t("skills.source.change")}
+          </Button>
+        </>
+      }
+    >
       <div className="flex flex-col border-b border-border-subtle">
         <Row label={t("skillSources.source.repository")}>
           <span className="min-w-0 break-all font-mono text-xs">{source.url}</span>
@@ -128,7 +134,7 @@ function GitSourceBlock({ skill, source }: { skill: SkillOut; source: GitImportS
       </div>
 
       <SkillChangeSourceDialog skill={skill} open={changing} onOpenChange={setChanging} />
-    </section>
+    </Section>
   );
 }
 

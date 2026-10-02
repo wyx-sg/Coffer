@@ -173,3 +173,34 @@ async def test_total_follows_every_filter(env: _Env) -> None:
         "next_cursor": None,
         "total": 0,
     }
+
+
+async def test_q_searches_server_side_and_pages_the_matches(env: _Env) -> None:
+    """Free text is applied by the database: the first page is the first page of
+    what matches, with the matches' own count, and ``%`` / ``_`` match themselves."""
+    await env.record("skill_bound", _T0)
+    await env.record("resource_enabled", _T0 + timedelta(minutes=1))
+    await env.record("skill_unbound", _T0 + timedelta(minutes=2))
+    await env.record("token_rotated", _T0 + timedelta(minutes=3))
+
+    first = (await env.read(q="SKILL", limit=1)).json()
+    second = (await env.read(q="SKILL", limit=1, cursor=first["next_cursor"])).json()
+    assert _events(first) == ["skill_unbound"] and first["total"] == 2
+    assert _events(second) == ["skill_bound"] and second["next_cursor"] is None
+    # An underscore is not a wildcard: "skill_b" is one row, not "skill" + any char + "b".
+    assert _events((await env.read(q="skill_b")).json()) == ["skill_bound"]
+    assert (await env.read(q="skill%")).json()["total"] == 0
+    # A cursor issued for one query is refused for another.
+    wrong = await env.read(q="token", limit=1, cursor=first["next_cursor"])
+    assert wrong.status_code == 400
+
+
+async def test_q_type_adds_events_the_client_matched_by_their_wording(env: _Env) -> None:
+    await env.record("skill_unbound", _T0)
+    await env.record("token_rotated", _T0 + timedelta(minutes=1))
+    await env.record("resource_enabled", _T0 + timedelta(minutes=2))
+
+    body = (await env.read(q="解绑", q_type=["skill_unbound"])).json()
+    assert _events(body) == ["skill_unbound"] and body["total"] == 1
+    # Without a text there is nothing to widen.
+    assert (await env.read(q_type=["skill_unbound"])).json()["total"] == 3

@@ -205,13 +205,17 @@ export function useSkillUpdateCompare(uid: string, stagingId: string | null, pat
 
 // ----- agents' copies (spec skill-manager "Report skill drift on request") -----
 
-/** The read-only drift report (Check copies): read once when the page opens,
- *  so a row can say "Folder in the way in Codex" without a click, and again on
- *  Check copies / Check again (`refetch`). Never polled. */
+/** The read-only drift report (Check copies): read only when the person asks
+ *  (Check copies / Check again call `refetch`), never when a page opens and
+ *  never polled. A row names a folder in the way once a check has found it. */
 export function useSkillCopies() {
   return useQuery({
     queryKey: skillCopiesKey,
     queryFn: () => skillsApi.verify(),
+    // Reading every agent's skill folders is real work: it runs only when the
+    // person asks (Check copies / Check again call `refetch`), never on opening
+    // a page. What a check found stays cached for the session.
+    enabled: false,
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });

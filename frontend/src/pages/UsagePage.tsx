@@ -6,6 +6,7 @@
 // them. The header's Refresh re-reads everything and asks Codex's app-server
 // for fresh quota; Claude Code's row re-reads its own. The ⋯ beside the
 // filters exports the current range and filters as CSV.
+import { SectionStack } from "@/components/Section";
 import { useState } from "react";
 import { RotateCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -131,30 +132,32 @@ export function UsagePage() {
           </div>
         }
       />
-      <QuotaSection
-        data={quota.data}
-        isLoading={quota.isLoading}
-        isError={quota.isError}
-        onRetryLoad={() => void quota.refetch()}
-        refresh={{ reason, triedAt, pending: refresh.isPending, onRetry: askCodex }}
-        reread={{ pending: quota.isFetching, onReread: () => void quota.refetch() }}
-        now={now}
-        apiKeyVendorFor={apiKeyVendorFor}
-        viaApiKey={viaApiKey}
-      />
-      <UsageSection
-        query={query}
-        onQueryChange={setQuery}
-        detailDays={detailDays}
-        summary={summary}
-        byDay={byDay}
-        neverUsed={ever.data?.totals.requests === 0}
-        agentTypes={(quota.data?.agents ?? []).map((a) => a.agent_type)}
-        providers={proxied.map((p) => ({ uid: p.uid, label: p.title || p.name }))}
-        subscriptionAgents={subscriptionAgents}
-        onExport={() => exportCsv.mutate(query)}
-        exporting={exportCsv.isPending}
-      />
+      <SectionStack>
+        <QuotaSection
+          data={quota.data}
+          isLoading={quota.isLoading}
+          isError={quota.isError}
+          onRetryLoad={() => void quota.refetch()}
+          refresh={{ reason, triedAt, pending: refresh.isPending, onRetry: askCodex }}
+          reread={{ pending: quota.isFetching, onReread: () => void quota.refetch() }}
+          now={now}
+          apiKeyVendorFor={apiKeyVendorFor}
+          viaApiKey={viaApiKey}
+        />
+        <UsageSection
+          query={query}
+          onQueryChange={setQuery}
+          detailDays={detailDays}
+          summary={summary}
+          byDay={byDay}
+          neverUsed={ever.data?.totals.requests === 0}
+          agentTypes={(quota.data?.agents ?? []).map((a) => a.agent_type)}
+          providers={proxied.map((p) => ({ uid: p.uid, label: p.title || p.name }))}
+          subscriptionAgents={subscriptionAgents}
+          onExport={() => exportCsv.mutate(query)}
+          exporting={exportCsv.isPending}
+        />
+      </SectionStack>
     </div>
   );
 }

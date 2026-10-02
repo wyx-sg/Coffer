@@ -91,6 +91,7 @@ class SyncRunListOut(BaseModel):
 
     rounds: list[RoundOut]
     total: int
+    next_cursor: str | None = None
 
 
 def _url(value: str) -> str:
@@ -210,6 +211,7 @@ class ProblemOut(BaseModel):
     kind: Literal[
         "unreachable",
         "auth_failed",
+        "waiting_approval",
         "push_failed",
         "plaintext_found",
         "cloud_folder",

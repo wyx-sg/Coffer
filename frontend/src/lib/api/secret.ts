@@ -16,6 +16,9 @@ type Schemas = components["schemas"];
 /** A change waiting for a present human in the desktop app. */
 export type Approval = Schemas["ApprovalOut"];
 
+/** What happened to one approval in a batch: approved, rejected, or skipped with why. */
+export type ApprovalBatchResult = Schemas["BatchResultOut"];
+
 /** One stored or cited ref: presence and what uses it, never a value. */
 export type SecretRef = Schemas["SecretRefOut"];
 /** The 202 answer to a write whose new value waits for approval. */
@@ -51,8 +54,19 @@ export const secretsApi = {
         params: { path: { approval_id: id } },
       }),
     ),
+  /** Refuse several at once. Needs no presence: refusing only narrows what is sent. */
+  rejectApprovals: (ids: string[]) =>
+    unwrap(getApiClient().POST("/secrets/approvals/reject", { body: { ids } })),
   /** Whether the approval requirement is on, and the approval that would switch it off. */
   secretBoundary: () => unwrap(getApiClient().GET("/settings/secret-boundary")),
+  /** Turn the approval requirement on (answers at once) or ask to turn it off (the answer
+   *  names the approval a present human must apply in the desktop app). */
+  setSecretBoundary: (requireApproval: boolean) =>
+    unwrap(
+      getApiClient().PUT("/settings/secret-boundary", {
+        body: { require_approval: requireApproval },
+      }),
+    ),
   /** Refuse one. Needs no presence: refusing only narrows what is sent. */
   rejectApproval: (id: string) =>
     unwrap(

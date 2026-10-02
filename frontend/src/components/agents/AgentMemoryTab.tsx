@@ -10,11 +10,15 @@
 // A store is a directory, so a row opens its own page (a file tree and a
 // read-only preview, where the open / reveal actions live) — the table has no
 // per-row actions.
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Brain, ChevronRight } from "lucide-react";
 
 import { DataTable, type Column } from "@/components/DataTable";
+import { TruncatedPath, TruncatedText } from "@/components/ui/truncated-text";
+import { SearchInput } from "@/components/SearchInput";
+import { Section } from "@/components/Section";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
@@ -40,7 +44,19 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
   const navigate = useNavigate();
   const native = useAgentNativeMemory(agent.uid);
   const agentName = agentTypeLabel(agent.type);
-  const stores = native.data?.items ?? [];
+  const [query, setQuery] = useState("");
+  // A store with no memory in it (a scratch project the agent once ran in) is not
+  // worth a row; the rest are searched by project name or path.
+  const all = useMemo(
+    () => (native.data?.items ?? []).filter((s) => s.item_count > 0),
+    [native.data],
+  );
+  const stores = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q
+      ? all.filter((s) => `${projectLabel(s)} ${s.memory_dir}`.toLowerCase().includes(q))
+      : all;
+  }, [all, query]);
 
   if (native.error) {
     return (
@@ -57,7 +73,7 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
       />
     );
   }
-  if (!native.isPending && stores.length === 0) {
+  if (!native.isPending && all.length === 0) {
     return (
       <EmptyState
         icon={Brain}
@@ -74,41 +90,49 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
     {
       key: "project",
       header: t("agents.memoryTab.colProject"),
-      cell: (s) => <span className="break-all text-sm text-text">{projectLabel(s)}</span>,
+      className: "w-[34%]",
+      cell: (s) => <TruncatedText text={projectLabel(s)} className="text-sm text-text" />,
     },
     {
       key: "path",
       header: t("agents.memoryTab.colPath"),
       cell: (s) => (
-        <span className="break-all font-mono text-xs text-text-muted">
-          {abbreviateHomePath(s.memory_dir)}
-        </span>
+        <TruncatedPath
+          text={abbreviateHomePath(s.memory_dir)}
+          className="text-xs text-text-muted"
+        />
       ),
     },
     {
       key: "items",
       header: t("agents.memoryTab.colItems"),
-      className: "whitespace-nowrap text-right tabular-nums",
+      className: "w-[80px] whitespace-nowrap text-right tabular-nums",
       cell: (s) => <span className="text-text-muted">{s.item_count}</span>,
     },
     {
       key: "open",
       header: <span className="sr-only">{t("agents.memoryTab.open")}</span>,
-      className: "w-6",
+      className: "w-10",
       cell: () => <ChevronRight className="size-4 text-text-subtle" aria-hidden />,
     },
   ];
 
   return (
-    <div className="flex flex-col gap-3.5">
-      <div className="space-y-1">
-        <h3 className="text-sm font-medium text-text">
-          {t("agents.memoryTab.title")}
-          <span className="text-text-muted">{` · ${stores.length}`}</span>
-        </h3>
-        <p className="text-xs text-text-muted">{t("agents.memoryTab.subtitle")}</p>
-      </div>
+    <Section
+      title={t("agents.memoryTab.title")}
+      help={t("agents.memoryTab.subtitle")}
+      actions={
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder={t("agents.memoryTab.search")}
+          ariaLabel={t("agents.memoryTab.search")}
+          className="w-64"
+        />
+      }
+    >
       <DataTable
+        fixed
         rows={stores}
         columns={columns}
         isLoading={native.isPending}
@@ -117,8 +141,8 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
         onRowClick={(s) =>
           navigate(agentMemoryStorePath(agent.type, s.memory_dir, s.path ?? s.project))
         }
-        emptyMessage={t("agents.memoryTab.emptyTitle", { agent: agentName })}
+        emptyMessage={t("agents.memoryTab.noMatch")}
       />
-    </div>
+    </Section>
   );
 }

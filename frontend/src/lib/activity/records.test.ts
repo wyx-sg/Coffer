@@ -68,39 +68,35 @@ function audit(overrides: Partial<AuditEntry> & { id: number }): AuditEntry {
 const f = (patch: Partial<ActivityFilters>): ActivityFilters => ({ ...DEFAULT_FILTERS, ...patch });
 
 describe("fromDaemonTail", () => {
+  const line = (patch: Partial<DaemonLogRecord>): DaemonLogRecord => ({
+    timestamp: null,
+    level: null,
+    event: null,
+    offset: 0,
+    record: {},
+    ...patch,
+  });
+
   test("an undated line borrows the time of the record it belongs to", () => {
-    const tail: DaemonLogRecord[] = [
-      { timestamp: null, level: null, event: null, record: { raw: "Traceback" } },
-      {
-        timestamp: "2026-09-29T14:00:00Z",
-        level: "error",
-        event: "boom",
-        record: { event: "boom" },
-      },
-    ];
-    const rows = fromDaemonTail(tail);
+    const rows = fromDaemonTail([
+      line({ offset: 40, record: { raw: "Traceback" } }),
+      line({ offset: 0, timestamp: "2026-09-29T14:00:00Z", level: "error", event: "boom" }),
+    ]);
     expect(rows[0].at).toBe("2026-09-29T14:00:00Z");
   });
 
   test("a line with nothing to borrow keeps no time", () => {
-    const rows = fromDaemonTail([
-      { timestamp: null, level: null, event: null, record: { raw: "x" } },
-    ]);
-    expect(rows[0].at).toBeNull();
+    expect(fromDaemonTail([line({ record: { raw: "x" } })])[0].at).toBeNull();
   });
 
-  test("keys stay the same when a new line arrives at the head", () => {
-    const older: DaemonLogRecord = {
-      timestamp: "2026-09-29T14:00:00Z",
-      level: "info",
-      event: "tick",
-      record: {},
-    };
-    const first = fromDaemonTail([older, older]).map((r) => r.key);
-    const newer: DaemonLogRecord = { ...older, timestamp: "2026-09-29T14:01:00Z" };
-    const second = fromDaemonTail([newer, older, older]).map((r) => r.key);
-    expect(second.slice(1)).toEqual(first);
-    expect(new Set(first).size).toBe(2);
+  test("a line's key is where it starts in the file: the same on every read and page", () => {
+    const same = { timestamp: "2026-09-29T14:00:00Z", event: "tick" };
+    const first = fromDaemonTail([line({ ...same, offset: 100 }), line({ ...same, offset: 50 })]);
+    // A new line at the head, and the page boundary falling elsewhere.
+    const second = fromDaemonTail([line({ ...same, offset: 150 }), line({ ...same, offset: 100 })]);
+    expect(first.map((r) => r.key)).toEqual(["daemon:100", "daemon:50"]);
+    expect(second[1].key).toBe(first[0].key);
+    expect(new Set(first.map((r) => r.key)).size).toBe(2);
   });
 });
 
@@ -137,10 +133,9 @@ describe("sourcesFor", () => {
 });
 
 describe("matchesFilters", () => {
-  test("free text matches the server and tool a call shows", () => {
+  test("free text is the routes' job, not this predicate's", () => {
     const r = fromCall(call());
-    expect(matchesFilters(r, "mcp", f({ search: "github.search" }), ctx)).toBe(true);
-    expect(matchesFilters(r, "mcp", f({ search: "linear" }), ctx)).toBe(false);
+    expect(matchesFilters(r, "mcp", f({ search: "linear" }), ctx)).toBe(true);
   });
 
   test("an agent filter keeps that agent's calls and the changes it made", () => {

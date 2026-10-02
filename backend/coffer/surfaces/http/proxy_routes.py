@@ -33,6 +33,11 @@ class ProxyStatusOut(BaseModel):
     last_error: str | None
     #: The revision of the state last pushed to it.
     revision: int | None
+    #: Consecutive failed attempts to start it (0 while it is up, or idle
+    #: because no agent is routed through it).
+    consecutive_failures: int
+    #: Starting it has failed repeatedly; the daemon retries on a slow backoff.
+    failing: bool
 
 
 class ProxyTokenOut(BaseModel):

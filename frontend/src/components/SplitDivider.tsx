@@ -1,15 +1,25 @@
 // src/components/SplitDivider.tsx — the draggable, keyboard-operable divider between two panes.
 //
-// Board 1.1.21: a 1px hairline in the border colour with an invisible 8px hit
+// Board 1.1.21: a 1px hairline in the border colour with an invisible 12px hit
 // area centred on it; on hover and while dragging a 2px accent line and the
 // col-resize cursor; on keyboard focus the accent line plus the focus ring.
 // It is the divider only — the caller owns the width (usually through
 // `useResizableWidth`) and places it between any two panes, so the app
 // sidebar uses it on its own and `SplitView` uses it for list/detail.
 //
+// With `onPreview` a drag is cheap: every pointer move reports the clamped
+// width there (the caller moves its pane directly, no React render) and
+// `onChange` fires once, with the final width, when the drag ends. Without it
+// `onChange` fires on every move. Keyboard steps always use `onChange`.
+//
 // Behaviour: drag with pointer events (captured, so the drag follows the
 // pointer outside the line); ← / → move by `KEYBOARD_STEP`, Home / End jump to
 // the bounds; double-click resets. Every value it emits is clamped.
+//
+// Folding is by dragging, not by a button: with `onCollapse`, pulling the
+// divider `COLLAPSE_SLACK` past the minimum and letting go folds the pane away
+// (← at the minimum does too); while `collapsed` the divider sits at the edge
+// and pulling it out by `COLLAPSE_SLACK` (or → / double-click) calls `onExpand`.
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
 import { clampWidth } from "@/lib/hooks/useResizableWidth";
@@ -17,6 +27,8 @@ import { cn } from "@/lib/utils";
 
 /** How far one ← / → press moves the divider (px). */
 export const KEYBOARD_STEP = 16;
+/** How far past the minimum (to fold) or out from the edge (to unfold) a drag must go (px). */
+export const COLLAPSE_SLACK = 48;
 
 // Put on <body> while dragging so no text is selected and the cursor stays
 // col-resize wherever the pointer wanders.
@@ -29,8 +41,17 @@ export interface SplitDividerProps {
   /** Upper bound (px); may be `Infinity` when the caller has no measurement yet. */
   max: number;
   onChange: (next: number) => void;
+  /** Optional: receives the width during a pointer drag instead of `onChange`,
+   *  which then fires once at the end of the drag. */
+  onPreview?: (next: number) => void;
   /** Double-click: restore the split's default width. */
   onReset: () => void;
+  /** The pane is folded away: the divider rests at the edge and `onExpand` brings it back. */
+  collapsed?: boolean;
+  /** Fold the pane: a drag released past the minimum, or ← at it. */
+  onCollapse?: () => void;
+  /** Unfold it: a drag out from the edge, → or double-click. */
+  onExpand?: () => void;
   /** Accessible name — what the divider resizes, e.g. "Resize the list". */
   label: string;
   className?: string;
@@ -41,11 +62,22 @@ export function SplitDivider({
   min,
   max,
   onChange,
+  onPreview,
   onReset,
+  collapsed = false,
+  onCollapse,
+  onExpand,
   label,
   className,
 }: SplitDividerProps) {
-  const drag = useRef<{ pointerId: number; startX: number; startValue: number } | null>(null);
+  const drag = useRef<{
+    pointerId: number;
+    startX: number;
+    startValue: number;
+    last: number | null;
+    /** Where a release would take the pane: fold it, unfold it, or just resize. */
+    release: "collapse" | "expand" | null;
+  } | null>(null);
   const [dragging, setDragging] = useState(false);
 
   const endDrag = (el: HTMLElement) => {
@@ -53,6 +85,9 @@ export function SplitDivider({
     if (!d) return;
     drag.current = null;
     setDragging(false);
+    if (d.release === "collapse") onCollapse?.();
+    else if (d.release === "expand") onExpand?.();
+    else if (onPreview && d.last !== null) onChange(d.last);
     document.body.classList.remove(...DRAGGING_BODY_CLASSES);
     try {
       if (el.hasPointerCapture?.(d.pointerId)) el.releasePointerCapture(d.pointerId);
@@ -66,7 +101,13 @@ export function SplitDivider({
     // No text selection starts, and focus still lands on the divider.
     e.preventDefault();
     e.currentTarget.focus();
-    drag.current = { pointerId: e.pointerId, startX: e.clientX, startValue: value };
+    drag.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startValue: value,
+      last: null,
+      release: null,
+    };
     setDragging(true);
     document.body.classList.add(...DRAGGING_BODY_CLASSES);
     try {
@@ -79,7 +120,17 @@ export function SplitDivider({
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d || e.pointerId !== d.pointerId) return;
-    onChange(clampWidth(d.startValue + (e.clientX - d.startX), min, max));
+    const raw = d.startValue + (e.clientX - d.startX);
+    if (collapsed) {
+      d.release = onExpand && raw > COLLAPSE_SLACK ? "expand" : null;
+      return;
+    }
+    d.release = onCollapse && raw < min - COLLAPSE_SLACK ? "collapse" : null;
+    const next = clampWidth(raw, min, max);
+    if (onPreview) {
+      d.last = next;
+      onPreview(next);
+    } else onChange(next);
   };
 
   const onPointerEnd = (e: PointerEvent<HTMLDivElement>) => {
@@ -88,6 +139,18 @@ export function SplitDivider({
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     let next: number | null = null;
+    if (collapsed) {
+      if (e.key === "ArrowRight" && onExpand) {
+        e.preventDefault();
+        onExpand();
+      }
+      return;
+    }
+    if (e.key === "ArrowLeft" && onCollapse && value <= min) {
+      e.preventDefault();
+      onCollapse();
+      return;
+    }
     if (e.key === "ArrowLeft") next = value - KEYBOARD_STEP;
     else if (e.key === "ArrowRight") next = value + KEYBOARD_STEP;
     else if (e.key === "Home") next = min;
@@ -112,13 +175,13 @@ export function SplitDivider({
       onPointerUp={onPointerEnd}
       onPointerCancel={onPointerEnd}
       onLostPointerCapture={onPointerEnd}
-      onDoubleClick={onReset}
+      onDoubleClick={collapsed ? onExpand : onReset}
       onKeyDown={onKeyDown}
       className={cn(
         // The 1px hairline; it takes 1px in the row and never shrinks.
         "group relative z-sticky w-px shrink-0 cursor-col-resize touch-none self-stretch bg-border outline-none",
-        // The invisible 8px hit area, centred on the line.
-        "before:absolute before:inset-y-0 before:-inset-x-[3.5px] before:content-['']",
+        // The invisible 12px hit area, centred on the line.
+        "before:absolute before:inset-y-0 before:-inset-x-[5.5px] before:content-['']",
         // The 2px accent line, centred on the hairline: hover, drag, focus.
         "after:pointer-events-none after:absolute after:inset-y-0 after:-inset-x-[0.5px] after:bg-accent after:opacity-0 after:transition-opacity after:duration-fast after:content-['']",
         "hover:after:opacity-100 focus-visible:after:opacity-100 data-[dragging=true]:after:opacity-100",

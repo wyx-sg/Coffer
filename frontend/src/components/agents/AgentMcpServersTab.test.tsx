@@ -26,6 +26,7 @@ vi.mock("@/lib/api/client", async (orig) => ({
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
     mcpEntries: vi.fn(),
+    mcpEntry: vi.fn(),
     connection: vi.fn(),
     listConfigFiles: vi.fn(),
     removeMcpEntry: vi.fn(),
@@ -186,14 +187,29 @@ describe("AgentMcpServersTab", () => {
     expect(await within(fs).findByText("Not connected")).toBeInTheDocument();
   });
 
-  test("a direct entry's name opens its page, and Manage opens a Coffer server's", async () => {
+  test("a direct entry's name opens its JSON in a dialog, and Manage opens a Coffer server's page", async () => {
+    stub();
+    api.mcpEntry.mockResolvedValue({
+      name: "postgres-local",
+      source: "global",
+      path: "/Users/me/.claude.json",
+      transport: "stdio",
+      config: { command: "npx", args: ["-y", "pg-mcp"] },
+    } as never);
+    renderTab();
+    fireEvent.click(await screen.findByRole("button", { name: "postgres-local" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText(/"command": "npx"/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Adopt" })).toBeInTheDocument();
+    // Adopt goes on to the adopt dialog (the row's own flow).
+    fireEvent.click(within(dialog).getByRole("button", { name: "Adopt" }));
+    expect(await screen.findByText("Adopt postgres-local")).toBeInTheDocument();
+  });
+
+  test("Manage opens a Coffer server's page", async () => {
     stub();
     renderTab();
-    expect(await screen.findByRole("link", { name: "postgres-local" })).toHaveAttribute(
-      "href",
-      "/agents/claude_code/mcp-servers/postgres-local?source=global",
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Manage: filesystem" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Manage: filesystem" }));
     expect(screen.getByTestId("where")).toHaveTextContent("/mcp-servers/filesystem");
   });
 

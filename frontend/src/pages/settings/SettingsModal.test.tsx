@@ -92,7 +92,7 @@ describe("the Settings modal", () => {
     const tabs = within(within(modal).getByRole("navigation", { name: "Settings sections" }))
       .getAllByRole("link")
       .map((link) => link.textContent);
-    expect(tabs).toEqual(["General", "Security", "Data", "Daemon", "About", "Features"]);
+    expect(tabs).toEqual(["General", "Security", "Data", "Daemon", "Features", "About"]);
     expect(within(modal).getByRole("link", { name: "General" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -172,7 +172,7 @@ describe("the Settings modal", () => {
       within(nav)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["General", "Security", "Data", "Daemon", "About", "Features"]);
+    ).toEqual(["General", "Security", "Data", "Daemon", "Features", "About"]);
 
     // The General tab carries no features card.
     const general = await screen.findByTestId("settings-pane-general", {}, { timeout: 5_000 });

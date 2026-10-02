@@ -120,6 +120,25 @@ test("an action label comes from its verb, falling back to Open", () => {
   expect(actionLabelKey("test")).toBe("overview.actions.test");
   expect(actionLabelKey("set_secret")).toBe("overview.actions.set_secret");
   expect(actionLabelKey("frobnicate")).toBe("overview.actions.open");
+  expect(actionLabelKey("turn_on")).toBe("overview.actions.turn_on");
+});
+
+test("the secret-approval item opens Settings, Security tab", () => {
+  const off = item({
+    kind: "secret",
+    uid: null,
+    title: "Secret approval",
+    reason_code: "secret_approval_off",
+    action: {
+      verb: "turn_on",
+      method: "PUT",
+      path: "/api/v1/settings/secret-boundary",
+      body: { require_approval: true },
+    },
+  });
+  expect(itemPage(off)).toBe("/settings/security");
+  expect(actionPage(off)).toBe("/settings/security");
+  expect(itemActionLabelKey(off)).toBe("overview.actions.turn_on");
 });
 
 test("an error is red and anything else amber", () => {

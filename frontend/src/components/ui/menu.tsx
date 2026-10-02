@@ -7,7 +7,7 @@
 // so a dialog the item opens takes focus cleanly. Destructive items read in the
 // danger role; a separator groups them apart.
 import * as React from "react";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, type LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 export interface MenuAction {
   key: string;
   label: string;
-  icon?: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  icon?: LucideIcon;
   onSelect: () => void;
   destructive?: boolean;
   disabled?: boolean;

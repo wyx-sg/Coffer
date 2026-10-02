@@ -11,11 +11,14 @@
 //   page the caller hands over is kept, keyed by its number, so the rows of
 //   pages 1..n are shown together, and Load more asks for page n+1. A caller
 //   going back to page 1 (a new search) starts over.
+// A list that pages by cursor instead (`useInfiniteList`) renders the shared
+// `LoadMoreFooter` / `LoadMoreSentinel` of `components/ui/load-more.tsx`, which
+// this footer is built on.
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { ServerPagination } from "@/components/DataTable.types";
-import { Button } from "@/components/ui/button";
+import { LoadMoreFooter } from "@/components/ui/load-more";
 
 interface LoadMoreArgs<T> {
   /** Client mode: every filtered row. Server mode: the page just handed over. */
@@ -73,19 +76,18 @@ interface Props {
   onMore: () => void;
 }
 
+/** The table's footer: the shared `LoadMoreFooter`, labelled with how many the next click adds. */
 export function DataTableLoadMore({ shown, total, size, hasMore, loading, onMore }: Props) {
   const { t } = useTranslation();
-  if (!hasMore && shown === 0) return null;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-text-muted">
-      <span>{t("pagination.showing", { shown, total })}</span>
-      {hasMore ? (
-        <Button variant="outline" size="sm" loading={loading} onClick={onMore}>
-          {loading
-            ? t("pagination.loadingMore")
-            : t("pagination.loadMore", { count: Math.min(size, total - shown) })}
-        </Button>
-      ) : null}
-    </div>
+    <LoadMoreFooter
+      loaded={shown}
+      total={total}
+      hasMore={hasMore}
+      loading={loading}
+      onMore={onMore}
+      className="justify-between"
+      moreLabel={t("pagination.loadMore", { count: Math.min(size, total - shown) })}
+    />
   );
 }

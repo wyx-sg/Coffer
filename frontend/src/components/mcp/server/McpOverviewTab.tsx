@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import { Section, SectionStack } from "@/components/Section";
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AgentOut } from "@/lib/api/agents";
@@ -105,12 +106,9 @@ export function McpOverviewTab({
   return (
     <div className="flex flex-col gap-6">
       {callout}
-      {facts}
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <section className="flex flex-col gap-1" aria-labelledby="mcp-agents">
-          <h3 id="mcp-agents" className="text-sm font-semibold text-text">
-            {t("mcp.page.agents")}
-          </h3>
+      <SectionStack>
+        {facts}
+        <Section title={t("mcp.page.agents")} gap="tight" labelled>
           <dl className="flex flex-col">
             <Fact label={t("mcp.page.toolsReachAgents")}>{reachesAgents}</Fact>
             {agentFacts ?? (
@@ -119,19 +117,20 @@ export function McpOverviewTab({
               </Fact>
             )}
           </dl>
-        </section>
+        </Section>
 
-        <section className="flex flex-col gap-3" aria-labelledby="mcp-24h">
-          <div className="flex items-center gap-2">
-            <h3 id="mcp-24h" className="text-sm font-semibold text-text">
-              {t("mcp.page.last24h")}
-            </h3>
-            {enabled ? (
-              <Link to="/activity?tab=mcp" className="ml-auto text-xs text-accent hover:underline">
+        <Section
+          title={t("mcp.page.last24h")}
+          gap="snug"
+          labelled
+          actions={
+            enabled ? (
+              <Link to="/activity?tab=mcp" className="text-xs text-accent hover:underline">
                 {t("mcp.page.openInActivity")}
               </Link>
-            ) : null}
-          </div>
+            ) : null
+          }
+        >
           {summaryPending ? (
             <Skeleton className="h-24 w-full" />
           ) : summary ? (
@@ -192,9 +191,9 @@ export function McpOverviewTab({
           ) : (
             <p className="text-xs text-text-muted">{t("mcp.page.summaryUnavailable")}</p>
           )}
-        </section>
-      </div>
-      {tools}
+        </Section>
+        {tools}
+      </SectionStack>
     </div>
   );
 }

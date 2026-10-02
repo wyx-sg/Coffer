@@ -7,7 +7,7 @@
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
-import { Label } from "@/components/ui/label";
+import { SettingRow } from "@/components/settings/SettingsLayout";
 import { Switch } from "@/components/ui/switch";
 import { honoursRequireMention } from "@/lib/channels/editChannel";
 
@@ -31,20 +31,14 @@ function SwitchRow({
   const id = useId();
   const helpId = `${id}-help`;
   return (
-    <div className="flex items-start justify-between gap-4">
-      <div className="space-y-0.5">
-        <Label htmlFor={id}>{label}</Label>
-        <p id={helpId} className="text-xs text-muted-foreground">
-          {help}
-        </p>
-      </div>
+    <SettingRow label={label} labelFor={id} description={help} descriptionId={helpId}>
       <Switch
         id={id}
         checked={checked}
         onCheckedChange={onCheckedChange}
         aria-describedby={helpId}
       />
-    </div>
+    </SettingRow>
   );
 }
 
@@ -60,8 +54,7 @@ export function EditChannelGroupFields({
   const { t } = useTranslation();
 
   return (
-    <fieldset className="space-y-3">
-      <legend className="mb-2 text-sm font-medium">{t("channels.edit.groups.title")}</legend>
+    <>
       {honoursRequireMention(channelType) ? (
         <SwitchRow
           label={t("channels.edit.groups.requireMention")}
@@ -76,6 +69,6 @@ export function EditChannelGroupFields({
         checked={draft.ignoreOtherMentions}
         onCheckedChange={(ignoreOtherMentions) => onChange({ ignoreOtherMentions })}
       />
-    </fieldset>
+    </>
   );
 }

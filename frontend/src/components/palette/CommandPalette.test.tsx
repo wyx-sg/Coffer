@@ -184,34 +184,30 @@ describe("CommandPalette", () => {
     expect(api.DELETE).not.toHaveBeenCalled();
   });
 
-  acceptance(
-    "web-ui",
-    "the palette leaves out switched-off features",
-    async () => {
-      features = ALL_OFF;
-      renderPalette();
-      await settled();
-      // Their pages are not listed, and nothing of theirs is asked for: no
-      // provider, knowledge, memory, sync or usage list is read.
-      for (const name of ["Model providers", "Usage", "Knowledge", "Memory", "Sync"]) {
-        type(name);
-        expect(options()).toEqual([]);
-      }
-      const asked = call.mock.calls.map(([path]) => path as string);
-      expect(asked.filter((p) => /^\/(providers|knowledge|memory|sync|usage)/.test(p))).toEqual([]);
-      const kinds = api.GET.mock.calls
-        .filter(([path]) => path === "/resources")
-        .map(([, init]) => (init as { params: { query: { kind?: string } } }).params.query.kind);
-      expect(kinds).not.toContain("provider");
-      // The always-on pages stay: Activity, Conversations, Channels and the MCP server list.
-      type("activity");
-      expect(options()).toEqual(["Activity"]);
-      type("channels");
-      expect(options()).toEqual(["Channels"]);
-      type("conversations");
-      expect(options()).toEqual(["Conversations"]);
-    },
-  );
+  acceptance("web-ui", "the palette leaves out switched-off features", async () => {
+    features = ALL_OFF;
+    renderPalette();
+    await settled();
+    // Their pages are not listed, and nothing of theirs is asked for: no
+    // provider, knowledge, memory, sync or usage list is read.
+    for (const name of ["Model providers", "Usage", "Knowledge", "Memory", "Sync"]) {
+      type(name);
+      expect(options()).toEqual([]);
+    }
+    const asked = call.mock.calls.map(([path]) => path as string);
+    expect(asked.filter((p) => /^\/(providers|knowledge|memory|sync|usage)/.test(p))).toEqual([]);
+    const kinds = api.GET.mock.calls
+      .filter(([path]) => path === "/resources")
+      .map(([, init]) => (init as { params: { query: { kind?: string } } }).params.query.kind);
+    expect(kinds).not.toContain("provider");
+    // The always-on pages stay: Activity, Conversations, Channels and the MCP server list.
+    type("activity");
+    expect(options()).toEqual(["Activity"]);
+    type("channels");
+    expect(options()).toEqual(["Channels"]);
+    type("conversations");
+    expect(options()).toEqual(["Conversations"]);
+  });
 
   // The other half: switched on, the pages are listed.
   test("switched on, a feature's pages and objects are listed", async () => {
@@ -320,5 +316,27 @@ describe("CommandPalette", () => {
     await waitFor(() => expect(input()).toHaveFocus());
     fireEvent.keyDown(input(), { key: "Escape" });
     await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  test("conversations are asked for by the text typed, 8 at a time, never as a whole list", async () => {
+    callAnswers["/chat/conversations"] = async () => ({
+      conversations: [{ id: "c1", title: "Deploy plan", running: false, preview: null }],
+      next_cursor: null,
+    });
+    renderPalette();
+    await settled();
+    // Opened empty, the palette reads the first page of 30.
+    const queries = () =>
+      call.mock.calls
+        .filter(([path]) => path === "/chat/conversations")
+        .map(([, init]) => (init as { params: { query: Record<string, unknown> } }).params.query);
+    await waitFor(() => expect(queries()).toHaveLength(1));
+    expect(queries()[0]).toMatchObject({ limit: 30 });
+    expect(queries()[0].q).toBeUndefined();
+
+    type("deploy");
+    await waitFor(() => expect(queries()).toHaveLength(2));
+    expect(queries()[1]).toMatchObject({ q: "deploy", limit: 8 });
+    await waitFor(() => expect(options()).toContain("Deploy plan"));
   });
 });

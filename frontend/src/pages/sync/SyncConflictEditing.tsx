@@ -9,6 +9,7 @@
 import { AlertTriangle, Pencil } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { Section } from "@/components/Section";
 import { Button } from "@/components/ui/button";
 import type { ConflictFile } from "@/lib/api/sync";
 import { useFileVersions } from "@/lib/hooks/useSyncStop";
@@ -73,16 +74,13 @@ export function SyncConflictEditing({ file, pending, error, onResolve, onBack }:
           </div>
         </div>
       </div>
-      <section className="flex flex-col gap-2" aria-label={t("sync.resolve.editing.saved")}>
-        <h3 className="text-2xs font-semibold uppercase tracking-[.02em] text-text-muted">
-          {t("sync.resolve.editing.saved")}
-        </h3>
+      <Section title={t("sync.resolve.editing.saved")} gap="snug" labelled>
         {saved !== null ? (
           <Saved text={saved} />
         ) : versions.isLoading ? null : (
           <p className="text-xs text-text-muted">{t("sync.resolve.editing.notSaved")}</p>
         )}
-      </section>
+      </Section>
     </>
   );
 }

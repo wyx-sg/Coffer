@@ -1,6 +1,6 @@
 // src/components/agents/detail/AgentDetailTabs.tsx — the agent page's nine tabs, each at its own path.
 //
-// Overview · Model · Skills · MCP servers · Plugins · Hooks · Config files ·
+// Overview · Model · Skills · MCP servers · Plugins · Hooks · Memory · Sessions · Config files ·
 // Memory · Sessions (spec agent-registry "Expose every agent operation
 // through REST, CLI and the Agents page"). The open tab is the path segment (`useDetailTab`); only the open
 // tab is mounted, so a tab reads its data when it is opened. The list tabs
@@ -11,10 +11,10 @@ import { useTranslation } from "react-i18next";
 
 import { AgentConfigFilesTab } from "@/components/agents/AgentConfigFilesTab";
 import { AgentHooksTab } from "@/components/agents/AgentHooksTab";
+import { AgentPluginsTab } from "@/components/agents/AgentPluginsTab";
 import { AgentMcpServersTab } from "@/components/agents/AgentMcpServersTab";
 import { AgentMemoryTab } from "@/components/agents/AgentMemoryTab";
 import { AgentOverviewTab } from "@/components/agents/AgentOverviewTab";
-import { AgentPluginsTab } from "@/components/agents/AgentPluginsTab";
 import { AgentSkillsTab } from "@/components/agents/AgentSkillsTab";
 import type { useAgentRowActions } from "@/components/agents/list/useAgentRowActions";
 import { AgentModelTab } from "@/components/agents/model/AgentModelTab";
@@ -24,7 +24,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AGENT_TABS, agentBasePath, DEFAULT_AGENT_TAB, type AgentTab } from "@/lib/agents/routes";
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
 import { useDetailTab } from "@/lib/detailTabs";
-import { useAgentCounts } from "@/lib/hooks/useAgentCounts";
 import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 
 interface Props {
@@ -45,10 +44,6 @@ const LABEL_KEY: Record<AgentTab, string> = {
   sessions: "agents.tabs.sessions",
 };
 
-function sum(split: { coffer: number; own: number } | undefined): number | undefined {
-  return split ? split.coffer + split.own : undefined;
-}
-
 export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
   const { t } = useTranslation();
   // The Model tab is about connections to model providers, so it exists only
@@ -59,17 +54,8 @@ export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
   const [tab, setTab] = useDetailTab(tabs, DEFAULT_AGENT_TAB, agentBasePath(agent.type), {
     enabled: models !== undefined,
   });
-  const counts = useAgentCounts(agent.uid);
   const [configDirty, setConfigDirty] = useState(false);
   const [pendingTab, setPendingTab] = useState<string | null>(null);
-
-  const count: Partial<Record<AgentTab, number | undefined>> = {
-    skills: sum(counts.skills),
-    "mcp-servers": sum(counts.mcp),
-    plugins: counts.plugins?.total,
-    hooks: counts.hooks?.total,
-    sessions: counts.sessions,
-  };
 
   const requestTab = (next: string) => {
     if (next === tab) return;
@@ -83,6 +69,7 @@ export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
     onEnable: open.enable,
     onChangeConfigDir: open.configDir,
     onRemove: open.remove,
+    busy: !!rowActions.pending,
   };
 
   return (
@@ -91,9 +78,6 @@ export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
         {tabs.map((id) => (
           <TabsTrigger key={id} value={id}>
             {t(LABEL_KEY[id])}
-            {count[id] ? (
-              <span className="text-2xs font-book text-text-subtle">{count[id]}</span>
-            ) : null}
           </TabsTrigger>
         ))}
       </TabsList>

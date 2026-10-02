@@ -1,8 +1,9 @@
 // frontend/src/components/skills/SkillActionsMenu.tsx
 // The open skill's "⋯" menu (canvas 4.3 page note): Open in editor · Reveal in
-// Finder · Copy master path · Check agents' copies · Turn off (removes it from
-// every agent and keeps who was chosen) · Delete…. The name is fixed and is the
-// heading, so there is no rename. Coffer's built-in skill keeps the menu but
+// Finder · Copy master path · Delete…. Turning it on or off is the reach
+// button's and Check copies is the Delivery tab's and the library's, so the
+// menu does not repeat them. The name is fixed and is the heading, so there is
+// no rename. Coffer's built-in skill keeps the menu but
 // Delete is disabled — Coffer writes it itself; the built-in banner says to
 // turn it off instead.
 import { useState } from "react";
@@ -14,21 +15,17 @@ import { useToast } from "@/components/ui/toast";
 import type { SkillOut } from "@/lib/api/skills";
 import { useFsActions } from "@/lib/fsActions";
 import { usePreferredEditor } from "@/lib/preferences";
-import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
 
 interface Props {
   skill: SkillOut;
-  onCheckCopies: () => void;
   onDeleted: () => void;
 }
 
-export function SkillActionsMenu({ skill, onCheckCopies, onDeleted }: Props) {
+export function SkillActionsMenu({ skill, onDeleted }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const editor = usePreferredEditor();
   const fs = useFsActions();
-  const enable = useEnableResource();
-  const disable = useDisableResource();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const path = skill.master_path;
 
@@ -53,23 +50,6 @@ export function SkillActionsMenu({ skill, onCheckCopies, onDeleted }: Props) {
           () => toast.error(t("skills.menu.copyFailed")),
         ),
     },
-    {
-      key: "check",
-      label: t("skills.menu.checkCopies"),
-      onSelect: onCheckCopies,
-      separated: true,
-    },
-    skill.enabled
-      ? {
-          key: "off",
-          label: t("skills.menu.turnOff"),
-          onSelect: () => disable.mutate({ kind: "skill", uid: skill.uid }),
-        }
-      : {
-          key: "on",
-          label: t("skills.menu.turnOn"),
-          onSelect: () => enable.mutate({ kind: "skill", uid: skill.uid }),
-        },
     {
       key: "delete",
       label: t("skills.menu.delete"),

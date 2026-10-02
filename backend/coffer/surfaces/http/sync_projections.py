@@ -189,6 +189,7 @@ def preview_out(p: JoinPreview) -> JoinPreviewOut:
         differ=list(p.differ),
         pushed=[AreaCountOut(area=a.area, files=a.files) for a in p.pushed],
         deleted=list(p.deleted),
+        deleted_total=p.deleted_total,
         conflicts=list(p.conflicts),
         same_name=list(p.same_name),
         refused=p.refused,

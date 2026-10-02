@@ -1,6 +1,6 @@
 // components/chat/MessageBubble.test.tsx
 import { describe, expect, test } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MessageBubble } from "./MessageBubble";
 import { acceptance } from "@/test/acceptance";
 import type { ContentBlock, Message } from "@/lib/api/chat";
@@ -150,5 +150,55 @@ describe("MessageBubble", () => {
       expect(renderedOrder(container)).toEqual(["BEFORE", "card", "AFTER"]);
       expect(screen.getAllByRole("button")).toHaveLength(1);
     });
+  });
+});
+
+describe("MessageBubble tool-call folding", () => {
+  const calls = (n: number, withResults = true): ContentBlock[] =>
+    Array.from({ length: n }, (_, i) => [
+      contentBlock({
+        type: "tool_use",
+        tool_use_id: `t${i}`,
+        tool_name: "shell",
+        tool_input: { command: `ls ${i}` },
+      }),
+      ...(withResults
+        ? [contentBlock({ type: "tool_result", tool_use_id: `t${i}`, output: { ok: true } })]
+        : []),
+    ]).flat();
+
+  test("two calls stay as cards", () => {
+    render(<MessageBubble message={makeAssistant({ content: calls(2) })} />);
+    expect(screen.queryByTestId("tool-call-group")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /toggle tool call/i })).toHaveLength(2);
+  });
+
+  test("three or more fold into one collapsed row that expands on click", () => {
+    render(<MessageBubble message={makeAssistant({ content: calls(4) })} />);
+    const toggle = screen.getByRole("button", { name: /ran 4 tool calls/i });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: /toggle tool call/i })).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getAllByRole("button", { name: /toggle tool call/i })).toHaveLength(4);
+  });
+
+  test("a group with a call still running is open", () => {
+    render(<MessageBubble message={makeAssistant({ content: calls(3, false) })} />);
+    expect(screen.getByRole("button", { name: /ran 3 tool calls/i })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  test("a group with a failed call is open and flags it", () => {
+    const content = calls(3);
+    content[1] = contentBlock({ type: "tool_result", tool_use_id: "t0", error: "boom" });
+    render(<MessageBubble message={makeAssistant({ content })} />);
+    expect(screen.getByRole("button", { name: /ran 3 tool calls/i })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByText("1 failed")).toBeInTheDocument();
   });
 });

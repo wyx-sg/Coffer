@@ -68,7 +68,7 @@ acceptance(
   "a library row says what needs attention in place of its description",
   async () => {
     renderSkillsPage("/skills");
-    const list = await screen.findByRole("list", { name: "Library" });
+    const list = await screen.findByTestId("skill-library");
     expect(await within(list).findByText("Needs jq · not installed")).toBeInTheDocument();
     expect(within(list).getByText("Update available")).toBeInTheDocument();
   },
@@ -94,7 +94,7 @@ acceptance(
       }),
     ];
     renderSkillsPage("/skills/hello");
-    const list = await screen.findByRole("list", { name: "Library" });
+    const list = await screen.findByTestId("skill-library");
     expect(
       await within(list).findByText("Needs secret GITHUB_TOKEN · not set"),
     ).toBeInTheDocument();

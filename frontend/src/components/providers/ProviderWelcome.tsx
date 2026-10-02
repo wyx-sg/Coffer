@@ -8,6 +8,7 @@
 import { useTranslation } from "react-i18next";
 import { ChevronRight } from "lucide-react";
 
+import { Section } from "@/components/Section";
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { Button } from "@/components/ui/button";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
@@ -70,8 +71,7 @@ export function ProviderWelcome({ agents, engineSet, onAdd }: Props) {
         ))}
       </div>
       {agents.length > 0 ? (
-        <div className="flex flex-col gap-1.5">
-          <h3 className="text-sm font-semibold text-text">{t("providers.welcome.rightNow")}</h3>
+        <Section title={t("providers.welcome.rightNow")} gap="tight">
           <div className="flex flex-col">
             {agents.map((a) => (
               <div
@@ -91,7 +91,7 @@ export function ProviderWelcome({ agents, engineSet, onAdd }: Props) {
               </div>
             ))}
           </div>
-        </div>
+        </Section>
       ) : null}
       {engineSet ? null : (
         <p className="flex flex-wrap items-center gap-2 text-xs text-text-muted">

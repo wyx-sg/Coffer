@@ -14,6 +14,7 @@ import type { Provider } from "@/lib/api/providers";
 import { PROTOCOL_LABEL_KEY } from "@/lib/providers/presets";
 import type { ProviderUse } from "@/lib/providers/usedBy";
 import { displayName } from "@/lib/resourceTitle";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { toneTextClass } from "@/lib/statusColors";
 import { cn } from "@/lib/utils";
 import { CofferUseBadge } from "./CofferUseBadge";
@@ -25,7 +26,7 @@ interface Props {
   selected: boolean;
   /** Set on the open row when its probe found the key rejected ("401"/"403", or ""). */
   rejected?: string | null;
-  /** The drag handle, before the link (list order is fallback priority). */
+  /** The drag handle: a quiet affordance shown on hover or focus at the row's end (list order is fallback priority). */
   handle?: ReactNode;
 }
 
@@ -50,21 +51,18 @@ export function ProviderListRow({ provider, use, selected, rejected, handle }: P
       data-testid="provider-row"
       className={cn(
         "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-text no-underline outline-none",
-        "hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-focus-ring",
+        "transition-colors duration-fast hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring",
+        handle && "pr-7",
         selected && "bg-surface-selected hover:bg-surface-selected",
       )}
     >
       <ProviderMark provider={provider} size="md" withWord={false} />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-sm font-label">{displayName(provider)}</span>
-        <span
-          className={cn(
-            "truncate text-xs",
-            rejected != null ? toneTextClass("error") : "text-text-muted",
-          )}
-        >
-          {sub}
-        </span>
+        <TruncatedText text={displayName(provider)} className="text-sm font-label" />
+        <TruncatedText
+          text={sub}
+          className={cn("text-xs", rejected != null ? toneTextClass("error") : "text-text-muted")}
+        />
       </span>
       <span className="inline-flex shrink-0 items-center gap-1">
         {use.agents.map(({ agent }) => (
@@ -77,9 +75,11 @@ export function ProviderListRow({ provider, use, selected, rejected, handle }: P
   );
   if (!handle) return link;
   return (
-    <div className="flex items-center gap-0.5">
-      {handle}
-      <div className="min-w-0 flex-1">{link}</div>
+    <div className="group relative">
+      {link}
+      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity duration-fast focus-within:opacity-100 group-hover:opacity-100">
+        {handle}
+      </span>
     </div>
   );
 }

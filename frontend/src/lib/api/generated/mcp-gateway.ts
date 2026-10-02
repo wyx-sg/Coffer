@@ -476,6 +476,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/resources/mcp_server/{uid}/tools/exposure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Tools Exposure
+         * @description Set one exposure mode on several tools in one write; nothing changes if any is unknown.
+         */
+        patch: operations["set_tools_exposure_api_v1_resources_mcp_server__uid__tools_exposure_patch"];
+        trace?: never;
+    };
+    "/api/v1/resources/mcp_server/{uid}/tools/{tool}/exposure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Tool Exposure
+         * @description Set how one tool is exposed to agents: ``auto``, ``listed`` or ``search``.
+         */
+        patch: operations["set_tool_exposure_api_v1_resources_mcp_server__uid__tools__tool__exposure_patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1396,6 +1436,47 @@ export interface components {
             /** Tool */
             tool: string;
         };
+        /** ToolExposureBatchBody */
+        ToolExposureBatchBody: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "auto" | "listed" | "search";
+            /** Tools */
+            tools: string[];
+        };
+        /** ToolExposureBody */
+        ToolExposureBody: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "auto" | "listed" | "search";
+        };
+        /**
+         * ToolExposureOut
+         * @description One tool's exposure: what the person set, what agents get, and why.
+         */
+        ToolExposureOut: {
+            /**
+             * Effective
+             * @enum {string}
+             */
+            effective: "listed" | "search";
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "auto" | "listed" | "search";
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "pinned" | "search_only" | "within_budget" | "top_by_use" | "low_use";
+            /** Tool */
+            tool: string;
+        };
         /**
          * ToolTieringOut
          * @description Which of this server's tools agents see listed and which only through search.
@@ -1418,6 +1499,8 @@ export interface components {
             listed_count: number;
             /** Tool Count */
             tool_count: number;
+            /** Tools */
+            tools: components["schemas"]["ToolExposureOut"][];
         };
         /** _MCPPromptArgument */
         _MCPPromptArgument: {
@@ -2122,6 +2205,8 @@ export interface operations {
                 agent_uid?: string | null;
                 /** @description Only the calls made under this correlation id — one /mcp request's — the same id its audit rows and daemon log lines carry. */
                 trace_id?: string | null;
+                /** @description Free text, matched in any case against the tool, the error, the session, the outcome and the server's name. */
+                q?: string | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;
@@ -2629,6 +2714,97 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ToolTieringOut"];
                 };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_tools_exposure_api_v1_resources_mcp_server__uid__tools_exposure_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolExposureBatchBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_tool_exposure_api_v1_resources_mcp_server__uid__tools__tool__exposure_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+                tool: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolExposureBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {

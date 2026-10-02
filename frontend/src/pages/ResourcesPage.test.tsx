@@ -254,7 +254,7 @@ describe("ResourcesPage", () => {
     await waitFor(() => expect(screen.queryByText("github")).toBeNull());
     expect(screen.getByText("linear")).toBeInTheDocument();
     expect(screen.queryByText("sentry")).toBeNull();
-    await choose("Disabled");
+    await choose("Off");
     await waitFor(() => expect(screen.getByText("sentry")).toBeInTheDocument());
     expect(screen.queryByText("linear")).toBeNull();
   });
@@ -310,6 +310,9 @@ describe("ResourcesPage", () => {
       renderAt("/mcp-servers/coffer");
       const groups = screen.getAllByRole("region").map((r) => r.getAttribute("aria-label"));
       expect(groups[groups.length - 1]).toBe("Built-in");
+      expect(
+        within(screen.getByRole("region", { name: "Built-in" })).queryByRole("checkbox"),
+      ).toBeNull();
       expect(await screen.findByTestId("mcp-builtin-pane")).toBeInTheDocument();
       expect(screen.getByText("coffer__search_tools", { exact: false })).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /^(Test|Edit)$/ })).toBeNull();

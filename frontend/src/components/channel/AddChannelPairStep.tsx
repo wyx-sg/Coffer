@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import type { PairingCode } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
-import { useChannelStatus, useIssuePairingCode } from "@/lib/hooks/useChannels";
+import { useIssuePairingCode } from "@/lib/hooks/useChannelPairing";
+import { useChannelStatus } from "@/lib/hooks/useChannels";
 import { displayName } from "@/lib/resourceTitle";
 import { channelPlatform } from "@/lib/channels/channelState";
 import { ChannelPairingCode } from "./ChannelPairingCode";
@@ -28,7 +29,7 @@ export function AddChannelPairStep({ channel, onDone }: Props) {
   const { data: status } = useChannelStatus(channel.uid, { poll: true });
   const issued = useRef(false);
   const platform = channelPlatform(channel.config);
-  const peer = status?.peer ?? null;
+  const peer = status?.people[0] ?? null;
   // The code is kept in this step's own state, not read off the mutation: the
   // step issues it as it opens, and under StrictMode's mount-unmount-mount the
   // mutation's observer is dropped before the answer lands — its `data` would

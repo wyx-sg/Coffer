@@ -45,6 +45,8 @@ vi.mock("@/lib/api/channels", async (orig) => ({
     expires_at: new Date(Date.now() + 58 * 60_000).toISOString(),
     pair_url: "",
   })),
+  cancelPairingCode: vi.fn(async () => undefined),
+  removeChannelPerson: vi.fn(async () => undefined),
   notifyChannel: vi.fn(async () => ({ sent: true })),
   restartChannel: vi.fn(async () => ({ running: true })),
 }));
@@ -53,13 +55,27 @@ vi.mock("@/lib/hooks/useMachines", () => ({
   useThisMachineId: () => ({ machineId: HERE, isPending: false }),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: () => ({ data: [AGENT] }) }));
+vi.mock("@/lib/hooks/useChannelConversations", () => ({
+  useChannelConversations: () => ({
+    isPending: false,
+    data: [
+      {
+        id: "conv-1",
+        title: "Standup thread",
+        preview: "what changed yesterday",
+        updated_at: "2026-10-02T08:00:00Z",
+      },
+    ],
+  }),
+}));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => ({ live: false }) }));
 vi.mock("@/lib/hooks/useScope", () => ({
   useResourceScope: () => ({ data: { scope: null, supports_scope: true } }),
   useUpdateResourceScope: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
-const { issuePairingCode, notifyChannel, restartChannel } = await import("@/lib/api/channels");
+const { cancelPairingCode, issuePairingCode, notifyChannel, removeChannelPerson, restartChannel } =
+  await import("@/lib/api/channels");
 
 const TEAM = makeChannel();
 const KICKED = makeChannel({ uid: "u-kick0001", name: "kicked-bot" });
@@ -87,7 +103,7 @@ beforeEach(() => {
     [TEAM, makeStatus(TEAM)],
     [KICKED, makeStatus(KICKED, { inbound: { websocket_state: "kicked", websocket_error: null } })],
     [OPS, makeStatus(OPS, { running: false, runs_here: false })],
-    [REVIEW, makeStatus(REVIEW, { peer: null })],
+    [REVIEW, makeStatus(REVIEW, { people: [] })],
   ]);
 });
 afterEach(() => vi.clearAllMocks());
@@ -105,6 +121,12 @@ describe("the list", () => {
     expect(attention).toHaveTextContent("Not paired yet");
     expect(screen.getByTestId("channel-group-connected")).toHaveTextContent("SeaTalk · team-bot");
     expect(screen.getByTestId("channel-group-elsewhere")).toHaveTextContent("Runs on Mac mini");
+  });
+
+  test("the list is folded by dragging its divider, not by a button", async () => {
+    renderChannelsPage(`/channels/${TEAM.uid}`);
+    expect(await screen.findByRole("separator")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /hide list/i })).toBeNull();
   });
 
   test("/channels opens the first channel the list shows", async () => {
@@ -195,6 +217,28 @@ describe("the header says what state the channel is in", () => {
       "Replace token",
     ],
     [
+      "secret waiting for approval",
+      TEAM,
+      makeStatus(TEAM, {
+        running: false,
+        secret_approval: { state: "pending", secret_ref: "channel/team/app-secret" },
+      }),
+      "Waiting for approval",
+      "waitingApproval",
+      "Open Secrets",
+    ],
+    [
+      "secret refused",
+      TEAM,
+      makeStatus(TEAM, {
+        running: false,
+        secret_approval: { state: "refused", secret_ref: "channel/team/app-secret" },
+      }),
+      "Secret refused",
+      "approvalRefused",
+      "Open Secrets",
+    ],
+    [
       "elsewhere",
       OPS,
       makeStatus(OPS, { runs_here: false }),
@@ -210,7 +254,7 @@ describe("the header says what state the channel is in", () => {
       "unknownMachine",
       "Run it here",
     ],
-    ["not paired", TEAM, makeStatus(TEAM, { peer: null }), "Not paired", "notPaired", null],
+    ["not paired", TEAM, makeStatus(TEAM, { people: [] }), "Not paired", "notPaired", null],
     [
       "status unavailable",
       TEAM,
@@ -315,8 +359,22 @@ acceptance("channels", "a channel links to its conversations instead of showing 
     "Settings",
   ]);
   expect(screen.queryByRole("tab", { name: /conversation|message|history/i })).toBeNull();
-  expect(screen.queryByRole("region", { name: /conversations|messages/i })).toBeNull();
   expect(screen.queryByRole("table")).toBeNull();
+  // What it does show is a short "recent" list whose rows are links, not a list to read in place.
+  expect(await screen.findByTestId("channel-recent-conversations")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Standup thread/ })).toHaveAttribute(
+    "href",
+    "/conversations/conv-1",
+  );
+});
+
+test("the Overview lists every command the channel answers, in the UI's language", async () => {
+  renderChannelsPage(`/channels/${TEAM.uid}`);
+  const list = await screen.findByTestId("channel-commands");
+  expect(within(list).getByText("/new [agent]")).toBeInTheDocument();
+  expect(within(list).getByText(/Interrupt the running turn/)).toBeInTheDocument();
+  // /kb needs the Knowledge feature; the page's feature flags do not turn it on here.
+  expect(within(list).queryByText(/^\/kb/)).toBeNull();
 });
 
 test("reconnect asks the daemon to restart the channel's adapter", async () => {
@@ -334,6 +392,13 @@ test("reconnect asks the daemon to restart the channel's adapter", async () => {
   expect(h.client.POST).not.toHaveBeenCalled();
 });
 
+test("the ⋯ menu holds only Reconnect: Send test and the Settings actions are not repeated", async () => {
+  renderChannelsPage(`/channels/${TEAM.uid}`);
+  fireEvent.click(await screen.findByRole("button", { name: /more actions/i }));
+  const items = await screen.findAllByRole("menuitem");
+  expect(items.map((i) => i.textContent)).toEqual(["Reconnect"]);
+});
+
 test("send test goes to the owner's direct chat with the editable message", async () => {
   renderChannelsPage(`/channels/${TEAM.uid}`);
   fireEvent.click(
@@ -349,21 +414,83 @@ test("send test goes to the owner's direct chat with the editable message", asyn
   );
 });
 
-test("re-pair asks first, then shows the new code", async () => {
+test("there is no re-pair: an owner row offers Remove only, and a new owner is added instead", async () => {
   renderChannelsPage(`/channels/${TEAM.uid}`);
-  fireEvent.click(await screen.findByRole("button", { name: "Re-pair…" }));
-  const dialog = await screen.findByRole("dialog");
-  expect(dialog).toHaveTextContent("Alex Chen stops being the owner");
-  expect(issuePairingCode).not.toHaveBeenCalled();
-  fireEvent.click(within(dialog).getByRole("button", { name: "Generate new code" }));
-  expect(await screen.findByText("K7QM 4XPT")).toBeInTheDocument();
-  expect(screen.getByText("Waiting for your message…")).toBeInTheDocument();
+  const owner = await screen.findByTestId("channel-owner");
+  expect(within(owner).getByRole("button", { name: "Remove" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /re-pair/i })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Add owner" }));
+  expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  // The code is for a NEW person: it names nobody to replace.
+  await waitFor(() => expect(issuePairingCode).toHaveBeenCalledWith(TEAM.uid, undefined));
+});
+
+const ANN = {
+  sender_id: "ann",
+  display_name: "Ann Lee",
+  chat_id: "c-2",
+  paired_at: "2026-09-13T08:00:00Z",
+  active_conversation_id: null,
+};
+
+describe("several owners", () => {
+  const two = () => {
+    const base = makeStatus(TEAM);
+    serve([[TEAM, { ...base, people: [...base.people, ANN] }]]);
+  };
+
+  test("lists every paired owner and says strangers get silence", async () => {
+    two();
+    renderChannelsPage(`/channels/${TEAM.uid}`);
+    const rows = await screen.findAllByTestId("channel-owner");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent("Alex Chen");
+    expect(rows[1]).toHaveTextContent("Ann Lee");
+    expect(screen.queryByText("2 owners")).not.toBeInTheDocument();
+    // The strangers line lives in the heading's help tip, not inline.
+    expect(screen.queryByText(/strangers get silence/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("channel-pairing-code")).not.toBeInTheDocument();
+  });
+
+  test("Add owner opens the dialog, and Cancel withdraws the code", async () => {
+    renderChannelsPage(`/channels/${TEAM.uid}`);
+    fireEvent.click(await screen.findByRole("button", { name: "Add owner" }));
+    expect(await screen.findByText("K7QM 4XPT")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveTextContent("Add an owner");
+    // An add carries no target: whoever sends the code joins the others.
+    expect(issuePairingCode).toHaveBeenCalledWith(TEAM.uid, undefined);
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(cancelPairingCode).toHaveBeenCalledWith(TEAM.uid));
+    await waitFor(() => expect(screen.queryByText("K7QM 4XPT")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Add owner" })).toBeInTheDocument();
+  });
+
+  test("Remove asks first, then un-pairs just that owner", async () => {
+    two();
+    renderChannelsPage(`/channels/${TEAM.uid}`);
+    const rows = await screen.findAllByTestId("channel-owner");
+    fireEvent.click(within(rows[1]).getByRole("button", { name: "Remove" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Remove Ann Lee from");
+    expect(dialog).toHaveTextContent("Other owners are not affected");
+    expect(removeChannelPerson).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(removeChannelPerson).toHaveBeenCalledWith(TEAM.uid, "ann"));
+  });
+
+  test("removing the only owner is allowed and warns the channel will answer nobody", async () => {
+    renderChannelsPage(`/channels/${TEAM.uid}`);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("the only owner");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(removeChannelPerson).toHaveBeenCalledWith(TEAM.uid, "alex"));
+  });
 });
 
 test("delete confirms, keeps conversations, and leaves the channel's address", async () => {
-  renderChannelsPage(`/channels/${TEAM.uid}`);
-  fireEvent.click(await screen.findByRole("button", { name: /more actions/i }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Delete channel…" }));
+  renderChannelsPage(`/channels/${TEAM.uid}/settings`);
+  fireEvent.click(await screen.findByRole("button", { name: "Delete…" }));
   const dialog = await screen.findByRole("dialog");
   expect(dialog).toHaveTextContent("Conversations stay in Conversations");
   h.channels = h.channels.filter((c) => (c as ResourceOut).uid !== TEAM.uid);

@@ -31,6 +31,7 @@ import type { components as AgentRegistryWire } from "@/lib/api/generated/agent-
 // ---------------------------------------------------------------------------
 
 export type AgentModel = AgentRegistryWire["schemas"]["AgentModelOut"];
+export type AgentModelsOut = AgentRegistryWire["schemas"]["AgentModelsOut"];
 
 // ---------------------------------------------------------------------------
 // API object

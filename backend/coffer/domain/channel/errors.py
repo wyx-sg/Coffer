@@ -18,6 +18,15 @@ class ChannelNotPaired(CofferError):  # noqa: N818
         super().__init__(f"channel {channel!r} has no paired peer")
 
 
+class ChannelPersonNotFound(CofferError):  # noqa: N818
+    """The channel has no paired person with that identity."""
+
+    code = "CHANNEL_PERSON_NOT_FOUND"
+
+    def __init__(self, channel: str, person: str) -> None:
+        super().__init__(f"channel {channel!r} has no paired person {person!r}")
+
+
 class ChannelNotRunning(CofferError):  # noqa: N818
     """The channel's adapter is not running (disabled or starting)."""
 

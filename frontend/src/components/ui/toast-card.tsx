@@ -116,7 +116,7 @@ function ToastCard({ toast, onDismiss, onPause, onResume }: CardProps) {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) hold(focus, false);
       }}
       className={cn(
-        "group pointer-events-auto relative min-w-[280px] max-w-[420px] overflow-hidden rounded-xl bg-surface-raised text-sm text-text shadow-overlay",
+        "group pointer-events-auto relative min-w-[280px] max-w-[420px] overflow-hidden rounded-xl bg-surface-raised text-sm text-text shadow-[var(--shadow-toast)]",
         "animate-in fade-in-0 slide-in-from-bottom-2 duration-slow ease-out",
       )}
     >
@@ -174,10 +174,7 @@ function ToastCard({ toast, onDismiss, onPause, onResume }: CardProps) {
   );
 }
 
-function ActionLink({
-  className,
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement>) {
+function ActionLink({ className, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       type="button"

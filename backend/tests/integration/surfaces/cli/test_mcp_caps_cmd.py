@@ -144,3 +144,71 @@ def test_cap_list_empty_type_renders_the_table(mcp_daemon: Any) -> None:
     result = _runner.invoke(app, ["mcp", "cap", "list", "fs", "--type", "prompt"])
     assert result.exit_code == 0, result.output
     assert "fs capabilities" in result.output
+
+
+# ---------------------------------------------------------------------------
+# coffer mcp cap expose (spec mcp-gateway "Choose how each tool is exposed")
+# ---------------------------------------------------------------------------
+
+
+def _seed_tools(uid: str, *keys: str) -> None:
+    """Tools discovery saw together: one ``last_seen_at`` for the whole list."""
+    import asyncio
+    from datetime import UTC, datetime
+
+    from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceStore
+    from tests.support.vault_stores import derived_sm
+
+    async def _seed() -> None:
+        now = datetime.now(tz=UTC)
+        store = MCPCapabilityPreferenceStore(derived_sm())
+        for key in keys:
+            await store.insert(uid, "tool", key, True, now, now)
+
+    asyncio.run(_seed())
+
+
+def _tools_of(args: list[str]) -> dict[str, Any]:
+    result = _runner.invoke(app, ["mcp", "cap", "list", "fs", "--type", "tool", "--json", *args])
+    assert result.exit_code == 0, result.output
+    return {t["original_name"]: t for t in json.loads(result.output)["tools"]}
+
+
+def test_mcp_cap_expose_pins_demotes_and_clears(mcp_daemon: Any) -> None:
+    from .test_mcp_cmd import STUB
+
+    STUB["discovery"].tools = ["read_file", "write_file"]
+    uid = _register_server()
+    _seed_tools(uid, "read_file", "write_file")
+
+    pinned = _runner.invoke(app, ["mcp", "cap", "expose", "fs", "listed", "tool:read_file"])
+    assert pinned.exit_code == 0, pinned.output
+    assert "exposure listed: fs tool:read_file" in pinned.output
+    demoted = _runner.invoke(app, ["mcp", "cap", "expose", "fs", "search", "tool:write_file"])
+    assert demoted.exit_code == 0, demoted.output
+
+    tools = _tools_of([])
+    assert (tools["read_file"]["exposure"], tools["read_file"]["effective"]) == ("listed", "listed")
+    assert (tools["write_file"]["exposure"], tools["write_file"]["effective"]) == (
+        "search",
+        "search",
+    )
+    table = _runner.invoke(app, ["mcp", "cap", "list", "fs"], env={"COLUMNS": "200"})
+    assert "Exposure" in table.output
+
+    cleared = _runner.invoke(
+        app, ["mcp", "cap", "expose", "fs", "auto", "tool:read_file", "tool:write_file"]
+    )
+    assert cleared.exit_code == 0, cleared.output
+    assert {t["exposure"] for t in _tools_of([]).values()} == {"auto"}
+
+
+def test_mcp_cap_expose_refuses_a_bad_mode_a_non_tool_and_an_unknown_tool(mcp_daemon: Any) -> None:
+    _register_server()
+
+    bad_mode = _runner.invoke(app, ["mcp", "cap", "expose", "fs", "pinned", "tool:read_file"])
+    assert bad_mode.exit_code == 2, bad_mode.output
+    prompt = _runner.invoke(app, ["mcp", "cap", "expose", "fs", "listed", "prompt:summarize"])
+    assert prompt.exit_code == 2, prompt.output
+    ghost = _runner.invoke(app, ["mcp", "cap", "expose", "fs", "listed", "tool:ghost"])
+    assert ghost.exit_code == 4, ghost.output

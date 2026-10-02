@@ -59,3 +59,13 @@ def test_an_unchanged_catalogue_is_indexed_once_and_a_changed_one_again():
     changed = [("jira__create_issue", "Create a Jira issue"), ("fs__read", "Open a document")]
     assert rank_tools("read file", changed, top_k=5) != second
     assert _index.cache_info().misses == 2
+
+
+def test_a_search_only_tool_goes_ahead_of_an_equal_one_the_agent_already_sees():
+    twins = [("alpha__fetch", "fetch the data"), ("beta__fetch", "fetch the data")]
+
+    plain = rank_tools("fetch data", twins, top_k=2)
+    preferred = rank_tools("fetch data", twins, top_k=2, prefer=[False, True])
+
+    assert [s.index for s in plain] == [0, 1]
+    assert [s.index for s in preferred] == [1, 0]

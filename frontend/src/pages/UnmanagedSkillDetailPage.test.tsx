@@ -189,10 +189,16 @@ describe("UnmanagedSkillDetailPage", () => {
     expect(screen.getByTitle(en.agents.skillsTab.adoptDisabledInvalid)).toBeInTheDocument();
   });
 
+  // Open folder and Delete sit behind the ⋯ at the header's right; Adopt is the one button.
+  async function openMenuItem(name: string) {
+    fireEvent.click(await screen.findByRole("button", { name: /^More for/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name }));
+  }
+
   test("open folder asks the daemon to open the folder with the OS default", async () => {
     stub();
     renderAt();
-    fireEvent.click(await screen.findByRole("button", { name: en.agents.skillsTab.openFolder }));
+    await openMenuItem(en.agents.skillsTab.openFolder);
     await waitFor(() => expect(openMock).toHaveBeenCalledWith("/x/skills/loose", ""));
   });
 
@@ -200,7 +206,7 @@ describe("UnmanagedSkillDetailPage", () => {
     stub();
     openMock.mockRejectedValueOnce(new Error("nope"));
     renderAt();
-    fireEvent.click(await screen.findByRole("button", { name: en.agents.skillsTab.openFolder }));
+    await openMenuItem(en.agents.skillsTab.openFolder);
     expect(await screen.findByText(en.agents.skillsTab.openFolderFailed)).toBeInTheDocument();
   });
 
@@ -222,7 +228,7 @@ describe("UnmanagedSkillDetailPage", () => {
       // Delete: confirm, then back to the agent's Skills tab.
       stub();
       renderAt();
-      fireEvent.click(await screen.findByRole("button", { name: en.common.delete }));
+      await openMenuItem(en.common.delete);
       const dialog = await screen.findByRole("dialog");
       expect(api.deleteUnmanagedSkill).not.toHaveBeenCalled();
       fireEvent.click(within(dialog).getByRole("button", { name: en.common.delete }));

@@ -13,6 +13,7 @@ import { Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
+import { Section } from "@/components/Section";
 import { Button } from "@/components/ui/button";
 import { useMarkMerged } from "@/lib/hooks/useSyncStop";
 import { refusal } from "./syncConflictFormat";
@@ -22,17 +23,14 @@ export function SyncConflictMerge({ prompt }: { prompt: string }) {
   const merged = useMarkMerged();
 
   return (
-    <section
-      className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface-sunken px-3 py-2.5"
-      aria-labelledby="sync-conflict-merge-title"
-      data-testid="sync-conflict-merge"
+    <Section
+      title={t("sync.resolve.merge.title")}
+      help={t("sync.resolve.merge.body")}
+      gap="snug"
+      labelled
+      testId="sync-conflict-merge"
+      className="rounded-lg border border-border-subtle bg-surface-sunken px-3 py-2.5"
     >
-      <div className="flex flex-col gap-0.5">
-        <h3 id="sync-conflict-merge-title" className="text-xs font-label text-text">
-          {t("sync.resolve.merge.title")}
-        </h3>
-        <p className="text-xs text-text-muted">{t("sync.resolve.merge.body")}</p>
-      </div>
       <div className="flex flex-wrap items-center gap-2">
         <AgentHandoff prompt={prompt} size="sm" />
         <Button
@@ -51,6 +49,6 @@ export function SyncConflictMerge({ prompt }: { prompt: string }) {
           {refusal(t, merged.error)}
         </p>
       ) : null}
-    </section>
+    </Section>
   );
 }

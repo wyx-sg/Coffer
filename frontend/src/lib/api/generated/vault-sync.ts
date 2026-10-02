@@ -716,20 +716,24 @@ export interface components {
          * @description What joining would do. ``empty``: the remote is empty and this vault is
          *     pushed whole; ``new``: the union is taken, nothing deleted, differing
          *     files left here until chosen; ``returning``: a three-way merge from the
-         *     commit this machine last converged at.
+         *     commit this machine last converged at; ``replace``: the remote holds an
+         *     older layout and this vault replaces it (``deleted`` lists, capped, what
+         *     goes away; ``deleted_total`` counts it).
          */
         JoinPreviewOut: {
             /** Conflicts */
             conflicts: string[];
             /** Deleted */
             deleted: string[];
+            /** Deleted Total */
+            deleted_total: number;
             /** Differ */
             differ: string[];
             /**
              * Kind
              * @enum {string}
              */
-            kind: "empty" | "new" | "returning";
+            kind: "empty" | "new" | "returning" | "replace";
             /** Pulled */
             pulled: components["schemas"]["AreaCountOut"][];
             /** Pulled Files */
@@ -858,7 +862,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "unreachable" | "auth_failed" | "push_failed" | "plaintext_found" | "cloud_folder" | "layout" | "git_missing" | "failed";
+            kind: "unreachable" | "auth_failed" | "waiting_approval" | "push_failed" | "plaintext_found" | "cloud_folder" | "layout" | "git_missing" | "failed";
             /** Message */
             message: string;
             /**
@@ -990,7 +994,7 @@ export interface components {
          * RoundStatus
          * @enum {string}
          */
-        RoundStatus: "nothing_to_do" | "pulled" | "pushed" | "pulled_and_pushed" | "push_failed" | "stopped" | "held" | "waiting_on_edit" | "join_required" | "joined" | "unreachable" | "auth_failed" | "paused_cloud_folder" | "remote_too_new" | "remote_too_old" | "plaintext_found" | "rolled_back" | "failed";
+        RoundStatus: "nothing_to_do" | "pulled" | "pushed" | "pulled_and_pushed" | "push_failed" | "stopped" | "held" | "waiting_on_edit" | "join_required" | "joined" | "unreachable" | "auth_failed" | "paused_cloud_folder" | "remote_too_new" | "plaintext_found" | "rolled_back" | "failed";
         /** StopStateOut */
         StopStateOut: {
             round: components["schemas"]["StoppedRoundOut"] | null;
@@ -1110,6 +1114,8 @@ export interface components {
          * @description A page of the history, newest first, and how many rounds it holds.
          */
         SyncRunListOut: {
+            /** Next Cursor */
+            next_cursor: string | null;
             /** Rounds */
             rounds: components["schemas"]["RoundOut"][];
             /** Total */
@@ -1963,7 +1969,8 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
-                offset?: number;
+                /** @description The previous page's next_cursor; any other value is 400 CURSOR_INVALID. */
+                cursor?: string | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;

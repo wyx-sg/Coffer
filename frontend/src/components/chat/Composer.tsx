@@ -15,10 +15,9 @@ import {
   useState,
   type ClipboardEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUp, Paperclip, Square } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { ChatAttachment } from "@/lib/api/chat";
 import { useComposerAttachments } from "@/lib/hooks/useComposerAttachments";
@@ -26,6 +25,7 @@ import { type ComposerRestore, useComposerRestore } from "@/lib/hooks/useCompose
 import { useFileDrop } from "@/lib/hooks/useFileDrop";
 import { cn, formatBytes } from "@/lib/utils";
 import { AttachmentChip } from "./AttachmentChip";
+import { ComposerToolbar } from "./ComposerToolbar";
 
 interface Props {
   /** Send with the finished uploads, in attach order. A promise of whether it was
@@ -41,6 +41,8 @@ interface Props {
   onRestored?: () => void;
   /** The input's placeholder — "Message Claude Code…", "Reply…", "…it queues". */
   placeholder?: string;
+  /** Compact controls (agent, model, effort) shown in the footer, left of Send. */
+  controls?: ReactNode;
 }
 
 /** Lets the parent load text in — a queued message pulled back to be edited. */
@@ -52,7 +54,16 @@ export interface ComposerHandle {
 const MAX_HEIGHT = 200;
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { onSend, disabled = false, streaming = false, onStop, restore, onRestored, placeholder },
+  {
+    onSend,
+    disabled = false,
+    streaming = false,
+    onStop,
+    restore,
+    onRestored,
+    placeholder,
+    controls,
+  },
   ref,
 ) {
   const { t } = useTranslation();
@@ -60,7 +71,6 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   // A send whose outcome is still pending: its chips are not sent twice.
   const [sending, setSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const files = useComposerAttachments();
   const { dragging, handlers: dropHandlers } = useFileDrop(disabled, files.add);
 
@@ -140,7 +150,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     // and "Drop to attach" — never a full-pane overlay; the limits are said
     // only by the line under the box when a file is refused.
     <div className="px-8 pb-4 pt-2" {...dropHandlers} data-testid="composer">
-      <div className="mx-auto flex w-full max-w-[720px] flex-col gap-1.5">
+      <div className="mx-auto flex w-full max-w-[960px] flex-col gap-1.5">
         <div
           className={cn(
             "flex flex-col gap-2.5 rounded-xl border bg-surface-raised pb-2.5 pl-3.5 pr-3 pt-3 transition-colors duration-fast",
@@ -188,47 +198,15 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             className="max-h-[200px] min-h-6 resize-none rounded-none border-0 bg-transparent p-0 leading-6 shadow-none focus-visible:ring-0"
             aria-label={t("conversations.composer.ariaLabel")}
           />
-          <div className="-ml-1.5 flex items-center gap-0.5">
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              hidden
-              data-testid="composer-file-input"
-              onChange={(e) => {
-                files.add(Array.from(e.target.files ?? []));
-                // Reset so picking the same file again still fires a change.
-                e.target.value = "";
-              }}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={disabled}
-              aria-label={t("conversations.composer.attach")}
-            >
-              <Paperclip className="size-3.5" aria-hidden="true" />
-            </Button>
-            <span className="ml-auto" />
-            {showStop ? (
-              <Button type="button" variant="outline" size="sm" onClick={onStop}>
-                <Square aria-hidden />
-                {t("conversations.composer.stop")}
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                size="icon-md"
-                onClick={handleSend}
-                disabled={!canSend}
-                aria-label={t("conversations.composer.send")}
-              >
-                <ArrowUp className="size-4" aria-hidden="true" />
-              </Button>
-            )}
-          </div>
+          <ComposerToolbar
+            onPickFiles={(picked) => files.add(picked)}
+            disabled={disabled}
+            controls={controls}
+            showStop={showStop}
+            onStop={onStop}
+            canSend={canSend}
+            onSend={handleSend}
+          />
         </div>
         {files.refusal ? (
           <p role="alert" data-testid="composer-refusal" className="px-1 text-xs text-danger">

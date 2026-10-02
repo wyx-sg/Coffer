@@ -75,7 +75,7 @@ afterEach(() => vi.clearAllMocks());
 
 /** The library's rows, by the link each one is. */
 async function libraryRows() {
-  const list = await screen.findByRole("list", { name: "Library" });
+  const list = await screen.findByTestId("skill-library");
   return within(list).queryAllByRole("link");
 }
 
@@ -93,7 +93,7 @@ test("the library's reach filter keeps only the skills in the chosen reach state
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
     fireEvent.click(await screen.findByRole("option", { name }));
   };
-  await choose("Disabled");
+  await choose("Off");
   await waitFor(async () => expect(await libraryRows()).toHaveLength(1));
   expect((await libraryRows())[0]).toHaveTextContent("off-skill");
 
@@ -245,6 +245,13 @@ describe("SkillsPage library", () => {
     expect(await screen.findByText("Choose a skill")).toBeInTheDocument();
   });
 
+  test("the list column is folded by dragging its divider, not by a button", async () => {
+    renderSkillsPage("/skills");
+    await screen.findByText("Choose a skill");
+    expect(screen.getByRole("separator")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /hide list/i })).toBeNull();
+  });
+
   test("the Reach filter and the search narrow the library", async () => {
     h.skills = [
       makeSkill({ uid: "a", name: "alpha" }),
@@ -254,7 +261,7 @@ describe("SkillsPage library", () => {
     expect(await libraryRows()).toHaveLength(2);
 
     fireEvent.keyDown(screen.getByRole("combobox", { name: "Reach" }), { key: "ArrowDown" });
-    fireEvent.click(await screen.findByRole("option", { name: "Disabled" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Off" }));
     await waitFor(async () => expect(await libraryRows()).toHaveLength(1));
     let rows = await libraryRows();
     expect(rows).toHaveLength(1);
@@ -313,11 +320,11 @@ describe("SkillsPage library", () => {
     );
   });
 
-  test("ticking rows shows the bulk bar with reach and Delete; the built-in row can't be ticked", async () => {
+  test("ticking rows shows the bulk bar with reach and Delete; the built-in row has no box", async () => {
     h.skills = [BUILTIN_SKILL, makeSkill()];
     renderSkillsPage("/skills");
     await libraryRows();
-    expect(screen.getByRole("checkbox", { name: /coffer-guide/ })).toBeDisabled();
+    expect(screen.queryByRole("checkbox", { name: /coffer-guide/ })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("checkbox", { name: /hello/ }));
     const bar = screen.getByRole("region", { name: "Selected skills" });

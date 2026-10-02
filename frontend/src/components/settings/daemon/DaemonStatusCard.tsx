@@ -3,7 +3,7 @@
 // Spec web-ui "Show and manage the daemon on Settings → Daemon": the state and
 // the address it answers on, then one line — how long it has been up, its pid
 // and how many agents carry Coffer's connection — all from the status probe
-// (the version is on About and in the sidebar footer). A Restart control in
+// (the version is on About; a daemon from another app version says so here). A Restart control in
 // both hosts: the shell's restart in the desktop shell, the daemon's own
 // restart in a browser (`useRestartDaemon`; the page then reloads from the new
 // daemon). While the daemon cannot be reached the card reads offline and names
@@ -130,6 +130,12 @@ export function DaemonStatusCard({ state, status, inShell }: Props) {
         </div>
         {inShell || state.kind !== "offline" ? restartButton : null}
       </div>
+
+      {state.kind === "running" && state.outOfDate ? (
+        <p className="text-xs text-warning" role="status" data-testid="settings-daemon-out-of-date">
+          {t("daemon.offline.outOfDateBody")}
+        </p>
+      ) : null}
 
       {state.kind === "offline" && !inShell ? (
         <CopyableCommand command="coffer daemon start" />

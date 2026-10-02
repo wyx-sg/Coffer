@@ -144,10 +144,10 @@ describe("ScopeControl", () => {
     // while reaching nobody on this machine, so the note colours it too.
     seed({ scope: only([GHOST]) });
     render(<ScopeControl kind="mcp_server" uid={FS_UID} enabled />);
-    expect(trigger()).toHaveAttribute("title", expect.stringMatching(/names no agent registered/i));
+    expect(trigger()).toHaveAttribute("title", expect.stringMatching(/names no agent added/i));
     expect(trigger().className).toContain("text-warning");
     openPanel();
-    expect(screen.getByText(/names no agent registered/i)).toBeInTheDocument();
+    expect(screen.getByText(/names no agent added/i)).toBeInTheDocument();
   });
 
   test("a scope that excludes nothing raises no note", () => {
@@ -158,7 +158,7 @@ describe("ScopeControl", () => {
     expect(screen.queryByText(/inactive/i)).not.toBeInTheDocument();
   });
 
-  test("a scoped-in agent uid that is not registered here renders with an unknown hint", () => {
+  test("a scoped-in agent uid that is not added here renders with an unknown hint", () => {
     // There is no name to print for it, so it prints as itself. Dropping the
     // row would silently widen the scope the user is looking at.
     seed({ scope: only([GHOST]), agents: [{ uid: CLAUDE, name: "claude" }] });
@@ -166,7 +166,7 @@ describe("ScopeControl", () => {
     openPanel();
     const row = agentRow(GHOST);
     expect(row.getByText(GHOST)).toBeInTheDocument();
-    expect(row.getByText(/not registered/i)).toBeInTheDocument();
+    expect(row.getByText(/not added/i)).toBeInTheDocument();
   });
 
   test("a stored scope spelling every-agent the long way reads as every agent", () => {
@@ -203,15 +203,15 @@ describe("ScopeControl", () => {
     seed({ scope: only([]), agents: [] });
     render(<ScopeControl kind="mcp_server" uid={FS_UID} enabled />);
     openPanel();
-    expect(screen.getByText(/no agents registered/i)).toBeInTheDocument();
+    expect(screen.getByText(/no agents added/i)).toBeInTheDocument();
   });
 
   test("a disabled resource says so, and no scope state claims to be live", () => {
     seed({ scope: only([CLAUDE]) });
     render(<ScopeControl kind="mcp_server" uid={FS_UID} enabled={false} />);
-    expect(trigger()).toHaveTextContent(/^disabled/i);
+    expect(trigger()).toHaveTextContent(/^off/i);
     openPanel();
-    expect(choice(/^disabled$/i)).toBeChecked();
+    expect(choice(/^off$/i)).toBeChecked();
     // Scope survives the disable, so the list it will come back to is visible —
     // but neither scope choice claims to be the live one.
     expect(choice(/only selected agents/i)).not.toBeChecked();
@@ -229,7 +229,7 @@ describe("ScopeControl", () => {
     seed({ scope: only([]) });
     render(<ScopeControl kind="mcp_server" uid={FS_UID} enabled={false} />);
 
-    expect(trigger()).toHaveTextContent(/^disabled/i);
+    expect(trigger()).toHaveTextContent(/^off/i);
     expect(trigger().className).not.toContain("text-warning");
     expect(screen.queryByText(/not active here/i)).toBeNull();
   });
@@ -243,11 +243,11 @@ describe("ScopeControl", () => {
     expect(trigger().className).toContain("text-warning");
   });
 
-  test("choosing Disabled disables the resource and leaves the scope alone", () => {
+  test("choosing Off disables the resource and leaves the scope alone", () => {
     seed({ scope: only([CLAUDE]) });
     render(<ScopeControl kind="mcp_server" uid={FS_UID} enabled />);
     openPanel();
-    fireEvent.click(choice(/^disabled$/i));
+    fireEvent.click(choice(/^off$/i));
     expect(disableMutate).toHaveBeenCalledWith({ kind: "mcp_server", uid: FS_UID });
     expect(mutate).not.toHaveBeenCalled();
   });

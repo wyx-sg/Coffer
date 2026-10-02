@@ -63,7 +63,7 @@ function AgentDetail({
   typeRow: AgentTypeOut;
   route: ReturnType<typeof useAgentRoute>;
 }) {
-  const rowActions = useAgentRowActions(typeRow, { includeOpen: false });
+  const rowActions = useAgentRowActions(typeRow);
   return (
     <div className="flex min-h-0 flex-col gap-4">
       <AgentDetailHeader typeRow={typeRow} agent={route.agent} rowActions={rowActions} />

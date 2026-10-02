@@ -163,7 +163,7 @@ async def test_spawn_failure_retries_then_enters_cooldown(tmp_path, monkeypatch)
         assert sup.health("bad") == UpstreamHealth.COOLDOWN
 
         # While in cooldown, no new spawn is attempted
-        with pytest.raises(UpstreamUnavailable, match="cooldown"):
+        with pytest.raises(UpstreamUnavailable, match="unreachable"):
             await sup.get_or_spawn("bad")
     finally:
         await sup.dispose()

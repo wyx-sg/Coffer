@@ -122,6 +122,12 @@ def _button_label(model: AgentModel) -> str:
     return label
 
 
+class NativeDefaultModelPort(Protocol):
+    """Reads the model an agent's own config names as its default, or ``None``."""
+
+    async def read(self, *, agent_key: str, config_dir: pathlib.Path | None) -> str | None: ...
+
+
 class AgentModelCatalogueService:
     """The deduped view of whatever discovery reports for one agent type."""
 
@@ -131,7 +137,9 @@ class AgentModelCatalogueService:
         agents: AgentLister,
         discovery: ModelDiscoveryPort,
         provider_models: ActiveProviderModelsPort | None = None,
+        native_default: NativeDefaultModelPort | None = None,
     ) -> None:
+        self._native_default = native_default
         self._agents = agents
         self._discovery = discovery
         # ``None`` means no provider layer is wired into this composition (a CLI
@@ -150,6 +158,21 @@ class AgentModelCatalogueService:
         """
         config_dir = await self._config_dir(agent_key)
         return _deduped(await self._discover(agent_key, config_dir))
+
+    async def native_default_model(self, agent_key: str) -> str | None:
+        """The model the agent's OWN config names as its default — never the
+        first catalogue entry, which is only the first one the CLI listed. ``None``
+        when the config names none: the agent then picks for itself and Coffer
+        cannot say which."""
+        if self._native_default is None:
+            return None
+        try:
+            return await self._native_default.read(
+                agent_key=agent_key, config_dir=await self._config_dir(agent_key)
+            )
+        except Exception:
+            _log.debug("agent.native_default.failed", exc_info=True)
+            return None
 
     async def offered(self, agent_key: str) -> list[AgentModel]:
         """What a PICKER should show — every one of them, wherever it renders.

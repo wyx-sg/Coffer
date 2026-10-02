@@ -40,7 +40,6 @@ const NEEDS_ATTENTION: readonly RoundStatus[] = [
   "auth_failed",
   "paused_cloud_folder",
   "remote_too_new",
-  "remote_too_old",
   "push_failed",
   "plaintext_found",
   "unreachable",

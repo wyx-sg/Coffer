@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { Wrench } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
+import { SectionStack } from "@/components/Section";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { useCustomToolGroup } from "@/lib/hooks/useCustomTools";
@@ -57,12 +58,13 @@ export function GroupPane({ name, onAddRequest }: Props) {
       <GroupHeader
         group={group}
         onEdit={() => setEditOpen(true)}
-        onReimport={() => setReimportOpen(true)}
         onDelete={() => setDeleteOpen(true)}
       />
       <GroupSecretAlert group={group} onChooseAnother={() => setEditOpen(true)} />
-      <GroupDefinition group={group} onReimport={() => setReimportOpen(true)} />
-      <ToolsTable group={group} onOpenTool={setTool} onAddRequest={onAddRequest} />
+      <SectionStack>
+        <GroupDefinition group={group} onReimport={() => setReimportOpen(true)} />
+        <ToolsTable group={group} onOpenTool={setTool} onAddRequest={onAddRequest} />
+      </SectionStack>
       <ToolEditorDrawer
         group={group}
         toolName={tool}

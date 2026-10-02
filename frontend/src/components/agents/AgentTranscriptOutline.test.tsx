@@ -57,9 +57,7 @@ describe("outlineOf", () => {
       ),
     ];
 
-    expect(outlineOf(messages)).toEqual([
-      { index: 0, label: "only show whether it is installed" },
-    ]);
+    expect(outlineOf(messages)).toEqual([{ index: 0, label: "only show whether it is installed" }]);
   });
 
   test("drops a turn the person did not write at all", () => {
@@ -104,6 +102,22 @@ describe("AgentTranscriptOutline", () => {
     expect(document.getElementById).toHaveBeenCalledWith(turnDomId(2));
     expect(scrollIntoView).toHaveBeenCalledWith({ block: "start", behavior: "smooth" });
     vi.restoreAllMocks();
+  });
+
+  test("every entry is one line, ellipsized, with the full text on hover", () => {
+    const long = "a very long prompt ".repeat(30).trim();
+    render(
+      <AgentTranscriptOutline messages={[turn("user", long), turn("user", "short")]} offset={40} />,
+    );
+
+    const entries = within(screen.getByTestId("transcript-outline")).getAllByRole("button");
+    for (const entry of entries) {
+      expect(within(entry).getByText(/\w/, { selector: "span.truncate" })).toBeInTheDocument();
+    }
+    expect(screen.getByTitle(long)).toBeInTheDocument();
+    // Each entry carries its place in the whole conversation: the window starts after turn 40.
+    expect(within(entries[0]).getByText("41")).toBeInTheDocument();
+    expect(within(entries[1]).getByText("42")).toBeInTheDocument();
   });
 
   test("a window with no prompts says so rather than rendering an empty list", () => {

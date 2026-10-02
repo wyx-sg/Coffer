@@ -12,9 +12,8 @@
 import { useMemo, useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { ChevronDown } from "lucide-react";
 
-import { HelpTip } from "@/components/HelpTip";
-import { Button } from "@/components/ui/button";
 import { translateApiError } from "@/lib/api/errors";
 import { MODALITIES, type Modality, type Provider } from "@/lib/api/providers";
 import type { EndpointModelsOut } from "@/lib/hooks/useModelIntrospection";
@@ -23,9 +22,11 @@ import { probeFailed } from "@/lib/providers/probeStatus";
 import type { ProviderUse } from "@/lib/providers/usedBy";
 import { ModelPriceCell } from "./ModelPriceCell";
 import { ModelsNotice } from "./ModelsNotice";
+import { ModelsRefresh } from "./ModelsRefresh";
 import { ModelsToolbar } from "./ModelsToolbar";
 import { ProviderModelRow } from "./ProviderModelRow";
 import { Section } from "@/components/Section";
+import { TableActionButton } from "@/components/table/TableActionButton";
 import { SetPriceDialog } from "./SetPriceDialog";
 import { useModelCuration } from "./useModelCuration";
 
@@ -65,7 +66,6 @@ export function ProviderModels({ provider, use, endpoint, engineModel, transcrib
   const types = MODALITIES.filter(
     (m) => m !== "video" || cur.rows.some((r) => cur.modalityOf(r) === m),
   );
-  const offered = cur.unrestricted ? cur.rows.length : provider.models.length;
 
   const tagsFor = (id: string): string[] => [
     ...use.agents
@@ -77,51 +77,51 @@ export function ProviderModels({ provider, use, endpoint, engineModel, transcrib
   const rowOf = (id: string) => cur.rows.find((m) => m.id === id);
 
   return (
-    <Section
-      title={t("providers.overview.models")}
-      aside={
-        <>
-          <HelpTip label={t("providers.prices.helpLabel")}>{t("providers.prices.help")}</HelpTip>
-          {cur.rows.length > 0 ? (
-            <span className="text-xs text-text-muted">
-              {t("providers.models.offeredCount", { n: offered, count: cur.rows.length })}
-            </span>
+    <>
+      <Section
+        title={t("providers.overview.models")}
+        help={
+          <>
+            <p>{t("providers.models.hint")}</p>
+            <p className="mt-1.5">{t("providers.prices.help")}</p>
+          </>
+        }
+        actions={<ModelsRefresh endpoint={endpoint} />}
+      >
+        <div className="flex flex-col divide-y divide-border-subtle">
+          {failed ? (
+            <div className="py-3">
+              <ModelsNotice
+                tone="error"
+                title={t("providers.models.failedTitle")}
+                body={t("providers.models.failedBody", { reason: reason ?? "" })}
+                action={t("common.retry")}
+                onAction={() => void endpoint.refetch()}
+              />
+            </div>
+          ) : !endpoint.isPending && cur.rows.length === 0 ? (
+            <div className="py-3">
+              <ModelsNotice
+                tone="neutral"
+                title={t("providers.models.noneTitle")}
+                body={t("providers.models.noneBody")}
+                action={t("providers.models.refresh")}
+                onAction={() => void endpoint.refetch()}
+              />
+            </div>
           ) : null}
-        </>
-      }
-    >
-      <ModelsToolbar
-        query={query}
-        onQuery={setQuery}
-        types={types}
-        type={type}
-        onType={setType}
-        endpoint={endpoint}
-      />
-      <p className="text-xs text-text-muted">{t("providers.models.hint")}</p>
 
-      {failed ? (
-        <ModelsNotice
-          tone="error"
-          title={t("providers.models.failedTitle")}
-          body={t("providers.models.failedBody", { reason: reason ?? "" })}
-          action={t("common.retry")}
-          onAction={() => void endpoint.refetch()}
-        />
-      ) : !endpoint.isPending && cur.rows.length === 0 ? (
-        <ModelsNotice
-          tone="neutral"
-          title={t("providers.models.noneTitle")}
-          body={t("providers.models.noneBody")}
-          action={t("providers.models.refresh")}
-          onAction={() => void endpoint.refetch()}
-        />
-      ) : null}
-
-      {cur.rows.length > 0 ? (
-        <div className="flex flex-col rounded-xl border border-border">
-          {rows.length === 0 ? (
-            <p className="px-3 py-3 text-sm text-text-muted">{t("providers.models.noMatch")}</p>
+          {cur.rows.length > 0 ? (
+            <ModelsToolbar
+              query={query}
+              onQuery={setQuery}
+              types={types}
+              type={type}
+              onType={setType}
+            />
+          ) : null}
+          {cur.rows.length > 0 && rows.length === 0 ? (
+            <p className="py-3 text-sm text-text-muted">{t("providers.models.noMatch")}</p>
           ) : (
             rows
               .slice(0, shown)
@@ -148,13 +148,16 @@ export function ProviderModels({ provider, use, endpoint, engineModel, transcrib
               ))
           )}
           {rows.length > shown ? (
-            <Button variant="ghost" className="m-1" onClick={() => setShown((n) => n + PAGE)}>
-              {t("providers.models.showMore", { count: rows.length - shown })}
-            </Button>
+            <div className="flex justify-center py-2.5">
+              <TableActionButton
+                icon={ChevronDown}
+                label={t("providers.models.showMore", { count: rows.length - shown })}
+                onClick={() => setShown((n) => n + PAGE)}
+              />
+            </div>
           ) : null}
         </div>
-      ) : null}
-
+      </Section>
       <SetPriceDialog
         model={pricing}
         current={pricing ? priceOf(pricing) : undefined}
@@ -164,6 +167,6 @@ export function ProviderModels({ provider, use, endpoint, engineModel, transcrib
           if (row) cur.setPrice(row, price);
         }}
       />
-    </Section>
+    </>
   );
 }

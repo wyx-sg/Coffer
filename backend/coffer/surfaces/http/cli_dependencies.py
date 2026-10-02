@@ -4,9 +4,35 @@ web"). Same ``set_*`` / ``get_*`` singleton shape as ``skill_dependencies``."""
 
 from __future__ import annotations
 
+from coffer.application.skill.cli_interface import CliInterfaceService
 from coffer.application.skill.cli_requirements import CliRequirementService
+from coffer.application.skill.cli_tools import CliToolService
 
 _service: CliRequirementService | None = None
+_tools: CliToolService | None = None
+_interface: CliInterfaceService | None = None
+
+
+def set_cli_tool_service(svc: CliToolService | None) -> None:
+    global _tools
+    _tools = svc
+
+
+def get_cli_tool_service() -> CliToolService:
+    if _tools is None:
+        raise RuntimeError("cli tool service not initialised")
+    return _tools
+
+
+def set_cli_interface_service(svc: CliInterfaceService | None) -> None:
+    global _interface
+    _interface = svc
+
+
+def get_cli_interface_service() -> CliInterfaceService:
+    if _interface is None:
+        raise RuntimeError("cli interface service not initialised")
+    return _interface
 
 
 def set_cli_requirement_service(svc: CliRequirementService | None) -> None:

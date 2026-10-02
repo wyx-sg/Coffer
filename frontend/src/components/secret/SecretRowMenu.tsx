@@ -1,6 +1,7 @@
 // src/components/secret/SecretRowMenu.tsx — a secret's ⋯ menu.
 //
-// Replace value… (Add value… for a secret missing on this Mac) · Reveal value…
+// Replace value… (not on a secret missing on this Mac: the row's Add value
+// button is that) · Reveal value…
 // · Copy reference (<reference>) · Show in Activity · Delete….
 // Reveal exists only in the desktop app (spec secret "Release plaintext
 // only to a present human in the desktop app"): a browser shows it disabled,
@@ -38,11 +39,16 @@ export function SecretRowMenu({ row, onAction }: Props) {
       .catch(() => toast.error(t("secrets.menu.copyFailed")));
 
   const actions: MenuAction[] = [
-    {
-      key: "replace",
-      label: missing ? t("secrets.menu.addValue") : t("secrets.menu.replace"),
-      onSelect: () => onAction("replace", row),
-    },
+    // A secret missing on this Mac has the row's own Add value button.
+    ...(missing
+      ? []
+      : [
+          {
+            key: "replace",
+            label: t("secrets.menu.replace"),
+            onSelect: () => onAction("replace", row),
+          },
+        ]),
     {
       key: "reveal",
       label: inApp ? t("secrets.menu.reveal") : t("secrets.menu.revealInApp"),

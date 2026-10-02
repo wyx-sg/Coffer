@@ -56,7 +56,8 @@ class _Store:
 
 
 class _Ctx:
-    def __init__(self, client, rsvc, prefs, invocations, store, health) -> None:
+    def __init__(self, client, rsvc, prefs, invocations, store, health, audit=None) -> None:
+        self.audit = audit
         self.client = client
         self.rsvc = rsvc
         self.prefs = prefs
@@ -128,7 +129,7 @@ async def ctx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://t", headers={"X-Coffer-Token": "tok"}
     ) as client:
-        yield _Ctx(client, rsvc, prefs, invocations, store, health)
+        yield _Ctx(client, rsvc, prefs, invocations, store, health, audit)
     await engine.dispose()
 
 

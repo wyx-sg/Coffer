@@ -7,7 +7,6 @@ import {
   citersFromRefusal,
   citersOf,
   displayName,
-  groupRows,
   isMissingHere,
   isValidSecretName,
   referenceOf,
@@ -71,14 +70,6 @@ describe("secretRows", () => {
     expect(citersFromRefusal(null)).toEqual([]);
   });
 
-  test("groups split used from unused and filter by name", () => {
-    const rows = [ref({ ref: "secret/a-key" }), ref({ ref: "secret/b-key", unreferenced: true })];
-    expect(groupRows(rows, "").inUse).toHaveLength(1);
-    expect(groupRows(rows, "").unused).toHaveLength(1);
-    expect(groupRows(rows, "B-K").inUse).toHaveLength(0);
-    expect(groupRows(rows, "B-K").unused).toHaveLength(1);
-  });
-
   test("a dry run's plan counts each secret and each file once", () => {
     const plan = planOf({
       dry_run: true,
@@ -116,6 +107,7 @@ describe("secretRows", () => {
       ref: null,
       slot: null,
       target: null,
+      target_fingerprint: null,
     };
     const waiting = refsWaiting([
       { ...base, id: "1", op: "replace_value", ref: "secret/a" },

@@ -10,6 +10,7 @@
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/components/ui/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Approval, SecretRef } from "@/lib/api/secret";
@@ -25,6 +26,9 @@ interface Props {
   inShell: boolean;
   /** Whether the card is the dialog's only one, and so owns its title. */
   heading: "title" | "card";
+  /** When set, the card carries a checkbox: it is one of several that can be answered together. */
+  selected?: boolean;
+  onSelectedChange?: (selected: boolean) => void;
 }
 
 function clock(iso: string, locale: string): string {
@@ -37,7 +41,14 @@ function clock(iso: string, locale: string): string {
   }).format(d);
 }
 
-export function ApprovalCard({ approval: a, row, inShell, heading }: Props) {
+export function ApprovalCard({
+  approval: a,
+  row,
+  inShell,
+  heading,
+  selected,
+  onSelectedChange,
+}: Props) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const kindLabel = useKindLabel();
@@ -98,7 +109,19 @@ export function ApprovalCard({ approval: a, row, inShell, heading }: Props) {
       className="space-y-3 rounded-xl border border-border-subtle bg-surface-sunken p-3"
       data-testid="approval-row"
     >
-      {heading === "card" ? <p className="text-sm font-semibold text-text">{question}</p> : null}
+      {heading === "card" ? (
+        <div className="flex items-start gap-2">
+          {onSelectedChange ? (
+            <Checkbox
+              className="mt-0.5"
+              checked={selected ?? false}
+              onChange={(e) => onSelectedChange(e.target.checked)}
+              aria-label={t("secrets.approvals.select", { name })}
+            />
+          ) : null}
+          <p className="text-sm font-semibold text-text">{question}</p>
+        </div>
+      ) : null}
       <p className="text-xs text-text-muted">{body}</p>
       <dl className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
         {fields

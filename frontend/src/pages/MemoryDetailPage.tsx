@@ -32,6 +32,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import { useDetailTab } from "@/lib/detailTabs";
+import { useBackLink } from "@/lib/origin";
 import { useMemoryPartitions } from "@/lib/hooks/useMemory";
 import { useUpkeepRunning } from "@/lib/hooks/useUpkeep";
 import { displayName } from "@/lib/resourceTitle";
@@ -47,7 +48,7 @@ export function MemoryDetailPage() {
   const updating = useMemoryUpdateRunning();
   const running = distilling || updating;
   const [tab, setTab] = useDetailTab(MEMORY_TABS, "memories", `/memory/${encodeURIComponent(uid)}`);
-  const back = { to: "/memory", label: t("common.backTo", { label: t("nav.memory") }) };
+  const back = useBackLink({ to: "/memory", label: t("nav.memory") });
 
   if (partitions.isPending) {
     return (

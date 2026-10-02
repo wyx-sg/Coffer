@@ -177,7 +177,7 @@ export function ScanSecretsDialog({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(next) => !importer.isPending && onOpenChange(next)}>
-      <DialogContent className="max-w-[640px]">{body}</DialogContent>
+      <DialogContent className="max-w-[640px] grid-cols-[minmax(0,1fr)]">{body}</DialogContent>
     </Dialog>
   );
 }

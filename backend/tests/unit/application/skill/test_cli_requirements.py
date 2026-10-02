@@ -9,7 +9,7 @@ import pytest
 
 from coffer.application.skill.cli_attention import CliAttentionSource
 from coffer.application.skill.cli_requirements import CliRequirementService, SkillDocument
-from coffer.domain.skill.cli_errors import CliNotRequired
+from coffer.domain.skill.cli_errors import CliNotKnown
 from coffer.domain.skill.cli_status import ServerLauncher, launcher_cli
 from tests.support.cli_requirements import FAKE_MACHINE, FakeCommand, FakeCommandProbe
 
@@ -85,7 +85,7 @@ async def test_a_read_never_runs_a_login_check() -> None:
 
 
 async def test_an_unknown_command_is_not_required() -> None:
-    with pytest.raises(CliNotRequired):
+    with pytest.raises(CliNotKnown):
         await _service({}, FakeCommandProbe()).get("gh")
 
 

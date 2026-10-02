@@ -98,6 +98,9 @@ class _StubRuntime:
         self.websocket_errors: dict[str, str] = {}
         self.restarted: list[str] = []
 
+    def secret_withheld(self, channel_uid: str) -> str | None:
+        return None
+
     def websocket_state(self, channel_uid: str) -> tuple[str, str | None] | None:
         state = self.websocket_states.get(channel_uid)
         if state is None:
@@ -142,15 +145,16 @@ class _Daemon:
         """A channel's uid, which every runtime key and every route now takes."""
         return str(self.channel(name).uid)
 
-    def pair(self, name: str, *, chat_id: str = "emp-1") -> None:
+    def pair(self, name: str, *, chat_id: str = "emp-1", display: str = "Yu") -> None:
         resource = self.channel(name)
         self.run(
             self.peers.upsert(
                 ChannelPeer(
                     resource_uid=resource.uid,
                     chat_id=chat_id,
-                    display_name="Yu",
+                    display_name=display,
                     paired_at=dt.now(tz=UTC),
+                    sender_id=chat_id,
                 )
             )
         )
@@ -734,6 +738,29 @@ def test_pair_prints_code_and_expiry(channel_daemon: _Daemon) -> None:
     assert channel_daemon.pairing.pending(channel_daemon.uid("tg")) is True
 
 
+def test_pair_replace_names_a_paired_person(channel_daemon: _Daemon) -> None:
+    assert _register_tg().exit_code == 0
+    channel_daemon.pair("tg", chat_id="555", display="Yu")
+    r = runner.invoke(app, ["channel", "pair", "tg", "--replace", "yu"])
+    assert r.exit_code == 0, r.output
+    assert channel_daemon.pairing.replaces(channel_daemon.uid("tg")) == "555"
+    ghost = runner.invoke(app, ["channel", "pair", "tg", "--replace", "nobody"])
+    assert ghost.exit_code == 4
+
+
+def test_unpair_removes_one_person_and_keeps_the_rest(channel_daemon: _Daemon) -> None:
+    assert _register_tg().exit_code == 0
+    channel_daemon.pair("tg", chat_id="555", display="Yu")
+    channel_daemon.pair("tg", chat_id="777", display="Ann")
+    r = runner.invoke(app, ["channel", "unpair", "tg", "Yu"])
+    assert r.exit_code == 0, r.output
+    assert "removed: Yu" in r.output
+    shown = runner.invoke(app, ["channel", "show", "tg"])
+    assert "Ann" in shown.output
+    assert "Yu (" not in shown.output
+    assert runner.invoke(app, ["channel", "unpair", "tg", "Yu"]).exit_code == 4
+
+
 def test_pair_unknown_channel_exits_4(channel_daemon: _Daemon) -> None:
     r = runner.invoke(app, ["channel", "pair", "ghost"])
     assert r.exit_code == 4
@@ -752,7 +779,7 @@ def test_show_renders_runtime_pairing_and_inbound(channel_daemon: _Daemon) -> No
     assert "channel:  st (seatalk)" in r.output
     assert "running: True" in r.output
     assert "no pending code" in r.output
-    assert "peer:     Yu (chat emp-1)" in r.output
+    assert "person:   Yu (emp-1, chat emp-1, paired " in r.output
     # No connection attempt yet: said as such, not as a fault.
     assert "inbound:  websocket (not connected yet)" in r.output
 
@@ -762,7 +789,7 @@ def test_show_renders_runtime_pairing_and_inbound(channel_daemon: _Daemon) -> No
     # The configuration and the status in one document.
     assert body["name"] == "st" and body["config"]["channel_type"] == "seatalk"
     assert body["status"]["running"] is True
-    assert body["status"]["peer"]["chat_id"] == "emp-1"
+    assert body["status"]["people"][0]["chat_id"] == "emp-1"
     assert body["status"]["inbound"] == {"websocket_state": None, "websocket_error": None}
     assert "callback" not in body["status"]
 

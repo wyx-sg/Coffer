@@ -1,26 +1,22 @@
 // src/components/agents/AgentHooksTab.tsx — the agent's Hooks tab: every hook it will run, in one table.
 //
 // Spec agent-registry "List every hook in the agent's native config" and
-// "Filter an agent's installed kinds by owner". Read only apart from the row
-// actions: each hook opens the file that declares it, and Coffer's own hook —
-// marked, with its health, Codex's trust and its last fire — offers Repair when
-// it is out of date or missing (`onRepair`, wired by the detail page to the
-// connection-change dialog). A missing Coffer hook, which no file declares any
-// more, still gets a row. A file that does not parse is a warning above the
-// table, not a failure of the tab.
+// "Filter an agent's installed kinds by owner". Read only: the hooks are shown
+// grouped by event (AgentHooksByEvent) — what runs on PreToolUse, on
+// SessionStart, … — and nothing opens a file. Coffer's own hook is marked, and
+// its health, Codex's trust and its last fire are said once in a status block
+// that offers Repair when it is out of date or missing (`onRepair`, wired by the
+// detail page to the connection-change dialog). A file that does not parse is a
+// warning above the list, not a failure of the tab.
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Webhook } from "lucide-react";
 
-import { AgentHookCommandCell } from "@/components/agents/AgentHookCommandCell";
-import { AgentHookEventCell } from "@/components/agents/AgentHookEventCell";
-import { AgentHookRowActions } from "@/components/agents/AgentHookRowActions";
-import { AgentHookStateCell } from "@/components/agents/AgentHookStateCell";
+import { AgentHooksByEvent } from "@/components/agents/AgentHooksByEvent";
 import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
-import { DataTable, type Column } from "@/components/DataTable";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
-import { fileName, hookRows, hookSummaryCounts, type HookRow } from "@/lib/agents/hookRows";
+import { hookRows, hookSummaryCounts, type HookRow } from "@/lib/agents/hookRows";
 import type { AgentOut } from "@/lib/api/agents";
 import { useAgentHooks } from "@/lib/hooks/useAgents";
 
@@ -56,66 +52,7 @@ export function AgentHooksTab({ agent, onRepair }: Props) {
     .filter(Boolean)
     .join(" · ");
 
-  const columns: Column<HookRow>[] = [
-    {
-      key: "event",
-      header: t("agents.hooksTab.cols.event"),
-      className: "w-44 align-top",
-      cell: (row) => <AgentHookEventCell row={row} />,
-    },
-    {
-      key: "command",
-      header: t("agents.hooksTab.cols.command"),
-      className: "align-top",
-      cell: (row) => (
-        <AgentHookCommandCell
-          row={row}
-          agentType={agent.type}
-          onCheckAgain={() => void hooks.refetch()}
-          checking={hooks.isFetching}
-        />
-      ),
-    },
-    {
-      key: "file",
-      header: t("agents.hooksTab.cols.file"),
-      className: "align-top",
-      cell: (row) => (
-        <span className="flex flex-col gap-0.5 text-xs">
-          <span className="break-all text-text">
-            {row.plugin
-              ? `${row.plugin.split("@")[0]} · ${fileName(row.path)}`
-              : abbreviateHomePath(row.path)}
-          </span>
-          <span className="text-text-muted">
-            {t("agents.hooksTab.matcher", {
-              matcher: row.matcher || t("agents.hooksTab.matcherAny"),
-            })}
-          </span>
-        </span>
-      ),
-    },
-    {
-      key: "state",
-      header: t("agents.hooksTab.cols.state"),
-      className: "w-32 align-top",
-      cell: (row) => <AgentHookStateCell row={row} />,
-    },
-    {
-      key: "owner",
-      header: t("agents.hooksTab.cols.owner"),
-      className: "w-32 align-top",
-      cell: (row) => (
-        <span className="text-xs text-text-muted">{t(`agents.kindTab.owner.${row.owner}`)}</span>
-      ),
-    },
-    {
-      key: "actions",
-      header: "",
-      className: "text-right align-top",
-      cell: (row) => <AgentHookRowActions row={row} onRepair={onRepair} />,
-    },
-  ];
+  const cofferRow = rows.find((r) => r.owner === "coffer") ?? null;
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -151,12 +88,13 @@ export function AgentHooksTab({ agent, onRepair }: Props) {
         footnote={t("agents.hooksTab.footnote", { agent: agentName })}
       >
         {(visible) => (
-          <DataTable
+          <AgentHooksByEvent
             rows={visible}
-            columns={columns}
-            rowKey={(row) => row.key}
-            isLoading={hooks.isPending}
-            emptyMessage={t("agents.hooksTab.noMatches")}
+            cofferRow={cofferRow}
+            agentType={agent.type}
+            onRepair={onRepair}
+            onCheckAgain={() => void hooks.refetch()}
+            checking={hooks.isFetching}
           />
         )}
       </AgentKindTab>

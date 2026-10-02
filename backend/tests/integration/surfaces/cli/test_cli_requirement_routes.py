@@ -78,7 +78,7 @@ def test_requires_list_is_read(daemon: CliDaemon, probe: FakeCommandProbe) -> No
     assert one.status_code == 200 and one.json()["status"] == "ready"
     missing = daemon.client.get("/clis/wget")
     assert missing.status_code == 404
-    assert missing.json()["error"]["code"] == "CLI_NOT_REQUIRED"
+    assert missing.json()["error"]["code"] == "CLI_NOT_KNOWN"
 
 
 @pytest.mark.acceptance(

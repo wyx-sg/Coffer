@@ -18,6 +18,7 @@ effort whatever the key says).
 
 from __future__ import annotations
 
+import functools
 import json
 import pathlib
 from collections.abc import MutableMapping, Sequence
@@ -123,6 +124,12 @@ def _pop_managed_catalog(doc: MutableMapping[str, object]) -> None:
         doc.pop(CODEX_MODEL_CATALOG_KEY, None)
 
 
+# Both functions below are pure in their arguments and cost a ``tomlkit`` round
+# trip of the whole file (hundreds of milliseconds for a Codex ``config.toml``
+# with a few dozen MCP servers); the reconciler asks the same question of the
+# same text on every pass, so the answer is kept by argument. A str result is
+# immutable, so sharing it is safe.
+@functools.lru_cache(maxsize=32)
 def apply_codex_provider(
     text: str,
     *,
@@ -172,6 +179,7 @@ def apply_codex_provider(
     return tomlkit.dumps(doc)
 
 
+@functools.lru_cache(maxsize=32)
 def remove_codex_provider(
     text: str, *, provider_id: str = CODEX_PROVIDER_ID, managed_effort: str | None = None
 ) -> str:

@@ -16,7 +16,7 @@ import pytest
 
 import coffer
 from coffer.domain.model_proxy.state import CONTROL_TOKEN_HEADER, ProxyState
-from coffer.infrastructure.model_proxy.info import read_info
+from coffer.infrastructure.model_proxy.info import EXIT_PORT_IN_USE, read_info
 from coffer.infrastructure.model_proxy.supervisor import ProxySupervisor
 from tests.integration.model_proxy.conftest import CLAUDE_TOKEN, claude_headers, member, state
 from tests.integration.model_proxy.harness import free_port, sse_reply, wait_for
@@ -111,7 +111,7 @@ def test_entry_refuses_a_held_port(home: Path) -> None:
             capture_output=True,
             timeout=30,
         )
-    assert proc.returncode == 2 and b"in use" in proc.stderr
+    assert proc.returncode == EXIT_PORT_IN_USE and b"in use" in proc.stderr
     assert read_info(home / ".coffer") is None
 
 

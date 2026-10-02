@@ -7,6 +7,7 @@
 // against its tile either: Coffer stopped asking about it.
 import { useTranslation } from "react-i18next";
 
+import { Section } from "@/components/Section";
 import { useAttention } from "@/lib/hooks/useAttention";
 import { isFeatureOn, useFeatureMap } from "@/lib/hooks/useFeatures";
 import { AREAS } from "@/lib/overview/health";
@@ -19,15 +20,12 @@ export function HealthTiles() {
   const shown = AREAS.filter((a) => isFeatureOn(features, a.feature));
   const items = attention.data?.items;
   return (
-    <section aria-labelledby="overview-health" className="space-y-2">
-      <h2 id="overview-health" className="flex min-h-[22px] items-center text-sm font-semibold">
-        {t("overview.health.title")}
-      </h2>
+    <Section as="h2" gap="snug" labelled title={t("overview.health.title")}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {shown.map((area) => (
           <AreaHealthTile key={area.id} area={area} items={items} />
         ))}
       </div>
-    </section>
+    </Section>
   );
 }

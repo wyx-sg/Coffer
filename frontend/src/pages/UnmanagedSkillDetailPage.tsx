@@ -7,7 +7,9 @@
 // change something (open the folder, adopt it, delete it). The folder has no
 // uid: it is addressed by the agent's type, the scan location and the folder
 // name, and the way back is the agent's Skills tab.
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+
+import { useSearchParamsKeepingState as useSearchParams } from "@/lib/hooks/useSearchParamsKeepingState";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Sparkles } from "lucide-react";
 
@@ -25,6 +27,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
 import { agentTabPath } from "@/lib/agents/routes";
+import { agentTypeLabel } from "@/lib/agents/display";
+import { useBackLink } from "@/lib/origin";
 import { useAgentRoute } from "@/lib/hooks/useAgentRoute";
 import { useUnmanagedSkill } from "@/lib/hooks/useUnmanagedSkill";
 
@@ -38,10 +42,11 @@ export function UnmanagedSkillDetailPage() {
   const { data: skill, isPending: skillPending, error } = useUnmanagedSkill(uid, location, name);
   const isPending = route.isPending || (uid !== "" && skillPending);
 
-  const back = {
+  const parent = {
     to: route.type ? agentTabPath(route.type, "skills") : "/agents",
-    label: t("common.backTo", { label: t("agents.workspace.skills") }),
+    label: t("agents.workspace.skills"),
   };
+  const back = useBackLink(parent);
 
   const setTab = (next: string) =>
     setParams(
@@ -86,7 +91,17 @@ export function UnmanagedSkillDetailPage() {
         back={back}
         title={skill.name}
         badges={<UnmanagedSkillBadges skill={skill} />}
-        actions={<UnmanagedSkillActions agentUid={uid} skill={skill} backTo={back.to} />}
+        actions={
+          <UnmanagedSkillActions
+            agentUid={uid}
+            skill={skill}
+            backTo={back.to}
+            adoptedFrom={{
+              to: parent.to,
+              label: route.type ? agentTypeLabel(route.type) : t("agents.title"),
+            }}
+          />
+        }
       />
 
       {!skill.valid ? <UnmanagedSkillInvalidNotice reason={skill.reason} /> : null}

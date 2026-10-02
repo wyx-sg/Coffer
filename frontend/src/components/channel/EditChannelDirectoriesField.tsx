@@ -11,9 +11,9 @@ import { useTranslation } from "react-i18next";
 
 import { FolderPicker } from "@/components/FolderPicker";
 import { FolderPickerField } from "@/components/FolderPickerField";
+import { SettingRow } from "@/components/settings/SettingsLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { DIRECTORIES_MAX, normaliseDirectory } from "@/lib/channels/editChannel";
 
 interface Props {
@@ -43,11 +43,20 @@ export function EditChannelDirectoriesField({
   };
 
   return (
-    <fieldset className="space-y-4" data-testid="channel-directories">
-      <legend className="mb-2 text-sm font-semibold">{t("channels.edit.directories.title")}</legend>
-      <div className="space-y-1.5">
-        <Label htmlFor={defaultId}>{t("channels.edit.directories.default")}</Label>
-        <p className="text-xs text-text-muted">{t("channels.edit.directories.defaultHint")}</p>
+    <>
+      <SettingRow
+        layout="stack"
+        label={t("channels.edit.directories.default")}
+        labelFor={defaultId}
+        description={t("channels.edit.directories.defaultHint")}
+        status={
+          defaultInvalid ? (
+            <p className="text-xs text-danger" role="alert">
+              {t("channels.edit.directories.notAbsolute", { path: defaultText.trim() })}
+            </p>
+          ) : null
+        }
+      >
         <FolderPickerField
           inputId={defaultId}
           ariaLabel={t("channels.edit.directories.default")}
@@ -57,47 +66,46 @@ export function EditChannelDirectoriesField({
           clearable
           typeable
         />
-        {defaultInvalid ? (
-          <p className="text-xs text-danger" role="alert">
-            {t("channels.edit.directories.notAbsolute", { path: defaultText.trim() })}
-          </p>
-        ) : null}
-      </div>
-      <div className="space-y-1.5">
-        <span className="text-sm font-label">{t("channels.edit.directories.allowed")}</span>
-        <p className="text-xs text-text-muted">{t("channels.edit.directories.allowedHint")}</p>
-        {directories.length > 0 ? (
-          <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle">
-            {directories.map((path) => (
-              <li key={path} className="flex items-center gap-2 px-3 py-2">
-                <span className="min-w-0 truncate font-mono text-xs" title={path}>
-                  {path}
-                </span>
-                {path === defaultPath ? (
-                  <Badge variant="secondary">{t("channels.edit.directories.defaultTag")}</Badge>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="ml-auto"
-                  aria-label={t("channels.edit.directories.removeAria", { path })}
-                  onClick={() => onDirectoriesChange(directories.filter((d) => d !== path))}
-                >
-                  {t("channels.edit.directories.remove")}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {directories.length < DIRECTORIES_MAX ? (
-          <FolderPicker value={null} onChange={add} label={t("channels.edit.directories.add")} />
-        ) : (
-          <p className="text-xs text-text-muted">
-            {t("channels.edit.directories.tooMany", { max: DIRECTORIES_MAX })}
-          </p>
-        )}
-      </div>
-    </fieldset>
+      </SettingRow>
+      <SettingRow
+        layout="stack"
+        label={t("channels.edit.directories.allowed")}
+        description={t("channels.edit.directories.allowedHint")}
+      >
+        <div className="flex w-full flex-col items-start gap-2">
+          {directories.length > 0 ? (
+            <ul className="w-full divide-y divide-border-subtle rounded-lg border border-border-subtle">
+              {directories.map((path) => (
+                <li key={path} className="flex items-center gap-2 px-3 py-2">
+                  <span className="min-w-0 truncate font-mono text-xs" title={path}>
+                    {path}
+                  </span>
+                  {path === defaultPath ? (
+                    <Badge variant="secondary">{t("channels.edit.directories.defaultTag")}</Badge>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto"
+                    aria-label={t("channels.edit.directories.removeAria", { path })}
+                    onClick={() => onDirectoriesChange(directories.filter((d) => d !== path))}
+                  >
+                    {t("channels.edit.directories.remove")}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {directories.length < DIRECTORIES_MAX ? (
+            <FolderPicker value={null} onChange={add} label={t("channels.edit.directories.add")} />
+          ) : (
+            <p className="text-xs text-text-muted">
+              {t("channels.edit.directories.tooMany", { max: DIRECTORIES_MAX })}
+            </p>
+          )}
+        </div>
+      </SettingRow>
+    </>
   );
 }

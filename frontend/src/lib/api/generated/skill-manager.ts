@@ -112,11 +112,18 @@ export interface paths {
         };
         /**
          * List Clis
-         * @description Every command a managed skill requires, problems first.
+         * @description Every command a skill or MCP server requires or the person added by
+         *     hand, problems first.
          */
         get: operations["list_clis_api_v1_clis_get"];
         put?: never;
-        post?: never;
+        /**
+         * Add Cli
+         * @description Add a command-line tool by hand, with no skill. 409 ``CLI_TOOL_EXISTS``
+         *     when it was already added; 400 ``CLI_TOOL_INVALID`` for a bad name, path,
+         *     version or login check.
+         */
+        post: operations["add_cli_api_v1_clis_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -143,6 +150,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/clis/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Cli
+         * @description What Coffer finds for a command name or path — where, which version,
+         *     whether it is already added or required — before anything is saved.
+         */
+        post: operations["preview_cli_api_v1_clis_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/clis/{command}": {
         parameters: {
             query?: never;
@@ -152,16 +180,28 @@ export interface paths {
         };
         /**
          * Get Cli
-         * @description One required command, with the hand-off prompt when it needs the
-         *     person; 404 ``CLI_NOT_REQUIRED`` when no skill or MCP server requires it.
+         * @description One command, with the hand-off prompt when it needs the person; 404
+         *     ``CLI_NOT_KNOWN`` when no skill or MCP server requires it and it was not
+         *     added by hand.
          */
         get: operations["get_cli_api_v1_clis__command__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Remove Cli
+         * @description Drop the hand-added declaration. A skill or MCP server that requires the
+         *     command keeps it listed. 404 ``CLI_TOOL_NOT_DECLARED`` for a tool no one
+         *     added by hand.
+         */
+        delete: operations["remove_cli_api_v1_clis__command__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Edit Cli
+         * @description Change a tool added by hand; a field left out stays, ``null`` clears it.
+         *     404 ``CLI_TOOL_NOT_DECLARED`` for a tool no one added by hand.
+         */
+        patch: operations["edit_cli_api_v1_clis__command__patch"];
         trace?: never;
     };
     "/api/v1/clis/{command}/check": {
@@ -178,6 +218,32 @@ export interface paths {
          * @description Probe one required command again.
          */
         post: operations["check_cli_api_v1_clis__command__check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clis/{command}/interface": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Cli Interface
+         * @description The interface read from the tool's help, as kept for this version of
+         *     it. Never runs the tool: ``not_read`` until a POST reads it.
+         */
+        get: operations["get_cli_interface_api_v1_clis__command__interface_get"];
+        put?: never;
+        /**
+         * Read Cli Interface
+         * @description Run the tool's help — ``--help``, ``-h`` and each subcommand's, nothing
+         *     else — and keep the tree. May take up to 30 seconds.
+         */
+        post: operations["read_cli_interface_api_v1_clis__command__interface_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -661,6 +727,117 @@ export interface components {
              */
             type: "builtin";
         };
+        /**
+         * CliAddIn
+         * @description Declare a tool by hand. ``command`` is a command name (``jq``) or the
+         *     absolute path of an executable (``/opt/tools/bin/jq``; the file name is
+         *     the command). ``login_check`` is a command line that starts with the tool,
+         *     like ``gh auth status``.
+         */
+        CliAddIn: {
+            /** Command */
+            command: string;
+            /** Description */
+            description?: string | null;
+            /** Login Check */
+            login_check?: string | null;
+            /** Min Version */
+            min_version?: string | null;
+            /** Title */
+            title?: string | null;
+        };
+        /**
+         * CliEditIn
+         * @description Change a hand-added tool; a field left out stays, ``null`` clears it.
+         */
+        CliEditIn: {
+            /** Description */
+            description?: string | null;
+            /** Login Check */
+            login_check?: string | null;
+            /** Min Version */
+            min_version?: string | null;
+            /** Title */
+            title?: string | null;
+        };
+        /** CliHelpArgumentOut */
+        CliHelpArgumentOut: {
+            /** Description */
+            description: string | null;
+            /** Name */
+            name: string;
+            /** Required */
+            required: boolean;
+        };
+        /**
+         * CliHelpNodeOut
+         * @description One command of the tool: the tool itself (empty ``path``) or a
+         *     subcommand. ``raw`` is the help as the tool printed it.
+         */
+        CliHelpNodeOut: {
+            /** Arguments */
+            arguments: components["schemas"]["CliHelpArgumentOut"][];
+            /** Description */
+            description: string | null;
+            /** Error */
+            error: string | null;
+            /** Options */
+            options: components["schemas"]["CliHelpOptionOut"][];
+            /** Path */
+            path: string[];
+            /** Raw */
+            raw: string;
+            /** Structured */
+            structured: boolean;
+            /** Subcommands */
+            subcommands: components["schemas"]["CliHelpSubcommandOut"][];
+            /** Truncated */
+            truncated: boolean;
+            /** Usage */
+            usage: string | null;
+        };
+        /** CliHelpOptionOut */
+        CliHelpOptionOut: {
+            /** Default */
+            default: string | null;
+            /** Description */
+            description: string | null;
+            /** Metavar */
+            metavar: string | null;
+            /** Names */
+            names: string[];
+            /** Required */
+            required: boolean;
+        };
+        /** CliHelpSubcommandOut */
+        CliHelpSubcommandOut: {
+            /** Name */
+            name: string;
+            /** Summary */
+            summary: string | null;
+        };
+        /**
+         * CliInterfaceOut
+         * @description ``not_read`` carries no nodes: nothing has been run for this version of
+         *     the tool yet (a GET never runs it; POST reads it).
+         */
+        CliInterfaceOut: {
+            /** Discovered At */
+            discovered_at: string | null;
+            /** Incomplete */
+            incomplete: boolean;
+            /** Message */
+            message: string | null;
+            /** Nodes */
+            nodes: components["schemas"]["CliHelpNodeOut"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "not_read" | "ok" | "unavailable" | "no_help";
+            /** Version */
+            version: string | null;
+        };
         /** CliListOut */
         CliListOut: {
             /** Items */
@@ -699,6 +876,8 @@ export interface components {
         };
         /** CliOut */
         CliOut: {
+            /** Added */
+            added: boolean;
             /**
              * Checked At
              * Format: date-time
@@ -706,6 +885,8 @@ export interface components {
             checked_at: string;
             /** Command */
             command: string;
+            /** Description */
+            description: string | null;
             handoff: components["schemas"]["HandoffOut"] | null;
             login: components["schemas"]["CliLoginOut"];
             /** Min Version */
@@ -723,6 +904,27 @@ export interface components {
             status: "missing" | "outdated" | "logged_out" | "ready";
             /** Title */
             title: string | null;
+            /** Version */
+            version: string | null;
+        };
+        /** CliPreviewIn */
+        CliPreviewIn: {
+            /** Command */
+            command: string;
+        };
+        /**
+         * CliPreviewOut
+         * @description What Coffer found for a name or path, before anything is saved.
+         */
+        CliPreviewOut: {
+            /** Added */
+            added: boolean;
+            /** Command */
+            command: string;
+            /** Path */
+            path: string | null;
+            /** Required */
+            required: boolean;
             /** Version */
             version: string | null;
         };
@@ -1661,6 +1863,51 @@ export interface operations {
             };
         };
     };
+    add_cli_api_v1_clis_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CliAddIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CliOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     check_clis_api_v1_clis_check_post: {
         parameters: {
             query?: never;
@@ -1679,6 +1926,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CliListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_cli_api_v1_clis_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CliPreviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CliPreviewOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -1743,6 +2034,94 @@ export interface operations {
             };
         };
     };
+    remove_cli_api_v1_clis__command__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                command: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    edit_cli_api_v1_clis__command__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                command: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CliEditIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CliOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     check_cli_api_v1_clis__command__check_post: {
         parameters: {
             query?: never;
@@ -1763,6 +2142,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CliOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_cli_interface_api_v1_clis__command__interface_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                command: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CliInterfaceOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_cli_interface_api_v1_clis__command__interface_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                command: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CliInterfaceOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

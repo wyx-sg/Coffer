@@ -1,41 +1,23 @@
 // frontend/src/components/channel/ChannelOverviewTab.tsx
-// A channel's Overview: who can use it (the paired owner, and re-pairing) and
+// A channel's Overview: who can use it (the paired owners: add, remove) and
 // which agents it drives — the default agent a new conversation starts on,
 // the shared reach control for the agents it may drive, and a link to the
-// conversations it started. It lists no messages: every message becomes an
-// ordinary conversation, and Conversations is where those are read.
+// latest conversations it started (each a link) and every command it answers.
+// It lists no messages: every message becomes an ordinary conversation, and
+// Conversations is where those are read.
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowRight } from "lucide-react";
 
 import { AgentSelect } from "@/components/agents/AgentSelect";
+import { Section, SectionStack } from "@/components/Section";
 import { ScopeControl } from "@/components/ScopeControl";
-import { Button } from "@/components/ui/button";
-import type { ChannelStatus } from "@/lib/api/channels";
+import type { ChannelPerson, ChannelStatus } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
-import { channelConversationsHref } from "@/lib/channels/tabs";
 import { CHANNEL_KIND } from "@/lib/hooks/useChannels";
 import { displayName } from "@/lib/resourceTitle";
-import { formatDateTime } from "@/lib/utils";
-
-function initials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  const letters = words.length > 1 ? words[0][0] + words[1][0] : name.slice(0, 2);
-  return letters.toUpperCase();
-}
-
-function Section({ title, meta, children }: { title: string; meta?: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2.5" aria-label={title}>
-      <div className="flex min-h-[26px] items-center gap-2">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        {meta ? <span className="text-xs text-text-muted">{meta}</span> : null}
-      </div>
-      {children}
-    </section>
-  );
-}
+import { ChannelCommands } from "./ChannelCommands";
+import { ChannelPeopleList } from "./ChannelPeopleList";
+import { ChannelRecentConversations } from "./ChannelRecentConversations";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -49,87 +31,62 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 interface Props {
   channel: ResourceOut;
   status: ChannelStatus | undefined;
-  /** The pairing code panel, shown under the owner once a new code is out,
-   *  or in place of the owner when the banner is not already showing it. */
-  pairing: ReactNode;
-  showPairing: boolean;
-  onRepair: () => void;
+  onAdd: () => void;
+  onRemove: (person: ChannelPerson) => void;
   onDefaultAgentChange: (agentUid: string) => void;
 }
 
 export function ChannelOverviewTab({
   channel,
   status,
-  pairing,
-  showPairing,
-  onRepair,
+  onAdd,
+  onRemove,
   onDefaultAgentChange,
 }: Props) {
   const { t } = useTranslation();
-  const peer = status?.peer ?? null;
+  const people = status?.people ?? [];
   const defaultAgent =
     typeof channel.config.default_agent === "string" ? channel.config.default_agent : "";
 
   return (
-    <div className="grid items-start gap-7 lg:grid-cols-2">
-      <Section
-        title={t("channels.overview.who.title")}
-        meta={peer ? t("channels.overview.who.oneOwner") : undefined}
-      >
-        {peer ? (
-          <div className="flex min-h-[46px] items-center gap-2.5 border-t border-border-subtle">
-            <span
-              aria-hidden
-              className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-md bg-chip text-2xs font-semibold text-text-muted"
-            >
-              {initials(peer.display_name)}
-            </span>
-            <span className="flex min-w-0 flex-col">
-              <span className="truncate text-sm font-label" data-testid="channel-owner">
-                {peer.display_name}
-              </span>
-              <span className="text-xs text-text-muted">
-                {t("channels.overview.who.ownerLine", { date: formatDateTime(peer.paired_at) })}
-              </span>
-            </span>
-            <Button size="sm" variant="ghost" className="ml-auto" onClick={onRepair}>
-              {t("channels.overview.who.repair")}
-            </Button>
-          </div>
-        ) : (
-          <p className="text-sm text-text-muted">{t("channels.overview.who.nobody")}</p>
-        )}
-        {showPairing ? pairing : null}
-        {peer ? (
-          <p className="text-xs text-text-muted">{t("channels.overview.who.onlyOwner")}</p>
-        ) : null}
-      </Section>
-
-      <Section title={t("channels.overview.agents.title")}>
-        <div className="flex flex-col">
-          <Row label={t("channels.overview.agents.default")}>
-            <AgentSelect
-              label={t("channels.overview.agents.default")}
-              value={defaultAgent}
-              onChange={onDefaultAgentChange}
-            />
-          </Row>
-          <Row label={t("channels.overview.agents.reach")}>
-            <ScopeControl kind={CHANNEL_KIND} uid={channel.uid} enabled={channel.enabled} />
-          </Row>
-        </div>
-        <p className="text-xs leading-normal text-text-muted">
-          {t("channels.overview.agents.help")}
-        </p>
-        <Link
-          to={channelConversationsHref(channel.uid)}
-          className="inline-flex w-fit items-center gap-1 text-sm font-label text-accent-text hover:underline"
-          data-testid="channel-conversations-link"
+    <div className="flex flex-col gap-7">
+      <div className="grid items-start gap-7 lg:grid-cols-2">
+        <Section
+          title={t("channels.overview.who.title")}
+          help={t("channels.overview.who.onlyOwner")}
+          labelled
         >
-          {t("channels.overview.conversations", { name: displayName(channel) })}
-          <ArrowRight className="size-3.5" aria-hidden />
-        </Link>
-      </Section>
+          <ChannelPeopleList
+            people={people}
+            canAdd={status !== undefined}
+            onAdd={onAdd}
+            onRemove={onRemove}
+          />
+        </Section>
+
+        <Section
+          title={t("channels.overview.agents.title")}
+          help={t("channels.overview.agents.help")}
+          labelled
+        >
+          <div className="flex flex-col">
+            <Row label={t("channels.overview.agents.default")}>
+              <AgentSelect
+                label={t("channels.overview.agents.default")}
+                value={defaultAgent}
+                onChange={onDefaultAgentChange}
+              />
+            </Row>
+            <Row label={t("channels.overview.agents.reach")}>
+              <ScopeControl kind={CHANNEL_KIND} uid={channel.uid} enabled={channel.enabled} />
+            </Row>
+          </div>
+        </Section>
+      </div>
+      <SectionStack>
+        <ChannelRecentConversations channelUid={channel.uid} channelName={displayName(channel)} />
+        <ChannelCommands commands={status?.commands} />
+      </SectionStack>
     </div>
   );
 }

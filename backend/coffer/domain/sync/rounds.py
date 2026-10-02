@@ -15,6 +15,7 @@ from enum import StrEnum
 from typing import Any
 
 from coffer.domain.sync.plaintext import PlaintextFinding
+from coffer.domain.vault.remote_errors import RemoteProblem
 
 
 class RoundStatus(StrEnum):
@@ -40,8 +41,6 @@ class RoundStatus(StrEnum):
     PAUSED_CLOUD_FOLDER = "paused_cloud_folder"
     #: The remote was written by a newer Coffer's layout.
     REMOTE_TOO_NEW = "remote_too_new"
-    #: The remote is at an older layout: rebuild it from a migrated machine.
-    REMOTE_TOO_OLD = "remote_too_old"
     #: A file the push would publish holds a plaintext secret: nothing pushed.
     PLAINTEXT_FOUND = "plaintext_found"
     ROLLED_BACK = "rolled_back"
@@ -58,10 +57,22 @@ NEEDS_PERSON = frozenset(
         RoundStatus.AUTH_FAILED,
         RoundStatus.PAUSED_CLOUD_FOLDER,
         RoundStatus.REMOTE_TOO_NEW,
-        RoundStatus.REMOTE_TOO_OLD,
         RoundStatus.PLAINTEXT_FOUND,
     }
 )
+
+
+#: What an ``auth_failed`` round's detail says when the push token is held for
+#: a person's approval rather than refused: the status view names that cause.
+APPROVAL_WAIT = "is waiting for approval in the Coffer desktop app"
+
+#: The round status each way a remote can fail maps to.
+PROBLEM_STATUS = {
+    RemoteProblem.UNREACHABLE: RoundStatus.UNREACHABLE,
+    RemoteProblem.AUTH_FAILED: RoundStatus.AUTH_FAILED,
+    RemoteProblem.PUSH_REJECTED: RoundStatus.PUSH_FAILED,
+    RemoteProblem.OTHER: RoundStatus.FAILED,
+}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -156,4 +167,12 @@ class RoundRecord:
         )
 
 
-__all__ = ["NEEDS_PERSON", "AppliedChange", "PulledCommit", "RoundRecord", "RoundStatus"]
+__all__ = [
+    "APPROVAL_WAIT",
+    "NEEDS_PERSON",
+    "PROBLEM_STATUS",
+    "AppliedChange",
+    "PulledCommit",
+    "RoundRecord",
+    "RoundStatus",
+]

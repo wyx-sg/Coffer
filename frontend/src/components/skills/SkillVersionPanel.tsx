@@ -19,7 +19,8 @@ import { translateApiError } from "@/lib/api/errors";
 import type { VaultPathChangeOut, VaultVersionOut } from "@/lib/api/vault";
 import { parseUnifiedDiff } from "@/lib/knowledge/unifiedDiff";
 import { useRestoreVaultVersion, useVaultDiff } from "@/lib/hooks/useVaultHistory";
-import { formatDateTime } from "@/lib/utils";
+import { TruncatedText } from "@/components/ui/truncated-text";
+import { cn, formatDateTime } from "@/lib/utils";
 import { vaultWriterLabel } from "@/lib/vault/writers";
 
 interface Props {
@@ -35,6 +36,9 @@ export function SkillVersionPanel({ folder, version, isCurrent }: Props) {
   const restore = useRestoreVaultVersion();
   const [confirming, setConfirming] = useState(false);
   const short = version.version.slice(0, 7);
+  // One file's diff at a time, the first changed file until another is picked.
+  const [filePath, setFilePath] = useState<string | null>(null);
+  const file = version.paths.find((p) => p.path === filePath) ?? version.paths[0];
 
   const confirm = () =>
     restore
@@ -48,8 +52,11 @@ export function SkillVersionPanel({ folder, version, isCurrent }: Props) {
       );
 
   return (
-    <section className="space-y-3" aria-label={t("skills.history.versionLabel")}>
-      <div className="flex flex-wrap items-center gap-2">
+    <section
+      className="flex min-h-0 min-w-0 flex-1 flex-col gap-3"
+      aria-label={t("skills.history.versionLabel")}
+    >
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         <p className="text-sm">
           <span className="font-semibold">{formatDateTime(version.time)}</span>
           <span className="text-text-subtle"> · {vaultWriterLabel(t, version.display_writer)}</span>
@@ -75,14 +82,39 @@ export function SkillVersionPanel({ folder, version, isCurrent }: Props) {
       {version.paths.length === 0 ? (
         <p className="text-sm text-text-subtle">{t("skills.history.noFiles")}</p>
       ) : (
-        version.paths.map((change) => (
-          <SkillVersionFileDiff
-            key={change.path}
-            folder={folder}
-            change={change}
-            version={version.version}
-          />
-        ))
+        <>
+          <ul
+            aria-label={t("skills.history.changedFiles")}
+            className="max-h-32 shrink-0 divide-y divide-border-subtle overflow-auto rounded-md border border-border-subtle"
+          >
+            {version.paths.map((change) => (
+              <li key={change.path}>
+                <button
+                  type="button"
+                  data-testid={`skill-version-file-${relName(folder, change.path)}`}
+                  aria-current={change.path === file.path ? "true" : undefined}
+                  onClick={() => setFilePath(change.path)}
+                  className={cn(
+                    "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs",
+                    change.path === file.path ? "bg-surface-selected" : "hover:bg-surface-hover",
+                  )}
+                >
+                  <TruncatedText
+                    mono
+                    text={relName(folder, change.path)}
+                    className="min-w-0 flex-1"
+                  />
+                  <span className="shrink-0 text-text-subtle">
+                    {t(`skills.history.status.${change.status}`, { defaultValue: change.status })}
+                  </span>
+                  <span className="shrink-0 text-success">+{change.added}</span>
+                  <span className="shrink-0 text-danger">−{change.removed}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <SkillVersionFileDiff folder={folder} change={file} version={version.version} />
+        </>
       )}
       <ConfirmDialog
         open={confirming}
@@ -98,6 +130,10 @@ export function SkillVersionPanel({ folder, version, isCurrent }: Props) {
   );
 }
 
+function relName(folder: string, path: string): string {
+  return path.startsWith(folder) ? path.slice(folder.length) : path;
+}
+
 function SkillVersionFileDiff({
   folder,
   change,
@@ -109,10 +145,10 @@ function SkillVersionFileDiff({
 }) {
   const { t } = useTranslation();
   const diff = useVaultDiff(change.path, version);
-  const name = change.path.startsWith(folder) ? change.path.slice(folder.length) : change.path;
+  const name = relName(folder, change.path);
   return (
-    <div className="space-y-1" data-testid={`skill-version-file-${name}`}>
-      <p className="text-xs">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1" data-testid="skill-version-diff">
+      <p className="shrink-0 text-xs">
         <span className="font-mono">{name}</span>
         <span className="text-text-subtle">
           {" "}
@@ -127,7 +163,7 @@ function SkillVersionFileDiff({
           {translateApiError(t, diff.error)}
         </p>
       ) : diff.data.diff ? (
-        <KnowledgeDiff rows={parseUnifiedDiff(diff.data.diff)} />
+        <KnowledgeDiff className="min-h-0 flex-1" rows={parseUnifiedDiff(diff.data.diff)} />
       ) : (
         <p className="text-xs text-text-subtle">{t("skills.history.noTextChange")}</p>
       )}

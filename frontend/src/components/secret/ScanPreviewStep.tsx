@@ -7,6 +7,7 @@
 // lists what was skipped.
 import { useTranslation } from "react-i18next";
 
+import { Section, SectionStack } from "@/components/Section";
 import { Button } from "@/components/ui/button";
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StatusWord } from "@/components/status/StatusWord";
@@ -20,12 +21,9 @@ interface Props {
   onApply: () => void;
 }
 
-function Section({ title, items, tag }: { title: string; items: string[]; tag: string }) {
+function PlanList({ title, items, tag }: { title: string; items: string[]; tag: string }) {
   return (
-    <section className="space-y-1">
-      <h3 className="text-xs font-semibold text-text">
-        {title} <span className="font-normal text-text-muted">{items.length}</span>
-      </h3>
+    <Section title={title} gap="tight">
       <ul className="divide-y divide-border-subtle rounded-md border border-border-subtle">
         {items.map((item) => (
           <li key={item} className="flex items-center gap-3 px-3 py-1.5 text-xs">
@@ -36,7 +34,7 @@ function Section({ title, items, tag }: { title: string; items: string[]; tag: s
           </li>
         ))}
       </ul>
-    </section>
+    </Section>
   );
 }
 
@@ -54,18 +52,18 @@ export function ScanPreviewStep({ plan, applying, onBack, onApply }: Props) {
           })}
         </DialogDescription>
       </DialogHeader>
-      <div className="max-h-[360px] space-y-3 overflow-y-auto">
-        <Section
+      <SectionStack className="max-h-[360px] overflow-y-auto">
+        <PlanList
           title={t("secrets.scan.previewSecrets")}
           items={plan.secrets}
           tag={t("secrets.scan.add")}
         />
-        <Section
+        <PlanList
           title={t("secrets.scan.previewFiles")}
           items={plan.files.map(shortPath)}
           tag={t("secrets.scan.modify")}
         />
-      </div>
+      </SectionStack>
       <p className="text-xs text-text-muted">{t("secrets.scan.previewNote")}</p>
       <DialogFooter>
         <Button variant="ghost" disabled={applying} onClick={onBack}>

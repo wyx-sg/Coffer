@@ -108,7 +108,10 @@ give the status each code is actually sent with.
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
-| `CLI_NOT_REQUIRED` | 404 | No managed skill declares that command in its `requires:`. | List required commands with `coffer cli list`. |
+| `CLI_NOT_KNOWN` | 404 | No managed skill requires that command and no command-line tool was added under that name. | List the known commands with `coffer cli list`. |
+| `CLI_TOOL_EXISTS` | 409 | A command-line tool with that name was already added. | Edit it with `coffer cli edit`, or remove it first. |
+| `CLI_TOOL_INVALID` | 400 | The command name, minimum version or login check is not valid. | Use a plain command name or an absolute path; read `message` for the field. |
+| `CLI_TOOL_NOT_DECLARED` | 404 | That command-line tool was not added by hand, so it cannot be edited or removed. | A command a skill requires is changed in the skill, not here. |
 
 ## Agents and agent workspaces
 
@@ -202,6 +205,7 @@ give the status each code is actually sent with.
 | `ATTACHMENT_TOO_LARGE` | 413 | An upload from the web composer is over the per-file limit the message names. | Attach a smaller file. |
 | `ATTACHMENT_TYPE_UNSUPPORTED` | 415 | No agent can use a file of that type from a turn (video, archives, executables and other binaries). | Attach an image, a document, audio or a text file. |
 | `CHANNEL_NOT_PAIRED` | 409 | The channel has no paired chat to send to. | Pair it: `coffer channel pair <name>`. See [Channels](/guides/channels). |
+| `CHANNEL_PERSON_NOT_FOUND` | 404 | No paired person on the channel matches the one named. | List the people with `coffer channel show <name>` and use one of their ids. |
 | `CHANNEL_NOT_RUNNING` | 409 | The channel's adapter is not running (disabled or still starting). | Enable the channel and wait for it to connect. |
 | `CHANNEL_SEND_FAILED` | 502 | The messaging platform refused or failed the send. | Read `message`; check the bot's token and permissions. |
 

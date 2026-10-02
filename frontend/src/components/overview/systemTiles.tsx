@@ -66,12 +66,15 @@ export function ClisTile({ area, items }: AreaProps) {
           value: clis.length,
           unit: t("overview.health.clis.unit", { count: clis.length }),
           summary:
-            clis.length > 0
-              ? t("overview.health.clis.neededBy", {
-                  count: skills.size,
-                  names: firstNames(clis.map((c) => c.command)),
-                })
-              : t("overview.health.clis.none"),
+            clis.length === 0
+              ? t("overview.health.clis.none")
+              : t(
+                  skills.size > 0 ? "overview.health.clis.neededBy" : "overview.health.clis.listed",
+                  {
+                    count: skills.size,
+                    names: firstNames(clis.map((c) => c.command)),
+                  },
+                ),
         };
       }}
     />

@@ -1,26 +1,20 @@
 // src/components/chat/ConversationWorkspace.tsx — an open conversation (or the
-// draft) beside the list it was opened from: a resizable split (SplitView, width
-// remembered as `coffer.split.chat.list`), the list collapsed below `md` where
-// two panes would leave the thread unreadable. The right pane is the thread with
-// its header and reply box, the draft, a loading line, or — for a link to a
-// conversation that no longer exists — a notice with a way to start a new one.
+// draft), full width: no list beside it — the header's back link returns to the
+// list (ConversationBackLink). It is the thread with its header and reply box,
+// the draft, a loading line, or — for a link to a conversation that no longer
+// exists — a notice with a way back and a way to start a new one.
 import { useTranslation } from "react-i18next";
 import { MessageSquareOff } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
-import { SplitView } from "@/components/SplitView";
 import { Button } from "@/components/ui/button";
 import { translateApiError } from "@/lib/api/errors";
 import type { ChatController } from "@/lib/hooks/useChatController";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { ChatErrorBanner } from "./ChatErrorBanner";
 import { ConversationHeader } from "./ConversationHeader";
-import { ConversationList } from "./ConversationList";
+import { ConversationBackLink } from "./ConversationBackLink";
 import { DraftThread } from "./DraftThread";
 import { MessageThread } from "./MessageThread";
-
-// Wide enough for a title beside its time, and the source badge under it.
-const LIST_DEFAULT_WIDTH = 280;
 
 interface Props {
   c: ChatController;
@@ -28,9 +22,17 @@ interface Props {
   agentNames: ReadonlyMap<string, string>;
 }
 
+/** A header strip holding only the back link (loading, not-found). */
+function BackBar({ listPath }: { listPath: string }) {
+  return (
+    <div className="flex h-[52px] shrink-0 items-center border-b border-border-subtle px-5">
+      <ConversationBackLink listPath={listPath} />
+    </div>
+  );
+}
+
 export function ConversationWorkspace({ c, onNew, agentNames }: Props) {
   const { t } = useTranslation();
-  const isDesktop = useMediaQuery("(min-width: 768px)", true);
   const conv = c.activeConv;
   const agentLabel = conv ? (c.activeAgent?.display_name ?? agentNames.get(conv.agent_key)) : "";
 
@@ -42,11 +44,12 @@ export function ConversationWorkspace({ c, onNew, agentNames }: Props) {
         header={
           <ConversationHeader
             conversation={conv}
-            agentLabel={agentLabel}
+            listPath={c.listPath}
             archived={c.activeArchived}
             onRename={(title) => c.renameConversation(conv.id, title)}
             onArchive={() => c.archiveConversation(conv.id)}
-            onRestore={() => c.restoreConversation(conv.id)}
+            onUnarchive={() => c.unarchiveConversation(conv.id)}
+            unarchivePending={c.unarchivePending}
             onDelete={() => c.requestDelete(conv.id)}
           />
         }
@@ -72,39 +75,47 @@ export function ConversationWorkspace({ c, onNew, agentNames }: Props) {
         queueHeld={c.turn.queueHeld}
         onResumeQueue={() => void c.turn.resumeQueue()}
         readOnly={c.activeArchived}
-        onRestore={() => c.restoreConversation(conv.id)}
-        restorePending={c.restorePending}
+        onUnarchive={() => c.unarchiveConversation(conv.id)}
+        unarchivePending={c.unarchivePending}
       />
     );
   } else if (c.activeLoading) {
     detail = (
-      <p className="flex flex-1 items-center justify-center text-sm text-text-muted">
-        {t("common.loading")}
-      </p>
+      <>
+        <BackBar listPath={c.listPath} />
+        <p className="flex flex-1 items-center justify-center text-sm text-text-muted">
+          {t("common.loading")}
+        </p>
+      </>
     );
   } else if (c.activeNotFound) {
     // A stale deep link says so rather than dropping silently into a draft.
     detail = (
-      <EmptyState
-        className="flex-1"
-        icon={MessageSquareOff}
-        title={t("conversations.thread.notFoundTitle")}
-        description={t("conversations.thread.notFoundBody")}
-        action={
-          <Button variant="outline" onClick={onNew}>
-            {t("conversations.thread.notFoundCta")}
-          </Button>
-        }
-      />
+      <>
+        <BackBar listPath={c.listPath} />
+        <EmptyState
+          className="flex-1"
+          icon={MessageSquareOff}
+          title={t("conversations.thread.notFoundTitle")}
+          description={t("conversations.thread.notFoundBody")}
+          action={
+            <Button variant="outline" onClick={onNew}>
+              {t("conversations.thread.notFoundCta")}
+            </Button>
+          }
+        />
+      </>
     );
   } else {
     detail = (
       <DraftThread
         agents={c.agents}
+        listPath={c.listPath}
         agentKey={c.effectiveDraft.agentKey}
         cwd={c.effectiveDraft.cwd}
         noManagedAgent={c.noManagedAgent}
         onAgentChange={c.setDraftAgent}
+        onCwdChange={c.setDraftCwd}
         modelValue={c.effectiveDraft.model}
         onModelChange={c.setDraftModel}
         effortValue={c.effectiveDraft.effort}
@@ -118,37 +129,15 @@ export function ConversationWorkspace({ c, onNew, agentNames }: Props) {
   }
 
   return (
-    <SplitView
-      storageKey="chat.list"
-      defaultListWidth={LIST_DEFAULT_WIDTH}
-      label={t("splitView.resizeList")}
-      listHidden={!isDesktop}
-      className="h-full flex-1"
-      listClassName="bg-surface-sidebar"
-      detailClassName="flex flex-col overflow-hidden"
-      list={
-        <ConversationList
-          conversations={c.listConversations}
-          activeId={conv?.id ?? null}
-          loading={c.listLoading}
-          listPath={c.listPath}
-          hrefFor={c.pathFor}
-          agentNames={agentNames}
-          onCreate={onNew}
+    <div className="flex h-full flex-1 flex-col overflow-hidden">
+      {c.createError ? (
+        <ChatErrorBanner
+          className="border-b"
+          message={translateApiError(t, c.createError)}
+          onDismiss={c.resetCreateError}
         />
-      }
-      detail={
-        <>
-          {c.createError ? (
-            <ChatErrorBanner
-              className="border-b"
-              message={translateApiError(t, c.createError)}
-              onDismiss={c.resetCreateError}
-            />
-          ) : null}
-          {detail}
-        </>
-      }
-    />
+      ) : null}
+      {detail}
+    </div>
   );
 }

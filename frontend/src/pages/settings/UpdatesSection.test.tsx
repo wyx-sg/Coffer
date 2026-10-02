@@ -165,7 +165,7 @@ describe("UpdatesSection", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/timed out.*You are on 1\.0\.0/);
     // The last successful check's time is still the one shown.
     expect(screen.getByText(/Last checked 2026-09-30 09:15:00/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /try again/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /retry/i })).toBeEnabled();
   });
 
   acceptance("web-ui", "about in a browser offers no update control", async () => {

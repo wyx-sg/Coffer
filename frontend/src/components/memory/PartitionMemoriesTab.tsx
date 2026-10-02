@@ -9,7 +9,7 @@
 // What the page leaves out is the requirement too: no file tree, no
 // `MEMORY.md` / `RETIRED.md`, no `.raw/`, no native path and no agent's
 // original text. Open-in-editor and reveal use the memory's own `file_path`.
-import { useSearchParams } from "react-router-dom";
+import { useSearchParamsKeepingState as useSearchParams } from "@/lib/hooks/useSearchParamsKeepingState";
 import { Brain } from "lucide-react";
 import { useTranslation } from "react-i18next";
 

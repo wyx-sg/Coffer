@@ -3,9 +3,12 @@
 
 A state document is a JSON object at a format version this build can read.
 The areas this build writes are checked for their shape: an MCP server's
-capability switches (``mcp-preferences``: ``server_uid`` and a ``disabled``
-map of capability type to key lists), a channel's pairings
+capability switches (``mcp-preferences``: ``server_uid``, a ``disabled``
+map of capability type to key lists and a ``tool_exposure`` map of tool to
+``listed`` / ``search``), a channel's pairings
 (``channel-peers``: ``channel_uid`` and a ``peers`` list naming each chat),
+the command-line tools a person added by hand (``cli-tools``: a ``tools`` list,
+each entry naming its ``command``),
 and Coffer's own settings (``settings``). Only one document per owner is
 admitted: a second path claiming an owner ``HEAD`` already files elsewhere is
 ``DUPLICATE_UID``. A key this build does not know is a warning; an area it
@@ -33,8 +36,9 @@ STATE_FORMAT = FormatSpec(current=1)
 
 #: area -> (owner field, the document's own keys).
 AREAS: dict[str, tuple[str | None, frozenset[str]]] = {
-    "mcp-preferences": ("server_uid", frozenset({"server_uid", "disabled"})),
+    "mcp-preferences": ("server_uid", frozenset({"server_uid", "disabled", "tool_exposure"})),
     "channel-peers": ("channel_uid", frozenset({"channel_uid", "peers"})),
+    "cli-tools": (None, frozenset({"tools"})),
     "settings": (
         None,
         frozenset(
@@ -53,12 +57,27 @@ def _shape_error(area: str, doc: dict[str, Any]) -> str | None:
             for keys in disabled.values()
         ):
             return "disabled must map a capability type to a list of keys"
+        exposure = doc.get("tool_exposure", {})
+        if not isinstance(exposure, dict) or not all(
+            v in ("listed", "search") for v in exposure.values()
+        ):
+            return "tool_exposure must map a tool name to listed or search"
     if area == "channel-peers":
         peers = doc.get("peers", [])
         if not isinstance(peers, list) or not all(
             isinstance(p, dict) and isinstance(p.get("chat_id"), str) for p in peers
         ):
             return "peers must be a list of objects, each naming its chat_id"
+    if area == "cli-tools":
+        tools = doc.get("tools", [])
+        if not isinstance(tools, list) or not all(
+            isinstance(t, dict) and isinstance(t.get("command"), str) and t["command"]
+            for t in tools
+        ):
+            return "tools must be a list of objects, each naming its command"
+        commands = [t["command"] for t in tools]
+        if len(set(commands)) != len(commands):
+            return "a command is listed twice"
     if area == "settings" and "upkeep" in doc and not isinstance(doc["upkeep"], dict):
         return "upkeep must be an object"
     return None

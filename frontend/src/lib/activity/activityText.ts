@@ -5,6 +5,8 @@
 // the old audit page split them once and the search box promptly stopped
 // matching what the row actually said.
 import type { TFunction } from "i18next";
+import i18n from "@/i18n";
+import { agentTypeLabel } from "@/lib/agents/display";
 import type { components } from "@/lib/api/types";
 
 type AuditEntry = components["schemas"]["AuditEntryOut"];
@@ -29,6 +31,9 @@ export function describeActivity(t: TFunction, entry: AuditEntry): string {
     defaultValue: entry.event_type,
     resource: entry.resource_name ?? "",
     key: text("key"),
+    // The agent a skill was bound to or unbound from (`details.agent`, written
+    // by the link reconciler); older rows carry none.
+    agent: text("agent") ? agentTypeLabel(text("agent")) : t("audit.agentFallback"),
     command: text("command"),
     capType: capTypeLabel(t, capTypeRaw),
     // A failover (provider_failover): the provider left, the one tried next.
@@ -38,21 +43,40 @@ export function describeActivity(t: TFunction, entry: AuditEntry): string {
   });
 }
 
+/** Every audit event type the current locale words as a sentence. */
+function knownEventTypes(): string[] {
+  const bundle = i18n.getResourceBundle(i18n.resolvedLanguage ?? i18n.language, "translation") as
+    | { audit?: { activity?: Record<string, string> } }
+    | undefined;
+  return Object.keys(bundle?.audit?.activity ?? {});
+}
+
 /**
- * The lowercased free-text haystack for one change — everything a user might
- * type into the Changes search box: the rendered sentence (so anything visible
- * is searchable by construction), the resource name, the raw event code a
- * reader may know from `coffer log audit`, and the humanised actor.
+ * The audit event types whose sentence, in the reader's language, contains
+ * `text`. The sentence a row shows is composed here from the event type and
+ * its details, so the database cannot search it; it searches the raw event
+ * code, the resource, the actor and the details itself, and is told these
+ * event types in addition (`q_type`).
  */
-export function auditSearchHaystack(t: TFunction, entry: AuditEntry): string {
-  return [
-    describeActivity(t, entry),
-    entry.resource_name ?? "",
-    entry.event_type,
-    t(`audit.actor.${entry.actor}`, { defaultValue: entry.actor }),
-  ]
-    .join(" ")
-    .toLowerCase();
+export function eventTypesMatching(t: TFunction, text: string): string[] {
+  const needle = text.trim().toLowerCase();
+  if (!needle) return [];
+  return knownEventTypes().filter((eventType) =>
+    describeActivity(t, {
+      id: 0,
+      timestamp: "",
+      event_type: eventType,
+      actor: "",
+      resource_kind: null,
+      resource_name: null,
+      details: null,
+      trace_id: null,
+      conversation_id: null,
+      turn_id: null,
+    })
+      .toLowerCase()
+      .includes(needle),
+  );
 }
 
 /**
@@ -78,21 +102,4 @@ export function daemonLogger(rec: DaemonLogRecord): string {
 export function daemonContinuation(rec: DaemonLogRecord): string[] {
   const lines = rec.record?.continuation;
   return Array.isArray(lines) ? lines.filter((l): l is string => typeof l === "string") : [];
-}
-
-/**
- * The lowercased free-text haystack for one daemon record: the rendered
- * message, its logger, its level, and the lines folded into it. The folded
- * lines matter because a traceback is not a row of its own any more — without
- * them, searching for the exception that caused a failure would find nothing.
- */
-export function daemonSearchHaystack(t: TFunction, rec: DaemonLogRecord): string {
-  return [
-    describeDaemonRecord(t, rec),
-    daemonLogger(rec),
-    rec.level ?? "",
-    daemonContinuation(rec).join(" "),
-  ]
-    .join(" ")
-    .toLowerCase();
 }

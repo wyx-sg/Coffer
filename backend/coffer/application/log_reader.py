@@ -223,34 +223,40 @@ def _is_continuation(line: str, *, in_traceback: bool) -> bool:
     )
 
 
-def parse_log_lines(lines: Iterable[str]) -> list[dict[str, Any]]:
-    """Parsed records, oldest-first, with continuation lines folded in.
+def parse_log_lines_indexed(lines: Iterable[str]) -> list[tuple[int, dict[str, Any]]]:
+    """Parsed records, oldest-first, each with the index of the line that opened it.
 
     A traceback is not four hundred log records with no time, level or logger:
     it is the tail of the one record that raised. Those lines are attached to
     that record under ``continuation`` — visible when the row is expanded,
     rather than as a run of empty rows pushing the record that explains them
-    off the page.
+    off the page. A caller that knows where each line sits in the file uses the
+    index to say where each record starts.
     """
-    records: list[dict[str, Any]] = []
+    records: list[tuple[int, dict[str, Any]]] = []
     in_traceback = False
-    for line in lines:
+    for index, line in enumerate(lines):
         clean = strip_ansi(line).rstrip()
         if not clean.strip():
             continue
         structured = _structured(clean)
         if structured is not None:
-            records.append(structured)
+            records.append((index, structured))
             in_traceback = False
             continue
         if _is_continuation(clean, in_traceback=in_traceback) and records:
-            records[-1].setdefault("continuation", []).append(clean)
+            records[-1][1].setdefault("continuation", []).append(clean)
         else:
-            records.append({"raw": clean})
+            records.append((index, {"raw": clean}))
         # The header opens the block; the first unindented line inside it (the
         # exception itself, already attached above) closes it.
         in_traceback = clean.strip() == _TRACEBACK_HEADER or (in_traceback and clean[:1].isspace())
     return records
+
+
+def parse_log_lines(lines: Iterable[str]) -> list[dict[str, Any]]:
+    """Parsed records, oldest-first, with continuation lines folded in."""
+    return [record for _, record in parse_log_lines_indexed(lines)]
 
 
 def matches_level(record: dict[str, Any], errors_only: bool) -> bool:
@@ -272,6 +278,7 @@ __all__ = [
     "normalise_level",
     "parse_log_line",
     "parse_log_lines",
+    "parse_log_lines_indexed",
     "strip_ansi",
     "tail_lines",
 ]

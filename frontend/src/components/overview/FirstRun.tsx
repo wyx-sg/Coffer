@@ -12,6 +12,7 @@ import { Link } from "react-router-dom";
 
 import { isFeatureOn, useFeatureMap } from "@/lib/hooks/useFeatures";
 import { NAV_ENTRIES } from "@/lib/navigation";
+import { Section } from "@/components/Section";
 import { FirstRunAgents } from "./FirstRunAgents";
 
 /** The areas agents share, in sidebar order, each with its first-step copy key. */
@@ -33,15 +34,13 @@ export function FirstRun() {
   return (
     <>
       <FirstRunAgents />
-      <section aria-labelledby="overview-then" className="space-y-2">
-        <div className="flex min-h-[22px] items-center gap-2">
-          <h2 id="overview-then" className="text-sm font-semibold">
-            {t("overview.firstRun.thenTitle")}
-          </h2>
-          <span className="ml-auto text-xs text-text-subtle">
-            {t("overview.firstRun.thenHint")}
-          </span>
-        </div>
+      <Section
+        as="h2"
+        gap="snug"
+        labelled
+        title={t("overview.firstRun.thenTitle")}
+        help={t("overview.firstRun.thenHint")}
+      >
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {shared.map((s) => {
             const entry = NAV_ENTRIES.find((e) => e.to === s.to);
@@ -70,7 +69,7 @@ export function FirstRun() {
             );
           })}
         </ul>
-      </section>
+      </Section>
     </>
   );
 }

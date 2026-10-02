@@ -64,6 +64,8 @@ const PAGES: Record<string, { list: string; detail?: (a: Address) => string | nu
   knowledge: { list: "/knowledge", detail: (a) => `/knowledge/${encode(a.uid)}` },
   memory: { list: "/memory", detail: (a) => `/memory/${encode(a.uid)}` },
   sync: { list: "/sync" },
+  // The approval switch lives in Settings, Security tab.
+  secret: { list: "/settings/security" },
   // A target the reconciler could not check is written up in the daemon log.
   reconcile: { list: "/activity?tab=daemon" },
   // A command a skill requires is addressed by the command itself.
@@ -116,7 +118,16 @@ export function actionPage(item: AttentionItem, agentType?: string): string {
   return itemPage(item, agentType);
 }
 
-const VERBS = new Set(["connect", "test", "set_secret", "check", "run", "review", "repair"]);
+const VERBS = new Set([
+  "connect",
+  "test",
+  "set_secret",
+  "check",
+  "run",
+  "review",
+  "repair",
+  "turn_on",
+]);
 
 /** i18n key of the action button's label; an unknown verb reads "Open". */
 export function actionLabelKey(verb: string): string {

@@ -46,7 +46,6 @@ describe("SyncRunDetail", () => {
     expect(drawer.getByText("a81d03e..4f1c2a9")).toBeInTheDocument();
     expect(drawer.getByTestId("sync-run-snapshot")).toHaveTextContent("snap-0929-1432");
     const pulled = drawer.getByTestId("sync-run-pulled");
-    expect(pulled).toHaveTextContent("2 commits");
     expect(pulled).toHaveTextContent("c9e1b07");
     expect(pulled).toHaveTextContent("Mac mini: 1 file");
     expect(pulled).toHaveTextContent("Mac mini: 2 files");

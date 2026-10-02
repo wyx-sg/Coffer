@@ -7,6 +7,10 @@
 // Select-all operates on whatever keys the caller passes (DataTable passes the
 // *filtered* keys), so "search/filter first, then select-all, then bulk-act"
 // works as documented.
+//
+// The checkboxes stay out of sight until they are wanted: a row's shows while
+// the pointer is over the row (or focus is in it), the header's while the
+// pointer is over the header, and every one shows once any row is ticked.
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 
@@ -80,14 +84,21 @@ export function BulkBar({
   );
 }
 
+/** Hidden (but keeping its space) until hover/focus on the row, or while anything is ticked. */
+const REVEAL =
+  "opacity-0 transition-opacity duration-fast group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-within:opacity-100";
+
 export function SelectAllHeadCell({
   checked,
   indeterminate,
   ariaLabel,
   onToggle,
   className,
+  selecting = false,
 }: {
   checked: boolean;
+  /** Any row is ticked: the checkbox stays shown. */
+  selecting?: boolean;
   indeterminate: boolean;
   ariaLabel: string;
   onToggle: () => void;
@@ -95,12 +106,14 @@ export function SelectAllHeadCell({
 }) {
   return (
     <TableHead className={cn("w-8", className)}>
-      <Checkbox
-        checked={checked}
-        indeterminate={indeterminate}
-        aria-label={ariaLabel}
-        onChange={onToggle}
-      />
+      <span className={cn("inline-flex", !(selecting || checked || indeterminate) && REVEAL)}>
+        <Checkbox
+          checked={checked}
+          indeterminate={indeterminate}
+          aria-label={ariaLabel}
+          onChange={onToggle}
+        />
+      </span>
     </TableHead>
   );
 }
@@ -110,8 +123,11 @@ export function RowSelectCell({
   ariaLabel,
   onToggle,
   selectable = true,
+  selecting = false,
 }: {
   checked: boolean;
+  /** Any row is ticked: every checkbox stays shown. */
+  selecting?: boolean;
   ariaLabel: string;
   onToggle: () => void;
   /** When false, render a spacer cell (no checkbox) to keep columns aligned. */
@@ -120,7 +136,9 @@ export function RowSelectCell({
   if (!selectable) return <TableCell className="w-8" />;
   return (
     <TableCell className="w-8" onClick={(e) => e.stopPropagation()}>
-      <Checkbox checked={checked} aria-label={ariaLabel} onChange={onToggle} />
+      <span className={cn("inline-flex", !(selecting || checked) && REVEAL)}>
+        <Checkbox checked={checked} aria-label={ariaLabel} onChange={onToggle} />
+      </span>
     </TableCell>
   );
 }

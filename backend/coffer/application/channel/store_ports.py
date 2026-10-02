@@ -24,15 +24,16 @@ from typing import Any, Protocol
 
 @dataclass(frozen=True)
 class ChannelPeer:
-    """The paired owner of a channel (one row in channel_peers)."""
+    """One paired chat of a channel (one row in channel_peers): a person's direct
+    chat, or a group one of the channel's people addressed the bot in."""
 
     resource_uid: str
     chat_id: str
     display_name: str
     paired_at: datetime
     # The paired sender's stable identity (Telegram from.id, SeaTalk
-    # employee_code); every owner gate compares it. Pairing refuses a message
-    # that carries none, and a group row inherits the owner's.
+    # employee_code); every gate compares it. Pairing refuses a message that
+    # carries none, and a group row inherits its addresser's.
     sender_id: str = ""
 
 
@@ -45,8 +46,8 @@ class ChannelPeerRepoPort(Protocol):
 
         A channel may hold several peers: its DM plus every group it has
         been paired to (one per chat). This
-        returns the earliest-paired one, which under the single-owner premise is
-        the owner's DM: pairing the DM is how a channel starts working at all,
+        returns the earliest-paired one, which is the first
+        paired person's DM: pairing a DM is how a channel starts working at all,
         and a group can only be added to a channel that already does.
 
         The order matters, not just the determinism: an answer that depended on
@@ -58,10 +59,10 @@ class ChannelPeerRepoPort(Protocol):
 
     async def list_by_resource(self, resource_uid: str) -> list[ChannelPeer]: ...
 
-    async def owner_sender_id(self, resource_uid: str) -> str | None:
-        """The first non-empty ``sender_id`` paired for this channel, across
-        all its peer rows (DM + any groups/threads). ``None`` when the
-        channel has no peer with a known sender identity."""
+    async def sender_ids(self, resource_uid: str) -> frozenset[str]:
+        """Every paired person's ``sender_id`` across the channel's peer rows
+        (DMs, groups and threads). Empty when nobody is paired — the only state
+        in which a group @mention cannot be a turn for anyone."""
         ...
 
     async def upsert(self, peer: ChannelPeer) -> None: ...
@@ -72,6 +73,12 @@ class ChannelPeerRepoPort(Protocol):
         A change of owner must never be half-applied: saving the new owner and
         dropping the previous one's chats either both happen or neither does,
         so a failure between them cannot leave the channel with no owner."""
+        ...
+
+    async def delete_by_sender(self, resource_uid: str, sender_id: str) -> list[str]:
+        """Un-pair a person: every row carrying ``sender_id`` (their DM and the
+        groups they brought the bot into), as ONE write. Returns the chats dropped
+        — empty when the person was not paired."""
         ...
 
     async def delete_by_chat(self, resource_uid: str, chat_id: str) -> None:

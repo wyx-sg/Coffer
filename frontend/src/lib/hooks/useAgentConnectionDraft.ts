@@ -250,6 +250,7 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     showTiers,
     tiers,
     draftTiers,
+    tiersAreSuggested: tiersKey(draftTiers) === tiersKey(suggestion),
     dirty,
     canConfirm,
     busy,

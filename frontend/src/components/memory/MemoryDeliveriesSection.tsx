@@ -36,7 +36,7 @@ export function MemoryDeliveriesSection() {
       gap="snug"
       labelled
       title={t("memory.deliveries.title")}
-      meta={t("memory.deliveries.window", { count: days })}
+      help={t("memory.deliveries.window", { count: days })}
       testId="memory-deliveries"
     >
       <div className="overflow-hidden rounded-lg border border-border-subtle bg-surface-raised">

@@ -55,6 +55,24 @@ export function SkillsPage() {
   const selected = skills.filter((s) => !s.builtin && picked.has(s.uid));
   const clearSelection = () => setPicked(new Set());
 
+  const reading = (onDeleted: () => void) => (
+    <SkillsReadingPane
+      list={list}
+      skills={skills}
+      match={match ?? null}
+      nameParam={nameParam}
+      orphan={orphan}
+      tab={tab}
+      onTabChange={setTab}
+      showCopies={showCopies}
+      onCloseCopies={() => setShowCopies(false)}
+      selected={selected}
+      onClearSelection={clearSelection}
+      onAdd={openAdd}
+      onDeleted={onDeleted}
+    />
+  );
+
   return (
     // Full-bleed like the chat page: Layout pads every page, and this one is a
     // workspace whose two panes each scroll on their own.
@@ -102,22 +120,7 @@ export function SkillsPage() {
         }
         detail={
           <div className="px-7 pb-5 pt-5">
-            <SkillsReadingPane
-              list={list}
-              skills={skills}
-              match={match ?? null}
-              nameParam={nameParam}
-              orphan={orphan}
-              tab={tab}
-              onTabChange={setTab}
-              showCopies={showCopies}
-              onCloseCopies={() => setShowCopies(false)}
-              onCheckCopies={checkCopies}
-              selected={selected}
-              onClearSelection={clearSelection}
-              onAdd={openAdd}
-              onDeleted={() => navigate("/skills", { replace: true })}
-            />
+            {reading(() => navigate("/skills", { replace: true }))}
           </div>
         }
       />

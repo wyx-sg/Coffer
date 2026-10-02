@@ -109,8 +109,16 @@ class ChannelPeerRepo:
     async def list_by_resource(self, resource_uid: str) -> list[ChannelPeer]:
         return self._peers(resource_uid)
 
-    async def owner_sender_id(self, resource_uid: str) -> str | None:
-        return next((p.sender_id for p in self._peers(resource_uid) if p.sender_id), None)
+    async def sender_ids(self, resource_uid: str) -> frozenset[str]:
+        return frozenset(p.sender_id for p in self._peers(resource_uid) if p.sender_id)
+
+    async def delete_by_sender(self, resource_uid: str, sender_id: str) -> list[str]:
+        peers = self._peers(resource_uid)
+        gone = [p.chat_id for p in peers if p.sender_id == sender_id]
+        if gone:
+            kept = [p for p in peers if p.sender_id != sender_id]
+            self._save(resource_uid, kept, f"Un-paired person {sender_id}")
+        return gone
 
     async def upsert(self, peer: ChannelPeer) -> None:
         await self.upsert_replacing(peer, ())

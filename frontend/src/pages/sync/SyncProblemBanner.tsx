@@ -135,6 +135,35 @@ export function SyncProblemBanner({ status, runs, onRun, running }: Props) {
           </div>
         </SyncBannerCard>
       );
+    case "waiting_approval":
+      return (
+        <SyncBannerCard
+          icon={KeyRound}
+          tone="warn"
+          title={t("sync.problem.waiting_approval.title")}
+          testId="sync-problem"
+        >
+          <Body>
+            {problem.secret_ref ? (
+              <>
+                <code className="rounded-xs bg-code px-1 py-0.5 font-mono text-xs text-text">
+                  {problem.secret_ref}
+                </code>{" "}
+              </>
+            ) : null}
+            {t("sync.problem.waiting_approval.body", { host })}
+          </Body>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link to="/secrets">{t("sync.problem.openSecrets")}</Link>
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={onRun} loading={running}>
+              <RotateCw aria-hidden />
+              {t("sync.problem.retry")}
+            </Button>
+          </div>
+        </SyncBannerCard>
+      );
     case "cloud_folder":
       return <SyncCloudFolderCard status={status} />;
     case "git_missing":

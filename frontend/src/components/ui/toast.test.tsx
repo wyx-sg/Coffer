@@ -139,15 +139,17 @@ describe("toast timing", () => {
     expect(screen.queryByRole("status")).toBeNull();
   });
 
-  test("an error stays until dismissed", () => {
+  test("an error stays 8s, then leaves on its own", () => {
     render(
       <ToastProvider>
         <Trigger />
       </ToastProvider>,
     );
     fire();
-    advance(60_000);
+    advance(7_000);
     expect(screen.getByRole("alert")).toBeInTheDocument();
+    advance(1_500);
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   test("hovering a card pauses its clock; leaving resumes it with the time left", () => {
@@ -171,7 +173,11 @@ describe("toast timing", () => {
   test("focus inside a card pauses it too", () => {
     render(
       <ToastProvider>
-        <Trigger kind="success" message="Saved" options={{ action: { label: "Open", onClick() {} } }} />
+        <Trigger
+          kind="success"
+          message="Saved"
+          options={{ action: { label: "Open", onClick() {} } }}
+        />
       </ToastProvider>,
     );
     fire();
@@ -180,7 +186,7 @@ describe("toast timing", () => {
     expect(screen.getByRole("status")).toBeInTheDocument();
   });
 
-  test("a card that leaves on its own draws a timer line; an error does not", () => {
+  test("a card that leaves on its own draws a timer line", () => {
     render(
       <ToastProvider>
         <Trigger kind="success" message="Saved" />
@@ -190,14 +196,14 @@ describe("toast timing", () => {
     expect(screen.getByTestId("toast-timer")).toBeInTheDocument();
   });
 
-  test("an error draws no timer line", () => {
+  test("an error draws a timer line too", () => {
     render(
       <ToastProvider>
         <Trigger />
       </ToastProvider>,
     );
     fire();
-    expect(screen.queryByTestId("toast-timer")).toBeNull();
+    expect(screen.getByTestId("toast-timer")).toBeInTheDocument();
   });
 
   test("at most three show, newest at the bottom; older ones fold into a chip", () => {

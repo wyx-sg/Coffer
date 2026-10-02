@@ -161,8 +161,8 @@ describe("SyncPage — header", () => {
   });
 
   test.each([
-    ["unreachable", "Remote unreachable", "Try again"],
-    ["auth_failed", "Sign-in failed", "Try again"],
+    ["unreachable", "Remote unreachable", "Retry"],
+    ["auth_failed", "Sign-in failed", "Retry"],
     ["push_failed", "Push failed", "Sync now"],
     ["cloud_folder", "Paused", "Sync now"],
     ["git_missing", "Git missing", "Sync now"],

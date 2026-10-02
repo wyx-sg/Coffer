@@ -2,7 +2,7 @@
 //
 // Real QueryClientProvider and router; only the agent-providers api is mocked.
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
@@ -28,7 +28,12 @@ function item(overrides: Partial<AttentionItem> = {}): AttentionItem {
     reason: "Its launcher uvx isn't found on this machine.",
     severity: "error",
     since: null,
-    action: { verb: "test", method: "POST", path: "/api/v1/resources/mcp_server/u1/test", body: null },
+    action: {
+      verb: "test",
+      method: "POST",
+      path: "/api/v1/resources/mcp_server/u1/test",
+      body: null,
+    },
     handoff: { prompt: PROMPT },
     ...overrides,
   };
@@ -82,10 +87,7 @@ acceptance("web-ui", "a needs-you row offers the item's hand-off in its menu", a
 
   openMenu();
   fireEvent.click(await screen.findByRole("menuitem", { name: "Ask an agent" }));
-  const dialog = await screen.findByRole("dialog");
-  const start = within(dialog).getByRole("button", { name: "Start" });
-  await waitFor(() => expect(start).toBeEnabled());
-  fireEvent.click(start);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(await screen.findByTestId("draft")).toHaveTextContent(PROMPT);
 });
 

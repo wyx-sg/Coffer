@@ -7,7 +7,7 @@ import pytest
 from coffer.application.attention import AttentionAction, Severity
 from coffer.application.channel.attention import ChannelAttentionSource
 from coffer.application.channel.inbound_status import InboundInfo
-from coffer.application.channel.service import ChannelStatus
+from coffer.application.channel.service import ChannelStatus, SecretApproval
 from tests.unit.application._attention_fakes import FakeResources, resource
 
 
@@ -19,6 +19,7 @@ def _status(
     ws: tuple[str, str | None] | None = None,
     seatalk: bool = True,
     title: str | None = None,
+    approval: str | None = None,
 ) -> ChannelStatus:
     inbound = (
         InboundInfo(websocket_state=ws[0] if ws else None, websocket_error=ws[1] if ws else None)
@@ -32,11 +33,13 @@ def _status(
         enabled=True,
         running=running,
         pending_pairing=False,
-        peer=None,
-        peer_conversation_id=None,
+        people=(),
         inbound=inbound,
         runs_here=runs_here,
         title=title,
+        secret_approval=SecretApproval(state=approval, secret_ref="coffer://secret/x")
+        if approval
+        else None,
     )
 
 
@@ -156,3 +159,15 @@ async def test_a_raising_status_propagates() -> None:
 def test_source_identity() -> None:
     source = _source()
     assert (source.name, source.feature) == ("channel", None)
+
+
+@pytest.mark.parametrize(
+    ("state", "phrase"), [("pending", "waits for your approval"), ("refused", "refused")]
+)
+async def test_a_secret_awaiting_approval_is_named_not_a_generic_stop(
+    state: str, phrase: str
+) -> None:
+    [item] = await _source(_status("c1", running=False, approval=state)).items()
+    assert item.reason_code == "channel_secret_approval"
+    assert phrase in item.reason
+    assert "Secrets page" in item.reason

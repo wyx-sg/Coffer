@@ -17,6 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.domain.sync.rounds import RoundRecord
+from coffer.infrastructure.persistence.keyset import newest_first_after
 from coffer.infrastructure.persistence.models import SyncRunModel
 
 
@@ -47,14 +48,18 @@ class SyncRunRepo:
             new_id = row.id
         return RoundRecord.from_json(payload, id=new_id)
 
-    async def recent(self, limit: int, offset: int = 0) -> list[RoundRecord]:
+    async def recent(
+        self, limit: int, after: tuple[datetime, int] | None = None
+    ) -> list[RoundRecord]:
+        stmt = select(SyncRunModel)
+        if after is not None:
+            stmt = stmt.where(newest_first_after(SyncRunModel.finished_at, SyncRunModel.id, after))
         async with self._sm() as session:
             rows = (
                 await session.execute(
-                    select(SyncRunModel)
-                    .order_by(SyncRunModel.finished_at.desc(), SyncRunModel.id.desc())
-                    .offset(offset)
-                    .limit(limit)
+                    stmt.order_by(SyncRunModel.finished_at.desc(), SyncRunModel.id.desc()).limit(
+                        limit
+                    )
                 )
             ).scalars()
             return [_record(r) for r in rows]

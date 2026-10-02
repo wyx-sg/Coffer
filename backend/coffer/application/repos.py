@@ -7,6 +7,7 @@ The resource repository is `coffer.infrastructure.vault.resource_store.FileResou
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any, Protocol
 
@@ -79,6 +80,8 @@ class AuditRepo(Protocol):
         limit: int = 50,
         after: tuple[datetime, int] | None = None,
         trace_id: str | None = None,
+        q: str | None = None,
+        q_types: Sequence[str] = (),
     ) -> list[AuditEntry]: ...
     async def count(
         self,
@@ -89,6 +92,8 @@ class AuditRepo(Protocol):
         event_prefix: str | None = None,
         since: datetime | None = None,
         trace_id: str | None = None,
+        q: str | None = None,
+        q_types: Sequence[str] = (),
     ) -> int: ...
 
 

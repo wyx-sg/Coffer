@@ -10,7 +10,7 @@
 // re-exported under the names the hooks and pages already import. Transport is
 // the typed client through `unwrap` (.agents/frontend.md §4).
 
-import { getApiClient, unwrap } from "@/lib/api/client";
+import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type { components } from "@/lib/api/generated/channels";
 
 type Schemas = components["schemas"];
@@ -37,9 +37,34 @@ export type ChannelSettings = NonNullable<Schemas["ChannelStatusOut"]["settings"
 // API functions
 // ---------------------------------------------------------------------------
 
-/** Issue a single-use pairing code (replaces any previous pending code). */
-export function issuePairingCode(uid: string): Promise<PairingCode> {
-  return unwrap(getApiClient().POST("/channels/{uid}/pairing-code", { params: { path: { uid } } }));
+export type ChannelPerson = Schemas["ChannelPersonOut"];
+
+/** Issue a single-use pairing code (replaces any previous pending code). Whoever
+ *  sends it is added as an owner; with `replaces` (a paired person's `sender_id`)
+ *  they take that person's place instead. */
+export function issuePairingCode(uid: string, replaces?: string): Promise<PairingCode> {
+  return unwrap(
+    getApiClient().POST("/channels/{uid}/pairing-code", {
+      params: { path: { uid } },
+      ...(replaces ? { body: { replaces } } : {}),
+    }),
+  );
+}
+
+/** Withdraw the channel's outstanding pairing code. */
+export async function cancelPairingCode(uid: string): Promise<void> {
+  await unwrapVoid(
+    getApiClient().DELETE("/channels/{uid}/pairing-code", { params: { path: { uid } } }),
+  );
+}
+
+/** Un-pair one person (their direct chat and the groups they brought the bot into). */
+export async function removeChannelPerson(uid: string, senderId: string): Promise<void> {
+  await unwrapVoid(
+    getApiClient().DELETE("/channels/{uid}/people/{sender_id}", {
+      params: { path: { uid, sender_id: senderId } },
+    }),
+  );
 }
 
 /** Runtime, pairing, and inbound status of a channel. */
@@ -52,7 +77,7 @@ export function restartChannel(uid: string): Promise<RestartOut> {
   return unwrap(getApiClient().POST("/channels/{uid}/restart", { params: { path: { uid } } }));
 }
 
-/** Push a text message to the channel's paired peer. */
+/** Push a text message to the channel's first paired owner. */
 export function notifyChannel(uid: string, text: string): Promise<NotifyOut> {
   return unwrap(
     getApiClient().POST("/channels/{uid}/notify", {

@@ -1,12 +1,16 @@
 // src/components/channel/PlatformMark.tsx — a chat platform shown as a small
-// two-letter tile (ST SeaTalk, TG Telegram) on the neutral chip, the way the
+// tile on the neutral chip — the platform's mark (SeaTalk's and Telegram's own
+// logos, as supplied by their sites), or two letters for a platform with none, the way the
 // Channels list, a channel's header and a conversation's source badge all show
 // it. Colour stays reserved for state, so the tile is the same for every
 // platform; the name beside it says which one (lib/chat/mirror `platformName`).
+import seatalkUrl from "@/assets/brand/seatalk-logo.png";
+import telegramUrl from "@/assets/brand/telegram-logo.svg";
 import { cn } from "@/lib/utils";
 
 import { platformName } from "@/lib/chat/mirror";
 
+const MARKS: Record<string, string> = { seatalk: seatalkUrl, telegram: telegramUrl };
 const INITIALS: Record<string, string> = { seatalk: "ST", telegram: "TG" };
 
 /** A platform key as its product name (`seatalk` → `SeaTalk`). */
@@ -31,7 +35,11 @@ export function PlatformMark({ platform, size = "sm", className }: Props) {
         className,
       )}
     >
-      {initials}
+      {MARKS[platform] ? (
+        <img src={MARKS[platform]} alt="" className="block h-[78%] w-[78%] object-contain" />
+      ) : (
+        initials
+      )}
     </span>
   );
 }

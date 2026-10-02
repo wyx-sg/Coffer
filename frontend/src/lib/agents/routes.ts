@@ -18,9 +18,9 @@ export const AGENT_TABS = [
   "mcp-servers",
   "plugins",
   "hooks",
-  "config",
   "memory",
   "sessions",
+  "config",
 ] as const;
 export type AgentTab = (typeof AGENT_TABS)[number];
 export const DEFAULT_AGENT_TAB: AgentTab = "overview";
@@ -41,17 +41,6 @@ export function agentBasePath(type: string): string {
 /** The canonical address of one tab (`/agents/<type>` for Overview). */
 export function agentTabPath(type: string, tab: AgentTab, search = ""): string {
   return detailTabPath(agentBasePath(type), tab, AGENT_TABS, DEFAULT_AGENT_TAB, search);
-}
-
-/** One direct MCP entry of the agent, under the MCP servers tab. */
-export function agentMcpEntryPath(type: string, entry: string, source?: string): string {
-  const qs = source ? `?source=${enc(source)}` : "";
-  return `${agentBasePath(type)}/mcp-servers/${enc(entry)}${qs}`;
-}
-
-/** One installed plugin (`<name>@<marketplace>`, one encoded segment), under Plugins. */
-export function agentPluginPath(type: string, pluginId: string): string {
-  return `${agentBasePath(type)}/plugins/${enc(pluginId)}`;
 }
 
 /** One skill folder Coffer does not manage, named as the scan names it, under Skills. */

@@ -165,10 +165,7 @@ export function HistoryBlock({ size, onReveal }: Props) {
             {prune.isPending ? t("settings.retention.pruning") : t("settings.retention.pruneAll")}
           </Button>
         </SettingRow>
-        <p
-          className="pb-1 pt-2 text-xs text-text-muted"
-          data-testid="settings-data-other-retention"
-        >
+        <p className="py-3 text-xs text-text-muted" data-testid="settings-data-other-retention">
           {t("settings.data.otherRetention")} <code className="font-mono">coffer config</code>
         </p>
       </DataBlock>

@@ -23,6 +23,7 @@ export type SyncStateKind =
   | "plaintext_found"
   | "unreachable"
   | "auth_failed"
+  | "waiting_approval"
   | "cloud_folder"
   | "git_missing"
   | "layout"
@@ -51,6 +52,7 @@ const PILL_TONE: Record<SyncStateKind, PillTone> = {
   plaintext_found: "err",
   unreachable: "warn",
   auth_failed: "err",
+  waiting_approval: "warn",
   cloud_folder: "warn",
   git_missing: "err",
   layout: "err",
@@ -106,7 +108,7 @@ export function primaryAction(kind: SyncStateKind): {
   disabled: boolean;
 } {
   if (kind === "syncing") return { label: "syncing", disabled: true };
-  if (kind === "unreachable" || kind === "auth_failed")
+  if (kind === "unreachable" || kind === "auth_failed" || kind === "waiting_approval")
     return { label: "tryAgain", disabled: false };
   // A stopped round is answered on its own page; another round would only stop again.
   return { label: "syncNow", disabled: kind === "conflicts" || kind === "held" };

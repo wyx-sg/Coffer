@@ -25,7 +25,6 @@ const MOVED_NOTHING = new Set<string>([
   "failed",
   "paused_cloud_folder",
   "remote_too_new",
-  "remote_too_old",
   "join_required",
   "waiting_on_edit",
 ]);
@@ -96,6 +95,11 @@ export function roundLabel(t: TFunction, round: SyncRound, ctx: Context): RoundL
           ctx.newest && ctx.nextRoundAt
             ? t("sync.rounds.detail.retriesAt", { time: clock(ctx.nextRoundAt) })
             : null,
+      };
+    case "pushed":
+      return {
+        main,
+        detail: round.join === "replace" ? t("sync.rounds.detail.replacedRemote") : null,
       };
     case "auth_failed":
       return { main, detail: t("sync.rounds.detail.nothingPulledOrPushed") };

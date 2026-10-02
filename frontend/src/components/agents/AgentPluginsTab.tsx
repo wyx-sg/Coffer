@@ -5,16 +5,18 @@
 // a plugin by the type's own strategy" and "Filter an agent's installed kinds by
 // owner". Coffer installs no plugins, so every row is the agent's own. A row
 // carries the plugin's version, marketplace and state, an enabled switch and
-// Uninstall (hidden when the listing says it cannot run now); its name opens the
-// plugin's own page — rows do not expand. When Uninstall cannot run because
+// Uninstall (hidden when the listing says it cannot run now); its name opens a
+// dialog saying what the plugin is and which skills, commands, subagents, hooks
+// and MCP servers it provides — rows do not expand. When Uninstall cannot run because
 // Claude Code's program is not found, the tab offers the agent's reinstall
 // hand-off beside saying so.
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 import { PackageMinus, Puzzle } from "lucide-react";
 
+import { PluginInfoDialog } from "@/components/agents/PluginInfoDialog";
 import { PluginUninstallDialog } from "@/components/agents/PluginUninstallDialog";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
 import { DataTable, type Column } from "@/components/DataTable";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
@@ -24,7 +26,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { agentTypeLabel } from "@/lib/agents/display";
 import type { Owner } from "@/lib/agents/owner";
-import { agentPluginPath } from "@/lib/agents/routes";
 import type { AgentOut } from "@/lib/api/agents";
 import type { PluginOut } from "@/lib/api/agents-workspace";
 import { useAgentPlugins, useTogglePlugin, useUninstallPlugin } from "@/lib/hooks/useAgents";
@@ -39,6 +40,7 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
   const toggle = useTogglePlugin(agent.uid);
   const uninstall = useUninstallPlugin(agent.uid);
   const [target, setTarget] = useState<PluginOut | null>(null);
+  const [infoId, setInfoId] = useState<string | null>(null);
 
   const rows = useMemo<PluginRow[]>(
     () => (plugins.data?.items ?? []).map((p) => ({ ...p, owner: "own" })),
@@ -58,35 +60,44 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
   const columns: Column<PluginRow>[] = [
     {
       key: "plugin",
+      className: "w-[38%]",
       header: t("agents.pluginsTab.cols.plugin"),
       cell: (p) => (
-        <span className="flex flex-col gap-0.5">
-          <Link
-            to={agentPluginPath(agent.type, p.id)}
-            className="font-medium text-text underline-offset-2 hover:text-accent-text hover:underline"
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <button
+            type="button"
+            onClick={() => setInfoId(p.id)}
+            className="block w-full min-w-0 text-left font-medium text-text underline-offset-2 hover:text-accent-text hover:underline"
           >
-            {p.name}
-          </Link>
-          {p.description ? <span className="text-xs text-text-muted">{p.description}</span> : null}
+            <TruncatedText text={p.name} />
+          </button>
+          {p.description ? (
+            <TruncatedText text={p.description} className="text-xs text-text-muted" />
+          ) : null}
         </span>
       ),
     },
     {
       key: "version",
+      className: "w-[110px]",
       header: t("agents.pluginsTab.cols.version"),
       cell: (p) => (
-        <span className="font-mono text-xs text-text-muted">
-          {p.version ?? t("common.emptyValue")}
-        </span>
+        <TruncatedText
+          mono
+          text={p.version ?? t("common.emptyValue")}
+          className="text-xs text-text-muted"
+        />
       ),
     },
     {
       key: "marketplace",
+      className: "w-[22%]",
       header: t("agents.pluginsTab.cols.marketplace"),
-      cell: (p) => <span className="break-all text-xs text-text-muted">{p.marketplace}</span>,
+      cell: (p) => <TruncatedText text={p.marketplace} className="text-xs text-text-muted" />,
     },
     {
       key: "state",
+      className: "w-[110px]",
       header: t("agents.pluginsTab.cols.state"),
       cell: (p) =>
         p.cache_present === false ? (
@@ -100,7 +111,7 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
     {
       key: "actions",
       header: "",
-      className: "text-right",
+      className: "w-[110px] text-right",
       cell: (p) => (
         <span className="inline-flex items-center justify-end gap-3">
           <Switch
@@ -167,6 +178,7 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
       >
         {(visible) => (
           <DataTable
+            fixed
             rows={visible}
             columns={columns}
             rowKey={(p) => p.id}
@@ -175,6 +187,7 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
           />
         )}
       </AgentKindTab>
+      <PluginInfoDialog agentUid={agent.uid} pluginId={infoId} onClose={() => setInfoId(null)} />
       <PluginUninstallDialog
         agentType={agent.type}
         plugin={target}

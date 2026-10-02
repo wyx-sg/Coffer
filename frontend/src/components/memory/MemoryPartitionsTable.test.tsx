@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { acceptance } from "@/test/acceptance";
+import { pathText } from "@/test/truncatedPath";
 import { MemoryPartitionsTable } from "./MemoryPartitionsTable";
 import { COFFER, GLOBAL, GONE } from "./memoryTestData";
 
@@ -45,8 +46,12 @@ describe("MemoryPartitionsTable", () => {
     const global = within(screen.getByText("global").closest("tr") as HTMLElement);
     expect(global.getByText("Every project")).toBeInTheDocument();
     expect(global.getByText("12")).toBeInTheDocument();
-    const coffer = within(screen.getByText("coffer").closest("tr") as HTMLElement);
-    expect(coffer.getByText("~/work/coffer")).toBeInTheDocument();
+    const coffer = within(
+      screen
+        .getByText("coffer", { selector: "[data-truncated-text]" })
+        .closest("tr") as HTMLElement,
+    );
+    expect(coffer.getByText(pathText("~/work/coffer"))).toBeInTheDocument();
     // No search box: the design has none.
     expect(screen.queryByRole("searchbox")).toBeNull();
     expect(screen.queryByPlaceholderText(/search/i)).toBeNull();
@@ -54,12 +59,20 @@ describe("MemoryPartitionsTable", () => {
 
   test("only a partition whose repository is gone is marked and offers Delete", () => {
     renderTable(<MemoryPartitionsTable rows={[COFFER, GONE]} />);
-    const gone = within(screen.getByText("old-prototype").closest("tr") as HTMLElement);
+    const gone = within(
+      screen
+        .getByText("old-prototype", { selector: "[data-truncated-text]" })
+        .closest("tr") as HTMLElement,
+    );
     expect(gone.getByTestId("partition-unresolvable-badge")).toHaveTextContent(
       /repository missing/i,
     );
     expect(gone.getByRole("button", { name: /delete: old-prototype/i })).toBeInTheDocument();
-    const coffer = within(screen.getByText("coffer").closest("tr") as HTMLElement);
+    const coffer = within(
+      screen
+        .getByText("coffer", { selector: "[data-truncated-text]" })
+        .closest("tr") as HTMLElement,
+    );
     expect(coffer.queryByRole("button", { name: /delete/i })).toBeNull();
     expect(coffer.queryByTestId("partition-unresolvable-badge")).toBeNull();
   });

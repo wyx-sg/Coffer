@@ -2,12 +2,12 @@
 // "Read one transcript session in bounded windows".
 // The agent detail page's Sessions tab: the agent's own CLI session history
 // (Claude Code's ~/.claude/projects, Codex's ~/.codex/sessions), read-only.
-// A resizable split of the session list (SessionList) and the open session
+// A resizable split of the session list (SessionList, newest first) and the open session
 // (SessionReader). The open session is in the URL as `?session=<source_path>`
 // — the file, because `session_id` repeats across subagent sidechain files —
 // so a reload or a link opens it again; none is opened until one is picked.
 // Coffer never writes these files.
-import { useSearchParams } from "react-router-dom";
+import { useSearchParamsKeepingState as useSearchParams } from "@/lib/hooks/useSearchParamsKeepingState";
 import { useTranslation } from "react-i18next";
 import { MessagesSquare } from "lucide-react";
 
@@ -22,15 +22,14 @@ import type { AgentOut } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
 import { useAgentTranscripts, useRefreshTranscripts } from "@/lib/hooks/useAgentTranscripts";
 
-// The most recent sessions, read once: whether there are any at all, and the
-// projects the filter offers (those seen in this window).
-const PROJECT_SAMPLE = 100;
+// One session is enough to know whether there are any at all.
+const EXISTENCE_PROBE = 1;
 
 export function AgentSessionsTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const selected = params.get("session");
-  const recent = useAgentTranscripts(agent.uid, { limit: PROJECT_SAMPLE });
+  const recent = useAgentTranscripts(agent.uid, { limit: EXISTENCE_PROBE });
   const refresh = useRefreshTranscripts(agent.uid);
   const fill = useFillToBottom();
   const agentName = agentTypeLabel(agent.type);
@@ -80,12 +79,6 @@ export function AgentSessionsTab({ agent }: { agent: AgentOut }) {
     );
   }
 
-  const projects = [
-    ...new Set(
-      (recent.data?.sessions ?? []).flatMap((s) => (s.project_path ? [s.project_path] : [])),
-    ),
-  ].sort();
-
   return (
     <div ref={fill.ref} style={fill.style} className="flex min-h-0">
       <SplitView
@@ -93,7 +86,7 @@ export function AgentSessionsTab({ agent }: { agent: AgentOut }) {
         label={t("splitView.resizeList")}
         className="min-h-0 flex-1"
         detailClassName="pl-4"
-        list={<SessionList uid={agent.uid} projects={projects} selected={selected} onOpen={open} />}
+        list={<SessionList uid={agent.uid} selected={selected} onOpen={open} />}
         detail={
           selected ? (
             <SessionReader

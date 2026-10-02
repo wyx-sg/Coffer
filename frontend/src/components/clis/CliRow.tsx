@@ -1,5 +1,8 @@
 // src/components/clis/CliRow.tsx — one command in the CLIs list pane: its name, one status line, how many MCP servers and skills need it.
 //
+// The right edge says who needs it ("2 skills", "1 server · 1 skill") or, for a
+// tool added by hand that nothing needs, the quiet tag "Added".
+//
 // The status line says what is wrong ("Not found", "Not found · duckdb needs
 // it" for a launcher an MCP server starts with, "24.0.2 · needs ≥ 25.0",
 // "Not logged in") or, when ready, the version found and — where a login is
@@ -67,7 +70,11 @@ export function CliRow({ cli, selected, onOpen }: Props) {
             {line}
           </span>
         </span>
-        <span className="shrink-0 text-xs text-text-muted">{neededByCount(t, cli, "row")}</span>
+        <span className="shrink-0 text-xs text-text-muted">
+          {cli.needed_by.length + cli.needed_by_servers.length > 0
+            ? neededByCount(t, cli, "row")
+            : t("clis.kind.added")}
+        </span>
       </button>
     </li>
   );

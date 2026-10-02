@@ -86,11 +86,14 @@ class SecretBoundary:
     def protections_on(self) -> bool:
         return self._store.get_setting(REQUIRE_APPROVAL_KEY) != "false"
 
-    def enable_protections(self) -> None:
-        """Turning the protection ON needs nobody: it only narrows."""
+    def enable_protections(self) -> bool:
+        """Turning the protection ON needs nobody: it only narrows. Answers
+        whether it was off, so the caller audits only a real change."""
+        was_off = not self.protections_on()
         self._store.set_setting(REQUIRE_APPROVAL_KEY, "true")
         for approval in self._store.pending_of_op("disable_protection"):
             self._store.decide(approval.id, "superseded", by="system", at=self._stamp())
+        return was_off
 
     def request_disable(self, actor: str) -> SecretApproval:
         """Turning it OFF waits for the desktop app, like any other widening."""

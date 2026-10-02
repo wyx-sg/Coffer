@@ -67,6 +67,7 @@ const INVOCATION = {
 };
 
 const DAEMON_RECORD = {
+  offset: 1000,
   timestamp: ago(10_000),
   level: "warning",
   event: "auto_sync_failed",
@@ -102,18 +103,22 @@ function mockApi(initial: Partial<Data> = {}) {
     .mockImplementation((path: string, init?: { params?: { query?: Record<string, unknown> } }) => {
       const query = init?.params?.query ?? {};
       if (path === data.failing) return Promise.resolve(fail);
+      // Each route searches the way the daemon does: the text, in any case, anywhere in the row.
+      const matches = (row: unknown) =>
+        !query.q || JSON.stringify(row).toLowerCase().includes(String(query.q).toLowerCase());
       if (path === "/audit") {
         const limit = Number(query.limit ?? 50);
+        const rows = data.audit.filter(matches);
         return Promise.resolve({
           data: {
-            entries: data.audit.slice(0, limit),
+            entries: rows.slice(0, limit),
             next_cursor: data.olderAudit && !query.cursor ? "older" : null,
-            total: data.audit.length + (data.olderAudit ? 200 : 0),
+            total: rows.length + (data.olderAudit ? 200 : 0),
           },
         });
       }
       if (path === "/mcp/invocations") {
-        let rows = data.invocations as (typeof INVOCATION)[];
+        let rows = (data.invocations as (typeof INVOCATION)[]).filter(matches);
         if (query.uid) rows = rows.filter((r) => r.resource_uid === query.uid);
         if (query.status) rows = rows.filter((r) => r.status === query.status);
         const limit = Number(query.limit ?? 50);
@@ -122,8 +127,15 @@ function mockApi(initial: Partial<Data> = {}) {
         });
       }
       if (path === "/daemon/logs") {
+        const records = data.daemon.filter(matches);
         return Promise.resolve({
-          data: { records: data.daemon, path: "/Users/me/.coffer/logs/daemon.log" },
+          data: {
+            records,
+            next_cursor: null,
+            total: query.with_total ? records.length : null,
+            total_is_floor: false,
+            path: "/Users/me/.coffer/logs/daemon.log",
+          },
         });
       }
       if (path === "/retention/policies") {
@@ -212,7 +224,7 @@ describe("ActivityPage", () => {
 
     expect(screen.getByRole("heading", { name: /Activity/ })).toBeInTheDocument();
     expect(tab(/everything/i)).toHaveAttribute("data-state", "active");
-    await screen.findByText("Registered filesystem");
+    await screen.findByText("Added filesystem");
     const rows = within(list())
       .getAllByRole("row")
       .filter((r) => r.hasAttribute("data-record"));
@@ -269,14 +281,12 @@ describe("ActivityPage", () => {
   test("the free text narrows what is shown", async () => {
     mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION] });
     render(wrap(<ActivityPage />));
-    await screen.findByText("Registered filesystem");
+    await screen.findByText("Added filesystem");
     fireEvent.change(screen.getByLabelText("Filter records"), {
       target: { value: "search_issues" },
     });
-    await waitFor(() =>
-      expect(screen.queryByText("Registered filesystem")).not.toBeInTheDocument(),
-    );
-    expect(screen.getByText(target("github.search_issues"))).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("Added filesystem")).not.toBeInTheDocument());
+    expect(await screen.findByText(target("github.search_issues"))).toBeInTheDocument();
   });
 
   test("the agent filter narrows the calls to that agent's", async () => {
@@ -311,7 +321,7 @@ describe("ActivityPage", () => {
   test("a change announced on the event stream re-reads the audit log's newest page", async () => {
     const { get } = mockApi({ audit: [AUDIT_ENTRY] });
     render(wrap(<ActivityPage />));
-    await screen.findByText("Registered filesystem");
+    await screen.findByText("Added filesystem");
     const before = get.mock.calls.filter((c: unknown[]) => c[0] === "/audit").length;
     act(() =>
       stream.listener?.({
@@ -332,7 +342,7 @@ acceptance("web-ui", "activity gives each record its own tab", async () => {
   render(wrap(<ActivityPage />));
 
   openTab(/^Changes/);
-  expect(await screen.findByText("Registered filesystem")).toBeInTheDocument();
+  expect(await screen.findByText("Added filesystem")).toBeInTheDocument();
   expect(screen.queryByText("resource_created")).not.toBeInTheDocument();
   expect(headers()).toEqual(["Time", "Event", "By"]);
 
@@ -341,7 +351,7 @@ acceptance("web-ui", "activity gives each record its own tab", async () => {
   expect(headers()).toEqual(["Time", "Agent", "Server · tool", "Took", "Status"]);
   expect(screen.queryByText("u-github")).not.toBeInTheDocument();
   expect(screen.getByText("42 ms")).toBeInTheDocument();
-  expect(screen.queryByText("Registered filesystem")).not.toBeInTheDocument();
+  expect(screen.queryByText("Added filesystem")).not.toBeInTheDocument();
 
   openTab(/daemon log/i);
   expect(await screen.findByText("auto_sync_failed")).toBeInTheDocument();
@@ -354,7 +364,7 @@ acceptance("web-ui", "activity row expands to its raw record", async () => {
   mockApi({ audit: [AUDIT_ENTRY], daemon: [DAEMON_RECORD] });
   render(wrap(<ActivityPage />));
 
-  const line = await screen.findByText("Registered filesystem");
+  const line = await screen.findByText("Added filesystem");
   fireEvent.click(line.closest("tr")!);
   const drawer = await screen.findByRole("complementary", { name: "Details" });
   await waitFor(() =>
@@ -473,14 +483,14 @@ acceptance("web-ui", "a failing record shows its error inside its own tab", asyn
 
   // Everything says which record is missing and still shows the other two.
   expect(await screen.findByText("MCP calls couldn't be loaded")).toBeInTheDocument();
-  expect(await screen.findByText("Registered filesystem")).toBeInTheDocument();
+  expect(await screen.findByText("Added filesystem")).toBeInTheDocument();
   expect(screen.getByText("auto_sync_failed")).toBeInTheDocument();
 
   openTab(/mcp calls/i);
   expect(await screen.findByText("Not found.")).toBeInTheDocument();
 
   openTab(/^Changes/);
-  expect(await screen.findByText("Registered filesystem")).toBeInTheDocument();
+  expect(await screen.findByText("Added filesystem")).toBeInTheDocument();
   expect(screen.queryByText("Not found.")).not.toBeInTheDocument();
 });
 
@@ -497,14 +507,14 @@ acceptance("web-ui", "each activity tab reads its owner's route", async () => {
   const requested = () => get.mock.calls.map((c: unknown[]) => c[0] as string);
 
   render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
-  expect(await screen.findByText("Registered filesystem")).toBeInTheDocument();
+  expect(await screen.findByText("Added filesystem")).toBeInTheDocument();
   expect(requested()).toContain("/audit");
   // The tab shows the audit log's rows and nothing else.
   expect(screen.queryByText(target("github.search_issues"))).not.toBeInTheDocument();
 
   openTab(/mcp calls/i);
   expect(await screen.findByText(target("github.search_issues"))).toBeInTheDocument();
-  expect(screen.queryByText("Registered filesystem")).not.toBeInTheDocument();
+  expect(screen.queryByText("Added filesystem")).not.toBeInTheDocument();
 
   openTab(/daemon log/i);
   expect(await screen.findByText("auto_sync_failed")).toBeInTheDocument();
@@ -539,7 +549,7 @@ acceptance("web-ui", "new records stream in at the top", async () => {
 acceptance("web-ui", "new records are held while the user reads", async () => {
   const { data } = mockApi({ audit: [AUDIT_ENTRY] });
   render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
-  await screen.findByText("Registered filesystem");
+  await screen.findByText("Added filesystem");
 
   // Scrolled down: nothing moves.
   list().scrollTop = 200;
@@ -553,7 +563,7 @@ acceptance("web-ui", "new records are held while the user reads", async () => {
   await pollHeads();
 
   const pill = await screen.findByRole("button", { name: "3 new" });
-  expect(screen.queryByText("Registered three")).not.toBeInTheDocument();
+  expect(screen.queryByText("Added three")).not.toBeInTheDocument();
   const rows = () =>
     within(list())
       .getAllByRole("row")
@@ -562,14 +572,14 @@ acceptance("web-ui", "new records are held while the user reads", async () => {
 
   fireEvent.click(pill);
   await waitFor(() => expect(rows()).toHaveLength(4));
-  expect(rows()[0]).toHaveTextContent("Registered three");
+  expect(rows()[0]).toHaveTextContent("Added three");
   expect(screen.queryByRole("button", { name: /new$/ })).not.toBeInTheDocument();
 });
 
 test("an open record holds new ones too", async () => {
   const { data } = mockApi({ audit: [AUDIT_ENTRY] });
   render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
-  fireEvent.click((await screen.findByText("Registered filesystem")).closest("tr")!);
+  fireEvent.click((await screen.findByText("Added filesystem")).closest("tr")!);
   await screen.findByRole("complementary", { name: "Details" });
   data.audit = [
     { ...AUDIT_ENTRY, id: 50, timestamp: ago(1_000), resource_name: "later" },
@@ -577,14 +587,25 @@ test("an open record holds new ones too", async () => {
   ];
   await pollHeads();
   expect(await screen.findByRole("button", { name: "1 new" })).toBeInTheDocument();
-  expect(screen.queryByText("Registered later")).not.toBeInTheDocument();
+  expect(screen.queryByText("Added later")).not.toBeInTheDocument();
 });
 
 test("a new record the filters exclude is neither inserted nor counted", async () => {
-  const { data } = mockApi({ audit: [AUDIT_ENTRY] });
+  const { data, get } = mockApi({ audit: [AUDIT_ENTRY] });
   render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
-  await screen.findByText("Registered filesystem");
+  await screen.findByText("Added filesystem");
   fireEvent.change(screen.getByLabelText("Filter records"), { target: { value: "filesystem" } });
+  // The text reaches the route once typing pauses.
+  await waitFor(() =>
+    expect(
+      get.mock.calls.some(
+        (c: unknown[]) =>
+          c[0] === "/audit" &&
+          (c[1] as { params: { query: Record<string, unknown> } }).params.query.q === "filesystem",
+      ),
+    ).toBe(true),
+  );
+  await screen.findByText("Added filesystem");
   list().scrollTop = 200;
   fireEvent.scroll(list());
   data.audit = [
@@ -658,7 +679,7 @@ test("the kind filter chooses several kinds, and the tabs keep their counts", as
   expect(screen.getByText("Everything except daemon records")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /^Kind:/ })).toHaveTextContent("Calls, changes");
   await waitFor(() => expect(screen.queryByText("auto_sync_failed")).not.toBeInTheDocument());
-  expect(screen.getByText("Registered filesystem")).toBeInTheDocument();
+  expect(screen.getByText("Added filesystem")).toBeInTheDocument();
   await waitFor(() => expect(tab(/^Everything/)).toHaveTextContent("Everything3"));
 
   // Unticking one kind keeps the others.
@@ -667,7 +688,7 @@ test("the kind filter chooses several kinds, and the tabs keep their counts", as
     "aria-checked",
     "false",
   );
-  await waitFor(() => expect(screen.queryByText("Registered filesystem")).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByText("Added filesystem")).not.toBeInTheDocument());
 });
 
 test("the agent filter lists who else made changes, with counts", async () => {
@@ -676,7 +697,7 @@ test("the agent filter lists who else made changes, with counts", async () => {
     invocations: [INVOCATION],
   });
   render(wrap(<ActivityPage />));
-  await screen.findByText("Registered linear");
+  await screen.findByText("Added linear");
   fireEvent.click(screen.getByRole("button", { name: /^Agent:/ }));
   const you = await screen.findByRole("checkbox", { name: "You" });
   expect(you).toHaveTextContent("1");
@@ -686,8 +707,8 @@ test("the agent filter lists who else made changes, with counts", async () => {
   await waitFor(() =>
     expect(screen.queryByText(target("github.search_issues"))).not.toBeInTheDocument(),
   );
-  expect(screen.getByText("Registered linear")).toBeInTheDocument();
-  expect(screen.queryByText("Registered filesystem")).not.toBeInTheDocument();
+  expect(screen.getByText("Added linear")).toBeInTheDocument();
+  expect(screen.queryByText("Added filesystem")).not.toBeInTheDocument();
 });
 
 test("the list says what it holds above the rows", async () => {
@@ -733,7 +754,7 @@ test("a log that failed on Everything names what is still shown", async () => {
 test("the time range offers its windows and a custom range", async () => {
   mockApi({ audit: [AUDIT_ENTRY] });
   render(wrap(<ActivityPage />));
-  await screen.findByText("Registered filesystem");
+  await screen.findByText("Added filesystem");
   const pill = screen.getByRole("button", { name: "Time range: Last hour" });
   fireEvent.click(pill);
   const options = await screen.findAllByRole("option");
@@ -837,8 +858,8 @@ acceptance("web-ui", "who and kind choose several values", async () => {
   expect(screen.getByText("Everything except daemon records")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /^Kind:/ })).toHaveTextContent("Calls, changes");
 
-  await waitFor(() => expect(screen.queryByText("Registered jira")).not.toBeInTheDocument());
-  expect(screen.getByText("Registered linear")).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByText("Added jira")).not.toBeInTheDocument());
+  expect(screen.getByText("Added linear")).toBeInTheDocument();
   expect(screen.getByText(target("github.search_issues"))).toBeInTheDocument();
   expect(screen.queryByText("auto_sync_failed")).not.toBeInTheDocument();
   await waitFor(() => expect(tab(/^Everything/)).toHaveTextContent("Everything4"));

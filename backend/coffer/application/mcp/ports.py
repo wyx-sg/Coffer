@@ -88,6 +88,13 @@ class MCPCapabilityPreferenceRepoPort(Protocol):
         default_enabled: bool,
         when: datetime,
     ) -> list[str]: ...
+    def exposure_for(self, resource_uid: str) -> dict[str, str]:
+        """Tool name -> ``listed`` | ``search`` for the tools the person set."""
+        ...
+
+    async def set_exposure(self, resource_uid: str, changes: dict[str, str]) -> bool:
+        """Set tools' exposure (``auto`` clears) in one write; False when a tool is unknown."""
+        ...
 
 
 class MCPInvocationRepoPort(Protocol):

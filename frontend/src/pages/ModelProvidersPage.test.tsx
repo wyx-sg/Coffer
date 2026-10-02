@@ -238,6 +238,14 @@ describe("ModelProvidersPage", () => {
     expect(rowFor("local-llm")).toHaveTextContent("Ollama · Coffer's engine only");
   });
 
+  test("the list is folded by dragging its divider, not by a button", async () => {
+    serve([makeProvider({ name: "official" })]);
+    renderAt();
+    await screen.findAllByTestId("provider-row");
+    expect(screen.getByRole("separator")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /hide list/i })).toBeNull();
+  });
+
   test("the filter narrows the rows over name and endpoint", async () => {
     serve([
       makeProvider({ name: "official" }),

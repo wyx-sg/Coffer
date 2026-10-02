@@ -97,20 +97,16 @@ describe("ScanSecretsDialog", () => {
     expect(dialog).toHaveTextContent("1 skill still reads keys from ~/.coffer/secrets/");
   });
 
-  acceptance(
-    "secret",
-    "a skill still reading a secrets file is handed to an agent",
-    async () => {
-      const writeText = vi.fn().mockResolvedValue(undefined);
-      Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
-      renderDialog();
-      const dialog = await screen.findByRole("dialog", { name: "Plaintext keys found" });
-      // Beside the mentions, the manual list stays and the hand-off is offered.
-      expect(within(dialog).getByText(/deploy/)).toBeInTheDocument();
-      fireEvent.click(within(dialog).getByRole("button", { name: "Copy prompt" }));
-      expect(writeText).toHaveBeenCalledWith(SCAN.handoff?.prompt);
-    },
-  );
+  acceptance("secret", "a skill still reading a secrets file is handed to an agent", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    renderDialog();
+    const dialog = await screen.findByRole("dialog", { name: "Plaintext keys found" });
+    // Beside the mentions, the manual list stays and the hand-off is offered.
+    expect(within(dialog).getByText(/deploy/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Copy prompt" }));
+    expect(writeText).toHaveBeenCalledWith(SCAN.handoff?.prompt);
+  });
 
   test("review runs a dry run of the ticked findings; apply runs the import", async () => {
     api.importFindings.mockImplementation(async (ids, dryRun) => ({
@@ -221,7 +217,7 @@ describe("ScanSecretsDialog", () => {
       "couldn't be rewritten: it is read-only. The key is saved as the secret npm-publish-token",
     );
     expect(result).toHaveTextContent("Every change is in Activity");
-    fireEvent.click(within(result).getByRole("button", { name: "Try again" }));
+    fireEvent.click(within(result).getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(api.importFindings).toHaveBeenLastCalledWith(["f1"], false));
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
@@ -231,5 +227,20 @@ describe("ScanSecretsDialog", () => {
     renderDialog();
     const dialog = await screen.findByRole("dialog", { name: "No plaintext keys found" });
     expect(dialog).toHaveTextContent("Coffer checked 214 files and found no API keys or tokens");
+  });
+  test("a whole-file finding (line 0) names no line, and the table stays inside the panel", async () => {
+    api.scan.mockResolvedValue({
+      ...SCAN,
+      findings: [{ ...SCAN.findings[0], line: 0, path: "/Users/me/.coffer/secrets/keys.json" }],
+    });
+    renderDialog();
+    const dialog = await screen.findByRole("dialog", { name: "Plaintext keys found" });
+    expect(dialog).not.toHaveTextContent("line 0");
+    expect(dialog).toHaveTextContent("secrets file");
+    within(dialog).getByRole("checkbox", { name: "Move ~/.coffer/secrets/keys.json" });
+    const table = within(dialog).getByRole("table");
+    expect(table).toHaveClass("table-fixed");
+    expect(table.parentElement).toHaveClass("overflow-auto", "min-w-0");
+    expect(dialog).toHaveClass("grid-cols-[minmax(0,1fr)]");
   });
 });

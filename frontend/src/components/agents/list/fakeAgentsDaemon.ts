@@ -18,7 +18,14 @@ export interface FakeDaemon {
   /** The managed agents a conversation (and so Ask an agent) can run on. */
   providers: AgentProviderInfo[];
   connections: Record<string, CofferConnection>;
+  /** The model binding on an agent's record, by uid. */
   models: Record<string, string>;
+  /** Uids of agents running on a Coffer connection (the rest are on their own login). */
+  onConnection: string[];
+  /** The agent's own catalogue per type key (its order is the CLI's, not a default). */
+  catalogue: Record<string, string[]>;
+  /** The default model each agent's own config names, per type key; absent → the agent chooses. */
+  nativeDefaults: Record<string, string>;
   calls: FakeCall[];
   /** Subfolder names per absolute path, for the folder browse. */
   folders: Record<string, string[]>;
@@ -30,6 +37,8 @@ export interface FakeDaemon {
   seq: number;
   /** Return an ApiError to make that request fail. */
   fail?: (call: FakeCall) => ApiError | undefined;
+  /** Return a promise to hold that request until it settles (a slow write). */
+  hold?: (call: FakeCall) => Promise<void> | undefined;
 }
 
 export function typeRow(over: Partial<AgentTypeOut> & Pick<AgentTypeOut, "type">): AgentTypeOut {
@@ -56,6 +65,9 @@ export function fakeDaemon(init: Partial<FakeDaemon> = {}): FakeDaemon {
     providers: [],
     connections: {},
     models: {},
+    onConnection: [],
+    catalogue: {},
+    nativeDefaults: {},
     calls: [],
     folders: {},
     pick: { available: true, path: null },
@@ -90,6 +102,7 @@ export function fakeCallFor(d: FakeDaemon) {
     d.calls.push(req);
     const failure = d.fail?.(req);
     if (failure) throw failure;
+    await d.hold?.(req);
     if (path === "/daemon/status") return { features: {} };
     const resource = path.match(/^\/resources\/([^/?]+)(?:\/(enable|disable))?$/);
     if (resource) {
@@ -118,6 +131,14 @@ export function fakeCallFor(d: FakeDaemon) {
     }
     if (path === "/agents/types") return { types: d.types, install_handoff: null };
     if (path === "/agent-providers") return { agents: d.providers };
+    const catalogue = path.match(/^\/agent-providers\/([^/]+)\/models$/);
+    if (catalogue) {
+      const ids = d.catalogue[decodeURIComponent(catalogue[1])] ?? [];
+      return {
+        models: ids.map((id) => ({ id, name: id, efforts: [] })),
+        default_model: d.nativeDefaults[decodeURIComponent(catalogue[1])] ?? null,
+      };
+    }
     if (path === "/agents" && method === "POST") {
       const body = opts.body as { type: string; config_dir?: string };
       const row = d.types.find((r) => r.type === body.type)!;
@@ -131,7 +152,13 @@ export function fakeCallFor(d: FakeDaemon) {
       const row = d.types.find((r) => r.uid === uid);
       if (method === "DELETE" && row) row.uid = null;
       if (method === "PATCH" && row) Object.assign(row, opts.body);
-      return row ? { ...row, model: d.models[uid] ?? null } : undefined;
+      return row
+        ? {
+            ...row,
+            model: d.models[uid] ?? null,
+            connection_uid: d.onConnection.includes(uid) ? "conn_1" : null,
+          }
+        : undefined;
     }
     if (path.endsWith("/hooks")) return { coffer_hook: null, items: [], parse_errors: [] };
     // Every list a count reads: nothing in it.

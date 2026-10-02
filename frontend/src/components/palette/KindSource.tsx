@@ -8,13 +8,16 @@ import { KIND_LIST_HOOKS, type KindState } from "./paletteSources";
  *  only while the palette is open and the daemon has answered. */
 export function KindSource({
   kind,
+  query,
   onState,
 }: {
   kind: ObjectKind;
+  /** What the palette's box holds. */
+  query: string;
   onState: (kind: ObjectKind, state: KindState) => void;
 }) {
   const useList = KIND_LIST_HOOKS[kind];
-  const { status, items } = useList();
+  const { status, items } = useList(query);
   useEffect(() => {
     onState(kind, { status, items });
   }, [kind, status, items, onState]);

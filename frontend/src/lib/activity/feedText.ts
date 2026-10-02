@@ -1,9 +1,9 @@
 // src/lib/activity/feedText.ts — what the Activity list says about itself: which logs answered, and the line above the rows.
 //
 // Pure functions over the visible tab's feed, shared by the list's notices
-// and its summary line (design 6.1: "1 error and 1 warning in the last hour",
-// "200 loaded of 1,204", "182 calls · 7 failed · 1 denied", "Changes and
-// daemon records").
+// and its summary line (design 6.1: "1 error and 1 warning in the last hour"
+// once the list is whole, "30 loaded of 1,204" while it is not, "182 calls · 7
+// failed · 1 denied", "Changes and daemon records").
 import type { TFunction } from "i18next";
 
 import type { ActivityFeed } from "@/lib/hooks/useActivityFeed";
@@ -66,6 +66,13 @@ export function listSummary(
       t("activity.summary.failed", { count: failed, n: n(failed) }),
       t("activity.summary.denied", { count: denied, n: n(denied) }),
     ].join(" · ");
+  }
+  // A page is a slice of the log: a tally of its errors and warnings would
+  // read as the log's own. Until every record is loaded the line says how many
+  // are, and the tally appears once the list is whole.
+  if (feed.hasOlder) {
+    if (total === undefined || feed.loaded === 0) return null;
+    return t("activity.summary.loadedOf", { loaded: n(feed.loaded), total: n(total) });
   }
   const errors = feed.rows.filter((r) => recordSeverity(r) === "error").length;
   const warnings = feed.rows.filter((r) => recordSeverity(r) === "warning").length;

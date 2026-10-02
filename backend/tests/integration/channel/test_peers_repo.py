@@ -172,7 +172,7 @@ async def test_upsert_updates_only_the_matching_chat_row(env: ChannelEnv) -> Non
     assert {row.chat_id for row in rows} == {"dm-1", "group-1"}
 
 
-async def test_owner_sender_id_returns_first_paired_sender(env: ChannelEnv) -> None:
+async def test_sender_ids_lists_every_paired_sender(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     await env.peers.upsert(
         ChannelPeer(
@@ -184,18 +184,43 @@ async def test_owner_sender_id_returns_first_paired_sender(env: ChannelEnv) -> N
         )
     )
 
-    assert await env.peers.owner_sender_id(resource.uid) == "u-owner"
+    await env.peers.upsert(
+        ChannelPeer(
+            resource_uid=resource.uid,
+            chat_id="dm-2",
+            display_name="Guest",
+            paired_at=datetime.now(tz=UTC),
+            sender_id="u-guest",
+        )
+    )
+
+    assert await env.peers.sender_ids(resource.uid) == {"u-owner", "u-guest"}
 
 
-async def test_owner_sender_id_none_when_no_sender_paired(env: ChannelEnv) -> None:
+async def test_sender_ids_empty_when_no_sender_paired(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     await env.peers.upsert(_peer(resource.uid))  # no sender_id supplied
 
-    assert await env.peers.owner_sender_id(resource.uid) is None
+    assert await env.peers.sender_ids(resource.uid) == frozenset()
 
 
-async def test_owner_sender_id_none_for_unknown_resource(env: ChannelEnv) -> None:
-    assert await env.peers.owner_sender_id(99999) is None
+async def test_sender_ids_empty_for_unknown_resource(env: ChannelEnv) -> None:
+    assert await env.peers.sender_ids(99999) == frozenset()
+
+
+async def test_delete_by_sender_drops_the_person_everywhere_and_only_them(
+    env: ChannelEnv,
+) -> None:
+    """Un-pairing a person takes their DM and every group they brought the bot
+    into, in one write, and leaves the other people's rows alone."""
+    resource = await env.register_channel("tg")
+    now = datetime.now(tz=UTC)
+    for chat, who in (("dm-a", "a"), ("grp", "a"), ("dm-b", "b")):
+        await env.peers.upsert(ChannelPeer(resource.uid, chat, who.upper(), now, sender_id=who))
+
+    assert sorted(await env.peers.delete_by_sender(resource.uid, "a")) == ["dm-a", "grp"]
+    assert [p.chat_id for p in await env.peers.list_by_resource(resource.uid)] == ["dm-b"]
+    assert await env.peers.delete_by_sender(resource.uid, "a") == []  # already gone
 
 
 # ---------------------------------------------------------------------------

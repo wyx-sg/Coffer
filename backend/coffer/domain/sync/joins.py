@@ -1,7 +1,7 @@
 """What joining a remote will do, shown before anything happens
 (spec vault-sync "Report a join before applying it").
 
-A machine joins a remote it has never converged with in one of three ways:
+A machine joins a remote it has never converged with in one of four ways:
 
 - **empty** — the remote holds nothing: this machine becomes the first, and
   the first round pushes the whole vault;
@@ -26,6 +26,7 @@ class JoinKind(StrEnum):
     EMPTY = "empty"
     NEW = "new"
     RETURNING = "returning"
+    REPLACE = "replace"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -47,12 +48,14 @@ class JoinPreview:
     pushed: tuple[AreaCount, ...] = ()
     #: Returning only: what the three-way merge would delete or stop on.
     deleted: tuple[str, ...] = ()
+    #: How many files ``deleted`` stands for (``deleted`` itself is capped).
+    deleted_total: int = 0
     conflicts: tuple[str, ...] = ()
     #: Resources of one kind and name with different uids: the join stops
     #: on them and asks which to keep, or to rename one.
     same_name: tuple[str, ...] = ()
     base: str | None = None
-    #: Why this remote cannot be joined at all (its layout is not this
+    #: Why this remote cannot be joined at all (its layout is newer than this
     #: build's), in words a person can act on; ``None`` when it can.
     refused: str | None = None
 

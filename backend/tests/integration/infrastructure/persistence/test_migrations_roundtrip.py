@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0138"
+HEAD_REVISION = "0139"
 #: The last revision whose tables still hold the pre-vault state: a data test
 #: of an older revision reads them here, before 0136 drops them.
 PRE_LAYOUT_REVISION = "0135"
@@ -428,6 +428,33 @@ def test_0138_drops_the_conversation_owner_column_and_its_index(tmp_path, monkey
     command.downgrade(cfg, "0137")
     cols, idx = columns_and_indexes()
     assert "owner" in cols and "idx_conversations_owner" in idx
+
+
+def test_0139_deletes_rounds_recorded_with_the_removed_remote_too_old_status(tmp_path, monkeypatch):
+    db_path = tmp_path / "rounds.db"
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
+    cfg = _alembic_config()
+    command.upgrade(cfg, "0138")
+    insert = (
+        "INSERT INTO sync_runs (started_at, finished_at, status, payload_json) "
+        "VALUES ('2026-10-01 08:00:00', '2026-10-01 08:00:01', ?, ?)"
+    )
+    with sqlite3.connect(db_path) as conn:
+        for status in ("remote_too_old", "pulled", "remote_too_old"):
+            payload = json.dumps(
+                {
+                    "status": status,
+                    "started_at": "2026-10-01T08:00:00+00:00",
+                    "finished_at": "2026-10-01T08:00:01+00:00",
+                }
+            )
+            conn.execute(insert, (status, payload))
+
+    command.upgrade(cfg, "head")
+    with sqlite3.connect(db_path) as conn:
+        assert [r[0] for r in conn.execute("SELECT status FROM sync_runs")] == ["pulled"]
+
+    command.downgrade(cfg, "0138")  # nothing to restore; must not raise
 
 
 def test_0029_rewrites_skill_config_to_local_import_only(tmp_path, monkeypatch):

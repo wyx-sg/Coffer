@@ -141,6 +141,22 @@ def test_state_documents_are_checked_for_their_shape_and_their_owner() -> None:
     assert rule([unknown_area], _Tree()).findings == []
 
 
+def test_the_cli_tools_document_is_checked_for_its_shape() -> None:
+    rule = state_rule()
+    path = "state/cli-tools/tools.json"
+
+    def codes(doc: bytes) -> list[FindingCode]:
+        return [f.code for f in rule([Change(path, doc, None)], _Tree()).findings]
+
+    assert codes(b'{"format_version": 1, "tools": [{"command": "jq", "title": null}]}') == []
+    assert codes(b'{"tools": {"jq": 1}}') == [FindingCode.INVALID_DOCUMENT]
+    assert codes(b'{"tools": [{"title": "no command"}]}') == [FindingCode.INVALID_DOCUMENT]
+    assert codes(b'{"tools": [{"command": "jq"}, {"command": "jq"}]}') == [
+        FindingCode.INVALID_DOCUMENT
+    ]
+    assert codes(b'{"tools": [], "extra": 1}') == [FindingCode.UNKNOWN_FIELD]
+
+
 class _Flagged(BaseModel):
     flag: bool = False
 

@@ -30,6 +30,7 @@ import {
   type ActivityFilters,
   type FilterContext,
 } from "@/lib/activity/filters";
+import { eventTypesMatching } from "@/lib/activity/activityText";
 import { resolveTimeWindow } from "@/lib/timeRange";
 import {
   useActivityCount,
@@ -54,10 +55,12 @@ function sourceParams(
   tab: ActivityTab,
   f: ActivityFilters,
   since: string | undefined,
+  qTypes: string[],
 ): SourceParams {
+  const q = f.search.trim() || undefined;
   // A change's kind is a category the audit route does not know (secrets,
   // sync, settings), so the kind filter is applied on the client.
-  if (source === "change") return { source, params: { since } };
+  if (source === "change") return { source, params: { since, q, qTypes } };
   if (source === "call") {
     return {
       source,
@@ -66,12 +69,13 @@ function sourceParams(
         uid: f.server !== "any" ? f.server : undefined,
         status: tab === "mcp" && isCallStatus(f.status) ? f.status : undefined,
         agentUid: singleAgent(tab, f),
+        q,
       },
     };
   }
   return {
     source,
-    params: { since, level: tab === "daemon" ? f.level : EVERYTHING_DAEMON_FLOOR },
+    params: { since, q, level: tab === "daemon" ? f.level : EVERYTHING_DAEMON_FLOOR },
   };
 }
 
@@ -152,12 +156,15 @@ export function useActivityFeed({ tab, filters, t, agentNames, serverNames }: Ar
   );
 
   const active = useMemo(() => new Set(sourcesFor(tab, filters)), [tab, filters]);
+  // The audit route searches the event code, the resource, the actor and the
+  // details; the events whose localized sentence holds the text are named too.
+  const qTypes = useMemo(() => eventTypesMatching(t, filters.search), [t, filters.search]);
 
   // The three logs are always the same three hooks; a log this tab does not
   // read is simply switched off.
-  const changeSpec = sourceParams("change", tab, filters, since);
-  const callSpec = sourceParams("call", tab, filters, since);
-  const daemonSpec = sourceParams("daemon", tab, filters, since);
+  const changeSpec = sourceParams("change", tab, filters, since, qTypes);
+  const callSpec = sourceParams("call", tab, filters, since, qTypes);
+  const daemonSpec = sourceParams("daemon", tab, filters, since, qTypes);
   const change = useActivitySource(changeSpec, active.has("change"));
   const call = useActivitySource(callSpec, active.has("call"));
   const daemon = useActivitySource(daemonSpec, active.has("daemon"));
@@ -199,11 +206,11 @@ export function useActivityFeed({ tab, filters, t, agentNames, serverNames }: Ar
   // while the tabs keep saying how much there is (design 6.1.03, 6.1.04).
   const framing: ActivityFilters = { ...filters, by: [], kinds: [] };
   const countSpecs = {
-    changes: sourceParams("change", "changes", framing, since),
-    callsAll: sourceParams("call", "everything", framing, since),
-    callsTab: sourceParams("call", "mcp", framing, since),
-    daemonAll: sourceParams("daemon", "everything", framing, since),
-    daemonTab: sourceParams("daemon", "daemon", framing, since),
+    changes: sourceParams("change", "changes", framing, since, qTypes),
+    callsAll: sourceParams("call", "everything", framing, since, qTypes),
+    callsTab: sourceParams("call", "mcp", framing, since, qTypes),
+    daemonAll: sourceParams("daemon", "everything", framing, since, qTypes),
+    daemonTab: sourceParams("daemon", "daemon", framing, since, qTypes),
   };
   const everythingSources = sourcesFor("everything", framing);
   const reuse = {

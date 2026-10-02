@@ -42,5 +42,5 @@ acceptance("web-ui", "every audit event type reads as a sentence in both locales
       expect(line).not.toMatch(/\b[a-z]+_[a-z_]+\b/); // no raw snake_case code leaks through
     }
   }
-  expect(describeActivity(i18n.getFixedT("en"), entry("resource_enabled"))).toBe("Enabled demo-fs");
+  expect(describeActivity(i18n.getFixedT("en"), entry("resource_enabled"))).toBe("Turned on demo-fs");
 });

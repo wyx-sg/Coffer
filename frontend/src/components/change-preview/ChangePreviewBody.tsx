@@ -4,17 +4,20 @@ import { useRef, useState, type ReactNode } from "react";
 import { AlertCircle, Check, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { Section, SectionStack } from "@/components/Section";
 import { Alert } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChangeSummary } from "./ChangeSummary";
 import { ChangeTargetList } from "./ChangeTargetList";
 import { FileDiff } from "./FileDiff";
 import { WhatWillHappen } from "./WhatWillHappen";
-import type { ChangeItem, ChangePreviewState, ChangeSummaryLine } from "@/lib/changePreview/changeCounts";
+import type {
+  ChangeItem,
+  ChangePreviewState,
+  ChangeSummaryLine,
+} from "@/lib/changePreview/changeCounts";
 
 const SKELETON_WIDTHS = ["w-[70%]", "w-[48%]", "w-[62%]", "w-[40%]"];
-
-const LABEL = "text-2xs font-semibold uppercase tracking-[.04em] text-text-subtle";
 
 function Computing() {
   const { t } = useTranslation();
@@ -76,21 +79,18 @@ function Review({
     <>
       <ChangeSummary items={items} />
       <div className="grid grid-cols-[330px_minmax(0,1fr)] items-start gap-5">
-        <div className="flex min-w-0 flex-col gap-3">
+        <SectionStack className="min-w-0">
           {lead}
           <WhatWillHappen summaries={summaries} />
-          <span className={LABEL}>
-            {t("changePreview.changesHeading", { count: items.length })}
-          </span>
-          <div className="-mt-1">
+          <Section title={t("changePreview.changesHeading")} gap="snug">
             <ChangeTargetList
               items={items}
               mode="review"
               selectedId={selectedId}
               onSelect={select}
             />
-          </div>
-        </div>
+          </Section>
+        </SectionStack>
         <div className="flex min-w-0 flex-col gap-2.5">
           {diffs.map((item) => (
             <FileDiff

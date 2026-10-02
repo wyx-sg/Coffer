@@ -55,9 +55,8 @@ export interface paths {
         };
         /**
          * List Conversations
-         * @description List conversations, newest activity first, paged by cursor.
-         *     ``?archived=true`` returns the archived threads; the default lists active
-         *     ones only. The conversation id breaks ties.
+         * @description Conversations newest activity first (id breaks ties), paged by cursor;
+         *     ``archived=true`` lists the archived ones, ``q`` filters by title.
          */
         get: operations["list_conversations_api_v1_chat_conversations_get"];
         put?: never;
@@ -70,6 +69,26 @@ export interface paths {
          *     agent. An unknown agent or an invalid config is rejected with 400.
          */
         post: operations["create_conversation_api_v1_chat_conversations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/conversations/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Conversations
+         * @description Apply ``action`` to every listed conversation; one result per id, in order.
+         */
+        post: operations["batch_conversations_api_v1_chat_conversations_batch_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -499,6 +518,36 @@ export interface components {
             type: "text" | "tool_use" | "tool_result" | "attachment";
         };
         /**
+         * ConversationBatchIn
+         * @description What to do, and to which conversations (at most 200, each listed once).
+         */
+        ConversationBatchIn: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "archive" | "unarchive" | "delete";
+            /** Ids */
+            ids: string[];
+        };
+        /** ConversationBatchOut */
+        ConversationBatchOut: {
+            /** Results */
+            results: components["schemas"]["ConversationBatchResultOut"][];
+        };
+        /** ConversationBatchResultOut */
+        ConversationBatchResultOut: {
+            /** Id */
+            id: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "done" | "skipped";
+            /** Reason */
+            reason: ("not_found" | "running" | "failed") | null;
+        };
+        /**
          * ConversationCreate
          * @description Body for POST /conversations.
          *
@@ -926,6 +975,8 @@ export interface operations {
                 limit?: number;
                 /** @description The previous page's next_cursor. Bound to the listing (active or archived) it was issued for; any other value is 400 CURSOR_INVALID. */
                 cursor?: string | null;
+                /** @description Title contains this text (case-insensitive); a cursor is bound to it. */
+                q?: string | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;
@@ -986,6 +1037,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    batch_conversations_api_v1_chat_conversations_batch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationBatchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationBatchOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

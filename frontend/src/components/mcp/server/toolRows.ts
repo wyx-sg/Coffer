@@ -8,8 +8,15 @@ import type { TFunction } from "i18next";
 import type { components } from "@/lib/api/types";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import type { InvocationSummary, ToolTiering } from "@/lib/hooks/useMcpServerPage";
+import type { ToolExposure } from "@/lib/api/mcpServers";
 import { CLIENT_NAME_LIMIT } from "../capabilityRows";
-import { listingOf, relativeTime, shortTime, usageByTool, type ServerState } from "@/lib/mcp/serverState";
+import {
+  listingOf,
+  relativeTime,
+  shortTime,
+  usageByTool,
+  type ServerState,
+} from "@/lib/mcp/serverState";
 
 type ToolView = components["schemas"]["MCPToolView"];
 
@@ -25,6 +32,8 @@ export interface ToolRow {
   lastCallAt: string | null;
   /** "listed" / "behind" while tiering hides some tools; null otherwise. */
   listing: "listed" | "behind" | null;
+  /** The person's exposure setting, what agents get and why; null when tiering is off or unread. */
+  exposure: ToolExposure | null;
   params: { name: string; type: string }[];
   /** The name a client shows (`mcp__coffer__<server>__<tool>`) and its length. */
   clientName: string;
@@ -50,6 +59,7 @@ export function toolRows(
   const usage = usageByTool(summary);
   const last = new Map((summary?.by_tool ?? []).map((r) => [r.tool, r.last_call_at ?? null]));
   const listing = listingOf(tiering);
+  const exposure = new Map((tiering?.tools ?? []).map((e) => [e.tool, e]));
   return (tools ?? []).map((tool) => {
     const use = usage.get(tool.original_name);
     const clientName = `mcp__coffer__${tool.prefixed_name}`;
@@ -68,6 +78,7 @@ export function toolRows(
             ? "listed"
             : null
         : null,
+      exposure: tiering?.enabled ? (exposure.get(tool.original_name) ?? null) : null,
       params: paramsOf(tool.input_schema),
       clientName,
       clientNameLength: tool.client_name_length,

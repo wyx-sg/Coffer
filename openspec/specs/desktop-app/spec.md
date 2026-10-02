@@ -181,11 +181,13 @@ A release built without a Developer ID is neither signed nor notarised (see "Sig
 
 ### Requirement: Release plaintext and approvals only after a presence check in the shell
 The shell MUST expose, over IPC, revealing a secret, writing a master key
-backup, approving a pending approval and reporting whether the daemon is a
+backup, approving a pending approval, approving several at once (it reads each from the daemon, keeps those still
+waiting and signs one grant over a digest of exactly that list) and reporting whether the daemon is a
 development build, and MUST run a fresh LocalAuthentication check
 (`deviceOwnerAuthentication`: Touch ID or the login password) before each one,
 with no reuse window. The operating system's prompt MUST name what it approves —
-the secret, the backup, or the approval's own description — and in a
+the secret, the backup, or the approval's own description (for several
+approvals at once: the first few descriptions and the count of the rest) — and in a
 development build MUST say so. Only after the check passes does the shell ask
 the daemon for a challenge, sign it with the grant key derived from the master
 key ([secret](../secret/spec.md) "Release plaintext only to a
@@ -210,6 +212,7 @@ its approval sheet opens.
 - **GIVEN** a reveal, a key backup and an approval
 - **WHEN** the shell builds each presence prompt
 - **THEN** each names its operation and target, and in a development build each says it is a development build
+- **AND** a prompt for several approvals names the first few and counts the rest
 
 #### Scenario: a pending approval raises one notification
 - **GIVEN** the daemon lists a pending approval the shell has not seen

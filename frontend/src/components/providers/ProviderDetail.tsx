@@ -1,12 +1,13 @@
 // src/components/providers/ProviderDetail.tsx — the open provider: header, the key-rejected banner, then one column.
 //
-// No tabs (canvas 2.2): Used by, Endpoint and Models read top to bottom at
+// No tabs (canvas 2.2): Used by, Endpoint and Models are three SettingsSection cards read top to bottom at
 // `/model-providers/<uid>`. The dialogs the header and the Endpoint open —
 // Edit, Replace key, Delete — are owned here, once.
 import { useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
+import { SETTINGS_STACK } from "@/components/settings/SettingsLayout";
 import { useToast } from "@/components/ui/toast";
 import type { Provider } from "@/lib/api/providers";
 import type { EndpointModelsOut } from "@/lib/hooks/useModelIntrospection";
@@ -16,6 +17,7 @@ import { DeleteProviderDialog } from "./DeleteProviderDialog";
 import { EditProviderDialog } from "./EditProviderDialog";
 import { KeyRejectedBanner } from "./KeyRejectedBanner";
 import { ProviderDetailHeader } from "./ProviderDetailHeader";
+import { SectionStack } from "@/components/Section";
 import { ProviderEndpoint } from "./ProviderEndpoint";
 import { ProviderModels } from "./ProviderModels";
 import { ProviderUsedBy } from "./ProviderUsedBy";
@@ -63,12 +65,11 @@ export function ProviderDetail({
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className={SETTINGS_STACK}>
       <ProviderDetailHeader
         provider={provider}
         status={status}
         onTest={() => void test()}
-        onRefresh={() => void endpoint.refetch()}
         onEdit={() => setOpen("edit")}
         onDelete={() => setOpen("delete")}
       />
@@ -80,20 +81,22 @@ export function ProviderDetail({
         />
       ) : null}
 
-      <ProviderUsedBy use={use} failing={status === "keyRejected"} />
-      <ProviderEndpoint
-        provider={provider}
-        use={use}
-        rejectedStatus={rejectedStatus}
-        onReplaceKey={() => setOpen("replace")}
-      />
-      <ProviderModels
-        provider={provider}
-        use={use}
-        endpoint={endpoint}
-        engineModel={engineModel}
-        transcribeModel={transcribeModel}
-      />
+      <SectionStack>
+        <ProviderUsedBy use={use} failing={status === "keyRejected"} />
+        <ProviderEndpoint
+          provider={provider}
+          use={use}
+          rejectedStatus={rejectedStatus}
+          onReplaceKey={() => setOpen("replace")}
+        />
+        <ProviderModels
+          provider={provider}
+          use={use}
+          endpoint={endpoint}
+          engineModel={engineModel}
+          transcribeModel={transcribeModel}
+        />
+      </SectionStack>
 
       <EditProviderDialog
         open={open === "edit"}

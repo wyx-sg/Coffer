@@ -1,27 +1,23 @@
 // src/components/mcp/server/McpBuiltinRow.tsx — the list's last group, Built-in, holding Coffer's own `coffer` server (board 4.1.23).
 //
-// Read-only: no checkbox (it cannot be selected for a bulk change) and its
-// reach is always every connected agent. Hidden while the daemon's
-// description of it has not arrived, and while a filter does not match it.
+// The list decides whether it shows (it obeys the search, Reach and Kind
+// filters, and the group hides when empty). Read-only: no checkbox (it cannot be
+// selected for a bulk change) and its reach is always every connected agent.
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { StatusDot } from "@/components/status/StatusDot";
-import { useBuiltinMcpServer } from "@/lib/hooks/useMcpAddFlow";
+import type { McpBuiltinServer } from "@/lib/api/mcpBuiltin";
 import { cn } from "@/lib/utils";
 
 interface Props {
-  query: string;
+  server: Pick<McpBuiltinServer, "name" | "tool_count">;
   to: string;
   current: boolean;
 }
 
-export function McpBuiltinRow({ query, to, current }: Props) {
+export function McpBuiltinRow({ server, to, current }: Props) {
   const { t } = useTranslation();
-  const { data: server } = useBuiltinMcpServer();
-  if (!server) return null;
-  const q = query.trim().toLowerCase();
-  if (q && !`${server.name} ${server.url}`.toLowerCase().includes(q)) return null;
   return (
     <section className="mb-3" aria-label={t("mcp.builtin.group")}>
       <h2 className="flex items-center px-2.5 pb-1 text-2xs font-semibold text-text-muted">
@@ -30,6 +26,7 @@ export function McpBuiltinRow({ query, to, current }: Props) {
       </h2>
       <ul className="flex flex-col gap-0.5">
         <li
+          data-testid="mcp-builtin-row"
           className={cn(
             "flex items-center rounded-lg pl-2.5 transition-colors duration-fast",
             current ? "bg-surface-selected" : "hover:bg-surface-hover",

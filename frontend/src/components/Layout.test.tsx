@@ -11,6 +11,8 @@ import indexHtml from "../../index.html?raw";
 import { Layout } from "./Layout";
 import { requestPalette } from "./shell/paletteRequest";
 
+const chrome = vi.hoisted(() => ({ overlay: false }));
+vi.mock("@/lib/windowChrome", () => ({ overlayTitleBar: () => chrome.overlay }));
 vi.mock("./DaemonOfflineBanner", () => ({
   DaemonStatusBar: () => null,
   DaemonOfflineState: () => null,
@@ -48,7 +50,7 @@ function Where() {
 const PAGES = [{ path: "*", element: <div>page body</div> }];
 const SETTINGS = [{ path: "settings/:tab", element: <div data-testid="settings-modal" /> }];
 
-function renderShell(path = "/agents/codex") {
+function renderShell(path: string | { pathname: string; state?: unknown } = "/agents/codex") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
@@ -62,12 +64,66 @@ function renderShell(path = "/agents/codex") {
   );
 }
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  chrome.overlay = false;
+});
 afterEach(() => {
   delete (window as unknown as { matchMedia?: unknown }).matchMedia;
 });
 
 describe("Layout", () => {
+  test("the browser keeps the brand link and its own toggle, with no drag strip", () => {
+    renderShell();
+    expect(
+      within(screen.getByTestId("sidebar")).getByRole("link", { name: /coffer/i }),
+    ).toHaveAttribute("href", "/");
+    expect(
+      within(screen.getByTestId("sidebar")).getByRole("button", { name: /collapse sidebar/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("window-drag-region")).toBeNull();
+  });
+
+  test("the overlay shell has one toggle, in the title strip, the same in both states", () => {
+    chrome.overlay = true;
+    renderShell();
+    const strip = screen.getByTestId("window-drag-region");
+    expect(strip).toHaveAttribute("data-tauri-drag-region");
+    // The page scrolls below the strip, so no header sits under it.
+    expect(screen.getByTestId("page-scroll").className).toContain("var(--titlebar-inset)");
+    // No brand row: the sidebar starts under the strip, at the search.
+    const side = screen.getByTestId("sidebar");
+    expect(side.className).toContain("var(--titlebar-inset)");
+    expect(within(side).queryByRole("link", { name: /coffer/i })).toBeNull();
+    expect(within(side).queryByText("Coffer")).toBeNull();
+    expect(
+      within(screen.getByTestId("sidebar")).queryByRole("button", { name: /sidebar/i }),
+    ).toBeNull();
+    const toggle = within(strip).getByRole("button", { name: /collapse sidebar/i });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(toggle).toHaveAttribute("aria-controls", "sidebar");
+    fireEvent.click(toggle);
+    expect(localStorage.getItem("coffer.nav.collapsed")).toBe("1");
+    const again = within(screen.getByTestId("window-drag-region")).getByRole("button", {
+      name: /expand sidebar/i,
+    });
+    expect(again).toHaveAttribute("aria-expanded", "false");
+    expect(
+      within(screen.getByTestId("sidebar")).queryByRole("button", { name: /sidebar/i }),
+    ).toBeNull();
+  });
+
+  test("Cmd/Ctrl+B toggles the sidebar in the overlay shell only", () => {
+    chrome.overlay = true;
+    renderShell();
+    const press = () => {
+      fireEvent.keyDown(window, { key: "b", metaKey: true });
+      fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+    };
+    press();
+    expect(localStorage.getItem("coffer.nav.collapsed")).toBe("1");
+  });
+
   test("the skip link is the first focusable element and targets main", () => {
     renderShell();
     const skip = screen.getByRole("link", { name: /skip to content/i });
@@ -86,7 +142,7 @@ describe("Layout", () => {
     expect(screen.getByRole("link", { name: "Overview" })).not.toHaveAttribute("aria-current");
   });
 
-  test("collapsing hides labels, keeps the brand mark, and moves expand to the rail's footer", () => {
+  test("collapsing hides labels, keeps the brand mark, and keeps expand at the top of the rail", () => {
     renderShell();
     expect(screen.getByText("Coffer")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
@@ -96,14 +152,16 @@ describe("Layout", () => {
     expect(screen.getByRole("link", { name: "Coffer" })).toHaveAttribute("href", "/");
     // Rows keep an accessible name without visible text.
     expect(screen.getByRole("link", { name: "Agents" })).toBeInTheDocument();
-    // No collapse control is left at the top; expanding is the footer's
-    // button between the gear and the daemon's dot (board 1.2.02).
-    expect(screen.queryByRole("button", { name: /collapse sidebar/i })).not.toBeInTheDocument();
-    const footer = within(screen.getByTestId("sidebar"));
-    const buttons = footer.getAllByRole("button").map((b) => b.getAttribute("aria-label"));
-    const expand = buttons.indexOf("Expand sidebar");
-    expect(buttons[expand - 1]).toBe("Settings");
-    expect(buttons[expand + 1]).toMatch(/^Daemon|^Connecting/);
+    // The expand control stays at the top, in the brand row under the mark,
+    // and the footer holds no second one.
+    const rail = within(screen.getByTestId("sidebar"));
+    const names = rail.getAllByRole("button").map((b) => b.getAttribute("aria-label"));
+    expect(names.filter((n) => n === "Expand sidebar")).toHaveLength(1);
+    expect(names.indexOf("Expand sidebar")).toBeLessThan(
+      names.findIndex((n) => n?.startsWith("Settings")),
+    );
+    fireEvent.click(rail.getByRole("button", { name: "Expand sidebar" }));
+    expect(localStorage.getItem("coffer.nav.collapsed")).toBe("0");
     // Theme and language live in the version menu, not in the sidebar.
     expect(screen.queryByRole("button", { name: /^language$/i })).not.toBeInTheDocument();
   });
@@ -118,7 +176,7 @@ describe("Layout", () => {
 
   test("the Settings row opens the modal over the page and is active only while it is open", () => {
     renderShell("/mcp-servers");
-    const row = screen.getByRole("button", { name: "Settings" });
+    const row = screen.getByRole("button", { name: /^Settings/ });
     expect(row).toHaveAttribute("aria-pressed", "false");
     // Settings is a footer row, not one of the navigation entries.
     const nav = screen.getByRole("navigation", { name: /primary/i });
@@ -129,7 +187,7 @@ describe("Layout", () => {
     expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
     // The page underneath stays rendered.
     expect(screen.getByText("page body")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Settings" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /^Settings/ })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -203,7 +261,7 @@ describe("Layout", () => {
     fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
     expect(screen.queryByRole("separator", { name: "Resize the sidebar" })).not.toBeInTheDocument();
     // The collapsed rail keeps Settings as a gear with an accessible name.
-    expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Settings/ })).toBeInTheDocument();
   });
 });
 

@@ -63,7 +63,7 @@ export function DataSettings() {
       {storage.error ? (
         <LoadError error={storage.error} onRetry={() => void storage.refetch()} />
       ) : null}
-      <div className="flex flex-col gap-7">
+      <div className="flex flex-col gap-6">
         <DataBlock
           title={t("settings.data.vault.title")}
           size={storage.error ? "—" : vaultSize}

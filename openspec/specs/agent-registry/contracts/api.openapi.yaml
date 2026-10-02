@@ -1508,6 +1508,328 @@ paths:
       summary: Patch Plugin
       tags:
       - agents
+  /api/v1/agents/{uid}/plugins/{plugin_id}/agents/{name}:
+    get:
+      operationId: get_plugin_subagent_api_v1_agents__uid__plugins__plugin_id__agents__name__get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: plugin_id
+        required: true
+        schema:
+          title: Plugin Id
+          type: string
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginDocumentOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Plugin Subagent
+      tags:
+      - agents
+  /api/v1/agents/{uid}/plugins/{plugin_id}/commands/{name}:
+    get:
+      operationId: get_plugin_command_api_v1_agents__uid__plugins__plugin_id__commands__name__get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: plugin_id
+        required: true
+        schema:
+          title: Plugin Id
+          type: string
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginDocumentOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Plugin Command
+      tags:
+      - agents
+  /api/v1/agents/{uid}/plugins/{plugin_id}/mcp-servers/{name}:
+    get:
+      operationId: get_plugin_mcp_server_api_v1_agents__uid__plugins__plugin_id__mcp_servers__name__get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: plugin_id
+        required: true
+        schema:
+          title: Plugin Id
+          type: string
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginMcpServerOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Plugin Mcp Server
+      tags:
+      - agents
+  /api/v1/agents/{uid}/plugins/{plugin_id}/skills/{skill}:
+    get:
+      operationId: get_plugin_skill_api_v1_agents__uid__plugins__plugin_id__skills__skill__get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: plugin_id
+        required: true
+        schema:
+          title: Plugin Id
+          type: string
+      - in: path
+        name: skill
+        required: true
+        schema:
+          title: Skill
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginSkillOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Plugin Skill
+      tags:
+      - agents
+  /api/v1/agents/{uid}/plugins/{plugin_id}/skills/{skill}/files:
+    get:
+      operationId: list_plugin_skill_files_api_v1_agents__uid__plugins__plugin_id__skills__skill__files_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: plugin_id
+        required: true
+        schema:
+          title: Plugin Id
+          type: string
+      - in: path
+        name: skill
+        required: true
+        schema:
+          title: Skill
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillFileTreeOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List Plugin Skill Files
+      tags:
+      - agents
+  /api/v1/agents/{uid}/plugins/{plugin_id}/skills/{skill}/files/content:
+    get:
+      description: |-
+        One file of a plugin's skill. A path resolving outside the skill's folder
+        (``..``, absolute, escaping symlink) is refused with 400 before anything is read.
+      operationId: read_plugin_skill_file_api_v1_agents__uid__plugins__plugin_id__skills__skill__files_content_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: plugin_id
+        required: true
+        schema:
+          title: Plugin Id
+          type: string
+      - in: path
+        name: skill
+        required: true
+        schema:
+          title: Skill
+          type: string
+      - in: query
+        name: path
+        required: true
+        schema:
+          minLength: 1
+          title: Path
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillFileContentOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Read Plugin Skill File
+      tags:
+      - agents
   /api/v1/agents/{uid}/transcripts:
     get:
       description: |-
@@ -1808,6 +2130,11 @@ components:
       type: object
     AgentModelsOut:
       properties:
+        default_model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Default Model
         models:
           items:
             $ref: '#/components/schemas/AgentModelOut'
@@ -1815,6 +2142,7 @@ components:
           type: array
       required:
       - models
+      - default_model
       title: AgentModelsOut
       type: object
     AgentOut:
@@ -2449,6 +2777,10 @@ components:
           - type: string
           - type: 'null'
           title: Command
+        config:
+          additionalProperties: true
+          title: Config
+          type: object
         cwd:
           anyOf:
           - type: string
@@ -2523,6 +2855,7 @@ components:
       - path
       - cwd
       - extra
+      - config
       title: McpEntryDetailOut
       type: object
     McpEntryFieldOut:
@@ -3255,6 +3588,52 @@ components:
       - mcp_servers
       title: PluginDetailOut
       type: object
+    PluginDocumentOut:
+      description: 'A plugin''s command or subagent: its markdown file, whole.'
+      properties:
+        content:
+          title: Content
+          type: string
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        name:
+          title: Name
+          type: string
+        path:
+          title: Path
+          type: string
+        truncated:
+          title: Truncated
+          type: boolean
+      required:
+      - name
+      - description
+      - path
+      - content
+      - truncated
+      title: PluginDocumentOut
+      type: object
+    PluginMcpServerOut:
+      properties:
+        config:
+          additionalProperties: true
+          title: Config
+          type: object
+        name:
+          title: Name
+          type: string
+        path:
+          title: Path
+          type: string
+      required:
+      - name
+      - path
+      - config
+      title: PluginMcpServerOut
+      type: object
     PluginOut:
       properties:
         author:
@@ -3330,6 +3709,25 @@ components:
       required:
       - enabled
       title: PluginPatch
+      type: object
+    PluginSkillOut:
+      properties:
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        name:
+          title: Name
+          type: string
+        path:
+          title: Path
+          type: string
+      required:
+      - name
+      - description
+      - path
+      title: PluginSkillOut
       type: object
     PluginsOut:
       properties:
@@ -3471,6 +3869,96 @@ components:
       - uid
       - title
       title: ReconcileSubjectOut
+      type: object
+    SkillFileContentOut:
+      properties:
+        abs_path:
+          title: Abs Path
+          type: string
+        binary:
+          title: Binary
+          type: boolean
+        content:
+          title: Content
+          type: string
+        fingerprint:
+          title: Fingerprint
+          type: string
+        folder_abs_path:
+          title: Folder Abs Path
+          type: string
+        path:
+          title: Path
+          type: string
+        size:
+          title: Size
+          type: integer
+        truncated:
+          title: Truncated
+          type: boolean
+      required:
+      - path
+      - abs_path
+      - folder_abs_path
+      - content
+      - truncated
+      - binary
+      - size
+      - fingerprint
+      title: SkillFileContentOut
+      type: object
+    SkillFileNodeOut:
+      properties:
+        abs_path:
+          title: Abs Path
+          type: string
+        children:
+          items:
+            $ref: '#/components/schemas/SkillFileNodeOut'
+          title: Children
+          type: array
+        folder_abs_path:
+          title: Folder Abs Path
+          type: string
+        name:
+          title: Name
+          type: string
+        path:
+          title: Path
+          type: string
+        size:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Size
+        truncated:
+          default: false
+          title: Truncated
+          type: boolean
+        type:
+          enum:
+          - file
+          - dir
+          title: Type
+          type: string
+      required:
+      - name
+      - path
+      - abs_path
+      - folder_abs_path
+      - type
+      - size
+      - truncated
+      - children
+      title: SkillFileNodeOut
+      type: object
+    SkillFileTreeOut:
+      properties:
+        root:
+          $ref: '#/components/schemas/SkillFileNodeOut'
+      required:
+      - root
+      title: SkillFileTreeOut
       type: object
     TranscriptMessageOut:
       description: One conversational turn, as the session page renders it.

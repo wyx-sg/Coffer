@@ -37,8 +37,8 @@ export interface MessageThreadProps {
   /** The live stream was lost mid-turn after every reconnect: say so, offer Reload. */
   streamLost?: boolean;
   onReload?: () => void;
-  /** Archived: read-only, a Restore in place of the composer. */
+  /** Archived: read-only, an Unarchive in place of the composer. */
   readOnly?: boolean;
-  onRestore?: () => void;
-  restorePending?: boolean;
+  onUnarchive?: () => void;
+  unarchivePending?: boolean;
 }

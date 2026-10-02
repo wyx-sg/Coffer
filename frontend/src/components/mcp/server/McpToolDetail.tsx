@@ -2,6 +2,7 @@
 import { useTranslation } from "react-i18next";
 
 import { relativeTime } from "@/lib/mcp/serverState";
+import { useExposureLabel } from "./exposureLabel";
 import type { ToolRow } from "./toolRows";
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 
 export function McpToolDetail({ row, fromCache }: Props) {
   const { t } = useTranslation();
+  const exposureLabel = useExposureLabel();
   return (
     <div
       className="mb-2 ml-12 mr-2 flex flex-wrap gap-x-6 gap-y-3 rounded-lg bg-surface-sunken px-3 py-2.5 text-xs"
@@ -42,6 +44,11 @@ export function McpToolDetail({ row, fromCache }: Props) {
             </div>
           </>
         )}
+        {row.exposure ? (
+          <p className="text-text-muted" data-testid="mcp-tool-exposure-reason">
+            {exposureLabel(row.exposure)} · {t(`mcp.exposure.reason.${row.exposure.reason}`)}
+          </p>
+        ) : null}
         <p className="text-text-muted">
           {t("mcp.page.seenAs")} <code className="font-mono text-text">{row.clientName}</code>
           {" · "}

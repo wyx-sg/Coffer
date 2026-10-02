@@ -24,6 +24,7 @@ import {
   revealSecret,
   exportMasterKeyBackup,
   approvePending,
+  approvePendingBatch,
   onApprovalsEvent,
   APPROVALS_EVENT,
   PresenceUnavailableError,
@@ -322,6 +323,7 @@ describe("presence-gated actions", () => {
       () => revealSecret("mcp_server/abc/TOKEN"),
       () => exportMasterKeyBackup("correct horse"),
       () => approvePending("apr-1"),
+      () => approvePendingBatch(["apr-1", "apr-2"]),
     ]) {
       const attempt = run();
       await expect(attempt).rejects.toBeInstanceOf(PresenceUnavailableError);
@@ -348,6 +350,14 @@ describe("presence-gated actions", () => {
     invokeMock.mockResolvedValueOnce({ id: "apr-1", status: "approved" });
     await expect(approvePending("apr-1")).resolves.toMatchObject({ status: "approved" });
     expect(invokeMock).toHaveBeenLastCalledWith("approve_pending", { approvalId: "apr-1" });
+
+    invokeMock.mockResolvedValueOnce({ results: [{ id: "apr-1", outcome: "approved" }] });
+    await expect(approvePendingBatch(["apr-1", "apr-2"])).resolves.toMatchObject({
+      results: [{ outcome: "approved" }],
+    });
+    expect(invokeMock).toHaveBeenLastCalledWith("approve_pending_batch", {
+      approvalIds: ["apr-1", "apr-2"],
+    });
   });
 
   test("outside the shell the approvals signal is a no-op subscription", () => {

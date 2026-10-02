@@ -101,6 +101,22 @@ async def list_audit(
             "daemon log lines carry."
         ),
     ),
+    q: str | None = Query(
+        default=None,
+        description=(
+            "Free text, matched in any case against the event code, the resource "
+            "name, the actor and the details of each row, and against the events "
+            "named by ``q_type``."
+        ),
+    ),
+    q_type: list[str] | None = Query(  # noqa: B008
+        default=None,
+        description=(
+            "With ``q``: event types that also match, because the caller found "
+            "``q`` in their localized wording (the sentence a reader sees is "
+            "composed in the client, not stored)."
+        ),
+    ),
     svc: AuditService = Depends(get_audit_service),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> AuditListOut:
@@ -118,6 +134,8 @@ async def list_audit(
         limit=limit,
         cursor=cursor,
         trace_id=trace_id,
+        q=q or None,
+        q_types=q_type or (),
     )
     # The page is validated first so a bad cursor is refused before counting.
     total = await svc.count(
@@ -127,6 +145,8 @@ async def list_audit(
         event_prefix=event_prefix,
         since=since_dt,
         trace_id=trace_id,
+        q=q or None,
+        q_types=q_type or (),
     )
     return AuditListOut(
         entries=[_to_out(e) for e in page.items], next_cursor=page.next_cursor, total=total

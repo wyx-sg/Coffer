@@ -12,6 +12,7 @@ import { translateApiError } from "@/lib/api/errors";
 import { useAudit } from "@/lib/hooks/useAudit";
 import { kindMeta } from "@/lib/overview/kinds";
 import { formatShortTime } from "@/lib/overview/time";
+import { Section } from "@/components/Section";
 import { describeActivity } from "@/lib/activity/activityText";
 import { actorLabel } from "@/lib/activity/recordText";
 
@@ -24,19 +25,21 @@ export function RecentActivity() {
   const entries = audit.data?.entries ?? [];
 
   return (
-    <section aria-labelledby="overview-activity" className="space-y-2">
-      <div className="flex min-h-[22px] items-center gap-2">
-        <h2 id="overview-activity" className="text-sm font-semibold">
-          {t("overview.activity.title")}
-        </h2>
+    <Section
+      as="h2"
+      gap="snug"
+      labelled
+      title={t("overview.activity.title")}
+      actions={
         <Link
           to="/activity"
-          className="ml-auto inline-flex items-center gap-1 rounded-xs text-xs font-label text-accent-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+          className="inline-flex items-center gap-1 rounded-xs text-xs font-label text-accent-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
         >
           {t("overview.activity.open")}
           <ArrowRight className="size-3" aria-hidden />
         </Link>
-      </div>
+      }
+    >
       {audit.isPending ? (
         <div aria-busy className="space-y-2">
           {[0, 1, 2].map((i) => (
@@ -57,6 +60,13 @@ export function RecentActivity() {
           {entries.slice(0, LIMIT).map((entry) => {
             const meta = kindMeta(entry.resource_kind);
             const KindIcon = meta.icon;
+            const sentence = [
+              entry.resource_kind ? t(meta.labelKey) : "",
+              entry.resource_name ?? "",
+              describeActivity(t, entry),
+            ]
+              .filter(Boolean)
+              .join(" ");
             return (
               <li key={entry.id} className="flex min-w-0 flex-col gap-1 px-4 py-3">
                 <span className="flex items-center gap-1.5 text-2xs text-text-subtle">
@@ -67,7 +77,7 @@ export function RecentActivity() {
                     {t("overview.activity.by", { actor: actorLabel(t, entry.actor) })}
                   </span>
                 </span>
-                <span className="truncate text-xs text-text">
+                <span className="truncate text-xs text-text" title={sentence}>
                   {entry.resource_kind ? <span className="mr-1">{t(meta.labelKey)}</span> : null}
                   {entry.resource_name ? (
                     <span className="mr-1 font-mono text-2xs">{entry.resource_name}</span>
@@ -79,6 +89,6 @@ export function RecentActivity() {
           })}
         </ul>
       )}
-    </section>
+    </Section>
   );
 }

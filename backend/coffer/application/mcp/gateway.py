@@ -75,6 +75,7 @@ from coffer.application.mcp.ports import (
 from coffer.application.mcp.saved_tools import saved_hidden_count
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.mcp.tiering_config import TieringConfig, load_tiering_config
+from coffer.application.mcp.tool_exposure import exposure_overrides
 from coffer.application.resource_service import ResourceService
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.errors import UpstreamUnavailable
@@ -125,8 +126,7 @@ class MCPGatewaySession:
         self._on_dispose = on_dispose
         # ``is not None``, not ``or``: a registry with every tool off is falsy.
         self._builtin = builtin_tools if builtin_tools is not None else BuiltinToolRegistry()
-        # Tool tiering: how much of the aggregated catalogue this session lists.
-        # Resolved once per session; None means "read the environment".
+        # Tool tiering: how much of the catalogue this session lists (None = read env).
         self._tiering = tiering or load_tiering_config()
         # Upstream tools left unlisted by tiering, for the instructions text:
         # estimated from the saved tool lists at ``initialize`` and replaced by
@@ -177,11 +177,9 @@ class MCPGatewaySession:
         # The identity scope is evaluated against: the shim's self-reported
         # agent uid, when it stamped one (params._meta["coffer/agent-uid"]).
         self._session_agent_uid = _extract_agent_uid(params)
-        # Tool tiering: the instructions field is the only channel into the
-        # client's system prompt, and it is read before the first tools/list, so
-        # the count comes from the tool lists discovery saved. It names only the
-        # built-ins the tool list carries now: a switched-off feature's tools
-        # are neither listed nor advertised.
+        # The instructions field is the only channel into the client's system
+        # prompt and is read before the first tools/list, so the unlisted count
+        # comes from the saved tool lists; it names only the built-ins listed now.
         self.last_hidden_count = await saved_hidden_count(
             self._resources,
             self._session_agent_uid,
@@ -245,10 +243,11 @@ class MCPGatewaySession:
     async def _enabled_mcp_servers(self) -> list[str]:
         return await enabled_mcp_servers(self._resources, self._session_agent_uid)
 
-    async def _servers_and_hidden(self) -> tuple[list[str], frozenset[str]]:
+    async def _servers_and_hidden(self) -> tuple[list[str], frozenset[str], dict[str, str]]:
+        """Visible server names, tools hidden from this agent, per-tool exposure overrides."""
         rows = await visible_mcp_servers(self._resources, self._session_agent_uid)
         hidden = await hidden_tool_names(rows, self._session_agent_uid, self._tool_reach)
-        return [r.name for r in rows], hidden
+        return [r.name for r in rows], hidden, await exposure_overrides(self._prefs, rows)
 
     async def _ensure_subscribed(self, server_name: str) -> None:
         """Attach notification + server-request handlers to the upstream connection lazily."""
@@ -287,12 +286,13 @@ class MCPGatewaySession:
     # module's header for the per-server budget + parallelism rationale.
 
     async def _handle_tools_list(self) -> dict[str, Any]:
-        servers, hidden = await self._servers_and_hidden()
+        servers, hidden, exposure = await self._servers_and_hidden()
         listing = await build_tools_listing(
             discovery=self._discovery,
             ensure_subscribed=self._ensure_subscribed,
             servers=servers,
             hidden=hidden,
+            exposure=exposure,
             builtin=self._builtin,
             invocations=self._invocations,
             tiering=self._tiering,
@@ -315,9 +315,10 @@ class MCPGatewaySession:
     async def _handle_tools_call(self, params: dict[str, Any]) -> Any:
         name = str(params.get("name") or "")
         if name == TOOL_SEARCH_NAME:
-            servers, hidden = await self._servers_and_hidden()
+            servers, hidden, exposure = await self._servers_and_hidden()
             return await run_tool_search(
                 params,
+                exposure=exposure,
                 discovery=self._discovery,
                 ensure_subscribed=self._ensure_subscribed,
                 servers=servers,

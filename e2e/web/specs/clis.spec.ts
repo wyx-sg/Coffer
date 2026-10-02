@@ -134,13 +134,9 @@ test("the CLIs page lists what a skill requires, and hands a fix to an agent", a
       page.getByRole("button", { name: /Install|Update/ }),
     ).toHaveCount(0);
 
-    // Ask an agent → New conversation → the draft, the prompt in its composer.
+    // Ask an agent → the draft, the prompt in its composer.
     const before = await conversationCount();
     await page.getByRole("button", { name: "Ask an agent" }).click();
-    const dialog = page.getByRole("dialog", { name: /new conversation/i });
-    const start = dialog.getByRole("button", { name: /^start$/i });
-    await expect(start).toBeEnabled();
-    await start.click();
     await expect(page).toHaveURL(/\/conversations\/new$/);
     const box = page.getByRole("textbox", { name: /message input/i });
     await expect(box).toHaveValue(

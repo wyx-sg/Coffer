@@ -126,10 +126,7 @@ pub async fn approve_pending(app: AppHandle, approval_id: String) -> Result<Valu
     blocking(move || {
         let daemon = Daemon::find()?;
         let development = daemon.development()?;
-        let path = format!(
-            "/api/v1/secrets/approvals/{}",
-            path_segment(&approval_id)?
-        );
+        let path = format!("/api/v1/secrets/approvals/{}", path_segment(&approval_id)?);
         let approval = daemon.get(&path)?;
         let description = approval
             .get("description")
@@ -148,6 +145,73 @@ pub async fn approve_pending(app: AppHandle, approval_id: String) -> Result<Valu
         )
     })
     .await
+}
+
+/// Approve several pending requests under one presence check and one grant.
+///
+/// The shell, not the page, decides what is approved: it reads each approval
+/// from the daemon (what it is and the target it is pinned to), keeps those
+/// still pending and batchable, shows their descriptions in the prompt, and
+/// signs the grant over a digest of exactly that list. The daemon recomputes
+/// the digest from the list it is sent and applies only items still pending for
+/// the same target. Ids that are gone or no longer pending are left out of the
+/// list and so are reported by the page as skipped.
+#[tauri::command]
+pub async fn approve_pending_batch(
+    app: AppHandle,
+    approval_ids: Vec<String>,
+) -> Result<Value, String> {
+    blocking(move || {
+        let daemon = Daemon::find()?;
+        let development = daemon.development()?;
+        let mut items: Vec<(String, String)> = Vec::new();
+        let mut descriptions: Vec<String> = Vec::new();
+        for id in &approval_ids {
+            let approval =
+                daemon.get(&format!("/api/v1/secrets/approvals/{}", path_segment(id)?))?;
+            if !is_batchable(&approval) {
+                continue;
+            }
+            let text = |name: &str| {
+                approval
+                    .get(name)
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned()
+            };
+            items.push((id.clone(), text("target_fingerprint")));
+            descriptions.push(text("description"));
+        }
+        if items.is_empty() {
+            return Err("nothing in the selection is still waiting for approval".to_owned());
+        }
+        presence::confirm(
+            &app,
+            &Subject::ApproveBatch {
+                descriptions: &descriptions,
+            },
+            development,
+        )?;
+        let target = presence_grant::batch_target(&items);
+        let (nonce, signature) = daemon.grant(GrantOp::ApproveBatch, &target)?;
+        let listed: Vec<Value> = items
+            .iter()
+            .map(|(id, fingerprint)| json!({"id": id, "fingerprint": fingerprint}))
+            .collect();
+        daemon.post(
+            "/api/v1/secrets/approvals/approve",
+            &json!({"items": listed, "nonce": nonce, "signature": signature}),
+            DEFAULT_READ_TIMEOUT,
+        )
+    })
+    .await
+}
+
+/// Whether an approval read from the daemon can be one of several: it waits,
+/// and it is not the switch that turns the protection off.
+fn is_batchable(approval: &Value) -> bool {
+    approval.get("status").and_then(Value::as_str) == Some("pending")
+        && approval.get("op").and_then(Value::as_str) != Some("disable_protection")
 }
 
 /// Run blocking work on Tauri's blocking pool.
@@ -286,6 +350,16 @@ mod tests {
         assert_eq!(picked_folder(&closed).unwrap_err(), "cancelled");
         let headless = json!({"available": false, "path": null});
         assert_ne!(picked_folder(&headless).unwrap_err(), "cancelled");
+    }
+
+    #[test]
+    fn only_a_waiting_approval_that_is_not_the_protection_switch_is_batchable() {
+        let a = |status: &str, op: &str| json!({"status": status, "op": op});
+        assert!(is_batchable(&a("pending", "bind")));
+        assert!(is_batchable(&a("pending", "replace_value")));
+        assert!(!is_batchable(&a("pending", "disable_protection")));
+        assert!(!is_batchable(&a("superseded", "bind")));
+        assert!(!is_batchable(&json!({})));
     }
 
     #[test]

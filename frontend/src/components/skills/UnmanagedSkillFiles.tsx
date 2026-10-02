@@ -8,14 +8,8 @@
 // adopted, so there is no draft, no fingerprint and no save — the <FileActions>
 // bar opens the file in the user's own editor, which is the honest way to change
 // something another tool put there.
-import { useTranslation } from "react-i18next";
-
-import { FileActions } from "@/components/FileActions";
-import { FILE_PANE_BODY } from "@/components/filePane";
-import { CodeView } from "@/components/preview/CodeView";
-import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
+import { ReadOnlyFileView } from "@/components/skills/ReadOnlyFileView";
 import { SkillFileBrowser } from "@/components/skills/SkillFileTree";
-import { translateApiError } from "@/lib/api/errors";
 import {
   useUnmanagedSkillFileContent,
   useUnmanagedSkillFiles,
@@ -37,63 +31,12 @@ export function UnmanagedSkillFiles(props: UnmanagedRef) {
   );
 }
 
-function isMarkdown(path: string): boolean {
-  return /\.mdx?$/i.test(path);
-}
-
 function UnmanagedSkillFileViewer({
   agentUid,
   location,
   name,
   path,
 }: UnmanagedRef & { path: string }) {
-  const { t } = useTranslation();
   const content = useUnmanagedSkillFileContent(agentUid, location, name, path);
-
-  if (content.isPending) {
-    return <p className="text-sm text-muted-foreground">{t("common.loading")}</p>;
-  }
-  if (content.error) {
-    return (
-      <p className="text-sm text-destructive" role="alert">
-        {translateApiError(t, content.error)}
-      </p>
-    );
-  }
-
-  const absPath = content.data?.abs_path;
-  const header = (
-    <div className="shrink-0 space-y-2">
-      <span className="block truncate font-mono text-xs text-muted-foreground">{path}</span>
-      {absPath ? <FileActions filePath={absPath} /> : null}
-    </div>
-  );
-
-  if (content.data?.binary) {
-    return (
-      <div className={FILE_PANE_BODY}>
-        {header}
-        <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
-          {t("skills.files.binary", { size: content.data.size })}
-        </div>
-      </div>
-    );
-  }
-
-  const text = content.data?.content ?? "";
-  return (
-    <div className={FILE_PANE_BODY}>
-      {header}
-      {isMarkdown(path) ? (
-        <FindableMarkdown fill className="rounded-md border bg-background p-3">
-          {text}
-        </FindableMarkdown>
-      ) : (
-        <CodeView value={text} filename={path} fill className="bg-background" />
-      )}
-      {content.data?.truncated ? (
-        <p className="shrink-0 text-xs text-muted-foreground">{t("skills.files.truncated")}</p>
-      ) : null}
-    </div>
-  );
+  return <ReadOnlyFileView path={path} content={content} />;
 }

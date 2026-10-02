@@ -1,9 +1,9 @@
 // frontend/src/components/channel/ChannelDetailHeader.tsx
 // The top of the open channel: its platform mark, "SeaTalk · Team bot", the
 // status pill, one meta line (app id, transport, where it runs), the one
-// primary action the state calls for, and the ⋯ menu with the rest — Send
-// test message, Reconnect, Change machine…, Replace app secret… / bot token…,
-// Delete channel….
+// primary action the state calls for, and a ⋯ menu holding only what has no
+// other home: Reconnect (Send test is the primary button; Change machine,
+// Replace secret and Delete are in the Settings tab).
 import { useTranslation } from "react-i18next";
 import { KeyRound, Play, Power, RefreshCw, Send } from "lucide-react";
 
@@ -16,7 +16,7 @@ import type { ChannelPrimaryAction, ChannelView } from "@/lib/channels/channelSt
 import { channelPlatform } from "@/lib/channels/channelState";
 import { PlatformMark } from "./PlatformMark";
 
-export type ChannelCommand = Exclude<ChannelPrimaryAction, null> | "changeMachine" | "delete";
+export type ChannelCommand = Exclude<ChannelPrimaryAction, null>;
 
 const PRIMARY_ICON = {
   sendTest: Send,
@@ -25,6 +25,7 @@ const PRIMARY_ICON = {
   retryStart: RefreshCw,
   refresh: RefreshCw,
   replaceSecret: KeyRound,
+  openSecrets: KeyRound,
   runHere: Play,
   runHereConfirm: Play,
   turnOn: Power,
@@ -33,12 +34,11 @@ const PRIMARY_ICON = {
 interface Props {
   channel: ResourceOut;
   view: ChannelView;
-  hasPeer: boolean;
   busy: boolean;
   onCommand: (command: ChannelCommand) => void;
 }
 
-export function ChannelDetailHeader({ channel, view, hasPeer, busy, onCommand }: Props) {
+export function ChannelDetailHeader({ channel, view, busy, onCommand }: Props) {
   const { t } = useTranslation();
   const words = useChannelStateWords();
   const meta = useChannelMeta(channel, view);
@@ -48,37 +48,20 @@ export function ChannelDetailHeader({ channel, view, hasPeer, busy, onCommand }:
   const PrimaryIcon = primary ? PRIMARY_ICON[primary] : null;
   const heading = channelHeading(channel);
 
-  const actions: MenuAction[] = [
-    {
-      key: "sendTest",
-      label: t("channels.actions.sendTestMessage"),
-      disabled: !hasPeer,
-      onSelect: () => onCommand("sendTest"),
-    },
-    {
-      key: "reconnect",
-      label: t("channels.actions.menu.reconnect"),
-      disabled: !view.runsHere || busy,
-      onSelect: () => onCommand("reconnect"),
-    },
-    {
-      key: "changeMachine",
-      label: t("channels.actions.changeMachine"),
-      onSelect: () => onCommand("changeMachine"),
-    },
-    {
-      key: "replaceSecret",
-      label: t(`channels.actions.menu.${secretKey}`),
-      onSelect: () => onCommand("replaceSecret"),
-    },
-    {
-      key: "delete",
-      label: t("channels.actions.menu.delete"),
-      destructive: true,
-      separated: true,
-      onSelect: () => onCommand("delete"),
-    },
-  ];
+  // Reconnect is the one command with no other home: Send test is the primary
+  // button while connected, and Change machine, Replace secret and Delete live
+  // in the Settings tab. When Reconnect is itself the primary button, no menu.
+  const actions: MenuAction[] =
+    primary === "reconnect"
+      ? []
+      : [
+          {
+            key: "reconnect",
+            label: t("channels.actions.menu.reconnect"),
+            disabled: !view.runsHere || busy,
+            onSelect: () => onCommand("reconnect"),
+          },
+        ];
 
   return (
     <header className="flex items-center gap-3" data-testid="channel-header">
@@ -103,7 +86,9 @@ export function ChannelDetailHeader({ channel, view, hasPeer, busy, onCommand }:
               : t(`channels.actions.${primary}`)}
           </Button>
         ) : null}
-        <ActionMenu label={t("channels.actions.more", { name: heading })} actions={actions} />
+        {actions.length > 0 ? (
+          <ActionMenu label={t("channels.actions.more", { name: heading })} actions={actions} />
+        ) : null}
       </span>
     </header>
   );

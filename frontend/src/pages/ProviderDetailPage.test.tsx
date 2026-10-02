@@ -206,10 +206,41 @@ describe("ProviderDetailPage", () => {
       "href",
       "/secrets",
     );
-    expect(await screen.findByText("2 of 3 offered")).toBeInTheDocument();
+    expect(screen.queryByText("2 of 3 offered")).not.toBeInTheDocument();
     // One column, no tabs: the Models section sits under Used by and Endpoint.
     expect(screen.queryByRole("tab")).toBeNull();
     expect(screen.getByRole("switch", { name: /gpt-5-codex/ })).toBeInTheDocument();
+  });
+
+  test("the detail is three card sections with a one-line header and truncated model rows", async () => {
+    serves(chat("gpt-5", "gpt-5-codex"));
+    serve(makeProvider({ models: chat("gpt-5", "gpt-5-codex") }));
+    const { container } = renderPage();
+    await heading();
+
+    // Used by, Endpoint and Models are Sections divided by one hairline, not cards.
+    for (const name of ["Used by", "Endpoint", "Models"]) {
+      const section = screen.getByRole("heading", { name }).closest("section")!;
+      expect(section).not.toHaveClass("border");
+      expect(section.parentElement).toHaveClass("divide-y");
+    }
+    // The header holds the actions in the sibling order: reach, test, edit, menu.
+    const header = screen.getByTestId("provider-header");
+    expect(within(header).getByTestId("scope-control")).toBeInTheDocument();
+    expect(within(header).getByRole("button", { name: "Test" })).toBeInTheDocument();
+    expect(within(header).getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(
+      within(header).getByRole("button", { name: "More actions for acme" }),
+    ).toBeInTheDocument();
+    // The menu holds only Delete: Refresh models is the Models section's button.
+    fireEvent.click(within(header).getByRole("button", { name: "More actions for acme" }));
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Delete provider"]);
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    // The page is no longer wrapped in one bordered box.
+    expect(container.querySelector(".rounded-xl.border.overflow-hidden")).toBeNull();
+    // A model id is one truncated line.
+    expect(await screen.findByText("gpt-5-codex")).toHaveAttribute("data-truncated-text");
+    expect(screen.getAllByTestId("model-row")).toHaveLength(2);
   });
 
   test("a keyless provider says no key is needed", async () => {

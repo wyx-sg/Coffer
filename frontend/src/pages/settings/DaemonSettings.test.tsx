@@ -7,12 +7,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ToastProvider } from "@/components/ui/toast";
 import { DaemonSettings } from "./DaemonSettings";
 
-const shell = vi.hoisted(() => ({ inShell: false }));
+const shell = vi.hoisted(() => ({ inShell: false, matches: true }));
 vi.mock("@/lib/tauri", async (orig) => ({
   ...(await orig<typeof import("@/lib/tauri")>()),
   isTauri: () => shell.inShell,
   inDesktopShell: () => shell.inShell,
-  daemonVersionMatches: async () => true,
+  daemonVersionMatches: async () => shell.matches,
   restartDaemon: vi.fn(),
 }));
 vi.mock("@/lib/api/client", async (orig) => ({
@@ -88,6 +88,7 @@ describe("DaemonSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     shell.inShell = false;
+    shell.matches = true;
   });
 
   acceptance("web-ui", "the settings daemon tab shows the running daemon", async () => {
@@ -99,6 +100,16 @@ describe("DaemonSettings", () => {
       /^Up \d+ days? · pid 51233 · 2 agents connected$/,
     );
     expect(screen.queryByRole("button", { name: /stop|shut ?down/i })).toBeNull();
+  });
+
+  test("a daemon from another app version says so on the tab", async () => {
+    shell.matches = false;
+    mockApi();
+    renderTab();
+    expect(await screen.findByTestId("settings-daemon-out-of-date")).toHaveTextContent(
+      /different|older|previous|version/i,
+    );
+    shell.matches = true;
   });
 
   acceptance("web-ui", "the settings daemon tab offers the host's restart", async () => {

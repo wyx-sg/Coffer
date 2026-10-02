@@ -1,8 +1,8 @@
 """Two machines that synced on the previous build, upgraded one after the
-other: the old remote is never converted — it is refused — and is rebuilt
-from the first upgraded machine; the second joins it as new, and both end
-with every resource byte-identical and nothing lost (plan q9, user rule "no
-remote conversion")."""
+other: the old remote is never converted — the first upgraded machine's vault
+replaces it (the old history stays in git) — and the second joins the
+replaced remote as new, and both end with every resource byte-identical and
+nothing lost (plan q9, user rule "no remote conversion")."""
 
 from __future__ import annotations
 
@@ -67,9 +67,9 @@ def _resources(machine: Machine) -> dict[str, bytes]:
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="an old remote is rebuilt from the first upgraded machine"
+    spec="vault-sync", scenario="a remote at an older layout is replaced by this vault"
 )
-def test_the_old_remote_is_refused_and_rebuilt_then_the_second_machine_joins_as_new(
+def test_the_old_remote_is_replaced_then_the_second_machine_joins_as_new(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     old = _old_layout_remote(tmp_path)
@@ -89,27 +89,27 @@ def test_the_old_remote_is_refused_and_rebuilt_then_the_second_machine_joins_as_
     monkeypatch.setenv("HOME", str(a.home))
     migrate(a.home, upgrade_db=UPGRADE, build="test")
     mac = Machine(a.coffer, "A", old)
-    refused = join(mac.engine, old, None)
-    assert refused.status is RoundStatus.REMOTE_TOO_OLD
-    assert (
-        subprocess.run(
-            ["git", "--git-dir", old.url, "show", "main:manifest.json"],
-            capture_output=True,
-            text=True,
-        ).stdout
-        == json.dumps({"schema_version": 2}) + "\n"
-    ), "the old remote is never converted"
-
-    new = SyncRemote(url=str(bare_remote(tmp_path / "rebuilt")))
-    mac = Machine(a.coffer, "A", new)
-    assert preview(mac.engine, new, None).kind is JoinKind.EMPTY
-    assert join(mac.engine, new, None).status is RoundStatus.PUSHED
+    old_tip = subprocess.run(
+        ["git", "--git-dir", old.url, "rev-parse", "main"], capture_output=True, text=True
+    ).stdout.strip()
+    assert preview(mac.engine, old, None).kind is JoinKind.REPLACE
+    replaced = join(mac.engine, old, None)
+    assert replaced.status is RoundStatus.PUSHED and replaced.join == "replace"
     shown = subprocess.run(
-        ["git", "--git-dir", new.url, "show", "main:manifest.json"], capture_output=True, text=True
+        ["git", "--git-dir", old.url, "show", "main:manifest.json"], capture_output=True, text=True
     ).stdout
     # Machine B, still on the previous build, reads only this number and
-    # refuses the rebuilt remote rather than misreading it.
+    # refuses the replaced remote rather than misreading it.
     assert json.loads(shown)["schema_version"] > PREVIOUS_BUILD_SCHEMA
+    assert (
+        subprocess.run(
+            ["git", "--git-dir", old.url, "merge-base", "--is-ancestor", old_tip, "main"],
+            check=False,
+        ).returncode
+        == 0
+    ), "the old history stays in the remote"
+    new = old
+    mac = Machine(a.coffer, "A", new)
 
     monkeypatch.setenv("HOME", str(b.home))
     migrate(b.home, upgrade_db=UPGRADE, build="test")

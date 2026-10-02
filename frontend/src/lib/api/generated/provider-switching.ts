@@ -982,6 +982,10 @@ export interface components {
         };
         /** ProxyStatusOut */
         ProxyStatusOut: {
+            /** Consecutive Failures */
+            consecutive_failures: number;
+            /** Failing */
+            failing: boolean;
             /** Last Error */
             last_error: string | null;
             /** Pid */

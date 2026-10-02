@@ -8,11 +8,11 @@
 // agent (`status.handoff`), beside the header's Retry. The daemon's
 // diagnostics (a setting the platform will not honour) follow as their own
 // banners. A healthy channel shows none.
-import type { ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { AlertCircle, AlertTriangle, Info } from "lucide-react";
 
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
+import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { ChannelStatus } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
@@ -36,6 +36,8 @@ const VARIANT: Partial<Record<ChannelStateKey, Variant>> = {
   kicked: "error",
   sdkMissing: "error",
   connectFailed: "error",
+  waitingApproval: "warning",
+  approvalRefused: "error",
   stopped: "error",
 };
 
@@ -47,11 +49,11 @@ interface Props {
   status: ChannelStatus | undefined;
   /** Why the status read failed, already translated. */
   statusError: string | null;
-  /** The pairing panel, shown in a not-paired channel's banner. */
-  pairing: ReactNode;
+  /** Opens the pairing dialog; offered in a not-paired channel's banner. */
+  onPair: () => void;
 }
 
-export function ChannelStatusBanner({ channel, view, status, statusError, pairing }: Props) {
+export function ChannelStatusBanner({ channel, view, status, statusError, onPair }: Props) {
   const { t } = useTranslation();
   const machineName = useMachineName();
   const platformKey = channelPlatform(channel.config);
@@ -111,7 +113,11 @@ export function ChannelStatusBanner({ channel, view, status, statusError, pairin
           <AlertTitle>{t("channels.banner.notPaired.title", vars)}</AlertTitle>
           <AlertDescription>
             <p>{t("channels.banner.notPaired.body")}</p>
-            <div className="mt-2.5">{pairing}</div>
+            <div className="mt-2.5">
+              <Button size="sm" onClick={onPair}>
+                {t("channels.overview.who.addOwner")}
+              </Button>
+            </div>
           </AlertDescription>
         </Alert>
       ) : null}

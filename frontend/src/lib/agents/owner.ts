@@ -3,7 +3,7 @@
 // The Skills, MCP servers, Plugins and Hooks tabs each list both in one table
 // with one owner filter kept in the tab's URL as `?owner=coffer|own` (All is the
 // bare address), spec agent-registry "Filter an agent's installed kinds by owner".
-import { useSearchParams } from "react-router-dom";
+import { useSearchParamsKeepingState as useSearchParams } from "@/lib/hooks/useSearchParamsKeepingState";
 
 export type Owner = "coffer" | "own";
 export type OwnerFilter = "all" | Owner;

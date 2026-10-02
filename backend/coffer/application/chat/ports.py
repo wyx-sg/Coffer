@@ -148,6 +148,8 @@ class ModelCatalogPort(Protocol):
 
     async def offered(self, agent_key: str) -> Sequence[CatalogueModel]: ...
 
+    async def native_default_model(self, agent_key: str) -> str | None: ...
+
 
 class ChatMediaStore(Protocol):
     """Where the web composer's uploads live until — and after — they are sent.

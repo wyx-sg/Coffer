@@ -64,6 +64,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/approvals/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Batch
+         * @description Approve several pending approvals under one presence grant.
+         *
+         *     The grant is for the digest of the listed ``(id, fingerprint)`` pairs, so
+         *     the set approved is the set the person was shown. Each item is then applied
+         *     only if it is still pending for that very target; the rest are skipped and
+         *     named. Nothing outside the list is touched.
+         */
+        post: operations["approve_batch_api_v1_secrets_approvals_approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/approvals/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Batch
+         * @description Refuse several pending approvals. Needs no presence: refusing only narrows.
+         */
+        post: operations["reject_batch_api_v1_secrets_approvals_reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/approvals/{approval_id}": {
         parameters: {
             query?: never;
@@ -444,6 +489,56 @@ export interface components {
             status: "pending" | "approved" | "rejected" | "superseded";
             /** Target */
             target: string | null;
+            /** Target Fingerprint */
+            target_fingerprint: string | null;
+        };
+        /**
+         * BatchApproveIn
+         * @description Approve every listed approval under one grant over exactly this list.
+         */
+        BatchApproveIn: {
+            /** Items */
+            items: components["schemas"]["BatchItemIn"][];
+            /** Nonce */
+            nonce: string;
+            /** Signature */
+            signature: string;
+        };
+        /**
+         * BatchItemIn
+         * @description One approval as the person was shown it.
+         */
+        BatchItemIn: {
+            /**
+             * Fingerprint
+             * @default
+             */
+            fingerprint?: string;
+            /** Id */
+            id: string;
+        };
+        /** BatchOut */
+        BatchOut: {
+            /** Results */
+            results: components["schemas"]["BatchResultOut"][];
+        };
+        /** BatchRejectIn */
+        BatchRejectIn: {
+            /** Ids */
+            ids: string[];
+        };
+        /** BatchResultOut */
+        BatchResultOut: {
+            approval: components["schemas"]["ApprovalOut"] | null;
+            /** Id */
+            id: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "approved" | "rejected" | "skipped";
+            /** Reason */
+            reason: ("changed" | "not_pending" | "not_found" | "not_batchable" | "failed") | null;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -499,7 +594,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "reveal" | "approve" | "export_master_key";
+            op: "reveal" | "approve" | "approve_batch" | "export_master_key";
             /** Target */
             target: string;
         };
@@ -513,7 +608,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "reveal" | "approve" | "export_master_key";
+            op: "reveal" | "approve" | "approve_batch" | "export_master_key";
             /** Target */
             target: string;
         };
@@ -940,6 +1035,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    approve_batch_api_v1_secrets_approvals_approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchApproveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reject_batch_api_v1_secrets_approvals_reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchRejectIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

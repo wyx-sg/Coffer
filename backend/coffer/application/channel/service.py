@@ -7,16 +7,16 @@ ChannelRuntime and message flow to InboundProcessor.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import TYPE_CHECKING
 
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.inbound_status import InboundInfo, inbound_info
 from coffer.application.channel.pairing import PairingManager, start_link
+from coffer.application.channel.people import ChannelPerson, people_of
 from coffer.application.channel.ports import EventIngestAdapter
 from coffer.application.channel.store_ports import (
-    ChannelPeer,
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
 )
@@ -26,7 +26,11 @@ from coffer.domain.channel.config import (
     TelegramChannelConfig,
     parse_channel_config,
 )
-from coffer.domain.channel.errors import ChannelNotPaired, ChannelNotRunning
+from coffer.domain.channel.errors import (
+    ChannelNotPaired,
+    ChannelNotRunning,
+    ChannelPersonNotFound,
+)
 from coffer.domain.resource import Resource
 
 if TYPE_CHECKING:
@@ -51,6 +55,19 @@ class ChannelDiagnostic:
 
 
 @dataclass(frozen=True)
+class SecretApproval:
+    """The channel's secret is the reason its adapter is not running.
+
+    ``pending`` waits for the owner's approval in the Coffer app; ``refused`` was
+    declined and stays so until the owner asks again from the Secrets page.
+    ``secret_ref`` names the secret (never its value).
+    """
+
+    state: str
+    secret_ref: str
+
+
+@dataclass(frozen=True)
 class ChannelStatus:
     #: The channel's identity — what a surface addresses it by and builds links
     #: from. Beside the name rather than instead of it: this object is rendered
@@ -61,13 +78,9 @@ class ChannelStatus:
     enabled: bool
     running: bool
     pending_pairing: bool
-    peer: ChannelPeer | None
-    # The conversation the owner's DM is currently driving, read from the
-    # thread-conversation table (``thread_id=""`` is the DM). It is reported
-    # beside ``peer`` rather than on it because a pairing and a conversation
-    # pointer are different lifetimes: the pairing converges between machines,
-    # the pointer names a row in THIS machine's conversation store.
-    peer_conversation_id: str | None
+    #: Everyone paired to the channel, earliest first; each carries the
+    #: conversation their direct chat is driving.
+    people: tuple[ChannelPerson, ...]
     # A SeaTalk channel's websocket connection; None for telegram, whose
     # inbound is the adapter's own polling and is reported by ``running``.
     inbound: InboundInfo | None
@@ -75,6 +88,10 @@ class ChannelStatus:
     # between the configuration and what the platform actually permits. Empty is the
     # healthy case.
     diagnostics: tuple[ChannelDiagnostic, ...] = ()
+    # Set while the channel's secret waits for (or was refused) the owner's
+    # approval — the cause behind ``running: false`` that no websocket state
+    # explains (spec channels "Report a channel whose secret waits for approval").
+    secret_approval: SecretApproval | None = None
     # The machine this channel is bound to, and whether that machine is this
     # one (spec channels "Bind each channel to the one machine that runs it").
     # Both, because ``running`` alone cannot tell "stopped" from "not mine to
@@ -127,9 +144,13 @@ class ChannelService:
         return await self._resources.get(channel_uid)
 
     async def issue_pairing_code(
-        self, channel_uid: str, *, actor: str
+        self, channel_uid: str, *, actor: str, replaces: str | None = None
     ) -> tuple[str, datetime, str]:
         """Generate a pairing code for the channel (replacing any pending one).
+
+        The person who claims it is added beside the ones already paired; with
+        ``replaces`` (a paired person's ``sender_id``) they take that person's
+        place instead (spec channels "Serve several paired people").
 
         Returns the code, its expiry, and — where the platform has a
         parameterised start link and the bot's username is known — a link that
@@ -138,16 +159,54 @@ class ChannelService:
         The link is "" when there is none; the typed code always works.
         """
         resource = await self._channel(channel_uid)
+        if replaces is not None:
+            await self._person(resource, replaces)
         # Pending code and running adapter are both keyed by the channel's uid, so
         # a rename between issuing and claiming keeps both.
-        code, expires_at = self._pairing.issue(resource.uid)
+        code, expires_at = self._pairing.issue(resource.uid, replaces=replaces)
+        details = {"expires_at": expires_at.isoformat()}
+        if replaces is not None:
+            details["replaces"] = replaces
         await self._audit.record(
             AuditEventType.CHANNEL_PAIRING_ISSUED.value,
             resource=resource,
             actor=actor,
-            details={"expires_at": expires_at.isoformat()},
+            details=details,
         )
         return code, expires_at, self._pair_link(resource.uid, code)
+
+    async def _person(self, resource: Resource, sender_id: str) -> ChannelPerson:
+        people = people_of(await self._peers.list_by_resource(resource.uid))
+        for person in people:
+            if person.sender_id == sender_id:
+                return person
+        raise ChannelPersonNotFound(resource.name, sender_id)
+
+    async def cancel_pairing_code(self, channel_uid: str) -> None:
+        """Drop the channel's pending code, so it can no longer pair anyone."""
+        resource = await self._channel(channel_uid)
+        self._pairing.clear(resource.uid)
+
+    async def remove_person(self, channel_uid: str, sender_id: str, *, actor: str) -> None:
+        """Un-pair one person: their direct chat and every group they brought the
+        bot into, in one write. Everyone else stays paired. Removing the last
+        person leaves the channel unpaired — a state it starts in.
+
+        An in-flight turn for a removed person finishes; the next message they
+        send is refused like a stranger's."""
+        resource = await self._channel(channel_uid)
+        person = await self._person(resource, sender_id)
+        chats = await self._peers.delete_by_sender(resource.uid, sender_id)
+        await self._audit.record(
+            AuditEventType.CHANNEL_PERSON_REMOVED.value,
+            resource=resource,
+            actor=actor,
+            details={
+                "sender_id": sender_id,
+                "display_name": person.display_name,
+                "chat_ids": chats,
+            },
+        )
 
     def _pair_link(self, channel_uid: str, code: str) -> str:
         """The one-tap pairing link, or "" when this channel cannot make one."""
@@ -219,12 +278,16 @@ class ChannelService:
     async def status(self, channel_uid: str) -> ChannelStatus:
         resource = await self._channel(channel_uid)
         name = resource.name
-        peer = await self._peers.owner_peer(resource.uid)
-        # The DM's own thread row (``thread_id=""``) is where the conversation
-        # pointer actually lives. ``channel_peers`` carried a column of the
-        # same name that nothing ever wrote, so this line used to report None
-        # for every channel that had been talking for weeks.
-        dm = await self._threads.get(resource.uid, peer.chat_id, "") if peer else None
+        # Each person's DM thread row (``thread_id=""``) is where the conversation
+        # pointer actually lives. It is read beside the pairing rather than stored
+        # on it because the two are different lifetimes: the pairing converges
+        # between machines, the pointer names a row in THIS machine's store.
+        people: list[ChannelPerson] = []
+        for person in people_of(await self._peers.list_by_resource(resource.uid)):
+            dm = await self._threads.get(resource.uid, person.chat_id, "")
+            people.append(
+                replace(person, active_conversation_id=dm.active_conversation_id if dm else None)
+            )
         channel_type = str(resource.config.get("channel_type", ""))
         inbound: InboundInfo | None = None
         if channel_type == "seatalk":
@@ -241,6 +304,7 @@ class ChannelService:
         local = await self._runtime.local_machine_id()
         runs_here = local is None or runs_on == local
         return ChannelStatus(
+            secret_approval=self._secret_approval(resource),
             diagnostics=self._diagnostics(resource, runs_on=runs_on, runs_here=runs_here),
             uid=resource.uid,
             name=name,
@@ -250,8 +314,7 @@ class ChannelService:
             enabled=resource.enabled,
             running=self._runtime.is_running(resource.uid),
             pending_pairing=self._pairing.pending(resource.uid),
-            peer=peer,
-            peer_conversation_id=dm.active_conversation_id if dm else None,
+            people=tuple(people),
             inbound=inbound,
             runs_on=runs_on,
             # A runtime with no machine of its own is not bound anywhere else
@@ -259,6 +322,17 @@ class ChannelService:
             # gate takes.
             runs_here=runs_here,
         )
+
+    def _secret_approval(self, resource: Resource) -> SecretApproval | None:
+        state = self._runtime.secret_withheld(resource.uid)
+        if state is None:
+            return None
+        field = (
+            "app_secret_ref"
+            if resource.config.get("channel_type") == "seatalk"
+            else "bot_token_ref"
+        )
+        return SecretApproval(state=state, secret_ref=str(resource.config.get(field) or ""))
 
     async def ingest_event(self, channel_uid: str, envelope: dict[str, object]) -> None:
         """Accept a platform event pushed down the channel's websocket connection.

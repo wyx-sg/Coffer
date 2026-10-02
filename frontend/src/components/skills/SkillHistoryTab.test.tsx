@@ -107,11 +107,12 @@ acceptance(
   },
 );
 
-test("choosing a version shows the diff of every file it changed", async () => {
+test("choosing a version lists its changed files and shows the picked one's diff", async () => {
   renderSkillsPage("/skills/hello/history");
   const list = await screen.findByRole("list", { name: "Versions" }, { timeout: 5_000 });
   fireEvent.click(within(list).getAllByRole("button")[1]);
   expect(await screen.findByTestId("skill-version-file-run.sh")).toHaveTextContent("added");
+  fireEvent.click(screen.getByTestId("skill-version-file-run.sh"));
   expect(await screen.findByText("new line of skills/hello/run.sh")).toBeInTheDocument();
   expect(vaultApi.diff).toHaveBeenCalledWith("skills/hello/run.sh", OLDER.version);
 });
@@ -171,4 +172,20 @@ acceptance("skill-manager", "Coffer's own skill has no history", async () => {
     await screen.findByText("Coffer’s own skill has no history", {}, { timeout: 5_000 }),
   ).toBeInTheDocument();
   expect(vaultApi.history).not.toHaveBeenCalled();
+});
+
+test("the history is split: versions on the left, the chosen version's diff on the right", async () => {
+  renderSkillsPage("/skills/hello/history");
+  const list = await screen.findByRole("list", { name: "Versions" }, { timeout: 5_000 });
+  const split0 = list.closest("div[class*='flex-row']") as HTMLElement;
+  expect(within(split0).getByRole("separator")).toHaveAttribute("aria-orientation", "vertical");
+  const split = list.closest("div[class*='flex-row']") as HTMLElement;
+  const detail = split.querySelector("section") as HTMLElement;
+  expect(detail).not.toBeNull();
+  expect(split.contains(list) && !detail.contains(list)).toBe(true);
+  // The newest version's first file is on screen; picking the older one changes it.
+  expect(await within(detail).findByText("new line of skills/hello/SKILL.md")).toBeInTheDocument();
+  fireEvent.click(within(list).getAllByRole("button")[1]);
+  fireEvent.click(await screen.findByTestId("skill-version-file-run.sh"));
+  expect(await screen.findByText("new line of skills/hello/run.sh")).toBeInTheDocument();
 });

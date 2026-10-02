@@ -33,6 +33,7 @@ from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.mcp.supervisor import SubprocessSupervisor
+from coffer.application.mcp.supervisor_failures import UpstreamFailureLedger
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_registry import (
     PrunableRegistry,
@@ -125,6 +126,9 @@ def wire_mcp_kind(
 
     # 2. Per-session supervisor registry (used for the lifecycle hooks + factory)
     session_supervisors: dict[str, SubprocessSupervisor] = {}
+    # One failure ledger for every supervisor: a dead upstream is backed off
+    # once for the daemon, not once per client session.
+    upstream_failures = UpstreamFailureLedger()
 
     # 3. Build the on_delete-aware Kind and register it
     mcp_kind = make_mcp_kind(session_supervisors)
@@ -142,6 +146,7 @@ def wire_mcp_kind(
         resource_service=resource_svc,
         secret_resolver=boundary_resolver(secret_store),
         upstream_factory=build_upstream,
+        failures=upstream_failures,
     )
     process_discovery = CapabilityDiscovery(
         resource_service=resource_svc,
@@ -168,6 +173,7 @@ def wire_mcp_kind(
             resource_service=resource_svc,
             secret_resolver=boundary_resolver(secret_store),
             upstream_factory=build_upstream,
+            failures=upstream_failures,
         )
         session_supervisors[session_id] = supervisor
 

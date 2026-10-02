@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { HelpTip } from "@/components/HelpTip";
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { SecretScan } from "@/lib/api/secret";
 import { fileCount, shortPath } from "./scanPlan";
@@ -50,8 +51,8 @@ export function ScanFindingsStep({
           })}
         </DialogDescription>
       </DialogHeader>
-      <div className="max-h-[360px] overflow-y-auto rounded-md border border-border-subtle">
-        <table className="w-full text-xs">
+      <div className="max-h-[360px] min-w-0 overflow-auto rounded-md border border-border-subtle">
+        <table className="w-full table-fixed text-xs">
           <thead className="sticky top-0 bg-surface-raised text-left text-text-muted">
             <tr className="border-b border-border-subtle">
               <th className="w-8 px-3 py-2">
@@ -62,8 +63,8 @@ export function ScanFindingsStep({
                   onChange={(e) => onToggleAll(e.target.checked)}
                 />
               </th>
-              <th className="px-2 py-2 font-medium">{t("secrets.scan.foundIn")}</th>
-              <th className="px-2 py-2 font-medium">{t("secrets.scan.key")}</th>
+              <th className="w-[42%] px-2 py-2 font-medium">{t("secrets.scan.foundIn")}</th>
+              <th className="w-[26%] px-2 py-2 font-medium">{t("secrets.scan.key")}</th>
               <th className="px-3 py-2 font-medium">{t("secrets.scan.secretName")}</th>
             </tr>
           </thead>
@@ -74,22 +75,33 @@ export function ScanFindingsStep({
                 <tr key={f.id} className={ticked.has(f.id) ? undefined : "text-text-muted"}>
                   <td className="px-3 py-2 align-top">
                     <Checkbox
-                      aria-label={t("secrets.scan.tickOne", { path: where, line: f.line })}
+                      aria-label={
+                        f.line > 0
+                          ? t("secrets.scan.tickOne", { path: where, line: f.line })
+                          : t("secrets.scan.tickWhole", { path: where })
+                      }
                       checked={ticked.has(f.id)}
                       onChange={() => onToggle(f.id)}
                     />
                   </td>
-                  <td className="max-w-[240px] px-2 py-2 align-top">
+                  <td className="px-2 py-2 align-top">
                     <p className="truncate font-mono text-text" title={f.path}>
                       {where}
                     </p>
                     <p className="text-2xs text-text-muted">
-                      {t("secrets.scan.line", { line: f.line })} ·{" "}
+                      {f.line > 0 ? `${t("secrets.scan.line", { line: f.line })} · ` : ""}
                       {t(`secrets.scan.source.${f.source}`)}
                     </p>
                   </td>
-                  <td className="px-2 py-2 align-top font-mono">{f.key}</td>
-                  <td className="px-3 py-2 align-top font-mono text-text">{f.proposed_name}</td>
+                  <td className="truncate px-2 py-2 align-top font-mono" title={f.key}>
+                    {f.key}
+                  </td>
+                  <td
+                    className="truncate px-3 py-2 align-top font-mono text-text"
+                    title={f.proposed_name}
+                  >
+                    {f.proposed_name}
+                  </td>
                 </tr>
               );
             })}
@@ -97,9 +109,9 @@ export function ScanFindingsStep({
         </table>
       </div>
       {mentions.length > 0 ? (
-        <div className="space-y-1 rounded-md bg-surface-sunken px-3 py-2 text-xs text-text-muted">
+        <div className="min-w-0 space-y-1 rounded-md bg-surface-sunken px-3 py-2 text-xs text-text-muted">
           <p>{t("secrets.scan.mentions", { count: mentions.length })}</p>
-          <ul className="space-y-0.5 font-mono">
+          <ul className="max-h-24 space-y-0.5 overflow-y-auto font-mono">
             {mentions.map((m) => (
               <li key={`${m.path}:${m.line}`} className="truncate" title={m.path}>
                 {m.skill} · {shortPath(m.path)}:{m.line}
@@ -113,10 +125,12 @@ export function ScanFindingsStep({
           ) : null}
         </div>
       ) : null}
-      <p className="text-xs text-text-muted">{t("secrets.scan.hint")}</p>
       <DialogFooter className="items-center">
-        <span className="mr-auto text-xs text-text-muted">
+        <span className="mr-auto flex items-center gap-1.5 text-xs text-text-muted">
           {t("secrets.scan.ticked", { count, total: findings.length })}
+          <HelpTip>
+            <p className="text-xs">{t("secrets.scan.hint")}</p>
+          </HelpTip>
         </span>
         <Button variant="ghost" onClick={onCancel}>
           {t("common.cancel")}

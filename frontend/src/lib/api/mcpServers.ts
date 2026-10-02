@@ -11,6 +11,9 @@ export type ToolTiering = components["schemas"]["ToolTieringOut"];
 export type McpTestResult = components["schemas"]["McpTestResultOut"];
 export type InvocationList = components["schemas"]["InvocationListOut"];
 
+export type ToolExposure = components["schemas"]["ToolExposureOut"];
+export type ToolExposureMode = ToolExposure["mode"];
+
 export type CapabilityType = "tool" | "resource" | "prompt";
 
 /** @ui-only query options the caller passes, not a response; never crosses the wire. */
@@ -80,6 +83,25 @@ export const mcpServersApi = {
         getApiClient().GET("/resources/mcp_server/{uid}/tiering", { params: { path: { uid } } }),
       ),
     ),
+  /** Set how tools are exposed to agents: one tool, or several in one write. */
+  setToolExposure: (
+    uid: string,
+    tools: readonly string[],
+    mode: ToolExposureMode,
+  ): Promise<void> =>
+    tools.length === 1
+      ? unwrapVoid(
+          getApiClient().PATCH("/resources/mcp_server/{uid}/tools/{tool}/exposure", {
+            params: { path: { uid, tool: tools[0] } },
+            body: { mode },
+          }),
+        )
+      : unwrapVoid(
+          getApiClient().PATCH("/resources/mcp_server/{uid}/tools/exposure", {
+            params: { path: { uid } },
+            body: { tools: [...tools], mode },
+          }),
+        ),
   invocations: (
     uid: string,
     { limit, status, since }: InvocationFilters,

@@ -334,6 +334,7 @@ def wire_agent_and_skill_kinds(
     set_skill_secret_presence(_secret_set)
     wire_cli_requirements(
         skill_svc,
+        audit,
         servers=_CliServerLaunchers(McpStdioLaunchers(resource_svc)),
         secret_set=_secret_set,
     )

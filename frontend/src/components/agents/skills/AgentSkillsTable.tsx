@@ -5,18 +5,20 @@
 // (disabled, with the reason, on a foreign link), Remove duplicate on an own
 // folder that shares its name with a skill Coffer delivers. A name opens the
 // skill's page — the managed skill's own, or the unmanaged folder's read-only
-// preview under this tab. The agent's own rows add a ⋯ menu — Adopt, Open
-// file, Delete — so a folder that is none of those states can still be deleted.
-// Nothing is truncated: paths wrap.
+// preview under this tab. The agent's own rows add a ⋯ menu — Open file, Delete
+// (no Delete on a duplicate: its button already removes it).
+// Fixed layout, one line per cell: name, description, path and state note end
+// in an ellipsis with the full text in a tooltip, so every row is one height.
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { FileText, Import, Trash2 } from "lucide-react";
+import { Import, Trash2 } from "lucide-react";
 
 import { DataTable, type Column } from "@/components/DataTable";
 import { StatusWord } from "@/components/status/StatusWord";
 import { TableActionButton } from "@/components/table/TableActionButton";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
+import { TruncatedPath, TruncatedText } from "@/components/ui/truncated-text";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import { unmanagedSkillPath } from "@/lib/agents/routes";
 import {
@@ -58,30 +60,26 @@ export function AgentSkillsTable({
 }: Props) {
   const { t } = useTranslation();
 
-  // The ⋯ menu of the agent's own folder: Adopt · Open file · Delete.
+  // The ⋯ menu of the agent's own folder: Open file · Delete. Adopt and Remove
+  // duplicate are the row's visible button (and where the row has no button,
+  // Adopt could not run anyway), so the menu does not repeat them.
   const ownMenu = (row: OwnSkillRow): MenuAction[] => [
-    {
-      key: "adopt",
-      label: t("agents.skillsTab.menu.adopt"),
-      disabled:
-        row.item.foreign_link ||
-        row.state === "invalid" ||
-        row.state === "duplicate" ||
-        adoptingKey !== null,
-      onSelect: () => onAdopt(row),
-    },
     {
       key: "open",
       label: t("agents.skillsTab.openFile"),
       onSelect: () => onOpenFile(skillFilePath(row.item.path)),
     },
-    {
-      key: "delete",
-      label: t("agents.skillsTab.menu.delete"),
-      destructive: true,
-      separated: true,
-      onSelect: () => (row.state === "duplicate" ? onRemoveDuplicate(row) : onDelete(row)),
-    },
+    ...(row.state === "duplicate"
+      ? []
+      : [
+          {
+            key: "delete",
+            label: t("agents.skillsTab.menu.delete"),
+            destructive: true,
+            separated: true,
+            onSelect: () => onDelete(row),
+          },
+        ]),
   ];
   const withMenu = (row: OwnSkillRow, action: ReactNode) => (
     <span className="inline-flex items-center justify-end gap-1">
@@ -93,27 +91,30 @@ export function AgentSkillsTable({
   const columns: Column<SkillRow>[] = [
     {
       key: "skill",
+      className: "w-[34%]",
       header: t("agents.skillsTab.cols.skill"),
       cell: (row) => (
         <div className="min-w-0 space-y-0.5">
-          <span className="flex flex-wrap items-center gap-2">
+          <span className="flex min-w-0 items-center gap-2">
             <Link
               to={
                 row.owner === "coffer"
                   ? `/skills/${encodeURIComponent(row.name)}`
                   : unmanagedSkillPath(agentType, row.item.location, row.name)
               }
-              className="break-all font-medium text-text hover:underline"
+              className="min-w-0 font-medium text-text hover:underline"
             >
-              {row.name}
+              <TruncatedText text={row.name} />
             </Link>
             {row.owner === "coffer" && row.skill.builtin ? (
-              <span className="rounded-sm border border-border-subtle px-1.5 text-2xs text-text-muted">
+              <span className="shrink-0 rounded-sm border border-border-subtle px-1.5 text-2xs text-text-muted">
                 {t("agents.skillsTab.builtIn")}
               </span>
             ) : null}
           </span>
-          {row.description ? <p className="text-xs text-text-muted">{row.description}</p> : null}
+          {row.description ? (
+            <TruncatedText text={row.description} className="text-xs text-text-muted" />
+          ) : null}
         </div>
       ),
     },
@@ -122,28 +123,30 @@ export function AgentSkillsTable({
       header: t("agents.skillsTab.cols.path"),
       cell: (row) =>
         row.path ? (
-          <span title={row.path} className="break-all font-mono text-xs text-text-muted">
-            {abbreviateHomePath(row.path)}
-          </span>
+          <TruncatedPath text={abbreviateHomePath(row.path)} className="text-xs text-text-muted" />
         ) : (
           <span className="text-text-muted">{t("common.emptyValue")}</span>
         ),
     },
     {
       key: "state",
+      className: "w-[150px]",
       header: t("agents.skillsTab.cols.state"),
       cell: (row) =>
         row.owner === "coffer" ? (
           <StatusWord tone="ok">{t("agents.skillsTab.state.linked")}</StatusWord>
         ) : (
-          <div className="space-y-0.5">
+          <div className="min-w-0 space-y-0.5">
             <StatusWord tone={OWN_STATE_TONE[row.state]}>{t(STATE_LABEL[row.state])}</StatusWord>
-            {row.stateNote ? <p className="text-xs text-text-muted">{row.stateNote}</p> : null}
+            {row.stateNote ? (
+              <TruncatedText text={row.stateNote} className="text-xs text-text-muted" />
+            ) : null}
           </div>
         ),
     },
     {
       key: "owner",
+      className: "w-[84px]",
       header: t("agents.skillsTab.cols.owner"),
       cell: (row) => (
         <span className="whitespace-nowrap text-xs text-text-muted">
@@ -154,30 +157,13 @@ export function AgentSkillsTable({
     {
       key: "actions",
       header: <span className="sr-only">{t("agents.skillsTab.cols.actions")}</span>,
-      className: "text-right",
+      className: "w-[210px] text-right",
       cell: (row) => {
-        if (row.owner === "coffer") {
-          const folder = row.path ?? row.skill.master_path;
-          return (
-            <TableActionButton
-              icon={FileText}
-              label={t("agents.skillsTab.openFile")}
-              aria-label={`${t("agents.skillsTab.openFile")}: ${row.name}`}
-              onClick={() => onOpenFile(skillFilePath(folder))}
-            />
-          );
-        }
-        if (row.state === "invalid") {
-          return withMenu(
-            row,
-            <TableActionButton
-              icon={FileText}
-              label={t("agents.skillsTab.openFile")}
-              aria-label={`${t("agents.skillsTab.openFile")}: ${row.name}`}
-              onClick={() => onOpenFile(skillFilePath(row.item.path))}
-            />,
-          );
-        }
+        // A Coffer-managed skill has nothing to act on here: its name opens its page,
+        // where the file is read and opened.
+        if (row.owner === "coffer") return null;
+        // An invalid one has only the ⋯ menu (its Open file lives there).
+        if (row.state === "invalid") return withMenu(row, null);
         if (row.state === "duplicate") {
           return withMenu(
             row,
@@ -210,6 +196,7 @@ export function AgentSkillsTable({
 
   return (
     <DataTable
+      fixed
       rows={rows}
       columns={columns}
       rowKey={(row) => row.key}

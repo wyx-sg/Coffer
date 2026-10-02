@@ -1066,6 +1066,10 @@ export interface operations {
                 cursor?: string | null;
                 /** @description Only the rows written under this correlation id: one HTTP request's or one chat/channel turn's, the same id its MCP invocations and daemon log lines carry. */
                 trace_id?: string | null;
+                /** @description Free text, matched in any case against the event code, the resource name, the actor and the details of each row, and against the events named by ``q_type``. */
+                q?: string | null;
+                /** @description With ``q``: event types that also match, because the caller found ``q`` in their localized wording (the sentence a reader sees is composed in the client, not stored). */
+                q_type?: string[] | null;
             };
             header?: {
                 "x-coffer-token"?: string | null;

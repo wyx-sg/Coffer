@@ -34,9 +34,21 @@ interface Props {
   code: PairingCode | undefined;
   isPending: boolean;
   onGenerate: () => void;
+  /** Withdraws the outstanding code. Offered only where the code is optional
+   *  (adding an owner to a channel that already has one). */
+  onCancel?: () => void;
+  /** Overrides the waiting line when it is somebody else who must send the code. */
+  waitingText?: string;
 }
 
-export function ChannelPairingCode({ platform, code, isPending, onGenerate }: Props) {
+export function ChannelPairingCode({
+  platform,
+  code,
+  isPending,
+  onGenerate,
+  onCancel,
+  waitingText,
+}: Props) {
   const { t } = useTranslation();
   const now = useNow(15_000);
   const [copied, setCopied] = useState(false);
@@ -108,13 +120,18 @@ export function ChannelPairingCode({ platform, code, isPending, onGenerate }: Pr
         {expired ? null : (
           <span className="inline-flex items-center gap-1.5 text-xs text-text-muted" role="status">
             <Loader2 className="size-3.5 animate-spin" aria-hidden />
-            {t("channels.pairing.waiting")}
+            {waitingText ?? t("channels.pairing.waiting")}
           </span>
         )}
+        {onCancel ? (
+          <Button size="sm" variant="ghost" className="ml-auto" onClick={onCancel}>
+            {t("channels.pairing.cancel")}
+          </Button>
+        ) : null}
         <Button
           size="sm"
           variant={expired ? "default" : "ghost"}
-          className="ml-auto"
+          className={onCancel ? undefined : "ml-auto"}
           onClick={onGenerate}
           disabled={isPending}
         >

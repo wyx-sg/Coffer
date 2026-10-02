@@ -16,10 +16,11 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { ArrowRight, ExternalLink, FolderOpen, Trash2 } from "lucide-react";
 
+import { Section, SectionStack } from "@/components/Section";
 import { KnowledgeWriterMark } from "@/components/knowledge/KnowledgeWriterMark";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import type { FileOut } from "@/lib/api/knowledge";
-import { timeAgo } from "@/lib/agents/hookRows";
+import { timeAgo } from "@/lib/timeAgo";
 import { agentLabel, writerLabel } from "@/lib/knowledge/changes";
 import { changePath } from "@/lib/knowledge/routes";
 import { outlineOf } from "@/lib/knowledge/text";
@@ -82,77 +83,77 @@ export function KnowledgeDocumentReader({ file, onOpen, onReveal, onDelete }: Pr
 
       <aside
         aria-label={t("knowledge.document.rail")}
-        className="hidden w-[210px] shrink-0 flex-col gap-[22px] overflow-auto px-5 py-[22px] lg:flex"
+        className="hidden w-[210px] shrink-0 flex-col overflow-auto px-5 py-[22px] lg:flex"
       >
-        {outline.length > 0 ? (
-          <section className="flex flex-col gap-1.5">
-            <h3 className="text-2xs font-semibold text-text-muted">
-              {t("knowledge.document.onThisPage")}
-            </h3>
-            <div className="flex flex-col">
-              {outline.map((h, i) => (
-                <button
-                  key={`${i}-${h.text}`}
-                  type="button"
-                  onClick={() => scrollTo(i)}
-                  style={{ paddingLeft: (h.level - top) * 10 }}
-                  className={cn(
-                    "truncate py-[3px] text-left text-xs hover:text-text",
-                    i === 0 ? "text-text" : "text-text-muted",
-                  )}
-                >
-                  {h.text}
-                </button>
-              ))}
-            </div>
-          </section>
-        ) : null}
+        <SectionStack>
+          {outline.length > 0 ? (
+            <Section title={t("knowledge.document.onThisPage")} gap="tight">
+              <div className="flex flex-col">
+                {outline.map((h, i) => (
+                  <button
+                    key={`${i}-${h.text}`}
+                    type="button"
+                    onClick={() => scrollTo(i)}
+                    style={{ paddingLeft: (h.level - top) * 10 }}
+                    className={cn(
+                      "truncate py-[3px] text-left text-xs hover:text-text",
+                      i === 0 ? "text-text" : "text-text-muted",
+                    )}
+                  >
+                    {h.text}
+                  </button>
+                ))}
+              </div>
+            </Section>
+          ) : null}
 
-        <section className="flex flex-col gap-1.5">
-          <h3 className="text-2xs font-semibold text-text-muted">
-            {t("knowledge.document.properties")}
-          </h3>
-          <dl className="flex flex-col">
-            <Property label={t("knowledge.document.edited")}>
-              <span className="flex min-w-0 items-center gap-1.5">
-                {newest ? (
-                  <KnowledgeWriterMark writer={newest.writer} agent={newest.agent} />
-                ) : null}
-                <span className="min-w-0">
-                  {t("knowledge.document.byWhen", {
-                    who: newest ? writerLabel(t, newest) : agentLabel(t, file.actor),
-                    when: timeAgo(newest?.time ?? file.updated_at, i18n.language),
-                  })}
+          <Section title={t("knowledge.document.properties")} gap="tight">
+            <dl className="flex flex-col">
+              <Property label={t("knowledge.document.edited")}>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  {newest ? (
+                    <KnowledgeWriterMark writer={newest.writer} agent={newest.agent} />
+                  ) : null}
+                  <span className="min-w-0">
+                    {t("knowledge.document.byWhen", {
+                      who: newest ? writerLabel(t, newest) : agentLabel(t, file.actor),
+                      when: timeAgo(newest?.time ?? file.updated_at, i18n.language),
+                    })}
+                  </span>
                 </span>
-              </span>
-            </Property>
-            <Property label={t("knowledge.document.created")}>
-              {t("knowledge.document.byWhen", {
-                who: oldest ? writerLabel(t, oldest) : agentLabel(t, file.actor),
-                when: new Date(file.created_at).toLocaleDateString(i18n.language, {
-                  month: "short",
-                  day: "numeric",
-                }),
-              })}
-            </Property>
-            {passes > 0 ? (
-              <Property label={t("knowledge.document.curatedFrom")}>
-                {t("knowledge.document.passes", { count: passes })}
               </Property>
-            ) : null}
-          </dl>
-        </section>
+              <Property label={t("knowledge.document.created")}>
+                {t("knowledge.document.byWhen", {
+                  who: oldest ? writerLabel(t, oldest) : agentLabel(t, file.actor),
+                  when: new Date(file.created_at).toLocaleDateString(i18n.language, {
+                    month: "short",
+                    day: "numeric",
+                  }),
+                })}
+              </Property>
+              {passes > 0 ? (
+                <Property label={t("knowledge.document.curatedFrom")}>
+                  {t("knowledge.document.passes", { count: passes })}
+                </Property>
+              ) : null}
+            </dl>
+          </Section>
 
-        <section className="flex flex-col items-start gap-2">
-          <RailAction icon={ExternalLink} label={t("fileActions.openInEditor")} onClick={onOpen} />
-          <RailAction icon={FolderOpen} label={t("fileActions.reveal")} onClick={onReveal} />
-          <RailAction
-            icon={Trash2}
-            label={t("knowledge.deleteDocument.menu")}
-            onClick={onDelete}
-            danger
-          />
-        </section>
+          <section className="flex flex-col items-start gap-2">
+            <RailAction
+              icon={ExternalLink}
+              label={t("fileActions.openInEditor")}
+              onClick={onOpen}
+            />
+            <RailAction icon={FolderOpen} label={t("fileActions.reveal")} onClick={onReveal} />
+            <RailAction
+              icon={Trash2}
+              label={t("knowledge.deleteDocument.menu")}
+              onClick={onDelete}
+              danger
+            />
+          </section>
+        </SectionStack>
       </aside>
     </div>
   );

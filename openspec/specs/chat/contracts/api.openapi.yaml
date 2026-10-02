@@ -90,9 +90,8 @@ paths:
   /api/v1/chat/conversations:
     get:
       description: |-
-        List conversations, newest activity first, paged by cursor.
-        ``?archived=true`` returns the archived threads; the default lists active
-        ones only. The conversation id breaks ties.
+        Conversations newest activity first (id breaks ties), paged by cursor;
+        ``archived=true`` lists the archived ones, ``q`` filters by title.
       operationId: list_conversations_api_v1_chat_conversations_get
       parameters:
       - in: query
@@ -121,6 +120,17 @@ paths:
           - type: 'null'
           description: The previous page's next_cursor. Bound to the listing (active or archived) it was issued for; any other value is 400 CURSOR_INVALID.
           title: Cursor
+      - description: Title contains this text (case-insensitive); a cursor is bound to it.
+        in: query
+        name: q
+        required: false
+        schema:
+          anyOf:
+          - maxLength: 200
+            type: string
+          - type: 'null'
+          description: Title contains this text (case-insensitive); a cursor is bound to it.
+          title: Q
       - in: header
         name: x-coffer-token
         required: false
@@ -194,6 +204,47 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Create Conversation
+      tags:
+      - chat
+  /api/v1/chat/conversations/batch:
+    post:
+      description: Apply ``action`` to every listed conversation; one result per id, in order.
+      operationId: batch_conversations_api_v1_chat_conversations_batch_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationBatchIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationBatchOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Batch Conversations
       tags:
       - chat
   /api/v1/chat/conversations/{id}:
@@ -1137,6 +1188,65 @@ components:
       - filename
       - mime
       title: ContentBlockOut
+      type: object
+    ConversationBatchIn:
+      description: What to do, and to which conversations (at most 200, each listed once).
+      properties:
+        action:
+          enum:
+          - archive
+          - unarchive
+          - delete
+          title: Action
+          type: string
+        ids:
+          items:
+            type: string
+          maxItems: 200
+          minItems: 1
+          title: Ids
+          type: array
+      required:
+      - action
+      - ids
+      title: ConversationBatchIn
+      type: object
+    ConversationBatchOut:
+      properties:
+        results:
+          items:
+            $ref: '#/components/schemas/ConversationBatchResultOut'
+          title: Results
+          type: array
+      required:
+      - results
+      title: ConversationBatchOut
+      type: object
+    ConversationBatchResultOut:
+      properties:
+        id:
+          title: Id
+          type: string
+        outcome:
+          enum:
+          - done
+          - skipped
+          title: Outcome
+          type: string
+        reason:
+          anyOf:
+          - enum:
+            - not_found
+            - running
+            - failed
+            type: string
+          - type: 'null'
+          title: Reason
+      required:
+      - id
+      - outcome
+      - reason
+      title: ConversationBatchResultOut
       type: object
     ConversationCreate:
       description: |-

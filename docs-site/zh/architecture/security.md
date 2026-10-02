@@ -159,7 +159,7 @@ flowchart LR
 - **替换正在使用的值。** 为某个已批准目的地所接收的引用、或为任何独立密钥设置新值，会以加密形式暂存，直到你批准；在此之前仍使用旧值。把消息渠道的机器人令牌换成攻击者的机器人，会把你的对话转走。
 - **关闭保护**（`secrets.require_approval`）。开启则立即生效。
 
-批准需要存在性授权。拒绝不需要——拒绝只会缩小 Coffer 做的事——并且在每个界面都能操作，包括 `coffer secret reject`。桌面应用会为每一项新的待批准弹出通知，并打开一个面板供你处理；命令行会打印 `waiting for approval in the Coffer app` 并以 `9` 退出，或者用 `--wait` 等待。见[密钥 → 批准](/zh/guides/secrets#approvals)。
+批准需要存在性授权。拒绝不需要——拒绝只会缩小 Coffer 做的事——并且在每个界面都能操作，包括 `coffer secret reject`。桌面应用会为每一项新的待批准弹出通知，并打开一个面板供你处理；命令行会打印 `waiting for approval in the Coffer app` 并以 `9` 退出，或者用 `--wait` 等待。多条批准可以在一次存在性验证下一并处理：授权是针对你看到的那份批准及其目标的摘要签名的，因此它只批准那份清单，其间目标发生变化的项会被跳过（见[密钥 → 一次处理多条](/zh/guides/secrets#answering-several-at-once)）。见[密钥 → 批准](/zh/guides/secrets#approvals)。
 
 边界的状态是本机专属的：它的绑定、待批准项、开关以及每个引用首次在本机存储的时间，都是 `~/.coffer/local/secret-boundary/` 下的 JSON 文件，原子写入，从不提交进保险库，也从不同步。待批准的替换值以密文形式在那里等待。
 

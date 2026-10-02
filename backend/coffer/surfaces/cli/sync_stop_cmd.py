@@ -39,6 +39,19 @@ def print_preview(p: dict[str, Any]) -> None:
         _console.print("the remote is empty: joining pushes this whole vault")
         _console.print(f"  pushed: {_areas(p.get('pushed') or [])}")
         return
+    if kind == "replace":
+        _console.print(
+            "the remote holds an older layout: this vault replaces it "
+            "(the old history stays in git; machines still on the older layout must upgrade)"
+        )
+        _console.print(f"  pushed: {_areas(p.get('pushed') or [])}")
+        total = p.get("deleted_total") or 0
+        shown = p.get("deleted") or []
+        for path in shown:
+            _console.print(f"  goes away from the remote: {path}")
+        if total > len(shown):
+            _console.print(f"  and {total - len(shown)} more file(s) go away from the remote")
+        return
     who = f" (last pushed by {p['pushed_by']}, {p.get('pushed_at')})" if p.get("pushed_by") else ""
     _console.print(f"joining as a [bold]{kind}[/bold] machine{who}")
     _console.print(f"  pulled: {_areas(p.get('pulled') or [])}")
@@ -112,7 +125,8 @@ def register(app: typer.Typer) -> None:
         yes: bool = typer.Option(False, "--yes", "-y", help="Do not ask before joining"),
     ) -> None:
         """Join the configured remote. What joining would do is printed first;
-        joining never deletes a file on either side."""
+        joining never deletes a file on either side, except that this vault
+        replaces a remote at an older layout (the old history stays in git)."""
         verbose = _verbose(ctx)
         c, _info = _cli_client.client_or_exit()
         with c:
@@ -122,7 +136,8 @@ def register(app: typer.Typer) -> None:
             print_preview(preview)
             if preview.get("refused"):
                 raise typer.Exit(code=1)
-            if not yes and not typer.confirm("Join?", default=False):
+            question = "Replace the remote?" if preview.get("kind") == "replace" else "Join?"
+            if not yes and not typer.confirm(question, default=False):
                 raise typer.Exit(code=1)
             r = c.post("/sync/join", json={})
             _cli_client.check(r, verbose=verbose)

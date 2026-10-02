@@ -19,8 +19,17 @@ use tauri::AppHandle;
 /// What a prompt is about. Each variant carries the target the grant will be
 /// signed over, so the words and the signature cannot describe two things.
 pub enum Subject<'a> {
-    Reveal { secret_ref: &'a str },
-    Approve { id: &'a str, description: &'a str },
+    Reveal {
+        secret_ref: &'a str,
+    },
+    Approve {
+        id: &'a str,
+        description: &'a str,
+    },
+    /// Several approvals at once: each one's description, as the daemon words it.
+    ApproveBatch {
+        descriptions: &'a [String],
+    },
     ExportMasterKey,
 }
 
@@ -39,6 +48,7 @@ pub fn reason(subject: &Subject<'_>, development: bool) -> String {
                 format!("approve: {description}")
             }
         }
+        Subject::ApproveBatch { descriptions } => batch_reason(descriptions),
         Subject::ExportMasterKey => "export a backup of Coffer's master key".to_owned(),
     };
     if development {
@@ -46,6 +56,29 @@ pub fn reason(subject: &Subject<'_>, development: bool) -> String {
     } else {
         what
     }
+}
+
+/// How many descriptions the operating system's one-line prompt spells out; the
+/// rest are counted. The page lists every item before the person starts the
+/// check, and the grant is signed over the whole list.
+const BATCH_PROMPT_ITEMS: usize = 3;
+
+fn batch_reason(descriptions: &[String]) -> String {
+    let shown: Vec<&str> = descriptions
+        .iter()
+        .take(BATCH_PROMPT_ITEMS)
+        .map(|d| d.trim())
+        .collect();
+    let rest = descriptions.len().saturating_sub(BATCH_PROMPT_ITEMS);
+    let mut text = format!(
+        "approve {} changes: {}",
+        descriptions.len(),
+        shown.join("; ")
+    );
+    if rest > 0 {
+        text.push_str(&format!("; and {rest} more listed in the Coffer window"));
+    }
+    text
 }
 
 /// How a check is carried out.
@@ -185,6 +218,25 @@ mod tests {
             description: "  ",
         };
         assert_eq!(reason(&bare, false), "approve request 0123456789abcdef");
+
+        // A batch names the first few and counts the rest.
+        let many: Vec<String> = (1..=5).map(|n| format!("send s to server {n}")).collect();
+        let batch = reason(
+            &Subject::ApproveBatch {
+                descriptions: &many,
+            },
+            false,
+        );
+        assert!(
+            batch.starts_with("approve 5 changes: send s to server 1; "),
+            "{batch}"
+        );
+        assert!(batch.contains("server 3"), "{batch}");
+        assert!(!batch.contains("server 4"), "{batch}");
+        assert!(
+            batch.ends_with("and 2 more listed in the Coffer window"),
+            "{batch}"
+        );
 
         let export = reason(&Subject::ExportMasterKey, true);
         assert!(export.starts_with("Development build — "), "{export}");

@@ -20,6 +20,7 @@ import { ThreadMessages } from "./ThreadMessages";
 import { Composer, type ComposerHandle } from "./Composer";
 import type { MessageThreadProps } from "./messageThreadProps";
 import { PendingQueue } from "./PendingQueue";
+import { AgentModelBar } from "./AgentModelBar";
 import { ArchivedNotice, StreamLostBanner } from "./ThreadNotices";
 import { FindWidget } from "@/components/preview/FindWidget";
 import { useDomFind } from "@/components/preview/useDomFind";
@@ -49,8 +50,8 @@ export function MessageThread({
   streamLost = false,
   onReload,
   readOnly,
-  onRestore,
-  restorePending,
+  onUnarchive,
+  unarchivePending,
 }: MessageThreadProps) {
   const { t } = useTranslation();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -183,7 +184,7 @@ export function MessageThread({
       )}
 
       {readOnly ? (
-        <ArchivedNotice onRestore={onRestore} pending={restorePending} />
+        <ArchivedNotice onUnarchive={onUnarchive} pending={unarchivePending} />
       ) : (
         <>
           <PendingQueue
@@ -209,6 +210,13 @@ export function MessageThread({
             onStop={onStop}
             restore={restore}
             onRestored={onRestored}
+            controls={
+              <AgentModelBar
+                conversationId={conversation.id}
+                agentKey={conversation.agent_key}
+                agentLabel={agentLabel}
+              />
+            }
           />
         </>
       )}

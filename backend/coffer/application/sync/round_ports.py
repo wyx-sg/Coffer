@@ -9,6 +9,7 @@ hold the vault's write lock without an event loop in between.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from typing import Protocol
 
 from coffer.domain.sync.remote import SyncRemote
@@ -86,7 +87,13 @@ class RoundHistoryPort(Protocol):
     rounds this one never ran would mean nothing here."""
 
     async def append(self, record: RoundRecord) -> RoundRecord: ...
-    async def recent(self, limit: int, offset: int = 0) -> list[RoundRecord]: ...
+    async def recent(
+        self, limit: int, after: tuple[datetime, int] | None = None
+    ) -> list[RoundRecord]:
+        """Newest first (``finished_at``, then id); with ``after``, only the
+        rounds strictly older than that keyset position."""
+        ...
+
     async def get(self, round_id: int) -> RoundRecord | None: ...
     async def count(self) -> int: ...
 

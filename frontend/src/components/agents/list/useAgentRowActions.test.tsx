@@ -67,11 +67,39 @@ describe("useAgentRowActions", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
-  test("a disabled agent offers Enable, which switches it back on", async () => {
+  test("the menu does not repeat the primary button: no Turn on on a disabled agent, no Disconnect on a connected one", async () => {
+    const row = typeRow({ type: "claude_code", uid: "agt_a" });
+    use(fakeDaemon({ types: [row], disabled: ["agt_a"] }));
+    const first = renderWithDaemon(<Harness row={row} />);
+    await screen.findByRole("button", { name: "Turn on" });
+    fireEvent.click(screen.getByRole("button", { name: "menu" }));
+    const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+    expect(items.map((i) => i.textContent)).not.toContain("Turn on");
+    first.unmount();
+
+    use(
+      fakeDaemon({
+        types: [row],
+        connections: {
+          agt_a: {
+            state: "connected",
+            parts: [{ key: "mcp", installed: true, detail: "/bin/coffer" }],
+          },
+        },
+      }),
+    );
+    renderWithDaemon(<Harness row={row} />);
+    await screen.findByRole("button", { name: "Disconnect" });
+    fireEvent.click(screen.getByRole("button", { name: "menu" }));
+    const connected = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+    expect(connected.map((i) => i.textContent)).not.toContain("Disconnect");
+  });
+
+  test("a disabled agent offers Turn on, which switches it back on", async () => {
     const row = typeRow({ type: "claude_code", uid: "agt_a" });
     const d = use(fakeDaemon({ types: [row], disabled: ["agt_a"] }));
     renderWithDaemon(<Harness row={row} />);
-    const enable = await screen.findByRole("button", { name: "Enable" });
+    const enable = await screen.findByRole("button", { name: "Turn on" });
     fireEvent.click(enable);
     await waitFor(() => expect(writes(d)).toEqual(["POST /resources/agt_a/enable"]));
     await waitFor(() => expect(screen.getByTestId("state")).not.toHaveTextContent("disabled"));
@@ -130,8 +158,8 @@ describe("useAgentRowActions", () => {
         name: "Ask an agent",
       });
       fireEvent.click(ask);
-      const dialog = await screen.findByRole("dialog");
-      expect(within(dialog).getByText("New conversation")).toBeInTheDocument();
+      // Straight to the draft: no dialog, and nothing written.
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(writes(d)).toEqual([]);
     },
   );

@@ -5,6 +5,11 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { Composer, type ComposerHandle } from "./Composer";
 
 describe("Composer", () => {
+  test("shows its controls in the footer beside Send", () => {
+    render(<Composer onSend={vi.fn()} controls={<span data-testid="ctl">agent</span>} />);
+    expect(screen.getByTestId("composer-controls")).toContainElement(screen.getByTestId("ctl"));
+  });
+
   test("renders textarea and send button", () => {
     render(<Composer onSend={vi.fn()} />);
     expect(screen.getByRole("textbox")).toBeInTheDocument();

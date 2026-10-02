@@ -1,6 +1,7 @@
 // src/components/agents/model/ModelFields.tsx — the Model tab's Model section: the model picker (read-only on the built-in login) and Effort.
 import { useTranslation } from "react-i18next";
 
+import { Section } from "@/components/Section";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -24,21 +25,25 @@ export function ModelFields({ agentType, draft: c }: Props) {
   const agent = agentTypeLabel(agentType);
 
   return (
-    <section className="flex min-w-0 flex-col gap-2.5">
-      <h3 className="min-h-control-sm text-sm font-semibold leading-[26px] text-text">
-        {t("agents.modelTab.model.title")}
-      </h3>
+    <Section title={t("agents.modelTab.model.title")} className="min-w-0">
       <div className="flex flex-col gap-3.5">
         {c.draftIsBuiltin ? (
-          // Nothing reads the agent's model binding on its own login, so the
-          // default is shown, not offered: /model in a session switches it.
+          // Nothing reads the agent's model binding on its own login (chat turns
+          // run on Claude Code's / Codex's own model, and switching back to the
+          // built-in login strips the keys Coffer wrote), so the default is
+          // shown greyed out, with the reason: /model in a session switches it.
           <div className="flex min-w-0 flex-col gap-1.5">
-            <span className="text-xs font-label text-text">{t("agents.modelTab.model.label")}</span>
-            {c.builtinDefault ? (
-              <div className="flex h-control-md items-center rounded-md border border-border-subtle bg-surface-sunken px-2.5 font-mono text-xs text-text">
-                {t("agents.modelTab.model.builtinDefault", { model: c.builtinDefault.id, agent })}
-              </div>
-            ) : null}
+            <span className="text-xs font-label text-text-muted">
+              {t("agents.modelTab.model.label")}
+            </span>
+            <div
+              aria-disabled
+              className="flex h-control-md cursor-not-allowed items-center rounded-md border border-border-subtle bg-surface-sunken px-2.5 font-mono text-xs text-text-subtle opacity-70"
+            >
+              {c.builtinDefault
+                ? t("agents.modelTab.model.builtinDefault", { model: c.builtinDefault.id, agent })
+                : "—"}
+            </div>
             <span className="text-xs text-text-subtle">
               {t("agents.modelTab.model.builtinHint", { agent })}
             </span>
@@ -72,9 +77,10 @@ export function ModelFields({ agentType, draft: c }: Props) {
         {c.effortLevels.length > 0 ? (
           <EffortControl
             levels={c.effortLevels}
-            value={c.draftEffort}
+            value={c.draftIsBuiltin ? null : c.draftEffort}
             onChange={c.pickEffort}
             readOnly={c.draftIsBuiltin || c.busy}
+            disabledLook={c.draftIsBuiltin}
             hint={t(
               c.draftIsBuiltin
                 ? "agents.modelTab.effort.builtinHint"
@@ -82,10 +88,12 @@ export function ModelFields({ agentType, draft: c }: Props) {
               { agent },
             )}
           />
-        ) : (
-          <p className="text-xs text-text-subtle">{t("agents.modelTab.effort.hidden")}</p>
+        ) : c.draftIsBuiltin ? null : (
+          <p className="text-xs text-text-subtle">
+            {t(c.draftModel ? "agents.modelTab.effort.hidden" : "agents.modelTab.effort.choose")}
+          </p>
         )}
       </div>
-    </section>
+    </Section>
   );
 }

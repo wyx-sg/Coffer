@@ -1,11 +1,12 @@
 // frontend/src/components/channel/ChannelTurnSettingsFields.tsx
-// The parts of a channel's Settings that shape its turns, in the two places
-// the tab shows them: `ChannelBatchingFields` — when it answers in a group and
-// how long it waits for a burst of messages to end — near the top, and
-// `ChannelReplyDirectoryFields` — how a running turn shows itself (the
-// completion ping, the step lines) and its working directories — after the
-// machine. Switches and list edits save at once; typed values save a moment
-// after typing stops, and only when valid (useSettingDraft).
+// The rows of a channel's Settings that shape its turns, one export per section
+// the tab draws (the tab owns the section cards; these are rows only):
+// `ChannelReceivingFields` — when it answers in a group and how long it waits
+// for a burst of messages to end; `ChannelReplyFields` — how a running turn shows
+// itself (the completion ping, the step lines) and when a chat starts a fresh
+// conversation; `ChannelDirectoryFields` — its working directories. Switches and
+// list edits save at once; typed values save a moment after typing stops, and
+// only when valid (useSettingDraft).
 //
 // Every starting value is read from the daemon's typed settings
 // (`ChannelSettings`, defaults filled in), never from the raw config.
@@ -36,7 +37,7 @@ const parseDefault = (text: string): { path: string | null } | null => {
   return path === null ? null : { path };
 };
 
-export function ChannelBatchingFields({
+export function ChannelReceivingFields({
   settings,
   save,
 }: {
@@ -83,15 +84,8 @@ export function ChannelBatchingFields({
   );
 }
 
-export function ChannelReplyDirectoryFields({
-  settings,
-  save,
-}: {
-  settings: ChannelSettings;
-  save: Save;
-}) {
+export function ChannelReplyFields({ settings, save }: { settings: ChannelSettings; save: Save }) {
   const [showSteps, setShowSteps] = useState(() => settings.show_steps);
-  const [directories, setDirectories] = useState(() => settings.directories);
   const notifyAfter = useSettingDraft(
     String(settings.notify_after_seconds),
     parseNotifyAfter,
@@ -101,9 +95,6 @@ export function ChannelReplyDirectoryFields({
     String(settings.new_conversation_after_idle_hours),
     parseIdleHours,
     (v) => save({ new_conversation_after_idle_hours: v }),
-  );
-  const defaultDir = useSettingDraft(storedDefaultDirectory(settings) ?? "", parseDefault, (v) =>
-    save({ default_directory: v.path }),
   );
 
   return (
@@ -121,17 +112,33 @@ export function ChannelReplyDirectoryFields({
       <div onBlur={idle.flush}>
         <EditChannelIdleField value={idle.text} onChange={idle.change} />
       </div>
-      <div onBlur={defaultDir.flush}>
-        <EditChannelDirectoriesField
-          defaultText={defaultDir.text}
-          onDefaultChange={defaultDir.change}
-          directories={directories}
-          onDirectoriesChange={(next) => {
-            setDirectories(next);
-            save({ directories: next });
-          }}
-        />
-      </div>
     </>
+  );
+}
+
+export function ChannelDirectoryFields({
+  settings,
+  save,
+}: {
+  settings: ChannelSettings;
+  save: Save;
+}) {
+  const [directories, setDirectories] = useState(() => settings.directories);
+  const defaultDir = useSettingDraft(storedDefaultDirectory(settings) ?? "", parseDefault, (v) =>
+    save({ default_directory: v.path }),
+  );
+
+  return (
+    <div onBlur={defaultDir.flush}>
+      <EditChannelDirectoriesField
+        defaultText={defaultDir.text}
+        onDefaultChange={defaultDir.change}
+        directories={directories}
+        onDirectoriesChange={(next) => {
+          setDirectories(next);
+          save({ directories: next });
+        }}
+      />
+    </div>
   );
 }

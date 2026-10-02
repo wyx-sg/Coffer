@@ -6,7 +6,7 @@
 // channel, host, daemon state and port and the enabled features, never a token
 // or a secret); the desktop shell's update check (`UpdatesSection`, its own
 // requirement); and the details — version (with the commit a release was built
-// from), license, source and the data folder. The version comes from
+// from), license, documentation, source and the data folder. The version comes from
 // /daemon/status so it names the build that is actually running. No release
 // channel is shown; it stays in the diagnostics.
 import { useTranslation } from "react-i18next";
@@ -20,11 +20,16 @@ import { inDesktopShell } from "@/lib/tauri";
 import { diagnosticsText } from "./aboutDiagnostics";
 import { UpdatesSection } from "./UpdatesSection";
 
+/** The published docs site (docs-site/), per interface language: Chinese lives under /zh/. */
+const DOCS_URL = {
+  en: "https://wyx-sg.github.io/Coffer/",
+  zh: "https://wyx-sg.github.io/Coffer/zh/",
+} as const;
 const SOURCE_URL = "https://github.com/wyx-sg/Coffer";
 const EMPTY = "—";
 
 export function AboutPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const { data: status } = useDaemonStatus();
   const state = useDaemonFooterState();
@@ -49,7 +54,7 @@ export function AboutPage() {
     ? t("settings.about.versionWithCommit", { version, commit: status.commit })
     : version;
   return (
-    <div className="flex flex-col gap-7">
+    <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3.5" data-testid="settings-about-head">
         <CofferMark size={44} />
         <div className="flex flex-col gap-0.5">
@@ -79,6 +84,16 @@ export function AboutPage() {
         </SettingRow>
         <SettingRow label={t("settings.about.fields.license")}>
           <span className="text-sm">MIT</span>
+        </SettingRow>
+        <SettingRow label={t("settings.about.fields.documentation")}>
+          <a
+            href={DOCS_URL[i18n.language?.startsWith("zh") ? "zh" : "en"]}
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm text-accent hover:underline"
+          >
+            {t("settings.about.documentationLink")}
+          </a>
         </SettingRow>
         <SettingRow label={t("settings.about.fields.source")}>
           <a

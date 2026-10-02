@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronRight, Cpu, Mic, type LucideIcon } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { StatusDot } from "@/components/status/StatusDot";
 import { agentTypeLabel } from "@/lib/agents/display";
 import { agentTabPath } from "@/lib/agents/routes";
@@ -20,7 +21,7 @@ import { useOpenSettings } from "@/lib/settingsModal";
 import { Section } from "@/components/Section";
 
 const ROW =
-  "grid min-h-12 grid-cols-[minmax(0,1fr)_150px_200px_16px] items-center gap-3 text-left text-text no-underline outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-focus-ring [&+&]:border-t [&+&]:border-border-subtle";
+  "-mx-2 grid min-h-row grid-cols-[minmax(0,1fr)_150px_200px_16px] items-center gap-3 px-2 py-2 text-left text-text no-underline outline-none transition-colors duration-fast hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring";
 
 function RowBody({
   lead,
@@ -40,9 +41,9 @@ function RowBody({
     <>
       <span className="inline-flex min-w-0 items-center gap-2.5">
         {lead}
-        <span className="truncate text-sm font-label">{name}</span>
+        <TruncatedText text={name} className="text-sm font-label" />
       </span>
-      <span className="truncate font-mono text-xs">{model ?? t("common.emptyValue")}</span>
+      <TruncatedText text={model ?? t("common.emptyValue")} mono className="text-xs" />
       <span className="flex flex-col gap-0.5">
         <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-text-muted">
           <StatusDot tone={failing ? "err" : "ok"} size={7} />
@@ -84,26 +85,11 @@ export function ProviderUsedBy({ use, failing }: { use: ProviderUse; failing: bo
   const empty = use.agents.length === 0 && coffer.length === 0;
 
   return (
-    <Section
-      title={t("providers.usedBy.title")}
-      aside={
-        <span className="inline-flex items-center gap-1">
-          {use.agents.map(({ agent }) => (
-            <AgentBadge key={agent.uid} type={agent.type} size="sm" />
-          ))}
-          {coffer.map((c) => (
-            <span key={c.key} className="text-xs text-text-subtle">
-              · {c.name}
-            </span>
-          ))}
-        </span>
-      }
-      gap="tight"
-    >
+    <Section title={t("providers.usedBy.title")} help={t("providers.usedBy.readOnly")}>
       {empty ? (
-        <p className="py-2 text-sm text-text-muted">{t("providers.usedBy.none")}</p>
+        <p className="py-3 text-sm text-text-muted">{t("providers.usedBy.none")}</p>
       ) : (
-        <div className="flex flex-col">
+        <div className="flex flex-col divide-y divide-border-subtle">
           {use.agents.map(({ agent, model }) => {
             const label = agentTypeLabel(agent.type);
             return (
@@ -136,7 +122,6 @@ export function ProviderUsedBy({ use, failing }: { use: ProviderUse; failing: bo
           ))}
         </div>
       )}
-      <p className="text-xs text-text-subtle">{t("providers.usedBy.readOnly")}</p>
     </Section>
   );
 }

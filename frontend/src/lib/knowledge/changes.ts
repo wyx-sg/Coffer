@@ -13,7 +13,7 @@
 import type { TFunction } from "i18next";
 
 import { agentTypeLabel } from "@/lib/agents/display";
-import { timeAgo } from "@/lib/agents/hookRows";
+import { timeAgo } from "@/lib/timeAgo";
 import type { ChangeOut } from "@/lib/api/knowledge";
 import { pathInCollection } from "@/lib/knowledge/routes";
 

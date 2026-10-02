@@ -8,12 +8,13 @@ One item per situation, each with the action that answers it:
 - ``sync_deletions_held`` — the deletion breaker held a round;
 - ``sync_join_choices`` — a join left differing files for the person;
 - ``sync_auth_failed`` — the remote refused the push secret;
+- ``sync_waiting_approval`` — the push token waits for approval in the desktop app;
 - ``sync_push_failed`` — the remote refused the push itself (a protected
   branch, a secret without write access);
 - ``sync_plaintext_found`` — a file the round would push holds a plaintext
   secret, so nothing was pushed;
 - ``sync_paused`` — the vault is inside a folder another tool synchronises;
-- ``sync_layout`` — the remote is at another layout than this build's.
+- ``sync_layout`` — the remote is at a newer layout than this build's.
 
 Read off the round state and the last recorded round, only while a remote is
 configured. A conflict an agent can merge, a refused sign-in, a refused push
@@ -32,7 +33,7 @@ from coffer.application.attention import AttentionAction, AttentionItem, Severit
 from coffer.domain.features import SYNC
 from coffer.domain.sync.handoffs import remote_failure_handoff, scrub_git_text
 from coffer.domain.sync.remote import SyncRemote
-from coffer.domain.sync.rounds import RoundRecord, RoundStatus
+from coffer.domain.sync.rounds import APPROVAL_WAIT, RoundRecord, RoundStatus
 from coffer.domain.sync.stops import ConflictFile, Stop, StopKind
 
 KIND = "sync"
@@ -158,6 +159,14 @@ def _problem_item(
             last.finished_at,
             handoff=plaintext(last),
         )
+    if last.status is RoundStatus.AUTH_FAILED and APPROVAL_WAIT in detail:
+        return _item(
+            "sync_waiting_approval",
+            f"Sync is waiting for you: {detail}".strip(),
+            Severity.WARNING,
+            "/api/v1/secrets",
+            last.finished_at,
+        )
     if last.status is RoundStatus.AUTH_FAILED:
         return _item(
             "sync_auth_failed",
@@ -185,7 +194,7 @@ def _problem_item(
             "/api/v1/sync/status",
             last.finished_at,
         )
-    if last.status in (RoundStatus.REMOTE_TOO_NEW, RoundStatus.REMOTE_TOO_OLD):
+    if last.status is RoundStatus.REMOTE_TOO_NEW:
         return _item("sync_layout", detail, Severity.ERROR, "/api/v1/sync/status", last.finished_at)
     return None
 

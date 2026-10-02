@@ -43,7 +43,7 @@ class WaitingCommit:
 class Problem:
     """Why sync is not working right now, in terms of what a person can do.
 
-    ``kind``: ``unreachable`` / ``auth_failed`` / ``push_failed`` /
+    ``kind``: ``unreachable`` / ``auth_failed`` / ``waiting_approval`` / ``push_failed`` /
     ``plaintext_found`` / ``cloud_folder`` / ``layout`` / ``git_missing`` /
     ``failed``. ``handoff`` is the prompt for the person's agent when the fix
     is outside Coffer (spec vault-sync "Hand a remote's failure to an agent",
@@ -164,6 +164,7 @@ class RollbackView:
 class RoundPage:
     rounds: tuple[RoundRecord, ...] = ()
     total: int = 0
+    next_cursor: str | None = None
 
 
 __all__ = [

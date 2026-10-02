@@ -10,6 +10,7 @@
 // or results (design 6.1.08).
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { Section } from "@/components/Section";
 import { ChevronDown, ChevronUp, Copy, ExternalLink, ScrollText, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -20,6 +21,7 @@ import { useToast } from "@/components/ui/toast";
 import { describeActivity } from "@/lib/activity/activityText";
 import { recordLogger, type ActivityRecord } from "@/lib/activity/records";
 import { useKindPageOpen } from "@/lib/hooks/useFeatures";
+import { useHereOriginState } from "@/lib/origin";
 import { changeLink, nearby, offsetLabel, whenLabel } from "@/lib/activity/recordText";
 import { useServerFailures } from "@/lib/hooks/useServerFailures";
 import {
@@ -30,7 +32,7 @@ import {
   SourceIcon,
   type AgentLook,
 } from "./activityCells";
-import { CallBody, ChangeBody, DaemonBody, LABEL } from "./recordBodies";
+import { CallBody, ChangeBody, DaemonBody } from "./recordBodies";
 
 function titleOf(t: TFunction, record: ActivityRecord): ReactNode {
   if (record.source === "call") return <CallTarget call={record.call} className="text-sm" />;
@@ -84,6 +86,7 @@ export function RecordDrawer({
   };
 
   const pageOpen = useKindPageOpen();
+  const origin = useHereOriginState();
   const link =
     record.source === "change"
       ? pageOpen(record.entry.resource_kind ?? "")
@@ -197,8 +200,7 @@ export function RecordDrawer({
         {record.source === "daemon" ? <DaemonBody t={t} log={record.log} record={record} /> : null}
 
         {around.length ? (
-          <section className="flex flex-col gap-1">
-            <span className={LABEL}>{t("activity.drawer.around")}</span>
+          <Section title={t("activity.drawer.around")} gap="tight">
             <div className="flex flex-col">
               {around.map((r, i) => (
                 <button
@@ -220,7 +222,7 @@ export function RecordDrawer({
                 </button>
               ))}
             </div>
-          </section>
+          </Section>
         ) : null}
 
         <RawLog record={raw} />
@@ -229,7 +231,7 @@ export function RecordDrawer({
       <footer className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
         {link ? (
           <Button asChild variant="outline" size="default">
-            <Link to={link.to}>
+            <Link to={link.to} state={origin}>
               <ExternalLink />
               {t("activity.drawer.open", { name: link.name })}
             </Link>

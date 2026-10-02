@@ -271,13 +271,50 @@ return useMutation({
     mounted over skeleton rows (never a "Loading…" card in the table's place)
     and `emptyAction` for the call-to-action under the empty message. The reach
     column's header key is `resources.cols.reach` on every table.
+  - **A list or table that can hold more than ~100 rows pages by cursor and
+    loads on scroll — never everything at once.** It opens on one small page
+    (`FIRST_PAGE` 30), reads the next `MORE_PAGE` 50 when its end scrolls into
+    view, and search and filters are query parameters of the route (debounced,
+    with the stale request aborted), not a filter over what happens to be
+    loaded. Build it from `useInfiniteList` (`lib/hooks/useInfiniteList.ts`: an
+    infinite query over the server's `next_cursor`, the abort signal passed to
+    the request function) and, under the rows, `LoadMoreFooter` with
+    `autoLoad` (`components/ui/load-more.tsx`: the `LoadMoreSentinel` plus the
+    always-visible "N loaded · Load more" fallback) and a `Skeleton` row while
+    a page loads. A list that is bounded by nature (a few dozen skills, MCP
+    servers, providers) keeps `DataTable`'s in-memory "Load N more". A live
+    list re-reads only its first page and holds what arrives above the
+    reader's scroll position behind a "↑ N new" control.
   - Every button inside a table — row actions and selection-bar actions
     alike — is a `TableActionButton` (`components/table/`): small outline
     button, icon + text label, `destructive` for anything that removes. Row
     delete is `RowDeleteButton`, bulk delete `BulkDeleteButton`, both built on
     it. No ghost, solid or text-only buttons in a table.
+  - A table cell whose content can be long (names, descriptions, paths, ids,
+    URLs, commands) is one line with an ellipsis and the full text in a
+    tooltip: `TruncatedText` / `TruncatedPath` (`components/ui/truncated-text.tsx`;
+    a path keeps its last segment visible), in a `<DataTable fixed>` whose
+    columns carry explicit widths (`w-[34%]`, `w-[150px]`). Never `break-all`
+    in a table cell — rows keep one height whatever the content.
+  - A settings-style form that is a stack of titled blocks is built from
+    `SettingsSection` + `SettingRow` (`components/settings/SettingsLayout.tsx`):
+    each section is a hairline card (`<section aria-labelledby>`, h3 title or h2
+    via `headingLevel`, optional `description`, `meta`, `action`) over
+    hairline-divided rows; a row is its label with its own helper line on the left
+    and its control on the right (`layout="stack"` for a wide control). Wrap the
+    stack in `SETTINGS_STACK` (24px between cards); a destructive or rare action
+    is the last section. Settings tabs and a channel's Settings use it; a bespoke
+    block takes `SETTINGS_CARD`. `Section` stays the card-less heading for
+    read-only overviews.
   - `EmptyState` is the shared "nothing here yet" card (icon, title,
     description, action).
+  - A file/session browser (tree or list beside a viewer) ends at the bottom
+    of the window and scrolls inside: put `useFillToBottom()` from
+    `components/filePane.ts` on the split, give columns `FILE_PANE_COLUMN` /
+    `FILE_PANE_BODY` with one `FILE_PANE_SCROLL` / `CodeView fill` region, and
+    keep headers and footers `shrink-0`. It measures against the page's real
+    scroller (the overflow wrapper inside `<main>`), floor 320px; never a
+    `max-h-*` cap on such a pane.
   - `Button` icon sizes are `icon-sm` / `icon-md` (plus the default `icon`);
     pick from those, do not size an icon button by hand.
 - **A resource shows its `title` when set, its `name` otherwise** — in tables,
@@ -309,6 +346,19 @@ return useMutation({
   a bug: it forks one component into two looks.
 - **Show an agent with `AgentBadge`** (its official mark on a neutral tile),
   never initials or a per-agent colour; list agents in the Agents page's order.
+- **A ⋯ menu never repeats what is already on the surface.** Visible buttons are
+  the frequent, high-value actions; the ⋯ menu holds the rare ones. An item that
+  does what a visible button, switch, link or row click does — or what another
+  tab or settings area of the same page offers — does not belong in the menu
+  (a "Send test message" under a "Send test" button, "Delete" in both the header
+  and Settings). A menu left with nothing in it is removed.
+- **A page only when there is a page's worth.** A thing with a lot to show or
+  do — tabs, several blocks, a file tree, its own actions (a managed skill, a
+  managed MCP server, an agent) — gets its own detail page. A thing with one or
+  two facts to read or a short form — a direct MCP entry's JSON, a custom tool,
+  an unmanaged item's summary — opens as a dialog over its list, with its
+  actions in the footer. Do not mint a route for a page that would hold a
+  single card.
 - Keep files focused. `scripts/check_file_sizes.py` (in `make lint`) enforces
   the limits: a page (`src/pages/**`) ≤ 200 lines, a component
   (`src/components/**`) ≤ 250, a hook or utility (`src/lib/**`) ≤ 300. One
@@ -375,6 +425,37 @@ One name per surface everywhere (spec web-ui "Call a surface by one name everywh
 | Sync | 同步 | Settings | 设置 |
 
 In zh an agent is always **智能体** — never "Agent" or 代理.
+
+### Action glossary (one wording per action)
+
+The same action carries the same words on the row button, the ⋯ menu item, the
+dialog title and confirm button, the progress line, the toast and the banner.
+A menu item ends in `…` only when a dialog follows. Progress in zh is
+`正在X…` (never `X中…`).
+
+| Action | English | 中文 | Not |
+| --- | --- | --- | --- |
+| Take an agent's own skill/MCP entry under Coffer | Adopt / Adopted | 纳入托管 / 已纳入托管 | 收编, 纳管, 接管 |
+| Under Coffer's care / not | Managed / Unmanaged | 托管 / 未托管 | 受管, 非托管 |
+| Link an agent to Coffer | Connect / Disconnect | 连接 / 断开连接 | 接入 (an agent), 连到 |
+| Re-establish a lost link | Reconnect | 重新连接 | 重连 |
+| Switch a resource or agent on / off | Turn on / Turn off; state On / Off | 开启 / 关闭; 已开启 / 已关闭 | Enable/Disable, 启用/停用/禁用, 打开 (as on) |
+| Destroy a thing | Delete | 删除 | |
+| Take a thing out of a list/agent/Coffer, keeping the thing | Remove | 移除 | |
+| Put something in the list | Add | 添加 (diff tag `+ 添加`) | 注册, 登记, 新增 |
+| Make a new object from nothing | Create / New | 创建 / 新建 | |
+| Redo a failed operation | Retry | 重试 | Try again, 再试一次 |
+| Run a check again | Check again | 重新检查 | 再检查一次, 再次检查 |
+| Test again | Test again | 重新测试 | 再测一次, 再次测试 |
+| Swap a value for another | Replace | 替换 | 更换, 换成 |
+| Pick another source/machine/directory | Change | 更改 | 更换 |
+| A change (noun) | change | 改动 | 变更, 更改 |
+| Drop unsaved edits | Discard | 放弃 | 丢弃 |
+| Look over before applying | Review | 查看 | 审阅, 检查 (that is Check) |
+| Rename | Rename | 重命名 | 改名 |
+| Held deletions (sync) | held | 暂扣 | 暂停, 拦下 |
+| Jump to the audit log | View in Activity | 在活动中查看 | 在活动中打开 |
+| Reveal a file in the OS file manager | Reveal in Finder | 在访达中显示 | Show in Finder, Finder |
 
 ## 8. Testing
 

@@ -1,6 +1,7 @@
 // src/components/mcp/server/McpSecretFacts.tsx — a server whose secret is missing: which setting cites which secret, and its last success (design 4.1.05).
 import { useTranslation } from "react-i18next";
 
+import { Section } from "@/components/Section";
 import { StatusPill } from "@/components/status/StatusPill";
 import type { ResourceOut } from "@/lib/api/resources";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
@@ -15,18 +16,15 @@ interface Props {
 export function McpSecretFacts({ resource, detail }: Props) {
   const { t } = useTranslation();
   const refs =
-    (resource.config as { transport?: { secret_refs?: Record<string, string> } } | null)
-      ?.transport?.secret_refs ?? {};
+    (resource.config as { transport?: { secret_refs?: Record<string, string> } } | null)?.transport
+      ?.secret_refs ?? {};
   const http = transportOf(resource.config).type === "http";
   const missingRef = detail?.missing_secret_ref ?? null;
   const entries = Object.entries(refs);
   if (entries.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-1" aria-labelledby="mcp-secrets">
-      <h3 id="mcp-secrets" className="text-sm font-semibold text-text">
-        {t("mcp.page.secrets.title")}
-      </h3>
+    <Section title={t("mcp.page.secrets.title")} gap="tight" labelled>
       <dl className="flex flex-col">
         {entries.map(([key, ref]) => (
           <div key={key} className="flex gap-3 border-b border-border-subtle py-2.5 text-sm">
@@ -62,6 +60,6 @@ export function McpSecretFacts({ resource, detail }: Props) {
           </dd>
         </div>
       </dl>
-    </section>
+    </Section>
   );
 }

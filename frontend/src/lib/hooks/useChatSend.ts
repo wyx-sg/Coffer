@@ -8,7 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { chatApi, type Message, type SendMessageAck } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
-import { conversationKey, conversationsKey, messagesKey } from "@/lib/api/queryKeys";
+import { conversationHeadsKey, conversationKey, messagesKey } from "@/lib/api/queryKeys";
 import { type EchoAttachment, type PendingEcho, createEcho } from "@/lib/chat/echoes";
 
 interface Options {
@@ -59,13 +59,13 @@ export function useChatSend({
         dropEcho();
         return false;
       } finally {
-        // Refresh the conversation list (first turn auto-titles it) AND the
+        // Refresh the conversation list's head (first turn auto-titles it) AND the
         // messages. The messages refetch is the safety net for the draft→first-
         // send race: if the turn finished before the subscription attached (the
         // bus ring buffer is already cleared), turn_start/turn_done never fire on
         // this client, so nothing else would load the committed user message and
         // reply — leaving the optimistic echo stranded.
-        void qc.invalidateQueries({ queryKey: conversationsKey });
+        void qc.invalidateQueries({ queryKey: conversationHeadsKey });
         void qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
       }
     },

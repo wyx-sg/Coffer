@@ -14,6 +14,10 @@ import { agentRowStateKey, agentRowTone, type AgentRowState } from "@/lib/agents
 import type { AgentTypeOut } from "@/lib/api/agents";
 import { useAgent, useAgentConnection, useAgentHooks } from "@/lib/hooks/useAgents";
 import { useAgentCounts } from "@/lib/hooks/useAgentCounts";
+import { useAgentDefaultModel } from "@/lib/hooks/useAgentModels";
+import { useAgentPending } from "@/lib/hooks/useAgentPending";
+import { cn } from "@/lib/utils";
+import { AgentPendingStatus } from "./AgentPendingStatus";
 import { formatRelativeTime } from "./relativeTime";
 import { useAgentRowActions } from "./useAgentRowActions";
 
@@ -31,12 +35,13 @@ export function AgentNameCell({ row }: { row: AgentTypeOut }) {
           : row.version
             ? t("agents.list.sub.installedVersion", { version: row.version })
             : t("agents.list.sub.installed");
+  const pending = useAgentPending(row);
   return (
-    <div className="flex min-w-0 items-center gap-2.5">
+    <div className={cn("flex min-w-0 items-center gap-2.5", pending && "opacity-60")}>
       <AgentBadge type={row.type} tooltip={false} />
       <div className="flex min-w-0 flex-col">
-        <span className="text-sm font-label text-text">{agentTypeLabel(row.type)}</span>
-        <span className="text-xs text-text-muted">{sub}</span>
+        <span className="truncate text-sm font-label text-text">{agentTypeLabel(row.type)}</span>
+        <span className="truncate text-xs text-text-muted">{sub}</span>
       </div>
     </div>
   );
@@ -54,9 +59,22 @@ export function ConfigDirCell({ row }: { row: AgentTypeOut }) {
   );
 }
 
-export function ModelCell({ uid }: { uid: string | null }) {
-  const model = useAgent(uid ?? "").data?.model;
-  return <span className="break-all font-mono text-xs text-text">{(uid && model) || DASH}</span>;
+/** The agent's default model. On a Coffer connection that is the agent's binding; on its own
+ *  login it is what the agent's own config names — and when that names none, the agent chooses
+ *  for itself, which is said in words rather than guessed from the first catalogue entry. */
+export function ModelCell({ uid, type }: { uid: string | null; type: AgentTypeOut["type"] }) {
+  const { t } = useTranslation();
+  const agent = useAgent(uid ?? "").data;
+  const onConnection = !!agent?.connection_uid;
+  const own = useAgentDefaultModel(onConnection ? "" : type).data ?? null;
+  if (!uid || !agent) return <span className="font-mono text-xs text-text">{DASH}</span>;
+  const model = onConnection ? agent.model : own;
+  if (model) return <span className="break-all font-mono text-xs text-text">{model}</span>;
+  return (
+    <span className="text-xs text-text-subtle">
+      {onConnection ? DASH : t("agents.list.autoModel")}
+    </span>
+  );
 }
 
 type CountKind = "skills" | "mcp" | "plugins";
@@ -131,20 +149,27 @@ export function CofferCell({
   state: AgentRowState | undefined;
 }) {
   const { t } = useTranslation();
+  const pending = useAgentPending(row);
   if (!state) return null;
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <StatusWord tone={agentRowTone(state)}>{t(agentRowStateKey(state))}</StatusWord>
-      <span className="text-xs text-text-muted">
-        <CofferDetail row={row} state={state} />
-      </span>
+      {pending ? (
+        <AgentPendingStatus pending={pending} />
+      ) : (
+        <>
+          <StatusWord tone={agentRowTone(state)}>{t(agentRowStateKey(state))}</StatusWord>
+          <span className="text-xs text-text-muted">
+            <CofferDetail row={row} state={state} />
+          </span>
+        </>
+      )}
     </div>
   );
 }
 
 export function ActionsCell({ row }: { row: AgentTypeOut }) {
   const { t } = useTranslation();
-  const { primary, actions, dialogs } = useAgentRowActions(row, { includeOpen: true });
+  const { primary, actions, dialogs, pending } = useAgentRowActions(row, { inList: true });
   const name = agentTypeLabel(row.type);
   return (
     <div className="flex items-center justify-end gap-1">
@@ -153,6 +178,7 @@ export function ActionsCell({ row }: { row: AgentTypeOut }) {
           icon={primary.icon}
           label={primary.label}
           destructive={primary.destructive}
+          loading={!!pending}
           onClick={primary.run}
         />
       ) : null}

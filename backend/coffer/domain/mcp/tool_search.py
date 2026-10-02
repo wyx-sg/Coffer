@@ -66,10 +66,14 @@ def rank_tools(
     query: str,
     catalogue: Sequence[tuple[str, str]],
     top_k: int,
+    *,
+    prefer: Sequence[bool] | None = None,
 ) -> list[ScoredTool]:
     """Rank ``catalogue`` against ``query``; return up to ``top_k`` best-first.
 
-    Zero-score tools are dropped. Deterministic: ties keep catalogue order.
+    Zero-score tools are dropped. Deterministic: ties keep catalogue order,
+    except that a tool flagged in ``prefer`` (one only search can reach) goes
+    ahead of an equally scored one the agent already sees listed.
     """
     if top_k <= 0 or not catalogue:
         return []
@@ -99,7 +103,7 @@ def rank_tools(
         if score > 0.0:
             scored.append(ScoredTool(index=i, score=score))
 
-    scored.sort(key=lambda s: (-s.score, s.index))
+    scored.sort(key=lambda s: (-s.score, not (prefer and prefer[s.index]), s.index))
     return scored[:top_k]
 
 

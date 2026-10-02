@@ -1,14 +1,16 @@
 """Wire shapes of ``/api/v1/clis`` (spec skill-manager "Serve required
-commands on REST, the command line and the web")."""
+commands on REST, the command line and the web", "Declare a command-line tool
+without a skill")."""
 
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from coffer.application.skill.cli_requirements import CliListing, CliView, SkillWarning
+from coffer.application.skill.cli_tools import CliPreview
 from coffer.surfaces.http.handoff_schemas import HandoffOut, handoff_out
 
 CliStatusOut = Literal["missing", "outdated", "logged_out", "ready"]
@@ -48,12 +50,18 @@ class CliLoginOut(BaseModel):
 class CliOut(BaseModel):
     command: str
     title: str | None
+    #: What the person wrote about it when they added the tool by hand.
+    description: str | None
+    #: The person added this tool by hand (alone or besides a skill that
+    #: requires it); ``needed_by`` and ``needed_by_servers`` may both be empty.
+    added: bool
     status: CliStatusOut
     #: Where the agent's ``PATH`` finds it; ``None`` when missing.
     path: str | None
     #: What ``--version`` printed; ``None`` when missing or unreadable.
     version: str | None
-    #: The highest minimum any skill asks for (MCP servers ask for none).
+    #: The highest minimum any skill or the hand-added declaration asks for
+    #: (MCP servers ask for none).
     min_version: str | None
     login: CliLoginOut
     #: The prompt to hand to an agent: install a missing command, update an
@@ -79,11 +87,58 @@ class CliListOut(BaseModel):
     warnings: list[CliWarningOut]
 
 
+class CliAddIn(BaseModel):
+    """Declare a tool by hand. ``command`` is a command name (``jq``) or the
+    absolute path of an executable (``/opt/tools/bin/jq``; the file name is
+    the command). ``login_check`` is a command line that starts with the tool,
+    like ``gh auth status``."""
+
+    command: str = Field(min_length=1, max_length=512)
+    title: str | None = None
+    description: str | None = None
+    min_version: str | None = None
+    login_check: str | None = None
+
+
+class CliEditIn(BaseModel):
+    """Change a hand-added tool; a field left out stays, ``null`` clears it."""
+
+    title: str | None = None
+    description: str | None = None
+    min_version: str | None = None
+    login_check: str | None = None
+
+
+class CliPreviewIn(BaseModel):
+    command: str = Field(min_length=1, max_length=512)
+
+
+class CliPreviewOut(BaseModel):
+    """What Coffer found for a name or path, before anything is saved."""
+
+    command: str
+    #: Where it was found; ``None`` when it is not on this machine.
+    path: str | None
+    version: str | None
+    #: Already added by hand.
+    added: bool
+    #: A skill or MCP server already requires it.
+    required: bool
+
+
+def cli_preview_out(p: CliPreview) -> CliPreviewOut:
+    return CliPreviewOut(
+        command=p.command, path=p.path, version=p.version, added=p.added, required=p.required
+    )
+
+
 def cli_out(view: CliView) -> CliOut:
     row, probe = view.required, view.probe
     return CliOut(
         command=row.command,
         title=row.title,
+        description=row.description,
+        added=row.added,
         status=view.status.value,
         path=probe.path,
         version=probe.version,

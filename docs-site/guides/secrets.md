@@ -155,7 +155,7 @@ Approve only a target you recognise. A command line you did not write, pointing 
 ### What needs no approval
 
 - **A secret you just supplied for it.** A value stored on this machine in the last five minutes under a ref that has never been sent anywhere is approved when you register the server, channel or connection that cites it. This is what every "add" dialog and `coffer mcp add` with a pasted token do. A second place citing the same ref is a second place, and waits. It does not apply to standalone secrets.
-- **Everything that already worked when you upgraded.** The first time a daemon with approvals starts, every secret already in use is approved once for its current target.
+- **Everything that already worked when you upgraded.** The first time a daemon with approvals starts, every secret already in use is approved once for its current target. The move to the vault layout (`coffer migrate`) is the exception: it carries no approvals, so each secret's first use at each destination waits once ([Upgrading](/guides/upgrading)).
 - **Anything, while the protection is off.**
 
 A binding is also checked when you register or change the place that uses it, so an approval it needs appears right when you save, with the approvals dialog opening on the page you are on. A binding is checked at the moment of use — when a server starts, a channel connects, a sync round pushes — so a change that arrives behind Coffer's back, such as a vault file edited by hand or a server another machine synced in, is caught too.
@@ -165,6 +165,10 @@ A binding is also checked when you register or change the place that uses it, so
 When something waits, the desktop app posts a notification, **Coffer needs your approval**, naming the change, and opens a window that asks the change as a question — "Approve a new value for github-token?", "Approve the new secret npm-publish-token?" — with the kind of change (**New value**, **New secret**, **New use**, **Turn off protection**), the secret, who asked and when, and what uses it. **Approve…** runs Touch ID or your login password, with a prompt that names the change, then applies it; the server, channel or remote picks the secret up on its next attempt, with no restart. **Reject** needs no presence check, since refusing only narrows what Coffer does.
 
 In a browser, **Approve** is disabled — "Approve in the Coffer desktop app" — and only **Reject** works.
+
+### Answering several at once
+
+When two or more changes wait — after an upgrade, say, when several destinations ask at once — each card has a checkbox, and a bar offers **Select all**, **Approve selected (N)…** and **Reject selected (N)**. Nothing is ticked to begin with. **Approve selected** opens a review that lists every change the confirmation will cover, each as the secret, where it goes and the target that receives it; only the review's **Approve N changes…** button asks for Touch ID or your login password, once, and the prompt names the first few changes and counts the rest. The same rows then say what became of each: approved, or skipped. A change whose target moved after you opened the list is skipped and keeps waiting, and so is anything no longer waiting; nothing outside the list you reviewed is approved. Turning the protection off is never part of a batch — approve it on its own. **Reject selected** needs no presence check. `coffer secret approvals` remains list-only: approving is the desktop app's.
 
 From a terminal you can list and reject, never approve:
 

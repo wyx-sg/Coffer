@@ -5,9 +5,9 @@
 import { useTranslation } from "react-i18next";
 import { Lock, MessageSquare, Users } from "lucide-react";
 
+import { Section } from "@/components/Section";
 import type { ChannelType } from "@/lib/api/channels";
 import { ChannelPlatformCards } from "./ChannelPlatformCards";
-import { PLATFORMS } from "./channelPlatforms";
 
 const BENEFITS = [
   { key: "chat", icon: MessageSquare },
@@ -25,15 +25,9 @@ export function ChannelFirstRun({ onChoose }: { onChoose: (platform: ChannelType
           {t("channels.firstRun.body")}
         </p>
       </div>
-      <section className="space-y-2.5" aria-label={t("channels.firstRun.choose")}>
-        <h3 className="flex items-center text-xs font-semibold text-text-muted">
-          {t("channels.firstRun.choose")}
-          <span className="ml-auto font-book">
-            {t("channels.platforms.count", { count: PLATFORMS.length })}
-          </span>
-        </h3>
+      <Section title={t("channels.firstRun.choose")} labelled>
         <ChannelPlatformCards onChoose={onChoose} />
-      </section>
+      </Section>
       <ul className="grid gap-4 sm:grid-cols-3">
         {BENEFITS.map(({ key, icon: Icon }) => (
           <li key={key} className="flex gap-2.5">

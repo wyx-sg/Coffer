@@ -1,12 +1,13 @@
-// src/components/agents/model/ProviderChoices.tsx — the Model tab's Provider section: built-in login plus every compatible connection, as radio cards.
+// src/components/agents/model/ProviderChoices.tsx — the Model tab's Provider section: two radio cards (built-in login / custom provider); the custom one opens a searchable list of every compatible connection.
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
 
-import { HelpTip } from "@/components/HelpTip";
+import { Label } from "@/components/ui/label";
 import { Section } from "@/components/Section";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import type { AgentType } from "@/lib/api/agents";
 import { modelIds, type Provider } from "@/lib/api/providers";
 import { agentTypeLabel } from "@/lib/agents/display";
@@ -25,8 +26,11 @@ function hostOf(url: string | null): string | null {
   }
 }
 
+const CUSTOM = "__custom__";
+
 interface Choice {
   value: string;
+  disabled?: boolean;
   title: string;
   detail: string;
 }
@@ -64,14 +68,35 @@ export function ProviderChoices({
       .filter(Boolean)
       .join(" · ");
   };
+  const customOn = value !== BUILTIN;
   const choices: Choice[] = [
     {
       value: BUILTIN,
       title: t("agents.modelTab.provider.builtin"),
       detail: t(`agents.modelTab.provider.builtinDetail.${agentType}`),
     },
-    ...connections.map((p) => ({ value: p.uid, title: displayName(p), detail: detailOf(p) })),
+    {
+      value: CUSTOM,
+      title: t("agents.modelTab.provider.custom"),
+      detail:
+        connections.length === 0
+          ? t("agents.modelTab.provider.customNone")
+          : t("agents.modelTab.provider.customDetail"),
+      disabled: connections.length === 0,
+    },
   ];
+  const options = connections.map((p) => ({
+    value: p.uid,
+    label: displayName(p),
+    hint: detailOf(p),
+  }));
+  // Choosing "custom" stages the provider the agent already runs on, else the first.
+  const choose = (choice: string) => {
+    if (choice === BUILTIN) return onChange(BUILTIN);
+    if (customOn) return;
+    const target = connections.find((p) => p.uid === applied) ?? connections[0];
+    if (target) onChange(target.uid);
+  };
 
   // Arrow keys move the choice, as in any radio group.
   const onKeyDown = (event: React.KeyboardEvent, index: number) => {
@@ -79,7 +104,8 @@ export function ProviderChoices({
     if (step === 0 || disabled) return;
     event.preventDefault();
     const next = (index + step + choices.length) % choices.length;
-    onChange(choices[next].value);
+    if (choices[next].disabled) return;
+    choose(choices[next].value);
     refs.current[next]?.focus();
   };
 
@@ -87,12 +113,10 @@ export function ProviderChoices({
     <Section
       title={t("agents.modelTab.provider.title")}
       className="min-w-0"
-      aside={
-        <HelpTip label={t("agents.modelTab.provider.helpLabel")}>
-          <p className="text-xs">
-            {t(`agents.modelTab.provider.helpByType.${agentType}`, { agent })}
-          </p>
-        </HelpTip>
+      help={
+        <p className="text-xs">
+          {t(`agents.modelTab.provider.helpByType.${agentType}`, { agent })}
+        </p>
       }
     >
       <div
@@ -101,7 +125,7 @@ export function ProviderChoices({
         className="flex min-w-0 flex-col gap-2"
       >
         {choices.map((choice, index) => {
-          const checked = choice.value === value;
+          const checked = choice.value === CUSTOM ? customOn : value === BUILTIN;
           return (
             <button
               key={choice.value}
@@ -112,8 +136,8 @@ export function ProviderChoices({
               role="radio"
               aria-checked={checked}
               tabIndex={checked ? 0 : -1}
-              disabled={disabled}
-              onClick={() => onChange(choice.value)}
+              disabled={disabled || choice.disabled}
+              onClick={() => choose(choice.value)}
               onKeyDown={(event) => onKeyDown(event, index)}
               className={cn(
                 "flex items-center gap-3 rounded-lg border px-3.5 py-2.5 text-left outline-none transition-colors duration-fast focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60",
@@ -135,7 +159,7 @@ export function ProviderChoices({
                 <span className="text-sm font-semibold text-text">{choice.title}</span>
                 <span className="break-all text-xs text-text-muted">{choice.detail}</span>
               </span>
-              {choice.value === applied ? (
+              {(choice.value === CUSTOM ? applied !== BUILTIN : applied === BUILTIN) ? (
                 <span className="inline-flex h-5 shrink-0 items-center rounded-sm bg-chip px-1.5 text-2xs font-label text-text-muted">
                   {t("agents.modelTab.provider.current")}
                 </span>
@@ -144,6 +168,20 @@ export function ProviderChoices({
           );
         })}
       </div>
+      {customOn && connections.length > 0 ? (
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <Label htmlFor="agent-provider">{t("agents.modelTab.provider.custom")}</Label>
+          <Combobox
+            id="agent-provider"
+            value={value}
+            options={options}
+            onChange={onChange}
+            placeholder={t("agents.modelTab.provider.customPick")}
+            emptyMessage={t("agents.modelTab.provider.customSearchEmpty")}
+            disabled={disabled}
+          />
+        </div>
+      ) : null}
       {connections.length === 0 ? (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-border px-3.5 py-2.5">
           <div className="flex min-w-0 flex-grow flex-col gap-0.5">

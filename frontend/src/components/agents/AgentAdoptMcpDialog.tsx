@@ -194,7 +194,7 @@ export function AgentAdoptMcpDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t("common.cancel")}
           </Button>
-          <Button disabled={adopt.isPending || !trimmed} onClick={submit}>
+          <Button loading={adopt.isPending} disabled={!trimmed} onClick={submit}>
             {adopt.isPending ? t("agents.mcpTab.adoptDialog.pending") : t("agents.mcpTab.adopt")}
           </Button>
         </DialogFooter>

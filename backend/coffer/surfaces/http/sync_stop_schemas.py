@@ -134,9 +134,11 @@ class JoinPreviewOut(BaseModel):
     """What joining would do. ``empty``: the remote is empty and this vault is
     pushed whole; ``new``: the union is taken, nothing deleted, differing
     files left here until chosen; ``returning``: a three-way merge from the
-    commit this machine last converged at."""
+    commit this machine last converged at; ``replace``: the remote holds an
+    older layout and this vault replaces it (``deleted`` lists, capped, what
+    goes away; ``deleted_total`` counts it)."""
 
-    kind: Literal["empty", "new", "returning"]
+    kind: Literal["empty", "new", "returning", "replace"]
     remote_tip: str | None
     pushed_by: str | None
     pushed_at: str | None
@@ -145,6 +147,7 @@ class JoinPreviewOut(BaseModel):
     differ: list[str]
     pushed: list[AreaCountOut]
     deleted: list[str]
+    deleted_total: int
     conflicts: list[str]
     same_name: list[str]
     refused: str | None

@@ -56,6 +56,9 @@ export const agentPluginsKey = (uid: string) => ["agents", uid, "plugins"] as co
 /** One plugin's detail — under the listing's key, so a toggle or uninstall that
  *  invalidates the listing refreshes the detail page too. */
 export const agentPluginKey = (uid: string, id: string) => ["agents", uid, "plugins", id] as const;
+/** The latest conversations one channel started (its Overview). */
+export const channelRecentConversationsKey = (uid: string) =>
+  ["channels", uid, "recent-conversations"] as const;
 export const agentUnmanagedSkillsKey = (uid: string) =>
   ["agents", uid, "unmanaged-skills"] as const;
 /** One unmanaged folder's preview — nested under the list key, so adopting or
@@ -216,7 +219,19 @@ export const upkeepRunsKey = ["upkeep", "runs"] as const;
 // --- chat — conversations, their messages and per-conversation agent config ---
 
 export const conversationsKey = ["conversations"] as const;
-export const archivedConversationsKey = ["conversations", "archived"] as const;
+/** Every list of conversations (pages, head and palette reads): one prefix. */
+export const conversationListsKey = ["conversations", "lists"] as const;
+/** Every conversation list's head (what a sent message refreshes without re-reading the pages). */
+export const conversationHeadsKey = ["conversations", "lists", "head"] as const;
+/** The pages a conversation list has read so far, for one view (archived, title search). */
+export const conversationPagesKey = (archived: boolean, q: string) =>
+  ["conversations", "lists", "pages", { archived, q }] as const;
+/** The newest few rows of that view, re-read to keep the pages current. */
+export const conversationHeadKey = (archived: boolean, q: string) =>
+  ["conversations", "lists", "head", { archived, q }] as const;
+/** What the command palette lists: a small read, by the text typed. */
+export const paletteConversationsKey = (q: string) =>
+  ["conversations", "lists", "palette", { q }] as const;
 export const conversationKey = (id: string) => ["conversations", id] as const;
 /** A conversation's managed-agent config (model, effort). A CHILD of the
  *  conversation, so removing `conversationKey(id)` drops it too. */
@@ -238,15 +253,6 @@ export const refusedApprovalsKey = ["secrets", "approvals", "rejected"] as const
 export const secretBoundaryKey = ["secrets", "secret-boundary"] as const;
 export const secretsListKey = ["secrets", "list"] as const;
 export const secretScanKey = ["secrets", "scan"] as const;
-
-// ---------------------------------------------------------------------------
-// clis — the commands managed skills require (/clis)
-// ---------------------------------------------------------------------------
-
-export const clisKey = ["clis"] as const;
-/** One command. Keyed on the command itself: it is the row's only identity,
- *  and no rename exists that could strand the entry. */
-export const cliKey = (command: string) => ["clis", command] as const;
 
 // --- settings — daemon-side settings the Settings pages edit ---------------
 

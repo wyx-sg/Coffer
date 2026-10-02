@@ -4,10 +4,13 @@
 Whether a person switched a capability off is theirs, and travels: it is
 ``state/mcp-preferences/<server name>.json``::
 
-    {"server_uid": "<uid>", "format_version": 1, "disabled": {"tool": ["delete_repo"]}}
+    {"server_uid": "<uid>", "format_version": 1, "disabled": {"tool": ["delete_repo"]},
+     "tool_exposure": {"list_repos": "listed", "dump_table": "search"}}
 
 Only the switched-off capabilities are listed — a capability nobody touched
-is on, so a new upstream tool writes nothing into the vault. When this machine
+is on, so a new upstream tool writes nothing into the vault. ``tool_exposure``
+likewise holds only the tools whose person-chosen exposure is not ``auto``
+(spec mcp-gateway "Choose how each tool is exposed"). When this machine
 first and last saw each capability is an observation it makes again, so those
 times are in ``derived/derived.db`` (``mcp_capability_seen``) and never
 committed.
@@ -39,10 +42,8 @@ from coffer.infrastructure.mcp.health_repo import (
     MCPServerHealthModel,
     MCPServerHealthRepo,
 )
-from coffer.infrastructure.mcp.invocation_writer import (
-    MCPInvocationModel,
-    MCPInvocationRepo,
-)
+from coffer.infrastructure.mcp.invocation_rows import MCPInvocationModel
+from coffer.infrastructure.mcp.invocation_writer import MCPInvocationRepo
 from coffer.infrastructure.mcp.tool_reach_repo import MCPToolReachStore
 from coffer.infrastructure.persistence.derived_db import MCPCapabilitySeenModel
 from coffer.infrastructure.vault.state_documents import StateDocuments
@@ -82,6 +83,13 @@ def _disabled(doc: dict[str, Any] | None) -> dict[str, set[str]]:
     }
 
 
+def _exposure(doc: dict[str, Any] | None) -> dict[str, str]:
+    raw = (doc or {}).get("tool_exposure")
+    if not isinstance(raw, dict):
+        return {}
+    return {str(k): v for k, v in raw.items() if v in ("listed", "search")}
+
+
 class MCPCapabilityPreferenceStore:
     """``MCPCapabilityPreferenceRepoPort``: switches in the vault, seen-times
     in ``derived.db``."""
@@ -100,13 +108,49 @@ class MCPCapabilityPreferenceStore:
     def _off(self, server_uid: str) -> dict[str, set[str]]:
         return _disabled(self.documents.get(server_uid))
 
-    def _save(self, server_uid: str, off: dict[str, set[str]], summary: str) -> None:
+    def _save(
+        self,
+        server_uid: str,
+        off: dict[str, set[str]],
+        summary: str,
+        exposure: dict[str, str] | None = None,
+    ) -> None:
+        """Write the document: ``exposure`` is replaced when given, else kept."""
         listed = {t: sorted(keys) for t, keys in sorted(off.items()) if keys}
-        if not listed:
+        pinned = dict(
+            sorted((exposure if exposure is not None else self.exposure_for(server_uid)).items())
+        )
+        if not listed and not pinned:
             self.documents.remove(server_uid, summary=summary)
             return
+        doc: dict[str, Any] = {}
+        if listed:
+            doc["disabled"] = listed
+        if pinned:
+            doc["tool_exposure"] = pinned
         name = self._name_of(server_uid) or server_uid
-        self.documents.put(server_uid, name, {"disabled": listed}, summary=summary)
+        self.documents.put(server_uid, name, doc, summary=summary)
+
+    def exposure_for(self, server_uid: str) -> dict[str, str]:
+        """The tools whose exposure the person set: tool name -> ``listed`` | ``search``."""
+        return _exposure(self.documents.get(server_uid))
+
+    async def set_exposure(self, server_uid: str, changes: dict[str, str]) -> bool:
+        """Set several tools' exposure (``auto`` clears) in one write; False,
+        and nothing written, when any named tool is not one this server offers."""
+        known = {p.capability_key for p in await self.list_for(server_uid, "tool")}
+        if any(tool not in known for tool in changes):
+            return False
+        pinned = self.exposure_for(server_uid)
+        for tool, mode in changes.items():
+            if mode == "auto":
+                pinned.pop(tool, None)
+            else:
+                pinned[tool] = mode
+        self._save(
+            server_uid, self._off(server_uid), f"Set exposure of {len(changes)} tools", pinned
+        )
+        return True
 
     async def _seen(
         self, server_uid: str, capability_type: CapabilityType | None

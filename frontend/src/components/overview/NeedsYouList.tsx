@@ -13,7 +13,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState";
-import { Badge } from "@/components/ui/badge";
+import { Section } from "@/components/Section";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
@@ -26,6 +26,9 @@ import { cn } from "@/lib/utils";
 import { NEEDS_YOU_CELL, NEEDS_YOU_ROW_GRID, NeedsYouRow } from "./NeedsYouRow";
 
 const LIST = "divide-y divide-border-subtle rounded-xl border border-border bg-surface-raised";
+// A long list scrolls inside its own window (about five rows) instead of pushing the
+// rest of the Overview down; the header and the ignored line stay in view.
+const SCROLL = "max-h-[23rem] overflow-y-auto overscroll-contain";
 
 const rowKey = (item: AttentionItem, i: number) =>
   `${item.kind}:${item.uid ?? ""}:${item.reason_code}:${i}`;
@@ -45,19 +48,13 @@ export function NeedsYouList() {
   const errors = attention.data?.errors ?? [];
 
   return (
-    <section aria-labelledby="overview-needs-you" className="space-y-2">
-      <div className="flex min-h-[22px] items-center gap-2">
-        <h2 id="overview-needs-you" className="text-sm font-semibold">
-          {t("overview.needsYou.title")}
-        </h2>
-        {items.length > 0 ? (
-          <>
-            <Badge variant="secondary">{items.length}</Badge>
-            <span className="ml-auto text-xs text-text-subtle">{t("overview.needsYou.order")}</span>
-          </>
-        ) : null}
-      </div>
-
+    <Section
+      as="h2"
+      gap="snug"
+      labelled
+      title={t("overview.needsYou.title")}
+      help={items.length > 0 ? t("overview.needsYou.order") : undefined}
+    >
       {attention.isPending ? (
         <ul aria-busy className={LIST}>
           {[0, 1, 2].map((i) => (
@@ -93,7 +90,7 @@ export function NeedsYouList() {
             </p>
           ))}
           {items.length > 0 ? (
-            <ul className={LIST}>
+            <ul className={cn(LIST, SCROLL)} data-testid="needs-you-scroll" tabIndex={0}>
               {items.map((item, i) => (
                 <NeedsYouRow
                   key={rowKey(item, i)}
@@ -114,7 +111,7 @@ export function NeedsYouList() {
             />
           ) : null}
           {hidden.length > 0 && showIgnored ? (
-            <ul aria-label={t("overview.needsYou.ignoredList")} className={LIST}>
+            <ul aria-label={t("overview.needsYou.ignoredList")} className={cn(LIST, SCROLL)}>
               {hidden.map((item, i) => (
                 <NeedsYouRow
                   key={rowKey(item, i)}
@@ -128,7 +125,7 @@ export function NeedsYouList() {
           ) : null}
         </>
       )}
-    </section>
+    </Section>
   );
 }
 

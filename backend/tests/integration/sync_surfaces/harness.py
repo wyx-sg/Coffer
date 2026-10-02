@@ -12,6 +12,7 @@ import asyncio
 import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -60,8 +61,16 @@ class MemoryHistory:
         self.rows.append(stored)
         return stored
 
-    async def recent(self, limit: int, offset: int = 0) -> list[RoundRecord]:
-        return list(reversed(self.rows))[offset : offset + limit]
+    async def recent(
+        self, limit: int, after: tuple[datetime, int] | None = None
+    ) -> list[RoundRecord]:
+        def key(r: RoundRecord) -> tuple[datetime, int]:
+            return datetime.fromisoformat(r.finished_at), r.id or 0
+
+        ordered = sorted(self.rows, key=key, reverse=True)
+        if after is not None:
+            ordered = [r for r in ordered if key(r) < after]
+        return ordered[:limit]
 
     async def get(self, round_id: int) -> RoundRecord | None:
         return next((r for r in self.rows if r.id == round_id), None)

@@ -1,22 +1,23 @@
 // src/lib/hooks/useActivitySource.ts — one of Activity's three logs: its loaded pages, its newest records and its count.
 //
-// Two reads per log. The **pages** are what the list shows: the first page,
-// then one more per "Load older", read once and never refetched behind the
-// reader's back, so a row being read never moves. The **head** is the newest
-// page, re-read every few seconds (no log here is on the daemon's event
+// Three reads per log, each small. The **pages** are what the list shows: a
+// first page of 30, then 50 more each time the reader scrolls to the end or
+// asks (`useInfiniteList`), read once and never refetched behind the reader's
+// back, so a row being read never moves. The **head** is the newest few
+// records, re-read every few seconds (no log here is on the daemon's event
 // stream, so this is the poll spec web-ui "Stream new Activity records while
 // the list is at the top" allows) and on demand; a head row the pages do not
 // hold is new, and waits in `pending` until the page releases it into view
-// (at once while the reader is at the top, on "↑ N new" otherwise). The head
-// also carries the log's `total`, which the tab counts show.
+// (at once while the reader is at the top, on "↑ N new" otherwise). The
+// **count** is one row's read that carries the log's `total`, for the tab
+// labels, re-read rarely.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   fetchAuditPage,
   fetchCallPage,
-  fetchDaemonTail,
-  MAX_PAGE,
+  fetchDaemonPage,
   type SourceParams,
 } from "@/lib/api/activity";
 import { auditListKey, daemonLogsKey, mcpAllInvocationsKey } from "@/lib/api/queryKeys";
@@ -29,50 +30,41 @@ import {
   type ActivityRecord,
   type ActivitySource,
 } from "@/lib/activity/records";
+import { FIRST_PAGE, MORE_PAGE, useInfiniteList, type ListPage } from "./useInfiniteList";
 
-/** Rows per "Load older". */
-export const PAGE_SIZE = 200;
 /** Rows the head re-reads; more new rows than this between two polls is a gap. */
-const HEAD_SIZE = 50;
+const HEAD_SIZE = 20;
 /** How often the head is re-read. */
 const HEAD_POLL_MS = 5_000;
+/** How often a count is re-read. */
+const COUNT_POLL_MS = 60_000;
 
-interface Page {
-  records: ActivityRecord[];
-  next: string | null;
-  /** Every row matching the filters; for the daemon tail, the rows it holds. */
-  total: number | undefined;
-  /** The daemon tail stopped at the route's cap: there may be more. */
-  capped: boolean;
-  /** The file the daemon tail was read from. */
+/** The file the daemon log is read from, once its first page has been. */
+interface Read extends ListPage<ActivityRecord> {
   path?: string;
 }
 
-async function readPage(spec: SourceParams, limit: number, cursor: string | null): Promise<Page> {
+async function readPage(
+  spec: SourceParams,
+  limit: number,
+  cursor: string | null,
+  signal: AbortSignal,
+  withTotal = false,
+): Promise<Read> {
   if (spec.source === "change") {
-    const out = await fetchAuditPage(spec.params, limit, cursor);
-    return {
-      records: out.entries.map(fromAudit),
-      next: out.next_cursor,
-      total: out.total,
-      capped: false,
-    };
+    const out = await fetchAuditPage(spec.params, limit, cursor, signal);
+    return { items: out.entries.map(fromAudit), next: out.next_cursor, total: out.total };
   }
   if (spec.source === "call") {
-    const out = await fetchCallPage(spec.params, limit, cursor);
-    return {
-      records: out.invocations.map(fromCall),
-      next: out.next_cursor,
-      total: out.total,
-      capped: false,
-    };
+    const out = await fetchCallPage(spec.params, limit, cursor, signal);
+    return { items: out.invocations.map(fromCall), next: out.next_cursor, total: out.total };
   }
-  const out = await fetchDaemonTail(spec.params, MAX_PAGE);
+  const out = await fetchDaemonPage(spec.params, limit, cursor, signal, withTotal);
   return {
-    records: fromDaemonTail(out.records),
-    next: null,
-    total: out.records.length,
-    capped: out.records.length >= MAX_PAGE,
+    items: fromDaemonTail(out.records),
+    next: out.next_cursor ?? null,
+    total: out.total ?? undefined,
+    totalIsFloor: out.total_is_floor,
     path: out.path,
   };
 }
@@ -94,7 +86,7 @@ export interface ActivitySourceState {
   /** Move every pending record into `records`. */
   release: () => void;
   total: number | undefined;
-  /** The count is a floor (the daemon tail hit its cap). */
+  /** The count is a floor (the daemon log counts a bounded tail). */
   capped: boolean;
   isLoading: boolean;
   error: unknown;
@@ -106,7 +98,7 @@ export interface ActivitySourceState {
   refreshHead: () => void;
   /** The time of the oldest loaded record, for merging several logs. */
   oldestAt: number | undefined;
-  /** The daemon log's file, once its tail has been read. */
+  /** The daemon log's file, once it has been read. */
   path: string | undefined;
 }
 
@@ -114,29 +106,31 @@ export function useActivitySource(spec: SourceParams, enabled: boolean): Activit
   const pagesKey = keyFor(spec, "pages");
   const identity = JSON.stringify(pagesKey);
 
-  const pages = useInfiniteQuery({
+  const pages = useInfiniteList<ActivityRecord>({
     queryKey: pagesKey,
-    queryFn: ({ pageParam }) => readPage(spec, PAGE_SIZE, pageParam),
-    initialPageParam: null as string | null,
-    getNextPageParam: (last) => last.next ?? undefined,
+    fetchPage: async (cursor, signal) => {
+      const page = await readPage(spec, cursor ? MORE_PAGE : FIRST_PAGE, cursor, signal);
+      return page;
+    },
     enabled,
     // What is on screen changes only when the reader asks: a new record comes
     // through the head, never by re-reading the pages under the reader.
     staleTime: Infinity,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    keepPrevious: false,
   });
 
   const head = useQuery({
     queryKey: keyFor(spec, "head"),
-    queryFn: () => readPage(spec, HEAD_SIZE, null),
-    enabled,
+    queryFn: ({ signal }) => readPage(spec, HEAD_SIZE, null, signal),
+    // Not alongside the first page, which already holds the newest rows.
+    enabled: enabled && !pages.isLoading,
     refetchInterval: HEAD_POLL_MS,
     refetchIntervalInBackground: false,
   });
+  // The daemon log counts a bounded tail: that read is not repeated per poll.
+  const count = useActivityCount(spec, enabled && spec.source === "daemon");
 
-  const loaded = useMemo(() => pages.data?.pages.flatMap((p) => p.records) ?? [], [pages.data]);
-
+  const loaded = pages.items;
   const [extra, setExtra] = useState<{
     identity: string;
     accepted: ActivityRecord[];
@@ -145,8 +139,8 @@ export function useActivitySource(spec: SourceParams, enabled: boolean): Activit
   // Other filters are another list: what was new under the old ones is not.
   const current = extra.identity === identity ? extra : { identity, accepted: [], pending: [] };
 
-  const headRecords = head.data?.records;
-  const pagesReady = pages.data !== undefined;
+  const headRecords = head.data?.items;
+  const pagesReady = loaded.length > 0 || !pages.isLoading;
   useEffect(() => {
     if (!pagesReady || !headRecords) return;
     setExtra((prev) => {
@@ -178,51 +172,48 @@ export function useActivitySource(spec: SourceParams, enabled: boolean): Activit
     [current.accepted, loaded],
   );
 
-  const firstPage = pages.data?.pages[0];
   const { refetch: refetchHead } = head;
-  const { refetch: refetchPages, fetchNextPage } = pages;
   const oldest = loaded.length > 0 ? loaded[loaded.length - 1].at : null;
+  const own =
+    spec.source === "daemon" ? count : { value: head.data?.total ?? pages.total, floor: false };
 
   return {
     source: spec.source,
     records,
     pending: current.pending,
     release,
-    total: head.data?.total ?? firstPage?.total,
-    capped: head.data?.capped ?? firstPage?.capped ?? false,
-    isLoading: enabled && pages.isLoading,
+    total: own.value ?? pages.total,
+    capped: own.floor || pages.totalIsFloor,
+    isLoading: pages.isLoading,
     error: pages.error,
-    retry: () => void refetchPages(),
-    hasOlder: pages.hasNextPage,
-    loadOlder: () => void fetchNextPage(),
-    isLoadingOlder: pages.isFetchingNextPage,
+    retry: pages.refetch,
+    hasOlder: pages.hasMore,
+    loadOlder: pages.loadMore,
+    isLoadingOlder: pages.isLoadingMore,
     refreshHead: () => void refetchHead(),
     oldestAt: oldest ? recordTimeMs(oldest) : undefined,
-    path: head.data?.path ?? firstPage?.path,
+    path: head.data?.path,
   };
 }
 
-/** How often a count beside a tab that is not in front is re-read. */
-const COUNT_POLL_MS = 15_000;
-
-/** @ui-only A log's count: every matching row, or a floor when the daemon tail hit its cap. */
+/** @ui-only A log's count: every matching row, or a floor when the daemon log counted a bounded tail. */
 export interface ActivityCount {
   value: number | undefined;
   floor: boolean;
 }
 
 /**
- * The count of one log under some filters, for a tab that is not in front —
- * one row's read for the paged logs (their answer carries `total`), the whole
- * bounded tail for the daemon log.
+ * The count of one log under some filters, for a tab label — one row's read
+ * (the paged logs answer with `total`; the daemon log counts its recent tail
+ * when asked). Re-read once a minute, not on every poll of the list.
  */
 export function useActivityCount(spec: SourceParams, enabled: boolean): ActivityCount {
   const query = useQuery({
     queryKey: keyFor(spec, "count"),
-    queryFn: () => readPage(spec, 1, null),
+    queryFn: ({ signal }) => readPage(spec, 1, null, signal, true),
     enabled,
     refetchInterval: COUNT_POLL_MS,
     refetchIntervalInBackground: false,
   });
-  return { value: query.data?.total, floor: query.data?.capped ?? false };
+  return { value: query.data?.total, floor: query.data?.totalIsFloor ?? false };
 }

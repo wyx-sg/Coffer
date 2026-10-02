@@ -15,7 +15,8 @@ from typing import Any
 
 from coffer.application.sync import round_plaintext
 from coffer.application.sync.round_engine import PROBLEM_STATUS, Recorder, RoundEngine
-from coffer.application.sync.round_layout import layout_refusal
+from coffer.application.sync.round_layout import is_older, layout_refusal
+from coffer.application.sync.round_replace import replace, replace_preview
 from coffer.application.sync.round_trees import identity_conflicts, settle_machines
 from coffer.domain.sync.joins import AreaCount, JoinKind, JoinPreview
 from coffer.domain.sync.remote import SyncRemote
@@ -67,6 +68,8 @@ def preview(engine: RoundEngine, remote: SyncRemote, token: str | None) -> JoinP
     if refused is not None:
         return JoinPreview(JoinKind.NEW, tip, refused=refused[1])
     newest = d.git.log(start=tip, limit=1)
+    if is_older(d, tip):
+        return replace_preview(d, tip, mine)
     labels = d.labels(tip)
     pushed_by = labels.get(newest[0].meta.machine or "", newest[0].meta.machine) if newest else None
     pushed_at = newest[0].time.isoformat(timespec="seconds") if newest else None
@@ -76,13 +79,15 @@ def preview(engine: RoundEngine, remote: SyncRemote, token: str | None) -> JoinP
         tree = settle_machines(d.git, merged.tree, tip, d.machine.descriptor_path())
         here = [c for c in d.git.diff(local, tree) if not c.path.startswith(MACHINES + "/")]
         there = [c for c in d.git.diff(tip, tree) if not c.path.startswith(MACHINES + "/")]
+        deleted = tuple(sorted({c.path for c in here + there if c.status == "D"}))
         return JoinPreview(
             JoinKind.RETURNING,
             tip,
             pushed_by=pushed_by,
             pushed_at=pushed_at,
             pulled=_areas([c.path for c in here if c.status != "D"]),
-            deleted=tuple(sorted({c.path for c in here + there if c.status == "D"})),
+            deleted=deleted,
+            deleted_total=len(deleted),
             conflicts=tuple(
                 c.path for c in merged.conflicts if not c.path.startswith(MACHINES + "/")
             ),
@@ -124,6 +129,8 @@ def join(engine: RoundEngine, remote: SyncRemote, token: str | None) -> RoundRec
         if shown.kind is JoinKind.EMPTY:
             return engine._push(rec, remote, token, local, None)
         tip = shown.remote_tip or ""
+        if shown.kind is JoinKind.REPLACE:
+            return replace(engine, rec, remote, token, local, tip)
         if shown.kind is JoinKind.RETURNING:
             return engine.converge(
                 rec,

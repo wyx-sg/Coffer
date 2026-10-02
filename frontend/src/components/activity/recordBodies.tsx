@@ -11,6 +11,8 @@ import type { ReactNode } from "react";
 import type { TFunction } from "i18next";
 import { Info, ShieldCheck } from "lucide-react";
 
+import { Section } from "@/components/Section";
+
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { daemonContinuation, describeDaemonRecord } from "@/lib/activity/activityText";
 import {
@@ -28,8 +30,6 @@ import type { ServerFailures } from "@/lib/hooks/useServerFailures";
 import { cn } from "@/lib/utils";
 import { LevelWord, type AgentLook } from "./activityCells";
 import { ValueDiffBlock } from "./ValueDiffBlock";
-
-export const LABEL = "text-2xs font-semibold uppercase tracking-[.02em] text-text-muted";
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -97,16 +97,19 @@ export function ChangeBody({ t, entry }: { t: TFunction; entry: AuditEntry }) {
         <TraceFact t={t} traceId={entry.trace_id} />
       </div>
       {hasDiff ? (
-        <section className="flex min-w-0 flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <span className={LABEL}>{t("activity.drawer.whatChanged")}</span>
-            {lines.length ? (
-              <span className="ml-auto flex gap-1.5 font-mono text-2xs">
+        <Section
+          title={t("activity.drawer.whatChanged")}
+          gap="snug"
+          className="min-w-0"
+          actions={
+            lines.length ? (
+              <span className="flex gap-1.5 font-mono text-2xs">
                 <span className="text-success">+{counts.added}</span>
                 <span className="text-danger">−{counts.removed}</span>
               </span>
-            ) : null}
-          </div>
+            ) : null
+          }
+        >
           {lines.length ? (
             <ValueDiffBlock lines={lines} />
           ) : (
@@ -116,7 +119,7 @@ export function ChangeBody({ t, entry }: { t: TFunction; entry: AuditEntry }) {
             <ShieldCheck className="size-3.5" aria-hidden />
             {t("activity.drawer.secretNote")}
           </p>
-        </section>
+        </Section>
       ) : null}
     </>
   );

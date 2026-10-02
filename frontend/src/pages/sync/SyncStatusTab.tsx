@@ -6,8 +6,8 @@
 // join is waiting on, and every round this Mac has run.
 //
 // The stop and the join are fetched only while the status says there is one
-// to answer; the rounds are fetched once and folded in the browser, because a
-// round-trip per fold is not worth it for a few hundred rows.
+// to answer; the rounds are read 30, then 50 more as the table is scrolled to
+// its end, and folded in the browser over what is loaded.
 import type { SyncStatus } from "@/lib/api/sync";
 import { useSyncRuns } from "@/lib/hooks/useSync";
 import { SyncAreaTiles } from "./SyncAreaTiles";
@@ -27,8 +27,8 @@ interface Props {
 
 export function SyncStatusTab({ status, state, startedAt, onRun }: Props) {
   // isLoading, not isPending: a disabled query stays "pending" forever.
-  const { data, isLoading, error, refetch } = useSyncRuns(true);
-  const runs = data?.rounds ?? [];
+  const rounds = useSyncRuns(true);
+  const runs = rounds.items;
   const stopped = status.conflicts > 0 || status.held > 0;
 
   return (
@@ -46,9 +46,13 @@ export function SyncStatusTab({ status, state, startedAt, onRun }: Props) {
       {status.join_choices > 0 ? <SyncJoinChoices /> : null}
       <SyncRoundsTable
         runs={runs}
-        isLoading={isLoading}
-        error={error}
-        onRetry={() => void refetch()}
+        total={rounds.total}
+        hasMore={rounds.hasMore}
+        isLoadingMore={rounds.isLoadingMore}
+        onLoadMore={rounds.loadMore}
+        isLoading={rounds.isLoading}
+        error={rounds.error}
+        onRetry={rounds.refetch}
         nextRoundAt={status.next_round_at}
       />
     </div>

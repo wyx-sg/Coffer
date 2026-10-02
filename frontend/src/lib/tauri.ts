@@ -215,6 +215,7 @@ export function followLanguageInShell(
 
 /** A change waiting for a present human — what `approve_pending` answers. */
 type Approval = components["schemas"]["ApprovalOut"];
+type ApprovalBatch = components["schemas"]["BatchOut"];
 
 /** Thrown by every presence-gated action outside the desktop shell. */
 export class PresenceUnavailableError extends Error {
@@ -253,6 +254,14 @@ export async function exportMasterKeyBackup(passphrase: string): Promise<MasterK
 export async function approvePending(approvalId: string): Promise<Approval> {
   if (!isTauri()) throw new PresenceUnavailableError("approve_pending");
   return shellInvoke<Approval>("approve_pending", { approvalId });
+}
+
+/** Approve several approvals under one presence check. Throws outside the shell.
+ *  The shell reads each one from the daemon itself and signs over exactly that
+ *  list; ids no longer waiting are left out and come back as skipped. */
+export async function approvePendingBatch(approvalIds: string[]): Promise<ApprovalBatch> {
+  if (!isTauri()) throw new PresenceUnavailableError("approve_pending_batch");
+  return shellInvoke<ApprovalBatch>("approve_pending_batch", { approvalIds });
 }
 
 /** The event the shell emits when it sees a pending approval it has not announced. */

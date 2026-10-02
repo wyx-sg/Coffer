@@ -12,7 +12,8 @@
 // is free and a mistyped id can never be entered by hand.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { syncApi } from "@/lib/api/sync";
-import { resourcesKey, scopeKey, skillsKey, syncKey, syncMachinesKey } from "@/lib/api/queryKeys";
+import { resourcesKey, scopeKey, skillsKey, syncMachinesKey } from "@/lib/api/queryKeys";
+import { invalidateSync } from "@/lib/syncInvalidate";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
 import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 
@@ -49,7 +50,7 @@ export function useRenameSelf() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (name: string) => syncApi.renameSelf(name),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: syncKey }),
+    onSuccess: () => invalidateSync(qc),
   });
 }
 
@@ -72,7 +73,7 @@ export function useRetireMachine() {
   return useMutation({
     mutationFn: (machineId: string) => syncApi.retire(machineId),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: syncKey });
+      invalidateSync(qc);
       void qc.invalidateQueries({ queryKey: resourcesKey });
       void qc.invalidateQueries({ queryKey: skillsKey });
       void qc.invalidateQueries({ queryKey: scopeKey });

@@ -22,6 +22,7 @@ and reported until the launcher is back.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import pathlib
@@ -147,7 +148,7 @@ class McpEntryTarget:
 
     async def desired(self) -> Sequence[Item]:
         homes = await self._homes()
-        wanted = self._scan(homes)
+        wanted = await asyncio.to_thread(self._scan, homes)
         shim = self._shim()
         items: list[Item] = []
         for uid, home in homes.items():
@@ -168,7 +169,7 @@ class McpEntryTarget:
     async def observe(self) -> Sequence[Item]:
         homes = await self._homes()
         items: list[Item] = []
-        for uid, params in self._scan(homes).items():
+        for uid, params in (await asyncio.to_thread(self._scan, homes)).items():
             home = homes[uid]
             items.append(
                 Item(

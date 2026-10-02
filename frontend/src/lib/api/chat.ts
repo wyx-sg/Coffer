@@ -49,6 +49,11 @@ export type ChannelPlatform = NonNullable<Schemas["ChannelBindingOut"]["platform
 
 export type ConversationListOut = Schemas["ConversationListOut"];
 
+/** The outcome of a bulk archive / unarchive / delete: one result per id. */
+export type ConversationBatchResult = Schemas["ConversationBatchResultOut"];
+
+export type ConversationBatchAction = Schemas["ConversationBatchIn"]["action"];
+
 export type ConversationCreate = Schemas["ConversationCreate"];
 
 export type ConversationPatch = Schemas["ConversationPatch"];
@@ -75,30 +80,28 @@ const conv = (id: string) => ({ params: { path: { id } } });
 
 export const chatApi = {
   // Conversations
-  // The listing pages by cursor (spec chat "List conversations by latest
-  // activity"); the Chat page wants the whole list, so this follows
-  // `next_cursor` until the last page. A cursor the server repeats ends the
-  // walk rather than looping forever.
-  listConversations: async (archived = false): Promise<ConversationListOut> => {
-    const conversations: Conversation[] = [];
-    const seen = new Set<string>();
-    let cursor: string | null = null;
-    let page: ConversationListOut;
-    do {
-      page = await unwrap(
-        getApiClient().GET("/chat/conversations", {
-          params: { query: { archived, limit: 500, ...(cursor ? { cursor } : {}) } },
-        }),
-      );
-      conversations.push(...page.conversations);
-      cursor = page.next_cursor;
-      if (cursor !== null) {
-        if (seen.has(cursor)) break;
-        seen.add(cursor);
-      }
-    } while (cursor);
-    return { ...page, conversations };
-  },
+  // One page of the listing (spec chat "List conversations by latest
+  // activity"): the caller reads as many pages as it shows, 30 and then 50, and
+  // passes the abort signal of its query so a stale request is cancelled. `q`
+  // is a case-insensitive substring of the title; a cursor belongs to the
+  // archived flag and the `q` it was issued for.
+  listConversations: (
+    opts: { archived?: boolean; limit: number; cursor?: string | null; q?: string },
+    signal?: AbortSignal,
+  ): Promise<ConversationListOut> =>
+    unwrap(
+      getApiClient().GET("/chat/conversations", {
+        signal,
+        params: {
+          query: {
+            archived: opts.archived ?? false,
+            limit: opts.limit,
+            ...(opts.cursor ? { cursor: opts.cursor } : {}),
+            ...(opts.q ? { q: opts.q } : {}),
+          },
+        },
+      }),
+    ),
 
   createConversation: (body: ConversationCreate) =>
     unwrap(getApiClient().POST("/chat/conversations", { body })),
@@ -108,6 +111,9 @@ export const chatApi = {
 
   unarchiveConversation: (id: string) =>
     unwrap(getApiClient().POST("/chat/conversations/{id}/unarchive", conv(id))),
+
+  batchConversations: (action: ConversationBatchAction, ids: string[]) =>
+    unwrap(getApiClient().POST("/chat/conversations/batch", { body: { action, ids } })),
 
   getConversation: (id: string) => unwrap(getApiClient().GET("/chat/conversations/{id}", conv(id))),
 
