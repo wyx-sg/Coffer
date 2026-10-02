@@ -156,7 +156,7 @@ test("the CLIs page lists what a skill requires, and hands a fix to an agent", a
     // 3. Needed by → the skill's Requires tab, whose rows link back to /clis/<command>.
     await page.getByRole("link", { name: skillName }).click();
     await expect(page).toHaveURL(new RegExp(`/skills/${skillName}/requires$`));
-    const requires = page.getByRole("list", { name: "Requires" });
+    const requires = page.getByRole("region", { name: "Requires" });
     await expect(requires.getByRole("link", { name: MISSING })).toHaveAttribute(
       "href",
       `/clis/${MISSING}`,

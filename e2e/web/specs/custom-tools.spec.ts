@@ -98,11 +98,13 @@ test("an OpenAPI file becomes a group, and a tool's Test calls the API from the 
     await page.goto("/custom-tools");
     await page.getByRole("button", { name: "Add custom tool" }).first().click();
     const choose = page.getByRole("dialog");
-    await choose.getByLabel("Group name").fill(name);
+    // The group comes first; a new group offers the two ways to start it.
+    await choose.getByRole("radio", { name: /^New group/ }).click();
     await choose.getByRole("radio", { name: /Import an OpenAPI spec/ }).click();
     await choose.getByRole("button", { name: "Continue" }).click();
 
     const importDialog = page.getByRole("dialog", { name: "Import an OpenAPI spec" });
+    await importDialog.getByLabel("Group name").fill(name);
     await importDialog.getByRole("radio", { name: "File" }).click();
     await importDialog.locator('input[type="file"]').setInputFiles({
       name: "items.json",
@@ -110,15 +112,19 @@ test("an OpenAPI file becomes a group, and a tool's Test calls the API from the 
       buffer: Buffer.from(spec()),
     });
     await expect(importDialog.getByText("Loaded · 2 operations")).toBeVisible();
-    await expect(importDialog.getByLabel("Base URL")).toHaveValue(upstreamUrl);
-    await importDialog.getByRole("button", { name: "Review tools" }).click();
-    // GET operations start picked; the POST one waits to be turned on.
+    // Step 1 picks the operations: GET ones start picked, the POST one waits
+    // to be turned on. The spec names its server, so no Base URL is asked.
     await expect(importDialog.getByRole("checkbox", { name: "get_item" })).toBeChecked();
     await expect(importDialog.getByRole("checkbox", { name: "create_item" })).not.toBeChecked();
+    await expect(importDialog.getByLabel("Base URL")).toHaveCount(0);
+    await importDialog.getByRole("button", { name: "Review 1 tool" }).click();
+    // Step 2 reads the group back, with the base URL the spec carried.
+    await expect(importDialog.getByText(upstreamUrl)).toBeVisible();
     await importDialog.getByRole("button", { name: "Create group with 1 tool" }).click();
 
     await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}$`));
-    await expect(page.getByText(`${name} · Imported from OpenAPI`)).toBeVisible();
+    await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
+    await expect(page.getByText("Imported from OpenAPI")).toBeVisible();
     await expect(page.getByRole("tablist")).toHaveCount(0);
     const tools = page.getByRole("region", { name: /Tools · 1 of 1 on/ });
     await expect(tools.getByText("GET /items/{id}")).toBeVisible();

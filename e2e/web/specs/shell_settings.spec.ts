@@ -262,7 +262,7 @@ test("the daemon tab refuses a port out of range and leaves a saved one pending 
     await field.fill("80");
     await modal.getByRole("button", { name: /^save$/i }).click();
     await expect(
-      modal.getByText(/whole number from 1024 to 65535/i),
+      modal.getByRole("alert").getByText(/use a port from 1024 to 65535/i),
     ).toBeVisible();
 
     const next = port === 65000 ? 65001 : 65000;

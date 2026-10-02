@@ -4,9 +4,10 @@
 // start" block and the partitions area render from the real REST answers.
 //
 // The e2e daemon runs on an isolated HOME, so it normally has no partitions
-// and the area shows the first-run state; a daemon whose background read has
-// already produced one shows the table instead. The walk asserts whichever
-// the daemon's own partition list says, so it holds either way.
+// and the page shows its first-run welcome in place of both blocks; a daemon
+// whose background read has already produced one shows the deliveries block
+// and the table instead. The walk asserts whichever the daemon's own
+// partition list says, so it holds either way.
 //
 // No acceptance marker: the memory scenarios are pinned by the component
 // tests, which can assert the page's contents far more precisely. What this
@@ -39,6 +40,18 @@ test("the Memory page shows deliveries at session start and the partitions area"
     page.getByRole("heading", { name: "Memory", level: 1 }),
   ).toBeVisible();
 
+  if (partitions.length === 0) {
+    // First run (canvas 5.2.08 / 5.2.09): the welcome stands in for both
+    // blocks, with the one Update memory action in it, not in the header too.
+    await expect(
+      page.getByText(/Nothing distilled yet|No agent memory to read/),
+    ).toBeVisible();
+    await expect(page.getByTestId("memory-deliveries")).toHaveCount(0);
+    await expect(page.getByTestId("memory-partitions")).toHaveCount(0);
+    await expect(page.getByRole("table")).toHaveCount(0);
+    return;
+  }
+
   const deliveries = page.getByTestId("memory-deliveries");
   await expect(deliveries).toBeVisible();
   await expect(
@@ -50,16 +63,8 @@ test("the Memory page shows deliveries at session start and the partitions area"
 
   const area = page.getByTestId("memory-partitions");
   await expect(area).toBeVisible();
-  if (partitions.length === 0) {
-    await expect(area.getByText("Nothing distilled yet")).toBeVisible();
-    await expect(
-      area.getByRole("button", { name: /update memory/i }),
-    ).toBeVisible();
-    await expect(area.getByRole("table")).toHaveCount(0);
-  } else {
-    await expect(area.getByRole("table")).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /update memory/i }),
-    ).toHaveCount(1);
-  }
+  await expect(area.getByRole("table")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /update memory/i }),
+  ).toHaveCount(1);
 });
