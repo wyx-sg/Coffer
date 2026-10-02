@@ -1,7 +1,7 @@
 # Coffer UI Visual Language
 
 > Companion reference for agents touching `frontend/`. The design source is
-> the **Foundations** board set on design canvas ① "Foundations & Shell"
+> the **Foundations** board set on design canvas 0 "Foundations"
 > (its `ds/coffer/tokens.json` names every token). The running values live in
 > [`frontend/src/index.css`](../frontend/src/index.css) (colours, per theme) and
 > [`frontend/tailwind.config.js`](../frontend/tailwind.config.js) (the names
