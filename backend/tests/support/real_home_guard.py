@@ -107,6 +107,13 @@ _PATH_EVENTS: dict[str, tuple[int, ...]] = {
 #: Spawn events -> position of their ``env`` argument.
 _ENV_EVENTS: dict[str, int] = {"subprocess.Popen": 3, "os.exec": 2, "os.posix_spawn": 2}
 
+#: System tools that never read ``$HOME`` — they answer from the OS alone — so
+#: spawning one with a scrubbed env cannot reach the real home. Library code
+#: does exactly that on Linux: ``ctypes.util.find_library`` runs
+#: ``/sbin/ldconfig -p`` with ``env={"LC_ALL": "C", "LANG": "C"}``, the first
+#: time anything in the process looks a shared library up.
+_HOME_BLIND_PROGRAMS: frozenset[str] = frozenset({"ldconfig"})
+
 _GITCONFIG = "[user]\n\tname = Coffer Tests\n\temail = tests@coffer.invalid\n"
 
 
@@ -233,6 +240,8 @@ class RealHomeGuard:
         env = args[env_index] if env_index < len(args) else None
         home = os.environ.get("HOME") if env is None else _env_home(env)
         if home is None:
+            if os.path.basename(os.fsdecode(args[0])) in _HOME_BLIND_PROGRAMS:
+                return None
             return f"spawned {args[0]!r} with no HOME in its env (it falls back to the real one)"
         if os.path.abspath(home) in self.homes:
             return f"spawned {args[0]!r} with HOME={home}, the real home"
