@@ -4705,7 +4705,6 @@
     },
     "needsYou": {
       "title": "Needs you",
-      "order": "Most urgent first",
       "failing": "Failing",
       "attention": "Needs attention",
       "since": "Since",
@@ -6390,6 +6389,8 @@
   },
   "handoff": {
     "copyPrompt": "Copy prompt",
+    "copyPromptHint": "Copy to the clipboard for an agent outside Coffer",
+    "askAgentHint": "Handle it in a Coffer conversation; nothing runs until you press Send",
     "copied": "Copied",
     "askAgent": "Ask an agent",
     "help": "Coffer doesn't run this itself: hand it to your agent, which picks the right way for this machine."

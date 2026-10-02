@@ -57,9 +57,19 @@ export function NeedsYouRow({ item, agentType, ignored = false, onIgnore, onRest
   const handoff = useAgentHandoff(item.handoff?.prompt ?? "");
   const menu: MenuAction[] = [];
   if (item.handoff) {
-    menu.push({ key: "copy-prompt", label: t("handoff.copyPrompt"), onSelect: handoff.copy });
+    menu.push({
+      key: "copy-prompt",
+      label: t("handoff.copyPrompt"),
+      description: t("handoff.copyPromptHint"),
+      onSelect: handoff.copy,
+    });
     if (handoff.canAsk)
-      menu.push({ key: "ask-agent", label: t("handoff.askAgent"), onSelect: handoff.ask });
+      menu.push({
+        key: "ask-agent",
+        label: t("handoff.askAgent"),
+        description: t("handoff.askAgentHint"),
+        onSelect: handoff.ask,
+      });
   }
   if (item.ignorable && run) {
     const separated = menu.length > 0;

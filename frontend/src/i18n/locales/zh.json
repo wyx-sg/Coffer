@@ -4705,7 +4705,6 @@
     },
     "needsYou": {
       "title": "需要你处理",
-      "order": "最紧急的在前",
       "failing": "失败",
       "attention": "需要关注",
       "since": "始于",
@@ -6390,6 +6389,8 @@
   },
   "handoff": {
     "copyPrompt": "复制提示词",
+    "copyPromptHint": "复制到剪贴板，交给 Coffer 外部的智能体处理",
+    "askAgentHint": "在 Coffer 内的对话里处理，点发送后才会执行",
     "copied": "已复制",
     "askAgent": "交给智能体",
     "help": "Coffer 不会自己执行：交给你的智能体，由它选择适合这台机器的做法。"

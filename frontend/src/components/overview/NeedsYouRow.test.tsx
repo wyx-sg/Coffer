@@ -82,11 +82,11 @@ acceptance("web-ui", "a needs-you row offers the item's hand-off in its menu", a
   renderRow(item(), true);
   await waitFor(() => expect(listAgents).toHaveBeenCalled());
   openMenu();
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Copy prompt" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /^Copy prompt/ }));
   expect(writeText).toHaveBeenCalledWith(PROMPT);
 
   openMenu();
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Ask an agent" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /^Ask an agent/ }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(await screen.findByTestId("draft")).toHaveTextContent(PROMPT);
 });
@@ -95,8 +95,8 @@ test("with no managed agent available the menu offers Copy prompt only", async (
   renderRow(item(), false);
   await waitFor(() => expect(listAgents).toHaveBeenCalled());
   openMenu();
-  expect(await screen.findByRole("menuitem", { name: "Copy prompt" })).toBeInTheDocument();
-  expect(screen.queryByRole("menuitem", { name: "Ask an agent" })).not.toBeInTheDocument();
+  expect(await screen.findByRole("menuitem", { name: /^Copy prompt/ })).toBeInTheDocument();
+  expect(screen.queryByRole("menuitem", { name: /^Ask an agent/ })).not.toBeInTheDocument();
 });
 
 test("a row with no hand-off that cannot be ignored has no menu", () => {

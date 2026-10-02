@@ -48,13 +48,7 @@ export function NeedsYouList() {
   const errors = attention.data?.errors ?? [];
 
   return (
-    <Section
-      as="h2"
-      gap="snug"
-      labelled
-      title={t("overview.needsYou.title")}
-      help={items.length > 0 ? t("overview.needsYou.order") : undefined}
-    >
+    <Section as="h2" gap="snug" labelled title={t("overview.needsYou.title")}>
       {attention.isPending ? (
         <ul aria-busy className={LIST}>
           {[0, 1, 2].map((i) => (

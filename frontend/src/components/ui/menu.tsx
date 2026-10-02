@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 export interface MenuAction {
   key: string;
   label: string;
+  /** A second, muted line saying what the item does, for a choice that is not obvious. */
+  description?: string;
   icon?: LucideIcon;
   onSelect: () => void;
   destructive?: boolean;
@@ -107,8 +109,9 @@ export function ActionMenu({ label, actions, align = "end", className }: Props) 
                   // 13/400, a 14px text-muted icon 9 before the label, the
                   // shortcut 11 text-muted on the right; danger reads danger.
                   className={cn(
-                    "flex h-control-md items-center gap-[9px] rounded-item px-2 text-left text-sm font-normal outline-none transition-colors duration-fast",
+                    "flex items-center gap-[9px] rounded-item px-2 text-left text-sm font-normal outline-none transition-colors duration-fast",
                     "hover:bg-surface-hover focus-visible:bg-surface-hover disabled:pointer-events-none disabled:opacity-disabled",
+                    action.description ? "min-h-control-md py-1.5" : "h-control-md",
                     action.destructive ? "text-danger" : "text-text",
                   )}
                 >
@@ -121,7 +124,16 @@ export function ActionMenu({ label, actions, align = "end", className }: Props) 
                       aria-hidden
                     />
                   ) : null}
-                  <span className="min-w-0 flex-1 truncate">{action.label}</span>
+                  {action.description ? (
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="truncate">{action.label}</span>
+                      <span className="text-2xs leading-snug text-text-muted">
+                        {action.description}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="min-w-0 flex-1 truncate">{action.label}</span>
+                  )}
                   {action.shortcut ? (
                     <span aria-hidden className="ml-3 shrink-0 text-2xs text-text-muted">
                       {action.shortcut}
