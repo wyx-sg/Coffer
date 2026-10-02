@@ -70,7 +70,14 @@ async def best_effort(step: str, awaitable: Any) -> None:
     """
     try:
         await awaitable
-    except (Exception, asyncio.CancelledError):
+    except asyncio.CancelledError:
+        # A step that was cancelled — the channel runtime and the session
+        # reaper are, deliberately, just above — has stopped; that is not a
+        # failure. If shutdown itself is being cancelled, say so upward.
+        task = asyncio.current_task()
+        if task is not None and task.cancelling():
+            raise
+    except Exception:
         _logger.exception("shutdown.step_failed", extra={"step": step})
 
 
