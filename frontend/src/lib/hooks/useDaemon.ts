@@ -1,4 +1,5 @@
 // frontend/src/lib/hooks/useDaemon.ts
+import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
@@ -15,7 +16,7 @@ import { daemonStatusKey, daemonUpgradeKey, daemonVersionSkewKey } from "@/lib/a
 type DaemonStatusOut = components["schemas"]["DaemonStatusOut"];
 
 export function useDaemonStatus() {
-  return useQuery({
+  const query = useQuery({
     queryKey: daemonStatusKey,
     queryFn: async (): Promise<DaemonStatusOut> => {
       const client = getApiClient();
@@ -29,6 +30,20 @@ export function useDaemonStatus() {
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
   });
+  // A probe that has never answered goes back to `pending` (error cleared)
+  // while a retry is in flight, so `isError` would flicker false on every
+  // retry: the shell read each one as a recovery and restarted its offline
+  // timer, and a daemon that was never up never reached the offline state.
+  // The failure stands until an answer replaces it.
+  const lastError = useRef<unknown>(null);
+  if (query.error) lastError.current = query.error;
+  if (query.isSuccess) lastError.current = null;
+  const retrying =
+    query.isFetching && !query.isSuccess && query.errorUpdatedAt > query.dataUpdatedAt;
+  if (!query.isError && retrying) {
+    return { ...query, isError: true, error: lastError.current } as unknown as typeof query;
+  }
+  return query;
 }
 
 /**

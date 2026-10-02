@@ -64,6 +64,35 @@ describe("useDaemonStatus", () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect((result.current.error as Error).message).toContain("not authorized");
   });
+
+  test("a probe that never answered keeps reading as failed while a retry is in flight", async () => {
+    let release: (value: unknown) => void = () => undefined;
+    const GET = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: undefined,
+        error: { error: { code: "DAEMON_OFFLINE", message: "unreachable" } },
+      })
+      .mockReturnValueOnce(new Promise((resolve) => (release = resolve)));
+    getApiClientMock.mockReturnValue({ GET } as unknown as ReturnType<typeof getApiClient>);
+
+    const { result } = renderHook(() => useDaemonStatus(), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    act(() => void result.current.refetch());
+    await waitFor(() => expect(result.current.isFetching).toBe(true));
+    expect(result.current.isError).toBe(true);
+    expect((result.current.error as { code?: string }).code).toBe("DAEMON_OFFLINE");
+
+    await act(async () => {
+      release({
+        data: { status: "ready", version: "1.0.0", port: 8000 },
+        error: undefined,
+      });
+    });
+    await waitFor(() => expect(result.current.isError).toBe(false));
+    expect(result.current.data?.status).toBe("ready");
+  });
 });
 
 describe("useDaemonOutOfDate", () => {
