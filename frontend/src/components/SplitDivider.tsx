@@ -15,11 +15,6 @@
 // Behaviour: drag with pointer events (captured, so the drag follows the
 // pointer outside the line); ← / → move by `KEYBOARD_STEP`, Home / End jump to
 // the bounds; double-click resets. Every value it emits is clamped.
-//
-// Folding is by dragging, not by a button: with `onCollapse`, pulling the
-// divider `COLLAPSE_SLACK` past the minimum and letting go folds the pane away
-// (← at the minimum does too); while `collapsed` the divider sits at the edge
-// and pulling it out by `COLLAPSE_SLACK` (or → / double-click) calls `onExpand`.
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
 import { clampWidth } from "@/lib/hooks/useResizableWidth";
@@ -27,8 +22,6 @@ import { cn } from "@/lib/utils";
 
 /** How far one ← / → press moves the divider (px). */
 export const KEYBOARD_STEP = 16;
-/** How far past the minimum (to fold) or out from the edge (to unfold) a drag must go (px). */
-export const COLLAPSE_SLACK = 48;
 
 // Put on <body> while dragging so no text is selected and the cursor stays
 // col-resize wherever the pointer wanders.
@@ -46,12 +39,6 @@ export interface SplitDividerProps {
   onPreview?: (next: number) => void;
   /** Double-click: restore the split's default width. */
   onReset: () => void;
-  /** The pane is folded away: the divider rests at the edge and `onExpand` brings it back. */
-  collapsed?: boolean;
-  /** Fold the pane: a drag released past the minimum, or ← at it. */
-  onCollapse?: () => void;
-  /** Unfold it: a drag out from the edge, → or double-click. */
-  onExpand?: () => void;
   /** Accessible name — what the divider resizes, e.g. "Resize the list". */
   label: string;
   className?: string;
@@ -64,9 +51,6 @@ export function SplitDivider({
   onChange,
   onPreview,
   onReset,
-  collapsed = false,
-  onCollapse,
-  onExpand,
   label,
   className,
 }: SplitDividerProps) {
@@ -75,8 +59,6 @@ export function SplitDivider({
     startX: number;
     startValue: number;
     last: number | null;
-    /** Where a release would take the pane: fold it, unfold it, or just resize. */
-    release: "collapse" | "expand" | null;
   } | null>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -85,9 +67,7 @@ export function SplitDivider({
     if (!d) return;
     drag.current = null;
     setDragging(false);
-    if (d.release === "collapse") onCollapse?.();
-    else if (d.release === "expand") onExpand?.();
-    else if (onPreview && d.last !== null) onChange(d.last);
+    if (onPreview && d.last !== null) onChange(d.last);
     document.body.classList.remove(...DRAGGING_BODY_CLASSES);
     try {
       if (el.hasPointerCapture?.(d.pointerId)) el.releasePointerCapture(d.pointerId);
@@ -106,7 +86,6 @@ export function SplitDivider({
       startX: e.clientX,
       startValue: value,
       last: null,
-      release: null,
     };
     setDragging(true);
     document.body.classList.add(...DRAGGING_BODY_CLASSES);
@@ -121,11 +100,6 @@ export function SplitDivider({
     const d = drag.current;
     if (!d || e.pointerId !== d.pointerId) return;
     const raw = d.startValue + (e.clientX - d.startX);
-    if (collapsed) {
-      d.release = onExpand && raw > COLLAPSE_SLACK ? "expand" : null;
-      return;
-    }
-    d.release = onCollapse && raw < min - COLLAPSE_SLACK ? "collapse" : null;
     const next = clampWidth(raw, min, max);
     if (onPreview) {
       d.last = next;
@@ -139,18 +113,6 @@ export function SplitDivider({
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     let next: number | null = null;
-    if (collapsed) {
-      if (e.key === "ArrowRight" && onExpand) {
-        e.preventDefault();
-        onExpand();
-      }
-      return;
-    }
-    if (e.key === "ArrowLeft" && onCollapse && value <= min) {
-      e.preventDefault();
-      onCollapse();
-      return;
-    }
     if (e.key === "ArrowLeft") next = value - KEYBOARD_STEP;
     else if (e.key === "ArrowRight") next = value + KEYBOARD_STEP;
     else if (e.key === "Home") next = min;
@@ -175,7 +137,7 @@ export function SplitDivider({
       onPointerUp={onPointerEnd}
       onPointerCancel={onPointerEnd}
       onLostPointerCapture={onPointerEnd}
-      onDoubleClick={collapsed ? onExpand : onReset}
+      onDoubleClick={onReset}
       onKeyDown={onKeyDown}
       className={cn(
         // The 1px hairline; it takes 1px in the row and never shrinks.

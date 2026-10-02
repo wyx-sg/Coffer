@@ -17,12 +17,7 @@ import {
   listMaxWidth,
   useResizableWidth,
 } from "@/lib/hooks/useResizableWidth";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
-import { useSplitCollapsed } from "@/lib/hooks/useSplitCollapsed";
 import { cn } from "@/lib/utils";
-
-// Tailwind's `md`: below it the list is not collapsible and always shows.
-const MD_QUERY = "(min-width: 768px)";
 
 // The list pane, memoised: while the divider is dragged only its inline width
 // changes (set directly on the element), so neither pane's content is
@@ -42,11 +37,6 @@ export interface SplitViewProps {
   /** Hide the list pane and its divider; the detail keeps its place in the
    *  tree (so it is not remounted) and takes the whole row. */
   listHidden?: boolean;
-  /** Let the viewer fold the list away by dragging the divider past its
-   *  minimum (default true); the divider then rests at the left edge and
-   *  pulling it out unfolds the list to the width last chosen. The choice is
-   *  remembered as `coffer.split.<storageKey>.collapsed`. Not offered below `md`. */
-  collapsible?: boolean;
   className?: string;
   /** Classes for the list pane (its surface, its own layout). */
   listClassName?: string;
@@ -61,17 +51,12 @@ export function SplitView({
   detail,
   label,
   listHidden = false,
-  collapsible = true,
   className,
   listClassName,
   detailClassName,
 }: SplitViewProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
-  const isMd = useMediaQuery(MD_QUERY, true);
-  const { collapsed: collapsedPref, setCollapsed } = useSplitCollapsed(storageKey);
-  const canCollapse = collapsible && isMd && !listHidden;
-  const collapsed = canCollapse && collapsedPref;
   const listRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
 
@@ -110,39 +95,23 @@ export function SplitView({
             // style, bridging the dragged width onto the pane.
             ref={listRef}
             id={listId}
-            hidden={collapsed}
             style={{ width }}
-            className={cn("flex min-h-0 shrink-0 flex-col", listClassName, collapsed && "hidden")}
+            className={cn("flex min-h-0 shrink-0 flex-col", listClassName)}
           >
             <Pane>{list}</Pane>
           </div>
           <SplitDivider
-            value={collapsed ? 0 : width}
-            min={collapsed ? 0 : bounds.min}
-            max={collapsed ? 0 : bounds.max}
+            value={width}
+            min={bounds.min}
+            max={bounds.max}
             onChange={setWidth}
             // A drag moves the pane's width on the element itself; React (and
             // the remembered width) hear of it once, when the pointer lifts.
             onPreview={(next) => {
               if (listRef.current) listRef.current.style.width = `${next}px`;
             }}
-            // Folding is by dragging past the minimum (no button): the divider then
-            // rests at the left edge, and pulling it back out unfolds the list to
-            // the width the viewer last chose.
-            collapsed={collapsed}
-            onCollapse={
-              canCollapse
-                ? () => {
-                    // The drag moved the pane's width on the element; put back the
-                    // width that is remembered, so unfolding returns to it.
-                    if (listRef.current) listRef.current.style.width = `${width}px`;
-                    setCollapsed(true);
-                  }
-                : undefined
-            }
-            onExpand={canCollapse ? () => setCollapsed(false) : undefined}
             // A 1px line with a 12px gutter each side: the panes' content never touches it.
-            className={collapsed ? "ml-1.5 mr-3" : "mx-3"}
+            className="mx-3"
             onReset={reset}
             label={label}
           />
