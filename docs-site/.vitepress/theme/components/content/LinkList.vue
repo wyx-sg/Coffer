@@ -1,113 +1,110 @@
 <script setup lang="ts">
-import { withBase } from "vitepress";
-
-// items: { title, desc?, link, mono? }. variant "list" (default) is a bordered
-// row list; "cards" is a grid of small bordered cards.
-withDefaults(
-  defineProps<{
-    items: { title: string; desc?: string; link: string; mono?: boolean }[];
-    variant?: "list" | "cards";
-  }>(),
-  { variant: "list" },
-);
+// Styles the Markdown list inside it; the text stays in the page, so it is
+// searchable, link-checked and translated with the page.
+//   variant "list" (default): a bordered row list. Write each item as
+//     - [Agents](/guides/agents) Register Claude Code and Codex…
+//     The leading link is the row's title, and the whole row is clickable.
+//   variant "cards": a grid of small bordered cards. Write each item as
+//     - **Add Codex.** Run `coffer agent add codex`… See [Agents](/guides/agents).
+withDefaults(defineProps<{ variant?: "list" | "cards" }>(), { variant: "list" });
 </script>
 
 <template>
-  <ul v-if="variant === 'list'" class="ll">
-    <li v-for="i in items" :key="i.link">
-      <a :href="withBase(i.link)">
-        <span class="t" :class="{ mono: i.mono }">{{ i.title }}</span>
-        <span class="d">{{ i.desc }}</span>
-        <svg class="chev" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5 10.5 8 6 12.5" /></svg>
-      </a>
-    </li>
-  </ul>
-  <div v-else class="cards">
-    <a v-for="i in items" :key="i.link" class="card" :href="withBase(i.link)">
-      <span class="t">{{ i.title }}</span>
-      <span class="d">{{ i.desc }}</span>
-    </a>
-  </div>
+  <div :class="variant === 'cards' ? 'cards' : 'll'"><slot /></div>
 </template>
 
 <style scoped>
-.ll {
+.ll :deep(ul),
+.cards :deep(ul) {
   list-style: none;
   margin: 16px 0 0;
   padding: 0;
+}
+.ll :deep(ul) {
   border: 1px solid var(--vp-c-divider);
   border-radius: 10px;
   overflow: hidden;
 }
-.ll li {
+.ll :deep(li) {
+  position: relative;
   margin: 0;
+  padding: 14px 48px 14px 262px;
   border-top: 1px solid var(--vp-c-divider);
-}
-.ll li:first-child {
-  border-top: 0;
-}
-.ll a {
-  display: grid;
-  grid-template-columns: 230px minmax(0, 1fr) 16px;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 16px;
-  text-decoration: none;
-  color: inherit;
-}
-.ll a:hover {
-  background: var(--vp-c-bg-soft);
-}
-.t {
-  font-size: 15px;
-  line-height: 22px;
-  font-weight: 600;
-  color: var(--vp-c-text-1);
-}
-.t.mono {
-  font-family: var(--vp-font-family-mono);
-  font-size: 14px;
-}
-.d {
   font-size: 14px;
   line-height: 22px;
   color: var(--vp-c-text-2);
 }
-.chev {
-  color: var(--vp-c-text-3);
+.ll :deep(li:first-child) {
+  border-top: 0;
 }
-.cards {
+.ll :deep(li:hover) {
+  background: var(--vp-c-bg-soft);
+}
+.ll :deep(li > a:first-child) {
+  float: left;
+  width: 230px;
+  margin-left: -246px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+  text-decoration: none;
+}
+/* the title link stretches over the row; the row draws a chevron */
+.ll :deep(li > a:first-child)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.ll :deep(li)::after {
+  content: "";
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -4px;
+  border-top: 1.5px solid var(--vp-c-text-3);
+  border-right: 1.5px solid var(--vp-c-text-3);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.ll :deep(li > a:first-child code) {
+  padding: 0;
+  background: none;
+  font-size: 14px;
+  color: inherit;
+}
+.cards :deep(ul) {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  margin-top: 16px;
 }
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.cards :deep(li) {
+  margin: 0;
   padding: 14px 16px;
   border: 1px solid var(--vp-c-divider);
   border-radius: 10px;
-  text-decoration: none;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--vp-c-text-2);
 }
-.card:hover {
-  background: var(--vp-c-bg-soft);
+.cards :deep(li > strong:first-child) {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 15px;
+  color: var(--vp-c-text-1);
 }
 @media (max-width: 640px) {
-  .ll a {
-    grid-template-columns: minmax(0, 1fr) 16px;
-    gap: 2px 12px;
+  .ll :deep(li) {
+    padding-left: 16px;
   }
-  .ll .d {
-    grid-column: 1;
-    grid-row: 2;
+  .ll :deep(li > a:first-child) {
+    float: none;
+    display: block;
+    width: auto;
+    margin-left: 0;
   }
-  .ll .chev {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-  }
-  .cards {
+  .cards :deep(ul) {
     grid-template-columns: 1fr;
   }
 }

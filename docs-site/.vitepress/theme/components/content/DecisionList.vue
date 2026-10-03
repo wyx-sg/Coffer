@@ -1,54 +1,46 @@
 <script setup lang="ts">
-import { withBase } from "vitepress";
-
-// items: { title, why, link, linkText } — hairline-separated, no box.
-defineProps<{ items: { title: string; why: string; link?: string; linkText?: string }[] }>();
+// Styles the Markdown list inside it as hairline-separated decisions; the text
+// stays in the page. Write each item as
+//   - **The decision.** Why it was made. [Page](/architecture/page)
+// The bold lead is the decision, a trailing link names the page that argues it.
 </script>
 
 <template>
-  <ul class="decisions">
-    <li v-for="d in items" :key="d.title">
-      <div class="d-title">{{ d.title }}</div>
-      <div class="d-why">{{ d.why }}</div>
-      <a v-if="d.link" class="d-link" :href="withBase(d.link)">{{ d.linkText }} →</a>
-    </li>
-  </ul>
+  <div class="decisions"><slot /></div>
 </template>
 
 <style scoped>
-.decisions {
+.decisions :deep(ul) {
   list-style: none;
   margin: 16px 0 0;
   padding: 0;
   border-top: 1px solid var(--vp-c-divider);
 }
-.decisions li {
+.decisions :deep(li) {
   margin: 0;
   padding: 16px 0;
   border-bottom: 1px solid var(--vp-c-divider);
-}
-.d-title {
-  font-size: 15px;
-  line-height: 24px;
-  font-weight: 600;
-  color: var(--vp-c-text-1);
-}
-.d-why {
-  margin-top: 4px;
   font-size: 14px;
   line-height: 22px;
   color: var(--vp-c-text-2);
 }
-.d-link {
-  display: inline-block;
+.decisions :deep(li > strong:first-child) {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--vp-c-text-1);
+}
+.decisions :deep(li > a:last-child) {
+  display: table;
   margin-top: 6px;
-  font-size: 14px;
-  line-height: 22px;
   font-weight: 500;
-  color: var(--vp-c-brand-1);
   text-decoration: none;
 }
-.d-link:hover {
+.decisions :deep(li > a:last-child)::after {
+  content: " →";
+}
+.decisions :deep(li > a:last-child:hover) {
   text-decoration: underline;
 }
 </style>
