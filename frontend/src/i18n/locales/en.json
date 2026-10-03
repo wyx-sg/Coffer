@@ -1712,6 +1712,7 @@
     "ATTACHMENT_NOT_FOUND": "An attached file is no longer available. Attach it again.",
     "ATTACHMENT_EXPIRED": "A file this message carried was deleted after 30 days, so it can't be sent again. Attach the file again and send a new message.",
     "QUESTION_CLOSED": "That question was already answered, or its task has stopped, so this answer wasn't sent.",
+    "ATTACHMENT_UNAVAILABLE": "This attachment is no longer available.",
     "QUESTION_ANSWER_INVALID": "That answer doesn't fit the question. Choose from the options, or type your own answer.",
     "MESSAGE_NOT_FOUND": "That message is no longer in this conversation.",
     "SECRET_BINDING_PENDING": "That secret is waiting for approval in the Coffer app before it is sent here.",

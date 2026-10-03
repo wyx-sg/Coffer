@@ -1712,6 +1712,7 @@
     "ATTACHMENT_NOT_FOUND": "某个附件已不可用，请重新添加。",
     "ATTACHMENT_EXPIRED": "这条消息携带的文件已超过 30 天被清理，无法重新发送。请重新添加文件后发送新消息。",
     "QUESTION_CLOSED": "这个问题已经被回答，或其任务已停止，所以这次回答没有发送。",
+    "ATTACHMENT_UNAVAILABLE": "这个附件已不可用。",
     "QUESTION_ANSWER_INVALID": "这个回答与问题不符。请从选项中选择，或输入你自己的回答。",
     "MESSAGE_NOT_FOUND": "该消息已不在此对话中。",
     "SECRET_BINDING_PENDING": "该密钥需在 Coffer 应用中批准后才会发送到这里。",
