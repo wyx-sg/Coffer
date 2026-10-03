@@ -13,11 +13,17 @@
 // "Reset to default", which removes the setting.
 //
 // The switch moves at once, settles on what the daemon answers, and a failed
-// write puts it back and shows the error beside the row that caused it.
+// write puts it back and says "Couldn’t save the change: <reason>" under the row
+// that caused it (canvas 1.4.21, 1.4.22).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { SettingRow, SettingsSection } from "@/components/settings/SettingsLayout";
+import {
+  SETTINGS_STACK,
+  SettingRow,
+  SettingsSection,
+  SettingsTabHeader,
+} from "@/components/settings/SettingsLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -75,67 +81,73 @@ export function ExperimentalFeaturesSettings() {
   if (!data) return null;
 
   return (
-    <SettingsSection
-      title={t("settings.features.title")}
-      description={t("settings.features.subtitle")}
-      testId="experimental-features"
-    >
-      {data.features.map((feature) => {
-        const checked = pending[feature.key] ?? feature.enabled;
-        const name = t(`settings.features.names.${feature.key}`, { defaultValue: feature.key });
-        return (
-          <div key={feature.key} data-testid={`feature-${feature.key}`}>
-            <SettingRow
-              label={
-                <span className="flex flex-wrap items-center gap-2">
-                  {name}
-                  <Badge variant="outline" className="font-normal">
-                    {t("settings.features.experimental")}
-                  </Badge>
-                </span>
-              }
-              description={
-                t(`settings.features.descriptions.${feature.key}`, { defaultValue: "" }) ||
-                undefined
-              }
-              status={
-                <>
-                  <span className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
-                    <span>
-                      {t("settings.features.decidedBy")}:{" "}
-                      {t(`settings.features.source.${sourceKey(feature, checked)}`)}
+    <div className="flex flex-col gap-4">
+      <SettingsTabHeader
+        title={t("settings.tabs.features")}
+        intro={t("settings.features.subtitle")}
+      />
+      <div className={SETTINGS_STACK}>
+        <SettingsSection testId="experimental-features">
+          {data.features.map((feature) => {
+            const checked = pending[feature.key] ?? feature.enabled;
+            const name = t(`settings.features.names.${feature.key}`, { defaultValue: feature.key });
+            return (
+              <div key={feature.key} data-testid={`feature-${feature.key}`}>
+                <SettingRow
+                  label={
+                    <span className="flex flex-wrap items-center gap-2">
+                      {name}
+                      <Badge variant="outline" className="font-normal">
+                        {t("settings.features.experimental")}
+                      </Badge>
                     </span>
-                    {feature.source === "setting" ? (
-                      <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        className="h-auto p-0 text-xs"
-                        disabled={reset.isPending || feature.key in pending}
-                        onClick={() => resetToDefault(feature)}
-                      >
-                        {t("settings.features.reset")}
-                      </Button>
-                    ) : null}
-                  </span>
-                  {failed?.key === feature.key ? (
-                    <p role="alert" className="text-xs text-danger">
-                      {translateApiError(t, failed.error)}
-                    </p>
-                  ) : null}
-                </>
-              }
-            >
-              <Switch
-                checked={checked}
-                disabled={feature.source === "pin" || feature.key in pending}
-                onCheckedChange={(next) => toggle(feature, next)}
-                aria-label={name}
-              />
-            </SettingRow>
-          </div>
-        );
-      })}
-    </SettingsSection>
+                  }
+                  description={
+                    t(`settings.features.descriptions.${feature.key}`, { defaultValue: "" }) ||
+                    undefined
+                  }
+                  status={
+                    <>
+                      <span className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                        <span>
+                          {t("settings.features.decidedBy")}:{" "}
+                          {t(`settings.features.source.${sourceKey(feature, checked)}`)}
+                        </span>
+                        {feature.source === "setting" ? (
+                          <Button
+                            type="button"
+                            variant="link"
+                            size="sm"
+                            className="h-auto p-0 text-xs"
+                            disabled={reset.isPending || feature.key in pending}
+                            onClick={() => resetToDefault(feature)}
+                          >
+                            {t("settings.features.reset")}
+                          </Button>
+                        ) : null}
+                      </span>
+                      {failed?.key === feature.key ? (
+                        <p role="alert" className="text-xs text-danger">
+                          {t("settings.features.saveFailed", {
+                            reason: translateApiError(t, failed.error),
+                          })}
+                        </p>
+                      ) : null}
+                    </>
+                  }
+                >
+                  <Switch
+                    checked={checked}
+                    disabled={feature.source === "pin" || feature.key in pending}
+                    onCheckedChange={(next) => toggle(feature, next)}
+                    aria-label={name}
+                  />
+                </SettingRow>
+              </div>
+            );
+          })}
+        </SettingsSection>
+      </div>
+    </div>
   );
 }

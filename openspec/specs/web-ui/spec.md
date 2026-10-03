@@ -780,12 +780,25 @@ Clicking a tab
 swaps the modal's right pane without a full page reload and without closing the
 modal.
 
+Every pane follows the page grammar: it opens with the tab's title (an `h1`) and
+one muted intro line, then its sections 32px apart. A section is not boxed — its
+title carries its meta and action on one line, its description is one muted line
+under the title, and its rows are separated by hairlines; a tab with a single
+section (Features) prints no section title. Settings save on change: no pane has
+a Save button, and a text field applies on Enter or when it loses focus.
+
 #### Scenario: settings layout uses the redesigned tabbed sidebar
 - **GIVEN** the user navigates to `/settings`
 - **WHEN** the route resolves
 - **THEN** the Settings modal opens on the General tab
-- **AND** the modal's tab list shows General, Security, Data, Daemon, About and Features — exactly those six, in that order — with the current route highlighted
+- **AND** the modal's tab list shows General, Security, Data, Daemon, Features and About — exactly those six, in that order — with the current route highlighted
 - **AND** clicking a tab swaps the right pane content without a full page reload and the modal stays open
+
+#### Scenario: every settings tab opens with its title and an intro line
+- **GIVEN** the Settings modal
+- **WHEN** each of the six tabs is opened
+- **THEN** its pane starts with an `h1` named for the tab, followed by one intro line
+- **AND** the pane has no Save button
 
 #### Scenario: the security tab keeps only machine-level settings
 - **GIVEN** stored secrets cited by a registered MCP server and a model provider
@@ -1607,7 +1620,7 @@ configuration (search is literal-only), and the second picker is Speech to text.
 The Daemon tab MUST show the daemon's state and carry the controls a user needs
 for it, and nothing that stops it:
 
-- **Status** — state and the address it answers on, then one line: how long
+- **Status** — an ordinary section (a title over a hairline-topped row, not a box): state and the address it answers on, then one line: how long
   it has been up, its pid and how many agents carry Coffer's connection, all
   from the status probe. The version is on About.
 - **Restart** — a Restart control in both hosts: in the desktop shell it runs the
@@ -1619,8 +1632,9 @@ for it, and nothing that stops it:
   answer within 90 seconds is reported beside the control.
 - **Port** — the port the daemon answers on, editable (spec [daemon](../daemon/spec.md) "Bind a fixed, settable port"):
   a value MUST be a whole number from 1024 to 65535 and a port no other process
-  holds, each refused in place otherwise, with Save disabled until the value is
-  edited; saving writes it to the pre-database
+  holds, each refused in place under the row's description otherwise. The row has
+  no Save button: Enter, or leaving the field, applies an edited value, and a
+  refused value is not sent again until it is edited. Applying writes it to the pre-database
   daemon config and the row then reads **takes effect after restart**, with
   **Restart now** — the same restart as the Restart control, in either host.
   Until the restart, the status keeps showing the port the daemon answers on.
@@ -1631,7 +1645,7 @@ Troubleshooting section: the daemon log is read on Activity's Daemon tab, and
 Copy diagnostics is on Settings › About.
 
 While the status has not yet answered, the tab MUST keep its layout over
-skeleton rows. While the daemon cannot be reached, the status card MUST read
+skeleton rows. While the daemon cannot be reached, the Status section MUST read
 offline and name the host's recovery — the Restart control in the desktop shell,
 the `coffer daemon start` command in a browser — and the Start at login and
 Port controls MUST be disabled.
@@ -1639,7 +1653,7 @@ Port controls MUST be disabled.
 #### Scenario: the settings daemon tab shows the running daemon
 - **GIVEN** a running daemon
 - **WHEN** the user opens `/settings/daemon`
-- **THEN** the status card shows its state, port, uptime, pid and connected-agent count, matching `GET /api/v1/daemon/status`
+- **THEN** the Status section shows its state, port, uptime, pid and connected-agent count, matching `GET /api/v1/daemon/status`
 - **AND** the tab carries no stop or shutdown control
 
 #### Scenario: the settings daemon tab offers the host's restart
@@ -1650,7 +1664,7 @@ Port controls MUST be disabled.
 
 #### Scenario: saving a valid port leaves it pending until restart
 - **GIVEN** a daemon answering on port 8000, opened in the desktop shell
-- **WHEN** the user sets the port to 8123 on the Daemon tab and saves
+- **WHEN** the user sets the port to 8123 on the Daemon tab and presses Enter
 - **THEN** 8123 is saved through `PUT /api/v1/daemon/port` (which writes it to `~/.coffer/daemon-config.json`), the row reads takes effect after restart with Restart now, and the status still shows 8000
 - **AND** in a browser the row offers the same Restart now
 
@@ -1854,6 +1868,11 @@ failed, MUST leave no badge rather than an error in the sidebar.
 - **THEN** the Sync entry carries a badge of 1 and the MCP servers entry a badge of 2, both in the danger-strong tone, each with an accessible name saying it needs attention
 - **AND** no other entry carries one
 
+#### Scenario: the badge count caps at 9+
+- **GIVEN** an entry whose kind reports twelve things that need the user
+- **WHEN** the sidebar renders expanded
+- **THEN** its badge reads "9+" in the danger-strong tone
+
 #### Scenario: the attention dot stays on the collapsed rail
 - **GIVEN** the MCP servers entry carrying a badge for one failing server
 - **WHEN** the sidebar is collapsed to its icon rail
@@ -1868,11 +1887,6 @@ failed, MUST leave no badge rather than an error in the sidebar.
 #### Scenario: an unreadable signal leaves no badge
 - **GIVEN** the route behind a kind's attention signal failing, or not yet answered
 - **WHEN** the sidebar renders
-#### Scenario: the badge count caps at 9+
-- **GIVEN** an entry whose kind reports twelve things that need the user
-- **WHEN** the sidebar renders expanded
-- **THEN** its badge reads "9+" in the danger-strong tone
-
 - **THEN** that entry carries no badge and the sidebar shows no error
 
 ### Requirement: Open Settings as a modal from the sidebar footer
@@ -1892,7 +1906,7 @@ beside the pages used every day, the convention of desktop applications' own
 preferences windows.
 
 The modal MUST stay addressable by route: each tab is `/settings/<tab>`
-(General, Security, Data, Daemon, About, Features — see "Organise Settings into six
+(General, Security, Data, Daemon, Features, About — see "Organise Settings into six
 tabs"), and while it is open the address bar and history carry that route,
 so a deep link, a reload, a link from another page (such as a link
 to `/settings/daemon`) or the palette opens the modal on that tab.

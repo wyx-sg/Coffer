@@ -97,7 +97,7 @@ function ExportDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? null : close())}>
-      <DialogContent className="max-w-[440px]">
+      <DialogContent>
         {exported ? (
           <Exported backup={exported} onDone={close} />
         ) : (
@@ -155,7 +155,7 @@ function ExportDialog({ open, onClose }: { open: boolean; onClose: () => void })
               </p>
             ) : null}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={close}>
+              <Button type="button" variant="ghost" onClick={close}>
                 {t("common.cancel")}
               </Button>
               <Button type="submit" disabled={!ready || exportKey.isPending}>

@@ -16,11 +16,14 @@
 // below what the endpoint really takes leaves the layer converging at a
 // fraction of its rate with nothing looking broken.
 //
-// Edits auto-save, like every other settings surface here (no Save button).
+// The row's line is the short answer; what a call covers and why the bound
+// should sit above the provider's real latency is behind the "?" beside the
+// label. Edits auto-save, like every other settings surface here (no Save button).
 import { useTranslation } from "react-i18next";
 import { RotateCcw } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
+import { HelpTip } from "@/components/HelpTip";
 import { ModelPairRow } from "@/components/settings/cofferModel/ModelPairRow";
 import { Button } from "@/components/ui/button";
 import { SettingRow } from "@/components/settings/SettingsLayout";
@@ -129,33 +132,37 @@ function TimeoutRow() {
       : TIMEOUT_CHOICES;
 
   return (
-    <div className="pl-4">
-      <SettingRow
-        label={t("settings.internalEngine.timeout")}
-        description={t("settings.internalEngine.timeoutHint")}
+    <SettingRow
+      indent
+      label={
+        <span className="inline-flex items-center gap-0.5">
+          {t("settings.internalEngine.timeout")}
+          <HelpTip>{t("settings.internalEngine.timeoutMore")}</HelpTip>
+        </span>
+      }
+      description={t("settings.internalEngine.timeoutHint")}
+    >
+      <Select
+        value={timeout === null ? DEFAULT_VALUE : String(timeout)}
+        onValueChange={(v) => setBound.mutate(v === DEFAULT_VALUE ? null : Number(v))}
+        disabled={setBound.isPending}
       >
-        <Select
-          value={timeout === null ? DEFAULT_VALUE : String(timeout)}
-          onValueChange={(v) => setBound.mutate(v === DEFAULT_VALUE ? null : Number(v))}
-          disabled={setBound.isPending}
-        >
-          <SelectTrigger className="w-44" aria-label={t("settings.internalEngine.timeout")}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={DEFAULT_VALUE}>
-              {t("settings.internalEngine.defaultTimeout", {
-                timeout: timeoutLabel(t, defaultTimeout),
-              })}
+        <SelectTrigger className="w-44" aria-label={t("settings.internalEngine.timeout")}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={DEFAULT_VALUE}>
+            {t("settings.internalEngine.defaultTimeout", {
+              timeout: timeoutLabel(t, defaultTimeout),
+            })}
+          </SelectItem>
+          {choices.map((s) => (
+            <SelectItem key={s} value={String(s)}>
+              {timeoutLabel(t, s)}
             </SelectItem>
-            {choices.map((s) => (
-              <SelectItem key={s} value={String(s)}>
-                {timeoutLabel(t, s)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </SettingRow>
-    </div>
+          ))}
+        </SelectContent>
+      </Select>
+    </SettingRow>
   );
 }

@@ -1,4 +1,4 @@
-// src/components/settings/storage/CacheBlock.tsx — Settings › Data's Rebuildable cache block and its confirmed Clear (design 6.2.07, 6.2.09).
+// src/components/settings/storage/CacheBlock.tsx — Settings › Data's Rebuildable cache block and its confirmed Clear (canvas 1.4.11).
 //
 // Spec web-ui "Group the Data tab by what kind of data it is": the memory tree
 // and the transcript summary cache, which Coffer rebuilds on its own. One Clear

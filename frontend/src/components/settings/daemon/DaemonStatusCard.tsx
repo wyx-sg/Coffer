@@ -1,4 +1,4 @@
-// src/components/settings/daemon/DaemonStatusCard.tsx — Settings › Daemon's status card and the host's restart (design 6.2.11 / 6.2.12).
+// src/components/settings/daemon/DaemonStatusCard.tsx — Settings › Daemon's Status section and the host's restart (canvas 1.4.15).
 //
 // Spec web-ui "Show and manage the daemon on Settings → Daemon": the state and
 // the address it answers on, then one line — how long it has been up, its pid
@@ -9,6 +9,7 @@
 // daemon). While the daemon cannot be reached the card reads offline and names
 // the host's recovery: nothing is running that could restart itself, so a
 // browser names `coffer daemon start`. No stop or shutdown control, anywhere.
+import type { ReactNode } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Power, RotateCw } from "lucide-react";
@@ -16,7 +17,7 @@ import { Power, RotateCw } from "lucide-react";
 import { CopyableCommand } from "@/components/settings/CopyableCommand";
 import { StatusDot } from "@/components/status/StatusDot";
 import { STATUS_TONE, type StatusTone } from "@/lib/statusTone";
-import type { DaemonFooterState } from "@/components/shell/useDaemonFooterState";
+import type { DaemonState } from "@/components/settings/daemon/useDaemonState";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { components } from "@/lib/api/types";
@@ -28,7 +29,7 @@ import { cn } from "@/lib/utils";
 
 type DaemonStatus = components["schemas"]["DaemonStatusOut"];
 
-const TONE: Record<DaemonFooterState["kind"], StatusTone> = {
+const TONE: Record<DaemonState["kind"], StatusTone> = {
   running: "ok",
   connecting: "off",
   stopping: "warn",
@@ -58,26 +59,23 @@ function statusLine(t: TFunction, status: DaemonStatus, now: number): string {
 }
 
 interface Props {
-  state: DaemonFooterState;
+  state: DaemonState;
   status: DaemonStatus | undefined;
   /** In the desktop shell (secret-supplier module, `lib/tauri.ts`). */
   inShell: boolean;
 }
 
-/** The status card; loading keeps its shape over skeleton rows. */
+/** The Status section; loading keeps its shape over skeleton rows. */
 export function DaemonStatusCard({ state, status, inShell }: Props) {
   const { t } = useTranslation();
   const restart = useRestartDaemon();
 
   if (state.kind === "connecting") {
     return (
-      <div
-        className="flex flex-col gap-2 rounded-xl border border-border-subtle p-4"
-        data-testid="settings-daemon-status-loading"
-      >
+      <StatusSection testId="settings-daemon-status-loading">
         <Skeleton className="h-5 w-56" />
         <Skeleton className="h-4 w-72" />
-      </div>
+      </StatusSection>
     );
   }
 
@@ -93,10 +91,7 @@ export function DaemonStatusCard({ state, status, inShell }: Props) {
   );
 
   return (
-    <div
-      className="flex flex-col gap-3 rounded-xl border border-border-subtle p-4"
-      data-testid="settings-daemon-status"
-    >
+    <StatusSection testId="settings-daemon-status">
       <div className="flex flex-wrap items-center gap-3">
         <span
           aria-hidden
@@ -146,6 +141,17 @@ export function DaemonStatusCard({ state, status, inShell }: Props) {
           {restartErrorText(t, restart.error)}
         </p>
       ) : null}
-    </div>
+    </StatusSection>
+  );
+}
+
+/** The Status section: its title, then one hairline-topped row (an ordinary section, not a card). */
+function StatusSection({ testId, children }: { testId: string; children: ReactNode }) {
+  const { t } = useTranslation();
+  return (
+    <section className="flex flex-col gap-2.5" data-testid={testId}>
+      <h2 className="text-md font-semibold text-text">{t("settings.daemonTab.status")}</h2>
+      <div className="flex flex-col gap-3 border-t border-border-subtle pt-2.5">{children}</div>
+    </section>
   );
 }

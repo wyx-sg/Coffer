@@ -8,7 +8,7 @@ import { act, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { resetDaemonConnection, useDaemonConnectionDriver } from "./daemonConnection";
-import { useDaemonFooterState } from "./useDaemonFooterState";
+import { useDaemonState } from "@/components/settings/daemon/useDaemonState";
 
 const status = vi.hoisted(() => ({
   current: { isError: false, error: null as unknown, errorUpdatedAt: 0, dataUpdatedAt: 0 } as {
@@ -27,12 +27,12 @@ vi.mock("@/lib/hooks/useDaemon", () => ({
 
 function Probe({ onRecovered }: { onRecovered: () => void }) {
   const { connection } = useDaemonConnectionDriver(onRecovered);
-  const footer = useDaemonFooterState();
+  const state = useDaemonState();
   return (
     <>
       <div data-testid="phase">{connection.phase}</div>
       <div data-testid="attempt">{connection.attempt}</div>
-      <div data-testid="footer">{footer.kind}</div>
+      <div data-testid="daemon-state">{state.kind}</div>
     </>
   );
 }
@@ -85,12 +85,12 @@ describe("useDaemonConnectionDriver", () => {
   test("a lost daemon reads reconnecting, retries with backoff, then reads offline after 10s", () => {
     const { rerender } = renderProbe();
     expect(screen.getByTestId("phase")).toHaveTextContent("ok");
-    expect(screen.getByTestId("footer")).toHaveTextContent("running");
+    expect(screen.getByTestId("daemon-state")).toHaveTextContent("running");
 
     fail(1);
     rerender();
     expect(screen.getByTestId("phase")).toHaveTextContent("reconnecting");
-    expect(screen.getByTestId("footer")).toHaveTextContent("reconnecting");
+    expect(screen.getByTestId("daemon-state")).toHaveTextContent("reconnecting");
     expect(screen.getByTestId("attempt")).toHaveTextContent("1");
 
     act(() => void vi.advanceTimersByTime(1000));
@@ -101,7 +101,7 @@ describe("useDaemonConnectionDriver", () => {
 
     act(() => void vi.advanceTimersByTime(9000));
     expect(screen.getByTestId("phase")).toHaveTextContent("offline");
-    expect(screen.getByTestId("footer")).toHaveTextContent("offline");
+    expect(screen.getByTestId("daemon-state")).toHaveTextContent("offline");
   });
 
   test("when the daemon answers again every query refetches and the shell is told once", () => {
@@ -123,11 +123,11 @@ describe("useDaemonConnectionDriver", () => {
   });
 
   test("with no driver mounted a failing probe reads offline", () => {
-    function FooterOnly() {
-      return <div data-testid="footer">{useDaemonFooterState().kind}</div>;
+    function StateOnly() {
+      return <div data-testid="daemon-state">{useDaemonState().kind}</div>;
     }
     fail(1);
-    render(<FooterOnly />);
-    expect(screen.getByTestId("footer")).toHaveTextContent("offline");
+    render(<StateOnly />);
+    expect(screen.getByTestId("daemon-state")).toHaveTextContent("offline");
   });
 });

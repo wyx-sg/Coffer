@@ -1,4 +1,4 @@
-// src/components/settings/storage/RetentionShortenDialog.tsx — the confirmation a shorter retention window asks for (design 6.2.08).
+// src/components/settings/storage/RetentionShortenDialog.tsx — the confirmation a shorter retention window asks for (canvas 1.4.12).
 //
 // It counts, through the daemon's preview read, how many records the next
 // cleanup would delete and how many the table holds now and after, before the

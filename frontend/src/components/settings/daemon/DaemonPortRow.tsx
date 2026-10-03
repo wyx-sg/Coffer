@@ -1,14 +1,15 @@
-// src/components/settings/daemon/DaemonPortRow.tsx — the editable port of the daemon's next start (design 6.2.11).
+// src/components/settings/daemon/DaemonPortRow.tsx — the editable port of the daemon's next start (canvas 1.4.15, 1.4.16).
 //
 // Spec web-ui "Show and manage the daemon on Settings → Daemon" and daemon
 // "Bind a fixed, settable port": a whole number from 1024 to 65535 that no
 // other program holds, each refused in place (the daemon checks it and names
-// the holder); saving writes it for the next start, and the row then says it
+// the holder). There is no Save button: Enter or leaving the field applies the
+// value, writing it for the next start, and the row then says it
 // takes effect after Coffer restarts, with Restart now — the shell's restart
 // in the desktop shell, the daemon's own in a browser, which then reloads the
 // page from the new port. The status above keeps showing the port the daemon
 // answers on until then.
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { SettingRow } from "@/components/settings/SettingsLayout";
@@ -40,9 +41,15 @@ export function DaemonPortRow({ disabled }: Props) {
   const restart = useRestartDaemon();
   const [value, setValue] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  // The last value sent (or refused), so a blur after Enter or after a refusal
+  // does not send the same text again.
+  const tried = useRef<string | null>(null);
 
   useEffect(() => {
-    if (port.data) setValue(String(port.data.port));
+    if (port.data) {
+      setValue(String(port.data.port));
+      tried.current = null;
+    }
   }, [port.data]);
 
   const refusal = (): string | null => {
@@ -66,9 +73,15 @@ export function DaemonPortRow({ disabled }: Props) {
     return translateApiError(t, err);
   };
 
-  const submit = () => {
+  // Enter and blur both land here: a value that is the saved one, the one
+  // already tried, or empty is not an edit.
+  const commit = () => {
+    const text = value.trim();
+    if (disabled || port.data === undefined || save.isPending) return;
+    if (text === "" || text === String(port.data.port) || text === tried.current) return;
+    tried.current = text;
     save.reset();
-    const n = Number(value.trim());
+    const n = Number(text);
     if (!Number.isInteger(n) || n < MIN_PORT || n > MAX_PORT) {
       setLocalError(t("settings.daemonTab.portRange", { min: MIN_PORT, max: MAX_PORT }));
       return;
@@ -79,7 +92,6 @@ export function DaemonPortRow({ disabled }: Props) {
 
   const error = refusal();
   const pending = port.data?.pending ? port.data.port : null;
-  const unchanged = port.data !== undefined && value.trim() === String(port.data.port);
 
   return (
     <>
@@ -95,40 +107,28 @@ export function DaemonPortRow({ disabled }: Props) {
           ) : null
         }
       >
-        <form
-          className="flex items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
+        <Input
+          id={id}
+          inputMode="numeric"
+          className="w-24 font-mono"
+          value={value}
+          disabled={disabled || port.data === undefined || save.isPending}
+          aria-invalid={error ? true : undefined}
+          onChange={(e) => {
+            setValue(e.target.value);
+            tried.current = null;
+            setLocalError(null);
+            save.reset();
           }}
-        >
-          <Input
-            id={id}
-            inputMode="numeric"
-            className="w-24 font-mono"
-            value={value}
-            disabled={disabled || port.data === undefined || save.isPending}
-            aria-invalid={error ? true : undefined}
-            onChange={(e) => {
-              setValue(e.target.value);
-              setLocalError(null);
-              save.reset();
-            }}
-          />
-          <Button
-            type="submit"
-            variant="outline"
-            disabled={
-              disabled || unchanged || save.isPending || value.trim() === "" || error !== null
-            }
-          >
-            {t("settings.daemonTab.save")}
-          </Button>
-        </form>
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+          }}
+        />
       </SettingRow>
       {pending !== null ? (
         <div
-          className="flex flex-col gap-2 rounded-md bg-warning-soft px-3 py-2.5"
+          className="mb-3 flex flex-col gap-2 rounded-md bg-warning-soft px-3 py-2.5"
           data-testid="settings-daemon-port-pending"
           role="status"
         >

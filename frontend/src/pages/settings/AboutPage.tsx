@@ -1,6 +1,6 @@
 // frontend/src/pages/settings/AboutPage.tsx
 //
-// Settings → About (design 6.2.13): what this Coffer is. A head line with the
+// Settings → About (canvas 1.4.23–1.4.26): what this Coffer is. A head line with the
 // logo, the running version and, beside it, "Copy diagnostics for a bug
 // report" (spec web-ui "Keep daemon shutdown on the command line": version,
 // channel, host, daemon state and port and the enabled features, never a token
@@ -12,8 +12,13 @@
 import { useTranslation } from "react-i18next";
 
 import { CofferMark } from "@/components/brand/CofferMark";
-import { SettingRow, SettingsSection } from "@/components/settings/SettingsLayout";
-import { useDaemonFooterState } from "@/components/shell/useDaemonFooterState";
+import {
+  SETTINGS_STACK,
+  SettingRow,
+  SettingsSection,
+  SettingsTabHeader,
+} from "@/components/settings/SettingsLayout";
+import { useDaemonState } from "@/components/settings/daemon/useDaemonState";
 import { useToast } from "@/components/ui/toast";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
 import { inDesktopShell } from "@/lib/tauri";
@@ -32,7 +37,7 @@ export function AboutPage() {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const { data: status } = useDaemonStatus();
-  const state = useDaemonFooterState();
+  const state = useDaemonState();
 
   const copyDiagnostics = async () => {
     const text = diagnosticsText({
@@ -54,11 +59,12 @@ export function AboutPage() {
     ? t("settings.about.versionWithCommit", { version, commit: status.commit })
     : version;
   return (
-    <div className="flex flex-col gap-6">
+    <div className={SETTINGS_STACK}>
+      <SettingsTabHeader title={t("settings.tabs.about")} intro={t("settings.about.intro")} />
       <div className="flex items-center gap-3.5" data-testid="settings-about-head">
         <CofferMark size={44} />
         <div className="flex flex-col gap-0.5">
-          <h3 className="m-0 text-xl font-bold tracking-tight text-text">Coffer</h3>
+          <p className="m-0 text-xl font-bold text-text">Coffer</p>
           <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-text-muted">
             <span>
               {status

@@ -1095,11 +1095,11 @@
       "autostartUnsupported": "Only available on macOS."
     },
     "features": {
-      "title": "Features",
       "subtitle": "Experimental features, each off until you turn it on here. Turning one off hides it everywhere on this machine and keeps everything it holds.",
       "experimental": "Experimental",
       "decidedBy": "Decided by",
       "reset": "Reset to default",
+      "saveFailed": "Couldn’t save the change: {{reason}}",
       "names": {
         "knowledge": "Knowledge",
         "memory": "Memory",
@@ -1181,6 +1181,7 @@
     },
     "about": {
       "documentationLink": "Open the docs",
+      "intro": "The version you run, how it updates, and where to read more.",
       "copyDiagnostics": "Copy diagnostics for a bug report",
       "fields": {
         "version": "Version",
@@ -1348,7 +1349,8 @@
       "model": "Model",
       "modelPlaceholder": "Select a model",
       "timeout": "Time limit per call",
-      "timeoutHint": "How long Coffer waits for one answer from its own model — a memory pass, a knowledge description, one turn of curation, a transcription. A call that runs out of time defers its work and reports success, so set this above what your provider really takes.",
+      "timeoutHint": "How long Coffer waits for one answer from its own model.",
+      "timeoutMore": "A memory pass, a knowledge description, one turn of curation and a transcription each get this long. A call that runs out of time defers its work and reports success, so set this above what your provider really takes.",
       "defaultTimeout": "Default ({{timeout}})",
       "seconds": "{{count}}s",
       "minutes": "{{count}} min"
@@ -1378,13 +1380,13 @@
       "restartTimedOut": "The daemon did not come back within 90 seconds. Check Activity › Daemon log once it answers, or start it again.",
       "copyCommand": "Copy {{command}}",
       "port": "Port",
-      "portHelp": "{{min}}–{{max}}, default 8000. Bookmarks and agent connections follow it.",
+      "portHelp": "{{min}}–{{max}}, default 8000. Press Enter to apply; bookmarks and agent connections follow it.",
       "portRange": "Use a port from {{min}} to {{max}}.",
       "portInUse": "Port {{port}} is in use by another program. Pick another port.",
       "portInUseBy": "Port {{port}} is in use by {{name}} (pid {{pid}}). Pick another port.",
       "portPending": "Port {{port}} saved — takes effect after Coffer restarts",
       "portPendingHelp": "Agents are reconnected to the new port automatically.",
-      "save": "Save",
+      "status": "Status",
       "startup": "Startup",
       "upDays_one": "Up {{count}} day",
       "upDays_other": "Up {{count}} days",

@@ -5,13 +5,13 @@
 // or a secret. Built only from the status probe's public fields and the host,
 // so nothing secret-shaped can reach it.
 import type { components } from "@/lib/api/types";
-import type { DaemonFooterState } from "@/components/shell/useDaemonFooterState";
+import type { DaemonState } from "@/components/settings/daemon/useDaemonState";
 
 type DaemonStatus = components["schemas"]["DaemonStatusOut"];
 
 interface Input {
   status: DaemonStatus | undefined;
-  state: DaemonFooterState;
+  state: DaemonState;
   /** "desktop app" or "browser", already worded. */
   host: string;
   platform: string;

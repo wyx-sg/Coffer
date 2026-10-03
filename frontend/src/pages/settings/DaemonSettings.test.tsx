@@ -140,7 +140,7 @@ describe("DaemonSettings", () => {
     const field = await screen.findByRole("textbox", { name: /^port$/i });
     await waitFor(() => expect(field).toHaveValue("8000"));
     fireEvent.change(field, { target: { value: "8123" } });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.keyDown(field, { key: "Enter" });
     await waitFor(() => expect(put).toHaveBeenCalledWith("/daemon/port", { body: { port: 8123 } }));
     const pending = await screen.findByTestId("settings-daemon-port-pending");
     expect(
@@ -176,16 +176,19 @@ describe("DaemonSettings", () => {
     const field = await screen.findByRole("textbox", { name: /^port$/i });
     await waitFor(() => expect(field).toHaveValue("8000"));
     fireEvent.change(field, { target: { value: "9000" } });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.keyDown(field, { key: "Enter" });
     expect(
       await screen.findByText("Port 9000 is in use by node (pid 4242). Pick another port."),
     ).toBeInTheDocument();
     expect(screen.queryByTestId("settings-daemon-port-pending")).toBeNull();
-    // Save stays disabled while the refusal is shown, until the port is edited.
-    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+    // There is no Save button; leaving the field does not resend the refused value.
+    expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
+    fireEvent.blur(field);
+    expect(put).toHaveBeenCalledTimes(1);
 
+    // Editing clears the refusal; an out-of-range value is refused in place on blur.
     fireEvent.change(field, { target: { value: "80" } });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.blur(field);
     expect(await screen.findByText("Use a port from 1024 to 65535.")).toBeInTheDocument();
     expect(put).toHaveBeenCalledTimes(1);
   });
