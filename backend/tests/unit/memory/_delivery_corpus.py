@@ -1,5 +1,5 @@
 """A note corpus and a fake memory port for the delivery tests (spec memory
-"Retrieve the notes a prompt names", "Guard a known trap once per session").
+"Retrieve the notes a prompt names").
 
 The BM25 relevance floor is calibrated on a real store of one to two hundred
 notes; over two or three notes every term's IDF is tiny and nothing clears it.

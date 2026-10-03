@@ -1,9 +1,9 @@
 // frontend/src/pages/MemoryPage.tsx — the Memory overview (spec memory "Present a
 // partition as its memories", web-ui "Show memory delivery on the Memory page").
 //
-// Memory is read-only: Coffer reads each agent's own memory and distils it into
+// Coffer reads each agent's own memory and distils it into
 // one memory per subject, in partitions — `global` plus one per repository
-// (ADR aggregate-agent-memory-never-write-it). Nothing here is user-created,
+// (ADR aggregate-agent-memory-never-write-it). Nothing here is user-created (a person only edits a memory's body),
 // so the header's one action is Update memory: read every agent's latest
 // memory and distil what is new (spec memory "Update memory in one action"),
 // the page's one primary button, beside the Automatic control that does the

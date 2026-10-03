@@ -266,7 +266,7 @@ def plaintext_handoff(*, vault: str, findings: Sequence[PlaintextFinding]) -> st
         facts.append(f"{f.path}, line {f.line}: {what}.")
     more = len(current) - _MAX_FILES
     if more > 0:
-        facts.append(f"And {more} more; `coffer sync status` lists every one.")
+        facts.append(f"And {more} more; the Sync page lists every one.")
     facts += [
         "`coffer secret set <name>` stores the value it reads on stdin as the secret <name>; "
         "a file then refers to it as coffer://secret/<name>, and `coffer run --secret "

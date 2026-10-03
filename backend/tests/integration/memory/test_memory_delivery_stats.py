@@ -122,28 +122,14 @@ def test_the_overview_counts_a_weeks_fires_and_the_notes_read(app: HookApp) -> N
     cc = register(app.client, "claude_code")
     cx = register(app.client, "codex")
     repo, name = distilled(app)
-    r = app.client.post(
-        "/memory/triggers",
-        json={"note": f"{name}/node-20-for-make-verify", "command": r"^make\s+verify\b"},
-    )
-    assert r.status_code == 201, r.text
     where = {"cwd": str(repo)}
 
-    # One fire that will be aged out of the window, then five inside it.
+    # One fire that will be aged out of the window, then four inside it.
     fire(app.client, cc, "SessionStart", session_id="old", **where)
     (old,) = audit(app.client, "memory_delivery_fired")
     for s in ("a", "b", "c"):
         fire(app.client, cc, "SessionStart", session_id=s, **where)
     assert fire(app.client, cc, "UserPromptSubmit", session_id="a", prompt=_PROMPT, **where)
-    assert fire(
-        app.client,
-        cc,
-        "PreToolUse",
-        session_id="a",
-        tool_name="Bash",
-        command="make verify",
-        **where,
-    )
     _age_fire(app, old["id"], days=10)
     fire(app.client, cx, "SessionStart", session_id="cx", **where)
     _claude_transcript(app, name)
@@ -152,8 +138,8 @@ def test_the_overview_counts_a_weeks_fires_and_the_notes_read(app: HookApp) -> N
     stats = _overview(app)
     claude = stats["claude_code"]
     assert claude["agent_uid"] == cc
-    assert claude["deliveries"] == 5
-    assert claude["by_moment"] == {"guard": 1, "prompt": 1, "session_start": 3}
+    assert claude["deliveries"] == 4
+    assert claude["by_moment"] == {"prompt": 1, "session_start": 3}
     newest = max(
         f["timestamp"]
         for f in audit(app.client, "memory_delivery_fired")
@@ -182,11 +168,6 @@ def test_the_overview_counts_a_weeks_fires_and_the_notes_read(app: HookApp) -> N
             "notes_read_status",
         }
         assert not any("install" in k or "trust" in k for k in entry)
-
-    plain = _runner.invoke(cli_app, ["memory", "delivered"])
-    assert plain.exit_code == 0, plain.output
-    assert "claude-code: 5 deliveries in 7 days, notes read: 2" in plain.output
-    assert "codex: 1 deliveries in 7 days, notes read: unavailable" in plain.output
 
 
 def test_a_codex_rollout_counts_the_notes_its_shell_calls_named(app: HookApp) -> None:
@@ -259,12 +240,7 @@ def test_connecting_and_firing_every_hook_leaves_claude_md_and_agents_md_untouch
 
     cc = register(app.client, "claude_code")
     cx = register(app.client, "codex")
-    repo, name = distilled(app)
-    r = app.client.post(
-        "/memory/triggers",
-        json={"note": f"{name}/node-20-for-make-verify", "command": r"^make\s+verify\b"},
-    )
-    assert r.status_code == 201, r.text
+    repo, _name = distilled(app)
     for uid in (cc, cx):
         r = app.client.post(f"/agents/{uid}/coffer-connection")
         assert r.status_code == 200, r.text
@@ -287,17 +263,6 @@ def test_connecting_and_firing_every_hook_leaves_claude_md_and_agents_md_untouch
         events = [
             {"hook_event_name": "SessionStart", "source": "startup"},
             {"hook_event_name": "UserPromptSubmit", "prompt": _PROMPT},
-            {
-                "hook_event_name": "PreToolUse",
-                "tool_name": "Bash",
-                "tool_input": {"command": "make verify"},
-            },
-            {
-                "hook_event_name": "PostToolUse",
-                "tool_name": "Bash",
-                "tool_input": {"command": "make verify"},
-                "tool_response": "ok",
-            },
         ]
         for ev in events:
             result = _runner.invoke(
@@ -306,5 +271,5 @@ def test_connecting_and_firing_every_hook_leaves_claude_md_and_agents_md_untouch
             assert result.exit_code == 0, result.output
 
     fired = {f["details"]["moment"] for f in audit(app.client, "memory_delivery_fired")}
-    assert {"session_start", "prompt", "guard"} <= fired
+    assert fired == {"session_start", "prompt"}
     assert (claude_md.read_bytes(), agents_md.read_bytes()) == before

@@ -28,7 +28,7 @@ _STATUS: dict[str, int] = {
     "RESOURCE_NOT_FOUND": 404,
     # Nothing informational is listed under that key to ignore.
     "ATTENTION_NOT_IGNORABLE": 409,
-    # custom tools (spec mcp-gateway "Manage custom tools on REST and the command line")
+    # custom tools (spec mcp-gateway "Manage custom tools through REST and the Custom tools page")
     "CUSTOM_TOOL_NOT_FOUND": 404,
     "NOT_A_CUSTOM_TOOL_GROUP": 404,
     "CUSTOM_TOOL_EXISTS": 409,
@@ -108,8 +108,8 @@ _STATUS: dict[str, int] = {
     "UNMANAGED_SKILL_NOT_FOUND": 404,
     "CONFIG_FILE_STALE": 409,
     "SKILL_FILE_STALE": 409,
-    # The commands skills require (spec skill-manager "Serve required
-    # commands on REST, the command line and the web").
+    # The commands skills require (spec skill-manager "Serve required commands on REST
+    # and the web").
     "CLI_NOT_KNOWN": 404,
     "CLI_TOOL_NOT_DECLARED": 404,
     "CLI_TOOL_EXISTS": 409,
@@ -150,13 +150,14 @@ _STATUS: dict[str, int] = {
     "GREP_PATTERN_INVALID": 400,
     # spec memory
     "MEMORY_NOTE_NOT_FOUND": 404,
+    # A save naming a fingerprint the note no longer has (spec memory "Edit a
+    # memory in the web UI or on disk"): the note is left as it is.
+    "MEMORY_NOTE_CONFLICT": 409,
     "MEMORY_RAW_ENTRY_NOT_FOUND": 404,
     "MEMORY_UNSAFE_PATH": 400,
     "MEMORY_UNREADABLE": 422,
     "MEMORY_DELIVERY_UNSUPPORTED": 422,
     "MEMORY_DELIVERY_CONFIG_INVALID": 422,
-    "MEMORY_TRIGGER_INVALID": 422,
-    "MEMORY_TRIGGER_NOT_FOUND": 404,
     # agent turns (spec chat)
     "CONVERSATION_NOT_FOUND": 404,
     "UNKNOWN_AGENT": 400,

@@ -18,7 +18,6 @@ import pytest
 from coffer.application.memory.hook_service import HookEvent, MemoryHookService
 from coffer.application.memory.retrieval import RetrievalService
 from coffer.application.memory.session_ledger import SessionLedger
-from coffer.application.memory.triggers import TriggerService
 from coffer.application.memory.turn_retrieval import (
     CHANNEL_TURN_EVENT,
     TurnRetrieval,
@@ -29,7 +28,6 @@ from coffer.domain.memory.hook_output import RETRIEVAL_HEADER
 from coffer.infrastructure.chat.prompt_memory import bind_prompt_memory, prompt_with_memory
 from coffer.infrastructure.memory import paths
 from tests.unit.memory._delivery_corpus import FakeMemory, corpus, node20_note
-from tests.unit.memory.conftest import FakeAudit
 
 _PROMPT = "why does make verify fail with undici AbortSignal under node"
 
@@ -80,8 +78,6 @@ def rig(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> _Rig:
         memory=memory,
         delivery=delivery,  # type: ignore[arg-type]
         retrieval=retrieval,
-        triggers=TriggerService(audit=FakeAudit()),  # type: ignore[arg-type]
-        ledger=ledger,
     )
     return _Rig(repo, delivery, turns, hook)
 

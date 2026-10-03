@@ -89,11 +89,11 @@ def test_an_unregistered_key_is_refused() -> None:
     assert exc.value.feature == "workflow"
 
 
-def test_the_disabled_error_names_the_command_that_switches_it_on() -> None:
+def test_the_disabled_error_names_the_setting_that_switches_it_on() -> None:
     err = FeatureDisabled(FAKE_FEATURE)
     assert err.code == "FEATURE_DISABLED"
     assert err.feature == FAKE_FEATURE
-    assert f"coffer config set feature.{FAKE_FEATURE} on" in str(err)
+    assert "Settings › Features" in str(err)  # noqa: RUF001
 
 
 def test_the_pinned_error_names_its_key() -> None:

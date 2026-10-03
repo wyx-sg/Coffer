@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-24
 **Deciders**: Yuxing Wu
-**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [SeaTalk WebSocket Inbound](seatalk-websocket-inbound.md), spec daemon "Run as a login service", spec daemon "Change residency from the settings page or the command line", spec daemon "Stand down only when provably superseded", spec desktop-app "Restart by stopping the running daemon first", PR #412, PR #431
+**Related**: [Detect-or-Spawn](daemon-detect-or-spawn.md), [Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [SeaTalk WebSocket Inbound](seatalk-websocket-inbound.md), spec daemon "Run as a login service", spec daemon "Change residency from the settings page", spec daemon "Stand down only when provably superseded", spec desktop-app "Restart by stopping the running daemon first", PR #412, PR #431
 
 ## Context
 
@@ -27,8 +27,8 @@ The daemon serves until it is stopped (`coffer daemon stop`, the desktop shell's
 restart, system shutdown) or superseded by another daemon (spec daemon "Stand
 down only when provably superseded"). It has no idle timer.
 
-On macOS, `coffer daemon service install` — or the Start at login switch in
-Settings, which calls `PUT /api/v1/daemon/residency` — writes a per-user
+On macOS, the Start at login switch in
+Settings, which calls `PUT /api/v1/daemon/residency`, writes a per-user
 launchd agent `dev.coffer.daemon` (`infrastructure/daemon/login_service.py`)
 with:
 

@@ -58,13 +58,6 @@ export type CurationRunOut = Schemas["CurationRunOut"];
  */
 export type IngestedDocumentOut = Schemas["IngestedDocumentOut"];
 
-/** What `POST /knowledge/material` did with a submission — an item waiting
- *  in the inbox (`pending`), or a document written as it is (`written`, with
- *  no model to curate it). */
-export type SubmissionOut = Schemas["SubmissionOut"];
-
-export type MaterialIn = Schemas["MaterialIn"];
-
 /** One change to knowledge: one commit in the vault's history, naming its
  *  writer (see "Keep every document's history and undo a pass as a whole"). */
 export type ChangeOut = Schemas["ChangeOut"];

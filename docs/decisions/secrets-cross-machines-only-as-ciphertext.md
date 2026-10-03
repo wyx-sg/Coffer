@@ -53,10 +53,9 @@ and never travels.
 carries it once per machine, out of band: the desktop app, behind a presence
 check, writes a passphrase-protected key backup
 ([The Master Key Lives in a Keychain Access Group](master-key-lives-in-the-macos-keychain.md)),
-`coffer sync key import <file>` installs it after showing the file's fingerprint
-beside this machine's, and `coffer sync key fingerprint` prints a 12-character
-SHA-256 prefix to compare (`surfaces/cli/sync_machine_cmd.py`;
-`/api/v1/sync/key/import/preview`, `/import`, `/fingerprint`). No command
+**Import a master key** in Settings › Security installs it after showing the
+file's fingerprint beside this machine's, a 12-character SHA-256 prefix to
+compare (`/api/v1/sync/key/import/preview`, `/import`, `/fingerprint`). No command
 exports the key — an agent could run it
 ([Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)).
 Export and import are audited (`master_key_exported`, `master_key_imported`). An
@@ -194,7 +193,7 @@ Secrets cross machines only as Fernet ciphertext, only on a remote configured
 to carry them, and two ciphertexts for one ref are ordered by their cleartext
 encryption time. The master key never enters the repository; the user moves it
 with a passphrase-protected key backup the desktop app writes and
-`coffer sync key import`, compares with `fingerprint`, and an import never
+installs with Import a master key in Settings › Security, compares fingerprints, and an import never
 overwrites a different key without keeping the old one. The push token reaches
 git only through a per-invocation credential helper reading an environment
 variable, with the user's global and system git configuration isolated.

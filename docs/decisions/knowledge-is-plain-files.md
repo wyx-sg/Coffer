@@ -60,8 +60,8 @@ documents with its own `Read` and `Grep` at absolute paths; what tells it which
 paths exist is a catalogue — every collection's documents with path,
 title and description — rendered into Coffer's own `coffer-guide` skill, whose
 frontmatter description names the subjects the collections cover (drawn from
-each collection's `README.md`). The only knowledge tool is `coffer__write`,
-which submits new material.
+each collection's `README.md`). There is no knowledge tool: an agent adds knowledge by writing a Markdown
+file into `<collection>/.inbox/`, and the sweep fills in the frontmatter.
 
 - **Pros.** Nothing to keep level with the disk: a person's edit — in their own
   editor or in the web UI's editor, which rewrites the same file — is live on
@@ -218,9 +218,10 @@ Rules a future change must respect:
   that own a derived store stay banned by the import-linter contract.
 - **Path is identity; frontmatter is metadata.** A collection describes itself
   in its own `README.md`, which is not a document and is not curated.
-- **One tool.** `coffer__write` is the only built-in knowledge tool; there is no
-  `list`, `grep`, `read`, `search` or `delete`. Deleting a document is a
-  person's action on the REST, CLI and web surfaces.
+- **No tool.** Coffer has no knowledge tool and no knowledge command group:
+  agents read, search and write with their own file tools, and a person works
+  in the web UI or an editor. Deleting a document is a person's action in the
+  web UI or on disk.
 - **The catalogue is generated and delivered as a skill.** This layer renders
   the text; the skill kind writes, registers and delivers it.
 - **One undivided store.** A collection carries no per-agent reach and no
@@ -259,6 +260,6 @@ Rules a future change must respect:
   channel's document extraction); path construction and the traversal guard in
   `backend/coffer/infrastructure/knowledge/paths.py`;
   spec knowledge "Store each collection as one tree of Markdown files",
-  spec knowledge "Expose exactly one knowledge tool",
+  spec knowledge "Expose no knowledge tool",
   spec knowledge "Serve every collection to every agent",
   spec knowledge "Carry no vector or embedding dependency".

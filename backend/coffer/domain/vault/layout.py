@@ -41,7 +41,6 @@ RESOURCES = "resources"
 STATE = "state"
 KNOWLEDGE = "knowledge"
 SKILLS = "skills"
-MEMORY_TRIGGERS = "memory-triggers"
 SECRET = "secret"
 MACHINES = "machines"
 MANIFEST = "manifest.json"
@@ -54,7 +53,7 @@ MANIFEST_SCHEMA_VERSION = 3
 #: Every top-level directory of the vault repository. Anything else a person
 #: puts there is kept and committed like any other file, but belongs to no
 #: area Coffer reads.
-VAULT_DIRS = (RESOURCES, STATE, KNOWLEDGE, SKILLS, MEMORY_TRIGGERS, SECRET, MACHINES)
+VAULT_DIRS = (RESOURCES, STATE, KNOWLEDGE, SKILLS, SECRET, MACHINES)
 
 #: The suffix of every document Coffer parses (resources, state, machines).
 DOCUMENT_SUFFIX = ".json"
@@ -114,7 +113,6 @@ __all__ = [
     "MACHINES",
     "MANIFEST",
     "MANIFEST_SCHEMA_VERSION",
-    "MEMORY_TRIGGERS",
     "RESOURCES",
     "SECRET",
     "SKILLS",

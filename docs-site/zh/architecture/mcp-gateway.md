@@ -97,7 +97,7 @@ Coffer-MCP 安装（见 [智能体](/zh/guides/agents)）写入的 `coffer` 条�
 身份是自报的，没有经过验证。任何持有令牌的本地进程都能打开 `/mcp` 并声称自己是任意 uid。在 [安全模型](/zh/architecture/security) 所描述的仅限回环、单用户的姿态下，这是可以接受的。
 :::
 
-`initialize` 的回复声明 `tools`、`resources` 和 `prompts`，每项都带 `listChanged: true`，协议版本为 `2025-06-18`。它还带一段上限 800 个字符的 `instructions` 字符串。这段文字说明 Coffer 是什么，点出会话当前列出的每个内置工具，说明对于 Coffer 没有工具的东西智能体该去哪里读（用它自己的文件工具搜索记忆根目录，用 `coffer log` 系列读取器读 Coffer 自己的记录），其他一切都指向 `coffer-guide` 技能。当会话最近一次 `tools/list` 有工具没被列出时，这段文字会加一句话，给出未列出工具的数量，并说明它们每一个都仍然可以调用。
+`initialize` 的回复声明 `tools`、`resources` 和 `prompts`，每项都带 `listChanged: true`，协议版本为 `2025-06-18`。它还带一段上限 800 个字符的 `instructions` 字符串。这段文字说明 Coffer 是什么，点出 Coffer 自己的工具，说明对于 Coffer 没有工具的东西智能体该去哪里读（用它自己的文件工具读取和编辑知识与记忆文件，用 `coffer log` 系列读取器读 Coffer 自己的记录），其他一切都指向 `coffer-guide` 技能。当会话最近一次 `tools/list` 有工具没被列出时，这段文字会加一句话，给出未列出工具的数量，并说明它们每一个都仍然可以调用。
 
 ## 发现与命名空间 {#discovery-and-namespacing}
 
@@ -109,7 +109,7 @@ Coffer-MCP 安装（见 [智能体](/zh/guides/agents)）写入的 `coffer` 条�
 | 提示词 | `summarize` | `jira__summarize` |
 | 资源 | `file:///notes.md` | `coffer://jira/file:///notes.md` |
 
-解析时按第一个 `__` 切分，所以这个类型拒绝任何包含 `__` 的服务器名。由于服务器名是智能体看到的每个工具名的前缀，而智能体的权限规则和技能都会引用它，所以名字一经注册就固定了：修改会以 `409 NAME_IMMUTABLE` 被拒绝。服务器旁边没有单独的显示标题；它的描述就是自由备注。客户端会在上面再加自己的前缀（Claude Code 显示为 `mcp__coffer__<server>__<tool>`），而模型提供商的 API 把工具名限制在 64 个字符（Cursor 会丢掉超过 60 个字符的工具）。所以服务器名上限 24 个字符，给上游工具名留出 25 个字符；每一行发现的能力都带 `client_name_length`，即 `mcp__coffer__<server>__<tool>` 的长度；**工具** 标签页和 `coffer mcp cap list` 会标出超过 64 的行。对 `resources/list` 或 `prompts/list` 回答 `-32601`（method not found）的上游，被视为没有这项能力，而不是视为失败。
+解析时按第一个 `__` 切分，所以这个类型拒绝任何包含 `__` 的服务器名。由于服务器名是智能体看到的每个工具名的前缀，而智能体的权限规则和技能都会引用它，所以名字一经注册就固定了：修改会以 `409 NAME_IMMUTABLE` 被拒绝。服务器旁边没有单独的显示标题；它的描述就是自由备注。客户端会在上面再加自己的前缀（Claude Code 显示为 `mcp__coffer__<server>__<tool>`），而模型提供商的 API 把工具名限制在 64 个字符（Cursor 会丢掉超过 60 个字符的工具）。所以服务器名上限 24 个字符，给上游工具名留出 25 个字符；每一行发现的能力都带 `client_name_length`，即 `mcp__coffer__<server>__<tool>` 的长度；**工具** 标签页会标出超过 64 的行。对 `resources/list` 或 `prompts/list` 回答 `-32601`（method not found）的上游，被视为没有这项能力，而不是视为失败。
 
 每次冷获取还会在 `derived.db` 里记录每项能力首次和最近一次被看到的时间，以服务器的 uid 为键。你的开关是另一份单独的保险库文档 `state/mcp-preferences/<server>.json`，只列出你关掉的能力，所以你停用的工具即使消失后又回来，也仍然是停用的，而且这个开关会随保险库同步一起传输。每次列出时都重新读取偏好，所以无论缓存里是什么，切换开关都立即生效。
 
@@ -186,10 +186,9 @@ coffer__search_tools(query: string, top_k?: integer = 5, 1..20)
 
 | 工具 | 声明方 |
 | --- | --- |
-| `coffer__write` | 知识模块 |
 | `coffer__search_tools` | 网关自己（网关自有） |
 
-`coffer__write` 属于 `knowledge` 实验功能；`coffer__search_tools` 由网关自己持有，始终存在。对于属于某个功能的工具，注册表每次读取时都会检查该功能：功能关闭时，它的工具不会出现在 `tools/list` 和 `initialize` 文字里。对它的调用会落到上游路由，并像一个未知工具那样失败。见 [实验功能](/zh/guides/experimental-features)。
+`coffer__search_tools` 由网关自己持有，始终存在。对任何其他 `coffer__` 名字的调用都会落到上游路由，并像一个未知工具那样失败。知识和记忆没有内置工具：智能体用自己的文件工具修改它们，所以注册表里没有对应任何一个的工具。
 
 内置工具的处理函数运行之前，网关会按上面所说设置 `agent`。当工具的 schema 声明了 `cwd` 属性而客户端没填时，它还会填上 `cwd`。处理函数的返回值被包装成一个 MCP 工具结果：`content` 里是 JSON 文本，`structuredContent` 里是同一个对象，`isError: false`。处理函数内部的异常会变成带内的 `isError: true` 结果，而不是 JSON-RPC 错误，这样模型能读到它并自我纠正。文本会显示 Coffer 编写的错误和无效值错误的消息，其他异常只显示异常的类型名。工具的具体行为见 [MCP 工具](/zh/reference/mcp-tools)。
 
@@ -293,7 +292,7 @@ stateDiagram-v2
 
 ### 内置的 `coffer` 服务器 {#the-built-in-coffer-server}
 
-MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」下。它不是资源：`GET /api/v1/mcp/builtin` 根据守护进程已知的信息来描述它：绑定的端口（`http://127.0.0.1:<port>/mcp`）、上面的内置工具列表（去掉关闭功能的工具）、MCP 配置里有 Coffer 条目的智能体（由组合根提供，因为 MCP 类型不能读取智能体类型），以及以保留 uid `coffer` 记录的最近 24 小时调用。它的「调用记录」标签页读取 `GET /api/v1/mcp/invocations?uid=coffer`。
+MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」下。它不是资源：`GET /api/v1/mcp/builtin` 根据守护进程已知的信息来描述它：绑定的端口（`http://127.0.0.1:<port>/mcp`）、上面的内置工具列表、MCP 配置里有 Coffer 条目的智能体（由组合根提供，因为 MCP 类型不能读取智能体类型），以及以保留 uid `coffer` 记录的最近 24 小时调用。它的「调用记录」标签页读取 `GET /api/v1/mcp/invocations?uid=coffer`。
 
 ## 通知与服务器发起的请求 {#notifications-and-server-initiated-requests}
 
@@ -345,7 +344,7 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 | 生效范围覆盖 | `~/.coffer/local/tool-reach.json` | 生效范围只属于本机；覆盖会为某一个工具缩小组的范围。 |
 | 按工具的闸门 | 网关，按会话 | 按会话计算被关掉的和超出生效范围的工具；`tools/list` 和 `coffer__search_tools` 丢掉它们，`tools/call` 以 `denied` 拒绝它们，与停用的能力形态相同。 |
 | 注解 | 每个发现的工具的注解，复制到它的列表条目 | 会修改数据的工具列为 `readOnlyHint: false, destructiveHint: true`，其他的列为 `readOnlyHint: true`；每个上游自己的注解也会透传。 |
-| 管理 | MCP 应用层包、自定义工具 REST 路由和 `coffer tool` CLI 命令组 | 每次写入都经过资源服务，所以校验、缺失密钥探测、审计和逐出活动连接都随之而来。 |
+| 管理 | MCP 应用层包和自定义工具 REST 路由 | 每次写入都经过资源服务，所以校验、缺失密钥探测、审计和逐出活动连接都随之而来。 |
 | OpenAPI | MCP 领域包里的一个纯读取器，以及 MCP 基础设施包里的一个获取器 | 文档被读成草稿工具；URL 通过 SSRF 防护获取（5 MiB、20 s、重定向会重新检查）。 |
 
 ### 密钥边界 {#the-secret-boundary}

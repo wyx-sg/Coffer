@@ -11,17 +11,18 @@ new material without choosing where it goes, and being refused when a request ai
 at something that is not a document.
 
 A collection is one tree of documents a person and curation write together. New
-knowledge never arrives as a file write: ``POST /material`` submits it to the
-collection's hidden inbox, and with no internal model configured — the state of the
-app booted here — it is promoted to a document on the spot ("Submit every entrance's
-input as material", "Promote material directly when no model is configured").
+knowledge never arrives as a file write: an agent's file in the collection's
+hidden inbox, or ``/upload``, submits it, and with no internal model configured —
+the state of the app booted here — it is promoted to a document on the spot
+("Submit every entrance's input as material", "Promote material directly when no
+model is configured").
 ``DELETE`` reaches any document; ``GET`` reads any document and any inbox item;
 ``PUT`` saves an edited body over an existing document. The README and the inbox are
 not documents, and each of those refusals is one assertion below, driven through the
 route rather than the service, because the route is where a handler could forget the
 rule.
 
-``client``, ``_create_collection``, ``_submit`` and ``_hold_material`` live in
+``client``, ``_create_collection``, ``_submit``, ``_submit_material`` and ``_hold_material`` live in
 ``conftest.py``.
 """
 
@@ -35,7 +36,7 @@ from starlette.testclient import TestClient
 
 from coffer.infrastructure.knowledge import curation_state, fs
 
-from .conftest import _create_collection, _hold_material, _submit
+from .conftest import _create_collection, _hold_material, _submit, _submit_material
 
 
 def _document(client: TestClient, collection: str, title: str, body: str = "b") -> str:
@@ -85,11 +86,9 @@ def test_the_listing_counts_documents_and_pending_material_apart(  # type: ignor
     _submit(client, collection="shopee", title="One", description="d", body="b")
     _document(client, "shopee", "Written")
     _hold_material(monkeypatch)
-    held = client.post(
-        "/api/v1/knowledge/material",
-        json={"collection": "shopee", "title": "Waiting", "description": "d", "body": "b"},
-    )
-    assert held.status_code == 201, held.text
+    assert _submit_material(
+        client, collection="shopee", title="Waiting", description="d", body="b"
+    ).pending
 
     listed = client.get("/api/v1/knowledge/collections")
     assert listed.status_code == 200, listed.text
@@ -145,10 +144,7 @@ def test_the_tree_lists_documents_and_the_inbox_but_not_the_readme(  # type: ign
     client.post("/api/v1/knowledge/collections", json={"name": "shopee", "description": "d"})
     document = _submit(client, collection="shopee", title="Note", description="d", body="b")
     _hold_material(monkeypatch)
-    client.post(
-        "/api/v1/knowledge/material",
-        json={"collection": "shopee", "title": "Waiting", "description": "d", "body": "b"},
-    )
+    _submit_material(client, collection="shopee", title="Waiting", description="d", body="b")
 
     level = client.get("/api/v1/knowledge/tree", params={"path": "shopee"})
     assert level.status_code == 200, level.text
@@ -189,10 +185,7 @@ def test_the_inbox_can_be_listed_and_read_but_nothing_else_hidden(  # type: igno
     module")."""
     _create_collection(client, "shopee")
     _hold_material(monkeypatch)
-    client.post(
-        "/api/v1/knowledge/material",
-        json={"collection": "shopee", "title": "Waiting", "description": "w", "body": "later"},
-    )
+    _submit_material(client, collection="shopee", title="Waiting", description="w", body="later")
     (tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / ".scratch").mkdir()
     (tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / ".scratch" / "x.md").write_text(
         "x", encoding="utf-8"
@@ -224,10 +217,7 @@ def test_an_inbox_item_cannot_be_deleted_or_saved(client, monkeypatch) -> None: 
     item ("Hide dot-prefixed entries except the inbox")."""
     _create_collection(client, "shopee")
     _hold_material(monkeypatch)
-    client.post(
-        "/api/v1/knowledge/material",
-        json={"collection": "shopee", "title": "Waiting", "description": "w", "body": "b"},
-    )
+    _submit_material(client, collection="shopee", title="Waiting", description="w", body="b")
     path = "shopee/.inbox/waiting.md"
     fingerprint = client.get("/api/v1/knowledge/file", params={"path": path}).json()["fingerprint"]
 
@@ -289,37 +279,30 @@ def test_reading_a_missing_file_is_not_found(client) -> None:  # type: ignore[no
 
 @pytest.mark.acceptance(
     spec="knowledge",
-    scenario="written material waits in the inbox, or becomes a document with no model",
+    scenario="with no internal model, pending material becomes documents as it stands",
 )
 def test_material_becomes_a_document_when_no_model_could_merge_it(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
     _create_collection(client, "shopee")
 
-    resp = client.post(
-        "/api/v1/knowledge/material",
-        json={
-            "title": "Account Gateway",
-            "description": "Where account decisions are made",
-            "body": "The orchestration layer.",
-            "collection": "shopee",
-        },
+    out = _submit_material(
+        client,
+        title="Account Gateway",
+        description="Where account decisions are made",
+        body="The orchestration layer.",
+        collection="shopee",
     )
-    assert resp.status_code == 201, resp.text
-    out = resp.json()
     # No internal model is configured in this app, so nothing would ever merge the
     # material: it is a document the moment it arrives ("Promote material directly
     # when no model is configured").
-    assert out == {
-        "status": "written",
-        "collection": "shopee",
-        "title": "Account Gateway",
-        "path": "shopee/account-gateway.md",
-    }
+    assert out.document is not None
+    assert out.document.path == "shopee/account-gateway.md"
+    assert out.pending is None
     # And nothing is left waiting behind it.
     assert (
         list((tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / ".inbox").iterdir()) == []
     )
     # Stamped, so the sweep does not hand the promoted document straight back.
-    read = client.get("/api/v1/knowledge/file", params={"path": out["path"]}).json()
+    read = client.get("/api/v1/knowledge/file", params={"path": out.document.path}).json()
     assert read["curated_at"]
 
 
@@ -329,17 +312,9 @@ def test_material_waits_in_the_inbox_when_a_pass_could_merge_it(  # type: ignore
     _create_collection(client, "shopee")
     _hold_material(monkeypatch)
 
-    resp = client.post(
-        "/api/v1/knowledge/material",
-        json={"collection": "shopee", "title": "Gateway", "description": "d", "body": "b"},
-    )
-    assert resp.status_code == 201, resp.text
-    assert resp.json() == {
-        "status": "pending",
-        "collection": "shopee",
-        "title": "Gateway",
-        "path": None,
-    }
+    out = _submit_material(client, collection="shopee", title="Gateway", description="d", body="b")
+
+    assert (out.pending, out.document) == ("gateway.md", None)
     inbox = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / ".inbox"
     assert [p.name for p in inbox.iterdir()] == ["gateway.md"]
     # And no document yet: a pass writes those.
@@ -379,34 +354,32 @@ def test_two_submissions_of_one_title_are_two_pieces_of_material(client) -> None
     )
 
 
-def test_material_for_an_unknown_collection_is_not_found(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
-    resp = client.post(
-        "/api/v1/knowledge/material",
-        json={"collection": "typo", "title": "t", "description": "d", "body": "b"},
-    )
-    assert resp.status_code == 404, resp.text
-    assert resp.json()["error"]["code"] == "KNOWLEDGE_COLLECTION_NOT_FOUND"
+def test_material_for_an_unknown_collection_is_refused_and_creates_nothing(
+    client, tmp_path
+) -> None:  # type: ignore[no-untyped-def]
+    from coffer.domain.knowledge.errors import CollectionNotFound
+
+    with pytest.raises(CollectionNotFound):
+        _submit_material(client, collection="typo", title="t", description="d", body="b")
     assert not (tmp_path / ".coffer" / "vault" / "knowledge" / "typo").exists()
 
 
-def test_material_with_no_description_is_refused(client) -> None:  # type: ignore[no-untyped-def]
-    """The skill's catalogue is how a document is ever found, so material that
-    fails to describe itself is unfindable ("Carry title, description and actor in frontmatter")."""
-    _create_collection(client, "shopee")
-    resp = client.post(
-        "/api/v1/knowledge/material",
-        json={"title": "t", "description": "", "body": "b", "collection": "shopee"},
-    )
-    assert resp.status_code == 422, resp.text
-
-
-def test_material_with_a_whitespace_only_description_is_refused(client) -> None:  # type: ignore[no-untyped-def]
-    _create_collection(client, "shopee")
-    resp = client.post(
-        "/api/v1/knowledge/material",
-        json={"title": "t", "description": "   ", "body": "b", "collection": "shopee"},
-    )
-    assert resp.status_code == 422, resp.text
+@pytest.mark.acceptance(
+    spec="knowledge",
+    scenario="the routes are the web UI's, with no material or create-at-path route",
+)
+def test_there_is_no_material_route_and_no_create_at_path_route(client) -> None:  # type: ignore[no-untyped-def]
+    routes = {
+        (method.upper(), path)
+        for path, operations in client.app.openapi()["paths"].items()  # type: ignore[attr-defined]
+        if path.startswith("/api/v1/knowledge")
+        for method in operations
+    }
+    assert ("POST", "/api/v1/knowledge/collections") in routes  # the table is not empty
+    assert not [p for _, p in routes if p.endswith("/material")]
+    # The one route that writes a document only replaces the body of one that exists.
+    assert {m for m, p in routes if p == "/api/v1/knowledge/file"} == {"GET", "PUT", "DELETE"}
+    assert client.post("/api/v1/knowledge/material", json={}).status_code in (404, 405)
 
 
 def test_a_collection_description_of_only_spaces_is_refused(client) -> None:  # type: ignore[no-untyped-def]
@@ -512,10 +485,7 @@ def test_curating_with_no_model_promotes_what_the_inbox_holds(  # type: ignore[n
     is configured")."""
     _create_collection(client, "shopee")
     _hold_material(monkeypatch)
-    client.post(
-        "/api/v1/knowledge/material",
-        json={"collection": "shopee", "title": "Gateway", "description": "d", "body": "b"},
-    )
+    _submit_material(client, collection="shopee", title="Gateway", description="d", body="b")
     uid = client.get("/api/v1/resources", params={"kind": "knowledge", "name": "shopee"}).json()[
         "resources"
     ][0]["uid"]

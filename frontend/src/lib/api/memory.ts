@@ -1,7 +1,7 @@
 // frontend/src/lib/api/memory.ts
 //
 // Request helpers for the `memory` kind's REST family (`/api/v1/memory/*`,
-// spec memory "Cover memory management on REST and the CLI"). Partition
+// spec memory "Manage memory in the web UI"). Partition
 // deletion is deliberately absent: a partition is one `memory` Resource, so it
 // goes through the kind-agnostic `DELETE /api/v1/resources/{uid}`.
 //
@@ -19,6 +19,7 @@ import type {
   MemoryFileTreeOut,
   NoteListOut,
   NoteOut,
+  NoteSave,
   PartitionListOut,
   ReadingOut,
   RetiredListOut,
@@ -53,6 +54,20 @@ export function getNote(uid: string, slug: string): Promise<NoteOut> {
   return unwrap(
     getApiClient().GET("/memory/partitions/{uid}/notes/{slug}", {
       params: { path: { uid, slug } },
+    }),
+  );
+}
+
+/** Save a memory's body ("Edit a memory in the web UI or on disk"): the
+ *  frontmatter is kept. `expected_fingerprint` is the one the read carried; a
+ *  note changed since is refused with 409 `MEMORY_NOTE_CONFLICT`, whose
+ *  `details` carry the note's current body and fingerprint. Resolves with the
+ *  note as saved, new fingerprint included. */
+export function saveNote(uid: string, slug: string, payload: NoteSave): Promise<NoteOut> {
+  return unwrap(
+    getApiClient().PUT("/memory/partitions/{uid}/notes/{slug}", {
+      params: { path: { uid, slug } },
+      body: payload,
     }),
   );
 }

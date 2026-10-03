@@ -55,11 +55,11 @@ Skills, knowledge, memory and model providers work the same way: kept once, deli
 
 ## Does Coffer change my agents' configuration files?
 
-Only when you ask it to, and each change is recorded in the audit log. Connecting an agent to Coffer writes one MCP server entry into the agent's configuration and Coffer's memory hook (four entries: session start, each prompt, and before and after each shell command) into its settings. Delivering a skill places a link to it in the agent's skills directory (for Claude Code, `~/.claude/skills`). Switching a model provider writes the provider's settings into the agent's own configuration. Coffer reads an agent's own memory files but never writes them. See [Agents](/guides/agents).
+Only when you ask it to, and each change is recorded in the audit log. Connecting an agent to Coffer writes one MCP server entry into the agent's configuration and Coffer's memory hook (two entries: session start and each prompt) into its settings. Delivering a skill places a link to it in the agent's skills directory (for Claude Code, `~/.claude/skills`). Switching a model provider writes the provider's settings into the agent's own configuration. Coffer reads an agent's own memory files but never writes them. See [Agents](/guides/agents).
 
 ## Do I have to start the daemon myself?
 
-No. Any `coffer` command that needs the daemon, an agent connecting through `coffer-mcp-shim`, and the desktop app all start the daemon if it is not running. `coffer daemon status` is the exception: it only reports, and says `not running` instead of starting one. On macOS, `coffer daemon service install` starts it at login and restarts it after a crash. See [Running the daemon](/guides/daemon).
+No. Any `coffer` command that needs the daemon, an agent connecting through `coffer-mcp-shim`, and the desktop app all start the daemon if it is not running. `coffer daemon status` is the exception: it only reports, and says `not running` instead of starting one. On macOS, **Settings → Daemon → Start at login** starts it at login and restarts it after a crash. See [Running the daemon](/guides/daemon).
 
 ## Where is my data?
 
@@ -67,7 +67,7 @@ In `~/.coffer` on each machine:
 
 | Path | Contents |
 | --- | --- |
-| `vault/` | A git repository of your configuration and content: one JSON file per resource, knowledge collections, skill folders, memory triggers, encrypted secrets |
+| `vault/` | A git repository of your configuration and content: one JSON file per resource, knowledge collections, skill folders, encrypted secrets |
 | `local/` | Settings true of this machine only: agents, reach, retention, the sync remote |
 | `content/` | Attachments and the chat workspace |
 | `runs.db` | History: conversations, audit and invocation logs, sync rounds, usage |

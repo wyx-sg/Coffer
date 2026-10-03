@@ -57,9 +57,9 @@ def seatalk_sdk_handoff(channel: str, location: SdkLocation, docs_url: str) -> s
                 f"Unpack it so that the package directory is {target} — the directory that "
                 f"holds `{SDK_PACKAGE}`'s `__init__.py` — creating {location.directory} if "
                 "needed. Do not pip-install it and do not change any other directory.",
-                f"Check that {target}__init__.py exists, then run `coffer channel show "
-                f"{channel}`: within a few seconds its inbound line should read "
-                "websocket (connected).",
+                f"Check that {target}__init__.py exists, then watch the "
+                f"{channel} channel's page in Coffer: within a few seconds its inbound line "
+                "should read websocket (connected).",
                 "When it does, tell me to press Retry on the channel's page if it still shows "
                 "the SDK as missing.",
             ),

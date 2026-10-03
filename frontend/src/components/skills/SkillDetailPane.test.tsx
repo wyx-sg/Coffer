@@ -1,6 +1,5 @@
 // frontend/src/components/skills/SkillDetailPane.test.tsx
-// The open skill in the Skills page's reading pane (spec skill-manager "Cover
-// skill management on REST, the CLI and the web", "Show the commands a skill
+// The open skill in the Skills page's reading pane (spec skill-manager "Cover skill management on REST and the web", "Show the commands a skill
 // declares it needs"): its four tabs at their own paths, the Files tab opening
 // on SKILL.md, each agent's copy on Delivery, the declared commands on
 // Requires (History has its own file), and the built-in skill's refusals. The

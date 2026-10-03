@@ -150,7 +150,12 @@ YAML frontmatter block, then Coffer's own prose underneath.
 | `partition` | string | `global` or a repository slug. |
 | `origins` | list of Origin | Every raw entry this note was built from, and through them every contributing agent ("Record provenance and merge by meaning"). |
 | `search_terms` | list of string | Carried up from the entries that supplied them, and restated in the index line so the next agent does not have to guess a word. |
-| `created_at` / `updated_at` | string | A note accumulates; `updated_at` moves when a later pass rewrites it. |
+| `created_at` / `updated_at` | string | A note accumulates; `updated_at` moves when a later pass rewrites it or a person saves an edit. |
+
+A note's read also carries a `fingerprint` (sha256 of the file's bytes). It is
+not stored in the file: it is what a save in the web UI sends back, so a note
+changed since the read (by distil or on disk) is refused instead of overwritten
+(see "Edit a memory in the web UI or on disk").
 
 There is **no** `status`, no `superseded_by` and no `conflicts_with`. A note a
 later one contradicts does not sit in `notes/` marked dead — it leaves, and
@@ -296,7 +301,7 @@ back empty, which is the truth rather than a lost record.
 
 ## Delivery state
 
-Per-agent delivery is **four entries in that agent's own settings file** — not a
+Per-agent delivery is **two entries in that agent's own settings file** — not a
 record here. Each of Coffer's entries is identified by a marker embedded as the
 argument of a leading no-op shell command, so detection never depends on
 `argv[0]`, and every entry runs the same command,
@@ -307,8 +312,6 @@ from stdin:
 |---|---|---|---|
 | `SessionStart` | `startup\|resume\|clear\|compact` | 10 s | the bounded index, as `additionalContext` |
 | `UserPromptSubmit` | — | 5 s | the prompt's retrieved notes, as `additionalContext` |
-| `PreToolUse` | `Bash` | 5 s | a `deny` with the note as reason, once per trigger per session |
-| `PostToolUse` | `Bash` | 5 s | the note as `additionalContext`, once per trigger per session |
 
 | Agent type | File | Approval |
 |---|---|---|
@@ -324,34 +327,10 @@ the vault-wide audit surface ("Audit every delivery fire").
 
 ### The session ledger
 
-What each session was already given — the notes retrieved for it and the
-triggers that already held a command — is kept per `session_id` in the daemon's
+What each session was already given — the notes retrieved for it — is kept per `session_id` in the daemon's
 memory, bounded to the 2,048 most recent sessions. It is not written to a file
 of its own: at boot it is rebuilt from the last 7 days of `memory_delivery_fired`
 audit events ("Remember what a session was given across daemon restarts").
-
-## Trigger
-
-An authored guard on a known trap, one Markdown file per trigger in the vault:
-`~/.coffer/vault/memory-triggers/<id>.md`, in the vault repository, so every
-change to one is a commit. Not under the memory root, because a person wrote
-it, so a rebuild of the derived tree keeps it (spec memory "Keep triggers in the
-vault, armed only by a person").
-
-| Field (frontmatter) | Meaning |
-|---|---|
-| `id` | the file's stem: the note's slug and six hex characters |
-| `note` | `<partition>/<slug>` — the note whose substance is the reason |
-| `kind` | `block` (deny the matching command once per session) or `context` (add the note after a command whose output matches) |
-| `command` | regex over each executing shell segment, `program args`; required for `block` |
-| `unless` | regex over the whole command; a match keeps the trigger quiet |
-| `error` | regex over a command's output; required for `context` |
-| `proposed_by` | `distil` for a proposal, empty when a person wrote it |
-| `armed_by`, `armed_at` | who armed it and when; empty while it is only a proposal |
-| `created` | when the file was first written |
-
-The body below the frontmatter is optional free text, shown as the reason when
-the note itself no longer exists.
 
 ## Audit events
 
@@ -365,11 +344,8 @@ every kind shares.
 | `memory_distilled` | a distil pass completes — scheduled, or as part of an Update memory action — with its merge / open / retire / kept-nothing counts and whether a model was used |
 | `memory_delivery_installed` | the hook is installed for an agent — by connecting it, or by applying its drift item |
 | `memory_delivery_removed` | the hook is removed from an agent — by disconnecting it |
-| `memory_delivery_fired` | an installed hook fires and delivers — its `details` name the `moment` (`session_start`, `prompt`, `guard`, `error`), the `session_id`, the `notes` it carried and, for a trigger, the `trigger`; never their text ("Audit every delivery fire") |
-| `memory_trigger_added` | a person writes a trigger, armed as it is written |
-| `memory_trigger_proposed` | distil proposes a trigger, unarmed |
-| `memory_trigger_armed` / `memory_trigger_disarmed` | a person arms or disarms a trigger |
-| `memory_trigger_deleted` | a trigger's file is deleted |
+| `memory_delivery_fired` | an installed hook fires and delivers — its `details` name the `moment` (`session_start` or `prompt`), the `session_id` and the `notes` it carried; never their text ("Audit every delivery fire") |
+| `memory_note_edited` | a person saves an edit to a note in the web UI, naming the partition, the note and the actor |
 
 Prompt-time retrieval (`POST /api/v1/memory/hook`) records one
 `memory_delivery_fired` event naming the notes it delivered, and nothing about

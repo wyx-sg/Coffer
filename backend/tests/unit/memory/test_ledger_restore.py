@@ -37,12 +37,10 @@ class _Audit:
 
 
 @pytest.mark.asyncio
-async def test_prompt_and_trigger_fires_are_replayed_per_session() -> None:
+async def test_prompt_fires_are_replayed_per_session() -> None:
     audit = _Audit(
         [
-            _fire({"moment": "guard", "session_id": "s1", "trigger": "t1", "notes": ["p/a"]}),
             _fire({"moment": "prompt", "session_id": "s1", "notes": ["p/a", "global/b"]}),
-            _fire({"moment": "error", "session_id": "s2", "trigger": "t2", "notes": ["p/a"]}),
             _fire({"moment": "session_start", "session_id": "s3"}),
             _fire({"moment": "prompt", "notes": ["p/c"]}),  # no session: nothing to key on
             _fire({"moment": "prompt", "session_id": "old", "notes": ["p/d"]}, minutes_ago=10**6),
@@ -52,9 +50,8 @@ async def test_prompt_and_trigger_fires_are_replayed_per_session() -> None:
 
     applied = await restore_from_audit(ledger, audit, now=_NOW)
 
-    assert applied == 3
+    assert applied == 1
     assert ledger.delivered("s1") == {"p/a", "global/b"}
-    assert ledger.has_fired("s1", "t1") and ledger.has_fired("s2", "t2")
     assert ledger.delivered("s3") == frozenset() and ledger.delivered("old") == frozenset()
     assert audit.asked[0]["event_type"] == "memory_delivery_fired"
     assert audit.asked[0]["since"] == _NOW - RESTORE_WINDOW

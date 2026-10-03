@@ -1,8 +1,8 @@
 """The background worker that folds new knowledge into a collection's documents.
 
 It is **on by default** (spec knowledge "Curate on one owner machine only"): it is what merges each
-collection's inbox — uploads, agents' ``coffer__write`` — into the documents an
-agent reads, and what carries a person's edit to one document into the rest.
+collection's inbox — uploads, files agents write there — into the documents an
+agent reads, and what carries an edit to one document into the rest.
 A vault where it never runs is one whose new material waits unread.
 
 It is still bounded by an owner machine, because a pass rewrites synced
@@ -26,6 +26,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from coffer.application.knowledge.curate import pending_items
+from coffer.application.knowledge.intake import adopt_dropped_files
 from coffer.application.knowledge.recording import settle
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.upkeep_clock import PASS_CLOCK, PassClock
@@ -146,6 +147,13 @@ class CurationWorker:
                 await self._deliver()
             except Exception:
                 logger.warning("knowledge.curate_worker.delivery_failed", exc_info=True)
+        # A file an agent wrote into an inbox gets the frontmatter it lacks and
+        # an audit event, before the disk step below commits it (spec knowledge
+        # "Submit material by writing a file into the inbox").
+        try:
+            await adopt_dropped_files(self._service)
+        except Exception:
+            logger.warning("knowledge.curate_worker.intake_failed", exc_info=True)
         # Edits made on disk since the last write become versions of their own
         # now, whether or not curation runs here (spec knowledge "Keep every
         # document's history and undo a pass as a whole").

@@ -175,3 +175,17 @@ def test_an_absolute_path_names_the_command_and_stays_on_this_machine(
     assert "/fake/bin" not in json.dumps(_stored(tmp_path))
     local = (tmp_path / ".coffer" / "local" / "cli-paths.json").read_text(encoding="utf-8")
     assert json.loads(local) == {"tool": "/fake/bin/tool"}
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="add, edit and remove a tool over REST")
+def test_a_tool_is_added_edited_and_removed(daemon: CliDaemon) -> None:
+    added = daemon.client.post("/clis", json={"command": "jq", "title": "JSON"})
+    assert added.status_code == 201 and added.json()["added"] is True
+    edited = daemon.client.patch("/clis/jq", json={"title": None})
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["title"] != "JSON"
+    assert daemon.client.delete("/clis/jq").status_code in (200, 204)
+    assert daemon.client.get("/clis").json()["items"] == []
+    again = daemon.client.delete("/clis/jq")
+    assert again.status_code == 404
+    assert again.json()["error"]["code"] == "CLI_TOOL_NOT_DECLARED"

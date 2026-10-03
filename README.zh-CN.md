@@ -12,7 +12,7 @@
 
 > 给 AI 编程智能体用的本地保险库。MCP 服务器、技能、知识、记忆和模型提供商只配一次，本机所有智能体共用。
 
-Coffer 是运行在你机器上的一个守护进程，Claude Code 和 Codex 都连到它。智能体共用的东西——调用的工具、遵循的技能、读的笔记、用的密钥——都放在 `~/.coffer` 下一个由普通文件组成的保险库里，再由 Coffer 投递给每个智能体。你可以用 Web 界面、macOS 桌面应用、`coffer` 命令行，或者在 Telegram、SeaTalk 里管理它。没有账号，也没有云端后台：守护进程只监听 `127.0.0.1`。
+Coffer 是运行在你机器上的一个守护进程，Claude Code 和 Codex 都连到它。智能体共用的东西——调用的工具、遵循的技能、读的笔记、用的密钥——都放在 `~/.coffer` 下一个由普通文件组成的保险库里，再由 Coffer 投递给每个智能体。你可以用 Web 界面、macOS 桌面应用，或者在 Telegram、SeaTalk 里管理它；`coffer` 命令行负责启动守护进程和读取它的日志。没有账号，也没有云端后台：守护进程只监听 `127.0.0.1`。
 
 📖 **文档：** <https://wyx-sg.github.io/Coffer/zh/>（[English](https://wyx-sg.github.io/Coffer/)）
 
@@ -34,7 +34,7 @@ Coffer 用智能体之下的一层共享层取代这些副本：
 | **一个 MCP 端点** | 上游 MCP 服务器只注册一次。每个智能体的配置里只有一个 `coffer` 条目；工具以 `<server>__<tool>` 的名字出现，每个服务器开放哪些工具、哪些智能体能用都由你决定，每次调用都有记录（从不记录参数）。工具数超出预算后，`coffer__search_tools` 可以在完整目录里搜索。 |
 | **自定义工具** | 导入 OpenAPI 规范，或描述一个请求，就能把任意 HTTP API 变成智能体的工具。请求由网关发出，出站时带上你的密钥。 |
 | **一个技能库** | [AgentSkills](https://agentskills.io) 技能只导入一次——来自文件夹、压缩包或 git 仓库——Coffer 把它们链接进每个智能体的 `skills/` 目录，保持链接正确，并跟踪上游更新。**命令行工具**页列出技能需要哪些命令，以及哪些缺失、版本太旧或没有登录。 |
-| **知识** | `~/.coffer/vault/knowledge/` 下的普通 Markdown 知识集。智能体借助生成的目录，用自己的文件工具读取，通过 `coffer__write` 往里添加。不切块、不做向量化。可选的整理会把新材料合并进已有文档，并保留可撤销的历史。 |
+| **知识** | `~/.coffer/vault/knowledge/` 下的普通 Markdown 知识集。智能体借助生成的目录，用自己的文件工具读取，往知识集的 `.inbox/` 里写一个文件就能添加。不切块、不做向量化。可选的整理会把新材料合并进已有文档，并保留可撤销的历史。 |
 | **记忆** | Coffer 以只读方式读取每个智能体自己的原生记忆，按项目提炼成笔记，另加一个 `global` 分区，再通过 Hook 投递回去——Claude Code 学到的，Codex 也知道。 |
 | **模型提供商** | 提供商配置（接入地址和 API 密钥）只存一次，智能体一键切换过去。智能体与 Coffer 的本地模型代理通信，由代理在上游加上 API 密钥、在提供同一模型的连接之间故障切换，并统计经过它的用量和费用。提供商的 API 密钥 不会写进智能体的配置。 |
 | **对话与消息渠道** | 在 Web 的**对话**页驱动 Claude Code 或 Codex，或者配对一个 Telegram、SeaTalk 机器人，用手机给智能体发消息——私聊、群聊和话题都行。 |
@@ -49,10 +49,9 @@ Coffer 用智能体之下的一层共享层取代这些副本：
 按照 https://wyx-sg.github.io/Coffer/zh/start/install 在这台机器上安装 Coffer——
 选择适合这台机器的安装方式（如果有适用于这个系统和架构的发布版就用发布版，
 否则从源码安装）。运行任何需要 sudo 的命令或修改我的 shell 配置文件之前先问我。
-装好后用 `coffer daemon status` 检查。然后对这台机器上装了的每个编程智能体
-（claude-code、codex）运行 `coffer agent add <type>` 和 `coffer agent connect <type>`，
-运行 connect 之前先告诉我它会改哪些配置文件。不要处理任何凭据：如果某一步需要登录，
-告诉我该怎么做。
+装好后用 `coffer daemon status` 检查。然后告诉我它在这里找到了哪些编程智能体
+（claude-code、codex），以及 Web 界面「智能体」页面上每个智能体的「连接」按钮会改哪些配置文件，
+好让我自己去连接。不要处理任何凭据：如果某一步需要登录，告诉我该怎么做。
 ```
 
 智能体会读安装页面，为你的机器选好安装方式并检查结果。
@@ -88,16 +87,16 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 ## 快速上手
 
 ```sh
-coffer open                          # 启动守护进程，打开已登录的 Web 界面
-coffer scan                          # 列出 Coffer 还没管理的智能体、技能和 MCP 条目
-coffer agent add claude-code         # 登记 Claude Code（Codex 用 codex）
-coffer agent connect claude-code     # 安装 Coffer 的 MCP 条目和记忆 Hook
-
-coffer mcp add filesystem --stdio "npx -y @modelcontextprotocol/server-filesystem /tmp"
-coffer mcp test filesystem           # 确认它能响应，并列出它的工具
+coffer daemon start                  # 启动守护进程；Web 界面在 http://127.0.0.1:8000/，已登录
 ```
 
-新开一个 Claude Code 会话，就能看到 `filesystem__read_file` 等工具。需要守护进程的命令都会自动启动它。[15 分钟快速上手](https://wyx-sg.github.io/Coffer/zh/start/quickstart)接着介绍如何投递技能；这些事在 Web 界面里也都能做，而且 Coffer 写入之前会让你逐一检查每处文件改动。
+在 Web 界面（或桌面应用）中：
+
+1. **智能体**：在 Claude Code 那一行（Codex 同理）选择**连接**，检查 Coffer 将要写入的内容，然后应用。
+2. **MCP 服务器**：**添加服务器**，粘贴服务器的 JSON（例如用 `npx -y @modelcontextprotocol/server-filesystem /tmp` 启动的 `filesystem`），然后**导入**。
+3. 在服务器页面上，**测试连接**确认它能响应；**工具**标签页列出它的工具。在终端里，`coffer mcp test filesystem` 做同样的检查。
+
+新开一个 Claude Code 会话，就能看到 `filesystem__read_file` 等工具。[15 分钟快速上手](https://wyx-sg.github.io/Coffer/zh/start/quickstart)接着介绍如何投递技能；Web 界面会在 Coffer 写入之前让你逐一检查每处文件改动。
 
 ## 工作原理
 

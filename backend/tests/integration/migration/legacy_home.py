@@ -597,7 +597,6 @@ def _trees(lh: LegacyHome) -> None:
     _write(lh, "memory/global/MEMORY.md", "# Memory\n")
     _write(lh, "memory/global/notes/a.md", "a lesson\n")
     _write(lh, "memory/coffer/.raw/entry.jsonl", '{"x": 1}\n')
-    _write(lh, "vault/memory-triggers/rm-rf.md", "---\nid: rm-rf\n---\nNever rm -rf.\n")
     _write(lh, "chat-media/abc.bin", b"\x00\x01binary")
     _write(lh, "channel-media/photo.png", b"\x89PNG")
     _write(lh, "workspace/notes.txt", "scratch\n")

@@ -126,7 +126,7 @@ coffer run --env-file connection.env -- ./query.sh
 
 在**桌面应用**中打开[密钥页面](#the-secrets-page)，在对应行选择 **显示值…**。先会弹出警告：任何能看到你屏幕的人都能读到这个值。然后 macOS 要求 Touch ID 或登录密码，提示中会写明是哪个密钥。值显示 30 秒，附带 **复制** 和 **隐藏**，然后再次隐藏；关闭对话框会立即丢弃它。每次显示都会重新询问；不存在一个“第二次免验证”的时间窗口。显示以 `secret_revealed` 记入审计，只记录 ref。
 
-浏览器界面不提供显示：菜单项显示为 **在 Coffer 应用中显示** 且处于禁用状态。`coffer secret get <ref>` 只确认值是否已存储。
+浏览器界面不提供显示：菜单项显示为 **在 Coffer 应用中显示** 且处于禁用状态。
 
 ## 审批 {#approvals}
 
@@ -141,7 +141,7 @@ coffer run --env-file connection.env -- ./query.sh
 | 把同步远端的推送令牌指向另一个 URL。 | 在你批准前，远端不会被保存。 |
 | 为一个已经有去处在接收的 ref、或任何独立密钥存入新值。 | 旧值继续使用；新值加密后等待。 |
 | 新增一个独立密钥。 | 在你批准前，这个名称下什么都不存；值加密后等待。 |
-| `coffer config set secrets.require_approval off` | 在你批准前，保护保持开启。 |
+| 在**设置 › 安全**里关闭密钥审批。 | 在你批准前，保护保持开启。 |
 
 关键在于**目标**——真正接收这个值的东西，写成你能据以判断的样子：stdio 服务器的完整命令行，连同它的工作目录和其他环境变量（像 `NODE_OPTIONS=--require …` 这样的变量会改变进程的行为）、HTTP 服务器的 URL、git 远端的 URL、消息渠道的机器人或应用。一条审批读起来像这样：
 
@@ -153,7 +153,7 @@ send secret 'github/token' to mcp_server 'gh-work' (GITHUB_TOKEN) at stdio npx -
 
 ### 哪些操作不需要审批 {#what-needs-no-approval}
 
-- **你刚为它提供的密钥。** 最近五分钟内存在这台机器上、且所在 ref 从未发往任何地方的值，会在你注册引用它的服务器、渠道或连接时获批。每个“添加”对话框，以及粘贴了令牌的 `coffer mcp add`，都是这样。第二个引用同一 ref 的地方就是第二个地方，需要等待。这一条不适用于独立密钥。
+- **你刚为它提供的密钥。** 最近五分钟内存在这台机器上、且所在 ref 从未发往任何地方的值，会在你注册引用它的服务器、渠道或连接时获批。每个“添加”对话框，只要粘贴了令牌，都是这样。第二个引用同一 ref 的地方就是第二个地方，需要等待。这一条不适用于独立密钥。
 - **升级时本来就在工作的一切。** 带审批功能的守护进程第一次启动时，每个已在使用的密钥都会针对它当前的目标自动批准一次。迁移到保险库布局（`coffer migrate`）是例外：它不带任何批准，所以每个密钥在每个目的地的首次使用都要等一次批准（见[升级](/zh/guides/upgrading)）。
 - **保护关闭期间的任何操作。**
 
@@ -167,30 +167,13 @@ send secret 'github/token' to mcp_server 'gh-work' (GITHUB_TOKEN) at stdio npx -
 
 ### 一次处理多条 {#answering-several-at-once}
 
-当有两条或更多改动在等待时（比如升级之后，多个去处同时提出请求），同一张表有表头复选框，一开始什么都不会被选中。勾选你要答复的改动：操作栏显示“已选 2/3”，并提供 **拒绝 2** 和 **批准 2…**；什么都没勾选时，按钮是 **全部拒绝** 和 **全部批准 3…**。按下 **批准…** 会直接发起一次 Touch ID 或登录密码验证，系统提示会写出前几项并说明还有多少项；没有第二个确认步骤，因为这张表已经列出了这次确认涵盖的每一项改动。随后各行会显示每一项的结果：**已批准**或**已跳过**。在你打开清单之后目标发生变化的改动会被跳过并继续等待，已不在等待的也会被跳过；你看过的清单之外的任何东西都不会被批准。关闭保护从不属于批量操作，需要单独批准。**拒绝** 不需要在场验证。`coffer secret approvals` 仍然只能列出：批准只能在桌面应用中进行。
-
-在终端里，你可以列出和拒绝，但永远不能批准：
-
-```sh
-coffer secret approvals              # what waits now
-coffer secret approvals --all        # decided ones too; --json for scripts
-coffer secret reject <id>
-```
+当有两条或更多改动在等待时（比如升级之后，多个去处同时提出请求），同一张表有表头复选框，一开始什么都不会被选中。勾选你要答复的改动：操作栏显示“已选 2/3”，并提供 **拒绝 2** 和 **批准 2…**；什么都没勾选时，按钮是 **全部拒绝** 和 **全部批准 3…**。按下 **批准…** 会直接发起一次 Touch ID 或登录密码验证，系统提示会写出前几项并说明还有多少项；没有第二个确认步骤，因为这张表已经列出了这次确认涵盖的每一项改动。随后各行会显示每一项的结果：**已批准**或**已跳过**。在你打开清单之后目标发生变化的改动会被跳过并继续等待，已不在等待的也会被跳过；你看过的清单之外的任何东西都不会被批准。关闭保护从不属于批量操作，需要单独批准。**拒绝** 不需要在场验证。
 
 拒绝对该目标一直有效：密钥继续被扣着，遇到它的服务器或命令会被告知“已被拒绝”（`SECRET_BINDING_REJECTED`），而不是“有东西在等”。拒绝只会弹出一条提示，页面不再列出被拒绝的改动，也没有“重新请求”。要让问题重新摆到你面前，请更改目的地。一条审批最终的状态是 `approved`、`rejected` 或 `superseded`——后者表示它针对的资源被删除了，或已经换了目标，而新目标会另外发起一条新的审批。
 
 ### 在命令行上 {#on-the-command-line}
 
-改动需要等待的命令——`coffer mcp add`、任何 `coffer <kind> edit`（包括 `coffer provider edit --secret` 或 `--base-url`）、`coffer channel add`、`coffer provider add`、`coffer sync remote set`、`coffer secret set`、`coffer config set secrets.require_approval off`——会保存能保存的部分，打印正在等待的内容，并以 `9` 退出：
-
-```text
-$ coffer mcp add gh-work --stdio "npx -y @modelcontextprotocol/server-github" --secret GITHUB_TOKEN=github/token
-waiting for approval in the Coffer app: send secret 'github/token' to mcp_server 'gh-work' (GITHUB_TOKEN) at stdio npx -y @modelcontextprotocol/server-github (approval 3f9c0a7d12e45b68)
-$ echo $?
-9
-```
-
-加上 `--wait`，命令会一直运行到你在应用里回应为止：批准后以 `0` 退出，拒绝后以非零退出；十分钟后放弃等待，审批仍留在应用里。`coffer config set` 没有 `--wait`；在应用里批准后，用 `coffer config get secrets.require_approval` 检查。
+对需要等待的改动，`coffer secret set` 会保存能保存的部分，打印 `waiting for approval in the Coffer app` 和正在等待的内容，并以 `9` 退出。加上 `--wait`，命令会一直运行到你在应用里回应为止：批准后以 `0` 退出，拒绝后以非零退出；十分钟后放弃等待，审批仍留在应用里。
 
 智能体遇到退出码 `9` 时，应该告诉你它注册了什么、正在等你批准，而不是重试。
 
@@ -200,13 +183,7 @@ $ echo $?
 
 ### 关闭保护 {#switching-the-protection-off}
 
-`secrets.require_approval` 默认开启。打开它立即生效。关闭它则要在桌面应用里等一条审批；关闭期间，每个新去处都会不经询问直接批准。除此之外——没有任何环境变量、文件或参数——能把它关掉。
-
-```sh
-coffer config get secrets.require_approval      # on
-coffer config set secrets.require_approval off  # exits 9 until approved in the app
-coffer config set secrets.require_approval on   # at once
-```
+`secrets.require_approval` 默认开启。打开它立即生效。关闭它则要在桌面应用里等一条审批；关闭期间，每个新去处都会不经询问直接批准。除此之外——没有任何环境变量、文件或参数——能把它关掉。开关在**设置 › 安全**的**审批**一节；浏览器里它显示为**在 Coffer 桌面应用中关闭**。
 
 ## 列出你的密钥 {#list-your-secrets}
 
@@ -220,21 +197,9 @@ coffer secret list
 
 ## 把明文密钥文件移入存储 {#move-plaintext-secret-files-into-the-store}
 
-早先的建议是把技能的密钥放在明文文件里，比如 `~/.coffer/secrets/<name>.env`。任何遍历你主目录的程序都能读到它们——备份工具、网盘客户端、智能体的文件搜索。`coffer secret scan` 负责找出它们，`coffer secret import` 负责把它们移入存储。[密钥页面](#the-secrets-page)上的 **查找明文密钥** 运行同样的扫描、试运行和导入：
+早先的建议是把技能的密钥放在明文文件里，比如 `~/.coffer/secrets/<name>.env`。任何遍历你主目录的程序都能读到它们——备份工具、网盘客户端、智能体的文件搜索。[密钥页面](#the-secrets-page)上的 **查找明文密钥** 会找出它们并把它们移入存储。扫描读取 `~/.coffer/secrets/*.env`（`KEY=VALUE` 行）和 `*.json`（扁平的字符串映射），以及你所有托管技能中的每个文本文件（名称里含 password、secret、token 或 key 的赋值，以及常见的令牌格式）。对每个发现，它列出文件、行号、键以及将会得到的独立密钥名称，比如 `coffer://secret/db.PASSWORD`——从不打印值。它还会列出仍在读取 `~/.coffer/secrets/` 下文件的每个技能，方便你把它的命令改成 `coffer run --secret` 或 `coffer run --env-file`。
 
-```sh
-coffer secret scan
-```
-
-扫描读取 `~/.coffer/secrets/*.env`（`KEY=VALUE` 行）和 `*.json`（扁平的字符串映射），以及你所有托管技能中的每个文本文件（名称里含 password、secret、token 或 key 的赋值，以及常见的令牌格式）。对每个发现，它打印文件、行号、键以及将会得到的独立密钥名称，比如 `coffer://secret/db.PASSWORD`——从不打印值。它还会列出仍在读取 `~/.coffer/secrets/` 下文件的每个技能，方便你把它的命令改成 `coffer run --secret` 或 `coffer run --env-file`；`coffer secret scan --prompt` 会打印一段提示词，把这项改写交给你的智能体。
-
-```sh
-coffer secret import --dry-run     # print the plan, write nothing
-coffer secret import               # move every finding (asks first; --yes skips)
-coffer secret import --id <id>     # only this finding (repeatable)
-```
-
-对每个发现，导入会把值存为 `secret/<name>`，读回并比对，然后才把文件中的值替换为 `coffer://secret/<name>`——原子写入，并保留文件权限。已经存有不同值的名称会被跳过，其文件不动。无法改写的文件会报告为已跳过，但值已经存入——存储里有了，文件里也还在——其他文件照常改写；再次导入同一项发现会重试这个文件。不保留任何明文备份。每个存入的值都以 `secret_imported` 记入审计。
+你确认保留勾选的发现之前不会写入任何东西。对每个发现，导入会把值存为 `secret/<name>`，读回并比对，然后才把文件中的值替换为 `coffer://secret/<name>`——原子写入，并保留文件权限。已经存有不同值的名称会被跳过，其文件不动。无法改写的文件会报告为已跳过，但值已经存入——存储里有了，文件里也还在——其他文件照常改写；再次导入同一项发现会重试这个文件。不保留任何明文备份。每个存入的值都以 `secret_imported` 记入审计。
 
 然后把技能的命令改成在 `coffer run` 下运行，例如 `coffer run --env-file ~/.coffer/secrets/db.env -- ./query.sh`。
 
@@ -247,7 +212,7 @@ coffer secret import --id <id>     # only this finding (repeatable)
 
 在场验证守护的是“让明文出去”的操作，而不是主密钥本身：这就是守护进程从不等你的原因。
 
-**在桌面应用中备份主密钥**（设置 › 安全）：选一个口令，用 Touch ID 或登录密码确认，选一个文件夹，应用就会把受口令保护的 `coffer-master-key.cfk` 以权限 `0600` 写进去，并以 `master_key_exported` 记入审计。任何命令或浏览器页面都做不到这一点。在另一台机器上用 `coffer sync key import <file>` 安装备份——见[密钥存储 → 把主密钥带到另一台机器](/zh/guides/secret-store#carry-the-key-to-another-machine)。在签名发行版中，钥匙串是唯一的副本，所以一定要做备份。
+**在桌面应用中备份主密钥**（设置 › 安全）：选一个口令，用 Touch ID 或登录密码确认，选一个文件夹，应用就会把受口令保护的 `coffer-master-key.cfk` 以权限 `0600` 写进去，并以 `master_key_exported` 记入审计。任何命令或浏览器页面都做不到这一点。在另一台机器上用**设置 › 安全**里的**导入主密钥**安装备份——见[密钥存储 → 把主密钥带到另一台机器](/zh/guides/secret-store#carry-the-key-to-another-machine)。在签名发行版中，钥匙串是唯一的副本，所以一定要做备份。
 
 ## 相关 {#related}
 

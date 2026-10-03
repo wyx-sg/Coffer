@@ -2,7 +2,7 @@
 
 Spec mcp-gateway "Serve an HTTP API as a group of custom tools", "Switch off or
 narrow one custom tool", "Wait for approval before a custom tool sends its
-secret" and "Manage custom tools on REST and the command line"; design
+secret" and "Manage custom tools through REST and the Custom tools page"; design
 add-http-custom-tools §2, §5, §9.
 
 A group is an ``mcp_server`` resource of the ``http_api`` transport, so every
@@ -255,7 +255,7 @@ class CustomToolService:
         """Run a draft tool once against the group's base URL and secret.
 
         Nothing is saved and nothing enters the invocation log (spec
-        mcp-gateway "Manage custom tools on REST and the command line"); the
+        mcp-gateway "Manage custom tools through REST and the Custom tools page"); the
         secret goes through the same boundary as a call does.
         """
         resource, transport = await self.group(name)

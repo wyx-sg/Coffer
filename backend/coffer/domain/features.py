@@ -155,6 +155,6 @@ class FeatureDisabled(CofferError):  # noqa: N818
 
     def __init__(self, key: str) -> None:
         super().__init__(
-            f"{key} is switched off on this machine — run: coffer config set feature.{key} on"
+            f"{key} is switched off on this machine — switch it on in Settings › Features"  # noqa: RUF001
         )
         self.feature = key

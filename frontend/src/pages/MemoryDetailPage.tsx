@@ -13,7 +13,8 @@
 //
 // Two tabs in the path: Memories (default) and Delivered. There is no status
 // or reach control — every partition is served to every agent — and no
-// per-memory action: memories are derived by distillation.
+// per-memory action but Edit: memories are derived by distillation, and
+// a person's edit is the memory until newer evidence revises it.
 import { Brain } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";

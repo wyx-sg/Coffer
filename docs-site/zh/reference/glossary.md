@@ -31,7 +31,7 @@ Coffer 在界面、CLI、API 和文档中使用的术语，按英文字母顺序
 
 ### 审批（Approval） {#approval}
 
-一项会扩大密钥去向的改动，在有人于桌面应用中答复之前一直被挂起：从新的[目的地](#destination)引用某个密钥，或把它发往新的[接收方](#target)；替换一个已经有东西在接收的值；或关闭这项保护。批准需要一次[在场授权](#presence-grant)；拒绝则不需要，在任何界面都能操作（`coffer secret reject`）。改动需要等待审批的命令会打印 "waiting for approval in the Coffer app" 并以 `9` 退出。见[密钥](/zh/guides/secrets#approvals)。
+一项会扩大密钥去向的改动，在有人于桌面应用中答复之前一直被挂起：从新的[目的地](#destination)引用某个密钥，或把它发往新的[接收方](#target)；替换一个已经有东西在接收的值；或关闭这项保护。批准需要一次[在场授权](#presence-grant)；拒绝则不需要，在任何界面都能操作。改动需要等待审批的命令会打印 "waiting for approval in the Coffer app" 并以 `9` 退出。见[密钥](/zh/guides/secrets#approvals)。
 
 ### 审计日志（Audit log） {#audit-log}
 
@@ -41,15 +41,15 @@ Coffer 在界面、CLI、API 和文档中使用的术语，按英文字母顺序
 
 ### 绑定（Binding） {#binding}
 
-[技能](#skill)与它被投递到的智能体之间的联系。Coffer 投递技能的方式，是在智能体的技能目录里放一个指向[主存储](#master-store)中该技能目录的符号链接；`coffer skill verify` 会报告任何偏移。见[技能](/zh/guides/skills)。
+[技能](#skill)与它被投递到的智能体之间的联系。Coffer 投递技能的方式，是在智能体的技能目录里放一个指向[主存储](#master-store)中该技能目录的符号链接；**技能**页面会报告任何偏移。见[技能](/zh/guides/skills)。
 
 ### 自带登录（Built-in login） {#built-in-login}
 
-智能体自己的认证方式，即 Coffer 把某个[连接](#connection)[投影](#projection)进去之前的状态。`coffer provider builtin <agent_type>` 会让智能体回到它。见[模型提供商](/zh/guides/providers)。
+智能体自己的认证方式，即 Coffer 把某个[连接](#connection)[投影](#projection)进去之前的状态。智能体页面上的**更改模型**会让智能体回到它。见[模型提供商](/zh/guides/providers)。
 
 ### 内置工具（Built-in tool） {#built-in-tool}
 
-Coffer 自己提供的 MCP 工具，以保留前缀 `coffer__` 与上游工具一起列出：`coffer__search_tools` 和 `coffer__write`。见 [MCP 工具](/zh/reference/mcp-tools)。
+Coffer 自己提供的 MCP 工具，以保留前缀 `coffer__` 与上游工具一起列出：只有一个：`coffer__search_tools`。见 [MCP 工具](/zh/reference/mcp-tools)。
 
 ## C {#c}
 
@@ -75,11 +75,11 @@ Coffer 自带并自行维护的技能。它是 Coffer 给智能体的说明书�
 
 ### 整理所有者（Curation owner） {#curation-owner}
 
-唯一允许自动运行[一轮整理](#curation-pass)的机器，这样两台同步的机器永远不会同时改写同一个知识集。用 `coffer config set engine.curate_owner` 设置。见[知识](/zh/architecture/knowledge#the-owner-machine)。
+唯一允许自动运行[一轮整理](#curation-pass)的机器，这样两台同步的机器永远不会同时改写同一个知识集。用**设置 › 通用**里的**运行位置**设置。见[知识](/zh/architecture/knowledge#the-owner-machine)。
 
 ### 一轮整理（Curation pass） {#curation-pass}
 
-[内部引擎](#internal-engine)对一个[知识集](#collection)做的一次有边界的改写：取一个待处理项（来自[收件箱](#inbox)的新[材料](#material)，或自上次整理以来被编辑过的文档），把它整理进知识集的文档，最多写八个文件。它按定时器运行，也可按需运行（`coffer knowledge curate`）。见[知识](/zh/architecture/knowledge#the-curation-pass)。
+[内部引擎](#internal-engine)对一个[知识集](#collection)做的一次有边界的改写：取一个待处理项（来自[收件箱](#inbox)的新[材料](#material)，或自上次整理以来被编辑过的文档），把它整理进知识集的文档，最多写八个文件。它按定时器运行，也可按需运行。见[知识](/zh/architecture/knowledge#the-curation-pass)。
 
 ## D {#d}
 
@@ -93,11 +93,11 @@ Coffer 自带并自行维护的技能。它是 Coffer 给智能体的说明书�
 
 ### 删除断路器（Deletion breaker） {#deletion-breaker}
 
-[保险库同步](#vault-sync)的保护机制：一轮[同步](#sync-round)如果会丢失 20 个或更多文件，或者某个区域超过 20% 的内容，无论方向如何，都会被挂起，直到你用 `coffer sync hold --confirm`（删除这些文件）或 `coffer sync hold --restore`（保留它们）答复。移动和重命名不算丢失。见[保险库同步](/zh/architecture/vault-sync#the-deletion-breaker)。
+[保险库同步](#vault-sync)的保护机制：一轮[同步](#sync-round)如果会丢失 20 个或更多文件，或者某个区域超过 20% 的内容，无论方向如何，都会被挂起，直到你在**同步**页面答复：**删除 n 个文件**，或**恢复 n 个文件**（保留它们）。移动和重命名不算丢失。见[保险库同步](/zh/architecture/vault-sync#the-deletion-breaker)。
 
 ### 投递（Delivery） {#delivery}
 
-把 Coffer 保存的东西送进智能体：[技能](#skill)通过[绑定](#binding)送达；[记忆](#partition)则通过 Coffer 安装在智能体设置里的 Hook 送达，它在会话开始时交出索引，交出提示词所提到的笔记，并在已知的坑之前交出[触发器](#memory-trigger)对应的笔记。见[记忆](/zh/guides/memory)。
+把 Coffer 保存的东西送进智能体：[技能](#skill)通过[绑定](#binding)送达；[记忆](#partition)则通过 Coffer 安装在智能体设置里的 Hook 送达，它在会话开始时交出索引，并交出提示词所提到的笔记。见[记忆](/zh/guides/memory)。
 
 ### 目的地（Destination） {#destination}
 
@@ -135,7 +135,7 @@ Coffer 自己对语言模型的使用，用于它的[维护任务](#upkeep-pass)
 
 ### 加入（Join） {#join}
 
-一台机器开始与一个从未同步过的远端同步的方式，总是先预览、从不自动进行：面对空远端，它推送自己的保险库；作为新机器，它取两边的并集，不删除任何东西，内容不同的文件留给你选择；作为回归的机器，它从自己描述文件中记录的提交处继续。用 `coffer sync join` 运行。见[保险库同步](/zh/architecture/vault-sync#joining)。
+一台机器开始与一个从未同步过的远端同步的方式，总是先预览、从不自动进行：面对空远端，它推送自己的保险库；作为新机器，它取两边的并集，不删除任何东西，内容不同的文件留给你选择；作为回归的机器，它从自己描述文件中记录的提交处继续。在**同步**页面运行。见[保险库同步](/zh/architecture/vault-sync#joining)。
 
 ## K {#k}
 
@@ -151,7 +151,7 @@ Coffer 自己对语言模型的使用，用于它的[维护任务](#upkeep-pass)
 
 ### 主密钥（Master key） {#master-key}
 
-解密所有已存密钥的密钥。签名的正式版把它放在只有 Coffer 签名二进制才能读取的钥匙串项目里；开发构建把它放在数据库旁边的 `master.key` 中（权限 `0600`），或者你挪过去的操作系统钥匙串中。它从不同步。在桌面应用中备份它，桌面应用会在在场验证之后写出一个密钥文件；再用 `coffer sync key import` 装到另一台机器上。见[密钥存储](/zh/guides/secret-store#where-the-master-key-lives)。
+解密所有已存密钥的密钥。签名的正式版把它放在只有 Coffer 签名二进制才能读取的钥匙串项目里；开发构建把它放在数据库旁边的 `master.key` 中（权限 `0600`），或者你挪过去的操作系统钥匙串中。它从不同步。在桌面应用中备份它，桌面应用会在在场验证之后写出一个密钥文件；再通过**设置 › 安全 › 导入主密钥**装到另一台机器上。见[密钥存储](/zh/guides/secret-store#where-the-master-key-lives)。
 
 ### 主存储（Master store） {#master-store}
 
@@ -159,7 +159,7 @@ Coffer 自己对语言模型的使用，用于它的[维护任务](#upkeep-pass)
 
 ### 材料（Material） {#material}
 
-提交给知识集的新知识，来自 `coffer__write`、`coffer knowledge write`、上传或消息渠道。材料在[收件箱](#inbox)里等待，直到[一轮整理](#curation-pass)把它整理进文档。见[知识](/zh/guides/knowledge)。
+提交给知识集的新知识，包括智能体写进[收件箱](#inbox)的 Markdown 文件、上传内容或消息渠道带来的内容。材料在[收件箱](#inbox)里等待，直到[一轮整理](#curation-pass)把它整理进文档。见[知识](/zh/guides/knowledge)。
 
 ### MCP 网关（MCP gateway） {#mcp-gateway}
 
@@ -169,10 +169,6 @@ Coffer 自己对语言模型的使用，用于它的[维护任务](#upkeep-pass)
 
 你在 Coffer 中注册的上游 Model Context Protocol 服务器，通过 stdio 或 HTTP 连接。它是类型为 `mcp_server` 的[资源](#resource)，它的工具以 `<server>__<tool>` 的形式到达智能体。见 [MCP 服务器](/zh/guides/mcp-servers)。
 
-### 记忆触发器（Memory trigger） {#memory-trigger}
-
-人为做的一个标记，表示某条记忆[笔记](#note)是与某条命令相关的已知坑：`~/.coffer/vault/memory-triggers/` 中的一个文件，写明笔记和一个模式。`block` 触发器会在一个会话中拦下第一条匹配的 shell 命令一次，以该笔记作为理由；`context` 触发器则在某条命令的输出显示已知错误后补上该笔记。提炼任务可以提议触发器；只有人能启用它。见[记忆](/zh/guides/memory#guard-a-known-trap-with-a-trigger)。
-
 ## N {#n}
 
 ### 原生记忆（Native memory） {#native-memory}
@@ -181,13 +177,13 @@ Coffer 自己对语言模型的使用，用于它的[维护任务](#upkeep-pass)
 
 ### 笔记（Note） {#note}
 
-Coffer 记忆中的一个主题，由[提炼任务](#distil-pass)写成[分区](#partition) `notes/` 目录下的一个 Markdown 文件。智能体用自己的文件工具搜索记忆根目录来找笔记，`coffer path memory` 会给出这个根目录。见[记忆](/zh/guides/memory)。
+Coffer 记忆中的一个主题，由[提炼任务](#distil-pass)写成[分区](#partition) `notes/` 目录下的一个 Markdown 文件。智能体用自己的文件工具搜索记忆根目录来找笔记，会话开始时的投递内容和 `coffer-guide` 技能都会指明这个根目录。见[记忆](/zh/guides/memory)。
 
 ## O {#o}
 
 ### 所有者配对（Owner pairing） {#owner-pairing}
 
-把一个[消息渠道](#channel)绑定到唯一允许使用它的人。`coffer channel pair` 会签发一个八位、一次性、一小时内有效的配对码；用它给机器人发消息的人就成为该渠道的所有者，其他发送者都被静默忽略。见[消息渠道](/zh/guides/channels)。
+把一个[消息渠道](#channel)绑定到唯一允许使用它的人。消息渠道的页面会签发一个八位、一次性、一小时内有效的配对码；用它给机器人发消息的人就成为该渠道的所有者，其他发送者都被静默忽略。见[消息渠道](/zh/guides/channels)。
 
 ## P {#p}
 
@@ -197,7 +193,7 @@ Coffer 记忆的一个单元：`global`，或者某一个仓库。每个分区�
 
 ### 应用前快照（Pre-apply snapshot） {#pre-apply-snapshot}
 
-Coffer 在一轮[同步](#sync-round)检出任何内容之前打的 git 标签（`refs/tags/coffer/pre-apply/<time>`，保留最新十个），这样这一轮可以用 `coffer sync rollback <round>` 回滚。见[保险库同步](/zh/architecture/vault-sync#rollback)。
+Coffer 在一轮[同步](#sync-round)检出任何内容之前打的 git 标签（`refs/tags/coffer/pre-apply/<time>`，保留最新十个），这样这一轮可以从该轮的抽屉里回滚。见[保险库同步](/zh/architecture/vault-sync#rollback)。
 
 ### 在场授权（Presence grant） {#presence-grant}
 
@@ -223,17 +219,17 @@ Coffer 在一轮[同步](#sync-round)检出任何内容之前打的 git 标签�
 
 ### 保留期限（Retention） {#retention}
 
-Coffer 保存日志类数据行（比如审计日志和[调用日志](#invocation-log)）多长时间的逐表限制，由后台清理程序执行。用 `coffer config set retention.<table>` 管理。见[可观测性](/zh/architecture/observability#retention)。
+Coffer 保存日志类数据行（比如审计日志和[调用日志](#invocation-log)）多长时间的逐表限制，由后台清理程序执行。在**设置 → 数据**里管理。见[可观测性](/zh/architecture/observability#retention)。
 
 ### `runs_on` {#runs-on}
 
-运行[消息渠道](#channel)适配器的那台机器的[机器 id](#machine-id)。消息渠道的设置同步到每台机器；只有这台机器连接即时通讯平台。用 `coffer channel bind` 设置。见[消息渠道](/zh/guides/channels)。
+运行[消息渠道](#channel)适配器的那台机器的[机器 id](#machine-id)。消息渠道的设置同步到每台机器；只有这台机器连接即时通讯平台。在消息渠道的页面上设置。见[消息渠道](/zh/guides/channels)。
 
 ## S {#s}
 
 ### 作用范围（Scope） {#scope}
 
-资源可选的一份适用智能体列表；没有列表就表示所有智能体。它与 `enabled` 一起构成资源的[生效范围](#reach)。对[消息渠道](#channel)来说，作用范围要反过来理解：它列出的是该渠道可以驱动的智能体。用该类型的 `scope` 命令设置，比如 `coffer skill scope <name> --agents a,b`。见[资源框架](/zh/architecture/resource-framework#reach)。
+资源可选的一份适用智能体列表；没有列表就表示所有智能体。它与 `enabled` 一起构成资源的[生效范围](#reach)。对[消息渠道](#channel)来说，作用范围要反过来理解：它列出的是该渠道可以驱动的智能体。用该类型的范围控件设置。见[资源框架](/zh/architecture/resource-framework#reach)。
 
 ### 密钥边界（Secret boundary） {#secret-boundary}
 
@@ -262,7 +258,7 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 ### 同步轮次（Sync round） {#sync-round}
 
-[保险库同步](#vault-sync)的一轮：拉取远端，在工作树之外把它与本机保险库合并，遇到任何冲突就停下，运行[删除断路器](#deletion-breaker)，打一个[应用前快照](#pre-apply-snapshot)，检出合并结果并推送。停下的一轮会逐个文件等待答复（`coffer sync resolve`，然后 `coffer sync continue`）。见[保险库同步](/zh/architecture/vault-sync#the-round)。
+[保险库同步](#vault-sync)的一轮：拉取远端，在工作树之外把它与本机保险库合并，遇到任何冲突就停下，运行[删除断路器](#deletion-breaker)，打一个[应用前快照](#pre-apply-snapshot)，检出合并结果并推送。停下的一轮会在**同步**页面逐个文件等待答复。见[保险库同步](/zh/architecture/vault-sync#the-round)。
 
 ## T {#t}
 
@@ -276,7 +272,7 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 ### 标题（Title） {#title}
 
-可选的显示标签，最多 80 个字符，由具备它的类型携带——模型提供商、消息渠道、知识集和记忆分区。Web 界面和 CLI 用它代替名称显示，`edit --title` 可以修改它。智能体、MCP 服务器和技能没有标题：智能体以其类型命名，MCP 服务器或技能的固定名称显示在其描述旁边。见[资源框架](/zh/architecture/resource-framework#identity)。
+可选的显示标签，最多 80 个字符，由具备它的类型携带——模型提供商、消息渠道、知识集和记忆分区。Web 界面用它代替名称显示。智能体、MCP 服务器和技能没有标题：智能体以其类型命名，MCP 服务器或技能的固定名称显示在其描述旁边。见[资源框架](/zh/architecture/resource-framework#identity)。
 
 ### Trace id {#trace-id}
 
@@ -294,17 +290,17 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 ### 非托管技能（Unmanaged skill） {#unmanaged-skill}
 
-智能体自己的技能目录中、不是由 Coffer 放进去的技能文件夹。智能体页面和 `coffer scan` 会列出它们，你可以把它们[纳入托管](#adopt)或丢弃。见[技能](/zh/guides/skills)。
+智能体自己的技能目录中、不是由 Coffer 放进去的技能文件夹。智能体页面会列出它们，你可以把它们[纳入托管](#adopt)或丢弃。见[技能](/zh/guides/skills)。
 
 ### 维护任务（Upkeep pass） {#upkeep-pass}
 
-Coffer 按定时器、无需要求就做的工作：记忆的 `aggregate` 和 `distil`，知识的 `curate`。每项都能用 `coffer config set engine.upkeep.<pass>.enabled` 或 `.interval` 关闭或调整时间。见[记忆](/zh/architecture/memory#workers-and-scheduling)和[知识](/zh/architecture/knowledge#the-sweep)。
+Coffer 按定时器、无需要求就做的工作：记忆的 `aggregate` 和 `distil`，知识的 `curate`。每项都能在知识和记忆页面的**自动**控件里关闭或调整时间。见[记忆](/zh/architecture/memory#workers-and-scheduling)和[知识](/zh/architecture/knowledge#the-sweep)。
 
 ## V {#v}
 
 ### 保险库（Vault） {#vault}
 
-位于 `~/.coffer/vault/` 的 git 仓库，保存你的配置和亲手编写的内容：资源文件、状态文档、知识集、技能文件夹、记忆触发器、密钥密文和机器描述文件。从第一次使用起它就是一个仓库，每次被接受的改动都是一个注明其[写入者](#writer)的提交。更宽泛地说，也指 Coffer 在 `~/.coffer/` 下以五种[存储类别](#storage-class)保存的一切。见[手动编辑保险库](/zh/guides/vault-files)和[文件与目录](/zh/reference/filesystem)。
+位于 `~/.coffer/vault/` 的 git 仓库，保存你的配置和亲手编写的内容：资源文件、状态文档、知识集、技能文件夹、密钥密文和机器描述文件。从第一次使用起它就是一个仓库，每次被接受的改动都是一个注明其[写入者](#writer)的提交。更宽泛地说，也指 Coffer 在 `~/.coffer/` 下以五种[存储类别](#storage-class)保存的一切。见[手动编辑保险库](/zh/guides/vault-files)和[文件与目录](/zh/reference/filesystem)。
 
 ### 保险库同步（Vault sync） {#vault-sync}
 
@@ -318,4 +314,4 @@ Coffer 按定时器、无需要求就做的工作：记忆的 `aggregate` 和 `d
 
 ### 写入者（Writer） {#writer}
 
-[保险库](#vault)中一次提交的作者，写在它的 `Coffer-Writer` trailer 里：`user`（你，通过 Coffer 的某个界面）、`disk`（在编辑器、shell 或智能体自己的文件工具中编辑的文件）、`agent`、`daemon`、`curation` 或 `sync`。`coffer vault history` 和技能的**历史**标签页会显示它。见[手动编辑保险库](/zh/guides/vault-files)。
+[保险库](#vault)中一次提交的作者，写在它的 `Coffer-Writer` trailer 里：`user`（你，通过 Coffer 的某个界面）、`disk`（在编辑器、shell 或智能体自己的文件工具中编辑的文件）、`agent`、`daemon`、`curation` 或 `sync`。技能的**历史**标签页会显示它。见[手动编辑保险库](/zh/guides/vault-files)。

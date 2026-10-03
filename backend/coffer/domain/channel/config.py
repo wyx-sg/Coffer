@@ -38,8 +38,8 @@ def _reject_raw_secret(field: str, value: str) -> str:
     for pat in _RAW_SECRET_PATTERNS:
         if pat.search(value):
             raise ValueError(
-                f"{field} looks like a raw secret; store the secret with "
-                f"`coffer secret set <ref>` and put the ref here instead"
+                f"{field} looks like a raw secret; store the secret on the "
+                f"Secrets page (or `coffer secret set <ref>`) and put the ref here instead"
             )
     return value
 

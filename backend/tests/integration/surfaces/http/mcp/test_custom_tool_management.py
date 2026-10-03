@@ -1,7 +1,7 @@
-"""Custom-tool groups on REST and the command line (spec mcp-gateway).
+"""Custom-tool groups on REST (spec mcp-gateway).
 
-Validation, OpenAPI import and re-import, Test, the health-ordered list and
-the ``coffer tool`` commands, against a real daemon and a fake HTTP API.
+Validation, OpenAPI import and re-import, Test, the health-ordered list,
+against a real daemon and a fake HTTP API.
 """
 
 from __future__ import annotations
@@ -12,13 +12,10 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from typer.testing import CliRunner
 
 from coffer.infrastructure.mcp.tool_reach_repo import tool_reach_path
-from coffer.surfaces.cli.main import app as cli_app
 from tests.support.boundary_daemon import (
     BoundaryDaemon,
-    point_cli_at,
     prepare_home,
     running_daemon,
 )
@@ -32,8 +29,6 @@ from tests.support.custom_tools import (
     tool,
 )
 from tests.support.fake_http_api import FakeHttpApi, fake_http_api
-
-_runner = CliRunner()
 
 
 @pytest.fixture
@@ -238,47 +233,6 @@ def test_the_group_list_puts_a_failing_group_first(daemon: BoundaryDaemon, api: 
     # The failing group hands its diagnosis to an agent; a healthy or off one does not.
     assert "b-bad" in groups[0]["handoff"]["prompt"]
     assert groups[1]["handoff"] is None and groups[2]["handoff"] is None
-
-
-@pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="the command line creates a group and adds a tool"
-)
-def test_the_command_line_creates_a_group_and_adds_a_tool(
-    daemon: BoundaryDaemon, api: FakeHttpApi, monkeypatch: pytest.MonkeyPatch
-):
-    point_cli_at(daemon, monkeypatch)
-    daemon.store(f"secret/{SECRET_NAME}", SECRET_VALUE)
-    added = _runner.invoke(
-        cli_app,
-        [
-            "tool", "add", "deploy", "--base-url", api.base_url + "/v1",
-            "--secret-header", f"Authorization={SECRET_NAME}",
-        ],
-    )  # fmt: skip
-    assert added.exit_code == 9, added.output
-    assert "waiting for approval in the Coffer app" in added.output
-    for approval_id in get_group(daemon, "deploy")["pending_approvals"]:
-        daemon.approve(approval_id)
-    op = _runner.invoke(
-        cli_app,
-        [
-            "tool", "op", "add", "deploy", "rollback", "--method", "POST",
-            "--path", "/services/{service}/rollback", "--arg", "service:string:required",
-        ],
-    )  # fmt: skip
-    assert op.exit_code == 0, op.output
-    shown = _runner.invoke(cli_app, ["tool", "show", "deploy", "--json"])
-    assert shown.exit_code == 0, shown.output
-    [rollback] = json.loads(shown.output)["tools"]
-    assert rollback["name"] == "rollback" and rollback["changes_data"] is True
-    tested = _runner.invoke(
-        cli_app, ["tool", "op", "test", "deploy", "rollback", "--arg-value", "service=web"]
-    )
-    assert tested.exit_code == 0, tested.output
-    assert "HTTP 200 OK" in tested.output
-    assert api.seen[-1].method == "POST" and api.seen[-1].path == "/v1/services/web/rollback"
-    listed = _runner.invoke(cli_app, ["tool", "list", "--json"])
-    assert [g["name"] for g in json.loads(listed.output)["groups"]] == ["deploy"]
 
 
 def test_deleting_a_group_keeps_its_secret_and_drops_its_overrides(

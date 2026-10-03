@@ -10,7 +10,7 @@ dangerous, some redundant, some unwanted right now), keeps the agent able to cho
 catalogue grows past what a model can reason over, and records which capability was called, when, for how
 long and with what outcome — never what was said. `mcp_server` was Coffer's first resource kind.
 
-This spec owns the gateway, capability curation, the invocation record and the `coffer mcp` / shim surfaces
+This spec owns the gateway, capability curation, the invocation record and the `coffer mcp test` command and the shim
 over them. The kind-agnostic lifecycle an `mcp_server` is managed through (immutable `uid`, fixed name, per-agent
 reach, audit log, retention) is [resource-framework](../resource-framework/spec.md)'s, and this spec
 contributes one `Kind` descriptor to it; the daemon that hosts the gateway — port, discovery file, token,
@@ -24,8 +24,6 @@ specification, and misbehaving ones are handled as faults. Coffer does not bundl
 `~/.coffer/`: the git convergence of [vault-sync](../vault-sync/spec.md) carries the vault — configuration,
 knowledge and secret ciphertext — to a remote the user owns (media under `content/`, the history in `runs.db`
 and machine-local state do not travel), and a byte copy is `cp -r ~/.coffer/` with the daemon stopped.
-
-While the `knowledge` feature is switched off, the built-in `coffer__write` tool is absent from the tool list (spec [experimental-features](../experimental-features/spec.md) "Close the knowledge feature's surfaces").
 
 ## Requirements
 
@@ -75,8 +73,8 @@ list-changed notifications) between clients and upstream MCP servers.
   prompts: the per-server capability view and the aggregate lists return that server's tools with an empty
   resources/prompts set (HTTP 200), not an error.
 - **Built-in tools.** Coffer's own built-in tools under the reserved `coffer__` prefix MUST be exactly
-  `coffer__search_tools` and `coffer__write`. Both MUST always be advertised in
-  `tools/list`; `coffer__write`'s contract is [knowledge](../knowledge/spec.md)'s. A call to any other `coffer__` name MUST be
+  `coffer__search_tools`, which MUST always be advertised in
+  `tools/list`. A call to any other `coffer__` name MUST be
   answered as an unknown tool.
 - **Built-in tool retrieval.** `coffer__search_tools`
   ([Tool Overload](../../../docs/decisions/tool-overload-tier-the-list-search-the-rest.md)) has the contract
@@ -127,11 +125,11 @@ list-changed notifications) between clients and upstream MCP servers.
 - **WHEN** an agent calls `coffer__search_tools` with an intent query and a `top_k`,
 - **THEN** it receives at most `top_k` ranked real upstream tool schemas (upstream-only, with Coffer's own `coffer__` built-ins excluded), each named `<server>__<tool>`, the response reports `total_searched`, and the gateway records the invocation.
 
-#### Scenario: the gateway advertises exactly two built-in tools
+#### Scenario: advertise coffer__search_tools as the one built-in tool
 - **GIVEN** a client connected through coffer
-- **WHEN** it lists tools, and calls `coffer__recall` and `coffer__diagnose`
-- **THEN** the `coffer__` tools listed are exactly `coffer__search_tools` and `coffer__write`
-- **AND** both calls are answered as unknown tools
+- **WHEN** it lists tools, and calls `coffer__recall`, `coffer__diagnose` and the former write tool
+- **THEN** the `coffer__` tools listed are exactly `coffer__search_tools`
+- **AND** all three calls are answered as unknown tools
 
 #### Scenario: a server's page reads its tiering split
 - **GIVEN** a budget of three and two enabled servers whose saved tool lists hold five tools, one server's `t2` and `t3` called most, and a disabled server with tools of its own
@@ -182,7 +180,7 @@ fixed: once registered it MUST NOT change, and a changed name MUST be refused wi
 ([resource-framework](../resource-framework/spec.md) "Treat a resource's name as a mutable label"). A server
 carries no title: its fixed name and its description — a note the user keeps for themselves — are all it has
 ([resource-framework](../resource-framework/spec.md) "Carry an optional editable title on the kinds that have one"),
-and `coffer mcp add` and `coffer mcp edit` offer no `--title`.
+and the Add and Edit dialogs offer no title field.
 The name MUST be at most 24 characters and MUST NOT be `coffer` (the name of Coffer's own gateway), in addition to
 the existing name pattern and the ban on `__`, wherever the framework validates it — registration here and a server arriving from another machine alike.
 
@@ -195,13 +193,13 @@ the existing name pattern and the ban on `__`, wherever the framework validates 
   only once the change is approved.
 - Registering a server with a name that already exists within the kind MUST be rejected with a clear error;
   a partial write is impossible.
-- The `coffer mcp` group MUST offer the lifecycle verbs `list`, `show`, `add`, `edit`, `rm`, `enable`,
-  `disable` and `scope`, plus `test` and `cap` (see "Toggle individual capabilities"). `coffer mcp test
-  <server>` MUST re-query the server's capabilities and then report its health, so one command both
-  refreshes what Coffer knows of the server and says whether it answers.
-- The `coffer mcp` CLI MUST exit with code 3 and name the condition on stderr when no daemon is reachable
+- Registering, listing, viewing, editing, enabling, disabling, scoping and deleting a server MUST be done
+  on the MCP servers page and through the resource routes; the command line carries only `coffer mcp
+  test <server>`, which MUST re-query the server's capabilities and then report its health, so one
+  command both refreshes what Coffer knows of the server and says whether it answers.
+- `coffer mcp test` MUST exit with code 3 and name the condition on stderr when no daemon is reachable
   and one cannot be started (a missing daemon is started on demand, and only a failed or timed-out start
-  exits 3), and its `list` subcommand MUST support machine-readable `--json` output.
+  exits 3). `coffer log mcp` MUST support machine-readable `--json` output.
   The same exit covers a daemon that stops answering after the command has connected to it: the lost
   connection is reported once, as a message naming the condition, never as a traceback.
 
@@ -210,18 +208,18 @@ the existing name pattern and the ban on `__`, wherever the framework validates 
 - **WHEN** the user registers a stdio MCP server with a unique name, command, and arguments,
 - **THEN** the server is persisted, its capabilities are discovered, and listing servers shows it as healthy.
 
-#### Scenario: CLI returns non-zero exit on daemon unreachable
+#### Scenario: coffer mcp test exits 3 when no daemon is reachable
 - **GIVEN** the daemon is not running and cannot be started (the spawn fails or the daemon does not come up within the boot timeout),
-- **WHEN** `coffer mcp list` is invoked,
+- **WHEN** `coffer mcp test <server>` is invoked,
 - **THEN** the process exits with code 3 and stderr names the daemon-unreachable condition.
 
-#### Scenario: CLI --json output is machine-readable
-- **GIVEN** `coffer mcp list` and `coffer log mcp` each support `--json`,
-- **WHEN** each is invoked with `--json`,
-- **THEN** stdout is a parseable JSON document with stable top-level keys (`resources` for `coffer mcp list`, `invocations` for `coffer log mcp`) and no human-readable framing.
+#### Scenario: coffer log mcp --json prints a parseable document
+- **GIVEN** `coffer log mcp` supports `--json`,
+- **WHEN** it is invoked with `--json`,
+- **THEN** stdout is a parseable JSON document with the stable top-level key `invocations` and no human-readable framing.
 
 #### Scenario: a daemon lost mid-command exits 3
-- **GIVEN** a `coffer mcp list` whose client was built against a daemon that has since stopped answering,
+- **GIVEN** a `coffer mcp test` whose client was built against a daemon that has since stopped answering,
 - **WHEN** the command makes its request,
 - **THEN** the process exits with code 3, and stderr names the daemon-unreachable condition exactly once and carries no traceback.
 
@@ -233,18 +231,18 @@ the existing name pattern and the ban on `__`, wherever the framework validates 
 #### Scenario: a server cannot take the name of Coffer's own gateway
 - **GIVEN** the coffer daemon is running
 - **WHEN** the user registers a server named `coffer`
-- **THEN** it is refused as a validation error saying the name is reserved, with nothing persisted, so no upstream tool can be mistaken for a built-in or shadow `coffer__write` or `coffer__search_tools`
+- **THEN** it is refused as a validation error saying the name is reserved, with nothing persisted, so no upstream tool can be mistaken for a built-in or shadow `coffer__search_tools`
 
 #### Scenario: test re-queries capabilities before reporting health
 - **GIVEN** a registered server whose upstream has gained a tool since Coffer last discovered it
 - **WHEN** the user runs `coffer mcp test <server>`
-- **THEN** the command reports the server's health, and `coffer mcp cap list <server>` then lists the new tool
+- **THEN** the command reports the server's health, and `GET /api/v1/resources/mcp_server/{uid}/capabilities` then lists the new tool
 - **AND** for a server whose upstream is unreachable, the command exits non-zero and names the failure
 
 #### Scenario: an MCP server is shown by its name
 - **GIVEN** the daemon is running
-- **WHEN** the user registers a server with `coffer mcp add fs --stdio '<command>' --description "Local files"` and then lists servers
-- **THEN** the list shows it as `fs` with that description, and `coffer mcp show fs --json` carries a `null` title
+- **WHEN** the user registers a server named `fs` with a stdio command and the description "Local files" through the Add dialog (`POST /api/v1/resources/mcp_server`) and then lists servers
+- **THEN** the list shows it as `fs` with that description, and reading it back carries a `null` title
 - **AND** a title submitted for it through the kind-agnostic update route is refused as a validation error
 
 ### Requirement: Support stdio and HTTP upstreams
@@ -267,10 +265,11 @@ Users MUST be able to enable or disable individual tools, resources, and prompts
 Disabling a tool MUST make it disappear from any client's next tool-list response and MUST make any call
 attempt on it fail with a tool-disabled error (JSON-RPC code -32000, TOOL_DISABLED).
 
-On the command line the capabilities MUST be read with `coffer mcp cap list <server> [--type
-tool|prompt|resource] [--json]` and toggled with `coffer mcp cap enable|disable <server> <ref>...`, where
-each ref names its type: `tool:<name>`, `prompt:<name>` or `resource:<uri>`. A ref that names no capability
-the server offers MUST be refused with nothing changed.
+The capabilities MUST be read with `GET /api/v1/resources/mcp_server/{uid}/capabilities` and toggled with
+`POST /api/v1/resources/mcp_server/{uid}/capabilities/{capability_type}/enable` or `.../disable` (the
+server page's Tools tab), where `capability_type` is `tool`, `prompt` or `resource` and the body names the
+capabilities by key. A key that names no capability the server offers MUST be refused with nothing
+changed. The command line carries no capability commands.
 
 #### Scenario: disable an individual capability
 - **GIVEN** a registered MCP server exposes several tools,
@@ -282,11 +281,11 @@ the server offers MUST be refused with nothing changed.
 - **WHEN** a shim client calls `tools/list` and then `tools/call` on the disabled tool,
 - **THEN** `tools/list` omits the disabled tool while listing the enabled tool, and `tools/call` returns a JSON-RPC error with code -32000 (TOOL_DISABLED) rather than a successful result.
 
-#### Scenario: the command line toggles capabilities by typed ref
+#### Scenario: capabilities are toggled by typed ref over REST
 - **GIVEN** a registered MCP server exposing a tool and a prompt
-- **WHEN** the user runs `coffer mcp cap disable <server> tool:<tool> prompt:<prompt>`, then `coffer mcp cap list <server> --type tool`
-- **THEN** both capabilities are disabled, and the list shows only tools, with the disabled one marked disabled
-- **AND** `coffer mcp cap enable <server> tool:no-such-tool` exits non-zero and changes nothing
+- **WHEN** the tool and the prompt are each disabled through `.../capabilities/tool/disable` and `.../capabilities/prompt/disable`, then the capabilities are read
+- **THEN** both capabilities are disabled, with the disabled ones marked disabled
+- **AND** an enable request naming a tool the server does not offer is refused and changes nothing
 
 ### Requirement: Preserve capability decisions
 The system MUST preserve the user's enable/disable decisions across daemon restarts, upstream upgrades, and
@@ -369,8 +368,7 @@ the person's agent (Principle IV, AI-Native). The server's status read
 `PATH` Coffer looks it up on and this machine's OS and architecture, asks for an install a process started
 from the GUI can find, and names `coffer mcp test <name>` to confirm. The command line MUST NOT carry a secret:
 an argument that follows a secret-named flag or looks like a token reads `<secret>`, and environment values
-are never quoted. The attention item's reason MUST name no command. `coffer mcp handoff <name>` MUST print the
-status read's prompt as served.
+are never quoted. The attention item's reason MUST name no command.
 
 #### Scenario: a missing stdio launcher is named in the server status
 - **GIVEN** a stdio server (e.g. imported from another machine) whose launcher command does not resolve on this machine,
@@ -388,10 +386,10 @@ status read's prompt as served.
 - **WHEN** the attention list is read
 - **THEN** its `mcp_missing_launcher` item carries the launcher hand-off and its reason names no command
 
-#### Scenario: coffer mcp handoff prints the server's hand-off
+#### Scenario: a server's status carries the hand-off its page offers
 - **GIVEN** a server whose status read carries a `handoff`, and one whose status carries none
-- **WHEN** `coffer mcp handoff <name>` is run for each
-- **THEN** the first prints the prompt exactly as the route serves it, and the second says there is nothing to hand off and exits 5
+- **WHEN** `GET /api/v1/resources/mcp_server/{uid}/status` is read for each
+- **THEN** the first carries the prompt and the Copy prompt button of the server's page offers exactly that text, and the second carries a `null` `handoff` and the page offers none
 
 ### Requirement: Gate server exposure by scope per session
 The system MUST filter `mcp_server` exposure by its framework-level `scope`
@@ -446,7 +444,7 @@ used for every subsequent list and call.
   the loopback-only, single-user posture [daemon](../daemon/spec.md) holds: any local process able to open the
   loopback MCP connection and set `_meta` could claim any agent uid.
 - Identity is reported **once, at the handshake**, and nowhere else: when the gateway threads the identity
-  into a Coffer built-in tool call (as the `agent` argument the knowledge write tool attributes material by), it
+  into a Coffer built-in tool call (as an `agent` argument), it
   MUST overwrite any `agent` the client put in the call's arguments with the session's, and MUST drop the
   argument entirely when the session reported none — so a client cannot pick a different identity per call,
   and no built-in tool advertises `agent` in its input schema.
@@ -488,18 +486,19 @@ disabled anything would add and delete the same document at each other every rou
 The system MUST compute, for every discovered tool, the length of the name a client shows for
 it, `mcp__coffer__<server>__<tool>`, and MUST flag each tool whose client-visible name is longer
 than 64 characters, which is the limit model provider APIs place on a tool name. The flag MUST
-appear on the server's Tools tab and in `coffer mcp cap list`, each carrying the length and a
-note that some clients drop tool names longer than 60 characters. `coffer mcp cap list --json`
+appear on the server's Tools tab and in the capability list
+(`GET /api/v1/resources/mcp_server/{uid}/capabilities`), each carrying the length and a
+note that some clients drop tool names longer than 60 characters. The capability list
 MUST carry the length on every tool row. Flagging MUST NOT disable, rename or hide the tool.
 
 #### Scenario: a tool with an over-long client-visible name is flagged
 - **GIVEN** a registered server whose upstream exposes one tool whose `mcp__coffer__<server>__<tool>` name is 70 characters long and one whose name is 40 characters long
-- **WHEN** the user opens the server's Tools tab and runs `coffer mcp cap list <server> --json`
+- **WHEN** the user opens the server's Tools tab and reads the capability list over REST
 - **THEN** the long tool is flagged on both surfaces with its length and a note that some clients drop names above 60 characters, and the short one is not flagged
 - **AND** both tools stay enabled and are still listed to clients under their usual names
 
 ### Requirement: Choose how each tool is exposed
-A person MUST be able to set, per tool of a server, how it is exposed to agents: `auto` (the default) leaves the decision to the tool-listing budget, so the most-used tools stay in `tools/list` and the rest are reached through `coffer__search_tools`; `listed` pins the tool into the list; `search` leaves it to `coffer__search_tools` only. The setting is the person's, kept per (server, tool) in the server's preference document in the vault, and survives a restart and switching the tool off and on; `auto` clears it. It changes only how a tool is listed, never whether it can be called. `PATCH /api/v1/resources/mcp_server/{uid}/tools/{tool}/exposure` sets one tool and `PATCH .../tools/exposure` sets several in one call (`{tools, mode}`); an unknown tool or a set containing one is refused with 404 and nothing changes, and a mode other than the three with 422. The server's tiering read reports each tool's setting, whether it is effectively listed or behind search, and why (`pinned`, `search_only`, `within_budget`, `top_by_use`, `low_use`). `coffer mcp cap expose <server> auto|listed|search tool:<name>...` does the same from the command line and `cap list` shows each tool's setting and what agents get. Each change is audited as `tool_exposure_changed`.
+A person MUST be able to set, per tool of a server, how it is exposed to agents: `auto` (the default) leaves the decision to the tool-listing budget, so the most-used tools stay in `tools/list` and the rest are reached through `coffer__search_tools`; `listed` pins the tool into the list; `search` leaves it to `coffer__search_tools` only. The setting is the person's, kept per (server, tool) in the server's preference document in the vault, and survives a restart and switching the tool off and on; `auto` clears it. It changes only how a tool is listed, never whether it can be called. `PATCH /api/v1/resources/mcp_server/{uid}/tools/{tool}/exposure` sets one tool and `PATCH .../tools/exposure` sets several in one call (`{tools, mode}`); an unknown tool or a set containing one is refused with 404 and nothing changes, and a mode other than the three with 422. The server's tiering read reports each tool's setting, whether it is effectively listed or behind search, and why (`pinned`, `search_only`, `within_budget`, `top_by_use`, `low_use`). Each change is audited as `tool_exposure_changed`.
 
 The server page's Tools tab MUST list every tool, not only a first page: fifty rows are shown with "Showing 50 of N" and **Show N more** reveals the rest, and its search runs over all of them. Each tool row carries its exposure as a choice that reads, for example, "Auto · Listed" or "Auto · Behind search". The Resources and Prompts tabs MUST be listed in full the same way, with a search over every item.
 
@@ -743,28 +742,27 @@ concerned.
 - **WHEN** its base URL is changed
 - **THEN** the group reports `pending_approval` for the new base URL and calls carry no secret until it is approved
 
-### Requirement: Manage custom tools on REST and the command line
+### Requirement: Manage custom tools through REST and the Custom tools page
 Custom-tool groups MUST be managed through `/api/v1/custom-tools` — list
 (failing groups first, each with its health, its secret's state, its calls and
 failures in the last 24 hours and its tools), create (with tools), read,
 change, delete, add / change / remove one tool, set or clear one tool's reach
 override, test a draft tool once without saving it, read an OpenAPI document,
-and preview and apply a re-import — and through `coffer tool` (`list`, `show`,
-`add` with `--openapi` to import, `edit`, `rm`, `enable`, `disable`, `scope`,
-`reimport`) and `coffer tool op` (`add`, `edit`, `rm`, `enable`, `disable`,
-`scope`, `test`), with `--json` on every read. A change that waits for a secret
-approval MUST report it as every other command does ([secret](../secret/spec.md)
-"Answer a pending approval on the command line by waiting or exiting").
+and preview and apply a re-import — and on the Custom tools page, which calls
+those routes; the command line carries no custom-tool command. A change that
+waits for a secret approval MUST report it as a pending approval on the Secrets
+page ([secret](../secret/spec.md) "Hold a secret for a new destination until a
+person approves it").
 A group's health MUST be `off` while disabled, `failing` when its last call
 in 24 hours failed, `attention` while its secret is missing or waits for
 approval, `healthy` after a successful last call, and `idle` with no call in
 24 hours.
 
-#### Scenario: the command line creates a group and adds a tool
+#### Scenario: create a custom-tool group and add a tool
 - **GIVEN** the daemon is running and a stored secret `deploy-token` whose binding is approved
-- **WHEN** the user runs `coffer tool add deploy --base-url https://deploy.example/v1 --secret-header Authorization=deploy-token`, then `coffer tool op add deploy rollback --method POST --path /services/{service}/rollback --arg service:string:required`
-- **THEN** `coffer tool show deploy --json` lists the `rollback` tool with the changes-data flag on
-- **AND** `coffer tool op test deploy rollback --arg-value service=web` prints the upstream's status line
+- **WHEN** the user creates a group `deploy` with `POST /api/v1/custom-tools` (base URL `https://deploy.example/v1`, an `Authorization` header with the prefix `Bearer ` and the secret `deploy-token`), then adds a `rollback` tool with `POST /api/v1/custom-tools/deploy/tools` (method `POST`, path `/services/{service}/rollback`, a required string argument `service`)
+- **THEN** reading the group lists the `rollback` tool with the changes-data flag on
+- **AND** `POST /api/v1/custom-tools/deploy/test` for that tool with the argument `service=web` returns the upstream's status line
 
 #### Scenario: a test runs a draft tool once without saving it
 - **GIVEN** a group with an approved secret

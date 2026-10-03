@@ -76,15 +76,9 @@ Telegram 的 start 链接会发送 `/start`，它的回答和 `/help` 一样。`
 
 对话通常在 Coffer 管理的工作目录 `~/.coffer/content/workspace` 里运行。`/dir` 可以把聊天移到另一个目录，但只能是消息渠道允许的目录。之所以有这份允许列表，是因为任何拿到你手机的人，或者一次手滑，都不应该能让一个拥有完整权限的智能体指向你机器上任意一个文件夹；这些地方由你事先在电脑前决定。
 
-两者都在消息渠道的**设置**标签页**工作目录**下。**默认**是新对话开始的位置（不设则用 Coffer 工作区）；**/dir 可用的目录**列出 `/dir` 可以切换进去的文件夹：用**添加目录…**添加，用**移除**删掉，默认目录那一行标着 *default*。一个都不允许时，`/dir` 关闭。也可以用 CLI：
+两者都在消息渠道的**设置**标签页**工作目录**下。**默认**是新对话开始的位置（不设则用 Coffer 工作区）；**/dir 可用的目录**列出 `/dir` 可以切换进去的文件夹：用**添加目录…**添加，用**移除**删掉，默认目录那一行标着 *default*。一个都不允许时，`/dir` 关闭。
 
-```sh
-coffer channel edit my-telegram --default-dir ~/src/coffer              # where new conversations start
-coffer channel edit my-telegram --dir ~/src/coffer --dir ~/src/notes   # replaces the list
-coffer channel edit my-telegram --no-dirs                              # allows none
-```
-
-`--dir` 可以重复。路径必须是绝对路径（`~` 由 shell 展开）；相对路径会被拒绝，什么都不保存。每个允许的目录也允许它下面的子目录。
+路径必须是绝对路径；相对路径会被拒绝，什么都不保存。每个允许的目录也允许它下面的子目录。
 
 - `/dir <path>` 接受一个允许的路径或它下面的路径；`/dir <name>` 接受某个允许路径的最后一级目录名（`/dir coffer`）。目录必须存在。
 - 切换会在那里开一个新对话，并为这个聊天记住该目录。

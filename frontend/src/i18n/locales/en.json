@@ -787,11 +787,7 @@
       "memory_delivery_installed": "Installed memory delivery into {{resource}}",
       "memory_delivery_removed": "Removed memory delivery from {{resource}}",
       "memory_distilled": "Distilled memory partition {{resource}}",
-      "memory_trigger_added": "Wrote and armed a memory trigger",
-      "memory_trigger_armed": "Armed a memory trigger",
-      "memory_trigger_deleted": "Deleted a memory trigger",
-      "memory_trigger_disarmed": "Disarmed a memory trigger",
-      "memory_trigger_proposed": "Distil proposed a memory trigger",
+      "memory_note_edited": "Edited a memory in {{resource}}",
       "provider_internal_default_set": "Made {{resource}} the internal engine's default",
       "provider_transcribe_default_set": "Made {{resource}} the provider Coffer transcribes speech on",
       "provider_projection_refused": "Refused to project {{resource}} into an agent",
@@ -1705,10 +1701,9 @@
     "MCP_INSTALL_UNSUPPORTED": "This agent does not support installing Coffer's MCP entry",
     "MEMORY_DELIVERY_CONFIG_INVALID": "That agent's settings file isn't something Coffer can edit",
     "MEMORY_DELIVERY_UNSUPPORTED": "This agent type has no memory-delivery hook",
+    "MEMORY_NOTE_CONFLICT": "That memory changed on disk since you opened it — your text was not saved. Reload, compare, or copy your text first.",
     "MEMORY_NOTE_NOT_FOUND": "That memory note wasn't found",
     "MEMORY_RAW_ENTRY_NOT_FOUND": "That raw memory entry wasn't found",
-    "MEMORY_TRIGGER_INVALID": "That memory trigger can't be used — check its kind, note and patterns",
-    "MEMORY_TRIGGER_NOT_FOUND": "That memory trigger wasn't found",
     "MEMORY_UNREADABLE": "That memory file could not be read",
     "MEMORY_UNSAFE_PATH": "That path isn't allowed in the memory store",
     "NAME_IMMUTABLE": "This name is fixed once added, because agents quote it. Delete it and add it again under the new name",
@@ -3168,7 +3163,7 @@
       "waitingCount_other": "{{count}} items waiting",
       "empty": "Nothing waiting. New items from agents and uploads show up here first.",
       "writtenBy": "written by {{who}} {{when}}",
-      "writtenWithWrite": "Written by {{who}} with coffer__write · {{when}}",
+      "writtenWithWrite": "Written by {{who}} · {{when}}",
       "writtenByYou": "Written by you · {{when}}",
       "note": "Curated into your documents within the hour, then removed from here.",
       "readOnlyTag": "Read-only",
@@ -3418,7 +3413,7 @@
   },
   "memory": {
     "title": "Memory",
-    "subtitle": "What your agents learned, read from their own memory and distilled into one memory per subject. Read-only.",
+    "subtitle": "What your agents learned, read from their own memory and distilled into one memory per subject.",
     "update": "Update memory",
     "updating": "Updating…",
     "syncDone": "Read {{count}} new entries and updated {{partitions}} partitions.",
@@ -3487,6 +3482,10 @@
         "delete": "Delete partition…",
         "history": "Distil history in Activity"
       }
+    },
+    "editor": {
+      "conflictTitle": "This memory changed on disk while you were editing",
+      "label": "Edit {{title}}"
     },
     "memories": {
       "listLabel": "Memories",
@@ -3986,7 +3985,7 @@
       "directories": {
         "description": "Where new conversations start, and what /dir may switch to. With none allowed, /dir is off."
       },
-      "unavailable": "This channel's saved settings are not valid, so they can't be shown here. Correct them with `coffer channel edit`.",
+      "unavailable": "This channel's saved settings are not valid, so they can't be shown here. Correct the channel's file under `~/.coffer/vault/resources/channel/`, or delete the channel and add it again.",
       "saveState": {
         "saving": "Saving…",
         "saved": "Saved",
@@ -4396,7 +4395,6 @@
         "skills": "Skills",
         "resources": "MCP servers & tools",
         "secret": "Encrypted secrets",
-        "memoryTriggers": "Memory triggers",
         "machines": "Machines"
       }
     },
@@ -4712,7 +4710,6 @@
         "skills": "Skills",
         "resources": "MCP servers & tools",
         "secret": "Secrets",
-        "memory-triggers": "Memory",
         "state": "State"
       }
     },

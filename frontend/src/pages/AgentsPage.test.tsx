@@ -361,6 +361,67 @@ describe("AgentsPage", () => {
     expect(row).not.toHaveTextContent("agnes-2.0-flash");
   });
 
+  acceptance("agent-registry", "the Agents page calls the connection routes", async () => {
+    setDaemon(
+      fakeDaemon({
+        types: [typeRow({ type: "claude_code", uid: "agt_a" })],
+        connections: {
+          agt_a: {
+            state: "connected",
+            parts: [{ key: "mcp", installed: true, detail: "/bin/coffer" }],
+          },
+        },
+      }),
+    );
+    renderPage();
+    const row = await screen.findByRole("row", { name: /Claude Code/ });
+    await waitFor(() => expect(within(row).getByText("Connected")).toBeInTheDocument());
+    fireEvent.click(within(row).getByRole("button", { name: "More actions for Claude Code" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Disconnect…" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(await within(dialog).findByRole("button", { name: /^disconnect/i }));
+    await waitFor(() => expect(within(dialog).getByText("Changes applied")).toBeInTheDocument());
+    fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(within(row).getByText("Not connected")).toBeInTheDocument());
+    expect(writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      "DELETE /agents/agt_a/coffer-connection",
+    ]);
+
+    fireEvent.click(await within(row).findByRole("button", { name: "Connect" }));
+    const review = await screen.findByRole("dialog");
+    fireEvent.click(await within(review).findByRole("button", { name: /^apply/i }));
+    await waitFor(() => expect(within(review).getByText("Changes applied")).toBeInTheDocument());
+    expect(writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      "DELETE /agents/agt_a/coffer-connection",
+      "POST /agents/agt_a/coffer-connection",
+    ]);
+    expect(daemon.connections.agt_a.state).toBe("connected");
+  });
+
+  acceptance("agent-registry", "the Agents page calls the lifecycle routes", async () => {
+    setDaemon(fakeDaemon({ types: [typeRow({ type: "codex" })] }));
+    renderPage();
+    const row = await screen.findByRole("row", { name: /Codex/ });
+    fireEvent.click(await within(row).findByRole("button", { name: "Connect" }));
+    const review = await screen.findByRole("dialog");
+    fireEvent.click(await within(review).findByRole("button", { name: /^apply/i }));
+    await waitFor(() => expect(within(review).getByText("Changes applied")).toBeInTheDocument());
+    fireEvent.click(within(review).getByRole("button", { name: "Done" }));
+
+    fireEvent.click(await within(row).findByRole("button", { name: "More actions for Codex" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Turn off" }));
+    const turnOn = await within(row).findByRole("button", { name: "Turn on" });
+    fireEvent.click(turnOn);
+    await waitFor(() =>
+      expect(writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+        "POST /agents",
+        "POST /agents/agt_1/coffer-connection",
+        "POST /resources/agt_1/disable",
+        "POST /resources/agt_1/enable",
+      ]),
+    );
+  });
+
   it("shows a pending state while a disconnect runs, and the row settles after", async () => {
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => (release = resolve));

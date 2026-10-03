@@ -108,7 +108,7 @@ Validation rules:
   migration `0103` (below), in one direction for the data and with no load-time
   shim (house rule). The secret values the two removed refs cited are left
   in the secret store: a migration that deletes secrets could not be undone
-  by its downgrade, and `coffer secret rm <ref>` removes them on
+  by its downgrade, and deleting them on the Secrets page removes them on
   purpose. A channel config refuses every key no channel type declares, so a
   file still carrying one is refused by the vault (spec vault-storage "Keep
   every vault document a JSON object that preserves what it does not know").

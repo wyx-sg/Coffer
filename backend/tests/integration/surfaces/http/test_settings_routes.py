@@ -10,6 +10,7 @@ from __future__ import annotations
 import pathlib
 from typing import Any
 
+import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -77,6 +78,10 @@ async def test_get_reports_file_by_default(tmp_path: pathlib.Path) -> None:
     assert r.json() == {"master_key_storage": "file"}
 
 
+@pytest.mark.acceptance(
+    spec="secret",
+    scenario="move the master key from the Settings card and refuse an unknown location",
+)
 async def test_put_relocates_and_audits(tmp_path: pathlib.Path) -> None:
     app, mgr, audit_repo = _build(tmp_path)
     async with _client(app) as c:
@@ -95,6 +100,10 @@ async def test_put_same_location_is_noop(tmp_path: pathlib.Path) -> None:
     assert audit_repo.entries == []
 
 
+@pytest.mark.acceptance(
+    spec="secret",
+    scenario="move the master key from the Settings card and refuse an unknown location",
+)
 async def test_put_rejects_unknown_value(tmp_path: pathlib.Path) -> None:
     app, _, _ = _build(tmp_path)
     async with _client(app) as c:

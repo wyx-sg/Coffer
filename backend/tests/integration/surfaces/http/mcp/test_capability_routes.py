@@ -1352,7 +1352,7 @@ async def test_status_reports_missing_runner(client_and_ctx, monkeypatch) -> Non
     # A server referencing a launcher that is absent here.
     from coffer.application.mcp import runner_detect
 
-    monkeypatch.setattr(runner_detect.shutil, "which", lambda _c: None)
+    monkeypatch.setattr(runner_detect.shutil, "which", lambda _c, **_kw: None)
     synced = await rsvc.register(
         kind="mcp_server",
         name="synced",

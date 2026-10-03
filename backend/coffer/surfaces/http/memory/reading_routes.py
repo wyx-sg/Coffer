@@ -5,7 +5,7 @@ memory").
 What the Memory page's header reads: "Read 14 min ago", and "· 1 agent
 failed" with a banner when the last read left an agent's memory unread. The
 answer comes from the audit log (``application.memory.reading``), so it is the
-same whether the timer, Update memory or ``coffer memory sync`` did the read.
+same whether the timer or Update memory did the read.
 """
 
 from __future__ import annotations

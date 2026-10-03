@@ -27,10 +27,11 @@ with one managed agent present, a user can open the Conversations page, send a f
 message and receive a streamed reply without configuring a Coffer LLM
 connection first.
 
-Known boundaries. **The platform ships no CLI, and that is a known gap**: no
-`chat` command group is registered, so conversations, the pending queue and the
-agent-provider registry are reachable over REST and from the web page only,
-against the REST/CLI parity rule in [`.agents/openspec.md`](../../../.agents/openspec.md).
+Known boundaries. **The platform ships no CLI, by design**: no `chat` command
+group is registered, so conversations, the pending queue and the agent-provider
+registry are reachable over REST and from the web page only, as the minimal-CLI
+rule in [`.agents/openspec.md`](../../../.agents/openspec.md) asks of anything
+that is neither a program's entry point, an offline operation nor a hand-off.
 Two route prefixes serve this one capability: `/api/v1/chat` carries everything
 about a conversation, and `/api/v1/agent-providers` carries the registry itself,
 because its subject is the adapters that can drive a turn and not the `agent`

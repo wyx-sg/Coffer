@@ -14,8 +14,8 @@ hours, the way LiteLLM and genai-prices refresh theirs:
 - pricing uses whichever of the cache and the bundled snapshot is fresher, and
   never waits on the network: a failed fetch keeps what is there, and is
   logged once per failure streak, not on every tick;
-- ``price_refresh`` in ``~/.coffer/daemon-config.json`` (``coffer config set
-  prices.refresh off``) turns it off on a firewalled machine;
+- ``price_refresh`` in ``~/.coffer/daemon-config.json`` (the Settings page's price-refresh switch)
+  turns it off on a firewalled machine;
   ``COFFER_PRICE_REFRESH=off`` pins it off (tests, CI).
 """
 

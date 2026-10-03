@@ -211,7 +211,7 @@ class PriceListOut(BaseModel):
     updated: date | None
     #: ``refreshed``: fetched by the daily refresh; ``bundled``: shipped in this build.
     origin: Literal["bundled", "refreshed"]
-    #: The machine's setting (``coffer config set prices.refresh on|off``).
+    #: The machine's setting (Settings > General).
     refresh: bool
     #: ``COFFER_PRICE_REFRESH=off`` pins the refresh off whatever the setting says.
     pinned_off: bool

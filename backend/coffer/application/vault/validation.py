@@ -1,7 +1,7 @@
 """The one validator every vault write passes through (spec vault-storage).
 
 Each area of the vault registers the rule for its own files — resource
-documents, a kind's state documents, memory triggers — under a path prefix.
+documents, a kind's state documents — under a path prefix.
 A change is judged by the rule of the longest prefix that covers it; a path no
 rule covers is accepted as it is (a knowledge document, a file inside a skill
 folder: their bytes are the content). One composite is handed to the writer,

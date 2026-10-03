@@ -1,7 +1,7 @@
 // e2e/web/specs/shell_knowledge.spec.ts
 //
 // The one /knowledge page end-to-end, against a live daemon: create a
-// collection and submit an item over the REST API, then walk the page in the
+// collection and upload an item over the REST API, then walk the page in the
 // real DOM — the collection in the tree, its document opened, an edit saved
 // through the body-only editor, the save in the document's History tab and in
 // Recent changes.
@@ -9,8 +9,8 @@
 // Nothing auto-provisions a collection (spec knowledge "Create collections
 // only deliberately"), so a walk starts by making one. The e2e daemon runs
 // without Coffer's model, so a submitted item is written as a document on the
-// spot (status `written`) and the page shows no Inbox and no Curate now — the
-// no-model line instead; the walk reads the submission's status and asserts
+// spot (`pending` false) and the page shows no Inbox and no Curate now — the
+// no-model line instead; the walk reads the upload's `pending` flag and asserts
 // whichever the daemon reported, so it holds in both configurations.
 //
 // No acceptance marker: the spec's viewer and editor scenarios are pinned by
@@ -45,21 +45,25 @@ async function createCollection(page: Page, name: string, description: string) {
   return (await res.json()) as { uid: string; name: string };
 }
 
-/** Submit an ITEM. Where it lands is the layer's decision, never a caller's. */
-async function submitItem(
-  page: Page,
-  collection: string,
-  title: string,
-  body: string,
-) {
+/** Submit an ITEM the way the page's Upload does (agents write a file into
+ *  `.inbox/` instead). Where it lands is the layer's decision, never a caller's. */
+async function submitItem(page: Page, collection: string, body: string) {
   const { base, headers } = api();
-  const res = await page.request.post(`${base}/knowledge/material`, {
-    headers,
-    data: { collection, title, description: "a first fact", body },
+  const { "Content-Type": _json, ...multipartHeaders } = headers;
+  const res = await page.request.post(`${base}/knowledge/upload`, {
+    headers: multipartHeaders,
+    multipart: {
+      collection,
+      file: {
+        name: "top-level-note.md",
+        mimeType: "text/markdown",
+        buffer: Buffer.from(`# Top level note\n\n${body}\n`),
+      },
+    },
   });
   expect(res.ok()).toBe(true);
   return (await res.json()) as {
-    status: "pending" | "written";
+    pending: boolean;
     path: string | null;
   };
 }
@@ -73,12 +77,7 @@ test("a collection is one tree; a document is read, edited and shows up in its H
     name,
     "An end-to-end collection",
   );
-  const submitted = await submitItem(
-    page,
-    name,
-    "Top level note",
-    "The first body.",
-  );
+  const submitted = await submitItem(page, name, "The first body.");
 
   await page.goto("/knowledge");
   const tree = page.getByRole("navigation", {
@@ -91,7 +90,7 @@ test("a collection is one tree; a document is read, edited and shows up in its H
   await expect(page.getByTestId("scope-control")).toHaveCount(0);
   await expect(page.getByRole("searchbox")).toHaveCount(0);
 
-  if (submitted.status === "pending") {
+  if (submitted.pending) {
     // Waiting in the Inbox: not a document yet.
     await expect(tree.getByRole("button", { name: /Inbox/ })).toContainText(
       "1",
@@ -117,9 +116,7 @@ test("a collection is one tree; a document is read, edited and shows up in its H
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   const editor = page.getByRole("textbox", { name: `Edit ${submitted.path}` });
   await expect(editor).toBeVisible();
-  await expect(
-    page.getByText("Read-only here · curation keeps it current"),
-  ).toBeVisible();
+  await expect(page.getByText("Kept by curation")).toBeVisible();
   await editor.fill("The edited body.");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("The edited body.")).toBeVisible();

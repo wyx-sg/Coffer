@@ -10,19 +10,18 @@
 //
 // A save refused as stale (409 `KNOWLEDGE_FILE_CONFLICT`) puts a danger banner
 // over the text — what changed and that the text is not saved — with three
-// ways out: Compare (the in-page KnowledgeCompareView), Copy my text and
-// Reload… (take what is on disk, after asking, because it drops the draft).
+// ways out (FileConflictBanner): Compare (the in-page KnowledgeCompareView),
+// Copy my text and Reload… (take what is on disk, after asking, because it
+// drops the draft).
 // There is no second save over it from here: Save stays off until the person
 // has compared, saved over or reloaded.
 //
 // ⌘S / Ctrl+S saves and Escape discards while the textarea has focus — keys on
 // the editor, not global handlers; the buttons' tooltips name them.
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FileConflictBanner } from "@/components/FileConflictBanner";
 import { translateApiError } from "@/lib/api/errors";
 import type { FileOut } from "@/lib/api/knowledge";
 import type { useFileDraft } from "@/lib/hooks/useFileDraft";
@@ -50,37 +49,17 @@ export function KnowledgeDocumentEditor({
   onDiscard,
 }: Props) {
   const { t } = useTranslation();
-  const [confirmReload, setConfirmReload] = useState(false);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2.5 px-8 pb-4 pt-5">
       {draft.conflict ? (
-        <div
-          role="alert"
-          className="flex shrink-0 items-center gap-2.5 rounded-lg bg-danger-soft px-3 py-2.5"
-        >
-          <AlertTriangle className="size-[15px] shrink-0 text-danger" aria-hidden />
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <p className="text-sm font-semibold">{t("knowledge.editor.conflictTitle")}</p>
-            <p className="text-xs text-text-muted">{conflictText}</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Button variant="outline" size="sm" onClick={onCompare}>
-              {t("knowledge.editor.compare")}
-            </Button>
-            <Button variant="outline" size="sm" onClick={onCopyMine}>
-              {t("knowledge.editor.copyMine")}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-danger"
-              onClick={() => setConfirmReload(true)}
-            >
-              {t("knowledge.editor.reloadAsk")}
-            </Button>
-          </div>
-        </div>
+        <FileConflictBanner
+          title={t("knowledge.editor.conflictTitle")}
+          text={conflictText}
+          onCompare={onCompare}
+          onCopyMine={onCopyMine}
+          onReload={onReload}
+        />
       ) : draft.error ? (
         <p role="alert" className="shrink-0 text-sm text-danger">
           {translateApiError(t, draft.error)}
@@ -119,18 +98,6 @@ export function KnowledgeDocumentEditor({
       {!draft.conflict ? (
         <p className="shrink-0 text-xs text-text-muted">{t("knowledge.editor.editStands")}</p>
       ) : null}
-
-      <ConfirmDialog
-        open={confirmReload}
-        onOpenChange={setConfirmReload}
-        title={t("knowledge.editor.reloadTitle")}
-        description={t("knowledge.editor.reloadBody")}
-        confirmLabel={t("knowledge.editor.reloadConfirm")}
-        onConfirm={() => {
-          setConfirmReload(false);
-          onReload();
-        }}
-      />
     </div>
   );
 }

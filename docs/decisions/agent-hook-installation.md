@@ -3,25 +3,22 @@
 **Status**: Accepted
 **Date**: 2026-09-23
 **Deciders**: Yuxing Wu
-**Related**: spec memory; [Memory Reaches a Session at Three Moments: an Index at Start, Retrieval per Prompt, and a Guard Before a Known Trap](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md); [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md); [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md); research note [agent plugins](../research/agent-plugins.md); PR #413
+**Related**: spec memory; [Memory Reaches a Session at Two Moments: an Index at Start and the Notes a Prompt Names](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md); [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md); [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md); research note [agent plugins](../research/agent-plugins.md); PR #413
 
 ## Context
 
-Memory delivery reaches a session at three moments: the index at session
-start, the notes a prompt names, and a guard before a shell command a person
-marked as a known trap
-([Memory Reaches a Session at Three Moments](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)).
+Memory delivery reaches a session at two moments: the index at session
+start and the notes a prompt names
+([Memory Reaches a Session at Two Moments](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)).
 For an agent the developer drives themselves, the only way in is the agent's
 own lifecycle hook: an entry in its settings file that runs a command at a
-lifecycle event, whose JSON output the agent adds to the context or, for a
-`PreToolUse` denial, uses to hold a command. Coffer's command is
+lifecycle event, whose JSON output the agent adds to the context. Coffer's command is
 `coffer memory hook --agent-uid <uid> --cwd "$PWD"`, the same one on every
 event; it reads the event the agent hands it on stdin.
 
-Both agents offer the same four events, so the hook is four entries:
-`SessionStart` (matched on `startup|resume|clear|compact`),
-`UserPromptSubmit`, and `PreToolUse` and `PostToolUse` matched on the `Bash`
-tool.
+Both agents offer the same events, so the hook is two entries:
+`SessionStart` (matched on `startup|resume|clear|compact`) and
+`UserPromptSubmit`. Nothing hooks a tool call: memory never holds a command.
 
 - **Claude Code** takes them in `~/.claude/settings.json`
   (`backend/coffer/infrastructure/memory/delivery/claude_code.py`). It runs
@@ -138,7 +135,7 @@ file, installed and removed only by an explicit act, audited on install, remove
 and every fire, and repaired whenever the installed command differs from the
 one this build would write.**
 
-- **Marker-scoped, four entries.** An entry is Coffer's if and only if its
+- **Marker-scoped, two entries.** An entry is Coffer's if and only if its
   command starts with `: coffer-memory` (`backend/coffer/domain/memory/delivery.py`);
   an install or remove first takes Coffer's entries off every event, so none is
   left beside the new ones. Coffer touches no other entry.
@@ -160,7 +157,7 @@ one this build would write.**
   [one-level-triggered-reconciler-compares-parameters](one-level-triggered-reconciler-compares-parameters.md))
   runs on every pass and on every switch of the `memory` feature: for each
   agent with a hook installed whose events or commands differ from what
-  `command_for(uid)` and the four entries would write, it reinstalls in place. It is best-effort per agent,
+  `command_for(uid)` and the two entries would write, it reinstalls in place. It is best-effort per agent,
   and it never installs a hook for an agent that has none — that would be a
   silent install.
 - **Named by uid.** The command names the agent by its immutable uid, not its

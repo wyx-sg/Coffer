@@ -186,3 +186,26 @@ async def test_a_healthy_server_has_no_hand_off(ctx: Any) -> None:
     [server] = await rsvc.list(kind="mcp_server")
     r = await client.get(f"/api/v1/resources/mcp_server/{server.uid}/status")
     assert r.json()["handoff"] is None
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a server's status carries the hand-off its page offers"
+)
+async def test_a_status_carries_a_hand_off_only_when_there_is_one(
+    ctx: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, rsvc, _health = ctx
+    [healthy] = await rsvc.list(kind="mcp_server")
+    stuck = await rsvc.register(
+        kind="mcp_server",
+        name="duck",
+        config={"transport": {"type": "stdio", "command": "uvx", "args": ["mcp-server-duckdb"]}},
+        actor="test",
+    )
+    monkeypatch.setattr(runner_detect.shutil, "which", lambda _c: None)
+
+    with_one = (await client.get(f"/api/v1/resources/mcp_server/{stuck.uid}/status")).json()
+    without = (await client.get(f"/api/v1/resources/mcp_server/{healthy.uid}/status")).json()
+
+    assert "`uvx`" in with_one["handoff"]["prompt"]
+    assert without["handoff"] is None

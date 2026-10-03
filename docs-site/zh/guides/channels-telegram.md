@@ -28,17 +28,6 @@ Telegram 是你完全可以自己搞定的消息渠道。它不需要公网 URL�
 
 ## 2. 登记消息渠道 {#_2-register-the-channel}
 
-::: code-group
-
-```sh [CLI]
-# Paste the token at the prompt; it is read from stdin, not your shell history
-coffer secret set channel/tg/bot-token
-
-coffer channel add my-telegram --type telegram \
-  --bot-token-ref channel/tg/bot-token \
-  --agent claude-code
-```
-
 ```text [Web UI]
 Channels → Add channel
   Type:           Telegram
@@ -48,43 +37,13 @@ Channels → Add channel
 → Create
 ```
 
-:::
+默认智能体是一个已登记的智能体，和**智能体**页面列出的一致。消息渠道会绑定到你登记它的那台机器，并立刻开始轮询。无法解析的令牌引用会被拒绝，不会保存任何东西。
 
-`--agent` 是一个已登记智能体的名称，和**智能体**页面列出的一致。消息渠道会绑定到你登记它的那台机器，并立刻开始轮询。无法解析的令牌引用会被拒绝，不会保存任何东西。
-
-确认它在运行：
-
-```sh
-coffer channel show my-telegram
-```
-
-```text
-channel:  my-telegram (telegram)
-uid:      9b2e…
-agent:    claude-code
-gating:   require_mention=on  ignore_other_mentions=off
-idle:     new conversation after 24 h idle
-secret:   bot_token_ref = channel/tg/bot-token
-enabled:  True    running: True
-runs on:  3f9c… (this machine)
-pairing:  no pending code
-peer:     not paired
-```
+确认它在运行：消息渠道的页头会显示它的状态和运行位置。
 
 ## 3. 配对你的账号 {#_3-pair-your-account}
 
-1. 生成一个配对码：在消息渠道的**总览**里点**生成配对码**，或者：
-
-   ```sh
-   coffer channel pair my-telegram
-   ```
-
-   ```text
-   pairing code: K7QM3XPA
-   expires at:   2026-09-24T15:04:05Z
-   pair link:    https://t.me/my_coffer_bot?start=K7QM3XPA
-   Send this code to the bot from the account that should own the channel.
-   ```
+1. 生成一个配对码：在消息渠道的**总览**里点**生成配对码**。对话框会显示配对码和配对链接。
 
 2. 在登录了你账号的手机上打开配对链接（网页上的 **Open the pairing link**），点 **Start**。或者打开机器人，把 `K7QM3XPA` 作为消息发过去。
 3. 机器人确认配对，并发一次帮助信息。你就是所有者了。
@@ -165,21 +124,16 @@ Bot API 只报告普通消息正文里的提及，所以照片或文件说明文
 
 Telegram 机器人默认**开启隐私模式**，即机器人只能看到提及它、回复它或者是命令的消息。这正是默认的 `require_mention: true` 所期望的，所以不需要改。
 
-如果你关掉 `require_mention`，让机器人对群组里所有者的每条消息都做出反应（消息渠道的**设置** → **群聊中** → **仅在被 @ 时回复**，或者 `coffer channel edit <name> --no-require-mention`），机器人还需要能看到这些消息：
+如果你关掉 `require_mention`，让机器人对群组里所有者的每条消息都做出反应（消息渠道的**设置** → **群聊中** → **仅在被 @ 时回复**），机器人还需要能看到这些消息：
 
 1. 在 BotFather 里发送 `/setprivacy`，选择这个机器人，再选 **Disable**。
 2. 把机器人移出群组再重新加入。这个改动只对机器人之后加入的群组生效。
 
-在你这么做之前，`coffer channel show` 会打印一行 `warning:`，写明这个修复办法。
+在你这么做之前，消息渠道页面会显示一条警告，写明这个修复办法。
 
 ## 轮换令牌 {#rotate-the-token}
 
-在消息渠道页面选择**更换 token**（Telegram 拒绝旧令牌时在页头里，也可以在 **⋯** 菜单里和**设置** → **密钥**下找到），把新令牌粘贴到 **Bot token**，然后选**更换并重启**。粘贴时 Coffer 会向 Telegram 检查这个令牌，并显示**可用——这是 @your_bot**；如果是同一个机器人，还会说明配对仍然有效；被 Telegram 拒绝的令牌会在字段下说明。令牌会写到消息渠道已经在用的那个引用下，所以配对和机器绑定都不受影响。在 CLI 下：
-
-```sh
-coffer channel show my-telegram               # find the bot_token_ref
-coffer secret set channel/tg/bot-token   # paste the new token
-```
+在消息渠道页面选择**更换 token**（Telegram 拒绝旧令牌时在页头里，也可以在 **⋯** 菜单里和**设置** → **密钥**下找到），把新令牌粘贴到 **Bot token**，然后选**更换并重启**。粘贴时 Coffer 会向 Telegram 检查这个令牌，并显示**可用——这是 @your_bot**；如果是同一个机器人，还会说明配对仍然有效；被 Telegram 拒绝的令牌会在字段下说明。令牌会写到消息渠道已经在用的那个引用下，所以配对和机器绑定都不受影响。
 
 ## 上限 {#limits}
 
@@ -195,12 +149,12 @@ coffer secret set channel/tg/bot-token   # paste the new token
 ## 故障排查 {#troubleshooting}
 
 **机器人完全不回复。**
-运行 `coffer channel show my-telegram`。
+在**消息渠道**下打开该渠道的页面。
 
-- `running: False`：消息渠道被禁用、处于休眠（它的生效范围里没有任何智能体）、没有可用的默认智能体，或者绑定在另一台机器上。状态和消息渠道页面会说明是哪种。
-- `peer: not paired`：先配对。未配对的机器人不回复任何人。
-- `runs on: … (another machine)`：只有那台机器在轮询这个机器人。用 `coffer channel bind my-telegram` 重新绑定。
-- `runs on: … (UNKNOWN MACHINE …)`：消息渠道绑定的机器已经不在这个保险库里，所以它哪里都不运行。用 `coffer channel bind my-telegram` 重新绑定。
+- 页头显示它没有运行：消息渠道被禁用、处于休眠（它的生效范围里没有任何智能体）、没有可用的默认智能体，或者绑定在另一台机器上。状态和消息渠道页面会说明是哪种。
+- 总览的**谁可以使用**里没有任何人：先配对。未配对的机器人不回复任何人。
+- 页头显示它运行在另一台机器上：只有那台机器在轮询这个机器人。选**在本机运行…**，或在**设置**标签页修改**运行在**。
+- 消息渠道绑定的机器已经不在这个保险库里，所以它哪里都不运行。选**在本机运行**，或在**设置**标签页修改**运行在**。
 
 **机器人回复了别人，或者在配置第二台机器后不再回复。**
 有两个消费者在轮询同一个机器人。同一个令牌被登记了两次（在两个消息渠道名下，或者在两个保险库里）时就会这样。只保留一个登记。

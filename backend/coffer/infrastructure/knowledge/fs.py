@@ -203,7 +203,7 @@ def save_body(
     fingerprint again under the vault's write lock, so a change that lands
     between this read and the write is refused the same way. Nothing records
     it as settled, which is exactly what makes the sweep treat it as a
-    person's edit (see "Let newer statements win and a person's edit stand").
+    person's edit (see "Let the newer or better-evidenced statement win").
 
     Only a Markdown document can be saved: ``require_document`` keeps the
     collection, its README and the inbox out of reach, and a file a person

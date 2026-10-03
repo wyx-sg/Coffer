@@ -136,7 +136,7 @@ only its own.
 Pros: work spreads across machines; nothing waits for one owner.
 
 Cons: provenance would have to travel with every inbox file; curation also
-carries a person's edit through *other* documents in the collection, so two
+carries an out-of-band edit through *other* documents in the collection, so two
 machines curating different material can still rewrite the same document; and a
 machine that never comes back leaves its material stranded.
 

@@ -50,7 +50,7 @@ flowchart LR
 
 | 类别 | 位置 | 存放内容 | 同步 | 历史 | 删掉是否安全 |
 | --- | --- | --- | --- | --- | --- |
-| **vault** | `vault/` | 资源定义、状态文档、知识、技能、记忆触发器、密钥密文、机器描述。 | 设置了远端时同步 | Git | 否：这是唯一副本 |
+| **vault** | `vault/` | 资源定义、状态文档、知识、技能、密钥密文、机器描述。 | 设置了远端时同步 | Git | 否：这是唯一副本 |
 | **local** | `local/` | 本机专属资源（智能体）、生效范围、同步远端、保留策略、密钥边界的批准记录、本机专属密文。 | 从不 | 无 | 你会丢掉一些需要重新设置的设置 |
 | **content** | `content/` | 聊天和消息渠道的附件、聊天工作目录。 | 暂不 | 无 | 否：这是你唯一的副本 |
 | **runs** | `runs.db` | 审计日志、MCP 调用、对话、消息渠道线程和发件箱、同步轮次和用量。 | 从不 | 它*本身*就是历史 | 你会丢掉历史 |
@@ -69,7 +69,6 @@ flowchart LR
 ├── state/settings/internal-engine.json Coffer's model and upkeep settings (absent = defaults)
 ├── knowledge/<collection>/…            Markdown documents, hidden .inbox/ for new material
 ├── skills/<name>/…                     skill master folders
-├── memory-triggers/<id>.md             triggers you wrote or armed
 ├── secret/<ref>.enc                    Fernet ciphertext, one file per secret
 └── machines/<machine id>.json          one descriptor per machine that syncs
 ```
@@ -191,7 +190,7 @@ flowchart LR
 
 手工编辑是被发现的，而不是被拦截的。文件事件只是提示（防抖到路径安静一秒为止），每 60 秒一次以及启动时的扫描才是准绳。有效的编辑以 `disk` 写入提交，并以人为操作者审计为 `vault_file_edited`。无效的编辑留在工作区里、不提交，会在待处理列表和 `coffer vault problems` 里被标记出来，同时 `HEAD` 继续生效。生效的状态永远是 `HEAD`：各个存储从一个由 `HEAD` 加载、每次提交后刷新的缓存里读取文档。
 
-保险库里的每个文件和文件夹都有可以查看、diff 和恢复的历史：`coffer vault history|diff|show|restore`、`/api/v1/vault/` 下的 REST 路由，以及技能的「历史」标签页。恢复是一次经过同样检查的新提交。见[手工编辑保险库](/zh/guides/vault-files)。
+保险库里的每个文件和文件夹都有可以查看、diff 和恢复的历史：`/api/v1/vault/` 下的 REST 路由，以及技能的「历史」标签页。恢复是一次经过同样检查的新提交。见[手工编辑保险库](/zh/guides/vault-files)。
 
 保险库需要 `git`。没有 git 的机器会在启动时失败，并给出说明。git 怎么装取决于这台机器，所以 `GIT_MISSING` 错误不点名任何安装程序，而是在 `details.handoff` 里带上交给你的智能体的安装提示词；同步状态也会报告问题 `git_missing`，附带同一段提示词。
 

@@ -1,16 +1,15 @@
 """What each agent session has already been given (spec memory "Retrieve the
-notes a prompt names", "Guard a known trap once per session").
+notes a prompt names").
 
-Two promises rest on it: a note retrieved for one prompt is not retrieved again
-in the same session, and a trigger holds a command at most once per session.
-Both are keyed on the ``session_id`` the agent hands its hook — never on a
+One promise rests on it: a note retrieved for one prompt is not retrieved again
+in the same session. It is keyed on the ``session_id`` the agent hands its hook — never on a
 process id, which every session of one Codex app-server shares — or, for a
 turn Coffer drives from a channel, on the conversation.
 
 Held in memory, bounded to the most recent sessions, and **rebuilt after a
 daemon restart** from the one durable record of what was given: every fire
 that delivered something is already an audit event naming its session, its
-notes and its trigger (spec memory "Audit every delivery fire"). So the ledger
+notes (spec memory "Audit every delivery fire"). So the ledger
 adds no table (spec memory "Add no table of its own"): ``restore`` reads those
 events back once, before the first question is answered
 (``ledger_restore.restore_from_audit``). A restore that fails is logged and
@@ -34,11 +33,10 @@ MAX_SESSIONS = 2048
 @dataclass
 class _Session:
     delivered: set[str] = field(default_factory=set)
-    fired: set[str] = field(default_factory=set)
 
 
 class SessionLedger:
-    """Per-session sets of delivered notes and fired triggers."""
+    """Per-session sets of delivered notes."""
 
     def __init__(
         self,
@@ -82,31 +80,6 @@ class SessionLedger:
 
     def mark_delivered(self, session_id: str, keys: list[str]) -> None:
         self._session(session_id).delivered.update(keys)
-
-    def has_fired(self, session_id: str, trigger_id: str) -> bool:
-        found = self._sessions.get(session_id)
-        return bool(found and trigger_id in found.fired)
-
-    def mark_fired(self, session_id: str, trigger_id: str) -> None:
-        self._session(session_id).fired.add(trigger_id)
-
-    def claim_fire(self, session_id: str, trigger_id: str) -> bool:
-        """Mark the trigger fired in this session unless it already was.
-
-        One synchronous step, so two parallel hook fires of one session cannot both
-        pass a ``has_fired`` check made before either has marked ("once per session").
-        """
-        fired = self._session(session_id).fired
-        if trigger_id in fired:
-            return False
-        fired.add(trigger_id)
-        return True
-
-    def release_fire(self, session_id: str, trigger_id: str) -> None:
-        """Give a claim back: the trigger did not fire after all."""
-        found = self._sessions.get(session_id)
-        if found is not None:
-            found.fired.discard(trigger_id)
 
 
 __all__ = ["MAX_SESSIONS", "SessionLedger"]

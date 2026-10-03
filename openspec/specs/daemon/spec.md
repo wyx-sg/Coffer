@@ -27,7 +27,7 @@ daemon-to-daemon protocol; the daemon spawns children but does not install runti
 managers for them, and the `.dmg` and the shell inside it belong to the desktop-app spec, which
 wraps the same three binaries this spec builds.
 
-Not every daemon operation is reachable from both REST and the CLI. Three gaps are deliberate. The pre-bind port setting is CLI-only by design, because it must work with no daemon
+The CLI carries only what needs it (see [resource-framework](../resource-framework/spec.md) "Keep the command line to what needs it"), so most daemon operations are REST and web UI only, and three differences are deliberate. The pre-bind port setting is reachable from the CLI as well as from Settings, because it must work with no daemon
 running. The `/api/v1/fs/*` routes are REST-only because their only caller is a web page that
 cannot reach the OS by itself, while a terminal user already has `cd`, `$EDITOR` and their
 platform's own open command. `POST /daemon/shutdown` has no dedicated CLI verb because
@@ -181,8 +181,7 @@ than tearing down inline, so an API stop and a signal stop cannot diverge. Exit 
 - **AND** an unauthenticated shutdown request is rejected without stopping anything.
 
 ### Requirement: Manage the daemon from the command line
-Users MUST be able to run `coffer daemon start`, `stop`, `restart`, `status [--json]`,
-`rotate-token` and `service install|uninstall|status`. `start` MUST key off the liveness probe rather than the
+Users MUST be able to run `coffer daemon start`, `stop`, `restart` and `status [--json]`, with the daemon down or wedged. `start` MUST key off the liveness probe rather than the
 presence of `daemon.json`, MUST diagnose a port that is already held *before* spawning rather than
 after a boot timeout, and MUST wait a bounded time for the spawned daemon to **answer its status call** — a published
 `daemon.json` is not that, because the file is written before the daemon has finished starting and a
@@ -201,9 +200,8 @@ start one. With a daemon answering, `status` MUST also report the passes in flig
 [resource-framework](../resource-framework/spec.md) "Report the passes in flight in one cross-kind read"
 defines, each with its kind, its target and when it started — in its own section of the table form,
 which says so when nothing is running, and as part of the object under `--json`. The daemon port is
-read and changed with `coffer config get|set|unset daemon.port`, and it and the `service` group MUST
-work with no daemon running (see "Bind a fixed, settable port" and "Change residency from the
-settings page or the command line").
+read and changed with `coffer config get|set|unset daemon.port`, which MUST work with no daemon
+running (see "Bind a fixed, settable port").
 
 #### Scenario: start reports a daemon that refused to start
 - **GIVEN** a stale `~/.coffer/daemon.json` and a vault the daemon refuses to open
@@ -282,7 +280,7 @@ in the shell and the daemon's own ("Restart itself on request") in a browser —
 new port the daemon records it in `~/.coffer/daemon.json`, so the desktop shell, the CLI and the MCP
 shim find it by the discovery file as they find any daemon, and no agent's configuration needs a
 rewrite: Coffer's MCP entry in an agent's config runs
-the shim, and the memory delivery hook runs `coffer memory hook`, and both find the daemon through
+the shim, and the memory delivery hook runs `coffer memory hook` (an internal entry point, hidden from help), and both find the daemon through
 `daemon.json` when they run rather than naming a port, so every agent reconnects without a manual
 step. This setting is deliberately outside the audit obligation every kind inherits: it is
 neither a resource nor a capability but process configuration read before the database opens, and
@@ -347,7 +345,7 @@ installed: deployed binaries live under a per-version directory whose older entr
 versioned path stops working two upgrades later, and a supervisor that cannot execute its program
 fails silently — which is the one way autostart could stop without anyone finding out. It MUST
 write to the daemon log (see "Write one bounded daemon log in one format") rather than a file of
-its own. Installing and removing it MUST be available from the CLI with no daemon running, and MUST
+its own. Installing and removing it MUST be done from Settings → Daemon (see "Change residency from the settings page"), and MUST
 be reversible without trace: removing it MUST NOT stop a daemon that is already running, and MUST
 unload it from launchd — at once when no process runs under it, otherwise as that daemon exits, so a
 crash after the user switched the service off is never restarted. See
@@ -395,9 +393,8 @@ daemon MUST NOT serve the framework's interactive API pages (`/docs`, `/redoc`) 
 - **THEN** the schema is refused with `401` until the active token is sent, and then answers with the management routes,
 - **AND** nothing answers at `/openapi.json`, `/docs` or `/redoc`.
 
-### Requirement: Rotate the token from REST or the command line
-Rotation MUST be reachable from both `POST /api/v1/daemon/rotate-token` and
-`coffer daemon rotate-token`. It MUST mint a fresh token, rewrite `daemon.json` atomically at mode
+### Requirement: Rotate the token over REST
+Rotation MUST be reachable through `POST /api/v1/daemon/rotate-token`, and no command rotates the token. It MUST mint a fresh token, rewrite `daemon.json` atomically at mode
 `0600` — never leaving the file at wider permissions for any window — publish the new value to the
 in-process check so the accepted token and the token "Hand the browser its token in the served
 page" injects cannot drift apart, and record a `token_rotated` audit entry. That audit obligation
@@ -407,7 +404,7 @@ is worth recording.
 
 #### Scenario: rotating the daemon token invalidates the previous one
 - **GIVEN** the daemon has issued an auth token,
-- **WHEN** the user invokes the rotate-token operation, through either `POST /api/v1/daemon/rotate-token` or `coffer daemon rotate-token`,
+- **WHEN** the user invokes the rotate-token operation, through `POST /api/v1/daemon/rotate-token`,
 - **THEN** subsequent management API calls with the previous token are rejected with 401, calls with the new token succeed, the new value reaches `~/.coffer/daemon.json` without the file ever existing at wider than user-only permissions, and the rotation is recorded as a `token_rotated` audit entry.
 
 ### Requirement: Refuse a request whose Host or Origin is not the daemon's own
@@ -476,13 +473,13 @@ restarted daemon's browser the previous daemon's dead token. The page MUST NOT p
 stored token outlives the daemon that minted it, and the daemon mints a new one on every start. The
 API token MUST NOT appear in a URL at any point — a URL lands in browser history, which would
 contradict the loopback-plus-token posture of "Bind every endpoint to loopback only" and "Require a
-token on every management call"; the response body is subject to none of that. `coffer open` MUST
+token on every management call"; the response body is subject to none of that. The desktop shell, which opens the UI, MUST
 therefore carry no secret of its own: it reads the daemon's real port from `daemon.json` and
-opens the browser at that origin.
+opens its window at that origin.
 
 #### Scenario: a page served by the daemon is authenticated by the daemon
 - **GIVEN** a daemon that has restarted since the browser last loaded the UI, and therefore minted a new token,
-- **WHEN** the browser opens any page the daemon serves — the bare `/`, a client-side route such as `/agents`, a bookmark, or a plain reload — whether it got there through `coffer open` or by typing the address,
+- **WHEN** the browser opens any page the daemon serves — the bare `/`, a client-side route such as `/agents`, a bookmark, or a plain reload — whether it got there through the desktop shell or by typing the address,
 - **THEN** the served `index.html` carries that daemon's live token as `window.__COFFER_TOKEN__`, the UI renders authenticated with no user action, and the token appears in no URL and in no browser storage,
 - **AND** the document is served `no-store` with no validators, so the browser can never revalidate its way back to a previous daemon's token.
 
@@ -660,7 +657,7 @@ of "Spawn a detached daemon from any surface that needs one" finds `coffer-daemo
 `coffer`. macOS x64 (Intel), Linux and Windows are deliberately not built — those legs were never
 validated end to end. This archive carries the "no system Python required" promise on its own: on a
 machine with no system Python, extracting it and running `coffer daemon start` reaches
-`status: ready`, and `coffer open` renders the UI authenticated. Both tiers ship per tag: this
+`status: ready`, and the daemon serves the UI, which renders authenticated at the origin `daemon.json` names. Both tiers ship per tag: this
 archive is the terminal install, and the `.dmg` of [desktop-app](../desktop-app/spec.md) "Ship the desktop tier as a macOS arm64 dmg" is the double-click one;
 neither is a substitute for the other.
 
@@ -728,9 +725,9 @@ whichever tier it came from.
 - **WHEN** the migrations run at startup,
 - **THEN** `runs.db.pre-<revision>` (with its `-wal`/`-shm` companions, when present) holds the pre-upgrade state beside the live file, only the three newest such copies are kept, and a start against an already-current schema — or an in-memory database — copies nothing.
 
-### Requirement: Change residency from the settings page or the command line
+### Requirement: Change residency from the settings page
 The one residency setting — whether the login service is installed (see "Run as a login service")
-— MUST be readable and settable both over REST and from the CLI. The daemon never stands down on
+— MUST be readable and settable over REST, from Settings → Daemon. The daemon never stands down on
 its own: once started it serves until it is stopped, or until another daemon supersedes it (see
 "Stand down only when provably superseded"), so there is no idle window to configure.
 
@@ -743,15 +740,10 @@ MUST report what is true after the change, and the change MUST be audited as
 
 This setting has a REST surface where the port deliberately does not: a port is changed when the
 daemon cannot start, so a route the daemon would have to serve is useless exactly then, while
-residency is a settings question asked of a daemon that is working.
+residency is a settings question asked of a daemon that is working, so it has no command.
 
-`coffer daemon service install|uninstall|status` MUST read and write the same setting directly,
-with no daemon involved and none required, since the state it is most often reached from is "no
-daemon is running". On a host that has no login service, `service install` and `service uninstall`
-MUST refuse with a clear message and a non-zero exit, while `service status` MUST exit successfully
-and report that a login service is not supported there. The CLI path records no audit entry, for
-the reason the port records none: it must work with no daemon running, so the audit table is
-unreachable on exactly the path it serves.
+There MUST be no command line for it: no `daemon` subcommand installs or removes the login service or
+sets an idle window, and the login service is installed and removed only through the route above.
 
 #### Scenario: the settings page changes residency in one request
 - **GIVEN** a running daemon on a host that supports a login service, with nothing configured,
@@ -759,11 +751,11 @@ unreachable on exactly the path it serves.
 - **THEN** the read reports a supported login service that is not installed, and the login service is installed at once,
 - **AND** the response and a `daemon_residency_updated` audit entry both report `login_service_installed: true`, and neither carries an idle window.
 
-#### Scenario: the command line changes residency with no daemon running
+#### Scenario: residency has no command
 - **GIVEN** no daemon running, on a host that supports a login service,
-- **WHEN** the user runs `coffer daemon service install`, `coffer daemon service status` and `coffer daemon service uninstall`,
-- **THEN** the login service is installed, reported installed, and removed,
-- **AND** no database is opened and no audit entry recorded, and `coffer daemon idle` is not a command.
+- **WHEN** the user runs `coffer daemon` with a `service` subcommand, install or status,
+- **THEN** each exits non-zero as an unknown command and the login service is neither installed nor removed,
+- **AND** no database is opened and no audit entry recorded, and no `idle` subcommand exists either.
 
 ### Requirement: Clear inherited agent-home variables at start
 The daemon MUST remove `CLAUDE_CONFIG_DIR` and `CODEX_HOME` — every agent type's home variable — from its own environment when it starts, before it spawns anything, and log once which ones it removed. A daemon started from a shell that exports one would otherwise hand it to every agent process it spawns, so an agent registered on the default directory would run against the exported one while Coffer delivers its skills, MCP entry and config into the default. An agent gets the variable only from its own registered config directory ([agent-registry](../agent-registry/spec.md)), set on that agent's process alone.
@@ -784,7 +776,7 @@ and restarts it after a crash. It pushes the proxy what it serves — the agents
 each agent's route with the decrypted keys, held only in the proxy's memory — over the proxy's
 authenticated loopback control route after every reconcile pass and whenever a token changes. The
 daemon stopping or restarting MUST NOT stop the proxy, so agents' in-flight model streams outlive a
-daemon upgrade. `coffer proxy status` (`GET /api/v1/proxy/status`) reports whether it runs, its
+daemon upgrade. `GET /api/v1/proxy/status` reports whether it runs, its
 port, pid, version, restart count and last error.
 
 #### Scenario: the daemon restarts a crashed proxy
@@ -874,8 +866,7 @@ connection — MUST come from
 daemon's state without a token and without a route of its own, and so the footer, the Daemon tab,
 `coffer daemon status` and the desktop shell's version check all read one answer. The one daemon
 setting those surfaces also show, whether it starts at login, comes from
-`GET /api/v1/daemon/residency` (see "Change residency from the settings page or the command
-line"). Showing the state MUST NOT move starting the daemon onto the user: every surface that needs
+`GET /api/v1/daemon/residency` (see "Change residency from the settings page"). Showing the state MUST NOT move starting the daemon onto the user: every surface that needs
 a daemon and finds none still starts one itself (see "Spawn a detached daemon from any surface that
 needs one").
 
@@ -899,7 +890,7 @@ its size) and the **rebuildable cache** (the memory tree and the transcript summ
 resolves it, so an override the owner honours is honoured here.
 
 `POST /api/v1/storage/cache/clear` MUST delete the files of the memory tree and of the transcript
-summary cache, and nothing else: no vault, local content, history, memory trigger or other file
+summary cache, and nothing else: no vault, local content, history or other file
 under `derived/`, and no partition row, so the next memory update rebuilds each partition from the
 agents' own memory. It MUST be refused (`UPKEEP_ALREADY_RUNNING`) while a memory pass is running,
 because that pass is writing into the tree, and MUST record the clear in the audit log with the
@@ -912,7 +903,7 @@ bytes freed.
 - **AND** before the vault repository has been created it reports the vault with no version count
 
 #### Scenario: clearing the cache leaves everything else
-- **GIVEN** a memory tree, a transcript summary cache, a knowledge document in the vault, chat media, a memory trigger, a sync round's hand-merge copy and the database
+- **GIVEN** a memory tree, a transcript summary cache, a knowledge document in the vault, chat media, a sync round's hand-merge copy and the database
 - **WHEN** `POST /api/v1/storage/cache/clear` is called
 - **THEN** the memory tree and the transcript cache are empty, everything else is untouched, the answer carries the bytes freed and the audit log records the clear
 - **AND** while a memory pass is running the clear is refused and nothing is deleted

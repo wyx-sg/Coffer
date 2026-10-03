@@ -50,14 +50,14 @@ class DriftEntry:
 
 @dataclass
 class DriftReport:
-    """Output of `coffer skill verify` (``drift_view.verify``)."""
+    """The skill drift report (``drift_view.verify``)."""
 
     entries: list[DriftEntry] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class RepairResult:
-    """Output of `coffer skill verify --fix` (``drift_view.repair``).
+    """The result of repairing drift (``drift_view.repair``).
 
     ``remediated`` holds entries that were successfully re-delivered;
     ``remaining`` is the residual DriftReport after the repair pass (entries

@@ -30,7 +30,6 @@ from coffer.infrastructure.vault.migration.connection_choice import settle_conne
 from coffer.infrastructure.vault.migration.knowledge import CURATED_AT_KEY
 from coffer.infrastructure.vault.migration.legacy_db import read_legacy
 from coffer.infrastructure.vault.migration.places import (
-    IN_PLACE,
     LEGACY_DB,
     PRE_LAYOUT_REVISION,
     RUNS_DB,
@@ -90,7 +89,7 @@ def _target(rel: str) -> str | None:
     for source, target in TREE_MOVES:
         if rel == source or rel.startswith(source + "/"):
             return target + rel[len(source) :]
-    return rel if any(rel.startswith(p + "/") for p in IN_PLACE) else None
+    return None
 
 
 @dataclass

@@ -1,18 +1,17 @@
 """Wire contract for the one ``knowledge`` kind.
 
-The oracle is an explicit table: the routes, the wire models and the built-in
-tool set are written down here, and the app must match them. That catches the
-drift class this module exists for — a route quietly renamed or dropped, a
-built-in tool appearing without anyone deciding on it, a field slipping back
+The oracle is an explicit table: the routes and the wire models are written
+down here, and the app must match them. That catches the drift class this
+module exists for — a route quietly renamed or dropped, a field slipping back
 onto a payload the layer no longer has anything to put in.
 
-Two entries in that table are the redesign itself, and they are the reason an
-equality is used rather than a subset check. ``search`` and ``grep`` are gone
-from the route set, and five of the six built-in tools are gone from the tool
-set (spec knowledge "Expose exactly one knowledge tool"): the layer keeps no
-index and offers no retrieval on any surface, so a route or a tool reappearing
-here is not a new feature but a reversal, and it should have to be written down
-before it ships.
+Two facts in that table are the redesign itself, and they are the reason an
+equality is used rather than a subset check. ``search``, ``grep`` and
+``material`` are gone from the route set, and the layer has no built-in tool at
+all (spec knowledge "Expose no knowledge tool", "Manage knowledge in the web
+UI"): it keeps no index, offers no retrieval on any surface, and the routes are
+the web UI's own, so a route or a tool reappearing here is not a new feature but
+a reversal, and it should have to be written down before it ships.
 """
 
 from __future__ import annotations
@@ -23,9 +22,9 @@ from coffer.surfaces.http.knowledge import schemas
 
 #: Every route the knowledge kind serves, as (method, path). Deleting a
 #: collection goes through the kind-agnostic Resource route, so it is
-#: deliberately absent (spec knowledge "Cover knowledge management on REST and
-#: the CLI"). So are ``search`` and ``grep``: this surface serves the person
-#: and the UI, and neither retrieves.
+#: deliberately absent (spec knowledge "Manage knowledge in the web UI"). So are
+#: ``search`` and ``grep``: this surface serves the person and the UI, and
+#: neither retrieves.
 _EXPECTED_ROUTES = {
     ("GET", "/api/v1/knowledge/collections"),
     ("POST", "/api/v1/knowledge/collections"),
@@ -34,10 +33,11 @@ _EXPECTED_ROUTES = {
     ("DELETE", "/api/v1/knowledge/file"),
     # The one document write: a person's edited body, kept frontmatter, and a
     # fingerprint guard (see "Save a document edited in the web UI"). New
-    # knowledge still arrives as material (see "Submit every entrance's input
-    # as material").
+    # knowledge arrives as material: an upload, or a file an agent writes into
+    # a collection's inbox (see "Submit every entrance's input as material").
+    # There is no material route and no route that creates a document at a path
+    # (see "Manage knowledge in the web UI").
     ("PUT", "/api/v1/knowledge/file"),
-    ("POST", "/api/v1/knowledge/material"),
     # The collection by its uid — a pass runs for minutes and must keep meaning
     # the same collection across a rename. The file routes above stay
     # name-addressed on purpose: their arguments are filesystem paths.
@@ -63,18 +63,6 @@ _EXPECTED_ROUTES = {
     ("PUT", "/api/v1/knowledge/collections/{uid}/description"),
 }
 
-#: Exactly one (see "Expose exactly one knowledge tool"). Upload is
-#: deliberately not among them — a document enters through a human surface (the
-#: Knowledge page, a channel, or the CLI), not an agent's tool call — and
-#: neither is any way to read: an agent reads the files with its own tools at
-#: the paths its delivered skill carries.
-_EXPECTED_BUILTIN_TOOLS = {"write"}
-
-#: The names that were retired with the retrieval surface. Listed by name so a
-#: revival reds this test with the name in the message rather than as an
-#: anonymous set difference.
-_RETIRED_BUILTIN_TOOLS = {"list", "grep", "read", "search", "delete"}
-
 
 def _knowledge_routes(app) -> set[tuple[str, str]]:  # type: ignore[no-untyped-def]
     """Every knowledge route the app DECLARES, read from its OpenAPI schema.
@@ -99,74 +87,36 @@ def test_every_knowledge_route_is_declared(app_with_knowledge) -> None:  # type:
     assert _knowledge_routes(app_with_knowledge) == _EXPECTED_ROUTES
 
 
-def test_the_builtin_tool_set_is_write_alone(builtin_registry) -> None:  # type: ignore[no-untyped-def]
-    names = {t.name for t in builtin_registry.list()}
-    assert names == _EXPECTED_BUILTIN_TOOLS
-    assert not names & _RETIRED_BUILTIN_TOOLS, sorted(names & _RETIRED_BUILTIN_TOOLS)
+@pytest.mark.acceptance(
+    spec="knowledge",
+    scenario="the routes are the web UI's, with no material or create-at-path route",
+)
+def test_the_routes_carry_no_material_or_create_at_path_route(app_with_knowledge) -> None:  # type: ignore[no-untyped-def]
+    routes = _knowledge_routes(app_with_knowledge)
+    assert routes, "the route table must not be empty"
+    assert not {path for _, path in routes if path.endswith("/material")}
+    assert {m for m, p in routes if p == "/api/v1/knowledge/file"} == {"GET", "PUT", "DELETE"}
 
 
-def test_every_builtin_tool_describes_itself(builtin_registry) -> None:  # type: ignore[no-untyped-def]
-    for tool in builtin_registry.list():
-        assert tool.description.strip(), f"{tool.name} has no description"
-        assert tool.input_schema.get("type") == "object"
-
-
-def test_the_write_tool_tells_the_agent_where_reading_happens(builtin_registry) -> None:  # type: ignore[no-untyped-def]
-    """The tool's description is one of only two places this layer is ever in a
-    model's context, and the one question a model will have on finding a write
-    tool and no read tool is where the reading went (see "Expose exactly one
-    knowledge tool")."""
-    [tool] = builtin_registry.list()
-    assert "coffer-guide" in tool.description
-    assert "no read tool" in tool.description
-
-
-def test_no_builtin_tool_takes_a_scope_or_a_mode(builtin_registry) -> None:  # type: ignore[no-untyped-def]
-    """Both axes are gone: there are no retrieval modes, and a caller never
-    names a scope — it sees every collection it is authorized for (see "Derive
-    no boundary from the working directory", "Serve every collection to every
-    agent")."""
-    for tool in builtin_registry.list():
-        properties = set(tool.input_schema.get("properties", {}))
-        assert not properties & {"scope", "mode", "top_k", "cwd"}, tool.name
-
-
-def test_the_write_tool_never_lets_a_caller_choose_where_it_lands(builtin_registry) -> None:  # type: ignore[no-untyped-def]
-    """What an agent writes is material (see "Submit every entrance's input as
-    material"), and where it belongs in the collection is curation's call. A
-    tool that accepted a ``path`` or a ``folder`` would be a way to write a
-    document around the pass."""
-    [tool] = builtin_registry.list()
-    properties = set(tool.input_schema.get("properties", {}))
-    assert properties == {"collection", "title", "description", "body"}
-    assert tool.input_schema["required"] == ["collection", "title", "description"]
-
-
-def test_a_material_payload_requires_a_description() -> None:
-    """The skill's catalogue is how a document is ever found, so material that
-    fails to describe itself is unfindable (see "Carry title, description and
-    actor in frontmatter")."""
-    with pytest.raises(ValueError):
-        schemas.MaterialIn(title="t", description="", body="b", collection="shopee")
-
-
-def test_a_material_payload_names_a_collection_and_nothing_finer() -> None:
-    """Material goes to a collection's inbox; no field aims it at a path."""
-    assert set(schemas.MaterialIn.model_fields) == {"collection", "title", "description", "body"}
+def test_no_material_wire_model_remains() -> None:
+    """The web UI never submitted material through REST, so the payload and its
+    answer are gone with the route."""
+    assert not hasattr(schemas, "MaterialIn")
+    assert not hasattr(schemas, "SubmissionOut")
     assert not hasattr(schemas, "FileWrite")
 
 
-def test_a_submission_says_whether_it_became_a_document() -> None:
-    """``pending`` while it waits for a pass, ``written`` with the document's
-    path when no model could merge it (see "Promote material directly when no
-    model is configured")."""
-    assert set(schemas.SubmissionOut.model_fields) == {"status", "collection", "title", "path"}
+def test_the_knowledge_layer_registers_no_builtin_tool() -> None:
+    """Knowledge is plain files an agent reads and writes with its own tools
+    (see "Expose no knowledge tool")."""
+    import importlib.util
+
+    assert importlib.util.find_spec("coffer.application.knowledge.builtin_tools") is None
 
 
 def test_no_wire_model_carries_a_retrieval_payload() -> None:
     """A search request, a hit or a grep match here would be a second retrieval
-    surface no one decided to add (see "Cover knowledge management on REST and
-    the CLI")."""
+    surface no one decided to add (see "Manage knowledge in the web UI")."""
     for gone in ("SearchRequest", "SearchHit", "SearchResultOut", "GrepMatchOut", "GrepOut"):
         assert not hasattr(schemas, gone), gone
 
@@ -214,18 +164,3 @@ def app_with_knowledge(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     from coffer.surfaces.http.app import create_app
 
     return create_app()
-
-
-@pytest.fixture
-def builtin_registry():  # type: ignore[no-untyped-def]
-    from coffer.application.builtin_tools import BuiltinToolRegistry
-    from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
-
-    registry = BuiltinToolRegistry()
-    # This module tests the DECLARED surface (names, schemas), never an
-    # invocation, so the service it would call is never reached.
-    register_knowledge_builtin_tools(
-        registry,
-        knowledge_service=None,  # type: ignore[arg-type]
-    )
-    return registry

@@ -349,10 +349,9 @@ describe("ResourcesPage", () => {
         checked_at: new Date().toISOString(),
         reaches_all_connected_agents: true,
         connected_agent_uids: ["a-cc"],
-        tool_count: 2,
+        tool_count: 1,
         tools: [
           { name: "search_tools", qualified_name: "coffer__search_tools", description: "Find" },
-          { name: "write", qualified_name: "coffer__write", description: "File a fact" },
         ],
         summary: {
           calls: 0,

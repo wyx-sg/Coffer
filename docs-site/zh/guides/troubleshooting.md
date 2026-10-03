@@ -107,11 +107,11 @@ shim 自己的日志是 `~/.coffer/logs/shim-<pid>-<time>.log`。
 | 原因 | 怎么判断 | 解决办法 |
 | --- | --- | --- |
 | 工具没有被公布，因为工具目录超出了列出预算（默认 50 个上游工具）。 | 服务器健康，工具也已启用。 | 工具照样能用。让智能体用 `coffer__search_tools` 找到它，或者在守护进程的环境里设置 `COFFER_TOOL_TIERING=off`，列出全部工具。 |
-| 服务器在这台机器上被禁用，或者它的生效范围不包括这个智能体。 | 服务器的生效范围控件，或 `coffer mcp scope <name>`。 | 启用它，或者加上这个智能体：`coffer mcp enable <name>`、`coffer mcp scope <name> --agents <agent>`。 |
-| 智能体的会话没有报告身份，所以它只能看到没有限定范围的服务器。 | 智能体的 MCP 条目运行 `coffer-mcp-shim` 时没带 `--agent-uid`。 | 重新接入这个智能体：`coffer agent connect <agent>`。 |
-| 这个工具被单独关掉了。 | 服务器的**工具**标签页，或 `coffer mcp cap list <name>`。 | 在那里打开它，或者运行 `coffer mcp cap enable <name> tool:<tool>`。 |
-| 服务器启动不了：缺少它的启动器。 | 服务器显示 `npx isn't found on this machine`（或 `uvx` 等）。 | 把那个运行时装到守护进程的 `PATH` 能找到的地方（从 Dock 或 Finder 启动的应用不会读你 shell 的启动文件），然后点**测试**。Coffer 不安装运行时；它提示框里的**复制提示词**（或 `coffer mcp handoff <name>`）会把安装交给你的智能体，并附上它需要的命令行和 `PATH`。 |
-| 服务器在出错，或者响应很慢。 | `coffer mcp test <name>`；服务器的 stderr 在 `~/.coffer/logs/upstream/<name>.log`。 | 修好服务器的配置或密钥。错过了发现阶段的服务器会在后台重试，它响应之后工具就会重新出现。出错提示框里的**复制提示词**（或 `coffer mcp test <name> --prompt`）会把诊断交给你的智能体，附上错误和 stderr 末尾，且不含任何密钥值。 |
+| 服务器在这台机器上被禁用，或者它的生效范围不包括这个智能体。 | 服务器的**生效范围**控件和启用开关。 | 启用它，或者在**可用范围**里加上这个智能体。 |
+| 智能体的会话没有报告身份，所以它只能看到没有限定范围的服务器。 | 智能体的 MCP 条目运行 `coffer-mcp-shim` 时没带 `--agent-uid`。 | 在该智能体页面再次点击**连接**。 |
+| 这个工具被单独关掉了。 | 服务器的**工具**标签页。 | 在那里打开它。 |
+| 服务器启动不了：缺少它的启动器。 | 服务器显示 `npx isn't found on this machine`（或 `uvx` 等）。 | 把那个运行时装到守护进程的 `PATH` 能找到的地方（从 Dock 或 Finder 启动的应用不会读你 shell 的启动文件），然后点**测试**。Coffer 不安装运行时；它提示框里的**复制提示词**会把安装交给你的智能体，并附上它需要的命令行和 `PATH`。 |
+| 服务器在出错，或者响应很慢。 | 服务器页面上的**测试**（或 `coffer mcp test <name>`）；服务器的 stderr 在 `~/.coffer/logs/upstream/<name>.log`。 | 修好服务器的配置或密钥。错过了发现阶段的服务器会在后台重试，它响应之后工具就会重新出现。出错提示框里的**复制提示词**会把诊断交给你的智能体，附上错误和 stderr 末尾，且不含任何密钥值。 |
 
 见 [MCP 服务器](/zh/guides/mcp-servers)和[连接客户端](/zh/guides/connect-a-client)。
 
@@ -135,11 +135,11 @@ shim 自己的日志是 `~/.coffer/logs/shim-<pid>-<time>.log`。
 
 **解决办法。** 固定一个端口：`coffer config get daemon.port` 告诉你配置的端口；`coffer config unset daemon.port` 恢复为 8000。
 
-### 页面或命令不见了，或命令提示某个功能已关闭 {#a-page-or-command-is-missing-or-a-command-says-a-feature-is-switched-off}
+### 因为功能已关闭，页面或工具不见了 {#a-page-or-tool-is-missing-because-a-feature-is-switched-off}
 
-**原因。** 这个页面、命令或工具属于一个在这台机器上被关掉的[实验功能](/zh/guides/experimental-features)。实验功能默认关闭，关闭的功能看起来就像不存在：没有侧边栏入口，命令面板里搜不到，直接打开它的页面链接会显示「未找到」页面。四个功能是知识、记忆、同步和模型提供商。
+**原因。** 这个页面或工具属于一个在这台机器上被关掉的[实验功能](/zh/guides/experimental-features)。实验功能默认关闭，关闭的功能看起来就像不存在：没有侧边栏入口，命令面板里搜不到，直接打开它的页面链接会显示「未找到」页面。四个功能是知识、记忆、同步和模型提供商。
 
-**解决办法。** 在**设置 → 功能**里开启它，或者运行 `coffer config set feature.<key> on`（需要某个功能的命令会原样打印这一行）。`coffer config list feature.` 会显示每个功能由什么决定；如果显示 `pin`，说明 `COFFER_FEATURES` 在守护进程的环境里把它固定了，到启动守护进程的地方去改。
+**解决办法。** 在**设置 → 功能**里开启它。**决定方**会显示每个功能由什么决定；如果显示 `pin`，说明 `COFFER_FEATURES` 在守护进程的环境里把它固定了，到启动守护进程的地方去改。
 
 ## 密钥和 macOS 钥匙串提示 {#secrets-and-macos-keychain-prompts}
 
@@ -154,20 +154,19 @@ shim 自己的日志是 `~/.coffer/logs/shim-<pid>-<time>.log`。
 
 - 把主密钥移回文件 `~/.coffer/master.key`：
   ```sh
-  coffer config set secrets.storage file
   ```
-  或者在**设置 → 安全**里关闭**将主密钥存入系统钥匙串**。
-- 用 `coffer secret list` 找出被引用但缺失的密钥，然后用 `coffer secret set <ref>` 逐个存储。
+  方法是在**设置 → 安全**里关闭**将主密钥存入系统钥匙串**。
+- 用 `coffer secret list` 找出被引用但缺失的密钥，然后在**密钥**页面或用 `coffer secret set <ref>` 逐个存储。
 
 ### 命令以 9 退出："waiting for approval in the Coffer app" {#a-command-exits-9-waiting-for-approval-in-the-coffer-app}
 
 **原因。** 这次改动把一个密钥发往了它从没去过的地方（第二个引用同一个令牌的 MCP 服务器、改过的命令行或 URL、指向新远端的推送令牌），或者替换了某个已经在用的值，或者把 `secrets.require_approval` 关掉了。改动已经保存；在你批准之前，密钥会被扣住。处于这种状态的 MCP 服务器不会启动，它的工具会以 `SECRET_BINDING_PENDING` 失败。
 
-**解决办法。** 打开桌面应用，回应它显示的批准请求（或者用 `coffer secret approvals` 查看）。只批准你认识的目标；其余的用 `coffer secret reject <id>` 拒绝。加上 `--wait` 重新运行命令，让它等你的答复。见[密钥 → 批准](/zh/guides/secrets#approvals)。
+**解决办法。** 打开桌面应用，回应它显示的批准请求（在**密钥**页面，点**查看**会打开审批对话框）。只批准你认识的目标；其余的在那里拒绝。答复之后重新运行命令。见[密钥 → 批准](/zh/guides/secrets#approvals)。
 
 ### 无法在终端里打印密钥 {#there-is-no-way-to-print-a-secret-from-the-terminal}
 
-**原因。** 这是有意设计：没有任何命令、路由或 MCP 工具会返回存储的值，因为你能运行的命令，智能体都能运行。`coffer secret get` 只确认某个值已被存储。
+**原因。** 这是有意设计：没有任何命令、路由或 MCP 工具会返回存储的值，因为你能运行的命令，智能体都能运行。`coffer secret list` 只显示哪些值已被存储。
 
 **解决办法。** 在桌面应用里显示或复制它，它会要求 Touch ID 或你的密码。要把某个值交给一条命令，把它存成一个独立的密钥，然后用 `coffer run --secret <name> -- <command>` 运行这条命令。见[密钥](/zh/guides/secrets)。
 
@@ -177,12 +176,12 @@ shim 自己的日志是 `~/.coffer/logs/shim-<pid>-<time>.log`。
 
 | 症状 | 原因 | 解决办法 |
 | --- | --- | --- |
-| `coffer sync status` 以 1 退出并显示 `deletions held` | 删除断路器扣住了某一轮。 | 看一下列表（`coffer sync hold`），然后运行 `coffer sync hold --confirm` 或 `--restore`。重装之后，选恢复。 |
-| `stopped on conflicts` | 两台机器以 git 无法合并的方式改了同一个文件。 | 运行 `coffer sync conflicts`，用 `coffer sync resolve <path> --mine\|--theirs\|--edited` 答复每个文件，然后运行 `coffer sync continue`；或者在**同步**页面上用**解决冲突**。要让你的智能体合并它们，点**交给智能体**（或把 `coffer sync conflicts --prompt` 给它）；它的合并显示为**智能体已合并 · 请检查**之后，看一眼 diff 再点**标记为已解决**（`coffer sync resolve <path> --edited`）。 |
-| `join required` | 这台机器还没有加入远端。 | `coffer sync join` |
-| 密钥无法解密 | 这台机器没有主密钥。 | `coffer sync key import <file>` |
-| 推送因认证错误失败 | Coffer 不使用你的全局 git 配置，也不使用 macOS 钥匙串助手。 | 存储一个令牌并传入 `--secret-ref`，或者使用一把不需要 passphrase 提示的 SSH 密钥。通过 HTTPS 使用 GitLab 时，加上 `--username oauth2`。 |
-| 你解释不了的 `push failed`、`sign-in refused` 或 `remote unreachable` | 远端那一侧的问题：受保护的分支、没有写权限的令牌、网络或 VPN 问题。 | `coffer sync status --prompt`（或者**同步**页面上消息旁边的提示词）会把诊断交给你的智能体，且不含令牌。然后点**重试**。 |
+| **同步**页面显示 `deletions held`（**查看删除**） | 删除断路器扣住了某一轮。 | 在**查看暂扣的删除**里看一下列表，然后**删除**这些文件或**恢复**它们。重装之后，选恢复。 |
+| `stopped on conflicts` | 两台机器以 git 无法合并的方式改了同一个文件。 | 在**同步**页面上用**解决冲突**：答复每个文件，然后点**继续这一轮**。要让你的智能体合并它们，点**交给智能体**；它的合并显示为**智能体已合并 · 请检查**之后，看一眼 diff 再点**标记为已解决**。 |
+| `join required` | 这台机器还没有加入远端。 | **同步**页面上的**加入并拉取** |
+| 密钥无法解密 | 这台机器没有主密钥。 | **设置 › 安全**里的**导入主密钥** |
+| 推送因认证错误失败 | Coffer 不使用你的全局 git 配置，也不使用 macOS 钥匙串助手。 | 存储一个令牌并在**远端**标签页的**密钥**里选中它，或者使用一把不需要 passphrase 提示的 SSH 密钥。通过 HTTPS 使用 GitLab 时，把**用户名**设为 `oauth2`。 |
+| 你解释不了的 `push failed`、`sign-in refused` 或 `remote unreachable` | 远端那一侧的问题：受保护的分支、没有写权限的令牌、网络或 VPN 问题。 | **同步**页面上消息旁边的提示词会把诊断交给你的智能体，且不含令牌。然后点**重试**。 |
 
 完整列表见[保险库同步的故障排查](/zh/guides/vault-sync#troubleshooting)。
 
@@ -190,20 +189,16 @@ shim 自己的日志是 `~/.coffer/logs/shim-<pid>-<time>.log`。
 
 ### 机器人不回复 {#the-bot-does-not-answer}
 
-先检查消息渠道的运行状态：
+先打开这个消息渠道的页面：它的状态行会说明哪里不对。
 
-```sh
-coffer channel show <name>
-```
-
-| `show` 打印的内容 | 原因 | 解决办法 |
+| 页面上显示的内容 | 原因 | 解决办法 |
 | --- | --- | --- |
-| 没有响应，或者是守护进程错误 | 守护进程没在运行。消息渠道在守护进程里运行。 | `coffer daemon start`。在 macOS 上，`coffer daemon service install` 可以在没有 Coffer 窗口的情况下让它一直运行。 |
-| `runs on: <id> (another machine)` | 这个消息渠道绑定在共享这个保险库的另一台机器上，由那台机器来回复。 | 什么都不用做，或者把它挪到这里：`coffer channel bind <name>` |
-| `runs on: unbound (runs nowhere)` | 这个消息渠道没有指定任何机器。 | `coffer channel bind <name>` |
-| `peer: not paired` | 还没有人和这个机器人配对，所以每条消息都会被忽略。 | 运行 `coffer channel pair <name>`，然后从你自己的账号把配对码发给机器人。 |
-| `inbound: websocket (…)` 并带有一行 `ws error:` | 某个 SeaTalk 消息渠道的连接失败了。错误会说明原因，比如另一个进程占着这个连接。 | 按错误指出的原因去修。 |
-| `warning: …` | 平台侧的某个设置让部分配置失效了。 | 按警告里的办法去修。 |
+| 没有响应，或者是守护进程错误 | 守护进程没在运行。消息渠道在守护进程里运行。 | `coffer daemon start`。在 macOS 上，**设置 → 守护进程 → 开机自启动** 可以在没有 Coffer 窗口的情况下让它一直运行。 |
+| 在另一台机器上运行 | 这个消息渠道绑定在共享这个保险库的另一台机器上，由那台机器来回复。 | 什么都不用做，或者在该消息渠道的页面上用**在本机运行…**把它挪到这里。 |
+| **无处运行** | 这个消息渠道没有指定任何机器。 | 在该消息渠道**设置**标签页的**运行在**里选一台机器。 |
+| **未配对** | 还没有人和这个机器人配对，所以每条消息都会被忽略。 | 在该消息渠道的**总览**上点**生成配对码**，然后从你自己的账号把配对码发给机器人。 |
+| 入站状态下有一行 `ws error:` | 某个 SeaTalk 消息渠道的连接失败了。错误会说明原因，比如另一个进程占着这个连接。 | 按错误指出的原因去修。 |
+| 一条警告 | 平台侧的某个设置让部分配置失效了。 | 按警告里的办法去修。 |
 
 只接受来自已配对所有者的消息。在群聊里，机器人只响应所有者发来的、在叫它的消息。见[消息渠道](/zh/guides/channels)。
 
@@ -221,7 +216,7 @@ coffer channel show <name>
 
 1. 版本：`coffer daemon status`，或者**设置 → 关于 → 复制诊断信息**。
 2. 你是怎么安装的（桌面应用、发布压缩包、源码），以及你的 macOS 版本。
-3. 打印出来的错误原文，以及产生它的命令或操作。用 `coffer -v …` 重新运行失败的命令行命令，可以得到完整的 traceback 和 HTTP 上下文。
+3. 打印出来的错误原文，以及产生它的命令或操作。用 `coffer -v …` 重新运行失败的 `coffer` 命令，可以得到完整的 traceback 和 HTTP 上下文。
 4. `daemon.log` 中相关的行（按失败发生的时间过滤），或者失败请求的 `X-Coffer-Trace` id。
 
 ::: warning 检查你粘贴的内容

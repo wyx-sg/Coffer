@@ -4,8 +4,8 @@
 // and interval, which Mac runs it once the vault spans several, when the last
 // pass ran and the next one will, and Curate now over every collection with
 // items waiting. It lives in the Knowledge header because that is what it
-// upkeeps (spec internal-engine "Report and change the curation owner from
-// every surface"). While Coffer's model is not set there is nothing to curate
+// upkeeps (spec internal-engine "Report and change the curation owner over
+// REST and in the Knowledge popover"). While Coffer's model is not set there is nothing to curate
 // with, so there is no control at all — the page shows its one muted line.
 //
 // "Curation runs on" follows the four-state rule of `lib/machineBinding`: an

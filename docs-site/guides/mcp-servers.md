@@ -38,18 +38,7 @@ The gateway:
 
 A stdio server is a command Coffer starts as a subprocess.
 
-**CLI:**
-
-```sh
-coffer mcp add filesystem \
-  --stdio "npx -y @modelcontextprotocol/server-filesystem /Users/you/projects" \
-  --description "Read and write files under ~/projects"
-# registered: mcp_server filesystem
-```
-
-`--stdio` takes the whole command line; Coffer splits it shell-style into `command` and `args`.
-
-**Web UI:** open **MCP servers**, click **Add server**, and paste whatever the server's README gives you into the one box. It is read as you type:
+Open **MCP servers**, click **Add server**, and paste whatever the server's README gives you into the one box. It is read as you type:
 
 - an `mcpServers` JSON block, or a single server object — one server or many;
 - Codex TOML `[mcp_servers.<name>]` tables;
@@ -77,28 +66,17 @@ One server opens the form prefilled with it (name, description, command and argu
 
 ### The built-in `coffer` server
 
-The list ends with **Built-in**: Coffer's own `coffer` server, the one endpoint every connected agent reaches Coffer through, and through it the tools of the servers you add. Its page shows the endpoint, the agents connected to it, its tools as agents see them (`coffer__search_tools`, `coffer__write`) and its calls in the last 24 hours. It has no settings and cannot be edited, turned off or removed.
+The list ends with **Built-in**: Coffer's own `coffer` server, the one endpoint every connected agent reaches Coffer through, and through it the tools of the servers you add. Its page shows the endpoint, the agents connected to it, its tools as agents see them (`coffer__search_tools`) and its calls in the last 24 hours. It has no settings and cannot be edited, turned off or removed.
 
 ### Worked example: a stdio server with a secret
 
-The Brave Search server reads its API key from the `BRAVE_API_KEY` environment variable. Store the key once, then cite it:
+The Brave Search server reads its API key from the `BRAVE_API_KEY` environment variable. Cite it from the server's environment:
 
-```sh
-# 1. Store the secret (read from stdin, so it never lands in shell history)
-printf '%s' "$BRAVE_API_KEY" | coffer secret set brave/api-key
+1. Open **MCP servers**, click **Add server** and paste `npx -y @modelcontextprotocol/server-brave-search` into the box.
+2. In the environment variables, add `BRAVE_API_KEY`, set the row to **Secret** and paste the key. Coffer stores it in the secret store under a generated ref and cites it from `secret_refs`. (When an agent stores a key for you, the hand-off tells it to read the value from stdin with `coffer secret set`, so it never lands in a chat or in shell history.)
+3. Press **Test**: the server starts and lists its tools. Then click **Add server**.
 
-# 2. Register the server, mapping the env var to the secret ref
-coffer mcp add brave \
-  --stdio "npx -y @modelcontextprotocol/server-brave-search" \
-  --secret BRAVE_API_KEY=brave/api-key
-
-# 3. Check it starts and lists tools
-coffer mcp test brave
-# OK  (1840 ms)
-coffer mcp cap list brave
-```
-
-A secret you store for the server and then register it with is approved by the registration, and the server uses it at once. Citing a secret that already goes somewhere else, or later changing the server's command line or URL, holds the secret until you approve it in the desktop app: `coffer mcp add` and `coffer mcp edit` print `waiting for approval in the Coffer app` and exit `9` (or wait with `--wait`), and Coffer does not start the server until then. Coffer also marks a stdio server whose environment carries a secret as readable by other processes on this Mac, because any program running as you can read a process's environment. See [Secrets → Approvals](/guides/secrets#approvals).
+A secret you store for the server and then register it with is approved by the registration, and the server uses it at once. Citing a secret that already goes somewhere else, or later changing the server's command line or URL, holds the secret until you approve it in the desktop app: the server's page says it waits, and Coffer does not start the server until then. Coffer also marks a stdio server whose environment carries a secret as readable by other processes on this Mac, because any program running as you can read a process's environment. See [Secrets → Approvals](/guides/secrets#approvals).
 
 The stored config holds only the reference:
 
@@ -127,19 +105,11 @@ An HTTP server is a remote MCP endpoint that speaks the streamable HTTP transpor
 
 ### Worked example: an HTTP server with a bearer token
 
-```sh
-# 1. Store the whole header value, including the scheme
-printf 'Bearer %s' "$GITHUB_PAT" | coffer secret set github/authorization
+1. Open **MCP servers**, click **Add server** and paste `https://api.githubcopilot.com/mcp/` into the box.
+2. In the headers, add `Authorization`, set the row to **Secret** and paste the whole header value, including the scheme (`Bearer …`).
+3. Press **Test**, then click **Add server**.
 
-# 2. Register the server, mapping the header to the secret ref
-coffer mcp add github \
-  --http https://api.githubcopilot.com/mcp/ \
-  --secret Authorization=github/authorization
-
-coffer mcp test github
-```
-
-For an HTTP server each `--secret NAME=REF` entry becomes a request header: the decrypted secret is sent as the header's **entire** value, so store `Bearer …` when the server expects that form. Non-secret headers go in the transport's `headers` map (edit the config JSON in the web UI).
+For an HTTP server each **Secret** header row becomes a request header: the decrypted secret is sent as the header's **entire** value, so store `Bearer …` when the server expects that form. Non-secret headers go in the transport's `headers` map (edit the config JSON in the web UI).
 
 The config Coffer stores:
 
@@ -170,22 +140,24 @@ A server name is a label of letters, digits, `.`, `_` and `-`, at most 24 charac
 
 The name is fixed once the server is registered, because it is the prefix of every tool name `<server>__<tool>` an agent sees, and agents' permission rules and skills quote those names. A request to change it is refused with `NAME_IMMUTABLE`. To use a different name, delete the server and register it again, which resets its capability toggles and its reach. The decision is recorded in the ADR "names-visible-to-agents-are-fixed".
 
-A server carries no title: its name is what every page and every agent shows. Next to the name sits an optional **description**, your own note about what the server is for. Agents never see it. Set it at registration with `coffer mcp add … --description`, change it later with `coffer mcp edit <name> --description "…"`, or edit it in the web UI.
+A server carries no title: its name is what every page and every agent shows. Next to the name sits an optional **description**, your own note about what the server is for. Agents never see it. Set it in the Add server form and change it later with **Edit**.
 
-After each discovery, Coffer measures the name a client like Claude Code shows for every tool, `mcp__coffer__<server>__<tool>`. The server's **Tools** tab and `coffer mcp cap list` flag a tool whose name is over 64 characters, the limit model provider APIs accept; Cursor already drops tools above 60. A flagged tool stays enabled and listed. The fix is on the upstream side (a shorter tool name) or a shorter server name for a new registration.
+After each discovery, Coffer measures the name a client like Claude Code shows for every tool, `mcp__coffer__<server>__<tool>`. The server's **Tools** tab flags a tool whose name is over 64 characters, the limit model provider APIs accept; Cursor already drops tools above 60. A flagged tool stays enabled and listed. The fix is on the upstream side (a shorter tool name) or a shorter server name for a new registration.
 
 ## Edit, test, refresh and delete
 
-| Task | Web UI | CLI |
-| --- | --- | --- |
-| Inspect | **MCP servers** → the server → **Overview** | `coffer mcp show <name>` |
-| Change the description | **Edit** | `PATCH /api/v1/resources/{uid}` (`description`) |
-| Change command or URL, environment or headers, secrets, working directory, timeouts | **Edit** | `PATCH /api/v1/resources/{uid}` |
-| Check the server answers and re-list its tools | **Test** (**Test again** while it is failing) | `coffer mcp test <name>` (exit 7 on failure; `--prompt` prints the failure's hand-off) |
-| Hand a missing launcher or a failure to an agent | **Ask an agent ▾** (with **Copy prompt**) in the Overview's callout | `coffer mcp handoff <name>` |
-| Turn the whole server off or on | **⋯** → **Turn off**, **Turn on** | `coffer mcp disable <name>` (and `enable`) |
-| Copy its config | **⋯** → **Copy config as JSON** (secret names only, never values) | `coffer mcp show <name>` |
-| Delete | **⋯** → **Delete…** | `coffer mcp rm <name>` |
+| Task | Web UI |
+| --- | --- |
+| Inspect | **MCP servers** → the server → **Overview** |
+| Change the description | **Edit** |
+| Change command or URL, environment or headers, secrets, working directory, timeouts | **Edit** |
+| Check the server answers and re-list its tools | **Test** (**Test again** while it is failing) |
+| Hand a missing launcher or a failure to an agent | **Ask an agent ▾** (with **Copy prompt**) in the Overview's callout |
+| Turn the whole server off or on | **⋯** → **Turn off**, **Turn on** |
+| Copy its config | **⋯** → **Copy config as JSON** (secret names only, never values) |
+| Delete | **⋯** → **Delete…** |
+
+From a terminal, `coffer mcp test <name>` runs the same check (exit 7 on failure); everything else in the table is the web UI. The command line carries only what a program runs, what must work when the daemon is down, what a Coffer hand-off prompt tells an agent to run, or what the web UI cannot do.
 
 The **Edit** dialog shows the name (fixed), a description only you see, the command and arguments or the URL, and the environment variables or headers. Each row is a key, a value and a delete button. The value is plain text; the 🔑 button at the end of the field picks a stored secret instead, and a value that looks like a secret offers to store it in Coffer for you ("This looks like a secret. Store it in Coffer?"). Secrets live only in Coffer: the server's settings hold the secret's name, never its value, and a secret you paste is saved to the Secrets page when you save the server. A command server also has an optional **Working directory**. **Test** tries the edited config before you save it — in the Add dialog too — and a failure that comes from this machine (the command is not found, the process exits, the connection fails or times out) offers **Ask an agent ▾** right there. A failed save stays in the dialog with its reason. Removing a secret row deletes the secret only when Coffer created it for this server. Saving an edit closes every live connection to the server, so the next call from any agent starts it with the new configuration.
 
@@ -197,9 +169,9 @@ Deleting a server removes its registration and capability preferences and keeps 
 
 The list groups servers by what needs you: **Needs attention** (failing, launcher missing, secret missing — each with its reason, such as `Connection refused · since 14:02`), **Healthy**, **Not checked yet** and **Off**. The open server's header carries its state (the icon tinted for a problem), its transport and command or URL on one line, and four fixed buttons that never change with its state: **Reach**, **Test**, **Edit** and **⋯**. A fix is never a header button; it lives in the banner that states the problem. A failing server's banner gives its last error, since when it has been failing, which agents can't call its tools and its last successful call, with **View log** (**View errors** for an HTTP server) and a diagnosis hand-off; a missing launcher has a hand-off for installing it (both below); a secret this Mac does not hold (a vault restored on a new Mac carries names, not values) has **Replace secret** and the setting that cites it; a test you just ran shows what it listed, with its stderr one click away. Below the banner, **Overview** stacks three blocks. **Last 24 hours** shows calls and errors, and per calling agent its calls, errors and last call. **Requires** lists what the server needs on this machine, worked out automatically from its command and settings — you declare nothing: the launcher CLI (`uv` for `uvx`; found or not found, linking to the [CLIs](/guides/clis) page) and every secret its settings cite (set, missing or waiting for approval, linking to the Secrets page). **Most-called tools** is read-only; the switches are on the **Tools** tab. A server that is failing, off or missing something shows its tools from the saved switches at once, marked as such, instead of waiting for it to answer. Registering a server whose upstream is unreachable still succeeds; it is marked failing until it answers. Without a **Test connection** result, health follows the server's most recent call: a call that could not reach the server (it would not start, the connection died, or it timed out) reads as failing, while a tool that answered with an error does not, because the server itself is up. Refused (`denied`) calls are ignored.
 
-When a stdio server's command is not found on this machine — for example a server imported from another machine that runs `uvx` where `uv` is missing — the status reads `missing <runner>`, and both its row in the list and its page say so (`uvx isn't found on this machine`). The launcher is also listed on the [CLIs](/guides/clis#launchers-your-mcp-servers-start-with) page under the command that provides it (`uv` for `uvx`), with this server under **Needed by**. Coffer does not install software for you, and does not guess an install command either: which installer fits depends on the machine. The callout offers **Ask an agent** (its menu holds **Copy prompt**; with no Coffer-managed agent available only **Copy prompt** is offered) — a prompt for your agent that names the launcher, the server, the command line it is started with (a token-looking argument reads `<secret>`, and environment values are never included), the `PATH` Coffer looks it up on and this machine's OS and architecture, and asks for an install a process started from the GUI can find, confirmed with `coffer mcp test <name>`. `coffer mcp handoff <name>` prints the same prompt. To do it by hand, install the runtime the command belongs to (`uv` for `uvx`, Node.js for `npx`, Docker for `docker`) where the daemon's `PATH` reaches — the desktop app and `coffer daemon service install` hand the daemon your login shell's `PATH` — then press **Test**.
+When a stdio server's command is not found on this machine — for example a server imported from another machine that runs `uvx` where `uv` is missing — the status reads `missing <runner>`, and both its row in the list and its page say so (`uvx isn't found on this machine`). The launcher is also listed on the [CLIs](/guides/clis#launchers-your-mcp-servers-start-with) page under the command that provides it (`uv` for `uvx`), with this server under **Needed by**. Coffer does not install software for you, and does not guess an install command either: which installer fits depends on the machine. The callout offers **Ask an agent** (its menu holds **Copy prompt**; with no Coffer-managed agent available only **Copy prompt** is offered) — a prompt for your agent that names the launcher, the server, the command line it is started with (a token-looking argument reads `<secret>`, and environment values are never included), the `PATH` Coffer looks it up on and this machine's OS and architecture, and asks for an install a process started from the GUI can find, confirmed with `coffer mcp test <name>`. To do it by hand, install the runtime the command belongs to (`uv` for `uvx`, Node.js for `npx`, Docker for `docker`) where the daemon's `PATH` reaches — the desktop app hands the daemon your login shell's `PATH` — then press **Test**.
 
-A test that an HTTP server answers with 401 or 403 is remembered as a rejected key, and so is an agent's own call that the server refuses that way (Coffer notices it without anyone pressing Test, and a later call the server answers clears it; a tool that returns an error result does not count): the server's page says so with **Replace key** (the Edit dialog on its secret), and Overview lists it as "Every call is rejected with 401 Unauthorized. The API key looks revoked." with the same **Replace key** action. A failing server, and a **Test** that fails, offer a second hand-off beside **View log**: a prompt to find the cause and propose a fix. It carries the server's name, its transport and a config summary (the command line and working directory, or the URL; the *names* of its environment variables, headers and stored secrets, never their values), the last error, and the newest 20 lines the server printed on stderr, each scrubbed of anything that looks like a token. It asks the agent not to read or change the secrets Coffer stores, and to verify with `coffer mcp test <name>`. `coffer mcp test <name> --prompt` prints a failed test's prompt; `coffer mcp handoff <name>` prints the one the page shows for a failing server.
+A test that an HTTP server answers with 401 or 403 is remembered as a rejected key, and so is an agent's own call that the server refuses that way (Coffer notices it without anyone pressing Test, and a later call the server answers clears it; a tool that returns an error result does not count): the server's page says so with **Replace key** (the Edit dialog on its secret), and Overview lists it as "Every call is rejected with 401 Unauthorized. The API key looks revoked." with the same **Replace key** action. A failing server, and a **Test** that fails, offer a second hand-off beside **View log**: a prompt to find the cause and propose a fix. It carries the server's name, its transport and a config summary (the command line and working directory, or the URL; the *names* of its environment variables, headers and stored secrets, never their values), the last error, and the newest 20 lines the server printed on stderr, each scrubbed of anything that looks like a token. It asks the agent not to read or change the secrets Coffer stores, and to verify with `coffer mcp test <name>`.
 
 A stdio server's stderr goes to its own file, `~/.coffer/logs/upstream/<name>.log`, not to the daemon log. Coffer adds its own lines there when it starts the server, when a start fails (a launcher not found on `PATH`, a start that timed out) and when it stops it. For a stdio server, **⋯** → **Server log** opens a drawer with its **Server log**, newest first, error lines in red, with **Copy** and **Open log file**, beside its **Calls** in the last 24 hours (**All** or **Errors**, one agent or all). An HTTP server runs somewhere else, so Coffer keeps no log of its own for it: its **View errors** opens the **Invocations** tab already filtered to the errors. Choosing a call opens it in a 640-wide drawer with its result, how long it took and its session.
 
@@ -207,19 +179,7 @@ A stdio server's stderr goes to its own file, `~/.coffer/logs/upstream/<name>.lo
 
 Every capability a server exposes can be switched on or off individually. A newly discovered capability starts **enabled**.
 
-**Web UI:** open the server and use the **Tools**, **Resources** and **Prompts** tabs. Each tab says how many are on, has a filter box and **All on** · **All off**, and each row a switch and its use in the last 24 hours (a tool's calls and errors, a resource's reads, a prompt's uses). The Tools tab lists the first ten matches of **Search tools**; a tool row opens to its full description, its input parameters and the name agents see it by, with its character count. The Overview lists the most-called few with **Show all N in Tools**.
-
-**CLI:**
-
-```sh
-coffer mcp cap list github --type tool
-coffer mcp cap disable github tool:delete_repository
-coffer mcp cap enable github tool:delete_repository
-coffer mcp cap list filesystem --type resource
-coffer mcp cap disable github prompt:triage
-```
-
-Each capability is named by a typed ref, `tool:<name>`, `prompt:<name>` or `resource:<uri>`, using its original, unprefixed name (`tool:delete_repository`, not `github__delete_repository`). `cap list` prints the ref for every row, and `cap enable`/`cap disable` take several refs at once.
+Open the server and use the **Tools**, **Resources** and **Prompts** tabs (each tab name carries its count). Each tab says how many are on, has a filter box and **All on** · **All off**, and each row a switch and its use in the last 24 hours (a tool's calls and errors, a resource's reads, a prompt's uses). The Tools tab lists the first ten matches of **Search tools**; a tool row opens to its full description, its input parameters and the name agents see it by, with its character count. The Overview lists the most-called few with **Show all N in Tools**.
 
 A disabled tool disappears from every client's next `tools/list`, and a call to it fails with `TOOL_DISABLED` (JSON-RPC `-32000`). Your choices survive daemon restarts, server upgrades and servers that briefly disappear: Coffer stores only the preference and when the capability was last seen, and discovers the capability itself live from the server.
 
@@ -227,16 +187,7 @@ A disabled tool disappears from every client's next `tools/list`, and a call to 
 
 By default a server reaches every agent. You can narrow that to specific agents — for example, keep a production database server away from an experimental agent. Together with the enabled switch this is the server's **reach**.
 
-**Web UI:** each row in **MCP servers** shows its reach as a badge (**Off**, **All agents**, or the marks of its agents); change it with the **Reach** button in the open server's header, or tick several rows and use the selection bar's reach control. The panel offers **Off**, **All agents** or **Chosen agents** with the agents ticked, and saves every change as you make it (it reads "Applying…", then "✓ Saved") — there is no Save button. **All agents** includes agents you add later. **Chosen agents** with none ticked makes the server dormant: registered, but reaching nobody.
-
-**CLI:**
-
-```sh
-coffer mcp scope postgres                        # show the current reach
-coffer mcp scope postgres --agents claude-code
-coffer mcp scope postgres --none                 # dormant: reaches nobody
-coffer mcp scope postgres --all                  # back to every agent
-```
+Each row in **MCP servers** shows its reach as a badge (**Off**, **All agents**, or the marks of its agents); change it with the **Reach** button in the open server's header, or tick several rows and use the selection bar's reach control. The panel offers **Off**, **All agents** or **Chosen agents** with the agents ticked, and saves every change as you make it (it reads Applying…, then Saved) — there is no Save button. **All agents** includes agents you add later. **Chosen agents** with none ticked makes the server dormant: registered, but reaching nobody.
 
 The gateway enforces reach per session, using the agent identity the shim reports (see [Connect a client](/guides/connect-a-client#agent-identity)). An agent outside a server's reach does not see its tools, resources or prompts, and a call is rejected as `TOOL_DISABLED` and logged as `denied` — while another agent connected at the same moment uses it normally. A session with no identity sees only servers that reach every agent.
 

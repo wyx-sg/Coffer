@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](distribution-pyinstaller.md), [The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do](desktop-shell-over-a-shared-frontend.md), [The Daemon Is Resident: It Never Idles Out, and a Login Service Restarts Only a Crash](daemon-is-a-resident-login-service.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [principles](../../docs-site/architecture/principles.md) (Secrets), research note [credentials and secrets](../research/credentials-secrets.md), spec secret "Keep the master key in exactly one place", spec secret "Keep the master key behind a storage port chosen by the build", spec secret "Resolve the master key file-first and create it only for an empty store", spec secret "Verify the destination before relocating the master key", spec secret "Expose the master key's location on every surface", spec secret "Refuse to start when the master key is missing", PR #51, PR #62
+**Related**: [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](distribution-pyinstaller.md), [The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do](desktop-shell-over-a-shared-frontend.md), [The Daemon Is Resident: It Never Idles Out, and a Login Service Restarts Only a Crash](daemon-is-a-resident-login-service.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [principles](../../docs-site/architecture/principles.md) (Secrets), research note [credentials and secrets](../research/credentials-secrets.md), spec secret "Keep the master key in exactly one place", spec secret "Keep the master key behind a storage port chosen by the build", spec secret "Resolve the master key file-first and create it only for an empty store", spec secret "Verify the destination before relocating the master key", spec secret "Read and change the master key's location through the API and Settings", spec secret "Refuse to start when the master key is missing", PR #51, PR #62
 
 ## Context
 
@@ -164,7 +164,7 @@ daemon as sole keychain owner.
   holding the key encrypted under a key scrypt derives from a passphrase the
   person types, so a stray copy opens nothing on its own, and returns only the
   path and the key's fingerprint. It is audited as `master_key_exported`. Import
-  is `coffer sync key import` and Settings › Security's **Import a master key**,
+  is Settings › Security's **Import a master key**,
   open to every surface, since whoever holds the file and its passphrase holds
   the key; it shows the file's fingerprint beside this machine's before
   replacing anything, and a different key already installed is kept as a second
@@ -327,7 +327,7 @@ Rules a future change must respect:
 - Not built yet: the migration of an existing `master.key` file or login-keychain
   item into the access group at a signed build's first start. A signed build
   that finds ciphertext and no item in the group stops with `MASTER_KEY_MISSING`;
-  the way in is `coffer sync key import` of a backup.
+  the way in is **Import a master key** of a backup.
 - Not built yet: a fake-free test of the access-group backend. Its Keychain
   calls are exercised through an injected fake; on an unsigned build the real
   calls fail with a missing-entitlement error.

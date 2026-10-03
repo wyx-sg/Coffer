@@ -2,7 +2,7 @@
 
 The upload contract under test (spec knowledge): an upload becomes **material**
 for a collection — the same submission, frontmatter and audit event as an
-agent's ``coffer__write`` — which a curation pass merges into the documents.
+agent's inbox file — which a curation pass merges into the documents.
 Nothing of the upload itself is kept: not the original bytes, not the extracted
 text as a file of its own. With no internal model to merge it, the material
 becomes a document as it stands (see "Promote material directly when no model

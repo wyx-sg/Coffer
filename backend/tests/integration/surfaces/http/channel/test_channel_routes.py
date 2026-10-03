@@ -516,7 +516,8 @@ async def test_status_hands_a_missing_sdk_to_an_agent(
     assert "$COFFER_SEATALK_SDK_DIR" in prompt
     assert "https://open.seatalk.io/docs/WebSocket-Event-Callback" in prompt
     assert "~/Downloads" in prompt
-    assert "coffer channel show st" in prompt
+    assert "coffer channel" not in prompt
+    assert "websocket (connected)" in prompt
     assert "I will log in myself" in prompt
     assert connected["handoff"] is None
 

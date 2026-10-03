@@ -1,5 +1,5 @@
-"""Refusals of the command-line tool surfaces (spec skill-manager "Serve
-required commands on REST, the command line and the web")."""
+"""Refusals of the command-line tool surfaces (spec skill-manager "Serve required
+commands on REST and the web")."""
 
 from __future__ import annotations
 

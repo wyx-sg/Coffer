@@ -1,6 +1,6 @@
 // frontend/src/components/skills/SkillDetailPane.tsx
 // The open skill in the Skills page's reading pane (spec skill-manager "Cover
-// skill management on REST, the CLI and the web", canvas 4.3 SkillHeader): the
+// skill management on REST and the web", canvas 4.3 SkillHeader): the
 // header, the tab strip — Files (the default), Delivery, Requires, History,
 // never with counts — and, under the strip, the banners of what needs the
 // reader. Banners are split by owner: the master folder (SkillMasterBanner) and

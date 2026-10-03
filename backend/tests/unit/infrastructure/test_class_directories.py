@@ -28,7 +28,7 @@ from coffer.infrastructure.daemon import bootstrap
 from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.knowledge.paths import knowledge_root
 from coffer.infrastructure.logging.files import log_dir
-from coffer.infrastructure.memory.paths import memory_root, triggers_root
+from coffer.infrastructure.memory.paths import memory_root
 from coffer.infrastructure.model_proxy.info import info_path
 from coffer.infrastructure.model_proxy.spool import spool_dir
 from coffer.infrastructure.skill.master_store import MasterStore, default_master_root
@@ -39,7 +39,6 @@ _REMOVED_OVERRIDES = (
     "COFFER_KNOWLEDGE_ROOT",
     "COFFER_SKILLS_ROOT",
     "COFFER_MEMORY_ROOT",
-    "COFFER_MEMORY_TRIGGERS_ROOT",
     "COFFER_AGENT_STATE_ROOT",
 )
 
@@ -53,7 +52,6 @@ def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Pat
 def test_vault_trees_are_inside_the_vault_repository(home: pathlib.Path) -> None:
     assert knowledge_root() == home / "vault" / "knowledge"
     assert default_master_root() == home / "vault" / "skills"
-    assert triggers_root() == home / "vault" / "memory-triggers"
 
 
 def test_content_trees_are_under_content(home: pathlib.Path) -> None:
@@ -94,7 +92,6 @@ def test_a_retired_override_moves_nothing(
         knowledge_root(),
         default_master_root(),
         memory_root(),
-        triggers_root(),
         agent_state_root(),
     )
     assert all(str(root).startswith(str(home)) for root in roots), roots

@@ -67,9 +67,7 @@ describe("an inbox item", () => {
   test("is read-only: one meta line, the title, Read-only and Curate now in the bar", async () => {
     renderKnowledge(`/knowledge/${UID}/inbox?file=${encodeURIComponent(ITEM.path)}`);
     expect(await screen.findByRole("heading", { name: ITEM.title, level: 1 })).toBeInTheDocument();
-    expect(
-      screen.getByText(/^Written by .* with coffer__write · .* · Waiting to be curated$/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/^Written by .* · .* · Waiting to be curated$/)).toBeInTheDocument();
     expect(screen.getByText("Read-only")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Curate now" })).toBeInTheDocument();
     // The old status line is gone.

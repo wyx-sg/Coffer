@@ -12,7 +12,7 @@
 
 > A local-first vault for your AI coding agents. Set up MCP servers, skills, knowledge, memory and model providers once, and every agent on your machine shares them.
 
-Coffer is one daemon on your machine that Claude Code and Codex both connect to. It holds what your agents share — the tools they call, the skills they follow, the notes they read, the keys they use — in a vault of plain files under `~/.coffer`, and delivers each of them into every agent. You manage it from a web UI, a macOS desktop app, the `coffer` CLI, or a Telegram or SeaTalk chat. There is no account and no cloud backend: the daemon listens on `127.0.0.1` only.
+Coffer is one daemon on your machine that Claude Code and Codex both connect to. It holds what your agents share — the tools they call, the skills they follow, the notes they read, the keys they use — in a vault of plain files under `~/.coffer`, and delivers each of them into every agent. You manage it from a web UI, a macOS desktop app, or a Telegram or SeaTalk chat; the `coffer` CLI starts the daemon and reads its logs. There is no account and no cloud backend: the daemon listens on `127.0.0.1` only.
 
 📖 **Documentation:** <https://wyx-sg.github.io/Coffer/> ([中文](https://wyx-sg.github.io/Coffer/zh/))
 
@@ -34,7 +34,7 @@ Coffer replaces the copies with one shared layer beneath the agents:
 | **One MCP endpoint** | Register an upstream MCP server once. Each agent's config holds a single `coffer` entry; tools appear as `<server>__<tool>`, you choose which tools each server exposes and which agents reach it, and every call is recorded (never its arguments). Past a tool budget, `coffer__search_tools` searches the full catalogue. |
 | **Custom tools** | Turn any HTTP API into agent tools by importing an OpenAPI spec or describing one request. The gateway makes the request and adds your key on the way out. |
 | **One skill library** | Import [AgentSkills](https://agentskills.io) folders once — from a folder, an archive or a git repository — and Coffer links them into each agent's `skills/` directory, keeps the links correct, and tracks upstream updates. The **CLIs** page shows which commands your skills need and which are missing, too old or not logged in. |
-| **Knowledge** | Collections of plain Markdown under `~/.coffer/vault/knowledge/`. Agents read them with their own file tools from a generated catalogue, and add to them through `coffer__write`. Nothing is chunked or embedded. An optional curation pass merges new material into the existing documents, with a history you can undo. |
+| **Knowledge** | Collections of plain Markdown under `~/.coffer/vault/knowledge/`. Agents read them with their own file tools from a generated catalogue, and add to them by writing a file into a collection's `.inbox/`. Nothing is chunked or embedded. An optional curation pass merges new material into the existing documents, with a history you can undo. |
 | **Memory** | Coffer reads each agent's own native memory (read-only), distils it into notes per project plus a `global` partition, and delivers them back through a hook — so what Claude Code learned, Codex knows too. |
 | **Model providers** | Store a provider profile (base URL and key) once and switch agents to it. Agents talk to Coffer's local model proxy, which adds the key upstream, fails over between connections serving the same model, and meters the usage and cost of what goes through it. No provider key is written into an agent's config. |
 | **Conversations and channels** | Drive Claude Code or Codex from the web **Conversations** page, or pair a Telegram or SeaTalk bot and message your agents from your phone — in private chats, groups and threads. |
@@ -51,10 +51,10 @@ https://wyx-sg.github.io/Coffer/start/install — pick the install path that fit
 this machine (a release build if one is published for this OS and architecture,
 otherwise from source). Ask me before running anything with sudo or editing my
 shell profile. When it is installed, check it with `coffer daemon status`.
-Then, for each coding agent installed here (claude-code, codex), run
-`coffer agent add <type>` and `coffer agent connect <type>`, telling me which
-config files connect will change before you run it. Do not handle any
-credentials: if a step needs a login, tell me what to do instead.
+Then tell me which coding agents it found here (claude-code, codex) and which
+config files each one's Connect button on the web UI's Agents page will change,
+so I can connect them myself. Do not handle any credentials: if a step needs a
+login, tell me what to do instead.
 ```
 
 The agent reads the install page, picks the path for your machine and checks the result.
@@ -90,16 +90,16 @@ Both put `coffer`, `coffer-daemon` and `coffer-mcp-shim` in `~/.coffer/bin`. The
 ## Quickstart
 
 ```sh
-coffer open                          # start the daemon and open the web UI, signed in
-coffer scan                          # list agents, skills and MCP entries Coffer does not manage yet
-coffer agent add claude-code         # register Claude Code (Codex: codex)
-coffer agent connect claude-code     # install Coffer's MCP entry and memory hook
-
-coffer mcp add filesystem --stdio "npx -y @modelcontextprotocol/server-filesystem /tmp"
-coffer mcp test filesystem           # check it answers and list its tools
+coffer daemon start                  # start the daemon; the web UI is at http://127.0.0.1:8000/, signed in
 ```
 
-Start a new Claude Code session and its tools are there as `filesystem__read_file` and friends. Any command that needs the daemon starts it. The [15-minute quickstart](https://wyx-sg.github.io/Coffer/start/quickstart) continues with delivering a skill, and the web UI does all of this with a review of every file change before Coffer writes it.
+In the web UI (or the desktop app):
+
+1. **Agents**: on the Claude Code row (Codex too), choose **Connect**, review the lines Coffer will write, and apply them.
+2. **MCP servers**: **Add server**, paste the server's JSON (for example `filesystem` with `npx -y @modelcontextprotocol/server-filesystem /tmp`), then **Import**.
+3. On the server's page, **Test connection** checks it answers; the **Tools** tab lists its tools. From a terminal, `coffer mcp test filesystem` does the same check.
+
+Start a new Claude Code session and its tools are there as `filesystem__read_file` and friends. The [15-minute quickstart](https://wyx-sg.github.io/Coffer/start/quickstart) continues with delivering a skill, and the web UI shows a review of every file change before Coffer writes it.
 
 ## How it works
 

@@ -38,7 +38,7 @@ import pathlib
 import re
 
 from coffer.domain.error_base import CofferError
-from coffer.infrastructure.vault.home import derived_root, vault_root
+from coffer.infrastructure.vault.home import derived_root
 
 #: The partition's index — the file delivery renders from and a human opens.
 INDEX_NAME = "MEMORY.md"
@@ -70,14 +70,6 @@ class UnsafeMemoryPath(CofferError):  # noqa: N818
 def memory_root() -> pathlib.Path:
     """The one directory the memory layer lives in: ``derived/memory``."""
     return derived_root() / "memory"
-
-
-def triggers_root() -> pathlib.Path:
-    """Where authored memory triggers live: ``vault/memory-triggers/``, one file
-    per trigger (ADR storage-is-five-classes-by-nature). In the vault, not under
-    the memory root, because a person wrote them: deleting and rebuilding the
-    derived memory tree must not take them with it."""
-    return vault_root() / "memory-triggers"
 
 
 def notes_signature(name: str) -> tuple[tuple[str, int, int], ...]:

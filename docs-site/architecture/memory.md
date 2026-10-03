@@ -1,6 +1,6 @@
 ---
 title: Memory
-description: How Coffer reads every agent's native memory without writing it, distils it into its own notes per repository, and hands them back at session start, at each prompt, and before a known trap.
+description: How Coffer reads every agent's native memory without writing it, distils it into its own notes per repository, and hands them back at session start and at each prompt.
 ---
 
 # Memory
@@ -15,11 +15,11 @@ Coffer's answer has three parts:
 
 1. **Read** each agent's native memory, and never write to it.
 2. **Distil** what it read into notes of its own: one topic per file, filed by repository, plus one `global` partition for what is about you.
-3. **Deliver** those notes back to every agent at three moments: the index at session start, the few notes a prompt names as it is sent, and, before a command a person has marked as a known trap, the note that says why. Every delivery names the absolute path of the note, and the agent reads a body the same way it reads its own memory: as a file.
+3. **Deliver** those notes back to every agent at two moments: the index at session start, and the few notes a prompt names as it is sent. Every delivery names the absolute path of the note, and the agent reads a body the same way it reads its own memory: as a file.
 
 What Claude Code learns in the morning, Codex has in its index when it opens the same repository in the afternoon. Coffer does not write into Codex's memory to make that happen. It hands Codex the index line.
 
-Memory is not [knowledge](/architecture/knowledge). Knowledge is what a person or an agent wrote down about the world, and agents pull it on demand through the `coffer-guide` catalogue. Memory is what agents learned while working, and the whole tree can be rebuilt from the agents' own copies. Memory is handed to a session, through hooks you install per agent, so it is an explicit exception to Coffer's [pull, not push](/architecture/design-principles#pull-not-push) rule rather than a silent one. That exception used to be the index at session start alone. The ADR [Memory Reaches a Session at Three Moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md), widens it to each prompt and to a known trap; the principle is stated for memory in those terms. Knowledge stays pull.
+Memory is not [knowledge](/architecture/knowledge). Knowledge is what a person or an agent wrote down about the world, and agents pull it on demand through the `coffer-guide` catalogue. Memory is what agents learned while working, and the whole tree can be rebuilt from the agents' own copies. Memory is handed to a session, through hooks you install per agent, so it is an explicit exception to Coffer's [pull, not push](/architecture/design-principles#pull-not-push) rule rather than a silent one. The ADR [Memory Reaches a Session at Two Moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) states the exception: the index at session start, and the notes a prompt names. Knowledge stays pull.
 
 ## Design decisions
 
@@ -32,7 +32,7 @@ Coffer reads native memory and never creates, modifies, moves, deletes or reform
 
 The one file Coffer does write into an agent's configuration is its hook entries in the agent's *settings*. That file is not memory, and Coffer writes the entries only when you connect the agent to Coffer (see [Delivery](#delivery)).
 
-### Four directories with one writer each
+### Four directories, one role each
 
 A partition is a top-level directory under `~/.coffer/derived/memory/`:
 
@@ -50,12 +50,12 @@ A partition is a top-level directory under `~/.coffer/derived/memory/`:
 
 | Path | Written by | Role |
 | --- | --- | --- |
-| `.raw/` | aggregation only | Faithful. Each agent's own words, one file per entry, stamped with the agent, the native path and the read time. It is the distil pass's input only: the web UI's tree and the partition file routes do not list or read it. |
-| `notes/` | distil only | Useful. Coffer's own prose, one topic per file, with provenance naming every raw entry behind it. |
+| `.raw/` | aggregation only | Faithful. Each agent's own words, one file per entry, stamped with the agent, the native path and the read time. It is the distil pass's input only: the web UI does not list or read it. |
+| `notes/` | distil, and edits by people or agents | Useful. Coffer's own prose, one topic per file, with provenance naming every raw entry behind it. A person can edit a note in the web UI or on disk (see [Editing a note](#editing-a-note-and-judging-disagreement)). |
 | `MEMORY.md` | distil only | Findable. One line per note, newest first (the same lines and order delivery uses). |
 | `RETIRED.md` | distil only | Makes a retirement stick. The next distil pass reads it as an exclusion list. |
 
-Because each directory has exactly one writer, you can re-run a bad distillation without reading the agents again: `.raw/` still holds everything they said. The rule is checkable in the code: exactly one module writes into `.raw/`, and the distil pass never uses it to write.
+Because `.raw/` has exactly one writer and nothing else touches it, you can re-run a bad distillation without reading the agents again: `.raw/` still holds everything they said. The rule is checkable in the code: exactly one module writes into `.raw/`, and the distil pass never uses it to write.
 
 The memory root is always `~/.coffer/derived/memory/`, in the derived storage class (see [Persistence](/architecture/persistence)); there is no override. The test suite gives every test its own `HOME`, so a test can never rewrite a developer's real memory tree.
 
@@ -84,7 +84,7 @@ This is deliberate. A per-agent default is the natural thing to reach for, namel
 
 ### Nothing syncs
 
-The memory tree is derived from the agents installed on *this* machine, so it never reaches the [vault-sync](/architecture/vault-sync) remote. The `memory` kind declares the derived storage class: its resource files and the whole tree live under `~/.coffer/derived/`, outside the vault repository, so there is nothing for sync to carry. Each machine aggregates its own agents. Only the triggers a person wrote or armed live in the vault (`vault/memory-triggers/`), because they are authored, not derived.
+The memory tree is derived from the agents installed on *this* machine, so it never reaches the [vault-sync](/architecture/vault-sync) remote. The `memory` kind declares the derived storage class: its resource files and the whole tree live under `~/.coffer/derived/`, outside the vault repository, so there is nothing for sync to carry. Each machine aggregates its own agents.
 
 ### No table of its own
 
@@ -199,6 +199,18 @@ Aggregation deletes a raw entry when its source stops producing it: the agent re
 
 This record is not an exclusion. It names no entry ids, and its title is not sent to routing among the retired subjects, because nobody judged the note untrue. If the material comes back, it is distilled like any new entry.
 
+### Editing a note and judging disagreement
+
+A person can edit a note: the web UI's **Edit** replaces the note's body and keeps its frontmatter, and editing the file under `notes/` in any editor needs nothing from Coffer. The web UI's save carries a fingerprint of the note as it was read. If the note changed since (distil rewrote it, or the file was edited on disk), the save is refused and the editor is handed the note as it is now, so nothing is overwritten and nothing is lost.
+
+An edited note is the note, not a suggestion. It is the body the writing stage receives the next time an entry is routed to it, and a note routing leaves alone keeps the edited text exactly. It persists until newer material revises it, under one rule that applies to every writer:
+
+- When two statements disagree, the **newer one wins unless the older one is shown to be right**: by a source, a date, a command's output or the code.
+- **No writer is exempt.** The writing stage's instruction does not mark an edited body as untouchable, whether a person or an agent edited it. An edited note is not safe because of who wrote it, and an agent's entry is not suspect because of who wrote it.
+- **A superseded statement stays legible.** It is retired through `RETIRED.md` with the reason and the replacing note, or kept in the rewritten body with the date it changed. History and restore remain the way back if a pass gets it wrong.
+
+The derived tree stays disposable. Deleting it and rebuilding reproduces the notes from the agents' own memory and loses every edit, which is why the guide says so.
+
 ### Degrading safely
 
 - **No internal connection.** The pass falls back to a mechanical distil, which has no way to call a model at all. Each new entry becomes a note of its own, carrying the source's title, description, text, type and search terms, and the index is written from their frontmatter. The result is thinner, but it still works.
@@ -209,7 +221,7 @@ Each pass records a `memory_distilled` audit event with the counts `merged`, `op
 
 ### One pass per partition
 
-The interval worker and Update memory (`POST /api/v1/memory/sync`, `coffer memory sync`) both claim the partition's **uid** in the shared upkeep-runs registry. Update memory reports a partition whose pass is already running under `skipped` and distils the rest. The worker skips a busy partition and returns to it on its next sweep. The registry lives in memory, one per daemon.
+The interval worker and Update memory (the web UI's button, which runs aggregation and then distil) both claim the partition's **uid** in the shared upkeep-runs registry. Update memory reports a partition whose pass is already running under `skipped` and distils the rest. The worker skips a busy partition and returns to it on its next sweep. The registry lives in memory, one per daemon.
 
 ## The index line
 
@@ -223,30 +235,27 @@ A line carries the note's conclusion, not a pointer to it, so reading the index 
 
 ## Delivery
 
-Memory reaches a session at **three moments**, through **four hook events**:
+Memory reaches a session at **two moments**, through **two hook events**:
 
 ```mermaid
 flowchart LR
   S["SessionStart"] --> I["The bounded index:<br/>global + this repository, ≤ 9,500 bytes"]
   P["UserPromptSubmit"] --> R["The top 3 notes the prompt names:<br/>BM25 above a floor, ≤ 1.5 KB"]
-  B["PreToolUse on Bash"] --> G["An armed block trigger matches:<br/>deny once, the note as the reason"]
-  A["PostToolUse on Bash"] --> E["An armed context trigger matches the output:<br/>add the note, never block"]
 ```
 
 1. **At session start**, the bounded index of `global` and the current repository, naming where the note bodies live.
 2. **At each substantive prompt**, the few notes that prompt names, ranked lexically.
-3. **Before a known trap**, the note a person tied to a command, delivered as the reason that command is held once. The same trigger mechanism also adds a note *after* a command whose output shows a known error.
 
-The design, the options weighed and the evidence are in the ADR [Memory Reaches a Session at Three Moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md).
+The design, the options weighed and the evidence are in the ADR [Memory Reaches a Session at Two Moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md).
 
-### Why three moments
+### Why two moments
 
-The ADR measured delivery on 107 hand-checked moments from real sessions where an agent needed something a store already held. Two different failures accounted for most misses, in roughly equal parts:
+The ADR measured delivery on 107 hand-checked moments from real sessions where an agent needed something a store already held. Two different failures accounted for most misses:
 
-- **Never delivered.** The fact existed, but it never reached the session. The index had been truncated, the session resolved to the wrong partition, or Coffer never reached that agent at all. Only retrieval at the prompt fixed this half.
-- **Delivered and not acted on.** The rule was in context, read at session start, and broken anyway twenty turns later. Only matching at the command reached this half, and it was also the only thing that caught a known trap repeated, the largest single category.
+- **Never delivered.** The fact existed, but it never reached the session. The index had been truncated, the session resolved to the wrong partition, or Coffer never reached that agent at all. Retrieval at the prompt addresses this half.
+- **Delivered and not acted on.** The rule was in context, read at session start, and broken anyway twenty turns later. This half is not something delivery can fix: an agent weighs what it was given, and the answer for a standing rule that applies to every reply is the instructions the agent loads on every turn (see [Rules about every turn are not memory's job](#rules-about-every-turn-are-not-memory-s-job)).
 
-In live runs on six traps that had bitten before, the session-start index alone avoided the mistake on the first attempt in 1 of 18 runs. Retrieval and the guard together avoided it in 18 of 18, at about 320 injected tokens a run. Each layer covers what the others cannot: the index covers the first message, retrieval covers the rules a prompt names, and the guard covers the traps that live in a command.
+Each layer covers what the other cannot: the index covers the first message, and retrieval covers the rules a prompt names.
 
 ### At session start: the bounded index
 
@@ -282,72 +291,36 @@ The floor was calibrated on the eval set against a real-size store, where a note
 
 **The index is derived and held in memory.** The daemon builds one ranking index per repository partition together with `global`, and rebuilds it when either partition's `notes/` changes by file name, modification time or size. It is never written to disk, and nothing chunks or embeds a note. The notes stay the only copy; the index is a view of them, like `MEMORY.md`. Embeddings were measured and rejected: three points of recall on the eval set did not pay for a 2.2 GB local model, and the product had already dropped embeddings for literal search.
 
-### Before a known trap: the guard
-
-A **trigger** is a person's mark that one note is a known trap tied to a command. Triggers are authored content, not derived memory, so they live in the vault, one Markdown file each, beside the derived tree rather than inside it. Deleting and rebuilding `~/.coffer/derived/memory/` keeps every trigger.
-
-```md
----
-id: frontend-vitest-needs-node-20-3fa1c2
-note: coffer/frontend-vitest-needs-node-20
-kind: block
-command: ^make verify
-unless: v20
-error: ''
-armed_by: cli
-armed_at: '2026-09-30T08:12:03+00:00'
-proposed_by: ''
-created: '2026-09-30T08:12:03+00:00'
----
-```
-
-The file is `~/.coffer/vault/memory-triggers/<id>.md`. Its frontmatter names the note as `<partition>/<slug>`, the `kind`, the `command`, `unless` and `error` patterns (Python regular expressions), who proposed it, who armed it and when, and when it was created. An optional body is the reason shown if the note itself is gone. A file that does not parse is skipped and logged, so one bad file never stops the others.
-
-There are two kinds:
-
-- **`block`** holds a command. On `PreToolUse` for the shell, the command's `command` pattern is matched against each shell segment that **executes**: the segments between `&&`, `||`, `;`, `|`, newlines, `(` and `$(`, each with any `VAR=value` prefix stripped and the program reduced to its base name. The pattern is matched **from the start** of each segment's program and arguments — or, when the program is an interpreter running a script (`bash`, `sh`, `zsh`, `python3`, `node`, …), from the script's base name — so it sees only what runs: `e2e` holds `bash scripts/e2e.sh` and passes `cat scripts/e2e.sh`, and `make\s+verify` passes `echo make verify is slow`. The `unless` pattern is matched against the whole command, prefixes included. When it matches, the command already does what the note asks (`PATH=…/v20…/bin:$PATH make verify`), and the trigger stays quiet.
-- **`context`** never blocks. On `PostToolUse` for the shell, when the command's output shows the `error` pattern (and the `command` pattern too, if the trigger has one), the note is added to the session as context.
-
-The first command in a session that a `block` trigger matches is **denied once**, through the agent's own deny decision, with the note as the reason and a line saying it is held once. The same trigger never holds another command in that session, so the agent's next attempt passes and a deliberate re-run is never stuck. A `context` trigger also fires at most once per session. A fire that carries no `session_id` holds nothing, because "once per session" needs a session to count in.
-
-A trigger applies only to sessions that can **reach its note**: a `global` note's trigger in every session, a repository note's trigger only in that repository's sessions.
-
-**Only a person arms a trigger.** A trigger a person writes (`coffer memory trigger add`, `POST /api/v1/memory/triggers`) is armed by that person as it is written. The distil pass may **propose** one: while rewriting a note it judges a known trap tied to a specific command, the writing stage may return a command pattern and an `unless` pattern. The proposal is filed unarmed, with `proposed_by: distil` and no `armed_by`, and it does nothing until a person arms it. Proposals are deduplicated on note, kind and patterns. Automatically derived triggers were measured and rejected: broad ones fired about 25 notes per session with less than one relevant, and pruned ones lost the very commands the traps live on. Precision is the whole value of something that can block. **Nothing is seeded**: a fresh vault has no trigger until a person writes one or distil proposes one.
-
-A trigger names its note rather than copying it, so the reason shown is always the note's current substance. When distil rewrites the note, the trigger's message follows.
-
 ### How a delivered note is worded
 
-Every note delivered at a prompt, before a command or after one reads as **provenance plus fact**. It names the note's file, and states its title and description as "the user's standing rule is: …" for a `feedback` note, or as "a fact they recorded: …" for anything else:
+Every note delivered at a prompt reads as **provenance plus fact**. It names the note's file, and states its title and description as "the user's standing rule is: …" for a `feedback` note, or as "a fact they recorded: …" for anything else:
 
 ```text
-Coffer memory, a note recorded for this user (/Users/you/.coffer/derived/memory/coffer/notes/frontend-vitest-needs-node-20.md): the user's standing rule is: Frontend vitest needs Node 20 — run make verify under Node 20; 22 and 24 exit 1 with every test green. (Held once by a Coffer memory trigger so you can adjust; run it again if it is still what you intend.)
+Coffer memory, a note recorded for this user (/Users/you/.coffer/derived/memory/coffer/notes/frontend-vitest-needs-node-20.md): the user's standing rule is: Frontend vitest needs Node 20 — run make verify under Node 20; 22 and 24 exit 1 with every test green.
 ```
 
-The wording is deliberate. In an earlier round of the eval, a note phrased as an imperative ("delete the branch and the worktree") and delivered just before a command was quoted back to the user as a prompt injection. Stated as the user's standing rule, 0 of 72 runs flagged a note. Delivered text is never an instruction to the agent, and nothing delivered at command time asks for a destructive step.
+The wording is deliberate. In an earlier round of the eval, a note phrased as an imperative ("delete the branch and the worktree") was quoted back to the user as a prompt injection. Stated as the user's standing rule, 0 of 72 runs flagged a note. Delivered text is never an instruction to the agent.
 
-### One command on four hook entries
+### One command on two hook entries
 
-Delivery reaches an agent through the agent's own hook mechanism. Coffer's hook is **four entries**, one per event, and every entry runs the same command, calling Coffer's CLI **by absolute path**:
+Delivery reaches an agent through the agent's own hook mechanism. Coffer's hook is **two entries**, one per event, and both run the same internal command, calling Coffer's CLI **by absolute path**:
 
 ```sh
 : coffer-memory; /Users/you/.coffer/bin/coffer memory hook --agent-uid <uid> --cwd "$PWD"
 ```
 
+`coffer memory hook` is an internal entry point run by the installed hook; it is hidden from the CLI help, because a person never types it, and it is the only `coffer memory` command there is.
+
 | Event | Matcher | Entry timeout | What it can answer |
 | --- | --- | --- | --- |
 | `SessionStart` | `startup\|resume\|clear\|compact` | 10 s | the bounded index, as `additionalContext` |
 | `UserPromptSubmit` | none | 5 s | the retrieved notes, as `additionalContext` |
-| `PreToolUse` | `Bash` | 5 s | `permissionDecision: "deny"` with the note as `permissionDecisionReason` |
-| `PostToolUse` | `Bash` | 5 s | the note, as `additionalContext` |
 
-Both agents get the same four entries: Claude Code in `settings.json`, Codex in `hooks.json`. Both hand their hook the event as JSON on stdin in the same shape (`hook_event_name`, `session_id`, `cwd`, `prompt`, and for the shell `tool_name: "Bash"`, `tool_input.command` and `tool_response`), and both read the same `hookSpecificOutput` JSON back on every event. So `coffer memory hook` reads the event from stdin, relays it to the daemon's `POST /api/v1/memory/hook`, and prints what comes back. `--cwd "$PWD"` is only the fallback for an event whose input carries no `cwd`. One command for every event means one string to judge for staleness and one hash shape per entry for Codex. To read the session-start text each agent is given, run `coffer memory delivered <partition>`.
-
-**Why a deny, not a reminder.** A `PreToolUse` hook can also answer with `additionalContext`, which would never interrupt the agent. But Claude Code delivers `PreToolUse` context **after** the command has run, together with its result, so a reminder there can only help the agent recover; it cannot stop the first attempt. Only `permissionDecision: "deny"` does. Codex honours the same deny and shows the model `Command blocked by PreToolUse hook: <reason>`. After a command is the right time for an error's context, which is why the `context` kind sits on `PostToolUse`.
+Both agents get the same two entries: Claude Code in `settings.json`, Codex in `hooks.json`. Both hand their hook the event as JSON on stdin in the same shape (`hook_event_name`, `session_id`, `cwd`, `prompt`), and both read the same `hookSpecificOutput` JSON back on every event. So the hook command reads the event from stdin, relays it to the daemon, and prints what comes back. `--cwd "$PWD"` is only the fallback for an event whose input carries no `cwd`. One command for every event means one string to judge for staleness and one hash shape per entry for Codex. The partition's Delivered tab in the web UI shows the session-start text each agent is given.
 
 The path is the one the composition root resolves, preferring the stable `~/.coffer/bin/coffer` over the version directory behind it. A bare `coffer` is not enough, because a hook runs under whatever shell the agent starts. Codex runs hooks under `/bin/zsh` without the user's rc files, so `~/.coffer/bin` is not on that shell's `PATH`. Claude Code started from the Dock does not inherit the login shell's `PATH` either.
 
-The leading `: coffer-memory;` is a shell no-op that carries the marker. Coffer finds, replaces and removes its own entries by that marker, and never touches another tool's hooks on the same events. An install or a remove first sweeps Coffer's marked entries off **every** event, so a marked entry on any other event is never left behind. Installing is always an explicit act: the hook is one part of the agent's Coffer connection (`coffer agent connect`, or **Connect to Coffer** on the agent's page; see [Agents](/guides/agents#connect-an-agent-to-coffer)). It is idempotent, and removing the entries deletes empty event arrays and an empty `hooks` key after itself. The agent is named by its immutable uid, because a hook string may sit in a settings file for months while you rename the agent.
+The leading `: coffer-memory;` is a shell no-op that carries the marker. Coffer finds, replaces and removes its own entries by that marker, and never touches another tool's hooks on the same events. An install or a remove first sweeps Coffer's marked entries off **every** event, so a marked entry on any other event is never left behind. Installing is always an explicit act: the hook is one part of the agent's Coffer connection (**Connect to Coffer** on the agent's page; see [Agents](/guides/agents#connect-an-agent-to-coffer)). It is idempotent, and removing the entries deletes empty event arrays and an empty `hooks` key after itself. The agent is named by its immutable uid, because a hook string may sit in a settings file for months while you rename the agent.
 
 ```mermaid
 sequenceDiagram
@@ -355,41 +328,41 @@ sequenceDiagram
   participant C as coffer memory hook
   participant D as Daemon
   A->>C: event JSON on stdin
-  alt trivial prompt, or no armed trigger matches the command
+  alt trivial prompt
     C-->>A: print nothing (no daemon call)
   else
-    C->>D: POST /api/v1/memory/hook (2–3 s timeout)
-    D->>D: compose index / rank notes / match triggers
+    C->>D: relay the event (2–3 s timeout)
+    D->>D: compose index / rank notes
     D->>D: session ledger, audit memory_delivery_fired
     D-->>C: hookSpecificOutput, or nothing
-    C-->>A: print the JSON (context, or a deny)
+    C-->>A: print the JSON (context)
   end
 ```
 
 ### Failing open
 
-Memory never stops a prompt or a command because Coffer is down. The CLI prints nothing and exits 0 when no daemon is running, when the daemon does not answer in time (3 seconds at session start, 2 seconds for a prompt or a command, both under the entry's own timeout), or when it answers with an error or with anything the CLI cannot read.
+Memory never stops a prompt because Coffer is down. The CLI prints nothing and exits 0 when no daemon is running, when the daemon does not answer in time (3 seconds at session start, 2 seconds for a prompt, both under the entry's own timeout), or when it answers with an error or with anything the CLI cannot read.
 
-A fire that cannot deliver anything never contacts the daemon at all. The CLI answers a trivial prompt locally with the same test the daemon uses, and it reads the armed triggers in `vault/memory-triggers/` itself, so a shell command that no armed trigger matches costs a process start and a directory read, not a round-trip. The daemon still decides everything that depends on state: which partition the session is in, whether the note is reachable from it, and whether this session already had it.
+A fire that cannot deliver anything never contacts the daemon at all. The CLI answers a trivial prompt locally with the same test the daemon uses, so a conversation that is just moving along costs a process start, not a round-trip. The daemon still decides everything that depends on state: which partition the session is in and whether this session already had the note.
 
 ### The per-session ledger
 
-Two promises rest on remembering what each session was given: a note retrieved for one prompt is not retrieved again in the same session, and a trigger holds or adds at most once per session. The daemon keeps both in a **per-session ledger in memory**, keyed on the `session_id` the agent hands its hook (or, for a channel turn, `conversation:<id>`) and bounded to the 2,048 most recent sessions.
+One promise rests on remembering what each session was given: a note retrieved for one prompt is not retrieved again in the same session. The daemon keeps this in a **per-session ledger in memory**, keyed on the `session_id` the agent hands its hook (or, for a channel turn, `conversation:<id>`) and bounded to the 2,048 most recent sessions.
 
-It is never keyed on a process id. Every session of one Codex app-server shares a parent pid, so a guard keyed on `$PPID` would fire only for the first session of each app-server under Codex Desktop and the IDE hosts.
+It is never keyed on a process id. Every session of one Codex app-server shares a parent pid, so a ledger keyed on `$PPID` would work only for the first session of each app-server under Codex Desktop and the IDE hosts.
 
-The ledger survives a daemon restart without a table of its own. Every fire that delivered something is already a `memory_delivery_fired` audit event naming its session, its notes and, for a trigger, the trigger. Before a new daemon answers its first prompt or command, it reads the fires of the last seven days back, oldest first, into the ledger. A running session therefore is not given a note again after a restart, and a trigger does not hold a second command in it. A session idle for more than seven days is treated as new. If the audit log cannot be read, the failure is logged and the ledger starts empty; the cost is one repeated line or one extra deny.
+The ledger survives a daemon restart without a table of its own. Every fire that delivered something is already a `memory_delivery_fired` audit event naming its session and its notes. Before a new daemon answers its first prompt, it reads the fires of the last seven days back, oldest first, into the ledger. A running session therefore is not given a note again after a restart. A session idle for more than seven days is treated as new. If the audit log cannot be read, the failure is logged and the ledger starts empty; the cost is one repeated line.
 
 ### Audit and the delivery views
 
-Every **delivering** fire is one `memory_delivery_fired` audit event naming the agent as both the resource and the actor, with details giving its `moment` (`session_start`, `prompt`, `guard` or `error`), the `session_id`, the notes it carried as `<partition>/<slug>` and, for a trigger, the trigger's id. The event never carries a note's text. A session start is recorded on every fire; a prompt, guard or error fire only when it delivered a note. Trigger acts are audited too: `memory_trigger_added`, `memory_trigger_proposed`, `memory_trigger_armed`, `memory_trigger_disarmed` and `memory_trigger_deleted`, each naming the trigger and its note.
+Every **delivering** fire is one `memory_delivery_fired` audit event naming the agent as both the resource and the actor, with details giving its `moment` (`session_start` or `prompt`), the `session_id` and the notes it carried as `<partition>/<slug>`. The event never carries a note's text. A session start is recorded on every fire; a prompt fire only when it delivered a note. A person's edit to a note is audited as `memory_note_edited`, naming the partition, the note and the user.
 
-Two read-only **delivery views** turn that record into answers. Both are on REST and on the CLI (`coffer memory delivered`):
+Two read-only **delivery views** in the web UI turn that record into answers:
 
-- **The overview** (`GET /api/v1/memory/deliveries`, `coffer memory delivered`). For every agent with a delivery hook, over the last seven days: how many times memory reached it, the same count by moment, when it last did, and how many **distinct notes** its sessions opened. That last number is read off the file paths the agent's tool calls named: a path under the memory root that names a note counts, and nothing a note, a tool result or a message says is read. A transcript line is parsed only when it mentions the memory root at all, and each transcript's answer is cached by modification time and size. When the agent's transcripts cannot be read, the count is reported as **unavailable**, never as zero. Aggregation still reads no transcript; this is observability over file paths.
-- **The Delivered view** of one partition (`GET /api/v1/memory/partitions/{uid}/delivered`, `coffer memory delivered <partition>`). The **exact** session-start text each agent is given in that partition's repository, composed by the same function and under the same ceiling as the hook. Reading it records nothing.
+- **The overview** on the Memory page. For every agent with a delivery hook, over the last seven days: how many times memory reached it, the same count by moment, when it last did, and how many **distinct notes** its sessions opened. That last number is read off the file paths the agent's tool calls named: a path under the memory root that names a note counts, and nothing a note, a tool result or a message says is read. A transcript line is parsed only when it mentions the memory root at all, and each transcript's answer is cached by modification time and size. When the agent's transcripts cannot be read, the count is reported as **unavailable**, never as zero. Aggregation still reads no transcript; this is observability over file paths.
+- **The Delivered view** of one partition. The **exact** session-start text each agent is given in that partition's repository, composed by the same function and under the same ceiling as the hook. Reading it records nothing.
 
-Neither view says whether a hook is installed or trusted. That is a property of the agent's Coffer connection and lives on the agent's page: its connection status, its Hooks tab, `coffer agent show` and `coffer agent hooks`. The hook's own status likewise reports installation only and carries no last-fired time. Whether it *fires* is a stream of events, which you read in the delivery views or on the [Activity](/guides/activity) page.
+Neither view says whether a hook is installed or trusted. That is a property of the agent's Coffer connection and lives on the agent's page: its connection status and its Hooks tab. The hook's own status likewise reports installation only and carries no last-fired time. Whether it *fires* is a stream of events, which you read in the delivery views or on the [Activity](/guides/activity) page.
 
 ### Codex's approval
 
@@ -400,18 +373,18 @@ Codex runs a hook only after the user has reviewed it, and records each approval
 trusted_hash = "sha256:…"
 ```
 
-The key is the file, the event, the matcher group's position and the handler's position. The hash covers a normalised form of the entry's definition. An entry with no matching hash is skipped silently: no error, no event. With four entries, the user approves four records in `/hooks`, and every change to Coffer's command needs the approvals again. Until then, Codex skips the entries it has no approval for.
+The key is the file, the event, the matcher group's position and the handler's position. The hash covers a normalised form of the entry's definition. An entry with no matching hash is skipped silently: no error, no event. With two entries, the user approves two records in `/hooks`, and every change to Coffer's command needs the approvals again. Until then, Codex skips the entries it has no approval for.
 
 Coffer computes each hash the way Codex does and reads the records. Its hook is trusted only when **every** entry is; otherwise its trust is that of the first entry, in file order, that is not. It never writes a record:
 
 - **It is Codex's review gate.** A tool that installs a hook and then approves that hook itself removes the one point at which the user looks at what will run.
 - **A stale copy of the algorithm must fail visibly.** If Coffer wrote hashes and its copy of the algorithm went stale, Coffer would report the hook as approved while Codex skipped it, which is the failure this section exists to prevent. Reading with a stale algorithm fails the visible way instead: Coffer says "needs approval" while Codex actually runs the hook.
 
-The result is Coffer's hook's **trust**: `trusted`, `untrusted`, `modified` (approved for an earlier command), `disabled`, `unknown`, or `not_required` for Claude Code, which runs every hook in its settings. It appears in `coffer agent hooks`, `GET /api/v1/agents/{uid}/hooks`, the agent's Hooks tab, and as an attention item. The remedy is always the same: open Codex, run `/hooks`, and trust each of Coffer's four entries.
+The result is Coffer's hook's **trust**: `trusted`, `untrusted`, `modified` (approved for an earlier command), `disabled`, `unknown`, or `not_required` for Claude Code, which runs every hook in its settings. It appears on the agent's Hooks tab and as an attention item. The remedy is always the same: open Codex, run `/hooks`, and trust each of Coffer's two entries.
 
 ### Keeping hooks current
 
-Detection matches the marker and never reads the arguments. A hook whose command went stale, for example because a CLI flag changed, therefore still reads as installed, while failing at every fire. So the hook is a target of the [reconciler](/architecture/reconciler). On every pass (at start, every minute, and soon after any agent changes), it compares each installed hook with what the running build would install: the **set of events** its entries sit on, and each entry's whole command. It rewrites the hooks that differ into the four current entries. One unreadable settings file is reported as blocked without stopping the others.
+Detection matches the marker and never reads the arguments. A hook whose command went stale, for example because a CLI flag changed, therefore still reads as installed, while failing at every fire. So the hook is a target of the [reconciler](/architecture/reconciler). On every pass (at start, every minute, and soon after any agent changes), it compares each installed hook with what the running build would install: the **set of events** its entries sit on, and each entry's whole command. It rewrites the hooks that differ into the two current entries. One unreadable settings file is reported as blocked without stopping the others.
 
 For Codex, the target also compares trust. A current hook that Codex will not run differs only in trust. That difference is reported as `hook_untrusted` (or `hook_disabled`, or `hook_trust_unknown`) on the attention list, with the remedy, and is never written.
 
@@ -426,17 +399,17 @@ Coffer drives a turn that arrives from Telegram or SeaTalk itself, so it compose
 
 Each callback answers nothing when it finds nothing, or when the tree cannot be read (logged; memory is an addition to the turn, not a precondition of it).
 
-The agent process Coffer spawns for that turn still loads the agent's own settings: the Agent SDK reads the user's `settings.json`, and `codex app-server` runs a trusted `hooks.json`. So on a connected agent, Coffer's hook fires inside a channel turn as well, and without a rule of its own it would hand the agent the index and the notes a second time, from a ledger keyed on the agent's session id that never saw the turn's, and audit each prompt twice. Each moment therefore has one owner. The provider sets `COFFER_CHANNEL_TURN=1` in the environment of a channel turn's process (merged over the daemon's own), the agent hands that environment to every hook it runs, and `coffer memory hook` answers nothing on `SessionStart` or `UserPromptSubmit` when it sees the mark. It does not contact the daemon, so nothing is recorded. The guard and the error context still go through the hook, because the turn delivers neither: a channel turn on a connected agent is held by an armed trigger just as a terminal session is.
+The agent process Coffer spawns for that turn still loads the agent's own settings: the Agent SDK reads the user's `settings.json`, and `codex app-server` runs a trusted `hooks.json`. So on a connected agent, Coffer's hook fires inside a channel turn as well, and without a rule of its own it would hand the agent the index and the notes a second time, from a ledger keyed on the agent's session id that never saw the turn's, and audit each prompt twice. Each moment therefore has one owner. The provider sets `COFFER_CHANNEL_TURN=1` in the environment of a channel turn's process (merged over the daemon's own), the agent hands that environment to every hook it runs, and `coffer memory hook` answers nothing on `SessionStart` or `UserPromptSubmit` when it sees the mark. It does not contact the daemon, so nothing is recorded.
 
 A turn from the web Conversations page is not marked and gets neither closure. It receives memory through the agent's own hook, so no turn gets memory both ways.
 
 ### Rules about every turn are not memory's job
 
-A rule about **every** reply, such as the language to answer in or a tone, is not something retrieval or a trigger can deliver. No prompt names it and no command trips it. In the eval, "reply in Chinese" failed under every delivery condition. Such a rule belongs in the instructions the agent loads on every turn, `CLAUDE.md` or `AGENTS.md`, which you own. Coffer never writes those files, for the same reason it never writes an agent's native memory: installing or firing the memory hook leaves them byte-identical.
+A rule about **every** reply, such as the language to answer in or a tone, is not something retrieval can deliver at the right moment. No prompt names it. In the eval, "reply in Chinese" failed under every delivery condition. Such a rule belongs in the instructions the agent loads on every turn, `CLAUDE.md` or `AGENTS.md`, which you own. Coffer never writes those files, for the same reason it never writes an agent's native memory: installing or firing the memory hook leaves them byte-identical.
 
 ## Finding a note in another partition
 
-The memory layer has no MCP tool. A note is a Markdown file, and every partition's `notes/` sits under one **memory root** (`~/.coffer/derived/memory/`, printed by `coffer path memory`), so one search with the agent's own file tools covers every partition. The delivered payload names that root, and so does the gateway's `initialize` text. For the current repository the index is already in the session's context; the root is for a note from a partition the session was *not* opened in.
+The memory layer has no MCP tool. A note is a Markdown file, and every partition's `notes/` sits under one **memory root** (`~/.coffer/derived/memory/`), so one search with the agent's own file tools covers every partition. The session-start payload names that root, and the `coffer-guide` skill names it beside the knowledge root. For the current repository the index is already in the session's context; the root is for a note from a partition the session was *not* opened in.
 
 A search over the files never sees a raw entry or a retired note as a note: raw entries live under `.raw/`, and retired notes leave `notes/` for `RETIRED.md`. There is no `remember` tool either. An agent records something the way it always does, and Coffer reads it on the next pass.
 
@@ -449,16 +422,15 @@ Both passes run as background tasks that the daemon starts at boot:
 | Aggregation | immediately on start | 1 hour | `system:memory-aggregate-worker` |
 | Distil | after 60 s | 6 hours | `system:memory-distil-worker` |
 
-Both are on by default. They read the agents' files and write only the derived tree, so an unattended run carries no risk. Each pass reads its switch and interval from the internal-engine configuration (`aggregate`, `distil`) **per pass**, so a change in Settings applies without a restart. A failed pass is logged and never ends the loop. On shutdown, a pending pass is dropped, because the next boot sweeps everything again. You can also run both by hand in one action: `coffer memory sync`, `POST /api/v1/memory/sync` or the web UI's **Update memory** button aggregates, then distils every partition left holding undistilled raw entries. A partition whose distil pass is already running is reported as `skipped` rather than failing the call. The answer carries what the aggregation wrote and the `distilled` and `skipped` partitions.
+Both are on by default. They read the agents' files and write only the derived tree, so an unattended run carries no risk. Each pass reads its switch and interval from the internal-engine configuration (`aggregate`, `distil`) **per pass**, so a change in Settings applies without a restart. A failed pass is logged and never ends the loop. On shutdown, a pending pass is dropped, because the next boot sweeps everything again. You can also run both by hand in one action: the web UI's **Update memory** button aggregates, then distils every partition left holding undistilled raw entries. A partition whose distil pass is already running is reported as `skipped` rather than failing the call. The answer carries what the aggregation wrote and the `distilled` and `skipped` partitions.
 
 ## Trade-offs and alternatives
 
 - **Projecting a Coffer-owned store into each agent's memory.** This would give ambient loading for free, but only by writing, symlinking or disabling another tool's memory. That is intrusive, hard to understand, and fragile against vendor changes. Aggregation leaves each agent's loop untouched and pays for it with a hook.
 - **Storing the sources' words verbatim as the product.** This keeps quotes exact, but Codex's untitled bullets would become notes whose title, description and body were the same sentence. Coffer keeps verbatim text in `.raw/`, where provenance points at it, and writes the notes in its own words.
 - **A budgeted digest plus a search tool.** Agents do not call a tool to find something they have not been shown: Coffer's earlier recall tool was called five times in its life. Both supported hosts load an index and read a body as a file. Coffer copies that shape, and names the memory root so a note from another partition is one search away.
-- **The whole index at session start, untruncated.** In replay it reached the most needs, but 30–45 KB cannot pass through either agent's hook output, and even delivered in full, half the rules in context were ignored. Hence the bounded index plus retrieval and the guard.
-- **A reminder at `PreToolUse` instead of a deny.** Claude Code delivers that context after the command has run, so it can only help recovery. It survives as the `context` trigger on `PostToolUse`, where after is the right time.
-- **Embeddings for ranking, or triggers derived from the notes' text.** Embeddings gained three points of recall for a 2.2 GB model; derived triggers were either noisy or missed the traps. The ranker stays lexical and triggers stay authored until the eval set shows a replacement earns its cost.
+- **The whole index at session start, untruncated.** In replay it reached the most needs, but 30–45 KB cannot pass through either agent's hook output, and even delivered in full, half the rules in context were ignored. Hence the bounded index plus retrieval.
+- **Embeddings for ranking.** Embeddings gained three points of recall for a 2.2 GB model. The ranker stays lexical until the eval set shows a replacement earns its cost.
 - **Literal de-duplication across agents.** Two agents never phrase a lesson the same way, so a literal comparison merges nothing. Merging is a judgement about meaning, made by the distil model.
 - **Keying partitions on working directories.** This splits a repository across its worktrees, orphans partitions when directories disappear, and turns scratch folders into permanent partitions. Keying on the repository avoids all three.
 - **A third reader abstraction.** Two readers are written as two readers. A third agent gets an adapter against the existing reader and delivery-adapter contracts, not a capability matrix.
@@ -467,14 +439,14 @@ Both are on by default. They read the agents' files and write only the derived t
 
 | Concern | Where |
 | --- | --- |
-| Repository identity, notes, triggers, the ranker, the hook entries and the delivered wording | the domain layer's `memory` package |
+| Repository identity, notes, the ranker, the hook entries and the delivered wording | the domain layer's `memory` package |
 | Aggregation, placement, distil, the index, context composition, delivery, the session ledger, the delivery views and the delivery-hook reconcile target | the application layer's `memory` package |
-| Native-memory readers, per-agent hook adapters, and the files under the memory root and `vault/memory-triggers/` | the infrastructure layer's `memory` package |
-| Workers, wiring, the channel-turn callbacks and the REST routes | the HTTP surface |
-| `coffer memory` (including `hook`, `trigger`, `delivered`) | the CLI surface |
+| Native-memory readers, per-agent hook adapters, and the files under the memory root | the infrastructure layer's `memory` package |
+| Workers, wiring, the channel-turn callbacks, the web UI's own routes and the hook route | the HTTP surface |
+| The internal `coffer memory hook` entry point | the CLI surface |
 
 ## Related
 
 - Spec: [memory](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md), [internal-engine](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md)
-- Decision records: [Aggregate the agents' memory; never write it](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md), [Memory reaches a session at three moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) (Proposed)
+- Decision records: [Aggregate the agents' memory; never write it](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md), [Memory reaches a session at two moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)
 - [Memory guide](/guides/memory) · [Knowledge architecture](/architecture/knowledge) · [Vault sync](/architecture/vault-sync) · [MCP gateway](/architecture/mcp-gateway) · [Chat and turns](/architecture/chat)

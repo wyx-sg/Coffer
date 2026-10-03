@@ -10,6 +10,7 @@
 // reaches the open partition page too, and deleting a partition can drop its
 // whole subtree in one `removeQueries`.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
@@ -22,6 +23,7 @@ import {
   listNotes,
   listPartitions,
   listRetired,
+  saveNote,
   sync,
 } from "@/lib/api/memory";
 import {
@@ -62,6 +64,26 @@ export function useMemoryNote(uid: string, slug: string | null) {
     queryFn: () => getNote(uid, slug as string),
     enabled: Boolean(uid && slug),
   });
+}
+
+/** Save one memory's body (spec memory "Edit a memory in the web UI or on
+ *  disk"). Resolves with the new fingerprint, so the editor's next save does
+ *  not conflict with its own previous one. The saved note replaces the cached
+ *  read, so the page shows the new body and update time at once; the list and
+ *  the partition rows (newest update) are refetched. A refused save is the
+ *  editor's to show, so there is no toast. */
+export function useSaveMemoryNote(uid: string, slug: string) {
+  const qc = useQueryClient();
+  return useCallback(
+    async (body: string, expectedFingerprint: string): Promise<string> => {
+      const saved = await saveNote(uid, slug, { body, expected_fingerprint: expectedFingerprint });
+      qc.setQueryData(memoryNoteKey(uid, slug), saved);
+      void qc.invalidateQueries({ queryKey: memoryNotesKey(uid) });
+      void qc.invalidateQueries({ queryKey: memoryPartitionsKey });
+      return saved.fingerprint;
+    },
+    [qc, uid, slug],
+  );
 }
 
 /** The memories the partition retired, each with its reason. */

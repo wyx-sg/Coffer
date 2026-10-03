@@ -103,7 +103,7 @@ acceptance("web-ui", "a surface carries one name in the sidebar and on its page"
     else if (node && typeof node === "object") Object.values(node).forEach(walk);
   };
   walk(zh);
-  // Backticked code (`coffer agent add`) and the AgentSkills standard's name
+  // Backticked code (`coffer daemon start`) and the AgentSkills standard's name
   // are identifiers, not names for an agent.
   // Interpolation placeholders ({{agent}}) and paths (~/.agents) are not prose.
   const prose = values.map((v) =>

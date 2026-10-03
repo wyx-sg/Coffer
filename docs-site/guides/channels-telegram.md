@@ -28,17 +28,6 @@ You do not need to set a description or a command list: Coffer registers the bot
 
 ## 2. Register the channel
 
-::: code-group
-
-```sh [CLI]
-# Paste the token at the prompt; it is read from stdin, not your shell history
-coffer secret set channel/tg/bot-token
-
-coffer channel add my-telegram --type telegram \
-  --bot-token-ref channel/tg/bot-token \
-  --agent claude-code
-```
-
 ```text [Web UI]
 Channels → Add channel
   Type:           Telegram
@@ -48,43 +37,13 @@ Channels → Add channel
 → Create
 ```
 
-:::
+The default agent is a registered agent, as the **Agents** page lists it. The channel is bound to the machine you register it from and starts polling immediately. A token reference that does not resolve is rejected and nothing is saved.
 
-`--agent` is the name of a registered agent, as the **Agents** page lists it. The channel is bound to the machine you register it from and starts polling immediately. A token reference that does not resolve is rejected and nothing is saved.
-
-Check that it is running:
-
-```sh
-coffer channel show my-telegram
-```
-
-```text
-channel:  my-telegram (telegram)
-uid:      9b2e…
-agent:    claude-code
-gating:   require_mention=on  ignore_other_mentions=off
-idle:     new conversation after 24 h idle
-secret:   bot_token_ref = channel/tg/bot-token
-enabled:  True    running: True
-runs on:  3f9c… (this machine)
-pairing:  no pending code
-peer:     not paired
-```
+Check that it is running: the channel's header shows its status and where it runs.
 
 ## 3. Pair your account
 
-1. Issue a code, on the channel's **Overview** with **Generate pairing code**, or:
-
-   ```sh
-   coffer channel pair my-telegram
-   ```
-
-   ```text
-   pairing code: K7QM3XPA
-   expires at:   2026-09-24T15:04:05Z
-   pair link:    https://t.me/my_coffer_bot?start=K7QM3XPA
-   Send this code to the bot from the account that should own the channel.
-   ```
+1. Issue a code, on the channel's **Overview** with **Generate pairing code**. The dialog shows the code and the pair link.
 
 2. Open the pair link on the phone signed in to your account (**Open the pairing link** on the web page) and tap **Start**. Or open the bot and send `K7QM3XPA` as a message.
 3. The bot confirms the pairing and sends the help once. You are the owner.
@@ -165,21 +124,16 @@ The Bot API only reports mentions in the text of a plain message, so an @mention
 
 Telegram bots start with **privacy mode on**, which means the bot only sees messages that mention it, reply to it, or are commands. That is what the default `require_mention: true` expects, so nothing needs changing.
 
-If you turn `require_mention` off so the bot acts on every owner message in a group — the channel's **Settings** → **In group chats** → **Answer only when @mentioned**, or `coffer channel edit <name> --no-require-mention` — the bot also needs to see them:
+If you turn `require_mention` off so the bot acts on every owner message in a group — the channel's **Settings** → **In group chats** → **Answer only when @mentioned** — the bot also needs to see them:
 
 1. In BotFather, send `/setprivacy`, choose the bot and select **Disable**.
 2. Remove the bot from the group and add it again. The change applies only to groups the bot joins afterwards.
 
-Until you do, `coffer channel show` prints a `warning:` line naming this fix.
+Until you do, the channel's page shows a warning naming this fix.
 
 ## Rotate the token
 
-On the channel's page, choose **Replace token** (in the header when Telegram rejected the old one, or in the **⋯** menu and under **Settings** → **Secrets**), paste the new token in **Bot token** and choose **Replace and restart**. Coffer checks the token with Telegram as you paste it and says **Works — this is @your_bot**, and for the same bot that the pairing still holds; a token Telegram rejects is named under the field. The token is written under the reference the channel already uses, so pairing and machine binding are untouched. From the CLI:
-
-```sh
-coffer channel show my-telegram               # find the bot_token_ref
-coffer secret set channel/tg/bot-token   # paste the new token
-```
+On the channel's page, choose **Replace token** (in the header when Telegram rejected the old one, or in the **⋯** menu and under **Settings** → **Secrets**), paste the new token in **Bot token** and choose **Replace and restart**. Coffer checks the token with Telegram as you paste it and says **Works — this is @your_bot**, and for the same bot that the pairing still holds; a token Telegram rejects is named under the field. The token is written under the reference the channel already uses, so pairing and machine binding are untouched.
 
 ## Limits
 
@@ -195,12 +149,12 @@ coffer secret set channel/tg/bot-token   # paste the new token
 ## Troubleshooting
 
 **The bot does not answer at all.**
-Run `coffer channel show my-telegram`.
+Open the channel's page under **Channels**.
 
-- `running: False` — the channel is disabled, dormant (its scope names no agent), has no usable default agent, or is bound to another machine. The status and the channel's page say which.
-- `peer: not paired` — pair first. An unpaired bot answers nobody.
-- `runs on: … (another machine)` — only that machine polls the bot. Rebind with `coffer channel bind my-telegram`.
-- `runs on: … (UNKNOWN MACHINE …)` — the channel names a machine no longer in this vault, so it runs nowhere. Rebind it with `coffer channel bind my-telegram`.
+- The header says it is not running — the channel is disabled, dormant (its scope names no agent), has no usable default agent, or is bound to another machine. The status and the channel's page say which.
+- **Who can use it** on the **Overview** lists nobody — pair first. An unpaired bot answers nobody.
+- The header says it runs on another machine — only that machine polls the bot. Choose **Run it here…**, or change **Runs on** on the **Settings** tab.
+- The channel names a machine no longer in this vault, so it runs nowhere. Choose **Run it here**, or change **Runs on** on the **Settings** tab.
 
 **The bot answers someone else, or stops answering after a second machine was set up.**
 Two consumers are polling the same bot. This happens when the same token is registered twice, under two channel names or on two vaults. Keep one registration.

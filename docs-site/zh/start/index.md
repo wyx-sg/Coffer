@@ -26,7 +26,7 @@ Coffer 是**一个守护进程加一个保险库**：
 - **保险库**是 `~/.coffer/vault`，一个由普通文件组成的 git 仓库：每个资源一个 JSON 文件，外加技能文件夹、知识集和加密后的密钥。它旁边的 `~/.coffer` 里还放着本机专属的设置、一个历史数据库，以及 Coffer 可以重建的状态，比如记忆树。
 - **`coffer-mcp-shim`** 是一个小型 stdio 程序，每个智能体把它当作普通 MCP 服务器启动。它会找到正在运行的守护进程（没有就启动一个），然后把会话转发过去。
 
-运行 `coffer agent connect claude-code` 时，Coffer 会往 Claude Code 的 MCP 配置里写入一条 `coffer` 条目。此后，你在 Coffer 里注册的每个 MCP 服务器，Claude Code 都通过这一条目访问。
+在**智能体**页面连接 Claude Code 时，Coffer 会往 Claude Code 的 MCP 配置里写入一条 `coffer` 条目。此后，你在 Coffer 里注册的每个 MCP 服务器，Claude Code 都通过这一条目访问。
 
 ## 它管理什么 {#what-it-manages}
 
@@ -50,8 +50,8 @@ Coffer 还提供一些不属于资源类型的能力：加密的[密钥存储](/
 
 | 入口 | 用途 |
 | --- | --- |
-| **CLI**（`coffer …`） | 脚本和终端操作。任何需要守护进程的命令，在守护进程没运行时都会自动启动它。见 [CLI 参考](/zh/reference/cli)。 |
-| **Web 界面** | 浏览和编辑一切。守护进程在自己的地址上提供它，`coffer open` 打开时你已经处于登录状态。见 [Web 界面](/zh/guides/web-ui)。 |
+| **CLI**（`coffer …`） | 一份很短的命令清单：启动、停止和检查守护进程，在带密钥的环境里运行命令，读取 Coffer 的日志。见 [CLI 参考](/zh/reference/cli)。 |
+| **Web 界面** | 浏览和编辑一切。守护进程在自己的地址（`http://127.0.0.1:8000/`）上提供它，打开时你已经处于登录状态。见 [Web 界面](/zh/guides/web-ui)。 |
 | **桌面应用** | 同样的界面，放在一个原生 macOS 窗口里，带 Dock 图标和菜单栏图标。它会替你启动守护进程。见[桌面应用](/zh/guides/desktop-app)。 |
 | **MCP 端点** | 智能体通过 `coffer-mcp-shim` 连接的地方。智能体看到的是上游工具，外加 Coffer 自己的 `coffer__*` 工具。见[连接客户端](/zh/guides/connect-a-client)。 |
 | **消息渠道** | Telegram 和 SeaTalk 机器人，让你在手机上驱动智能体、接收通知。见[消息渠道](/zh/guides/channels)。 |

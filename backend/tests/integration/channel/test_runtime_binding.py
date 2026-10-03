@@ -79,7 +79,7 @@ async def test_a_binding_no_machine_claims_starts_nowhere(env: ChannelEnv) -> No
         assert runtime.is_running(uid_of("tg")) is False
         # The status reports the raw binding and that it is not this machine's;
         # telling "unknown" from "elsewhere" takes the machine registry, which the
-        # surfaces join (web: channelState, CLI: `coffer channel show`).
+        # surfaces join (web: channelState).
         status = await env.service_for(runtime).status(resource.uid)
         assert (status.runs_on, status.runs_here) == ("cccccccccccccccc", False)
     assert env.created_adapters == []

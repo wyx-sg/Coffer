@@ -1,9 +1,9 @@
-"""`coffer daemon` subcommand group: start / stop / restart / status /
-rotate-token, and the login service that decides whether the system starts it
-at all.
+"""`coffer daemon` subcommand group: start / stop / restart / status.
 
-The port it listens on and the experimental features it serves are settings,
-read and changed with `coffer config` (`daemon.port`, `feature.<key>`)."""
+These work when the daemon is down, which is why they are on the command line
+(spec resource-framework "Keep the command line to what needs it"). The port it
+listens on is the one setting that works the same way: `coffer config set
+daemon.port`."""
 
 from __future__ import annotations
 
@@ -21,11 +21,9 @@ from coffer.infrastructure.daemon.pid_lock import pid_is_coffer_daemon
 from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
 from coffer.infrastructure.vault.home import daemon_json_path
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli import daemon_service_cmd
 from coffer.surfaces.cli._options import ExitCode
 
 app = typer.Typer(help="Daemon lifecycle")
-app.add_typer(daemon_service_cmd.app, name="service")
 
 
 START_TIMEOUT_SECONDS = 30.0
@@ -271,14 +269,3 @@ def _runtime_lines(runtime: dict[str, Any] | None) -> list[str]:
     if last:
         lines.append(f"         last crash: {last['task']} ({last['error']}) at {last['at']}")
     return lines
-
-
-@app.command("rotate-token")
-def rotate_token(ctx: typer.Context) -> None:
-    """Rotate the daemon API token and update daemon.json."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post("/daemon/rotate-token")
-        _cli_client.check(r, verbose=verbose)
-    typer.echo("token rotated; re-read ~/.coffer/daemon.json for the new value")

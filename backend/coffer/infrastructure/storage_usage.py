@@ -17,8 +17,7 @@ through ``infrastructure.vault.home`` like every other reader of them:
   memory; spec memory "Keep the memory tree derived and local") and the
   transcript summary cache, both under ``derived/``. Clearing it deletes the
   files and leaves every partition's record, so the next memory update refills
-  the folders. Authored memory triggers live under ``vault/memory-triggers/``,
-  outside the tree; the rest of ``derived/`` (the uid index, ``derived.db``, a
+  the folders. The rest of ``derived/`` (the uid index, ``derived.db``, a
   stopped sync round's hand-merge copies) is not the cache this clears.
 
 Everything here blocks on the filesystem; callers run it in a thread.

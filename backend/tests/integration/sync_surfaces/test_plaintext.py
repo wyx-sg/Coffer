@@ -11,13 +11,10 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from typer.testing import CliRunner
 
 from coffer.application.sync.attention import SyncAttentionSource
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import RoundStatus
-from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli.sync_cmd import app
 
 from .conftest import client_for
 from .harness import Box
@@ -26,7 +23,6 @@ DOC = "knowledge/team/db.md"
 #: Built at run time so no secret-shaped literal sits in the source.
 VALUE = "q7" * 8
 TOKEN = "ghp_" + "Z9" * 18
-runner = CliRunner()
 
 
 def _remote_objects(url: str) -> bytes:
@@ -139,30 +135,6 @@ def test_ciphertext_is_not_read_as_plaintext(pair: tuple[Box, Box]) -> None:
     got = mac.round()
     assert got.status is RoundStatus.PUSHED, got.detail
     assert "secret/orders-db.enc" in {c.path for c in got.pushed}
-
-
-@pytest.mark.acceptance(
-    spec="vault-sync", scenario="a plaintext secret stops the round before anything is pushed"
-)
-def test_the_command_line_names_the_places_and_prints_the_hand_off(
-    monkeypatch: pytest.MonkeyPatch, pair: tuple[Box, Box]
-) -> None:
-    mac, _mini = pair
-    client = client_for(mac)
-    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (client, None))
-    _leak(mac)
-    ran = runner.invoke(app, ["now"])
-    assert "plaintext_found" in ran.output and f"{DOC}:4" in ran.output
-    assert VALUE not in ran.output
-    shown = runner.invoke(app, ["status"])
-    assert shown.exit_code == 1 and "coffer sync status --prompt" in shown.output
-    prompt = runner.invoke(app, ["status", "--prompt"])
-    assert prompt.exit_code == 0 and "DB_PASSWORD" in prompt.output
-    assert VALUE not in prompt.output
-    declined = runner.invoke(app, ["push-anyway"], input="n\n")
-    assert declined.exit_code == 1
-    pushed = runner.invoke(app, ["push-anyway", "--yes"])
-    assert pushed.exit_code == 0 and "pushed" in pushed.output
 
 
 def test_the_detection_runs_over_every_unpushed_version(tmp_path: Path) -> None:

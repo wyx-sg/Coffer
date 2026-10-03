@@ -1,5 +1,5 @@
-"""Coffer's own memory hook: the four entries it installs (session start, each
-prompt, before and after a shell command), the command they run, the ceiling on
+"""Coffer's own memory hook: the two entries it installs (session start and each
+prompt), the command they run, the ceiling on
 what session start prints, the adapter Protocol, and the shape of an
 install/status view. The marker and the JSON text transform live in
 `domain.memory.hook_entries` and are re-exported here.
@@ -92,39 +92,32 @@ class DeliveryUnsupported(CofferError):  # noqa: N818
 DELIVERY_CEILING_BYTES = 9500
 
 
-#: The four moments memory reaches a session (ADR
-#: memory-reaches-a-session-at-prompt-time-and-before-a-known-trap): the index at
-#: session start, retrieval per prompt, the guard before a shell command, and
-#: the error context after one. Both supported agents run all four and read the
-#: same JSON from each.
+#: The two moments memory reaches a session: the index at session start and
+#: retrieval per prompt. Both supported agents run both and read the same JSON
+#: from each.
 SESSION_START = "SessionStart"
 USER_PROMPT_SUBMIT = "UserPromptSubmit"
-PRE_TOOL_USE = "PreToolUse"
-POST_TOOL_USE = "PostToolUse"
-DELIVERY_EVENTS = (SESSION_START, USER_PROMPT_SUBMIT, PRE_TOOL_USE, POST_TOOL_USE)
+DELIVERY_EVENTS = (SESSION_START, USER_PROMPT_SUBMIT)
 #: The moments a channel turn carries itself: Coffer puts the index in its
 #: system prompt and the notes its prompt names after the prompt (spec memory
 #: "Deliver to channel turns through the system prompt"). The hook answers
 #: nothing on these in a process Coffer spawned for a channel turn
-#: (``coffer.domain.channel_turn``), so each moment has one owner; the guard
-#: and the error context stay the hook's, since the turn does neither.
+#: (``coffer.domain.channel_turn``), so each moment has one owner.
 CHANNEL_TURN_EVENTS = (SESSION_START, USER_PROMPT_SUBMIT)
 
 #: Every source that starts a session, in both agents' vocabulary.
 SESSION_MATCHER = "startup|resume|clear|compact"
-#: The shell tool, by the name both agents hand a hook (``tool_name``).
-SHELL_TOOL_MATCHER = "Bash"
 
 #: Generous enough that a slow first call never blocks the session from
 #: starting; short enough that a hung daemon does not hang the terminal.
 SESSION_TIMEOUT_SECONDS = 10
-#: A prompt or a command waits at most this long for Coffer; the CLI itself
+#: A prompt waits at most this long for Coffer; the CLI itself
 #: gives up sooner and prints nothing (fail open).
 TURN_TIMEOUT_SECONDS = 5
 
 
 def hook_invocation(agent_uid: str, *, cli: str = "coffer") -> str:
-    """The CLI call every one of Coffer's four entries runs.
+    """The CLI call each of Coffer's two entries runs.
 
     One command for every event: it reads the hook's own JSON from stdin, whose
     ``hook_event_name`` says which moment this is, and prints the JSON that
@@ -161,14 +154,11 @@ def entry_command(agent_uid: str, *, cli: str = "coffer") -> str:
 
 
 def delivery_entries(agent_uid: str, *, cli: str = "coffer") -> tuple[EntrySpec, ...]:
-    """The four entries one agent carries: the same command on every event,
-    the shell tool's events matched on the shell tool alone."""
+    """The two entries one agent carries: the same command on each event."""
     command = entry_command(agent_uid, cli=cli)
     return (
         EntrySpec(SESSION_START, command, SESSION_MATCHER, SESSION_TIMEOUT_SECONDS),
         EntrySpec(USER_PROMPT_SUBMIT, command, None, TURN_TIMEOUT_SECONDS),
-        EntrySpec(PRE_TOOL_USE, command, SHELL_TOOL_MATCHER, TURN_TIMEOUT_SECONDS),
-        EntrySpec(POST_TOOL_USE, command, SHELL_TOOL_MATCHER, TURN_TIMEOUT_SECONDS),
     )
 
 
@@ -209,7 +199,7 @@ class DeliveryStatus:
     #: write, so a caller can show it before acting.
     command: str
     #: The hook events this agent's adapter installs on, comma-joined
-    #: (``PostToolUse,PreToolUse,SessionStart,UserPromptSubmit``).
+    #: (``SessionStart,UserPromptSubmit``).
     event: str
 
 
@@ -293,12 +283,9 @@ __all__ = [
     "DELIVERY_EVENTS",
     "HOOKS_KEY",
     "MARKER",
-    "POST_TOOL_USE",
-    "PRE_TOOL_USE",
     "SESSION_MATCHER",
     "SESSION_START",
     "SESSION_TIMEOUT_SECONDS",
-    "SHELL_TOOL_MATCHER",
     "TURN_TIMEOUT_SECONDS",
     "USER_PROMPT_SUBMIT",
     "DeliveryAdapter",

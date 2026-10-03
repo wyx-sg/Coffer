@@ -3,7 +3,7 @@
 A push publishes more than the files as they are now: it publishes every
 file version in every commit the remote lacks. So the check reads each blob
 reachable from the commit being pushed and not from the remote's head, with
-the detection ``coffer secret scan`` uses, and skips what is not plaintext:
+the detection the Secrets page's scan uses, and skips what is not plaintext:
 an encrypted ``secret/<ref>.enc`` file, a binary file, and a blob the person
 already said to push anyway.
 

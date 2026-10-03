@@ -5,7 +5,7 @@ description: Coffer 的全部任务型指南集中在一页，按你要做的事
 
 # 指南 {#guides}
 
-一个任务一页。每篇指南都给出命令行命令和应用里的位置。指南默认 Coffer 已经安装、守护进程正在运行。如果还没有，先看[安装](/zh/start/install)和[快速上手](/zh/start/quickstart)；指南里用到的术语见[核心概念](/zh/start/concepts)。
+一个任务一页。每篇指南都给出应用里的位置，只有在命令行承担该任务时才给出命令。指南默认 Coffer 已经安装、守护进程正在运行。如果还没有，先看[安装](/zh/start/install)和[快速上手](/zh/start/quickstart)；指南里用到的术语见[核心概念](/zh/start/concepts)。
 
 ## 智能体与工具 {#agents-and-tools}
 

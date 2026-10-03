@@ -9,7 +9,7 @@ Coffer runs as one long-lived daemon per vault, and every other piece is a clien
 
 ## The problem
 
-A vault has exactly one owner of its state: one SQLite writer, one set of upstream MCP subprocesses, one set of channel connections. But the processes that need that owner come and go on their own schedules. An MCP client starts a shim when an editor opens. A developer runs `coffer skill list` in a terminal. A Telegram message arrives while no window is open. None of these callers should have to know whether Coffer is running, and none of them should ever cause a second daemon, because a second daemon does not fail loudly: it splits the vault's state between two processes and you find out much later.
+A vault has exactly one owner of its state: one SQLite writer, one set of upstream MCP subprocesses, one set of channel connections. But the processes that need that owner come and go on their own schedules. An MCP client starts a shim when an editor opens. A developer runs `coffer daemon status` in a terminal. A Telegram message arrives while no window is open. None of these callers should have to know whether Coffer is running, and none of them should ever cause a second daemon, because a second daemon does not fail loudly: it splits the vault's state between two processes and you find out much later.
 
 So the design has to answer four questions:
 
@@ -234,7 +234,7 @@ coffer daemon restart              # a running daemon owns its socket; restart t
 coffer config unset daemon.port    # back to 8000
 ```
 
-The `daemon.port` key works with no daemon running, because you change the port precisely when the daemon cannot start. For that reason it is the one `coffer config` key the CLI writes straight into the pre-bind settings file rather than through a route. The web UI reaches the same file through the running daemon: `GET /api/v1/daemon/port` returns the saved port, the bound one and whether a restart is pending, and `PUT /api/v1/daemon/port` saves the next start's port, refusing one that cannot be bound.
+The `daemon.port` key works with no daemon running, because you change the port precisely when the daemon cannot start. For that reason `coffer config set daemon.port` writes straight into the pre-bind settings file rather than through a route, and `coffer config` carries only keys of that kind. The web UI reaches the same file through the running daemon: `GET /api/v1/daemon/port` returns the saved port, the bound one and whether a restart is pending, and `PUT /api/v1/daemon/port` saves the next start's port, refusing one that cannot be bound.
 
 A daemon that scans for a free port breaks two things without saying so: your bookmark to the web UI, and everything the browser has stored against that origin. Refusing to start and naming the process that holds the port is the better failure. When the holder is itself a Coffer daemon, the message says it is most likely your own daemon still warming up rather than telling you to kill it.
 
@@ -327,7 +327,7 @@ The copy, sentinel, symlink-flip and pruning rules are described once, in [Distr
 
 ## Login service
 
-On macOS, `coffer daemon service install` writes a per-user launchd agent, `~/Library/LaunchAgents/dev.coffer.daemon.plist`, so the daemon is running before anything asks for it:
+On macOS, turning on **Start at login** (**Settings › Daemon**) writes a per-user launchd agent, `~/Library/LaunchAgents/dev.coffer.daemon.plist`, so the daemon is running before anything asks for it:
 
 | Key | Value | Why |
 | --- | --- | --- |
@@ -337,7 +337,7 @@ On macOS, `coffer daemon service install` writes a per-user launchd agent, `~/Li
 | Program | `~/.coffer/bin/coffer-daemon` symlink | A path pinned to a version directory stops working two upgrades later, when that directory is pruned. |
 | `StandardOutPath` / `StandardErrorPath` | `~/.coffer/logs/daemon.log` | One log for every writer. |
 
-Install and uninstall work with no daemon running, and are also reachable from the web UI's residency setting (`PUT /api/v1/daemon/residency`). Uninstall deletes the plist and then boots the job out, with one exception that keeps the request alive. Once launchd has started the daemon, the daemon *is* the job, and `launchctl bootout` would kill the very process answering the settings request. So when a process is running under the job, the uninstall leaves it running and the daemon boots its own job out as it exits (the last step of the entry point). Without that, launchd would go on restarting a crashed daemon from the definition it still holds after the user switched Start at login off. A loaded job with nothing running under it is booted out at once.
+Turning it on and off is the web UI's residency setting (`PUT /api/v1/daemon/residency`). Uninstall deletes the plist and then boots the job out, with one exception that keeps the request alive. Once launchd has started the daemon, the daemon *is* the job, and `launchctl bootout` would kill the very process answering the settings request. So when a process is running under the job, the uninstall leaves it running and the daemon boots its own job out as it exits (the last step of the entry point). Without that, launchd would go on restarting a crashed daemon from the definition it still holds after the user switched Start at login off. A loaded job with nothing running under it is booted out at once.
 
 ## Trade-offs and alternatives
 

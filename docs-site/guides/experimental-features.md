@@ -1,6 +1,6 @@
 ---
 title: Experimental features
-description: The four capabilities that ship switched off — Knowledge, Memory, Sync and Model providers — how to switch each one on per machine from Settings, the CLI or COFFER_FEATURES, and what a switched-off feature looks like.
+description: The four capabilities that ship switched off — Knowledge, Memory, Sync and Model providers — how to switch each one on per machine from Settings or COFFER_FEATURES, and what a switched-off feature looks like.
 ---
 
 # Experimental features
@@ -13,7 +13,7 @@ A stable release and a build from source behave the same way here: every experim
 
 | Key | Name | What it covers |
 | --- | --- | --- |
-| `knowledge` | Knowledge | The Knowledge page and its files, the `coffer__write` tool, and the knowledge sections of the `coffer-guide` skill. |
+| `knowledge` | Knowledge | The Knowledge page and its files, and the knowledge sections of the `coffer-guide` skill. |
 | `memory` | Memory | The Memory page, the memory delivery hook in your agents, and memory in channel turns. |
 | `sync` | Sync | Vault sync to your own git remote. |
 | `models` | Model providers | Model providers, the local model proxy and Usage, and the projection of connections into your agents' own config files. |
@@ -26,31 +26,14 @@ No feature needs another. When one is off, the others keep working:
 
 | When this is off | What happens |
 | --- | --- |
-| `knowledge` | The Knowledge page and its API are gone, `coffer__write` is hidden, the `coffer-guide` skill has no knowledge catalogue, curation skips, and a channel's `/kb` answers that Knowledge is switched off. Memory is unaffected. |
+| `knowledge` | The Knowledge page and its API are gone, the `coffer-guide` skill has no knowledge catalogue, curation skips, and a channel's `/kb` answers that Knowledge is switched off. Memory is unaffected. |
 | `memory` | The Memory page and its API are gone, the handshake does not name the memory root, the memory hook is taken out of your agents (and put back when you switch it on), distil and aggregate skip, and channel turns carry no memory. Knowledge is unaffected. |
 | `sync` | The vault is single-machine for curation. |
 | `models` | The local proxy and Usage are gone, and Coffer's keys are taken out of your agents' own configs, so agents use their own login. Knowledge and memory keep working on the model connection already chosen for Coffer's engine. |
 
 ## Switch a feature on or off
 
-Every feature is off by default. You switch it on for this machine in either of two places:
-
-- **Settings → Features** lists the four features, each with an **Experimental** mark, a one-line description and an on/off switch. The tab is in every build. If the feature is pinned (below), the switch is disabled and says so.
-- **`coffer config`** has a `feature.<key>` key for each feature:
-
-```sh
-coffer config list feature.            # every feature, its state, and what decided it
-coffer config set feature.models on
-coffer config set feature.models off
-coffer config unset feature.models     # back to off
-```
-
-```text
-feature.knowledge = off (default)
-feature.memory = on (setting)
-feature.sync = off (pin)
-feature.models = off (default)
-```
+Every feature is off by default. You switch it on for this machine on the Settings page, or pin it with `COFFER_FEATURES` (below). **Settings → Features** lists the four features, each with an **Experimental** mark, a one-line description and an on/off switch. The tab is in every build. If the feature is pinned (below), the switch is disabled and says so. **Reset to default** returns a feature to off, and **Decided by** shows whether a pin, this machine's setting or the default decided it.
 
 A switch takes effect at once, with no restart, and is kept in `~/.coffer/daemon-config.json` on this machine only. It never syncs, so switching a feature on in your laptop leaves your desktop as it was. The same switch is `PUT /api/v1/daemon/features/{key}`, and `DELETE` on that path returns it to off.
 
@@ -84,7 +67,6 @@ A switched-off feature looks absent. Nothing in the web UI mentions it:
 
 - **Web UI:** its sidebar entries are gone (and a group left with no entries disappears), it is not in the command palette, its tiles and first-run cards are not on Overview, and no other page shows a section for it. A link straight to one of its pages shows the standard not-found page. There is no notice and no **Switch on** button outside Settings → Features.
 - **REST:** its routes answer `404` with the code `FEATURE_DISABLED` and the feature's key. Resources of a kind the feature owns are also hidden from the generic `/api/v1/resources` routes.
-- **CLI:** its commands print one line naming `coffer config set feature.<key> on` and exit 1.
 - **MCP:** a built-in tool that belongs to the feature leaves the tool list, and a call to one answers as an unknown tool.
 - **Background passes:** its passes skip their rounds.
 

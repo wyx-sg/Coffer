@@ -187,7 +187,7 @@ sequenceDiagram
 - `secret_revealed`——有人在桌面应用里经过在场验证后显示或复制了一个值。这是值被展示的唯一途径，因为没有任何路由、命令或工具会返回它。
 - `secret_resolved`——`coffer run` 把一个独立密钥解析进一个子进程。记录写明密钥、程序和工作目录，从不记录值或命令行的其余部分。
 - `secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected`——一个密钥等待被发往新的地方（或者一个正在使用的值等待被替换，或者保护等待被关闭），然后有人做了答复。见[密钥](/zh/guides/secrets#approvals)。
-- `secret_imported`——`coffer secret import` 把一个明文密钥从文件移进了存储。
+- `secret_imported`——一个明文密钥从文件被移进了存储。
 - `master_key_exported`——桌面应用在经过在场验证后写出了一份密钥备份。没有任何命令或路由能导出密钥。
 
 为启动上游而解密密钥不是审计事件。
@@ -257,7 +257,7 @@ flowchart LR
 - 完整的清理还会清扫消息渠道的媒体目录，worker 也按同样的节奏清理旧的 shim 和上游日志文件。`daemon.log` 本身由自己的滚动限定大小，从不被删除。
 - 窗口设为 “none” 会关闭该表的清理。修改窗口会在审计日志里记一条 `retention_updated`。
 
-你可以用 `coffer config list retention.`、`coffer config set retention.<table> <days|forever>` 和 `coffer log prune`，或者通过 `/api/v1/retention/policies` 和 `POST /api/v1/retention/prune` 管理策略。
+你可以在**设置 → 数据**里管理策略，或者通过 `/api/v1/retention/policies` 和 `POST /api/v1/retention/prune`。
 
 ## 读取记录：`coffer log` 与 `coffer path logs` {#reading-the-records-coffer-log-and-coffer-path-logs}
 

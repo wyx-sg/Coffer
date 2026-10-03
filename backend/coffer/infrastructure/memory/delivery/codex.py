@@ -1,20 +1,17 @@
 """Codex's memory hook adapter.
 
-Codex (0.155 and later) runs `SessionStart`, `UserPromptSubmit`, `PreToolUse`
-and `PostToolUse` hooks with the same stdin shape as Claude Code — the shell
-tool arrives as `tool_name: "Bash"` with `tool_input.command` — and its hook
-input carries the session's id. Coffer installs one entry on each, all running
-the same `coffer memory hook` command. Anything once-per-session is keyed on
-that `session_id`, never on a process id: under Codex Desktop and the IDE hosts
-every session of one `codex app-server` shares a parent pid, so a guard keyed
-on `$PPID` would let only the first session of each app-server fire.
+Codex (0.155 and later) runs `SessionStart` and `UserPromptSubmit` hooks with
+the same stdin shape as Claude Code, and its hook input carries the session's
+id. Coffer installs one entry on each, both running the same
+`coffer memory hook` command. Anything once-per-session is keyed on that
+`session_id`, never on a process id: under Codex Desktop and the IDE hosts
+every session of one `codex app-server` shares a parent pid, so a key on
+`$PPID` would let only the first session of each app-server fire.
 
 Three things make the hooks actually run and actually arrive:
 
 * **JSON output.** Every event prints `{"hookSpecificOutput": {...}}`: Codex
-  ignores plain stdout on the tool events, hands `additionalContext` to the
-  model as a developer message, and honours `permissionDecision: "deny"`,
-  showing the model "Command blocked by PreToolUse hook: <reason>". Past 2,500
+  hands `additionalContext` to the model as a developer message. Past 2,500
   tokens (UTF-8 bytes / 4) it keeps only the head and the tail of a context, so
   every payload is bounded under that (`domain.memory.delivery.DELIVERY_CEILING_BYTES`).
 * **An absolute CLI path.** Codex runs hooks under `/bin/zsh` without the
@@ -143,7 +140,7 @@ class CodexDelivery:
     def trust(self, hooks_text: str, trust_text: str | None, hooks_path: str) -> HookTrust:
         """Whether Codex will run **every** one of Coffer's entries.
 
-        Codex records trust per entry, so four entries are four approvals; the
+        Codex records trust per entry, so two entries are two approvals; the
         answer is the first entry's that is not trusted, in file order, and
         ``TRUSTED`` only when all are.
         """

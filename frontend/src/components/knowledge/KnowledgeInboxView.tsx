@@ -2,8 +2,8 @@
 //
 // A collection's Inbox (boards 5.1.15, 5.1.16): the items waiting to be
 // curated, and the one quiet Curate now (spec knowledge "Present a collection
-// as one tree in the web UI"). Items are submitted by agents (`coffer__write`)
-// and by uploads; curation files each into the right document on its own
+// as one tree in the web UI"). Items are submitted by agents (a file written into
+// `.inbox/`) and by uploads; curation files each into the right document on its own
 // within the hour, so the button is only for "now". The list is a title, one
 // muted line saying what happens to items, and rows that open whole (›). An
 // item opens read-only — it is not a document yet — Reader-style: who wrote it
@@ -61,7 +61,9 @@ export function KnowledgeInboxView({ collection, file, modelSet }: Props) {
   }
 
   const rows = items.data?.files ?? [];
-  const curate = <KnowledgeCurateNow collectionUid={collection.uid} variant="outline" icon={false} />;
+  const curate = (
+    <KnowledgeCurateNow collectionUid={collection.uid} variant="outline" icon={false} />
+  );
 
   if (file) {
     return (

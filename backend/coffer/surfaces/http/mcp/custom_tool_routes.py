@@ -1,6 +1,6 @@
 """``/api/v1/custom-tools`` — custom-tool groups and their tools.
 
-Spec mcp-gateway "Manage custom tools on REST and the command line"; design
+Spec mcp-gateway "Manage custom tools through REST and the Custom tools page"; design
 add-http-custom-tools §9. A group is addressed by its fixed name, like an MCP
 server on the page that shows it. Enabling, disabling and the group's reach use
 the kind-agnostic resource routes by the group's uid.

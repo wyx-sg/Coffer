@@ -57,7 +57,7 @@ async function bestEffortDelete(url: string, token: string): Promise<void> {
 
 acceptance(
   "skill-manager",
-  "desktop and CLI cover every operation",
+  "the web UI and REST cover every operation",
   async ({ page }) => {
     const { token, port } = readDaemonToken();
     const stamp = Date.now().toString(36);

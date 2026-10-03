@@ -35,3 +35,28 @@ def unique_name(directory: pathlib.Path, slug: str) -> str:
         if not (directory / candidate).exists():
             return candidate
     raise ValueError(f"cannot find a free name for {slug!r}")
+
+
+#: Length of the opening-prose fallback description: a catalogue line, not a summary.
+FALLBACK_DESCRIPTION_CHARS = 240
+
+
+def opening_prose(markdown: str, *, fallback: str) -> str:
+    """A document's own opening prose — first paragraph, headings skipped — or
+    ``fallback`` (its title) when it has none: a bare table, a blank file.
+
+    The description a catalogue entry needs when nothing wrote one (spec
+    knowledge "Fill frontmatter on converted material").
+    """
+    paragraph: list[str] = []
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        if not stripped:
+            if paragraph:
+                break
+            continue
+        paragraph.append(stripped)
+    text = " ".join(paragraph).strip()
+    return text[:FALLBACK_DESCRIPTION_CHARS] if text else fallback

@@ -8,7 +8,7 @@ carries Coffer's gateway MCP entry, installed by ``AgentMcpService``.
 
 - A stale hook — a bare ``coffer`` command on ``SessionStart`` alone — is
   found as a MODIFY of ``command`` and ``event`` and rewritten into this
-  build's four entries, foreign hooks untouched, one audit row from
+  build's two entries, foreign hooks untouched, one audit row from
   ``system`` (spec memory "Repair stale delivery hooks"). For Codex the
   rewritten entries are then reported as needing the user's approval in Codex
   until ``config.toml`` records each of them.
@@ -212,7 +212,7 @@ async def test_a_stale_hook_is_rewritten_into_the_current_entries(
         for leaf in g["hooks"]
         if MARKER in leaf["command"]
     ]
-    # One entry on each of the four events, every one the current command.
+    # One entry on each of the two events, every one the current command.
     assert sorted(coffer_commands) == sorted(
         (event, adapter.command_for(agent.uid)) for event in DELIVERY_EVENTS
     )
@@ -258,6 +258,81 @@ async def test_an_audit_that_cannot_be_recorded_puts_the_file_back(
     assert result.outcome is Outcome.FAILED
     assert "audit not recorded" in (result.error or "")
     assert path.read_text() == before
+
+
+@pytest.mark.acceptance(
+    spec="memory",
+    scenario="a four-entry hook is rewritten to two without losing Codex's approvals",
+)
+@pytest.mark.parametrize("agent_type", [AgentType.CLAUDE_CODE, AgentType.CODEX])
+async def test_a_four_entry_hook_is_rewritten_to_two(rig: _Rig, agent_type: AgentType) -> None:
+    agent_dir = fake_agent_dir(rig.home, agent_type)
+    agent = await rig.agents.register(agent_type=agent_type, actor="cli")
+    await rig.mcp.install(agent.uid, actor="ui")
+    adapter = agent_catalog().delivery_hook(agent_type)
+    assert adapter is not None
+    command = adapter.command_for(agent.uid)
+
+    def entry(matcher: str | None, timeout: int) -> dict[str, object]:
+        group: dict[str, object] = {"hooks": [{"type": "command", "command": command}]}
+        group["hooks"][0]["timeout"] = timeout  # type: ignore[index]
+        if matcher is not None:
+            group["matcher"] = matcher
+        return group
+
+    foreign_pre = {"hooks": [{"type": "command", "command": "/skynet/beforeShell.sh"}]}
+    doc = {
+        "hooks": {
+            "SessionStart": [_FOREIGN_SESSION, entry("startup|resume|clear|compact", 10)],
+            "UserPromptSubmit": [entry(None, 5)],
+            "PreToolUse": [foreign_pre, entry("Bash", 5)],
+            "PostToolUse": [entry("Bash", 5)],
+        }
+    }
+    key = "settings" if agent_type is AgentType.CLAUDE_CODE else "hooks"
+    path = agent_dir.write(key, json.dumps(doc, indent=2))
+    four = adapter.find_all(path.read_text())
+    assert len(four) == 4
+    trust_before: dict[str, str] = {}
+    if agent_type is AgentType.CODEX:
+        config = agent_dir.path("config")
+        config.write_text(
+            config.read_text()
+            + "".join(
+                f'\n[hooks.state."{trust_key(str(path), h)}"]\ntrusted_hash = "{current_hash(h)}"\n'
+                for h in four
+            )
+        )
+        trust_before = {trust_key(str(path), h): current_hash(h) for h in four}
+        config_before = config.read_text()
+
+    plan = await rig.reconciler.plan(targets=[TARGET], trigger=Trigger.PERIOD)
+    (planned,) = plan.results
+    assert planned.change.difference.op is Op.MODIFY
+    assert "event" in planned.change.difference.changed_params
+    assert "command" not in planned.change.difference.changed_params
+
+    (result,) = (await rig.reconciler.run(trigger=Trigger.PERIOD)).results
+    assert result.outcome is Outcome.APPLIED
+
+    data = json.loads(path.read_text())
+    two = adapter.find_all(path.read_text())
+    assert sorted(h.event for h in two) == ["SessionStart", "UserPromptSubmit"]
+    assert [h.command for h in two] == [command, command]
+    # A foreign hook on a shell event stays; Coffer's entries on them are gone.
+    assert data["hooks"]["PreToolUse"] == [foreign_pre]
+    assert "PostToolUse" not in data["hooks"]
+    assert data["hooks"]["SessionStart"][0] == _FOREIGN_SESSION
+
+    if agent_type is AgentType.CODEX:
+        # The two kept entries keep their position and command, so the keys and
+        # hashes Codex recorded for them still match; Coffer wrote no approval.
+        for h in two:
+            k = trust_key(str(path), h)
+            assert trust_before[k] == current_hash(h)
+        assert config.read_text() == config_before
+    # Converged: no `hook_untrusted` either, the approvals still match.
+    assert (await rig.reconciler.run(trigger=Trigger.PERIOD)).results == ()
 
 
 def _fingerprint(root: pathlib.Path) -> dict[str, tuple[int, str, int]]:

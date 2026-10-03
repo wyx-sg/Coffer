@@ -27,9 +27,6 @@ TREE_MOVES: tuple[tuple[str, str], ...] = (
     ("cache/agent", "derived/cache/agent"),
 )
 
-#: Trees the previous layout already kept where this one does.
-IN_PLACE: tuple[str, ...] = ("vault/memory-triggers",)
-
 #: The class directories the upgrade creates; a rollback moves aside each one
 #: the home did not already have.
 CLASS_DIRS: tuple[str, ...] = ("vault", "local", "content", "derived")
@@ -73,7 +70,6 @@ __all__ = [
     "DAEMON_CONFIG_BACKUP",
     "DB_BACKUP",
     "HOLD_MARKER",
-    "IN_PLACE",
     "KNOWLEDGE_GIT_BACKUP",
     "LAYOUT_REVISION",
     "LEGACY_DB",

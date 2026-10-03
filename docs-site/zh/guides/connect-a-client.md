@@ -24,18 +24,7 @@ description: 通过 stdio shim 或 HTTP 端点，把 Claude Code、Codex 或任�
 
 对已注册的[智能体](/zh/guides/agents)，把它接入 Coffer，而不是手写条目：
 
-::: code-group
-
-```sh [CLI]
-coffer agent connect claude-code
-coffer agent connect codex
-```
-
-```text [Web UI]
-Agents → (agent) → Connect to Coffer
-```
-
-:::
+打开 **智能体 →（该智能体）**，点击 **连接**。Coffer 会先显示确切的几行，由你确认。
 
 Coffer 会写入 shim 的绝对路径和智能体的 uid：
 
@@ -78,7 +67,7 @@ args = ["--agent-uid", "bc0eff325c015d279faab81ce63e50b2"]
 }
 ```
 
-shim 只接受自己的一个参数 `--agent-uid <uid>`，客户端传入的其他参数一律忽略。不带 `--agent-uid` 时，会话身份不明（见下文）。要让手动配置的客户端算作已注册的智能体，加上 `"args": ["--agent-uid", "<uid>"]`，uid 取自 `coffer agent show <name>`。
+shim 只接受自己的一个参数 `--agent-uid <uid>`，客户端传入的其他参数一律忽略。不带 `--agent-uid` 时，会话身份不明（见下文）。要让手动配置的客户端算作已注册的智能体，加上 `"args": ["--agent-uid", "<uid>"]`，uid 取自智能体 **⋯** 菜单里的 **复制 uid**。
 
 ### shim 做了什么 {#what-the-shim-does}
 
@@ -134,7 +123,7 @@ curl -s http://127.0.0.1:8000/mcp \
 ```
 
 ::: warning 每次守护进程启动令牌都会变
-守护进程每次启动都会生成新令牌，`coffer daemon rotate-token` 也可以按需替换它。配置了字面令牌的客户端在下次重启后就失效了。只要客户端能运行命令，就优先用 shim。
+守护进程每次启动都会生成新令牌，也可以在 **设置 → 安全 → 守护进程访问令牌** 中点 **轮换…** 按需替换它。配置了字面令牌的客户端在下次重启后就失效了。只要客户端能运行命令，就优先用 shim。
 :::
 
 守护进程只监听回环地址，并拒绝 `Host` 不是回环名的请求。请使用 `127.0.0.1` 或 `localhost`。空闲的 HTTP 会话在 30 分钟无流量后会被丢弃（用 `COFFER_MCP_SESSION_IDLE_S` 修改）。
@@ -151,7 +140,7 @@ curl -s http://127.0.0.1:8000/mcp \
 
 身份不明的会话看到的总是更少，绝不会更多。调用会话生效范围之外的服务器，会得到与停用工具相同的错误（`TOOL_DISABLED`，JSON-RPC `-32000`），并记为 `denied`。基于名字的 `_meta` 键（例如 `coffer/agent`）会被忽略；只认 uid。
 
-Coffer 自己那些按智能体行事的工具（例如 `coffer__write`）从网关获得会话身份。客户端在调用中放入的任何 `agent` 参数都会被覆盖，所以客户端无法在每次调用时冒充别的智能体。
+Coffer 自己的工具从网关获得会话身份。客户端在调用它时放入的任何 `agent` 参数都会被覆盖，所以客户端无法在每次调用时冒充别的智能体。
 
 ::: info 信任边界
 身份是自报的，没有经过密码学验证。任何能读取 `~/.coffer/daemon.json` 的本地进程都能打开会话并声称任意 uid。对一个绑定在回环地址上的单用户守护进程，这是可以接受的；它不是用户之间的访问控制机制。
@@ -159,14 +148,7 @@ Coffer 自己那些按智能体行事的工具（例如 `coffer__write`）从网
 
 ## 验证连接 {#verify-the-connection}
 
-1. **检查条目。**
-
-   ```sh
-   coffer agent show claude-code
-   # ...
-   # coffer_connection: connected
-   #   gateway MCP entry: installed (/Users/you/.coffer/bin/coffer-mcp-shim)
-   ```
+1. **检查条目。** 打开 **智能体 →（该智能体）**：**连接** 一栏会说明该智能体通过一个 MCP 条目和一个钩子接入 Coffer，并给出 shim 的路径。
 
 2. **检查守护进程。**
 
@@ -176,22 +158,16 @@ Coffer 自己那些按智能体行事的工具（例如 `coffer__write`）从网
 
 3. **在客户端里列出工具。** 在 Claude Code 里，`/mcp` 命令会显示 `coffer` 服务器及其工具。你应该能看到 Coffer 自己的 `coffer__…` 工具，以及以 `<server>__<tool>` 形式出现的上游工具。上游工具很多时，只列出预算内的一部分；其余仍可调用，`coffer__search_tools` 能找到它们（见 [MCP 服务器](/zh/guides/mcp-servers#many-tools-tiering-and-tool-search)）。
 
-4. **发起一次调用，并在日志里找到它。**
-
-   ```sh
-   coffer log mcp --limit 5
-   ```
-
-   调用会带着服务器、工具、耗时和状态出现。**活动**页面展示同一份日志。
+4. **发起一次调用，并在日志里找到它。** 打开 **活动 → MCP 调用**：调用会带着服务器、工具、耗时和状态出现。`coffer log mcp --limit 5` 打印同样的行。
 
 ## 故障排查 {#troubleshooting}
 
 | 现象 | 可能原因 | 解决 |
 | --- | --- | --- |
-| 客户端说 `coffer` 服务器启动失败，或 `command not found` | 条目指向的 shim 在那个路径下不存在 | 重新运行 `coffer agent connect <agent>`；手写条目的话，使用绝对路径 `~/.coffer/bin/coffer-mcp-shim`。 |
+| 客户端说 `coffer` 服务器启动失败，或 `command not found` | 条目指向的 shim 在那个路径下不存在 | 在该智能体页面再次点击 **连接**；手写条目的话，使用绝对路径 `~/.coffer/bin/coffer-mcp-shim`。 |
 | shim 以退出码 3 退出 | 10 秒内无法启动守护进程 | 查看 `~/.coffer/logs/daemon.log`。常见原因是另一个进程占用了守护进程的端口；`coffer config get daemon.port` 显示它想用哪个端口。 |
 | 每次调用都以 `All connection attempts failed` 失败 | shim 丢了守护进程，而且没有可达的存活守护进程 | 启动守护进程（`coffer daemon start`），然后在客户端里重启 MCP 服务器，让新的 shim 启动。 |
-| 某个服务器的工具只对某一个智能体缺失 | 该服务器的生效范围排除了这个智能体，或条目没有 `--agent-uid` | 用 `coffer mcp scope <server>` 检查生效范围；用 `coffer agent connect <agent>` 重写条目。 |
+| 某个服务器的工具只对某一个智能体缺失 | 该服务器的生效范围排除了这个智能体，或条目没有 `--agent-uid` | 在该服务器页面检查它的 **生效范围**；在该智能体页面点击 **连接** 重写条目。 |
 | 某个工具不在列表里，但按名字调用可用 | 工具分层让它没有被列出 | 使用 `coffer__search_tools`，或调高预算（见 [MCP 服务器](/zh/guides/mcp-servers#many-tools-tiering-and-tool-search)）。 |
 | stderr 显示版本不匹配的警告 | 升级后旧的守护进程仍在运行 | `coffer daemon restart`。 |
 | HTTP 客户端收到 `401 bad token` | 守护进程重启时令牌变了 | 从 `~/.coffer/daemon.json` 读取当前令牌，或改用 shim。 |

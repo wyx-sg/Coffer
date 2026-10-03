@@ -11,7 +11,7 @@ reads it either: recall and delivery go through ``notes/`` alone.
 The tree is derived (see "Keep the memory tree derived and local") and the next
 pass would overwrite any edit, so this module reads and never writes. Reading a
 file's text is not done here: the web page shows the tree, and a note's text
-comes from the note itself, or from the file on disk (``coffer path memory``).
+comes from the note itself, or from the file on disk.
 
 Every other hidden entry is left out too: the only ones that occur are the
 ``.<name>.tmp`` files an atomic write leaves for a few milliseconds, which would

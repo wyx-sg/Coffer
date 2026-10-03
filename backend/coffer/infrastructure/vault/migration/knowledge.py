@@ -5,7 +5,7 @@ stamps become ``local/curation.json`` (plan q9 §3 step 5; D14).
 its own (``<knowledge root>/.git``). Its commits are replayed into the vault
 repository one for one — each commit's message, author and committer with
 their dates kept, its tree nested under ``knowledge/`` beside what the
-vault's first commit holds, its parents mapped — so ``coffer vault history``
+vault's first commit holds, its parents mapped — so the vault's history
 of a knowledge document reads back to its first version. Nothing is
 rewritten in the old repository: its objects are fetched, and the directory
 is then renamed into the backup set (a rollback renames it back).

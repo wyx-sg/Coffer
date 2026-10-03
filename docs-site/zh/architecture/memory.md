@@ -1,6 +1,6 @@
 ---
 title: 记忆
-description: Coffer 如何只读不写地读取每个智能体的原生记忆，按仓库提炼成自己的笔记，并在会话开始、每次提问、以及踩到已知陷阱之前把它们交还给智能体。
+description: Coffer 如何只读不写地读取每个智能体的原生记忆，按仓库提炼成自己的笔记，并在会话开始和每次提问时把它们交还给智能体。
 ---
 
 # 记忆 {#memory}
@@ -15,11 +15,11 @@ Coffer 的解法分三步：
 
 1. **读取**每个智能体的原生记忆，但从不写入。
 2. **提炼**读到的内容，写成 Coffer 自己的笔记：一个主题一个文件，按仓库归档，另有一个 `global` 分区存放关于你本人的内容。
-3. **投递**这些笔记给每个智能体，时机有三个：会话开始时给索引；提问发出时给该提问点到的少数几条笔记；在执行某条被人标记为已知陷阱的命令之前，给说明原因的那条笔记。每次投递都写明笔记的绝对路径，智能体读正文的方式和读自己的记忆一样：当作文件读。
+3. **投递**这些笔记给每个智能体，时机有两个：会话开始时给索引；提问发出时给该提问点到的少数几条笔记。每次投递都写明笔记的绝对路径，智能体读正文的方式和读自己的记忆一样：当作文件读。
 
 Claude Code 上午学到的东西，Codex 下午打开同一个仓库时，索引里就已经有了。Coffer 做到这一点并不需要写入 Codex 的记忆，只是把那一行索引交给 Codex。
 
-记忆不是[知识](/zh/architecture/knowledge)。知识是人或智能体关于外部世界写下的东西，智能体通过 `coffer-guide` 目录按需拉取。记忆是智能体在工作中学到的东西，整棵树都能从智能体自己的副本重建。记忆是通过你为每个智能体安装的 Hook 交给会话的，所以它是 Coffer [拉取而非推送](/zh/architecture/design-principles#pull-not-push)原则的一个显式例外，而不是悄悄破例。这个例外原本只有会话开始时的索引。决策记录（ADR）[记忆在三个时机到达会话](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)把它扩展到每次提问和已知陷阱；原则对记忆也按这个口径表述。知识依旧是拉取。
+记忆不是[知识](/zh/architecture/knowledge)。知识是人或智能体关于外部世界写下的东西，智能体通过 `coffer-guide` 目录按需拉取。记忆是智能体在工作中学到的东西，整棵树都能从智能体自己的副本重建。记忆是通过你为每个智能体安装的 Hook 交给会话的，所以它是 Coffer [拉取而非推送](/zh/architecture/design-principles#pull-not-push)原则的一个显式例外，而不是悄悄破例。决策记录（ADR）[记忆在两个时机到达会话](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)陈述了这个例外：会话开始时的索引，以及提问点到的笔记。知识依旧是拉取。
 
 ## 设计决策 {#design-decisions}
 
@@ -32,7 +32,7 @@ Coffer 读取原生记忆，但从不在其中创建、修改、移动、删除�
 
 Coffer 唯一会写入智能体配置的，是它在智能体 *settings* 里的 Hook 条目。那个文件不是记忆，而且只有在你把智能体接入 Coffer 时才会写（见[投递](#delivery)）。
 
-### 四个目录，各只有一个写入者 {#four-directories-with-one-writer-each}
+### 四个目录，各有各的作用 {#four-directories-one-role-each}
 
 分区是 `~/.coffer/derived/memory/` 下的一个顶层目录：
 
@@ -50,12 +50,12 @@ Coffer 唯一会写入智能体配置的，是它在智能体 *settings* 里的 
 
 | 路径 | 写入者 | 作用 |
 | --- | --- | --- |
-| `.raw/` | 仅聚合 | 忠实。每个智能体的原话，一条一个文件，标注智能体、原生路径和读取时间。它只作为提炼的输入：Web 界面的文件树和分区文件路由都不会列出或读取它。 |
-| `notes/` | 仅提炼 | 有用。Coffer 自己写的文字，一个主题一个文件，出处列出背后的每条原始条目。 |
+| `.raw/` | 仅聚合 | 忠实。每个智能体的原话，一条一个文件，标注智能体、原生路径和读取时间。它只作为提炼的输入：Web 界面不会列出或读取它。 |
+| `notes/` | 提炼，以及人的编辑 | 有用。Coffer 自己写的文字，一个主题一个文件，出处列出背后的每条原始条目。人可以在 Web 界面里或直接在磁盘上编辑笔记（见[编辑笔记](#editing-a-note-and-judging-disagreement)）。 |
 | `MEMORY.md` | 仅提炼 | 可查找。每条笔记一行，最新的在前（行与顺序同投递一致）。 |
 | `RETIRED.md` | 仅提炼 | 让退役生效。下一轮提炼会把它当作排除清单读取。 |
 
-因为每个目录恰好只有一个写入者，提炼出了问题可以重跑，而不必重新读取智能体：`.raw/` 里仍保存着它们说过的一切。这条规则在代码里可以检查：只有一个模块会写入 `.raw/`，提炼流程从不借它来写。
+因为 `.raw/` 恰好只有一个写入者，别的东西都不碰它，提炼出了问题可以重跑，而不必重新读取智能体：`.raw/` 里仍保存着它们说过的一切。这条规则在代码里可以检查：只有一个模块会写入 `.raw/`，提炼流程从不借它来写。
 
 记忆根目录固定为 `~/.coffer/derived/memory/`，属于派生存储类别（见[持久化](/zh/architecture/persistence)），不能改。测试套件给每个测试一个独立的 `HOME`，所以测试永远不会改写开发者真实的记忆树。
 
@@ -84,7 +84,7 @@ Coffer 唯一会写入智能体配置的，是它在智能体 *settings* 里的 
 
 ### 什么都不同步 {#nothing-syncs}
 
-记忆树派生自*这台*机器上安装的智能体，所以它永远不会到达[保险库同步](/zh/architecture/vault-sync)的远端。`memory` 类型声明的是派生存储类别：它的资源文件和整棵树都在 `~/.coffer/derived/` 下，位于保险库仓库之外，同步没有东西可带。每台机器聚合自己的智能体。只有人写下或启用的触发器存在保险库里（`vault/memory-triggers/`），因为它们是人写的，不是派生的。
+记忆树派生自*这台*机器上安装的智能体，所以它永远不会到达[保险库同步](/zh/architecture/vault-sync)的远端。`memory` 类型声明的是派生存储类别：它的资源文件和整棵树都在 `~/.coffer/derived/` 下，位于保险库仓库之外，同步没有东西可带。每台机器聚合自己的智能体。
 
 ### 没有自己的表 {#no-table-of-its-own}
 
@@ -199,6 +199,18 @@ sequenceDiagram
 
 这条记录不是排除项。它不列任何条目 id，它的标题也不会作为已退役主题发给路由，因为没有人判断这条笔记是错的。如果材料回来了，就像任何新条目一样被提炼。
 
+### 编辑笔记，以及如何裁决不一致 {#editing-a-note-and-judging-disagreement}
+
+人可以编辑笔记：Web 界面的**编辑**会替换笔记的正文并保留它的 frontmatter，用任何编辑器直接改 `notes/` 下的文件则不需要 Coffer 做任何事。Web 界面的保存会带上读取时笔记的指纹。如果这期间笔记变了（提炼重写了它，或者文件在磁盘上被改过），保存会被拒绝，并把笔记现在的内容交给编辑器，所以什么都不会被覆盖，也不会丢。
+
+编辑过的笔记就是那条笔记，而不是一条建议。下次有条目被分派到它时，撰写阶段收到的就是这份正文；没被分派到的笔记保持编辑后的文字原样不变。它会一直保持，直到更新的材料修订它，而规则对每个写入者都一样：
+
+- 两条说法不一致时，**较新的那条胜出，除非较旧的那条被证明是对的**：来源、日期、命令输出或代码。
+- **没有哪个写入者是例外。** 撰写阶段的指令不会把编辑过的正文标为不可触碰，不管是人还是智能体编辑的。人的编辑不会因为是谁写的就安全，智能体的条目也不会因为是谁写的就可疑。
+- **被取代的说法仍然看得到。** 它会通过 `RETIRED.md` 带着原因和取代它的笔记退役，或者在重写后的正文里保留，并注明改动的日期。万一某一轮判断错了，历史和恢复仍是退路。
+
+派生树依旧是可丢弃的。删掉它再重建，会从智能体自己的记忆重新生成笔记，并丢掉所有编辑，所以指南里明确写了这一点。
+
 ### 安全降级 {#degrading-safely}
 
 - **没有内部连接。** 这一轮退回机械提炼，它根本没有办法调用模型。每条新条目各自成为一条笔记，带上来源的标题、描述、文本、类型和检索词，索引根据它们的 frontmatter 写出。结果更单薄，但仍然可用。
@@ -209,7 +221,7 @@ sequenceDiagram
 
 ### 每个分区同时只跑一轮 {#one-pass-per-partition}
 
-间隔 worker 和「更新记忆」（`POST /api/v1/memory/sync`、`coffer memory sync`）都会在共享的维护任务登记表里认领分区的 **uid**。「更新记忆」会把已有一轮在跑的分区报告在 `skipped` 下，并提炼其余分区。worker 会跳过忙碌的分区，下次扫描时再来。登记表在内存里，每个守护进程一份。
+间隔 worker 和「更新记忆」（Web 界面的按钮，先聚合再提炼）都会在共享的维护任务登记表里认领分区的 **uid**。「更新记忆」会把已有一轮在跑的分区报告在 `skipped` 下，并提炼其余分区。worker 会跳过忙碌的分区，下次扫描时再来。登记表在内存里，每个守护进程一份。
 
 ## 索引行 {#the-index-line}
 
@@ -223,30 +235,27 @@ sequenceDiagram
 
 ## 投递 {#delivery}
 
-记忆在**三个时机**、通过**四个 Hook 事件**到达会话：
+记忆在**两个时机**、通过**两个 Hook 事件**到达会话：
 
 ```mermaid
 flowchart LR
   S["SessionStart"] --> I["有界索引：<br/>global + 当前仓库，≤ 9,500 字节"]
   P["UserPromptSubmit"] --> R["提问点到的前 3 条笔记：<br/>BM25 高于下限，≤ 1.5 KB"]
-  B["Bash 的 PreToolUse"] --> G["某个已启用的 block 触发器匹配：<br/>拦截一次，以笔记作为原因"]
-  A["Bash 的 PostToolUse"] --> E["某个已启用的 context 触发器匹配输出：<br/>补充笔记，从不拦截"]
 ```
 
 1. **会话开始时**，给出 `global` 和当前仓库的有界索引，并说明笔记正文在哪里。
 2. **每次有实质内容的提问时**，给出该提问点到的少数几条笔记，按字面匹配排序。
-3. **踩到已知陷阱之前**，给出某人与一条命令绑定的那条笔记，作为这条命令被拦截一次的原因。同一套触发器机制也会在命令输出显示已知错误*之后*补充一条笔记。
 
-设计、权衡过的方案和证据见决策记录（ADR）[记忆在三个时机到达会话](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)。其状态为 **Proposed**。
+设计、权衡过的方案和证据见决策记录（ADR）[记忆在两个时机到达会话](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)。
 
-### 为什么是三个时机 {#why-three-moments}
+### 为什么是两个时机 {#why-two-moments}
 
-这份 ADR 在真实会话中取了 107 个经人工核对的时刻来衡量投递，这些时刻里智能体需要的东西存储中都已经有了。大部分遗漏来自两种不同的失败，比例大致相当：
+这份 ADR 在真实会话中取了 107 个经人工核对的时刻来衡量投递，这些时刻里智能体需要的东西存储中都已经有了。大部分遗漏来自两种不同的失败：
 
-- **从未投递。** 事实存在，但从未到达会话。索引被截断了、会话解析到了错误的分区，或者 Coffer 根本没接到那个智能体。只有在提问时检索才能修好这一半。
-- **投递了却没照做。** 规则就在上下文里，会话开始时读过，二十个轮次之后照样违反。只有在命令处匹配才能覆盖这一半，而且它也是唯一能抓住已知陷阱重犯的手段，这是最大的单一类别。
+- **从未投递。** 事实存在，但从未到达会话。索引被截断了、会话解析到了错误的分区，或者 Coffer 根本没接到那个智能体。在提问时检索能解决这一半。
+- **投递了却没照做。** 规则就在上下文里，会话开始时读过，二十个轮次之后照样违反。这一半不是投递能修的：智能体自己权衡拿到的内容；对于适用于每次回复的长期规则，答案是放进智能体每个轮次都会加载的指令里（见[关于每个轮次的规则不归记忆管](#rules-about-every-turn-are-not-memory-s-job)）。
 
-在六个曾经踩过的陷阱上实跑，仅有会话开始时的索引，18 次中只有 1 次首次尝试就避开了错误。检索加守卫，18 次全部避开，每次运行注入约 320 个 token。每一层都覆盖了另外两层覆盖不到的：索引覆盖第一条消息，检索覆盖提问点到的规则，守卫覆盖藏在命令里的陷阱。
+每一层都覆盖了另一层覆盖不到的：索引覆盖第一条消息，检索覆盖提问点到的规则。
 
 ### 会话开始时：有界索引 {#at-session-start-the-bounded-index}
 
@@ -282,72 +291,36 @@ flowchart LR
 
 **索引是派生的，只存在内存里。** 守护进程为每个仓库分区连同 `global` 建一个排序索引，当任一分区的 `notes/` 在文件名、修改时间或大小上变化时重建。它从不写盘，也没有任何东西对笔记分块或做 embedding。笔记始终是唯一的副本；索引只是它们的一个视图，和 `MEMORY.md` 一样。embedding 做过测量并被否决：在评测集上多出三个点的召回率，抵不上一个 2.2 GB 的本地模型，而且产品早已为字面检索放弃了 embedding。
 
-### 踩到已知陷阱之前：守卫 {#before-a-known-trap-the-guard}
-
-**触发器**是某人做的标记：某条笔记是与某条命令绑定的已知陷阱。触发器是人写的内容，不是派生的记忆，所以它们放在保险库里，每个一个 Markdown 文件，位于派生树旁边而不是里面。删除并重建 `~/.coffer/derived/memory/` 不会丢失任何触发器。
-
-```md
----
-id: frontend-vitest-needs-node-20-3fa1c2
-note: coffer/frontend-vitest-needs-node-20
-kind: block
-command: ^make verify
-unless: v20
-error: ''
-armed_by: cli
-armed_at: '2026-09-30T08:12:03+00:00'
-proposed_by: ''
-created: '2026-09-30T08:12:03+00:00'
----
-```
-
-文件是 `~/.coffer/vault/memory-triggers/<id>.md`。它的 frontmatter 以 `<partition>/<slug>` 的形式指明笔记，还有 `kind`、`command`、`unless` 和 `error` 模式（Python 正则表达式）、谁提议的、谁在什么时候启用的、以及创建时间。可选的正文是笔记本身不存在时显示的原因。解析失败的文件会被跳过并记日志，所以一个坏文件永远不会挡住其他文件。
-
-触发器有两种：
-
-- **`block`** 拦截命令。在 shell 的 `PreToolUse` 上，命令的 `command` 模式会与每个**真正执行**的 shell 片段匹配：即以 `&&`、`||`、`;`、`|`、换行、`(` 和 `$(` 分隔的片段，每个片段去掉 `VAR=value` 前缀，程序名缩成基本名。模式从每个片段的程序和参数**开头**匹配——如果程序是运行脚本的解释器（`bash`、`sh`、`zsh`、`python3`、`node`……），则从脚本的基本名开始——所以它只看到真正运行的东西：`e2e` 会拦 `bash scripts/e2e.sh`，放过 `cat scripts/e2e.sh`；`make\s+verify` 放过 `echo make verify is slow`。`unless` 模式与整条命令（含前缀）匹配。匹配时说明命令已经在做笔记要求的事（`PATH=…/v20…/bin:$PATH make verify`），触发器保持安静。
-- **`context`** 从不拦截。在 shell 的 `PostToolUse` 上，当命令输出出现 `error` 模式（如果触发器有 `command` 模式，也要匹配它）时，把笔记作为上下文加入会话。
-
-会话中第一条被 `block` 触发器匹配的命令会**被拒绝一次**，走的是智能体自己的拒绝决策，以笔记作为原因，并附一行说明只拦这一次。同一个触发器在该会话里不会再拦其他命令，所以智能体的下一次尝试会通过，刻意的重跑也永远不会被卡住。`context` 触发器每个会话同样最多触发一次。不带 `session_id` 的触发什么都不拦，因为“每会话一次”需要一个会话来计数。
-
-触发器只作用于能**触达其笔记**的会话：`global` 笔记的触发器作用于每个会话，仓库笔记的触发器只作用于该仓库的会话。
-
-**只有人能启用触发器。** 人写的触发器（`coffer memory trigger add`、`POST /api/v1/memory/triggers`）在写入时就由这个人启用。提炼可以**提议**触发器：撰写阶段在重写某条笔记时，如果判断它是与特定命令绑定的已知陷阱，可以返回一个命令模式和一个 `unless` 模式。提议以未启用状态归档，带 `proposed_by: distil`，没有 `armed_by`，在有人启用之前什么都不做。提议按笔记、种类和模式去重。自动派生的触发器做过测量并被否决：宽泛的每个会话触发约 25 条笔记而相关的不到一条，修剪过的又丢掉了陷阱恰恰所在的那些命令。对一个能拦截的东西来说，精确就是它全部的价值。**不预置任何触发器**：新的保险库在有人写一个或提炼提议一个之前，没有任何触发器。
-
-触发器引用笔记而不是复制它，所以显示的原因永远是笔记当前的内容。提炼重写笔记时，触发器的消息随之更新。
-
 ### 投递的笔记如何措辞 {#how-a-delivered-note-is-worded}
 
-在提问时、命令前或命令后投递的每条笔记，读起来都是**出处加事实**。它写明笔记的文件，并把标题和描述表述为：`feedback` 笔记是 “the user's standing rule is: …”，其他则是 “a fact they recorded: …”：
+在提问时投递的每条笔记，读起来都是**出处加事实**。它写明笔记的文件，并把标题和描述表述为：`feedback` 笔记是 “the user's standing rule is: …”，其他则是 “a fact they recorded: …”：
 
 ```text
-Coffer memory, a note recorded for this user (/Users/you/.coffer/derived/memory/coffer/notes/frontend-vitest-needs-node-20.md): the user's standing rule is: Frontend vitest needs Node 20 — run make verify under Node 20; 22 and 24 exit 1 with every test green. (Held once by a Coffer memory trigger so you can adjust; run it again if it is still what you intend.)
+Coffer memory, a note recorded for this user (/Users/you/.coffer/derived/memory/coffer/notes/frontend-vitest-needs-node-20.md): the user's standing rule is: Frontend vitest needs Node 20 — run make verify under Node 20; 22 and 24 exit 1 with every test green.
 ```
 
-这样措辞是有意的。在早先一轮评测里，一条写成祈使句（“删掉分支和 worktree”）、在命令前投递的笔记，被智能体当作提示词注入向用户引述出来。改成表述为用户的长期规则之后，72 次运行中 0 次把笔记标记为注入。投递的文本从来不是给智能体的指令，命令时投递的内容也从不要求执行破坏性操作。
+这样措辞是有意的。在早先一轮评测里，一条写成祈使句（“删掉分支和 worktree”）的笔记，被智能体当作提示词注入向用户引述出来。改成表述为用户的长期规则之后，72 次运行中 0 次把笔记标记为注入。投递的文本从来不是给智能体的指令。
 
-### 一条命令，四个 Hook 条目 {#one-command-on-four-hook-entries}
+### 一条命令，两个 Hook 条目 {#one-command-on-two-hook-entries}
 
-投递通过智能体自己的 Hook 机制到达智能体。Coffer 的 Hook 是**四个条目**，每个事件一个，每个条目运行同一条命令，**按绝对路径**调用 Coffer 的 CLI：
+投递通过智能体自己的 Hook 机制到达智能体。Coffer 的 Hook 是**两个条目**，每个事件一个，两个条目运行同一条内部命令，**按绝对路径**调用 Coffer 的 CLI：
 
 ```sh
 : coffer-memory; /Users/you/.coffer/bin/coffer memory hook --agent-uid <uid> --cwd "$PWD"
 ```
 
+`coffer memory hook` 是由已安装的 Hook 运行的内部入口；它在 CLI 帮助里是隐藏的，因为没有人会自己输入它，也是唯一存在的 `coffer memory` 命令。
+
 | 事件 | 匹配器 | 条目超时 | 能回答什么 |
 | --- | --- | --- | --- |
 | `SessionStart` | `startup\|resume\|clear\|compact` | 10 秒 | 有界索引，作为 `additionalContext` |
 | `UserPromptSubmit` | 无 | 5 秒 | 检索到的笔记，作为 `additionalContext` |
-| `PreToolUse` | `Bash` | 5 秒 | `permissionDecision: "deny"`，以笔记作为 `permissionDecisionReason` |
-| `PostToolUse` | `Bash` | 5 秒 | 笔记，作为 `additionalContext` |
 
-两个智能体拿到的是同样的四个条目：Claude Code 写在 `settings.json`，Codex 写在 `hooks.json`。两者都以同样形状的 JSON 通过 stdin 把事件交给 Hook（`hook_event_name`、`session_id`、`cwd`、`prompt`，shell 事件还有 `tool_name: "Bash"`、`tool_input.command` 和 `tool_response`），也都在每个事件上读回同样的 `hookSpecificOutput` JSON。所以 `coffer memory hook` 从 stdin 读事件，转发给守护进程的 `POST /api/v1/memory/hook`，再把返回的内容打印出来。`--cwd "$PWD"` 只是输入里没有 `cwd` 的事件的兜底。所有事件共用一条命令，意味着判断是否过时只需要看一个字符串，Codex 每个条目也只有一种哈希形状。要查看每个智能体在会话开始时拿到的文本，运行 `coffer memory delivered <partition>`。
-
-**为什么是拒绝，而不是提醒。** `PreToolUse` Hook 也可以回答 `additionalContext`，那样永远不会打断智能体。但 Claude Code 会在命令**运行之后**才把 `PreToolUse` 的上下文连同结果一起交给模型，所以那里的提醒只能帮智能体补救，拦不住第一次尝试。只有 `permissionDecision: "deny"` 能做到。Codex 同样遵守这个拒绝，并给模型显示 `Command blocked by PreToolUse hook: <reason>`。命令之后才是给出错误上下文的正确时机，所以 `context` 种类放在 `PostToolUse` 上。
+两个智能体拿到的是同样的两个条目：Claude Code 写在 `settings.json`，Codex 写在 `hooks.json`。两者都以同样形状的 JSON 通过 stdin 把事件交给 Hook（`hook_event_name`、`session_id`、`cwd`、`prompt`），也都在每个事件上读回同样的 `hookSpecificOutput` JSON。所以这条 Hook 命令从 stdin 读事件，转发给守护进程，再把返回的内容打印出来。`--cwd "$PWD"` 只是输入里没有 `cwd` 的事件的兜底。所有事件共用一条命令，意味着判断是否过时只需要看一个字符串，Codex 每个条目也只有一种哈希形状。Web 界面里分区的「投递内容」标签页会显示每个智能体在会话开始时拿到的文本。
 
 路径由组合根解析，优先使用稳定的 `~/.coffer/bin/coffer`，而不是它背后的版本目录。只写 `coffer` 不够，因为 Hook 在智能体启动的任意 shell 下运行。Codex 在不加载用户 rc 文件的 `/bin/zsh` 下运行 Hook，所以那个 shell 的 `PATH` 里没有 `~/.coffer/bin`。从 Dock 启动的 Claude Code 也不继承登录 shell 的 `PATH`。
 
-开头的 `: coffer-memory;` 是一个携带标记的 shell 空操作。Coffer 靠这个标记查找、替换和删除自己的条目，从不碰同一事件上其他工具的 Hook。安装或移除都会先把 Coffer 带标记的条目从**所有**事件上清掉，所以任何其他事件上都不会遗留带标记的条目。安装始终是显式操作：Hook 是智能体 Coffer 连接的一部分（`coffer agent connect`，或智能体页面上的「连接到 Coffer」；见[智能体](/zh/guides/agents#connect-an-agent-to-coffer)）。它是幂等的，移除条目后还会顺手删掉空的事件数组和空的 `hooks` 键。智能体以不可变的 uid 命名，因为 Hook 字符串可能在 settings 文件里躺好几个月，而你期间可能给智能体改名。
+开头的 `: coffer-memory;` 是一个携带标记的 shell 空操作。Coffer 靠这个标记查找、替换和删除自己的条目，从不碰同一事件上其他工具的 Hook。安装或移除都会先把 Coffer 带标记的条目从**所有**事件上清掉，所以任何其他事件上都不会遗留带标记的条目。安装始终是显式操作：Hook 是智能体 Coffer 连接的一部分（智能体页面上的「连接到 Coffer」；见[智能体](/zh/guides/agents#connect-an-agent-to-coffer)）。它是幂等的，移除条目后还会顺手删掉空的事件数组和空的 `hooks` 键。智能体以不可变的 uid 命名，因为 Hook 字符串可能在 settings 文件里躺好几个月，而你期间可能给智能体改名。
 
 ```mermaid
 sequenceDiagram
@@ -355,41 +328,41 @@ sequenceDiagram
   participant C as coffer memory hook
   participant D as 守护进程
   A->>C: 通过 stdin 传入事件 JSON
-  alt 琐碎的提问，或没有已启用的触发器匹配该命令
+  alt 琐碎的提问
     C-->>A: 什么都不打印（不调用守护进程）
   else
-    C->>D: POST /api/v1/memory/hook（2–3 秒超时）
-    D->>D: 组装索引 / 排序笔记 / 匹配触发器
+    C->>D: 转发事件（2–3 秒超时）
+    D->>D: 组装索引 / 排序笔记
     D->>D: 会话台账，审计 memory_delivery_fired
     D-->>C: hookSpecificOutput，或什么都没有
-    C-->>A: 打印 JSON（上下文，或一次拒绝）
+    C-->>A: 打印 JSON（上下文）
   end
 ```
 
 ### 失败即放行 {#failing-open}
 
-记忆从不因为 Coffer 宕机而挡住提问或命令。以下情况 CLI 什么都不打印并以 0 退出：没有守护进程在运行；守护进程没有及时回答（会话开始时 3 秒，提问或命令时 2 秒，都在条目自身的超时之内）；或者它回了错误、或回了 CLI 读不懂的内容。
+记忆从不因为 Coffer 宕机而挡住提问。以下情况 CLI 什么都不打印并以 0 退出：没有守护进程在运行；守护进程没有及时回答（会话开始时 3 秒，提问时 2 秒，都在条目自身的超时之内）；或者它回了错误、或回了 CLI 读不懂的内容。
 
-一次不可能投递任何东西的触发根本不会联系守护进程。CLI 用和守护进程相同的判断在本地处理琐碎提问，并自己读取 `vault/memory-triggers/` 里已启用的触发器，所以一条没有任何已启用触发器匹配的 shell 命令，代价只是一次进程启动和一次目录读取，而不是一次往返。所有依赖状态的判断仍由守护进程决定：会话在哪个分区、笔记能否从那里触达、本会话是否已经拿到过它。
+一次不可能投递任何东西的触发根本不会联系守护进程。CLI 用和守护进程相同的判断在本地处理琐碎提问，所以只是顺着往下聊的对话，代价是一次进程启动，而不是一次往返。所有依赖状态的判断仍由守护进程决定：会话在哪个分区、本会话是否已经拿到过这条笔记。
 
 ### 按会话的台账 {#the-per-session-ledger}
 
-有两项承诺依赖于记住每个会话拿到过什么：为某次提问检索到的笔记，在同一会话中不会再次检索；一个触发器在每个会话中最多拦截或补充一次。守护进程把两者都记在**内存中的按会话台账**里，以智能体交给 Hook 的 `session_id` 为键（消息渠道的轮次则是 `conversation:<id>`），上限为最近的 2,048 个会话。
+有一项承诺依赖于记住每个会话拿到过什么：为某次提问检索到的笔记，在同一会话中不会再次检索。守护进程把它记在**内存中的按会话台账**里，以智能体交给 Hook 的 `session_id` 为键（消息渠道的轮次则是 `conversation:<id>`），上限为最近的 2,048 个会话。
 
-它从不以进程 id 为键。同一个 Codex app-server 的所有会话共享一个父 pid，所以以 `$PPID` 为键的守卫在 Codex Desktop 和各 IDE 宿主下只会对每个 app-server 的第一个会话触发。
+它从不以进程 id 为键。同一个 Codex app-server 的所有会话共享一个父 pid，所以以 `$PPID` 为键的台账在 Codex Desktop 和各 IDE 宿主下只会对每个 app-server 的第一个会话起作用。
 
-台账不需要自己的表也能挺过守护进程重启。每一次有投递的触发都已经是一条 `memory_delivery_fired` 审计事件，记着它的会话、笔记，以及触发器触发时的触发器。新的守护进程在回答第一个提问或命令之前，会把最近七天的触发按从旧到新读回台账。所以正在运行的会话在重启后不会再次拿到同一条笔记，触发器也不会在其中拦第二条命令。闲置超过七天的会话视为新会话。审计日志读不出来时，失败会记日志，台账从空开始；代价是多一行重复内容或多一次拒绝。
+台账不需要自己的表也能挺过守护进程重启。每一次有投递的触发都已经是一条 `memory_delivery_fired` 审计事件，记着它的会话和笔记。新的守护进程在回答第一个提问之前，会把最近七天的触发按从旧到新读回台账。所以正在运行的会话在重启后不会再次拿到同一条笔记。闲置超过七天的会话视为新会话。审计日志读不出来时，失败会记日志，台账从空开始；代价是多一行重复内容。
 
 ### 审计与投递视图 {#audit-and-the-delivery-views}
 
-每次**有投递**的触发都是一条 `memory_delivery_fired` 审计事件，资源和操作者都记为该智能体，details 给出它的 `moment`（`session_start`、`prompt`、`guard` 或 `error`）、`session_id`、它携带的笔记（形如 `<partition>/<slug>`），以及触发器触发时的触发器 id。事件从不携带笔记文本。会话开始每次触发都记录；提问、守卫或错误的触发只在投递了笔记时记录。触发器的操作也会审计：`memory_trigger_added`、`memory_trigger_proposed`、`memory_trigger_armed`、`memory_trigger_disarmed` 和 `memory_trigger_deleted`，每条都写明触发器及其笔记。
+每次**有投递**的触发都是一条 `memory_delivery_fired` 审计事件，资源和操作者都记为该智能体，details 给出它的 `moment`（`session_start` 或 `prompt`）、`session_id` 和它携带的笔记（形如 `<partition>/<slug>`）。事件从不携带笔记文本。会话开始每次触发都记录；提问的触发只在投递了笔记时记录。人对笔记的编辑会审计为 `memory_note_edited`，写明分区、笔记和用户。
 
-两个只读的**投递视图**把这些记录变成答案。两者在 REST 和 CLI（`coffer memory delivered`）上都有：
+Web 界面里有两个只读的**投递视图**，把这些记录变成答案：
 
-- **总览**（`GET /api/v1/memory/deliveries`、`coffer memory delivered`）。对每个装了投递 Hook 的智能体，统计最近七天：记忆到达它多少次、按时机的同样计数、最后一次是什么时候，以及它的会话打开过多少条**不同的笔记**。最后这个数字是从智能体工具调用中出现的文件路径读出来的：记忆根目录下指向一条笔记的路径才算，笔记、工具结果或消息里说了什么一概不读。只有提到记忆根目录的会话记录行才会被解析，每份会话记录的结果按修改时间和大小缓存。智能体的会话记录读不了时，计数报告为**不可用**，而不是零。聚合仍然不读任何会话记录；这是对文件路径的可观测性。
-- **单个分区的「投递内容」视图**（`GET /api/v1/memory/partitions/{uid}/delivered`、`coffer memory delivered <partition>`）。每个智能体在该分区所属仓库里拿到的**确切**会话开始文本，由与 Hook 相同的函数、在相同的上限下组装。读取它不会记录任何东西。
+- **总览**，在记忆页面上。对每个装了投递 Hook 的智能体，统计最近七天：记忆到达它多少次、按时机的同样计数、最后一次是什么时候，以及它的会话打开过多少条**不同的笔记**。最后这个数字是从智能体工具调用中出现的文件路径读出来的：记忆根目录下指向一条笔记的路径才算，笔记、工具结果或消息里说了什么一概不读。只有提到记忆根目录的会话记录行才会被解析，每份会话记录的结果按修改时间和大小缓存。智能体的会话记录读不了时，计数报告为**不可用**，而不是零。聚合仍然不读任何会话记录；这是对文件路径的可观测性。
+- **单个分区的「投递内容」视图**。每个智能体在该分区所属仓库里拿到的**确切**会话开始文本，由与 Hook 相同的函数、在相同的上限下组装。读取它不会记录任何东西。
 
-两个视图都不说明 Hook 是否已安装或已被信任。那是智能体 Coffer 连接的属性，在智能体页面上：它的连接状态、「钩子」标签页、`coffer agent show` 和 `coffer agent hooks`。Hook 自身的状态同样只报告是否安装，不带最后触发时间。它是否*触发*是一串事件，你在投递视图或[活动](/zh/guides/activity)页面里读。
+两个视图都不说明 Hook 是否已安装或已被信任。那是智能体 Coffer 连接的属性，在智能体页面上：它的连接状态和「钩子」标签页。Hook 自身的状态同样只报告是否安装，不带最后触发时间。它是否*触发*是一串事件，你在投递视图或[活动](/zh/guides/activity)页面里读。
 
 ### Codex 的批准 {#codex-s-approval}
 
@@ -400,18 +373,18 @@ Codex 只在用户审查过 Hook 之后才运行它，并把每次批准记在 `
 trusted_hash = "sha256:…"
 ```
 
-键由文件、事件、匹配器组的位置和处理器的位置组成。哈希覆盖条目定义的规范化形式。没有匹配哈希的条目会被静默跳过：没有错误，没有事件。有四个条目，用户就要在 `/hooks` 里批准四条记录，而 Coffer 的命令每改一次，都需要重新批准。在那之前，Codex 会跳过它没有批准记录的条目。
+键由文件、事件、匹配器组的位置和处理器的位置组成。哈希覆盖条目定义的规范化形式。没有匹配哈希的条目会被静默跳过：没有错误，没有事件。有两个条目，用户就要在 `/hooks` 里批准两条记录，而 Coffer 的命令每改一次，都需要重新批准。在那之前，Codex 会跳过它没有批准记录的条目。
 
 Coffer 按 Codex 的方式计算每个哈希，并读取这些记录。只有**每个**条目都被信任时，它的 Hook 才算被信任；否则它的信任状态取按文件顺序第一个未被信任的条目。它从不写入记录：
 
 - **这是 Codex 的审查关口。** 一个工具安装了 Hook 又自己批准它，就去掉了用户查看将要运行什么的唯一时机。
 - **过时的算法副本必须显式地失败。** 如果 Coffer 写入哈希而它的算法副本过时了，Coffer 会报告 Hook 已批准，而 Codex 却跳过它，这恰恰是本节要防止的失败。用过时算法去读，失败则是可见的：Coffer 显示“需要批准”，而 Codex 实际上在运行这个 Hook。
 
-结果就是 Coffer Hook 的**信任状态**：`trusted`、`untrusted`、`modified`（批准的是更早的命令）、`disabled`、`unknown`，或者对 Claude Code 是 `not_required`，因为它会运行 settings 里的每个 Hook。它出现在 `coffer agent hooks`、`GET /api/v1/agents/{uid}/hooks`、智能体的「钩子」标签页里，也会作为一个待处理项出现。解决办法永远一样：打开 Codex，运行 `/hooks`，信任 Coffer 的四个条目。
+结果就是 Coffer Hook 的**信任状态**：`trusted`、`untrusted`、`modified`（批准的是更早的命令）、`disabled`、`unknown`，或者对 Claude Code 是 `not_required`，因为它会运行 settings 里的每个 Hook。它出现在智能体的「钩子」标签页里，也会作为一个待处理项出现。解决办法永远一样：打开 Codex，运行 `/hooks`，信任 Coffer 的两个条目。
 
 ### 让 Hook 保持最新 {#keeping-hooks-current}
 
-检测只匹配标记，从不读参数。所以一个命令已经过时的 Hook（例如因为某个 CLI 参数改了）仍然显示为已安装，却在每次触发时失败。因此 Hook 是[调和器](/zh/architecture/reconciler)的一个目标。每一轮（启动时、每分钟一次、以及任何智能体变化后不久），调和器都会把每个已安装的 Hook 与当前运行的构建会安装的内容比较：条目所在的**事件集合**，以及每个条目的完整命令。有差异的 Hook 会被重写成当前的四个条目。某个 settings 文件读不了时，报告为 blocked，不影响其他文件。
+检测只匹配标记，从不读参数。所以一个命令已经过时的 Hook（例如因为某个 CLI 参数改了）仍然显示为已安装，却在每次触发时失败。因此 Hook 是[调和器](/zh/architecture/reconciler)的一个目标。每一轮（启动时、每分钟一次、以及任何智能体变化后不久），调和器都会把每个已安装的 Hook 与当前运行的构建会安装的内容比较：条目所在的**事件集合**，以及每个条目的完整命令。有差异的 Hook 会被重写成当前的两个条目。某个 settings 文件读不了时，报告为 blocked，不影响其他文件。
 
 对 Codex，这个目标还会比较信任状态。一个内容是最新的、但 Codex 不会运行的 Hook，差别只在信任上。这个差别在待处理列表里报告为 `hook_untrusted`（或 `hook_disabled`、`hook_trust_unknown`），附上解决办法，而且从不写入。
 
@@ -426,17 +399,17 @@ Coffer 按 Codex 的方式计算每个哈希，并读取这些记录。只有**�
 
 两个闭包什么都没找到、或者树读不了时（会记日志；记忆是轮次的附加内容，不是前提），都什么也不返回。
 
-Coffer 为这个轮次启动的智能体进程仍会加载智能体自己的设置：Agent SDK 读取用户的 `settings.json`，`codex app-server` 运行已被信任的 `hooks.json`。所以在已连接的智能体上，Coffer 的 Hook 在消息渠道轮次里同样会触发；如果没有专门的规则，它会第二次把索引和笔记交给智能体（它的台账以智能体的会话 id 为键，从没见过这个轮次的 id），并把每次提问审计两遍。因此每个时机只有一个负责方。提供方在消息渠道轮次的进程环境里设置 `COFFER_CHANNEL_TURN=1`（合并在守护进程自身的环境之上），智能体会把这个环境传给它运行的每个 Hook，`coffer memory hook` 看到这个标记时，在 `SessionStart` 或 `UserPromptSubmit` 上什么都不回答。它不联系守护进程，所以什么都不记录。守卫和错误上下文仍然走 Hook，因为轮次本身不投递这两者：已连接智能体上的消息渠道轮次，和终端会话一样会被已启用的触发器拦截。
+Coffer 为这个轮次启动的智能体进程仍会加载智能体自己的设置：Agent SDK 读取用户的 `settings.json`，`codex app-server` 运行已被信任的 `hooks.json`。所以在已连接的智能体上，Coffer 的 Hook 在消息渠道轮次里同样会触发；如果没有专门的规则，它会第二次把索引和笔记交给智能体（它的台账以智能体的会话 id 为键，从没见过这个轮次的 id），并把每次提问审计两遍。因此每个时机只有一个负责方。提供方在消息渠道轮次的进程环境里设置 `COFFER_CHANNEL_TURN=1`（合并在守护进程自身的环境之上），智能体会把这个环境传给它运行的每个 Hook，`coffer memory hook` 看到这个标记时，在 `SessionStart` 或 `UserPromptSubmit` 上什么都不回答。它不联系守护进程，所以什么都不记录。
 
 来自 Web 对话页面的轮次不带这个标记，也不会拿到这两个闭包。它通过智能体自己的 Hook 获得记忆，所以没有哪个轮次会两路都拿到记忆。
 
 ### 关于每个轮次的规则不归记忆管 {#rules-about-every-turn-are-not-memory-s-job}
 
-关于**每一次**回复的规则，比如用什么语言回答、什么语气，是检索和触发器都投递不了的。没有哪个提问会点到它，也没有哪条命令会触发它。在评测中，“用中文回复”在所有投递条件下都失败了。这类规则应该放在智能体每个轮次都会加载的指令里，即你自己维护的 `CLAUDE.md` 或 `AGENTS.md`。Coffer 从不写这些文件，理由和它从不写智能体原生记忆一样：安装或触发记忆 Hook 都会让它们保持逐字节不变。
+关于**每一次**回复的规则，比如用什么语言回答、什么语气，是检索没法在合适的时机投递的。没有哪个提问会点到它。在评测中，“用中文回复”在所有投递条件下都失败了。这类规则应该放在智能体每个轮次都会加载的指令里，即你自己维护的 `CLAUDE.md` 或 `AGENTS.md`。Coffer 从不写这些文件，理由和它从不写智能体原生记忆一样：安装或触发记忆 Hook 都会让它们保持逐字节不变。
 
 ## 在其他分区里找笔记 {#finding-a-note-in-another-partition}
 
-记忆层没有 MCP 工具。笔记是 Markdown 文件，每个分区的 `notes/` 都在同一个**记忆根目录**下（`~/.coffer/derived/memory/`，由 `coffer path memory` 打印），所以用智能体自己的文件工具搜一次就能覆盖所有分区。投递的内容里写明了这个根目录，网关的 `initialize` 文本里也有。当前仓库的索引已经在会话上下文里；根目录是给会话*没有*在其中打开的分区里的笔记用的。
+记忆层没有 MCP 工具。笔记是 Markdown 文件，每个分区的 `notes/` 都在同一个**记忆根目录**下（`~/.coffer/derived/memory/`），所以用智能体自己的文件工具搜一次就能覆盖所有分区。会话开始时的内容里写明了这个根目录，`coffer-guide` 技能也把它和知识的根目录写在一起。当前仓库的索引已经在会话上下文里；根目录是给会话*没有*在其中打开的分区里的笔记用的。
 
 对文件的搜索永远不会把原始条目或已退役的笔记当成笔记：原始条目在 `.raw/` 下，已退役的笔记离开 `notes/` 进了 `RETIRED.md`。也没有 `remember` 工具。智能体照常记录，Coffer 在下一轮读取。
 
@@ -449,16 +422,15 @@ Coffer 为这个轮次启动的智能体进程仍会加载智能体自己的设�
 | 聚合 | 启动时立即运行 | 1 小时 | `system:memory-aggregate-worker` |
 | 提炼 | 60 秒后 | 6 小时 | `system:memory-distil-worker` |
 
-两者默认开启。它们读智能体的文件，只写派生树，所以无人值守地运行没有风险。每一轮都会**逐轮**从内部引擎配置（`aggregate`、`distil`）读取自己的开关和间隔，所以在设置里的修改无需重启就生效。失败的一轮会记日志，从不终止循环。关闭时，待执行的一轮会被丢弃，因为下次启动会再全部扫一遍。你也可以一次手动运行两者：`coffer memory sync`、`POST /api/v1/memory/sync` 或 Web 界面的「更新记忆」按钮会先聚合，再提炼所有还有未提炼原始条目的分区。提炼已在运行的分区报告为 `skipped`，而不会让调用失败。回答中包含聚合写了什么，以及 `distilled` 和 `skipped` 的分区。
+两者默认开启。它们读智能体的文件，只写派生树，所以无人值守地运行没有风险。每一轮都会**逐轮**从内部引擎配置（`aggregate`、`distil`）读取自己的开关和间隔，所以在设置里的修改无需重启就生效。失败的一轮会记日志，从不终止循环。关闭时，待执行的一轮会被丢弃，因为下次启动会再全部扫一遍。你也可以一次手动运行两者：Web 界面的「更新记忆」按钮会先聚合，再提炼所有还有未提炼原始条目的分区。提炼已在运行的分区报告为 `skipped`，而不会让调用失败。回答中包含聚合写了什么，以及 `distilled` 和 `skipped` 的分区。
 
 ## 权衡与备选方案 {#trade-offs-and-alternatives}
 
 - **把 Coffer 自有的存储投射进每个智能体的记忆。** 这能免费获得自动加载，但代价是写入、软链接或禁用别的工具的记忆。这很侵入、难以理解，而且厂商一改就容易坏。聚合让每个智能体的循环保持原样，代价是一个 Hook。
 - **把来源的原话直接当作产品。** 这样引用能保持精确，但 Codex 没有标题的列表项会变成标题、描述和正文都是同一句话的笔记。Coffer 把原文保存在 `.raw/`，由出处指向它，笔记则用自己的话写。
 - **有预算的摘要加一个搜索工具。** 智能体不会去调用工具查找它没被展示过的东西：Coffer 早先的 recall 工具在整个生命周期里只被调用过五次。两个受支持的宿主都会加载索引、把正文当文件读。Coffer 照搬这个形状，并写明记忆根目录，让其他分区的笔记只需一次搜索。
-- **会话开始时给完整、不截断的索引。** 在回放中它覆盖的需求最多，但 30–45 KB 过不了任何一个智能体的 Hook 输出，而且即使完整投递，上下文里一半的规则也被忽略了。所以才有了有界索引加检索和守卫。
-- **在 `PreToolUse` 上给提醒而不是拒绝。** Claude Code 在命令运行之后才交付那份上下文，所以它只能帮助补救。它以 `PostToolUse` 上的 `context` 触发器的形式保留下来，在那里“之后”正是合适的时机。
-- **用 embedding 排序，或从笔记文本派生触发器。** embedding 为一个 2.2 GB 的模型换来三个点的召回；派生触发器要么太吵，要么漏掉陷阱。在评测集证明某个替代方案值回成本之前，排序器保持字面匹配，触发器保持人写。
+- **会话开始时给完整、不截断的索引。** 在回放中它覆盖的需求最多，但 30–45 KB 过不了任何一个智能体的 Hook 输出，而且即使完整投递，上下文里一半的规则也被忽略了。所以才有了有界索引加检索。
+- **用 embedding 排序。** embedding 为一个 2.2 GB 的模型换来三个点的召回。在评测集证明某个替代方案值回成本之前，排序器保持字面匹配。
 - **跨智能体的字面去重。** 两个智能体从不用同样的话描述同一个教训，所以字面比较什么都合并不了。合并是对含义的判断，由提炼模型来做。
 - **按工作目录划分分区。** 这会把一个仓库拆散到它的各个 worktree，目录消失时留下孤立分区，还会把临时文件夹变成永久分区。按仓库划分就避免了这三点。
 - **第三个读取器抽象。** 两个读取器就写成两个读取器。第三个智能体按现有的读取器和投递适配器约定写一个适配器，而不是搞一张能力矩阵。
@@ -467,14 +439,14 @@ Coffer 为这个轮次启动的智能体进程仍会加载智能体自己的设�
 
 | 关注点 | 位置 |
 | --- | --- |
-| 仓库身份、笔记、触发器、排序器、Hook 条目和投递措辞 | 领域层的 `memory` 包 |
+| 仓库身份、笔记、排序器、Hook 条目和投递措辞 | 领域层的 `memory` 包 |
 | 聚合、安放、提炼、索引、上下文组装、投递、会话台账、投递视图和投递 Hook 的调和目标 | 应用层的 `memory` 包 |
-| 原生记忆读取器、各智能体的 Hook 适配器，以及记忆根目录和 `vault/memory-triggers/` 下的文件 | 基础设施层的 `memory` 包 |
-| Worker、装配、消息渠道轮次的回调和 REST 路由 | HTTP 接口层 |
-| `coffer memory`（含 `hook`、`trigger`、`delivered`） | CLI 接口层 |
+| 原生记忆读取器、各智能体的 Hook 适配器，以及记忆根目录下的文件 | 基础设施层的 `memory` 包 |
+| Worker、装配、消息渠道轮次的回调、Web 界面自己的路由和 Hook 路由 | HTTP 接口层 |
+| 内部的 `coffer memory hook` 入口 | CLI 接口层 |
 
 ## 相关链接 {#related}
 
 - 规格：[memory](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md)、[internal-engine](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md)
-- 决策记录：[聚合智能体的记忆，从不写入](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md)、[记忆在三个时机到达会话](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)（Proposed）
+- 决策记录：[聚合智能体的记忆，从不写入](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md)、[记忆在两个时机到达会话](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)
 - [记忆指南](/zh/guides/memory) · [知识架构](/zh/architecture/knowledge) · [保险库同步](/zh/architecture/vault-sync) · [MCP 网关](/zh/architecture/mcp-gateway) · [对话与轮次](/zh/architecture/chat)

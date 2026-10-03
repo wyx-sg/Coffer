@@ -104,7 +104,6 @@ from coffer.application.memory.distil_sources import (
 from coffer.application.memory.index import render_index
 from coffer.domain.memory.note import Note
 from coffer.domain.memory.retired import RetiredNote
-from coffer.domain.memory.trigger import KIND_BLOCK, TriggerProposal
 from coffer.infrastructure.memory import store
 from coffer.infrastructure.memory.raw_store import StoredRawEntry
 
@@ -135,9 +134,6 @@ class DistilResult:
     #: mechanical path ran (see "Distil mechanically with no internal connection") — not
     #: that a model was asked and declined.
     model_used: bool
-    #: Triggers the writing stage proposed, unarmed (spec memory "Keep triggers
-    #: in the vault, armed only by a person").
-    proposals: tuple[TriggerProposal, ...] = ()
 
 
 def _write_index(partition: str, repository_path: str) -> None:
@@ -316,10 +312,6 @@ async def distil_partition(
         retired=counts.retired + sourceless,
         dropped=counts.dropped,
         model_used=True,
-        proposals=tuple(
-            TriggerProposal(slug=slug, kind=KIND_BLOCK, command=command, unless=unless)
-            for slug, command, unless in counts.proposals
-        ),
     )
 
 

@@ -29,3 +29,26 @@ class UnreadableMemory(CofferError):  # noqa: N818
         super().__init__(f"cannot read memory at {path!r}: {reason}")
         self.path = path
         self.reason = reason
+
+
+class NoteConflict(CofferError):  # noqa: N818
+    """A note changed after the editor read it.
+
+    Spec memory "Edit a memory in the web UI or on disk". The save is refused
+    and the file left as it is: a distil pass or a person's own editor wrote it
+    in between, and overwriting that silently would lose their change. The
+    refusal carries the note as it is now, so the editor can recover without a
+    second save over it.
+    """
+
+    code = "MEMORY_NOTE_CONFLICT"
+
+    def __init__(self, slug: str, *, current_body: str, current_fingerprint: str) -> None:
+        super().__init__(f"note {slug!r} changed since it was opened; your text was not saved")
+        self.slug = slug
+        self.error_details: dict[str, object] = {
+            "slug": slug,
+            "saved": False,
+            "current_body": current_body,
+            "current_fingerprint": current_fingerprint,
+        }

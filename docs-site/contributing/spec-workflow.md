@@ -51,7 +51,7 @@ A capability is named and never numbered. Its id is its path under `openspec/spe
 | [`mcp-gateway`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md) | Upstream MCP servers aggregated behind one endpoint |
 | [`memory`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md) | Aggregating each agent's native memory into Coffer's own notes |
 | [`provider-switching`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/provider-switching/spec.md) | Model provider connections projected into each agent's config |
-| [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) | The kind-agnostic resource model, scope, audit log, retention, REST/CLI parity |
+| [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) | The kind-agnostic resource model, scope, audit log, retention, the minimal-CLI rule |
 | [`skill-manager`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/skill-manager/spec.md) | The master skill store and delivery to agents |
 | [`vault-storage`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-storage/spec.md) | The five storage classes under `~/.coffer/`, the vault as a git repository written through one validated commit, and the one-time upgrade |
 | [`vault-sync`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md) | Converging the vault with a git remote the user owns |
@@ -200,9 +200,9 @@ The pytest marker is registered with `--strict-markers`, so a typo in the marker
 
 ## The end-to-end deliverable rule
 
-A capability ships only when a user can really operate it. That means backend persistence plus every surface that exposes it (CLI, MCP through `coffer-mcp-shim`, REST and, where it has one, the web UI), all wired together, with every scenario covered by a passing test. A backend with no surface, or a page with no backend, is not done.
+A capability ships only when a user can really operate it. That means backend persistence plus every surface that exposes it (REST, the web UI, MCP through `coffer-mcp-shim` and, where one is needed, a CLI command), all wired together, with every scenario covered by a passing test. A backend with no surface, or a page with no backend, is not done.
 
-One rule applies across every spec: **every mutation, and every read of state that is not a plain file, is reachable from both REST and the `coffer` CLI**, with the same daemon and the same error model. For a plain file the owning spec declares directly readable or editable — a knowledge document, a memory note, a skill's folder, an agent's own config file, the daemon log — the CLI satisfies the rule by naming the file with `coffer path`; the REST routes that serve such files stay for the web UI, which cannot read the disk. The [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) spec tests it across the whole command tree. A spec that cannot honour the rule records the gap in its `## Purpose`.
+One rule applies across every spec: **the CLI carries only what needs it.** A command exists for one of four reasons: a program Coffer installs or writes runs it, it must work when the daemon is down, a prompt Coffer hands an agent tells it to run it, or the web UI cannot do it. Every other operation is REST plus a page of the web UI, and a plain file that the owning spec declares directly readable or editable (a knowledge document, a memory note, a skill's folder, an agent's own config file, the daemon log) is read and edited with ordinary tools. The [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) spec tests that the command tree equals the reviewed list of commands and their reasons.
 
 ## Docs change with the code
 

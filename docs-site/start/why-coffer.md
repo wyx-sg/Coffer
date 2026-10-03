@@ -39,7 +39,7 @@ This page explains the decisions that shape Coffer, for readers deciding whether
 
 **What it means for you.**
 
-- Register a server once with `coffer mcp add`. Every agent with Coffer installed gets its tools in its next session.
+- Register a server once on the **MCP servers** page. Every agent with Coffer installed gets its tools in its next session.
 - Once the catalogue grows past a budget (50 upstream tools by default), `tools/list` shows only the most-used tools. The built-in `coffer__search_tools` tool searches the full catalogue, and every tool can still be called.
 - Each agent session gets its own upstream subprocesses, so two agents working at the same time do not interfere with each other.
 
@@ -54,8 +54,8 @@ See [MCP gateway](/architecture/mcp-gateway) for how sessions, namespacing and t
 **What it means for you.**
 
 - Your knowledge is plain Markdown you can open, grep, version and edit in any tool.
-- Agents add material through `coffer__write`. A curation pass, run by Coffer's own model if you set one up, folds new material into the existing documents.
-- Memory works the other way round. Coffer's distilled memory is pushed, through a hook that you install explicitly for each agent: the index at session start, the notes a prompt names, and a note you tied to a command just before it runs. The [memory guide](/guides/memory) explains how.
+- Agents add knowledge by writing a Markdown file into a collection's `.inbox/` folder, and change a document by editing it. A curation pass, run by Coffer's own model if you set one up, fills in missing frontmatter and folds new material into the existing documents. When two statements disagree, the newer one wins unless the older is shown to be right.
+- Memory works the other way round. Coffer's distilled memory is pushed, through a hook that you install explicitly for each agent: the index at session start and the notes a prompt names. The [memory guide](/guides/memory) explains how.
 
 ## Secrets are encrypted with a key you hold
 
@@ -73,7 +73,7 @@ See [Security model](/architecture/security) for the full threat model.
 
 ## Sync goes through a git remote you own
 
-**The decision.** To share one vault between your machines, point each of them at a git repository you own. Sync is off until you set it up. The vault is already a git repository, so a background worker only fetches, lets git merge, and pushes. A clean merge is applied; any conflict stops the round, with nothing changed on either side, until you choose per file. A round that would delete more than a set share of the vault stops and asks you first, and every round can be rolled back. Secrets travel only as ciphertext. The master key moves between machines only when you run the out-of-band transfer (`coffer sync key`) yourself.
+**The decision.** To share one vault between your machines, point each of them at a git repository you own. Sync is off until you set it up. The vault is already a git repository, so a background worker only fetches, lets git merge, and pushes. A clean merge is applied; any conflict stops the round, with nothing changed on either side, until you choose per file. A round that would delete more than a set share of the vault stops and asks you first, and every round can be rolled back. Secrets travel only as ciphertext. The master key moves between machines only when you carry the key yourself: the desktop app writes a backup, and **Settings › Security › Import a master key** installs it.
 
 **Why.** A service run by Coffer would break the local-first rule. A git remote under your control is a meeting point, not a system of record: every machine keeps the complete vault, so you can delete the remote and rebuild it from any single machine.
 
@@ -81,7 +81,7 @@ See [Security model](/architecture/security) for the full threat model.
 
 - You choose the host (GitHub, GitLab, your own server) and can read every commit Coffer makes.
 - Some settings stay on each machine. A resource's *reach* (whether it is enabled here, and which agents may use it) does not sync, so each machine decides for itself.
-- A new machine joins with `coffer sync join`. It shows what joining would do, deletes nothing, and asks you before applying it.
+- A new machine joins from the **Sync** page. It shows what joining would do, deletes nothing, and asks you before applying it.
 
 See [Vault sync](/architecture/vault-sync) for the round in detail.
 

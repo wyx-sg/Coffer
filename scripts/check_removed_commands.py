@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Fail when a doc, a spec, a shipped skill, the web UI, the desktop shell or an e2e spec quotes a removed command.
+"""Fail when a doc, spec, shipped skill, web UI, desktop shell or e2e spec quotes a removed command.
 
-The OpenSpec change reshape-cli-and-mcp-surface rebuilt the `coffer` command
-line around one grammar and removed two built-in MCP tools, with no
-compatibility aliases (its design.md "Command mapping" lists every old
-spelling and its replacement). Anything that still quotes an old spelling tells
+The OpenSpec change trim-the-cli-to-what-needs-it cut the `coffer` command line
+to what the web UI cannot do (its design.md §1 lists what stays), with no
+compatibility aliases; each removed spelling is listed below with where the
+operation lives now. Anything that still quotes an old spelling tells
 a reader or an agent to run a command that no longer exists, and the failure
 only shows when someone follows it. The readers that matter are the docs site,
 the repository's own guides (README in both languages, AGENTS, CONTRIBUTING,
@@ -73,154 +73,119 @@ _SKIP_FILES = {"package-lock.json"}
 #: (removed phrase, what replaces it). A phrase is words separated by spaces;
 #: it matches with any run of whitespace between the words and must not be
 #: followed by a word character or a dash.
+#:
+#: The command line keeps only what needs it (OpenSpec change
+#: trim-the-cli-to-what-needs-it, design §1): `memory hook`, `proxy token`,
+#: `daemon start|stop|restart|status`, `migrate`, `path logs`, `config
+#: list|get|set|unset`, `run`, `secret list|set`, `log audit|mcp|daemon`, `mcp
+#: test` and `vault problems`. Everything else is removed, with no aliases;
+#: each spelling names the web UI page that does the job now.
+_AGENTS = "the Agents page"
+_CHANNELS = "the Channels page"
+_SKILLS = "the Skills page"
+_KNOWLEDGE = "edit the files in the knowledge folder directly (or the Knowledge page)"
+_MEMORY = "read the memory notes as files (or the Memory page)"
+_MCP = "the MCP servers page"
+_MODELS = "the Models page"
+_SYNC = "the Sync page"
+_SECRETS = "the Secrets page"
+_SETTINGS = "Settings"
 REMOVED: tuple[tuple[str, str], ...] = (
-    ("coffer resource", "coffer <kind> list|show|edit|rm|enable|disable"),
-    ("coffer scope", "coffer <kind> scope <name> --agents|--all|--none"),
+    # Whole groups.
+    ("coffer agent", _AGENTS),
+    ("coffer channel", _CHANNELS),
+    ("coffer skill", _SKILLS),
+    ("coffer knowledge", _KNOWLEDGE),
+    ("coffer provider", _MODELS),
+    ("coffer tool", "the Custom tools page"),
+    ("coffer cli", "the Commands page"),
+    ("coffer usage", "the Usage tab"),
+    ("coffer sync", _SYNC),
+    (
+        "coffer drift",
+        "nothing: the reconciler repairs drift; what needs a person is on the attention list",
+    ),
+    ("coffer attention", "the attention list on the Overview page"),
+    ("coffer open", "open the Coffer app"),
+    (
+        "coffer scan",
+        "the Agents page (detected agents) and the Skills / MCP servers pages (unmanaged items)",
+    ),
+    ("coffer adopt", "the Skills / MCP servers pages"),
+    ("coffer discard", "the Skills / MCP servers pages"),
+    # Subcommands of groups that keep a few.
+    ("coffer memory list", _MEMORY),
+    ("coffer memory show", _MEMORY),
+    ("coffer memory edit", _MEMORY),
+    ("coffer memory rm", _MEMORY),
+    ("coffer memory sync", "Update memory on the Memory page"),
+    ("coffer memory delivered", "the Memory page"),
+    ("coffer memory context", "the Memory page"),
+    ("coffer memory delivery", "the Agents page (Connect)"),
+    ("coffer memory distil", "Update memory on the Memory page"),
+    ("coffer memory partitions", _MEMORY),
+    ("coffer memory notes", _MEMORY),
+    ("coffer proxy rotate", "the Agents page"),
+    ("coffer proxy status", _MODELS),
+    ("coffer daemon service", f"{_SETTINGS} > General (start at login)"),
+    ("coffer daemon rotate-token", f"{_SETTINGS}"),
+    ("coffer log prune", f"{_SETTINGS} (log retention)"),
+    ("coffer mcp add", _MCP),
+    ("coffer mcp edit", _MCP),
+    ("coffer mcp rm", _MCP),
+    ("coffer mcp list", _MCP),
+    ("coffer mcp show", _MCP),
+    ("coffer mcp enable", _MCP),
+    ("coffer mcp disable", _MCP),
+    ("coffer mcp scope", _MCP),
+    ("coffer mcp handoff", _MCP),
+    ("coffer mcp cap", _MCP),
+    ("coffer secret get", _SECRETS),
+    ("coffer secret rm", _SECRETS),
+    ("coffer secret approvals", "approve in the Coffer app"),
+    ("coffer secret reject", "reject in the Coffer app"),
+    ("coffer secret scan", _SECRETS),
+    ("coffer secret import", _SECRETS),
+    ("coffer vault history", "the file history in the web UI"),
+    ("coffer vault diff", "the file history in the web UI"),
+    ("coffer vault show", "the file history in the web UI"),
+    ("coffer vault restore", "the file history in the web UI"),
+    ("coffer path knowledge", "the knowledge folder named in the prompt"),
+    ("coffer path memory", "the memory folder named in the prompt"),
+    ("coffer path skill", "the skill master folder named in the prompt"),
+    ("coffer path agent", "the Agents page"),
+    ("coffer path vault", "the vault folder named in the prompt"),
+    # Earlier removals, still gone.
+    ("coffer resource", _MCP),
+    ("coffer scope", "the Reach control on the resource's page"),
     ("coffer audit", "coffer log audit"),
-    ("coffer retention", "coffer config list|set retention.<table>, coffer log prune"),
-    ("coffer engine", "coffer config engine.* / transcribe.*, coffer daemon status"),
+    ("coffer retention", f"{_SETTINGS} (log retention)"),
+    ("coffer engine", f"{_SETTINGS} > Coffer's model"),
     ("coffer daemon port", "coffer config get|set|unset daemon.port"),
-    ("coffer daemon features", "coffer config list feature. / set feature.<key> on|off"),
-    ("coffer provider internal-default", "coffer config set engine.provider <name>"),
-    ("coffer provider transcribe-default", "coffer config set transcribe.provider <name>"),
-    ("coffer provider use-builtin", "coffer provider builtin"),
-    (
-        "coffer provider key",
-        "coffer proxy token --agent-uid <uid> (a local proxy token, never a provider key)",
-    ),
-    ("coffer mcp remove", "coffer mcp rm"),
-    ("coffer mcp refresh", "coffer mcp test"),
-    ("coffer mcp invocations", "coffer log mcp [--server <name>]"),
-    ("coffer mcp tool", "coffer mcp cap list|enable|disable <server> tool:<name>"),
-    ("coffer mcp resource", "coffer mcp cap list|enable|disable <server> resource:<uri>"),
-    ("coffer mcp prompt", "coffer mcp cap list|enable|disable <server> prompt:<name>"),
-    # Renamed by the OpenSpec change rename-credentials-capability-to-secret,
-    # with no alias; its old `delete` and `storage` subcommands are covered too.
-    ("coffer credentials", "coffer secret"),
-    ("coffer agent detect", "coffer scan"),
-    ("coffer agent native-memory", "coffer path agent <name> memory"),
-    ("coffer agent native-memory-files", "coffer path agent <name> memory"),
-    ("coffer agent transcripts", "coffer agent transcript <name> [<id>]"),
-    ("coffer agent config ls", "coffer path agent <name> config"),
-    ("coffer agent config cat", "coffer path agent <name> config"),
-    ("coffer agent config files", "coffer path agent <name> config"),
-    ("coffer agent config write", "coffer agent config edit <name> <key> --from-file"),
-    ("coffer agent mcp", "coffer agent connect|disconnect, coffer scan, coffer adopt|discard mcp"),
-    ("coffer agent plugin uninstall", "coffer agent plugin rm"),
-    ("coffer channel register", "coffer channel add"),
-    ("coffer channel status", "coffer channel show"),
-    ("coffer channel set", "coffer channel edit"),
-    ("coffer skill import", "coffer skill add <folder>"),
-    ("coffer skill files", "coffer path skill <name>"),
-    ("coffer skill cat", "coffer path skill <name>, then read the file"),
-    ("coffer skill write", "coffer path skill <name>, then edit the file"),
-    ("coffer skill unmanaged", "coffer scan"),
-    ("coffer skill adopt", "coffer adopt skill <path>"),
-    ("coffer skill rm-unmanaged", "coffer discard skill <path>"),
-    ("coffer knowledge collections", "coffer knowledge list"),
-    ("coffer knowledge create", "coffer knowledge add"),
-    ("coffer knowledge ls", "coffer path knowledge [<collection>]"),
-    ("coffer knowledge read", "coffer path knowledge [<collection>], then read the file"),
-    ("coffer knowledge delete", "delete the file under coffer path knowledge"),
-    ("coffer memory partitions", "coffer memory list"),
-    ("coffer memory notes", "coffer path memory [<partition>]"),
-    ("coffer memory note", "coffer path memory [<partition>]"),
-    ("coffer memory retired", "coffer path memory [<partition>]"),
-    ("coffer memory ls", "coffer path memory [<partition>]"),
-    ("coffer memory read", "coffer path memory [<partition>], then read the file"),
-    ("coffer memory delivery-install", "coffer agent connect <agent>"),
-    ("coffer memory delivery-remove", "coffer agent disconnect <agent>"),
-    # The delivery hook is a part of the agent's Coffer connection (spec
-    # agent-registry "Connect an agent to Coffer in one action").
-    (
-        "coffer memory delivery",
-        "coffer agent connect|disconnect <agent>, coffer agent show <agent>",
-    ),
-    # Trimmed by the OpenSpec change trim-redundant-cli-commands: each repeated
-    # another command or guarded nothing.
-    ("coffer adopt agent", "coffer agent add <type>"),
-    (
-        "coffer discard agent",
-        "coffer agent add <type> to register it; Coffer never removes a detected agent",
-    ),
-    ("coffer agent connection", "coffer agent show <name> (field coffer_connection)"),
-    ("coffer knowledge save", "edit the file under coffer path knowledge <collection>"),
-    ("coffer memory distil", "coffer memory sync"),
-    # Removed by the OpenSpec change file-the-vault-and-sync-it-thinly: a round
-    # stops on any conflict and the person answers it; there is no working tree
-    # to rebuild and no remote history to restore a date from.
-    ("coffer sync adopt", "coffer sync join"),
-    ("coffer sync confirm", "coffer sync hold --confirm"),
-    ("coffer sync reject", "coffer sync hold --restore"),
-    ("coffer sync rebuild", "coffer sync remote clear, then coffer sync join"),
-    ("coffer sync restore", "coffer sync rollback <round>"),
-    ("coffer sync remote show", "coffer sync status"),
-    ("coffer sync machine remove", "coffer sync machine rm"),
-    # Removed by the OpenSpec change add-secret-boundary: no command hands out
-    # the master key (spec secret "Return no plaintext on any route,
-    # command or tool").
-    ("coffer sync key export", "export a key backup in the Coffer desktop app"),
-    # Removed by the OpenSpec change one-agent-per-type-and-no-titles: a skill
-    # has a fixed name and no title, and its description is SKILL.md's.
-    ("coffer skill edit", "edit SKILL.md under coffer path skill <name>"),
-    # Removed by the OpenSpec change hand-cli-installs-to-an-agent: Coffer runs
-    # no installer; the person's agent installs the command from a prompt.
-    ("coffer cli install", "coffer cli prompt <command>, then give the prompt to your agent"),
-    # Removed for 1.0 with its `--hook-event` and `--ceiling-tokens` options:
-    # only hooks older builds installed ran it; every installed hook entry now
-    # runs `coffer memory hook`.
-    (
-        "coffer memory context",
-        "coffer memory delivered <partition> (the session-start text each agent is given)",
-    ),
-    ("coffer__recall", "grep the memory root (coffer path memory)"),
+    ("coffer daemon features", f"{_SETTINGS} > General (Experimental features)"),
+    ("coffer credentials", "coffer secret list|set"),
+    ("coffer__recall", "grep the memory root"),
     ("coffer__diagnose", "coffer log audit|mcp|daemon, coffer path logs"),
+    # Removed by the OpenSpec change make-knowledge-and-memory-files-only: an
+    # agent adds knowledge with its own file tools.
+    ("coffer__write", "write a file into <collection>/.inbox/"),
 )
 
 #: (command phrase, removed option, what replaces it). Matches the phrase with
-#: the option later on the same line.
-REMOVED_OPTIONS: tuple[tuple[str, str, str], ...] = (
-    # One agent per type (change one-agent-per-type-and-no-titles): the type
-    # is the name.
-    ("coffer agent add", "--name", "coffer agent add <type> [--config-dir <dir>]"),
-    # No command prints a stored secret (spec secret "Return no plaintext
-    # on any route, command or tool").
-    ("coffer secret get", "--show", "coffer secret get <ref> (metadata only)"),
-    # Renamed with the `coffer secret` group (change
-    # rename-credentials-capability-to-secret): the flags say "secret".
-    ("coffer mcp add", "--credential", "coffer mcp add … --secret ENV_OR_HEADER=<ref>"),
-    ("coffer mcp edit", "--credential", "coffer mcp edit … --secret ENV_OR_HEADER=<ref>"),
-    ("coffer mcp edit", "--clear-credentials", "coffer mcp edit … --clear-secrets"),
-    ("coffer provider add", "--credential-ref", "coffer provider add … --secret-ref <ref>"),
-    ("coffer sync remote set", "--credential-ref", "coffer sync remote set … --secret-ref <ref>"),
-    # Sync has no working tree of its own, and its flag names the one kind of
-    # thing it may carry (change file-the-vault-and-sync-it-thinly).
-    ("coffer sync remote set", "--worktree", "coffer sync remote set <url> (no working tree)"),
-    ("coffer sync remote set", "--with-credentials", "coffer sync remote set … --with-secret"),
-    (
-        "coffer sync remote set",
-        "--without-credentials",
-        "coffer sync remote set … --without-secret",
-    ),
-    ("coffer sync remote set", "--with-secrets", "coffer sync remote set … --with-secret"),
-    ("coffer sync remote set", "--without-secrets", "coffer sync remote set … --without-secret"),
-)
+#: the option later on the same line. None are left: every command that had a
+#: removed option is itself removed above.
+REMOVED_OPTIONS: tuple[tuple[str, str, str], ...] = ()
 
 #: (file, phrase, why this line may name it). The phrase is the removed phrase
 #: as it appears in REMOVED, or "<command> <option>" for REMOVED_OPTIONS.
 _ABSENT = "a requirement or scenario asserting the removed spelling does not exist"
 ALLOWED: tuple[tuple[str, str, str], ...] = (
-    ("openspec/specs/secret/spec.md", "coffer secret get --show", _ABSENT),
-    ("openspec/specs/secret/spec.md", "coffer sync key export", _ABSENT),
-    ("openspec/specs/internal-engine/spec.md", "coffer engine", _ABSENT),
-    ("openspec/specs/resource-framework/spec.md", "coffer discard agent", _ABSENT),
     ("openspec/specs/knowledge/spec.md", "coffer__recall", _ABSENT),
+    ("openspec/specs/knowledge/spec.md", "coffer__write", _ABSENT),
     ("openspec/specs/knowledge/spec.md", "coffer__diagnose", _ABSENT),
     ("openspec/specs/mcp-gateway/spec.md", "coffer__recall", _ABSENT),
     ("openspec/specs/mcp-gateway/spec.md", "coffer__diagnose", _ABSENT),
     ("openspec/specs/memory/spec.md", "coffer__recall", _ABSENT),
-    ("docs-site/architecture/security.md", "coffer secret get --show", _ABSENT),
-    ("docs-site/zh/architecture/security.md", "coffer secret get --show", _ABSENT),
 )
 
 
@@ -297,7 +262,7 @@ def main() -> int:
     if hits:
         print(
             f"check_removed_commands: {len(hits)} quote(s) of removed commands; "
-            "see openspec design 'Command mapping' (reshape-cli-and-mcp-surface)",
+            "see openspec change trim-the-cli-to-what-needs-it design §1",
             file=sys.stderr,
         )
         return 1

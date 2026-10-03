@@ -21,10 +21,10 @@ https://wyx-sg.github.io/Coffer/start/install — pick the install path that fit
 this machine (a release build if one is published for this OS and architecture,
 otherwise from source). Ask me before running anything with sudo or editing my
 shell profile. When it is installed, check it with `coffer daemon status`.
-Then, for each coding agent installed here (claude-code, codex), run
-`coffer agent add <type>` and `coffer agent connect <type>`, telling me which
-config files connect will change before you run it. Do not handle any
-credentials: if a step needs a login, tell me what to do instead.
+Then tell me which coding agents it found here (claude-code, codex) and which
+config files each one's Connect button on the web UI's Agents page will change,
+so I can connect them myself. Do not handle any credentials: if a step needs a
+login, tell me what to do instead.
 ```
 
 The agent reads this page, chooses the path that fits your machine and checks the result, asking before it touches anything outside Coffer's own directory. Coffer never asks an agent to handle a credential, so any login stays with you. The rest of this page is what the agent follows, and what you follow to install by hand.
@@ -40,7 +40,7 @@ The agent reads this page, chooses the path that fits your machine and checks th
 
 Prebuilt binaries target **macOS on Apple silicon (arm64)** only. Intel Macs, Linux and Windows have no release build. On those machines, install from source (Python 3.12 or later).
 
-Every path installs the whole of Coffer. The daemon serves the web UI itself, so a CLI install also gives you the UI (`coffer open`), and the desktop app also gives you the CLI.
+Every path installs the whole of Coffer. The daemon serves the web UI itself, so a CLI install also gives you the UI (at `http://127.0.0.1:8000/`), and the desktop app also gives you the CLI.
 
 ## Desktop app
 
@@ -87,14 +87,7 @@ The script:
 3. Installs `coffer`, `coffer-daemon` and `coffer-mcp-shim` into the install directory. Each binary is copied to a temporary name beside it, marked executable and renamed over the public name, so when that name is a symlink into a versioned directory (as it is once a daemon started from elsewhere, such as the desktop app, has deployed its build there), the link is replaced and the previous version's binaries stay intact for a rollback.
 4. If that directory is not already on your `PATH`, appends a line to your shell profile. The profile depends on your shell: `~/.zshrc` for zsh (or `$ZDOTDIR/.zshrc`), `~/.bash_profile` for bash on macOS, `~/.config/fish/config.fish` for fish (as `fish_add_path`), and `~/.profile` for anything else. Running the script again does not add the line twice.
 
-Open a new shell, or `source` the profile the script names, so that `coffer` is on your `PATH`. The script ends by suggesting the two commands that connect Claude Code:
-
-```sh
-coffer agent add claude-code
-coffer agent connect claude-code
-```
-
-See the [Quickstart](/start/quickstart) for what they do.
+Open a new shell, or `source` the profile the script names, so that `coffer` is on your `PATH`. The script ends by pointing you to the web UI's **Agents** page, where **Connect** connects Claude Code. See the [Quickstart](/start/quickstart).
 
 ### Installer options
 
@@ -139,7 +132,7 @@ pip install -e ./backend
 
 `pip install` puts two console scripts on the venv's `PATH`: `coffer` and `coffer-mcp-shim`. A source install has no separate `coffer-daemon` binary. The CLI and the shim start the daemon from the same Python environment.
 
-Build the web UI once so the daemon has something to serve. Without it, the API and the MCP endpoint still work, but `coffer open` has no page to open.
+Build the web UI once so the daemon has something to serve. Without it, the API and the MCP endpoint still work, but the daemon has no page to serve.
 
 ```sh
 cd frontend && npm install && npm run build && cd ..
@@ -162,7 +155,7 @@ cd frontend && npm install && npm run build && cd ..
 | --- | --- |
 | `~/.coffer/bin/coffer`, `coffer-daemon`, `coffer-mcp-shim` | The public names. For a release build these are symlinks into a versioned directory. |
 | `~/.coffer/bin/<version>/` | One directory per deployed build. The current and previous versions are kept, so you can roll back by pointing the links at the older directory. |
-| `~/.coffer/vault/` | The vault: a git repository of resource files, skills, knowledge, memory triggers and encrypted secrets. |
+| `~/.coffer/vault/` | The vault: a git repository of resource files, skills, knowledge and encrypted secrets. |
 | `~/.coffer/local/` | Settings true of this machine only: agents, reach, retention, the sync remote. |
 | `~/.coffer/runs.db` | The history database: audit log, invocations, conversations, sync rounds, usage. |
 | `~/.coffer/runs.db.pre-<revision>` | A copy taken before each schema migration. The three newest are kept. |
@@ -188,13 +181,7 @@ port:    8000
 pid:     48213
 ```
 
-Your version and PID will differ. Then open the UI:
-
-```sh
-coffer open
-```
-
-`coffer open` reads `~/.coffer/daemon.json` and opens your browser at `http://127.0.0.1:8000/`. The page it loads already carries the API token, so you are signed in with no further step. Pass `--no-browser` to print the URL instead.
+Your version and PID will differ. Then open `http://127.0.0.1:8000/` in your browser, or open the desktop app. The page the daemon serves already carries the API token, so you are signed in with no further step.
 
 ## Start and keep the daemon running
 
@@ -204,11 +191,7 @@ You rarely need to start the daemon yourself:
 - `coffer-mcp-shim` does the same when an agent starts a session.
 - The desktop app starts it at launch.
 
-Once started, the daemon keeps running until you stop it or another daemon replaces it. To have macOS start it at login and restart it after a crash, install the login service:
-
-```sh
-coffer daemon service install    # coffer daemon service status | uninstall
-```
+Once started, the daemon keeps running until you stop it or another daemon replaces it. To have macOS start it at login and restart it after a crash, turn on **Start at login** in **Settings › Daemon**.
 
 The daemon binds `127.0.0.1:8000`. If another program already holds that port, the daemon refuses to start and names the program holding it. You can move it with `coffer config set daemon.port <port>` and go back with `coffer config unset daemon.port`. See [Running the daemon](/guides/daemon).
 
@@ -238,17 +221,11 @@ Restarting matters because a daemon that is already running keeps running the ol
 
 ## Uninstall
 
-1. Disconnect each agent from Coffer, which removes Coffer's entries from its config, and remove the agent from Coffer. Removing the agent also removes the skill links Coffer delivered into it:
+1. On the **Agents** page, choose **Disconnect…** from each agent's **⋯** menu, which removes Coffer's entries from its config, then **Turn off**, which also removes the skill links Coffer delivered into it.
+
+2. Turn off **Start at login** in **Settings › Daemon** if you turned it on, then stop the daemon:
 
    ```sh
-   coffer agent disconnect claude-code
-   coffer agent rm claude-code
-   ```
-
-2. Stop the daemon and remove the login service if you installed it:
-
-   ```sh
-   coffer daemon service uninstall
    coffer daemon stop
    ```
 
@@ -261,7 +238,7 @@ Restarting matters because a daemon that is already running keeps running the ol
 
 ## Experimental features
 
-Every build carries the same capabilities. Four of them are experimental — Knowledge, Memory, Sync and Model providers — and start switched off, in a stable release and a source build alike. Switch one on from Settings → Features or with `coffer config set feature.<key> on`. See [Experimental features](/guides/experimental-features).
+Every build carries the same capabilities. Four of them are experimental — Knowledge, Memory, Sync and Model providers — and start switched off, in a stable release and a source build alike. Switch one on from Settings → Features. See [Experimental features](/guides/experimental-features).
 
 ## Next steps
 

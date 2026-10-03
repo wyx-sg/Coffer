@@ -114,8 +114,7 @@ stops the channel's adapter and its inbound connection (a SeaTalk websocket),
 forgets any failure it was waiting out, and starts them afresh at once from the
 stored configuration and the secret as it is now. It answers whether the adapter
 is running afterwards; a disabled channel, or one bound to another machine, stays
-stopped. The Channels page's **Reconnect** action and `coffer channel restart
-<name>` MUST both call it.
+stopped. The Channels page's **Reconnect** action MUST call it.
 
 Replacing a secret under its existing ref MUST restart the adapter that uses it
 without anyone asking: the daemon notices that the stored value changed and
@@ -127,7 +126,7 @@ restarts it.
 
 #### Scenario: a restart rebuilds the adapter on demand
 - **GIVEN** an enabled channel with a running adapter
-- **WHEN** the owner presses Reconnect, or runs `coffer channel restart <name>`
+- **WHEN** the owner presses Reconnect
 - **THEN** the old adapter stops and a new one starts and reads its secret again
 - **AND** a channel waiting out a failed start is retried at once, and a disabled channel stays stopped
 
@@ -333,16 +332,15 @@ the agent").
 - **AND** Agent offers the channel's agents with the current one ticked, and the tap starts a fresh conversation on the second agent
 
 ### Requirement: Notify the paired owner on demand
-A notify entry point (REST + CLI) MUST deliver arbitrary text to a channel's
-paired peer, independent of any conversation and with no inbound message — for
-example `coffer channel notify my-telegram "build finished"` or the matching
-REST call. Notify on a channel with no paired peer fails with a clear error and
+A notify entry point (`POST /api/v1/channels/{uid}/notify`) MUST deliver arbitrary text to a
+channel's paired peer, independent of any conversation and with no inbound message — the call
+the Channels page's **Send test** makes. Notify on a channel with no paired peer fails with a clear error and
 sends nothing. This is the outbound foundation any feature that alerts the user
 reuses.
 
 #### Scenario: notify delivers to the paired owner
 - **GIVEN** a paired channel
-- **WHEN** notify is called via REST and via CLI
+- **WHEN** notify is called via REST, and again with the Channels page's Send test
 - **THEN** the text arrives in the IM chat both times
 
 #### Scenario: notify on an unpaired channel fails cleanly
@@ -350,7 +348,7 @@ reuses.
 - **WHEN** notify is called
 - **THEN** the call fails with a clear error and nothing is sent
 
-### Requirement: Manage channels from the Channels page and the CLI
+### Requirement: Manage channels from the Channels page
 The Channels page MUST be a list beside a detail pane. The **list** shows every
 channel as one row — its platform, its name and one line saying what state it is
 in — grouped by that state (needs attention, connected, running on another
@@ -391,45 +389,36 @@ channel already cites before the configuration is saved, and that ref MUST stay 
 the saved configuration, so a rotation moves no secret and leaves the channel's
 machine binding and pairing untouched. A secret left blank rotates nothing.
 
-The CLI MUST offer these operations in the `coffer channel` group. Its uniform
-lifecycle verbs are `list`, `show`, `add`, `edit`, `rm`, `enable`, `disable` and
-`scope <name> [--agents a,b | --all | --none]` (see
-[resource-framework](../resource-framework/spec.md), the requirement that
-generates each kind's lifecycle verbs), and its channel-specific commands are
-`pair`, `bind`, `restart` and `notify`:
-
-- `coffer channel show <name>` MUST report the channel's configuration together
-  with its status — adapter run state, paired peer, machine binding and the
-  inbound state its type reports — in plain and `--json` output. The group
-  gating and the idle period it prints are the settings with their defaults
-  filled in, as the daemon reads them.
-- `coffer channel add` and `coffer channel edit` MUST take the group-gating
-  switches as `--require-mention/--no-require-mention` and
-  `--ignore-other-mentions/--no-ignore-other-mentions`. `edit` also takes
-  `--name`, `--title` and `--description`, and it changes only what it is
-  given: every switch, setting and ref it is not given keeps its stored value.
-- `coffer secret set <ref>` rotates a secret under a ref that
-  `coffer channel show` reports.
+Registering, editing, enabling, disabling, scoping and deleting a channel are the framework's own
+lifecycle operations (see [resource-framework](../resource-framework/spec.md)), done on the
+Channels page and over `/api/v1/resources`; pairing, binding, restarting and notifying are the
+channel routes under `/api/v1/channels/{uid}`. Coffer has no `channel` command group. The page
+MUST report the channel's configuration together with its status — adapter run state, paired
+peer, machine binding and the inbound state its type reports — with the group gating and the
+idle period shown as the settings with their defaults filled in, as the daemon reads them. Saving
+a setting changes only that setting: every switch, setting and ref it does not touch keeps its
+stored value. `coffer secret set <ref>` rotates a secret under a ref the channel's
+configuration cites.
 
 The channel's status (`GET /api/v1/channels/{uid}/status`) carries its
 **settings**: the typed reading of its stored configuration with every default
 filled in (`TelegramChannelConfig` or `SeaTalkChannelConfig` in this capability's
-contract). The Channels page starts every settings field from them and the CLI
-prints them, so a default is written in one place, in the daemon, and no surface
+contract). The Channels page starts every settings field from them, so a
+default is written in one place, in the daemon, and no surface
 keeps a copy. A stored configuration that no longer validates reports no
 settings, and the page says so rather than guess.
 
 Changing a channel's default agent or type settings is served by the detail page
 and `PATCH /api/v1/resources/{uid}`.
 
-#### Scenario: register and list channels from the command line
+#### Scenario: register a channel from the Add dialog and list it
 - **GIVEN** a running daemon and a stored secret
-- **WHEN** the user runs `coffer channel add` and `coffer channel list`
-- **THEN** the channel is created and appears in the listing
+- **WHEN** the user registers a channel in the Channels page's Add dialog and opens the list
+- **THEN** the channel is created and appears in the list
 
 #### Scenario: channel status reports runtime, pairing, and callback details
 - **GIVEN** channels in various states
-- **WHEN** the user queries status via REST and with `coffer channel show`
+- **WHEN** the user queries status via REST and on the Channels page
 - **THEN** adapter run state, paired peer, and the channel type's own inbound
   state are reported accurately
 
@@ -448,14 +437,14 @@ and `PATCH /api/v1/resources/{uid}`.
 - **AND** the channel's configuration is then saved to the same channel with
   every ref unchanged, so nothing its pairing and binding hang off moves
 
-#### Scenario: the group-gating switches are edited from the command line
+#### Scenario: the group-gating switches are edited in the Settings tab
 - **GIVEN** a registered channel with `require_mention` on and `ignore_other_mentions` off (the defaults)
-- **WHEN** the owner switches `require_mention` off and `ignore_other_mentions` on through `coffer channel edit`
+- **WHEN** the owner switches `require_mention` off and `ignore_other_mentions` on in the channel's Settings tab
 - **THEN** the saved configuration carries both changes and every other setting and ref as it was
 
-#### Scenario: a channel's lifecycle and reach run from its own command group
+#### Scenario: a channel's lifecycle and reach run through the resource routes
 - **GIVEN** a registered, enabled channel named `tg`
-- **WHEN** the user runs `coffer channel edit tg --title "Phone bot"`, `coffer channel scope tg --agents codex`, `coffer channel disable tg` and then `coffer channel rm tg`
+- **WHEN** the user, on the Channels page or over `/api/v1/resources`, sets its title to "Phone bot", scopes it to `codex` only, disables it and then deletes it
 - **THEN** the title is saved with every ref unchanged, the channel's scope names only `codex`, and the adapter stops when it is disabled
 - **AND** the removal deletes the channel and its peer binding, and each step is audited
 
@@ -1017,8 +1006,8 @@ this.
   channel to this machine, the answer it would have given had the key been
   absent. This is the one case where an existing value is overwritten, and it is
   the one case where leaving it would silently stop a working bot on upgrade.
-  Past the upgrade a value is written only by the surfaces, and `coffer channel
-  bind` refuses an id the machine registry does not hold; whatever else ends up
+  Past the upgrade a value is written only by the surfaces, and they
+  refuse an id the machine registry does not hold; whatever else ends up
   there fails closed and is reported as a binding to an unknown machine.
 - Rebinding MUST converge without a restart and without a command that reaches
   another machine: changing `runs_on` is an ordinary configuration edit. The
@@ -1199,8 +1188,7 @@ model, effort and directory carry over (see "Keep a chat's settings across its
 conversations").
 
 The setting is edited on the Channels page, on the channel's Settings tab, and
-with `coffer channel add|edit --new-conversation-after-idle-hours <hours>`;
-`coffer channel show` reports it.
+the channel's status reports it.
 
 #### Scenario: a chat idle past the configured hours opens a new conversation
 - **GIVEN** a paired chat whose active conversation was last active 25 hours ago, on a channel with the default 24
@@ -1227,7 +1215,7 @@ with `coffer channel add|edit --new-conversation-after-idle-hours <hours>`;
 #### Scenario: the idle period comes from the channel's settings
 - **WHEN** a channel config omits `new_conversation_after_idle_hours`, sets it to 0, or sets it below 0 or above 8760
 - **THEN** it is 24, it is 0 (never), and it is refused
-- **AND** the owner can set it with `coffer channel edit <name> --new-conversation-after-idle-hours 6` and on the channel's Settings tab, and a value outside the range is refused in both
+- **AND** the owner can set it to 6 on the channel's Settings tab, and a value outside the range is refused
 
 ### Requirement: Open a new conversation when the active one is archived
 A message that reaches a chat whose active conversation is archived MUST open a
@@ -1852,8 +1840,7 @@ inside the window restarts it. The window is 1.5 seconds after a text message.
 It is 5 seconds after a message that is rarely the whole ask: a forwarded chat
 record, or files with no text. Both windows are the channel's own settings,
 `wait_after_text_seconds` and `wait_after_forward_seconds`, each from 0 to 60
-seconds and edited on the Channels page or with `coffer channel edit
---wait-after-text/--wait-after-forward`; 0 runs every such message as its own
+seconds and edited on the Channels page; 0 runs every such message as its own
 turn.
 
 The coalesced turn carries:
@@ -1897,9 +1884,9 @@ button is the command typed, so it settles the held messages the same way.
 - **THEN** it waits 1.5 seconds after text and 5 seconds after a forward
 - **AND** a config may set either window anywhere from 0 to 60 seconds, and a value outside that range is refused
 
-#### Scenario: the quiet windows are edited from the command line
+#### Scenario: the quiet windows are edited in the channel's settings
 - **GIVEN** a registered channel
-- **WHEN** the owner runs `coffer channel edit <name> --wait-after-text 0 --wait-after-forward 8`
+- **WHEN** the owner sets the wait after a text message to 0 and the wait after a forward to 8 in the channel's settings
 - **THEN** the channel's config holds those two windows and every other setting is unchanged
 
 #### Scenario: the quiet windows are edited on the Channels page
@@ -2122,11 +2109,9 @@ The owner MUST be able to move a chat's conversation to another working
 directory from chat — but only to a directory the channel allows. A channel's
 Settings carry its Working directories: a **Default**, the absolute path new
 conversations start in (stored as the default agent configuration's `cwd`; set
-with `coffer channel add|edit --default-dir PATH`, cleared with `edit
---no-default-dir`; none means the Coffer workspace `~/.coffer/content/workspace`), and the list **Allowed for
+on the Channels page and cleared there; none means the Coffer workspace `~/.coffer/content/workspace`), and the list **Allowed for
 /dir**, `directories`, absolute paths shown as rows with Remove and an Add
-directory… folder picker, the default's row marked "default", and edited with
-`coffer channel add|edit --dir PATH` (repeatable; `edit --no-dirs` clears it);
+directory… folder picker, the default's row marked "default", and edited on the Channels page;
 each entry also admits the directories beneath it. With no allowed directory,
 `/dir` is off.
 `/dir <path>` accepts an allowed path or one beneath it, `/dir <name>` the base
@@ -2154,18 +2139,17 @@ is refused with the allowed ones named.
 - **THEN** the channel refuses, naming the allowed directory, and the active
   conversation and its directory are unchanged
 
-#### Scenario: the channel's directories are edited from the Channels page and the CLI
+#### Scenario: the channel's directories are edited on the Channels page
 - **GIVEN** a registered channel
-- **WHEN** the owner sets its directories with `coffer channel edit --dir` or in
-  the channel's settings on the Channels page
+- **WHEN** the owner sets its directories in the channel's settings on the Channels page
 - **THEN** the channel's configuration carries exactly those absolute paths, and
-  `--no-dirs` clears them
+  removing every row clears them
 
-#### Scenario: the channel's default directory is edited from the Channels page and the CLI
+#### Scenario: the channel's default directory is edited on the Channels page
 - **GIVEN** a registered channel
-- **WHEN** the owner sets its Default working directory in the channel's settings on the Channels page, or with `coffer channel edit --default-dir`
-- **THEN** the channel's default agent configuration carries that absolute path as `cwd`, new conversations start there, and `--no-default-dir` clears it
-- **AND** a relative path is refused with nothing saved, on the page and in `coffer channel add|edit --default-dir` and `--dir` alike
+- **WHEN** the owner sets its Default working directory in the channel's settings on the Channels page
+- **THEN** the channel's default agent configuration carries that absolute path as `cwd`, new conversations start there, and clearing the field removes it
+- **AND** a relative path is refused with nothing saved, in the Default working directory and in the allowed list alike
 
 ### Requirement: Resume an earlier conversation from chat
 Every conversation a chat thread opens MUST be remembered for that thread, and
@@ -2280,7 +2264,7 @@ side of a tool call, so two sentences never run together.
 
 A channel setting `show_steps` (default on) hides the step lines and keeps the
 header and narration — useful in a busy group. It is edited on the Channels
-page and with `coffer channel add|edit --show-steps/--hide-steps`.
+page.
 
 A transport that must shorten a snapshot to its own limit clips the answer's
 oldest words and keeps the status block whole; only a limit too small for the
@@ -2314,8 +2298,8 @@ block drops the step lines, then the header.
 - **WHEN** a turn calls a tool
 - **THEN** the status block shows the header and narration but no step line
 
-#### Scenario: the step lines are hidden from the command line
-- **WHEN** the owner runs `coffer channel edit <name> --hide-steps`, then `--show-steps`
+#### Scenario: the step lines are hidden in the channel's settings
+- **WHEN** the owner switches the channel's step lines off in its settings, then on again
 - **THEN** the channel's `show_steps` setting is off, then on again
 
 ### Requirement: Ping the asker when a long turn ends
@@ -2336,8 +2320,7 @@ notified. A turn shorter than the threshold sends none either — the answer
 itself is the signal.
 
 Presence is not observable on any platform, so duration is the only signal. The
-setting is edited on the Channels page and with `coffer channel add|edit
---notify-after <seconds>`.
+setting is edited on the Channels page.
 
 #### Scenario: a long turn whose answer does not notify ends with a ping
 - **GIVEN** a transport whose streamed answer persists from the turn's start, and
@@ -2368,8 +2351,8 @@ setting is edited on the Channels page and with `coffer channel add|edit
   past 3600
 - **THEN** it is 90, it is 0 (off), and it is refused
 
-#### Scenario: the ping threshold is edited from the command line
-- **WHEN** the owner runs `coffer channel edit <name> --notify-after 0`
+#### Scenario: the ping threshold is edited in the channel's settings
+- **WHEN** the owner sets the ping threshold to 0 in the channel's settings
 - **THEN** the channel's threshold is 0, and a value past 3600 is refused
 
 ### Requirement: Shape a reply for what the chat can show
@@ -2473,8 +2456,8 @@ lowercased, every run of characters the name rules refuse turned into one `-`,
 `channel` when nothing is left — stepping to `-2`, `-3`, … past a name another
 channel already holds, so adding a channel never fails on a name the person did
 not type. The channel's Settings show the display name as its Name and edit it
-as the title. The command line keeps addressing a channel by its name and sets
-the display name with `--title`.
+as the title. REST keeps addressing a channel by its `uid`, and the display name is
+its `title`.
 
 #### Scenario: a channel is named by any display name
 - **GIVEN** the Add channel dialog on the Channels page

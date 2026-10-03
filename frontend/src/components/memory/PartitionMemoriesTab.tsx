@@ -9,7 +9,7 @@
 // What the page leaves out is the requirement too: no file tree, no
 // `MEMORY.md` / `RETIRED.md`, no `.raw/`, no native path and no agent's
 // original text, and no file action on a memory (the partition's ⋯ menu
-// reveals the folder). A partition not distilled yet has no list column at all:
+// reveals the folder); a memory's one action is Edit. A partition not distilled yet has no list column at all:
 // only the centred empty state, with no Update memory button (the header has
 // it; board 5.2.08).
 import { useSearchParamsKeepingState as useSearchParams } from "@/lib/hooks/useSearchParamsKeepingState";
@@ -125,7 +125,7 @@ export function PartitionMemoriesTab({ uid, name, partition }: Props) {
           }
           detail={
             selected ? (
-              <MemoryPane uid={uid} slug={selected} />
+              <MemoryPane uid={uid} slug={selected} partitionName={name} />
             ) : (
               <p className="text-sm text-text-muted">{t("memory.memories.select")}</p>
             )

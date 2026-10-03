@@ -29,7 +29,7 @@ from coffer.infrastructure.memory.delivery.claude_code import ADAPTER as _CC
 from coffer.infrastructure.memory.delivery.codex import ADAPTER as _CODEX
 from coffer.infrastructure.memory.delivery.codex import current_hash, trust_key
 
-_ALL_EVENTS = "PostToolUse,PreToolUse,SessionStart,UserPromptSubmit"
+_ALL_EVENTS = "SessionStart,UserPromptSubmit"
 
 
 def test_claude_code_adapter_uses_session_start_and_settings_key() -> None:
@@ -64,13 +64,11 @@ def test_codex_install_matches_every_session_start_source() -> None:
     assert entry["hooks"][0]["timeout"] == 10
     assert "matcher" not in hooks["UserPromptSubmit"][0]
     assert hooks["UserPromptSubmit"][0]["hooks"][0]["timeout"] == 5
-    for event in ("PreToolUse", "PostToolUse"):
-        assert hooks[event][0]["matcher"] == "Bash"
-        assert hooks[event][0]["hooks"][0]["timeout"] == 5
+    assert set(hooks) == {"SessionStart", "UserPromptSubmit"}
 
 
 @pytest.mark.parametrize("adapter", [_CC, _CODEX])
-def test_every_adapter_installs_the_same_command_on_all_four_events(adapter: object) -> None:
+def test_every_adapter_installs_the_same_command_on_both_events(adapter: object) -> None:
     text = adapter.install("", "u1")  # type: ignore[attr-defined]
     hooks = json.loads(text)[HOOKS_KEY]
     assert set(hooks) == set(DELIVERY_EVENTS)
@@ -137,10 +135,8 @@ def test_codex_install_coexists_with_a_foreign_session_start_entry() -> None:
     entries = data[HOOKS_KEY]["SessionStart"]
     assert len(entries) == 2
     assert entries[0] == skynet_fixture["hooks"]["SessionStart"][0]
-    pre = data[HOOKS_KEY]["PreToolUse"]
-    assert len(pre) == 2
-    assert pre[0] == skynet_fixture["hooks"]["PreToolUse"][0]
-    assert pre[1]["matcher"] == "Bash"
+    assert data[HOOKS_KEY]["PreToolUse"] == skynet_fixture["hooks"]["PreToolUse"]
+    assert len(data[HOOKS_KEY]["UserPromptSubmit"]) == 1
     assert data[HOOKS_KEY]["Stop"] == skynet_fixture["hooks"]["Stop"]
 
     removed = json.loads(_CODEX.remove(new_text))
@@ -195,7 +191,7 @@ def test_codex_trust_reads_every_state_codex_can_record() -> None:
     path = "/h/.codex/hooks.json"
     text = _CODEX.install("", "cx")
     hooks = _CODEX.find_all(text)
-    assert len(hooks) == 4
+    assert len(hooks) == 2
     first, rest = hooks[0], hooks[1:]
     key = trust_key(path, first)
     digest = current_hash(first)
@@ -222,5 +218,5 @@ def test_codex_trust_reads_every_state_codex_can_record() -> None:
     assert _CODEX.trust(
         text, with_others(_approved(key.replace(":0:0", ":1:0"), digest)), path
     ) is (HookTrust.UNTRUSTED)
-    # Four entries are four approvals: one approved alone is not enough.
+    # Two entries are two approvals: one approved alone is not enough.
     assert _CODEX.trust(text, _approved(key, digest), path) is HookTrust.UNTRUSTED

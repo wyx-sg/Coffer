@@ -78,7 +78,7 @@ async def test_a_missing_master_hands_the_search_to_an_agent(tmp_path):
     assert prompt is not None
     assert str(master) in prompt
     assert str(graph.store.backup_root) in prompt
-    assert "coffer skill show s1 --json" in prompt
+    assert "coffer skill" not in prompt
     assert "copy (don't move)" in prompt
     item = (await _attention(graph))[DriftKind.MISSING_MASTER.value]
     assert item.handoff == prompt

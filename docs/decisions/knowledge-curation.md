@@ -10,11 +10,11 @@
 [Knowledge Is Plain Files](knowledge-is-plain-files.md) makes each collection
 one tree of Markdown documents that a person and Coffer both write, with the
 files as the only copy. That leaves a question the tree itself cannot answer:
-**what happens when new knowledge arrives?** It arrives from four entrances — an
-agent calling `coffer__write`, the CLI's `coffer knowledge write` (route
-`POST /api/v1/knowledge/material`), a document uploaded on the Knowledge page,
-and a document sent to a channel and saved with `/kb` — and from a fifth,
-unannounced one: a person or an agent editing a document directly.
+**what happens when new knowledge arrives?** It arrives from three entrances — an
+agent writing a Markdown file into a collection's `.inbox/`, a document
+uploaded on the Knowledge page, and a document sent to a channel and saved
+with `/kb` — and from a fourth, unannounced one: a person or an agent editing
+a document directly.
 
 Three measured facts constrain the answer:
 
@@ -37,13 +37,13 @@ base.
 
 ## Options Considered
 
-### Option A — An inbox merged by a fenced, bounded pass; a person's edit stands (chosen)
+### Option A — An inbox merged by a fenced, bounded pass; the newer or better-evidenced statement wins (chosen)
 
 Every entrance submits **material** into the collection's hidden `.inbox/`. A
 pass driven by Coffer's internal model takes one item, folds what is new in it
 into whichever documents own its subject, and deletes it. The same sweep also
 picks up documents edited out of band and carries the edit into the rest of the
-collection, never reverting it.
+collection as a newer statement.
 
 - **Pros.** The collection grows by integration rather than accumulation: an
   upload adds what is new to the documents that already cover the subject
@@ -56,8 +56,8 @@ collection, never reverting it.
   is not kept.
 - **Why it wins.** It is the only option that lets both a person and a model
   edit one tree. What makes unattended rewriting tolerable is not a protected
-  lane but a set of hard bounds (below) and the rule that the person's edit
-  wins.
+  lane but a set of hard bounds (below) and the rule that no writer is exempt: the newer
+  statement wins unless the older one is shown to be right.
 
 ### Option B — Keep the originals and index them (no rewriting)
 
@@ -116,8 +116,9 @@ Coffer files material as documents and a person merges by hand.
 - **Pros.** No unattended rewriting at all.
 - **Cons.** It did not happen: the tidy pass that needed a person to switch it
   on ran once. Agents write faster than a person tidies.
-- **Why it lost.** A corpus nobody tidies is the rotted one. A person's edit is
-  still first-class — it is the input curation carries outward.
+- **Why it lost.** A corpus nobody tidies is the rotted one. An edit made outside a pass is
+  still first-class input — curation carries it outward — but as a statement
+  to weigh, not one to protect.
 
 ### Option G — Curate on read
 
@@ -133,13 +134,16 @@ Merge lazily, when an agent opens a document or the catalogue is rendered.
 
 **New knowledge arrives as material in a hidden inbox, and a bounded curation
 pass merges it into the documents and deletes it. A document edited out of
-band is carried into the rest of the collection. A person's edit is never
-reverted.**
+band is carried into the rest of the collection as a newer statement. Where
+two statements disagree the newer one wins unless the older one is shown to be
+right, and no writer — person, agent or pass — is exempt.**
 
-- **Every entrance submits material.** `coffer__write`, `coffer knowledge
-  write` / `POST /api/v1/knowledge/material`, an upload (converted to Markdown by
-  `markitdown`, plus plain text and CSV) and a channel's `/kb` all write into
-  `.inbox/`. Neither an upload's original bytes nor its extracted text is kept
+- **Every entrance submits material.** An agent's Markdown file written into
+  `<collection>/.inbox/`, an upload (converted to Markdown by `markitdown`,
+  plus plain text and CSV) and a channel's `/kb` all land in `.inbox/`. The
+  sweep fills the frontmatter an agent's file lacks (`title`, `description`,
+  `actor`, timestamps), keeps every key the writer set, and audits the item as
+  `knowledge_written`; a non-Markdown file there is left in place and logged. Neither an upload's original bytes nor its extracted text is kept
   as a file: once the knowledge is merged the carrier has nothing left to say.
   The inbox is the one hidden directory Coffer writes. The web UI's tree and
   the read route list and read it for a person, so what is waiting can be
@@ -149,13 +153,20 @@ reverted.**
   a pass promotes whatever is already in the inbox (`no_model`). Merging is the
   model's job, but knowledge sitting in a hidden directory for a connection
   nobody set up is knowledge no agent can read.
-- **Newer statements win; a person's edit stands.** Where material contradicts
-  a document, the newer statement wins and the superseded one stays legible as
-  a dated correction. Where the item is a document a person edited, what they
-  wrote is the truth: the pass carries it outward — correcting other documents
-  that say otherwise — and does not revert or reword it. Both are instructions
-  to the model (`application/knowledge/curate_prompt.py`), because no code can
-  adjudicate a contradiction.
+- **The newer or better-evidenced statement wins.** Where material contradicts
+  a document, or two documents disagree, the newer statement wins unless the
+  older one is shown to be right by evidence — a source, a date, a command's
+  output, the code. The superseded statement stays legible with the date it
+  changed. No writer is exempt: a person's edit, an agent's file and a
+  pass's own earlier rewrite are all statements, and a later item may correct
+  any of them. Where the item is a document edited out of band, the pass
+  carries it outward — correcting other documents that disagree — as a newer
+  statement. Both are instructions to the model
+  (`application/knowledge/curate_prompt.py`), because no code can adjudicate a
+  contradiction. Two guards protect data rather than a writer, and are code: a
+  pass never overwrites a file whose bytes changed after it read them, and a
+  rewrite keeps every frontmatter key it did not set. History, per-version
+  restore and whole-pass undo are the recovery path for a wrong merge.
 - **Out-of-band edits are found by content, not by time.** Curation keeps a
   record of its own, `~/.coffer/local/curation.json`: for each document, the
   content id (git blob) it had when curation last settled it, after a pass
@@ -214,8 +225,9 @@ reverted.**
 - **The documents belong to the person again, and the corpus reorganises
   itself.** An upload integrates instead of accumulating; a correction made in
   one document reaches the others that repeated the mistake.
-- **Curation rewrites the only copy.** What protects a document is the rule
-  that a person's edit is never reverted, the eight-write bound, one pass per
+- **Curation rewrites the only copy.** What protects a document is the
+  changed-since-read guard, the evidence clause of the precedence rule, the
+  eight-write bound, one pass per
   collection, an audit event per pass, and the vault's git history, where a
   pass is one commit that can be undone as a whole. A bad merge is fixed by
   editing the document or undoing the pass.
@@ -233,7 +245,8 @@ reverted.**
   spec knowledge "Curate through a fenced four-tool pass",
   spec knowledge "Assemble a pass from a bounded context",
   spec knowledge "Bound a pass to eight writes",
-  spec knowledge "Let newer statements win and a person's edit stand",
+  spec knowledge "Let the newer or better-evidenced statement win",
+  spec knowledge "Submit material by writing a file into the inbox",
   spec knowledge "Refuse file-name references in documents",
   spec knowledge "Settle an item only after its pass completes",
   spec knowledge "Promote material directly when no model is configured",

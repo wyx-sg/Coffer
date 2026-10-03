@@ -42,14 +42,14 @@ What each box is:
 | --- | --- |
 | Coding agents | Claude Code and Codex, the two agent types Coffer registers. Each reaches Coffer through an MCP server entry Coffer writes into its config, and reads skills Coffer delivers into its skills directory. |
 | `coffer-mcp-shim` | A small stdio-to-HTTP forwarder the agent launches as an MCP server. It finds (or starts) the daemon and relays JSON-RPC to `/mcp`, stamping the agent's identity onto the handshake. |
-| `coffer` CLI | A Typer application. Every command is an HTTP call to the daemon; the CLI never opens the database or the secret store itself. |
+| `coffer` CLI | A Typer application with a short command list: the daemon's lifecycle, the one-time migration, the logs, `coffer run`, and the few commands a program or an agent hand-off runs. Each command that reads or writes state is an HTTP call to the daemon; the CLI never opens the database or the secret store itself. |
 | Web UI | A React single-page app, built to static files that the daemon serves from its own origin. |
 | Desktop shell | A Tauri 2 app that hosts the same built frontend in a native window with a menu bar item. It supplies the page its daemon address and token over IPC, starts the daemon when none is running, and updates itself from a signed release manifest. |
 | HTTP API | FastAPI routes under `/api/v1/*`: the management plane every client uses. |
 | MCP gateway | The `/mcp` endpoint. It aggregates every enabled upstream MCP server behind one endpoint, adds Coffer's builtin tools, and filters what each agent sees by reach. See [MCP gateway](/architecture/mcp-gateway). |
 | Resource framework and kinds | The kind-agnostic core that gives every user-managed thing — an MCP server, a skill, a channel — one identity, lifecycle, audit trail and reach, plus the seven kinds plugged into it. See [Resource framework](/architecture/resource-framework). |
 | Background workers | In-process asyncio loops: retention pruning, knowledge curation, memory aggregation and distillation, vault sync rounds, the transcript-cache warm-up, the MCP session reaper, and the channel runtime that holds Telegram polling and SeaTalk websocket connections. The full list with cadences is in [Daemon and processes](/architecture/daemon#background-work). |
-| `vault/` | A git repository under `~/.coffer`, the system of record for configuration and content: one JSON file per resource, state documents, knowledge collections, skill folders, memory triggers and secret ciphertext. Every accepted write is one validated commit naming its writer. Beside it, `local/` holds what is true of this machine only, `content/` media and the chat workspace, and `derived/` what can be rebuilt, such as the memory tree. See [Persistence](/architecture/persistence). |
+| `vault/` | A git repository under `~/.coffer`, the system of record for configuration and content: one JSON file per resource, state documents, knowledge collections, skill folders and secret ciphertext. Every accepted write is one validated commit naming its writer. Beside it, `local/` holds what is true of this machine only, `content/` media and the chat workspace, and `derived/` what can be rebuilt, such as the memory tree. See [Persistence](/architecture/persistence). |
 | `runs.db` | SQLite, history only: the audit log, MCP invocations, conversations and messages, sync rounds, usage. |
 | Upstream MCP servers | The servers you register — stdio subprocesses or HTTP endpoints — started per client session. |
 | Model providers | Anthropic, OpenAI-compatible and Ollama endpoints Coffer's own passes run on, and the provider profiles it projects into agents. |
@@ -69,7 +69,7 @@ Coffer runs as a small set of cooperating processes. Only one of them holds stat
 | Upstream MCP servers | Per client session, per server. | Spawned by the gateway's per-session supervisor and reaped when the session closes. |
 | Agent runtimes | Per chat turn or conversation. | The Claude Agent SDK and the Codex app-server, started by the chat platform to run a turn. |
 
-The CLI, the shim and the desktop shell all discover the daemon through `~/.coffer/daemon.json` (pid, port, token; mode `0600`), which the daemon writes at start and removes at exit. A spawn lock on `~/.coffer/daemon.lock` makes concurrent detect-or-spawn attempts converge on one daemon. On macOS, `coffer daemon service install` registers the daemon as a login service. The full lifecycle is in [Daemon and processes](/architecture/daemon).
+The CLI, the shim and the desktop shell all discover the daemon through `~/.coffer/daemon.json` (pid, port, token; mode `0600`), which the daemon writes at start and removes at exit. A spawn lock on `~/.coffer/daemon.lock` makes concurrent detect-or-spawn attempts converge on one daemon. On macOS, **Start at login** registers the daemon as a login service. The full lifecycle is in [Daemon and processes](/architecture/daemon).
 
 ## Main data flows
 

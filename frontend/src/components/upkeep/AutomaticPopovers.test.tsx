@@ -184,3 +184,24 @@ acceptance("internal-engine", "the memory popover switches reading and distillin
   expect(setUpkeep).toHaveBeenCalledTimes(1);
   expect(setUpkeep).toHaveBeenCalledWith({ pass: "aggregate", interval_s: 1800 });
 });
+
+acceptance("internal-engine", "the popover shows and sets the curation owner", () => {
+  machines = [
+    { machine_id: "m-here", name: "MacBook Pro", is_self: true },
+    { machine_id: "m-mini", name: "Mac mini", is_self: false },
+  ];
+  config = { model: "m", curate_owner_machine_id: null, upkeep: { curate: pass() } };
+  renderIt(<KnowledgeAutomaticPopover />);
+  const dialog = open("knowledge-automatic");
+
+  // No owner named: the picker reads "Not chosen" and says every Mac curates.
+  expect(dialog).toHaveTextContent("Curation runs on");
+  expect(dialog).toHaveTextContent("Not chosen");
+  expect(dialog).toHaveTextContent(/every Mac curates/);
+
+  fireEvent.keyDown(within(dialog).getByRole("combobox", { name: "Curation runs on" }), {
+    key: "ArrowDown",
+  });
+  fireEvent.click(screen.getByRole("option", { name: "MacBook Pro · this Mac" }));
+  expect(setOwner).toHaveBeenCalledWith("m-here");
+});

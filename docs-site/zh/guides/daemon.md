@@ -50,7 +50,7 @@ pid:     41822
 - `stop` 在发信号前先确认记录的 pid 确实是 Coffer 守护进程。如果该 pid 已被其他进程复用，`stop` 会删除过期的 `daemon.json` 并说明情况，而不会误杀无关进程。
 - 在守护进程绑定前读取的设置（端口），要靠 `restart` 才能生效。
 
-要打开守护进程提供的界面，运行 `coffer open`。它从 `~/.coffer/daemon.json` 读取端口并在浏览器里打开该地址；`--no-browser` 则只打印 URL。
+要打开守护进程提供的界面，在浏览器里访问 `http://127.0.0.1:<port>`；端口在 `~/.coffer/daemon.json` 里（默认 8000）。[桌面应用](/zh/guides/desktop-app)会替你打开。
 
 ## 选择端口 {#choose-the-port}
 
@@ -87,19 +87,7 @@ port 8000 is the port Coffer's daemon binds, but something else is already using
 
 按需启动时，守护进程恰好在智能体当天第一次调用、或没有打开 Coffer 窗口时收到聊天消息的那一刻是停着的，谁先来谁就得等冷启动。在 macOS 上，你可以把它装成每用户的 launchd agent：
 
-::: code-group
-
-```sh [CLI]
-coffer daemon service install     # start at login, restart after a crash
-coffer daemon service status      # installed or not, and where
-coffer daemon service uninstall   # stop starting it at login
-```
-
-```text [Web UI]
-Settings → Daemon → Start at login
-```
-
-:::
+打开 **设置 → 守护进程 → 开机自启动**：守护进程会在登录时启动，崩溃后重启。
 
 该服务就是 plist 文件 `~/Library/LaunchAgents/dev.coffer.daemon.plist`（label 为 `dev.coffer.daemon`）。它：
 
@@ -109,10 +97,10 @@ Settings → Daemon → Start at login
 - 运行 `~/.coffer/bin/coffer-daemon`，这个软链接始终指向当前构建，所以升级后依然有效（源码安装会回退到 Python 模块命令）；
 - 与其他任何方式启动时一样，写入同一个 `~/.coffer/logs/daemon.log`。
 
-`uninstall` 删除 plist，但不会停掉正在运行的守护进程。两个命令都不需要守护进程。Web 界面的开关通过守护进程做同样的事，并记录一条 `daemon_residency_updated` 审计条目；命令行不记录，因为它必须在没有守护进程、也就没有数据库时也能工作。
+关掉开关会删除 plist，但不会停掉正在运行的守护进程。每次改动都会记录一条 `daemon_residency_updated` 审计条目。
 
 ::: info
-开机自启服务仅限 macOS。在其他系统上，`service install` 和 `service uninstall` 会打印消息并以非零码退出，`service status` 报告不支持。
+开机自启服务仅限 macOS。在其他系统上，**开机自启动** 开关会报告不支持。
 :::
 
 ## 守护进程读写的文件 {#files-the-daemon-reads-and-writes}
@@ -147,13 +135,7 @@ Settings → Daemon → Start at login
 
 守护进程每次启动都生成一个新的随机令牌，并写入 `daemon.json`。客户端从那里读取；守护进程提供给浏览器的页面也带着它，所以重启后普通刷新一下就能重新认证，无需你做任何事。
 
-不重启而轮换令牌：
-
-```sh
-coffer daemon rotate-token
-```
-
-读 `daemon.json` 的客户端会拿到新值；已打开的浏览器标签页需要刷新。
+不重启而轮换令牌：在 **设置 → 安全 → 守护进程访问令牌** 点 **轮换…** 并确认。读 `daemon.json` 的客户端会拿到新值；已打开的浏览器标签页需要刷新。
 
 ## 升级与回滚 {#upgrades-and-rollback}
 
@@ -221,7 +203,7 @@ Coffer 保存的一切都在 `~/.coffer` 下。无法重建的部分是：
 
 | 路径 | 为什么重要 |
 | --- | --- |
-| `vault/` | 每个资源定义、共享设置、知识集、技能文件夹、记忆触发器和加密密钥，以及它们在 `vault/.git` 中的完整历史。 |
+| `vault/` | 每个资源定义、共享设置、知识集、技能文件夹和加密密钥，以及它们在 `vault/.git` 中的完整历史。 |
 | `local/` | 本机的智能体、生效范围、保留策略、同步远端和密钥审批。 |
 | `content/` | 附件和聊天工作目录。 |
 | `runs.db`（+ `-wal`、`-shm`） | 对话、审计日志、调用日志、同步轮次、用量。 |

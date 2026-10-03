@@ -128,7 +128,7 @@ class FeatureService:
     async def unset(self, key: str) -> FeatureState:
         """Remove this machine's setting for ``key``, so it is off
         again (spec experimental-features "Switch a feature from the
-        settings page or the command line").
+        settings page or over REST").
 
         Refuses a pinned feature with ``FeaturePinned``, like :meth:`set`, and
         is written, serialized and heard the same way. Unsetting a feature

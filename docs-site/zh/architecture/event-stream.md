@@ -5,7 +5,7 @@ description: 页面怎么知道有东西变了——整个守护进程共用一�
 
 # 事件流 {#the-event-stream}
 
-Web 界面显示的状态会在它背后发生变化：终端里的一条命令禁用了一个服务器，一轮调和修好了某个智能体的配置，一轮同步从另一台机器导入了一个技能，某个 MCP 服务器开始出错。页面必须知道这些。本页讲 Coffer 为此用的机制：整个守护进程只有一条流，它只说*什么*变了，从不说*怎么*变的。决策本身和权衡过的方案见决策记录 [The Wire Contract Is Generated From the Pydantic Models](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/wire-contract-generated-from-the-pydantic-models.md)（事件流一节）。
+Web 界面显示的状态会在它背后发生变化：智能体改了某个服务器的文件，一轮调和修好了某个智能体的配置，一轮同步从另一台机器导入了一个技能，某个 MCP 服务器开始出错。页面必须知道这些。本页讲 Coffer 为此用的机制：整个守护进程只有一条流，它只说*什么*变了，从不说*怎么*变的。决策本身和权衡过的方案见决策记录 [The Wire Contract Is Generated From the Pydantic Models](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/wire-contract-generated-from-the-pydantic-models.md)（事件流一节）。
 
 ## 只给提示，不给状态 {#hints-not-state}
 
@@ -17,7 +17,7 @@ Web 界面显示的状态会在它背后发生变化：终端里的一条命令�
 
 ## 提示从哪里来 {#where-the-hints-come-from}
 
-对资源的每一次写入——不管来自 Web 界面、命令行、智能体的 MCP 调用还是同步导入——都会经过资源框架，而资源框架本来就会把写入通知给[调和器](/zh/architecture/reconciler)，好让下一轮来得早一点。事件流就在同一个地方监听。没有哪种类型需要记得通报自己的写入，所以也没有哪种类型会忘记。
+对资源的每一次写入——不管来自 Web 界面、智能体的 MCP 调用还是同步导入——都会经过资源框架，而资源框架本来就会把写入通知给[调和器](/zh/architecture/reconciler)，好让下一轮来得早一点。事件流就在同一个地方监听。没有哪种类型需要记得通报自己的写入，所以也没有哪种类型会忘记。
 
 唯一不是资源写入的，是总览页上的「需要你处理」列表。它是按需从各类型自己的信号算出来的——测试失败的服务器、未连接的智能体、因冲突停下的同步——没有任何东西记录它变化的时刻。所以守护进程会盯着它：在资源写入之后、每轮调和之后，以及按一个较慢的定时器，重新计算这个列表的指纹，只有指纹变了才通报一次 `attention` 变化。指纹只覆盖有哪些条目、严重程度如何，不包括措辞，所以改一句提示文字不会把每个页面都叫醒。
 

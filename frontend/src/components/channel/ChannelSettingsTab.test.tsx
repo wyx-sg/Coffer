@@ -180,7 +180,7 @@ describe("working directories", () => {
 
   acceptance(
     "channels",
-    "the channel's directories are edited from the Channels page and the CLI",
+    "the channel's directories are edited on the Channels page",
     async () => {
       const api = installApi();
       renderSettings(makeChannel({ config: { directories: ["/srv/app", "/srv/lib"] } }));
@@ -193,7 +193,7 @@ describe("working directories", () => {
 
   acceptance(
     "channels",
-    "the channel's default directory is edited from the Channels page and the CLI",
+    "the channel's default directory is edited on the Channels page",
     async () => {
       const api = installApi();
       renderSettings(makeChannel({ config: { directories: ["/srv/app"] } }));
@@ -244,7 +244,7 @@ test("the SeaTalk App ID saves when changed, and refuses to save blank", async (
 });
 
 acceptance("channels", "rotating a channel secret keeps its refs and pairing", async () => {
-  // spec channels "Manage channels from the Channels page and the CLI": a
+  // spec channels "Manage channels from the Channels page": a
   // rotation writes the new value under the ref the channel already cites,
   // then PATCHes the same channel with every ref unchanged — so the binding,
   // the pairing and the synced ciphertext address all stay where they were —

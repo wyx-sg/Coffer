@@ -79,7 +79,7 @@ export function usePatchAgent() {
 /** Every supported type with its detection state and — when added — its uid:
  *  the Agents page's two fixed rows and the type → uid step of every page
  *  under /agents/:type. Detection is automatic (spec agent-registry "Expose
- *  agent discovery on every surface"): read on load, when the window regains
+ *  agent discovery over REST and on the Agents page"): read on load, when the window regains
  *  focus, and every few minutes, never behind a Detect action. */
 export function useAgentTypes() {
   return useQuery({

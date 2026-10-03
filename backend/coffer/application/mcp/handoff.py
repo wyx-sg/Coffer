@@ -13,8 +13,7 @@ config with every value that could be a secret left out
 (``domain/mcp/config_summary``), the machine, and for a failure the error and
 the last lines the server printed. The machine label and ``PATH`` are passed
 in by the caller (application code does not read the host). The same text is
-what the server page, the Overview's attention row and ``coffer mcp handoff``
-hand over.
+what the server page, the Overview's attention row hand over.
 """
 
 from __future__ import annotations

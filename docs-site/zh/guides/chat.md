@@ -13,13 +13,13 @@ description: 在 Coffer Web 界面的对话页面和 Claude Code 或 Codex 交�
 
 这个页面是看一个对话的一扇窗，IM 消息渠道是另一扇。你在手机上通过 Telegram 或 SeaTalk 发起的对话会出现在对话页面上，你可以在这里看它的轮次流式输出、停止它们、继续打字。智能体分辨不出一个轮次来自哪扇窗。
 
-::: info 没有 CLI
-没有 `coffer chat` 命令组。对话可以从对话页面、从消息渠道，以及通过 `/api/v1/chat` 下的 REST API 访问。
+::: info Web 界面与 REST
+对话可以从对话页面、从消息渠道，以及通过 `/api/v1/chat` 下的 REST API 访问。
 :::
 
 ## 前提条件 {#prerequisites}
 
-- 守护进程正在运行。用 `coffer open` 或[桌面应用](/zh/guides/desktop-app)打开界面。
+- 守护进程正在运行。用[桌面应用](/zh/guides/desktop-app)打开界面，或在浏览器里访问守护进程的地址。
 - 在**智能体**页面至少登记了一个受管智能体，并且它的 CLI 已装在这台机器上。见[智能体](/zh/guides/agents)。
 - 智能体已按你在终端里使用它的方式登录。Claude Code 需要先运行一次 `claude` 并完成 `/login`。
 
@@ -211,7 +211,7 @@ description: 在 Coffer Web 界面的对话页面和 Claude Code 或 Codex 交�
 
 ### 保留期限 {#retention}
 
-Coffer 会把 7 天没有新消息的对话归档，并在归档 30 天后删除它们。删除窗口可以在**设置 → 数据 → 历史记录 → 对话**下修改，或设为**永久保留**；归档窗口用 `coffer config set retention.conversations_archive <days>` 设置。归档可以撤回，删除不能。
+Coffer 会把 7 天没有新消息的对话归档，并在归档 30 天后删除它们。删除窗口可以在**设置 → 数据 → 历史记录 → 对话**下修改，或设为**永久保留**；归档窗口是同一区域里的**自动归档闲置对话**设置。归档可以撤回，删除不能。
 
 ## 对话和智能体自己的会话 {#chat-and-the-agent-s-own-sessions}
 

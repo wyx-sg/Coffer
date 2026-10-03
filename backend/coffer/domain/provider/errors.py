@@ -34,13 +34,11 @@ class ProviderProtocolLockedWhileActive(CofferError):  # noqa: N818
     code = "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE"
 
     def __init__(self, name: str, protocol: str, agent_types: list[str]) -> None:
-        how = " and ".join(f"`coffer provider builtin {t}`" for t in agent_types) or (
-            "`coffer provider builtin <agent_type>`"
-        )
+        who = " and ".join(agent_types) or "those agents"
         super().__init__(
             f"connection {name!r} has agents running on it, so its wire format cannot change — "
             f"put those agents back on their built-in login first "
-            f"({how}), then edit the wire, "
+            f"(Change model on Model providers, for {who}), then edit the wire, "
             f"then switch them onto the connection again"
         )
         self.name = name
@@ -101,7 +99,7 @@ class ProviderInternalDefaultTaken(CofferError):  # noqa: N818
     def __init__(self, holder: str) -> None:
         super().__init__(
             f"connection {holder!r} is already Coffer's internal-engine default — "
-            f"move the flag with `coffer config set engine.provider <name>` "
+            f"move the flag with Settings › General (Coffer's engine) "  # noqa: RUF001
             f"(POST /api/v1/providers/{{uid}}/internal-default) instead"
         )
         self.holder = holder
@@ -120,7 +118,7 @@ class ProviderTranscribeDefaultTaken(CofferError):  # noqa: N818
     def __init__(self, holder: str) -> None:
         super().__init__(
             f"connection {holder!r} is already Coffer's speech-to-text default — "
-            f"move the flag with `coffer config set transcribe.provider <name>` "
+            f"move the flag with Settings › General (Coffer's engine) "  # noqa: RUF001
             f"(POST /api/v1/providers/{{uid}}/transcribe-default) instead"
         )
         self.holder = holder

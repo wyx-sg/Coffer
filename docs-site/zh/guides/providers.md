@@ -32,27 +32,12 @@ Claude Code 从 `settings.json` 读取接入地址；Codex 从 `config.toml` 读
 
 ## 添加提供商 {#add-a-provider}
 
-**Web 界面：** 打开**模型提供商**，点**添加提供商**。对话框分两步。
+打开**模型提供商**，点**添加提供商**。对话框分两步。
 
 1. **接入地址。** 从网格里选一个**厂商**——**Anthropic**、**OpenAI**、**Google Gemini**、**DeepSeek**、**OpenRouter**、**Ollama**、**LM Studio**——它会填好协议和 base URL；或者为网关或中转选**自定义**，它会按用途问你协议：**OpenAI 兼容**（Codex、对话和 Coffer 引擎）或 **Anthropic 兼容**（Claude Code、对话和 Coffer 引擎）。填一个**名称**，粘贴 **API 密钥**；key 会成为这台 Mac 上钥匙串加密存储里的一个新密钥，之后不会再显示。**测试**用你填的 key 列出接入地址的模型——「Connected in 180 ms」或「The endpoint rejected the key (401)」——添加提供商之前什么都不会保存。缺失或格式错误的字段会在各自下方指出。
 2. **模型。** 勾选提供商要提供的模型，有搜索和类型筛选。什么都不勾，就表示提供接入地址服务的所有模型。**添加提供商**会保存并打开它。
 
 选择 **Ollama** 或 **LM Studio** 会走本地路径：不需要 key，Coffer 会在这台 Mac 上查找运行时（见[本地模型运行时](#local-model-runtimes)）。选定运行时或填了地址之前，下一步保持灰色；选定运行时后才会出现**名称**字段。
-
-**CLI：**
-
-```sh
-# Store the key first, so it never appears on a command line
-printf '%s' "$DEEPSEEK_API_KEY" | coffer secret set deepseek/key
-
-coffer provider add deepseek \
-  --protocol openai \
-  --base-url https://api.deepseek.com \
-  --secret-ref deepseek/key
-# added provider deepseek (openai)
-```
-
-`coffer provider add` 也接受 `--secret <key>`，它会把 key 存到一个形如 `provider/<uuid>/key` 的新不透明 ref 下——但这样值就留在了你的 shell 历史里。对 `anthropic`、`openai` 和 `unknown`，必须且只能给出 `--secret` 或 `--secret-ref` 之一。
 
 | 协议 | 含义 | Key |
 | --- | --- | --- |
@@ -67,15 +52,7 @@ coffer provider add deepseek \
 
 带 key 的新提供商对所有智能体生效，包括你之后注册的智能体。`ollama` 提供商一开始是休眠的，永远不对智能体生效。
 
-**Web 界面：** 在**模型提供商**页面上，用提供商头部的**生效范围**控件。
-
-**CLI：**
-
-```sh
-coffer provider scope deepseek --agents codex
-coffer provider scope deepseek               # show the current reach
-coffer provider scope deepseek --all         # back to every agent
-```
+在**模型提供商**页面上，用提供商头部的**生效范围**控件。
 
 Coffer 写哪个文件由**智能体**决定，而不是由协议决定。对 `claude-code` 生效，就按 Claude Code 的格式写它的 `settings.json`；对 `codex` 生效，就写 Codex 的 `config.toml`。这就是 OpenAI 兼容网关能驱动 Claude Code 的方式——前提是网关真的接受 Claude Code 发送的内容。Coffer 不在协议之间做转换。
 
@@ -93,21 +70,7 @@ Coffer 写哪个文件由**智能体**决定，而不是由协议决定。对 `c
 
 之后智能体**总览 › 模型**区块会显示提供商、模型、推理强度和**路径**——经由 Coffer 的中转，带**测试**按钮。**轮换中转令牌**（替换智能体用于 Coffer 中转的本地令牌）在智能体页面的 **⋯** 菜单里，只有智能体运行在提供商上时才提供；内置登录绕过中转。
 
-### 从命令行 {#from-the-command-line}
-
-```sh
-coffer agent edit claude-code --model sonnet --effort high --tier haiku=haiku
-coffer provider switch deepseek --agent claude_code
-# switched claude_code to deepseek [openai]
-coffer provider switch deepseek       # no --agent: every registered, enabled agent it reaches
-
-coffer provider builtin claude_code   # Claude Code back on its own login
-coffer provider builtin codex         # Codex back on its own login
-```
-
 智能体运行在哪个提供商上，是智能体自己的一个字段（`connection_uid`），所以一个智能体同一时间最多在一个提供商上，这个选择留在本机，不会同步。提供商被删除、被关闭或不再覆盖该智能体时，该智能体回到自己的登录。
-
-`builtin` 接受要切回的智能体类型，`claude_code` 或 `codex`——而不是某种 wire，因为提供商通过生效范围对智能体生效，而 wire 并不指明智能体。它是幂等的，并且只切回这一个智能体：同样运行在这个提供商上的其他智能体不受影响。
 
 智能体运行在哪个提供商上，是智能体自己的设置，所以一个智能体最多只在一个提供商上，切换一个智能体也不会动另一个。把智能体切到一个对它不生效的提供商上（提供商或智能体被停用，或提供商的生效范围没有指明该智能体），会以 `PROVIDER_DOES_NOT_REACH_AGENT` 被拒绝。这个选择按机器设置：它是智能体记录的一部分，不会同步。
 
@@ -144,7 +107,7 @@ Coffer 只把自己的键合并进智能体的文件，其余一切保持原样�
 - **文件里写的是中转，不是提供商。** 把 Claude Code 从一个 API 密钥 提供商切到另一个，只改变中转的路由；`settings.json` 保持不变，重命名提供商也不会动任何东西。
 - **`NO_PROXY`** 会加上 `127.0.0.1,localhost`，这样公司的 `HTTPS_PROXY` 永远不会截获回环调用。你自己的条目保留，切回时只移除 Coffer 追加的这一对。
 - **模型**写在顶层 `model` 键，`/model` 也会保存到这里，所以在 Claude Code 里选别的模型会保留下来。**推理强度**写在 `effortLevel`。
-- **每个档位都被固定。** Claude Code 按档位请求模型——Opus、Sonnet、Haiku（它也负责后台任务）和 Fable。在不提供 Claude id 的接入地址上，每个档位都是智能体的模型；在提供 Claude id 的网关上，每个档位是名字里带有该档位的模型。`coffer agent edit <agent> --tier haiku=<model>` 可以自己设置某一个。
+- **每个档位都被固定。** Claude Code 按档位请求模型——Opus、Sonnet、Haiku（它也负责后台任务）和 Fable。在不提供 Claude id 的接入地址上，每个档位都是智能体的模型；在提供 Claude id 的网关上，每个档位是名字里带有该档位的模型。在更换模型对话框的**按档位选模型**里可以自己设置某一个。
 - **`modelPicker`** 把提供商的模型放进 `/model`，当提供商不提供 Claude id 时替换内置的选项。
 
 helper 以绝对路径指向 `coffer` CLI（路径含空格时按 shell 规则加引号），因为从 Dock 或 Finder 启动的 Claude Code 拿不到你登录 shell 的 `PATH`。安装在 `~/.coffer/bin` 下时，路径是稳定的 `~/.coffer/bin/coffer`，所以升级不会弄坏它。
@@ -176,22 +139,12 @@ auth = { command = "/Users/you/.coffer/bin/coffer", args = ["proxy", "token", "-
 
 提供商可以是这台机器上的模型运行时：**Ollama**（Claude Code 需 ≥ 0.14.0，Codex 需 ≥ 0.13.4）、**LM Studio**（≥ 0.4.1 / ≥ 0.3.29）、**vLLM**（≥ 0.11.1 / ≥ 0.10.0），或 llama.cpp 的 **llama-server**（Codex 支持为实验性）。Coffer 通过中转用每个运行时自己的原生协议与之通信——不做转换——所以只支持 Chat Completions 的 `mlx_lm.server` 不受支持；请用 LM Studio 的 MLX 引擎。
 
-**Web 界面：** 在**添加提供商**里选 **Ollama** 或 **LM Studio**。Coffer 会在每个运行时的默认端口上查找（或在你填写的回环地址上查找，然后点**检测**），并列出有响应的——运行时、版本、它提供的协议及其模型。选一个，并选择要用的协议：运行时提供时可选 **Anthropic 兼容**或 **OpenAI 兼容**，或者选只供 Coffer 引擎使用的 **Ollama API**。下一步开始时已勾选能调用工具的模型，每个都显示上下文窗口。
+在**添加提供商**里选 **Ollama** 或 **LM Studio**。Coffer 会在每个运行时的默认端口上查找（或在你填写的回环地址上查找，然后点**检测**），并列出有响应的——运行时、版本、它提供的协议及其模型。选一个，并选择要用的协议：运行时提供时可选 **Anthropic 兼容**或 **OpenAI 兼容**，或者选只供 Coffer 引擎使用的 **Ollama API**。下一步开始时已勾选能调用工具的模型，每个都显示上下文窗口。
 
-如果没有任何响应，对话框会说明，并提供一段给智能体的提示词（**交给智能体**，菜单里有**复制提示词**），让它在这台机器上装好一个运行时：提示词写明机器、Coffer 探测的运行时和默认端口、同时满足两种智能体协议的版本，优先 Ollama 或 LM Studio，并要求一个适合你内存大小、能调用工具的模型。运行起来后点**检测**。自己安装运行时也完全可以——在默认端口上启动它，或填写一个已在运行的运行时地址。`coffer provider detect-local` 什么都没找到时会打印同样的提示词。
+如果没有任何响应，对话框会说明，并提供一段给智能体的提示词（**交给智能体**，菜单里有**复制提示词**），让它在这台机器上装好一个运行时：提示词写明机器、Coffer 探测的运行时和默认端口、同时满足两种智能体协议的版本，优先 Ollama 或 LM Studio，并要求一个适合你内存大小、能调用工具的模型。运行起来后点**检测**。自己安装运行时也完全可以——在默认端口上启动它，或填写一个已在运行的运行时地址。
 
-**CLI：**
-
-```sh
-coffer provider detect-local
-# ollama 0.14.2 at http://127.0.0.1:11434 — anthropic, openai
-#   qwen3-coder  (65536, tools)
-
-coffer provider add ollama --protocol anthropic --base-url http://127.0.0.1:11434 --local
-```
-
-- **检测是只读的。** 它只探测回环地址（每个运行时的默认端口，或你给的 URL），通过指纹识别运行时而不是相信端口，从不拉取、加载或下载模型。vLLM 的默认端口 8000 是 Coffer 自己守护进程的端口，所以请在其他端口启动 vLLM，并用 `--base-url` 传入。
-- **`--local` 不需要 key**，并整理运行时里能调用工具的模型，每个都带上运行时为它提供的上下文窗口。Ollama 的窗口在模型加载后才知道；在此之前未知，你可以在提供商的**模型**区块里设置。
+- **检测是只读的。** 它只探测回环地址（每个运行时的默认端口，或你给的 URL），通过指纹识别运行时而不是相信端口，从不拉取、加载或下载模型。vLLM 的默认端口 8000 是 Coffer 自己守护进程的端口，所以请在其他端口启动 vLLM，并输入它的地址，然后点**检测**。
+- **本地运行时不需要 key**；Coffer 会整理运行时里能调用工具的模型，每个都带上运行时为它提供的上下文窗口。Ollama 的窗口在模型加载后才知道；在此之前未知，你可以在提供商的**模型**区块里设置。
 - **Claude Code** 会得到 `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1`（本地运行时会拒绝它的 beta 字段），以及设为所提供窗口大小的 `CLAUDE_CODE_MAX_CONTEXT_TOKENS`，每个档位都固定到那一个模型。**Codex** 在它的目录里得到窗口大小。Coffer 从不用 `--oss` 运行 Codex，因为它可能会拉取模型。
 - 上下文窗口至少 64k token 时，智能体表现会好得多；本地运行时的 token 计数是近似值，第一个请求可能要等模型冷启动加载。
 
@@ -209,15 +162,15 @@ coffer provider add ollama --protocol anthropic --base-url http://127.0.0.1:1143
 
 **模型**标题下的那一行只说一次大多数价格来自哪里——「随 Coffer 打包，更新于 <日期>」或来自提供商——每行模型显示它每 1M token 的价格（输入 · 输出），只标出例外：
 
-- **你设置**——你在这个提供商上记录的价格；它优先于其他一切。**设置价格…**（或点击价格）打开一个小表单，填输入和输出价格，左下角是**恢复默认**，它会移除自定价格。`coffer provider price <name> <model> --input <usd> --output <usd>` 做同样的事，`--reset` 移除，`coffer provider price <name>` 列出每个价格及其来源。
+- **你设置**——你在这个提供商上记录的价格；它优先于其他一切。**设置价格…**（或点击价格）打开一个小表单，填输入和输出价格，左下角是**恢复默认**，它会移除自定价格。
 - **From `<provider>`**——列出模型时提供商自己的 API 报告了价格（OpenRouter 会）。每次列出或刷新模型时更新，从不按请求更新。
-- **Bundled · updated `<date>`**——Coffer 的价格表：pydantic 的 genai-prices，外加 Coffer 自己为最新模型准备的 Anthropic 价格。它知道每个提供商的价格、历史价格和长上下文档位。每个版本随附一份副本，守护进程每天从 genai-prices 更新一次；日期是当前所用数据的获取时间。在防火墙隔离的机器上，**设置 › 通用**里的**刷新模型价格**（`coffer config set prices.refresh off`）可以关掉更新。计算请求费用时从不临时查询价格。
+- **Bundled · updated `<date>`**——Coffer 的价格表：pydantic 的 genai-prices，外加 Coffer 自己为最新模型准备的 Anthropic 价格。它知道每个提供商的价格、历史价格和长上下文档位。每个版本随附一份副本，守护进程每天从 genai-prices 更新一次；日期是当前所用数据的获取时间。在防火墙隔离的机器上，**设置 › 通用**里的**刷新模型价格**可以关掉更新。计算请求费用时从不临时查询价格。
 - **本地 · 不计费**——这台 Mac 上的模型运行时。
 - **—**——没有任何价格来源，附带**设置价格…**。在你设置之前，[用量](/zh/guides/usage)对它显示 `—`。
 
 空选择表示不作限制：接入地址提供的所有模型。模型 id 原样传给厂商，从不在 Coffer 内部与某个列表做比对。
 
-模型选择器为智能体提供什么，在一个地方决定，并提供给所有界面——对话页面、消息渠道的 `/model` 卡片，以及 `coffer agent models`：
+模型选择器为智能体提供什么，在一个地方决定，并提供给所有界面——对话页面、消息渠道的 `/model` 卡片，：
 
 - 当智能体所在的提供商整理了**文本**模型时，就恰好是那些，按你的顺序；
 - 否则，是智能体自己的目录（见[智能体](/zh/guides/agents#models)）。
@@ -228,8 +181,8 @@ coffer provider add ollama --protocol anthropic --base-url http://127.0.0.1:1143
 
 当智能体的模型由不止一个已启用的提供商提供时，如果请求在第一个字节之前失败（连接错误、5xx、529 或 429、key 被拒，或首字节超时），Coffer 的中转会把它转到下一个提供同一模型的提供商。这是自动的，无需设置：
 
-- 按**模型提供商列表的顺序**尝试，智能体自己的提供商最先。拖动行来改变顺序，或运行 `coffer provider order <name>…` 把指定的提供商排到最前。
-- **作为其他提供商的备用**（默认开启，在提供商的**接入地址**里）决定其他提供商的请求能否切换到它。`coffer provider edit <name> --no-fallback` 关闭它。
+- 按**模型提供商列表的顺序**尝试，智能体自己的提供商最先。拖动行来改变顺序。
+- **作为其他提供商的备用**（默认开启，在提供商的**接入地址**里）决定其他提供商的请求能否切换到它。
 - 本地运行时从不切换出去，也从不作为备用。
 - 模型永远不变，回答的第一个字节之后也不会再切换；智能体自己的重试会落到一个健康的提供商上。
 - 每次故障切换都记在**活动**里，**用量**计入实际回答的那个提供商。
@@ -238,27 +191,15 @@ coffer provider add ollama --protocol anthropic --base-url http://127.0.0.1:1143
 
 ## 编辑、重命名和删除 {#edit-rename-and-delete}
 
-**Web 界面：** 在提供商头部：
+在提供商头部：
 
 - **编辑**修改**名称**、**协议**和 **Base URL**，保存前可以**测试**。重命名只改标签；页面停留在原处。有智能体运行在该提供商上时，协议被锁定。key 不在这里编辑。
 - **更换密钥**（在概览上，或在密钥被拒的横幅里）接受一个新 key，可以先**测试**，然后覆盖同一个密钥背后的值——智能体的配置文件只写密钥名，所以不会变。key 正在使用时，新值要等你在 Coffer 应用里批准：对话框和 API 密钥 行会显示**等待在 Coffer 应用中批准**，附带**查看**。见[密钥存储](/zh/guides/secret-store)。
 - **⋯ › 删除提供商**在确认后删除一个没有任何东西在用的提供商及其密钥。有东西在用的提供商不会被拦住：**删除提供商**会改为打开一个审阅。左边说明每个使用方将发生什么——智能体回到它自己的登录、Coffer 引擎暂停、语音转文字关闭、密钥被删除——右边显示 Coffer 将从每个智能体配置文件里移除的确切行（对 Codex 是它的模型、提供商表、推理强度和模型列表指针；你自己的行保留）。**删除**才会应用：先把智能体切回它们自己的登录，再删除提供商。如果期间某个智能体的文件变了，删除会停下，提供商仍在。
 
-**CLI：**
-
-```sh
-coffer provider edit deepseek --base-url https://api.deepseek.com/v1
-coffer provider edit deepseek --secret "$NEW_KEY"      # rotates the key in place
-coffer provider edit deepseek --title "DeepSeek (EU account)"
-coffer provider edit deepseek --name deepseek-eu
-coffer provider rm deepseek
-```
-
-- **标题**是可选的显示名（最多 80 个字符），Coffer 的页面和 CLI 用它代替名字显示；空的 `--title` 会清除它。
-
-- **轮换** key 会覆盖同一个 ref 下存的密钥；引用它的一切都不变。
-- **等待批准。** 为正在使用的 key 提供新的 `--secret`、为 key 已经发往某处的连接提供新的 `--base-url`，以及用另一个连接在用的 key 执行 `coffer provider add … --secret-ref`，都会被保存，但要等你在 Coffer 应用里批准。命令会打印 `waiting for approval in the Coffer app` 和审批 id，并以 `9` 退出；带 `--wait` 时则等待你的答复。在此之前继续使用旧的 key 和 URL。
-- **修改协议**在有智能体运行在该提供商上期间会以 `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` 被拒绝。对运行在它上面的每个智能体运行 `coffer provider builtin <agent_type>`（拒绝信息里会列出），编辑，然后再切换回来。
+- **更换** key 会覆盖同一个 ref 下存的密钥；引用它的一切都不变。
+- **等待批准。** 为正在使用的 key 提供新值、为 key 已经发往某处的连接提供新的 base URL，以及选用另一个连接在用的 key，都会被保存，但要等你在 Coffer 应用里批准。在此之前继续使用旧的 key 和 URL。
+- **修改协议**在有智能体运行在该提供商上期间会以 `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` 被拒绝。把运行在它上面的每个智能体（拒绝信息里会列出）切回**内置登录**，编辑，然后再切换回来。
 - **重命名**只改标签。uid、密钥 ref 和智能体的文件都保持不变；Codex 的 `name = "Coffer (<name>)"` 标签在下次切换时更新。
 - **删除**先把运行在该提供商上的每个智能体切回它自己的登录，再移除提供商，如果没有其他东西引用它的密钥，也删除密钥。
 
@@ -285,20 +226,9 @@ Coffer 的部分工作运行在它自己的模型上：记忆整理、知识整�
 
 Coffer 自行运行的处理在它们所维护的页面上开关：整理由知识页面头部的**自动**控件开关，读取和提炼记忆由记忆页面头部的那个控件开关。
 
-**CLI：**
-
-```sh
-coffer config set engine.provider deepseek        # the endpoint and key
-coffer config set engine.model deepseek-flash     # the model
-coffer config list engine.
-
-coffer config set transcribe.provider openai-direct
-coffer config set transcribe.model whisper-1
-```
-
 最多只有一个提供商是内部引擎的默认值，最多只有一个负责语音转文字；设置其中任何一个都会把标志从原来的位置移过来。一个提供商可以同时被切入智能体并作为引擎的默认值。`ollama` 提供商只能服务引擎。引擎的提供商变化时，除非新提供商的整理列表包含原引擎模型，否则引擎模型会被清除。
 
-其他 `engine.*` 键控制无人值守的处理（`engine.upkeep.<pass>.enabled` 和 `engine.upkeep.<pass>.interval`）、单次调用的时间上限（`engine.timeout`），以及哪台机器可以运行知识整理（`engine.curate_owner`）；`coffer config list engine.` 会打印每个键的当前值、默认值和说明。`engine.provider` 和 `transcribe.provider` 没有默认值，所以 `config unset` 会拒绝它们：要移动标志，就指定另一个连接。`coffer daemon status` 显示当前正在运行的处理。见 [CLI 参考](/zh/reference/cli)。
+无人值守的处理、单次调用的时间上限，以及哪台机器可以运行知识整理，同样是设置页面里的控件。引擎提供商和语音转文字提供商没有默认值：要移动标志，就选另一个提供商。`coffer daemon status` 显示当前正在运行的处理。
 
 ## 故障排查 {#troubleshooting}
 
@@ -307,9 +237,9 @@ coffer config set transcribe.model whisper-1
 | 切换以 `CONFIG_FILE_STALE` 失败 | 在 Coffer 读和写之间，智能体的配置变了 | 再切换一次。 |
 | 切换以 `PROVIDER_DOES_NOT_REACH_AGENT` 失败 | 提供商或智能体被停用，或提供商的生效范围没有指明该智能体 | 启用它，或把该智能体加入它的生效范围，然后再切换。 |
 | 切换以 `PROVIDER_INTERNAL_ONLY` 失败 | 你试图把智能体切到一个 `ollama` 提供商上 | 改为把它用作内部引擎的默认值。 |
-| 智能体从中转收到 `503` "no connection is active" | 智能体所在的提供商被停用、不再对该智能体生效，或缺少 key | 检查提供商的生效范围和 key；`coffer proxy status` 显示中转本身的状态。 |
-| 智能体从中转收到 `401` | helper 没打印令牌，或打印了过期的令牌 | 自己运行智能体文件里的 `apiKeyHelper` / `auth` 命令；`coffer proxy rotate <agent>` 会签发新令牌。 |
-| `127.0.0.1:8001` 上没有任何响应 | 中转没在运行 | `coffer proxy status`；守护进程会在几秒内重启崩溃的中转。 |
+| 智能体从中转收到 `503` "no connection is active" | 智能体所在的提供商被停用、不再对该智能体生效，或缺少 key | 检查提供商的生效范围和 key。 |
+| 智能体从中转收到 `401` | helper 没打印令牌，或打印了过期的令牌 | 自己运行智能体文件里的 `apiKeyHelper` / `auth` 命令；智能体页面 **⋯** 菜单里的**轮换中转令牌**会签发新令牌。 |
+| `127.0.0.1:8001` 上没有任何响应 | 中转没在运行 | 守护进程会在几秒内重启崩溃的中转；`coffer daemon status` 显示守护进程是否在运行。 |
 | 智能体页面显示内置登录 | Coffer 的定期检查发现智能体配置里已经没有投射，于是清除了该智能体的提供商，而不是重新路由它 | 如果你仍想用这个提供商，再切换一次。 |
 
 ## 相关 {#related}

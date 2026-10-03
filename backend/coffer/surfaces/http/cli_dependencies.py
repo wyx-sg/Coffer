@@ -1,6 +1,6 @@
 """FastAPI dependency provider for the commands skills require (spec
-skill-manager "Serve required commands on REST, the command line and the
-web"). Same ``set_*`` / ``get_*`` singleton shape as ``skill_dependencies``."""
+skill-manager "Serve required commands on REST and the web"). Same ``set_*`` /
+``get_*`` singleton shape as ``skill_dependencies``."""
 
 from __future__ import annotations
 

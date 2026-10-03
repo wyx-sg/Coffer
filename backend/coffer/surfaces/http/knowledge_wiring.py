@@ -4,9 +4,9 @@ Three things are built here: the directory service, ``IngestService`` (document
 upload), and the renderer for Coffer's own skill, which carries the catalogue.
 
 There is no ``SearchService`` any more, and no retrieval tool to register
-alongside it. The layer exposes exactly one built-in, ``coffer__write``
-(spec knowledge "Expose exactly one knowledge tool"); reading is the agent's
-own, at the absolute paths the delivered skill carries. ``IngestService`` takes
+alongside it. The layer exposes no built-in tool (spec knowledge "Expose no
+knowledge tool"); reading and writing are the agent's own, at the absolute paths
+the delivered skill carries. ``IngestService`` takes
 an optional ``completion`` port and so cannot fail to build: with no internal
 connection configured it falls back to the document's own opening prose ("Fill
 frontmatter on converted material"). The model port is handed in rather than
@@ -30,10 +30,9 @@ from dataclasses import dataclass
 from functools import cache
 from typing import TYPE_CHECKING
 
-from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.builtin_tools import AgentDirectory, BuiltinToolRegistry
 from coffer.application.engine_ports import ModelSelectorPort
 from coffer.application.knowledge import guide_render
-from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
 from coffer.application.knowledge.history_service import KnowledgeHistoryService
 from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.kind import make_knowledge_kind
@@ -147,7 +146,13 @@ def wire_knowledge_kind(
             ),
         )
 
-    register_knowledge_builtin_tools(builtin_tools, knowledge_service=service)
+    # No tool: knowledge is plain files an agent reads and writes with its own
+    # tools; the directory entry is how the handshake learns the layer is on.
+    builtin_tools.register_directory(
+        AgentDirectory(
+            name="knowledge", path=lambda: str(paths.knowledge_root()), feature=KNOWLEDGE
+        )
+    )
     app.state.kinds[KIND_KNOWLEDGE] = make_knowledge_kind(service)
     return KnowledgeWiring(
         service=service,

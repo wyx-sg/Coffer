@@ -48,8 +48,8 @@ from coffer.surfaces.http.retention_routes import router as retention_router
 from tests.support.no_approvals import router as no_approvals_router
 from tests.support.vault_stores import make_resource_repo
 
-# Re-export the MCP daemon fixture so both test_mcp_cmd.py and
-# test_mcp_caps_cmd.py can request it by name (pytest resolves fixtures from
+# Re-export the MCP daemon fixture so test_mcp_cmd.py and
+# the log tests can request it by name (pytest resolves fixtures from
 # conftest), avoiding a cross-module import that would shadow the param (F811).
 from .test_mcp_cmd import mcp_daemon  # noqa: F401
 

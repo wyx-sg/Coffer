@@ -9,7 +9,7 @@
 // per-collection switch and no reach control; and the layer has no retrieval,
 // so there is no search box — ⌘K jumps to a collection by name.
 //
-// New knowledge goes in as an ITEM — an upload, an agent's `coffer__write` —
+// New knowledge goes in as an ITEM — an upload, an agent's file in `.inbox/` —
 // which waits in the collection's Inbox until curation files it into the right
 // document; people write through Edit. With Coffer's engine not set there is
 // nothing to curate with: the Automatic control reads "Curation needs Coffer's

@@ -27,8 +27,9 @@ from typing import Any
 import pytest
 
 from coffer.application.memory.context import compose_context
+from coffer.application.memory.distil_write import WRITE_SYSTEM
 from coffer.application.memory.service import KIND_MEMORY
-from coffer.infrastructure.memory import paths, store
+from coffer.infrastructure.memory import note_edit, paths, store
 from coffer.infrastructure.memory.raw_store import list_raw_entries
 from tests.integration.memory.conftest import FakeResources, init_repository
 from tests.unit.memory.conftest import (
@@ -237,6 +238,92 @@ async def test_a_later_entry_rewrites_the_note_it_belongs_to(vault: _Vault) -> N
     assert note.created_at == note_before.created_at
     assert note.updated_at > note_before.updated_at
     assert (result.merged, result.opened) == (1, 0)
+
+
+# --- an edited note is the note ---------------------------------------------
+
+
+async def _open_one_note(vault: _Vault) -> str:
+    vault.codex_says("Daemon restart", "Restart with coffer daemon stop/start.", digest="b1")
+    await vault.service().aggregate()
+    (first,) = _entry_ids()
+    await vault.pass_over(
+        [
+            _route({"entry": first, "action": "open", "title": "Daemon restart"}),
+            _write("Daemon restart", "restart with stop/start", "Restart the daemon."),
+        ]
+    )
+    return first
+
+
+def _edit(slug: str, body: str) -> None:
+    fingerprint = note_edit.note_fingerprint(_PARTITION, slug)
+    note_edit.save_body(
+        _PARTITION, slug, body, expected_fingerprint=fingerprint, stamp="2026-10-04T00:00:00+00:00"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="memory", scenario="an edited note is the body distil's writing stage receives"
+)
+async def test_an_edited_note_is_the_body_the_writing_stage_receives(vault: _Vault) -> None:
+    first = await _open_one_note(vault)
+    _edit("daemon-restart", "Restart with `coffer daemon restart` — edited by a person.")
+
+    vault.claude_says("Port drift", "The port drifts after a restart.", digest="a2")
+    await vault.service().aggregate()
+    added = next(e for e in _entry_ids() if e != first)
+    calls_before = len(vault.completion.calls)
+    await vault.pass_over(
+        [
+            _route({"entry": added, "action": "merge", "slug": "daemon-restart"}),
+            _write("Daemon restart", "restart, then re-check the port", "Merged prose."),
+        ]
+    )
+
+    writing = [c for c in vault.completion.calls[calls_before:] if c["system"] == WRITE_SYSTEM]
+    (request,) = writing
+    current = json.loads(request["user"])["current_note"]
+    assert current["body"].startswith("Restart with `coffer daemon restart` — edited by a person.")
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="memory", scenario="an edited note is the body distil's writing stage receives"
+)
+async def test_a_note_routing_leaves_alone_keeps_the_edited_text_byte_for_byte(
+    vault: _Vault,
+) -> None:
+    await _open_one_note(vault)
+    _edit("daemon-restart", "A person's edit.")
+    path = paths.note_path(_PARTITION, "daemon-restart")
+    edited = path.read_bytes()
+
+    vault.claude_says("Unrelated", "Something about another subject.", digest="a2")
+    await vault.service().aggregate()
+    other = next(e for e in _entry_ids() if e != _entry_ids()[0])
+    await vault.pass_over(
+        [
+            _route({"entry": other, "action": "open", "title": "Another subject"}),
+            _write("Another subject", "one line", "Its own prose."),
+        ]
+    )
+
+    assert path.read_bytes() == edited
+
+
+@pytest.mark.acceptance(spec="memory", scenario="a newer entry revises an edited note")
+@pytest.mark.acceptance(
+    spec="memory", scenario="keep an edited statement against an older entry without evidence"
+)
+def test_the_writing_instruction_judges_by_evidence_and_never_by_the_writer() -> None:
+    system = WRITE_SYSTEM.lower()
+    assert "newer statement wins unless the older one is shown to be right" in system
+    assert "command's output" in system
+    assert "nothing in it is exempt because a person or an agent wrote it" in system
+    # Triggers are gone from the answer's shape.
+    assert "trigger" not in system
 
 
 # --- a retirement sticks -----------------------------------------------------

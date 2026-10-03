@@ -9,7 +9,7 @@ The Coffer desktop app is a macOS application that hosts Coffer's web UI in a na
 
 ## What it adds
 
-The app shows the same UI as `coffer open` — built from the same `frontend/dist` — so every page works identically. What it adds is what a browser tab cannot do for itself:
+The app shows the same UI as a browser tab at the daemon's address — built from the same `frontend/dist` — so every page works identically. What it adds is what a browser tab cannot do for itself:
 
 - **A real application.** A window with a Dock icon and a Cmd-Tab entry, and a menu bar item that stays resident when the window is closed and says whether the daemon is running and how many things need you. The window has its own title bar with the sidebar toggle and back and forward arrows (see [Web UI](/guides/web-ui#the-sidebar)).
 - **Detect-or-spawn.** At launch it attaches to a running daemon or starts one. You never need to know the port.
@@ -23,7 +23,7 @@ The app shows the same UI as `coffer open` — built from the same `frontend/dis
 Everything else — opening files in your editor, choosing folders — goes through the daemon's HTTP routes exactly as it does in a browser.
 
 ::: info Platform
-The desktop app is built for macOS on Apple silicon only. On other platforms, use the CLI install and `coffer open`.
+The desktop app is built for macOS on Apple silicon only. On other platforms, use the CLI install and open the daemon's address (`http://127.0.0.1:<port>`) in a browser.
 :::
 
 ## Install
@@ -167,7 +167,7 @@ coffer daemon stop
 
 ### Keep the daemon running
 
-Turn on **Settings → Daemon → Start at login** to start the daemon when you log in and restart it if it crashes, whether or not the app is open. The CLI equivalent is `coffer daemon service install`. With it on, the app attaches to an already-running daemon at launch and opens immediately.
+Turn on **Settings → Daemon → Start at login** to start the daemon when you log in and restart it if it crashes, whether or not the app is open. With it on, the app attaches to an already-running daemon at launch and opens immediately.
 
 ## Logs
 

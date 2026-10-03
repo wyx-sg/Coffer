@@ -45,17 +45,17 @@ coffer secret set github/token
 
 | 位置 | 如何引用 ref |
 | --- | --- |
-| stdio MCP 服务器 | `coffer mcp add … --secret ENV_VAR=<ref>`——成为服务器进程的一个环境变量 |
-| HTTP MCP 服务器 | `coffer mcp add … --secret Header-Name=<ref>`——成为一个请求头，密钥就是这个请求头的完整值 |
-| 纳入托管某个智能体的 MCP 条目 | `coffer adopt mcp <agent>:<entry> --secret KEY=<ref>`——Coffer 把该条目当前的值存到 `<ref>` 下 |
-| 模型提供商 | `coffer provider add … --secret-ref <ref>` |
+| stdio MCP 服务器 | **添加服务器**或**编辑**对话框里设为**密钥**的环境变量行——成为服务器进程的一个环境变量 |
+| HTTP MCP 服务器 | 同样的对话框里设为**密钥**的请求头行——成为一个请求头，密钥就是这个请求头的完整值 |
+| 纳入托管某个智能体的 MCP 条目 | **添加服务器**对话框里的**从你的智能体导入**——Coffer 把该条目当前的值存到一个生成的 ref 下 |
+| 模型提供商 | **添加提供商**里的 **API key** 字段 |
 | 消息渠道 | 消息渠道的令牌字段（见[消息渠道](/zh/guides/channels)） |
-| 同步远端 | `coffer sync remote set … --secret-ref <ref>` |
+| 同步远端 | **同步**页面上的推送密钥 |
 | 你运行的命令、技能、env 文件 | `coffer://secret/<name>`，指向以 `secret/<name>` 存储的独立密钥——见[密钥](/zh/guides/secrets) |
 
 注册一个引用了存储中不存在的 ref 的资源会失败，报错里会写出缺少哪个密钥，而且什么都不会保存。
 
-多个资源可以引用同一个 ref，但一个已经发往某处的 ref，要发往第二个地方，必须先在桌面应用里由你批准。存入一个值后在注册资源时引用它，会立即生效，因为值是你刚刚提供的。在新资源里引用一个已在使用的密钥，或者改变某个资源发送密钥的去处（stdio 服务器的命令、HTTP 服务器的 URL、同步远端的 URL），会保存改动但扣住密钥：命令打印 `waiting for approval in the Coffer app` 并以 `9` 退出。见[密钥 → 审批](/zh/guides/secrets#approvals)。
+多个资源可以引用同一个 ref，但一个已经发往某处的 ref，要发往第二个地方，必须先在桌面应用里由你批准。存入一个值后在注册资源时引用它，会立即生效，因为值是你刚刚提供的。在新资源里引用一个已在使用的密钥，或者改变某个资源发送密钥的去处（stdio 服务器的命令、HTTP 服务器的 URL、同步远端的 URL），会保存改动但扣住密钥：它会等待你在桌面应用里批准。见[密钥 → 审批](/zh/guides/secrets#approvals)。
 
 ## 列出与查看 {#list-and-inspect}
 
@@ -83,11 +83,7 @@ coffer secret list
 
 它不解密任何东西，也不记入审计。`--json` 给出同样的数据，外加每个 ref 已批准和待批准的去处。Web 界面里的[密钥页面](/zh/guides/secrets#the-secrets-page)显示同一份列表。
 
-```sh
-coffer secret get github/token          # [redacted] — a presence check, not audited
-```
-
-`get` 只告诉你某个值是否已存储：它打印 `[redacted]`，ref 不存在时以 `4` 退出。没有任何选项能打印出值。要查看或复制一个值，请在桌面应用的[密钥页面](/zh/guides/secrets#the-secrets-page)选择 **显示值…**，每次都会要求 Touch ID 或登录密码。
+没有任何命令能打印出值。[密钥页面](/zh/guides/secrets#the-secrets-page)的每一行会说明值是否已存储。要查看或复制一个值，请在桌面应用的[密钥页面](/zh/guides/secrets#the-secrets-page)选择 **显示值…**，每次都会要求 Touch ID 或登录密码。
 
 ## 轮换密钥 {#rotate-a-secret}
 
@@ -97,25 +93,15 @@ coffer secret get github/token          # [redacted] — a presence check, not a
 printf '%s' "$NEW_TOKEN" | coffer secret set github/token
 ```
 
-该条记录原地重新加密，创建时间保持不变。所有引用该 ref 的地方，下次解析时就会用新值——对 MCP 服务器来说，是下一个会话启动它的时候。对提供商，`coffer provider edit <name> --secret <value>` 通过提供商自己的 ref 做同样的事。在密钥页面上，行菜单里的 **替换值…** 对任何 ref 都能做到。
+该条记录原地重新加密，创建时间保持不变。所有引用该 ref 的地方，下次解析时就会用新值——对 MCP 服务器来说，是下一个会话启动它的时候。在密钥页面上，行菜单里的 **替换值…** 对任何 ref 都能做到。
 
 替换一个已经有去处在接收的值——或者任何独立的 `secret/<name>`——要等你在桌面应用里批准，因为比如把消息渠道的机器人令牌换成别人的，就会把你的对话转走。批准之前，旧值继续使用，新值加密后等待；`set` 打印 `waiting for approval in the Coffer app` 并以 `9` 退出，或者加 `--wait` 等待。新的 ref、或者没有任何去处接收的 ref，会立即存入。
 
 ## 删除密钥 {#delete-a-secret}
 
-```sh
-coffer secret rm github/token           # asks first; --force skips the prompt
-```
+在[密钥页面](/zh/guides/secrets#the-secrets-page)上选择行上的 **删除…**，它会先询问。只要还有资源引用这个 ref，或者还有技能文件引用独立密钥的 `coffer://secret/<name>`，删除就会被拒绝：对仍在使用的 ref，对话框不会删除，而是按类型和当前名称列出使用它的每一项，并附上各自页面的链接。
 
-只要还有资源引用这个 ref，或者还有技能文件引用独立密钥的 `coffer://secret/<name>`，删除就会被拒绝，报错会按类型和当前名称列出每一个：
-
-```text
-secret 'github/token' is still used by: mcp_server 'github'; detach or delete those resources before deleting the secret
-```
-
-在密钥页面上，行菜单里的 **删除…** 效果相同；对仍在使用的 ref，它不会删除，而是列出使用它的每一项，并附上各自页面的链接。
-
-你很少需要这个命令：删除资源时，会释放不再被其他东西引用的 ref（独立的 `secret/` 名称永远不会这样被释放）。删除一个 ref 会忘掉它已批准的去处，所以之后在同一个 ref 下存入的新值会被当作一个新密钥。删除不存在的 ref 会成功，但什么都不做。
+你很少需要手动删除：删除资源时，会释放不再被其他东西引用的 ref（独立的 `secret/` 名称永远不会这样被释放）。删除一个 ref 会忘掉它已批准的去处，所以之后在同一个 ref 下存入的新值会被当作一个新密钥。删除不存在的 ref 会成功，但什么都不做。
 
 ## 主密钥放在哪里 {#where-the-master-key-lives}
 
@@ -140,15 +126,7 @@ Coffer 目前还没有发布用 Apple Developer ID 签名的二进制，所以�
 | 提示 | 无 | 每次守护进程启动时，macOS 可能会询问一次是否允许访问 |
 | 能防住 | — | 在没有你的钥匙串的情况下拷走 `~/.coffer/` 的人 |
 
-**Web 界面：** **设置 › 安全** 的 **加密** 部分。打开 **将主密钥存入系统钥匙串**，然后在确认框里点 **移动主密钥**。
-
-**命令行：**
-
-```sh
-coffer config get secrets.storage       # file
-coffer config set secrets.storage keychain
-coffer config set secrets.storage file
-```
+打开**设置 › 安全**的 **加密** 部分。打开 **将主密钥存入系统钥匙串**，然后在确认框里点 **移动主密钥**。
 
 移动时，会先把主密钥写到目标位置并读回校验，然后才删除原位置，所以中途被打断的话，主密钥仍留在原处。无论往哪个方向移动，所有已存储的密钥都保持可读，移动会以 `master_key_relocated` 记入审计。主密钥可以移动，但不能轮换：Coffer 不会用一把新密钥重新加密整个存储。签名发行版拒绝把主密钥移出钥匙串。
 
@@ -176,26 +154,20 @@ coffer config set secrets.storage file
 
 ## 把主密钥带到另一台机器 {#carry-the-key-to-another-machine}
 
-[保险库同步](/zh/guides/vault-sync)可以把密钥带到你的其他机器，但只以密文形式，而且只在你打开时才会（`coffer sync remote set <url> --with-secret`，或同步页面上的 **包含加密密钥**）。无论怎么设置，主密钥都不会被推送。一台收到密文却没有主密钥的机器，会把这些 ref 报告为已锁定，而不是悄悄失败。
+[保险库同步](/zh/guides/vault-sync)可以把密钥带到你的其他机器，但只以密文形式，而且只在你打开时才会（同步页面上的 **包含加密密钥**）。无论怎么设置，主密钥都不会被推送。一台收到密文却没有主密钥的机器，会把这些 ref 报告为已锁定，而不是悄悄失败。
 
 要让第二台机器能解密，请通过你信任的渠道自己搬运主密钥：
 
-1. 在机器 A 上，用桌面应用备份主密钥（见上文），并记下它的指纹（`coffer sync key fingerprint`）。
+1. 在机器 A 上，用桌面应用备份主密钥（见上文），并记下它的指纹（**设置 › 安全**上的**密钥指纹**）。
 2. 把备份文件拷到机器 B。
-3. 在机器 B 上：
+3. 在机器 B 上，在应用或浏览器中使用 **设置 › 安全** 上的 **导入主密钥**，选择文件并输入口令；**文件中的主密钥**必须显示为*相同*，即与机器 A 的指纹一致。然后删除拷贝的文件。
 
-   ```sh
-   coffer sync key import ~/coffer-master-key.cfk   # asks for the passphrase
-   coffer sync key fingerprint     # must match machine A
-   rm ~/coffer-master-key.cfk
-   ```
-
-也可以在应用或浏览器中，使用 **设置 › 安全** 上的 **导入主密钥**。导入不需要在场验证——持有文件和口令的人本来就持有主密钥。裸主密钥（开发版的 `master.key`）导入时不需要口令。正在运行的守护进程会立即使用导入的主密钥。被替换的旧主密钥会先备份到一个 `master.key.bak-*` 文件，无论它原来存放在哪里（开发版里也包括系统钥匙串，导入的主密钥会在那里取代它）。**同步** 页面也提供 **导入主密钥**，它的机器列表会显示每台机器是否持有 **同一把主密钥**。导入一把不同的主密钥时，之前那把会作为备份保留在旁边：开发版中是一个带时间戳的 `master.key.bak-*` 文件，签名发行版中是第二个钥匙串条目。
+导入不需要在场验证——持有文件和口令的人本来就持有主密钥。裸主密钥（开发版的 `master.key`）导入时不需要口令。正在运行的守护进程会立即使用导入的主密钥。被替换的旧主密钥会先备份到一个 `master.key.bak-*` 文件，无论它原来存放在哪里（开发版里也包括系统钥匙串，导入的主密钥会在那里取代它）。**同步** 页面也提供 **导入主密钥**，它的机器列表会显示每台机器是否持有 **同一把主密钥**。导入一把不同的主密钥时，之前那把会作为备份保留在旁边：开发版中是一个带时间戳的 `master.key.bak-*` 文件，签名发行版中是第二个钥匙串条目。
 
 ## 哪些内容永远不会被记录 {#what-never-gets-logged}
 
 - 密钥的值从不以明文出现在保险库、`runs.db`、日志文件、审计日志或 MCP 调用日志中。
-- 密钥相关的审计事件——`secret_set`、`secret_revealed`、`secret_deleted`、`master_key_relocated`、`master_key_exported`、`secret_resolved`、`secret_imported` 以及各个 `secret_approval_*` 事件——只携带 ref、密钥名称或去处，从不携带值。`secret_revealed` 记录的是在桌面应用中的一次显示或复制；存在性检查（`get`）和列表不记入审计。
+- 密钥相关的审计事件——`secret_set`、`secret_revealed`、`secret_deleted`、`master_key_relocated`、`master_key_exported`、`secret_resolved`、`secret_imported` 以及各个 `secret_approval_*` 事件——只携带 ref、密钥名称或去处，从不携带值。`secret_revealed` 记录的是在桌面应用中的一次显示或复制；列表不记入审计。
 - 明文只存在于守护进程的内存中，从解密到使用它的进程启动或 HTTP 请求为止——以及你查看显示出来的值时，桌面应用的窗口里。
 - stdio MCP 服务器只收到它自己的密钥。它不继承守护进程的环境，所以读不到守护进程启动时带的其他密钥。它自己的密钥放在它的环境变量里，以你身份运行的其他程序可以读到；列表会把这类 ref 标为“readable by local processes”（本机进程可读）。
 - HTTP 上游的连接错误只报告异常类型，所以携带密钥的 URL 或请求头不会被回显到错误信息里。
@@ -204,11 +176,11 @@ coffer config set secrets.storage file
 
 | 错误 | 含义 | 解决办法 |
 | --- | --- | --- |
-| 启动时报 `MASTER_KEY_MISSING` | 存在密文，但找不到可用的主密钥 | 用 `coffer sync key import <file>` 导入你的主密钥备份；开发版中也可以恢复 `~/.coffer/master.key`（或钥匙串条目）。 |
+| 启动时报 `MASTER_KEY_MISSING` | 存在密文，但找不到可用的主密钥 | 用**设置 › 安全**上的**导入主密钥**导入你的主密钥备份；开发版中也可以恢复 `~/.coffer/master.key`（或钥匙串条目）。 |
 | 启动时报 `SECRET_LOCKED` | 钥匙串无法读取——它被锁住了，或者提示框被关掉了 | 解锁钥匙串，再次启动守护进程。 |
 | `SECRET_UNREADABLE`，并指出某个 ref | 密文用当前主密钥解不开——通常是另一台机器的主密钥加密的 | 导入对应的主密钥，或者重新设置该 ref 的值。 |
 | `SECRET_IN_USE` | 仍有资源引用该 ref | 解除或删除报错中列出的资源。 |
-| `waiting for approval in the Coffer app`，退出码 `9` | 改动中的某个密钥要发往一个从未去过的地方，或替换了一个正在使用的值 | 在桌面应用中批准；`coffer secret approvals` 列出正在等待的项。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
+| `waiting for approval in the Coffer app`，退出码 `9` | 改动中的某个密钥要发往一个从未去过的地方，或替换了一个正在使用的值 | 在桌面应用中批准；审批对话框列出正在等待的项。见[密钥 → 审批](/zh/guides/secrets#approvals)。 |
 | `PRESENCE_GRANT_INVALID` | 在桌面应用之外尝试了显示值、备份主密钥或审批 | 到桌面应用里去做。 |
 | MCP 服务器启动失败，提示缺少某个密钥 | 引用的 ref 不在存储中 | `coffer secret set <ref>`。 |
 

@@ -221,7 +221,7 @@ async def test_two_repositories_and_a_preference_make_exactly_three_partitions(
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
     spec="memory",
-    scenario="compose context and locate the memory root without creating a partition",
+    scenario="compose session context without creating a partition",
 )
 async def test_reading_from_inside_a_repository_brings_no_partition_into_existence(
     tmp_path: pathlib.Path,

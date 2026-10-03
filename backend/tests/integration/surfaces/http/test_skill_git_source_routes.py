@@ -160,6 +160,10 @@ def _move(up: Upstream) -> str:
     return up.commit("v2 change")
 
 
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="update a Git-imported skill from its source preview",
+)
 def test_check_preview_compare_and_apply_over_rest(c: TestClient, up: Upstream) -> None:
     item = _add(c, up, path="skills/review")
     uid, first = item["uid"], item["source"]["commit"]
@@ -229,6 +233,10 @@ def test_closing_a_preview_leaves_the_pin(c: TestClient, up: Upstream) -> None:
     assert stage_dirs(get_skill_source_service()) == []
 
 
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="update a Git-imported skill from its source preview",
+)
 def test_a_local_edit_is_409_until_taken_or_kept(c: TestClient, up: Upstream) -> None:
     item = _add(c, up, path="skills/review")
     uid, first = item["uid"], item["source"]["commit"]

@@ -3,7 +3,7 @@
 ## Purpose
 Where Coffer keeps what it stores and how anything is written there. State is
 split by what it is into five classes under `~/.coffer/`; the vault — the
-user's configuration, skills, knowledge, memory triggers and secret ciphertext
+user's configuration, skills, knowledge and secret ciphertext
 — is plain files in a git repository that every writer (a person, the daemon,
 sync) changes through one validated, compare-and-swap write that is committed
 naming its writer, so any file's history can be read and restored. The
@@ -193,7 +193,8 @@ fingerprint, validated, as a new commit naming the writer and
 `Coffer-Restored-From` — never by rewriting history. Restoring a folder SHALL
 also remove the files that version did not have. All of this SHALL be reachable
 on REST (`/api/v1/vault/history`, `/api/v1/vault/diff`, `/api/v1/vault/content`,
-`/api/v1/vault/restore`) and on the CLI (`coffer vault history|diff|show|restore`).
+`/api/v1/vault/restore`); the command line carries none of it, and the web UI
+shows a version's diff and restores through these routes.
 
 #### Scenario: a file's history lists its versions with their writers
 - **GIVEN** a skill file saved twice
@@ -277,7 +278,7 @@ the upgrade carries no approvals, so each secret's first use at each destination
 person's approval in the Coffer app.
 
 #### Scenario: the upgrade carries every item
-- **GIVEN** a home at the single-database layout with resources of every kind, secrets, approvals, knowledge with history, skills, memory, triggers and media
+- **GIVEN** a home at the single-database layout with resources of every kind, secrets, approvals, knowledge with history, skills, memory and media
 - **WHEN** `coffer migrate` runs
 - **THEN** every item is in its class directory with its uid, reach and bytes, and the knowledge history is readable in the vault
 
@@ -304,12 +305,14 @@ person's approval in the Coffer app.
 ### Requirement: List recent vault changes and the hand edits kept out
 The vault's recent commits SHALL be readable newest first, across the whole
 vault or under one path prefix, each with its writer, time, summary and the
-paths it changed, a page at a time (`GET /api/v1/vault/changes`; on the CLI one
-folder's commits are `coffer vault history <folder>/`). The hand edits the
+paths it changed, a page at a time (`GET /api/v1/vault/changes`; one folder's
+commits are `GET /api/v1/vault/history` for that folder). The hand edits the
 vault refused (see "Keep the last valid version when a hand edit is invalid")
 SHALL be listed with the path, the finding's code, severity and message — on
 REST as `GET /api/v1/vault/problems` and on the CLI as `coffer vault problems`
-(`--json` for scripts), which says so when there are none.
+(`--json` for scripts), which says so when there are none. `coffer vault
+problems` is the only vault command the CLI keeps, because no page lists the
+refused edits.
 
 #### Scenario: recent changes list the vault's commits newest first
 - **GIVEN** one commit under `knowledge/` and a later one under `skills/`

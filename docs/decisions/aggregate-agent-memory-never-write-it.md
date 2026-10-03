@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-17
 **Deciders**: Yuxing Wu
-**Related**: [Memory Reaches a Session at Three Moments: an Index at Start, Retrieval per Prompt, and a Guard Before a Known Trap](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md); spec memory; spec knowledge; [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md); [Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale](agent-hook-installation.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); [Sync Withholds Derived Output](sync-withholds-derived-output.md); research note [agent memory](../research/agent-memory.md)
+**Related**: [Memory Reaches a Session at Two Moments: an Index at Start and the Notes a Prompt Names](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md); spec memory; spec knowledge; [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md); [Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale](agent-hook-installation.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); [Sync Withholds Derived Output](sync-withholds-derived-output.md); research note [agent memory](../research/agent-memory.md)
 
 ## Context
 
@@ -29,7 +29,7 @@ the place agent memory lives four times:
    projection's one real benefit, ambient loading. Removed 2026-09-10 — it had
    never once been installed on the maintainer's machine, so in two months the
    path never ran. Delivery came back later as an explicit, audited install,
-   decided in [Memory Reaches a Session at Three Moments](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md).
+   decided in [Memory Reaches a Session at Two Moments](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md).
 
 Aggregation — reading the agents' own memories — shipped 2026-09-12, installed
 and ran. It was the first attempt whose failure could be measured, and on
@@ -61,12 +61,11 @@ neither built a search engine to do it:
 Coffer reads each enabled agent's native memory read-only, keeps what it read
 verbatim in a hidden `.raw/`, and has its internal model distil it into notes of
 its own — one topic per file, partitioned by repository plus `global` — merging
-across agents by meaning. Delivery is by hook, at three moments (decided in
+across agents by meaning. Delivery is by hook, at two moments (decided in
 the delivery ADR above): a session opens with the index of its repository's
 partition and `global`, bounded to what a hook can carry, plus the absolute
 path of the notes directory; each substantive prompt brings in up to three
-notes it names; a command a person marked as a known trap is held once with
-its note as the reason.
+notes it names.
 
 - **Pros.** The agents keep the canonical copy, so nothing Coffer does can
   corrupt a tool's memory. Distilling starts from the agents' finished work
@@ -154,7 +153,7 @@ Multi-term, fuzzy or embedding search behind `coffer__recall`.
 memory read-only, distils it into notes of its own — one topic per file, filed
 by repository — and delivers them through hooks: the index of that set plus
 the path to read the bodies as files at session start, then the notes a prompt
-names and the note behind a known trap.**
+names.**
 
 1. **Read, never write.** Coffer reads the native memory of each registered,
    enabled agent from a path derived from its own `config_dir`, and modifies
@@ -185,12 +184,10 @@ names and the note behind a known trap.**
    prefers the open repository over `global`, and names the directory holding
    what it dropped. Partitions are identified by repository, which collapses
    worktrees and second clones and excludes scratch directories.
-6. **After the start, retrieval and a guard.** Each substantive prompt ranks
-   the notes lexically and adds the top three; a command a person has marked
-   as a known trap is denied once with the note as its reason. Both are
-   decided in [Memory Reaches a Session at Three Moments](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md).
+6. **After the start, retrieval.** Each substantive prompt ranks
+   the notes lexically and adds the top three. Decided in [Memory Reaches a Session at Two Moments](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md).
 7. **Two delivery paths.** A session the developer drives themselves receives
-   all three moments through hooks in the agent's own settings, installed only
+   both moments through hooks in the agent's own settings, installed only
    on request and repaired when stale — see
    [Agent Hook Installation](agent-hook-installation.md). A channel-driven turn
    receives the index and the prompt's notes through the system-prompt append
@@ -238,5 +235,4 @@ names and the note behind a known trap.**
   spec memory "Deliver the index and the notes path at session start",
   spec memory "Deliver to channel turns through the system prompt",
   spec memory "Retrieve the notes a prompt names",
-  spec memory "Guard a known trap once per session",
   spec memory "Reintroduce no retired mechanism".

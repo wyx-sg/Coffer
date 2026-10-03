@@ -179,6 +179,7 @@ Rules a future change must respect:
   is decided in [Per-Agent Resource Scope](per-agent-resource-scope.md).
 - Because the framework spans every layer, the code layout had to be decided in
   the same spec: [Code Layout — Layer-First](code-layout-layer-first.md).
-- REST and CLI answer through the same services, which is what lets spec
-  resource-framework "Reach every management operation from both REST and the
-  CLI" hold for every kind at once.
+- The CLI carries only what needs it (a program runs it, it must work when the
+  daemon is down, a hand-off prompt tells an agent to run it, or the web UI
+  cannot do it); every management operation is REST plus a web page, answered
+  by the same services for every kind. Spec resource-framework records the rule.

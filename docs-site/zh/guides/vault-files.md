@@ -17,12 +17,11 @@ Coffer 保存的、你希望带到另一台机器上的一切——MCP 服务器
 ├── state/settings/internal-engine.json Coffer's model and upkeep settings
 ├── knowledge/<collection>/…            knowledge documents (Markdown)
 ├── skills/<name>/…                     skill folders (SKILL.md and the rest)
-├── memory-triggers/<id>.md             memory triggers
 ├── secret/<ref>.enc                    encrypted secrets (never edit these)
 └── machines/<id>.json                  one descriptor per machine that syncs
 ```
 
-`coffer path vault` 打印它的位置。智能体不在这里：智能体的配置只关乎某一台机器，所以放在 `~/.coffer/local/resources/agent/`。生效范围（本机哪些智能体可以使用某个资源）也不在这里，而是在 `~/.coffer/local/reach.json`。见[文件与目录](/zh/reference/filesystem)。
+智能体不在这里：智能体的配置只关乎某一台机器，所以放在 `~/.coffer/local/resources/agent/`。生效范围（本机哪些智能体可以使用某个资源）也不在这里，而是在 `~/.coffer/local/reach.json`。见[文件与目录](/zh/reference/filesystem)。
 
 ## 编辑文件 {#edit-a-file}
 
@@ -52,7 +51,7 @@ Coffer 保存的、你希望带到另一台机器上的一切——MCP 服务器
 - **未知的顶层字段会被保留。** 与 `uid`、`kind`、`name`、`config` 并列、但本构建不认识的字段会报一个警告，但绝不会被丢掉，所以更新版本的 Coffer 添加的字段在你编辑后依然存在。
 - **`config` 只能包含该类型拥有的设置。** 该类型没有声明的键（笔误，或 Coffer 已废弃的设置）会被拒绝：这次编辑不会提交，问题会指出是哪个键，最后一个有效版本继续生效。类型不允许的名字也一样（MCP 服务器的名字最多 24 个字符且不能含 `__`；技能的名字只能用小写字母、数字和连字符），MCP 服务器、智能体或技能上出现 `title` 也一样，它们没有这个字段。
 - **`${HOME}`** 代表你的主目录，所以同一个文件在每台机器上都能用。
-- **永远不要编辑 `secret/`。** 这些文件是密文；请用 `coffer secret set`。
+- **永远不要编辑 `secret/`。** 这些文件是密文；请用密钥页面（**添加密钥**）。
 
 知识文档和技能文件夹就是普通文件：像对待任何 Markdown 一样编辑、新增、移动和删除即可。
 
@@ -75,21 +74,20 @@ Coffer 还会每分钟以及启动时扫描一次保险库，所以守护进程�
 
 ## 历史与恢复 {#history-and-restore}
 
-保险库的每一次被接受的改动都是一个版本，记录时间、写入者（你、在磁盘上编辑、智能体、Coffer、整理或同步）以及哪台机器。任何文件或文件夹都有历史：
-
-```sh
-coffer vault history resources/mcp_server/jira.json
-coffer vault history skills/pdf/                 # a folder ends in /
-coffer vault diff resources/mcp_server/jira.json <version>
-coffer vault show resources/mcp_server/jira.json <version>
-coffer vault restore skills/pdf/ <version>
-```
-
-路径相对于保险库。`<version>` 来自 `history`。恢复会把那个版本的内容作为一个**新**版本放回去，标注为从旧版本恢复，并经过和其他写入相同的检查：不会原地改写任何东西，所以你还可以恢复这次恢复。恢复文件夹会整体放回，删除那个版本里没有的文件。恢复前会先询问；`--yes` 跳过询问。密钥没有可读的历史，不能这样恢复。
+保险库的每一次被接受的改动都是一个版本，记录时间、写入者（你、在磁盘上编辑、智能体、Coffer、整理或同步）以及哪台机器。任何文件或文件夹都有历史。密钥没有可读的历史，不能恢复。
 
 在 Web 界面里，技能的 **历史** 标签页列出它的各个版本及每个版本的写入者，逐文件展示每个版本的改动，并在询问后恢复某个版本。知识文档在 **知识** 页面上有同样的历史。
 
-你也可以直接用 git 读历史（`git -C ~/.coffer/vault log`）。但做改动时请编辑文件、让 Coffer 来提交：它的提交带有标明写入者的 trailer，而且它会校验所提交的内容。
+对其他文件，可以直接用 git 读历史，并把旧版本的内容存回文件来放回去：
+
+```sh
+cd ~/.coffer/vault
+git log --oneline -- resources/mcp_server/jira.json
+git diff <version> -- resources/mcp_server/jira.json
+git show <version>:resources/mcp_server/jira.json > resources/mcp_server/jira.json
+```
+
+Coffer 会校验存回的文件，并把它记为一个**新**版本：不会原地改写任何东西，所以你还可以恢复这次恢复。但做改动时请编辑文件、让 Coffer 来提交：它的提交带有标明写入者的 trailer，而且它会校验所提交的内容。
 
 ## 相关内容 {#related}
 

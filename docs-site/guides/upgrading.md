@@ -68,7 +68,7 @@ Every move is recorded in `local/migration.json` as it happens, so a rollback ca
 - **Your sync remote is replaced** by the first upgraded machine, if you had one (below).
 - **Secrets waiting for approval.** When the home holds secrets, the report counts them and says that each one's first use at each destination waits once for your approval in the Coffer app.
 
-Then start Coffer as usual. `coffer path` prints the new roots.
+Then start Coffer as usual. **Settings → Data** shows the new roots.
 
 ## Roll it back
 
@@ -93,13 +93,13 @@ If an upgrade stops half-way, `coffer migrate` refuses to run again and names `-
 
 A remote written by an earlier Coffer is in the old layout. It is never converted in place; the upgraded vault is the source of truth and replaces it. Nothing is refused: the first upgraded machine's next round, or its join, replaces the old remote.
 
-1. **Upgrade the first machine.** Open the **Sync** page (or run `coffer sync join`): the preview says what goes up by area, which files only the old remote had and will go away (the first 100 are listed, with the exact total), who pushed the old tip and when, and that machines still on the older layout must upgrade. Confirm to replace the remote. The push is a fast-forward, so the old history stays in the remote's git log.
+1. **Upgrade the first machine.** On the **Sync** page press **Join and pull**: the preview says what goes up by area, which files only the old remote had and will go away (the first 100 are listed, with the exact total), who pushed the old tip and when, and that machines still on the older layout must upgrade. Confirm to replace the remote. The push is a fast-forward, so the old history stays in the remote's git log.
 
    Your old remote setting was carried into `local/sync/remote.json`, so nothing needs re-entering. A plaintext secret in the vault still stops the push, and the remote keeps its old tip.
 
-2. **Upgrade each other machine**, then join the replaced remote. It joins as a new machine: it takes the union, deletes nothing, and leaves any file that differs for you to choose (`coffer sync choose`). A machine still on the earlier Coffer reads only the layout number and refuses the replaced remote until it is upgraded.
+2. **Upgrade each other machine**, then join the replaced remote. It joins as a new machine: it takes the union, deletes nothing, and leaves any file that differs for you to choose (**Choose versions** on the **Status** tab of the **Sync** page). A machine still on the earlier Coffer reads only the layout number and refuses the replaced remote until it is upgraded.
 
-Secret ciphertext is committed to the remote only if your old remote carried secrets; otherwise pass `--with-secret` when you want it.
+Secret ciphertext is committed to the remote only if your old remote carried secrets; otherwise switch on **Include encrypted secrets** when you want it.
 
 ## Related
 

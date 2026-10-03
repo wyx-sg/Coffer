@@ -76,15 +76,9 @@ This is why `/new` is safe to use often: it clears the context, not your choices
 
 A conversation normally runs in the Coffer-managed workspace `~/.coffer/content/workspace`. `/dir` moves the chat to another directory, but only to one the channel allows. The allow-list exists because anyone holding your phone — or a slip of the thumb — should not be able to point an agent with full permissions at an arbitrary folder on your machine; you decide the places in advance, at the computer.
 
-Both live on the channel's **Settings** tab under **Working directories**. **Default** is where new conversations start (none means the Coffer workspace); **Allowed for /dir** lists the folders `/dir` may switch into — add one with **Add directory…**, take one out with **Remove**, and the default's row is marked *default*. With none allowed, `/dir` is off. Or from the CLI:
+Both live on the channel's **Settings** tab under **Working directories**. **Default** is where new conversations start (none means the Coffer workspace); **Allowed for /dir** lists the folders `/dir` may switch into — add one with **Add directory…**, take one out with **Remove**, and the default's row is marked *default*. With none allowed, `/dir` is off.
 
-```sh
-coffer channel edit my-telegram --default-dir ~/src/coffer              # where new conversations start
-coffer channel edit my-telegram --dir ~/src/coffer --dir ~/src/notes   # replaces the list
-coffer channel edit my-telegram --no-dirs                              # allows none
-```
-
-`--dir` is repeatable. Paths must be absolute (`~` is expanded by the shell); a relative one is refused and nothing is saved. Each allowed directory also admits the directories beneath it.
+Paths must be absolute; a relative one is refused and nothing is saved. Each allowed directory also admits the directories beneath it.
 
 - `/dir <path>` accepts an allowed path or one beneath it; `/dir <name>` accepts the base name of one allowed path (`/dir coffer`). The directory must exist.
 - Switching opens a fresh conversation there and remembers the directory for the chat.

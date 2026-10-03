@@ -16,7 +16,7 @@ import pytest
 
 from coffer.infrastructure.knowledge.paths import knowledge_root
 
-from .conftest import _create_collection, _hold_material, _submit
+from .conftest import _create_collection, _hold_material, _submit, _submit_material
 
 
 def _uid(client, name: str) -> str:  # type: ignore[no-untyped-def]
@@ -47,11 +47,9 @@ def test_a_deleted_collection_comes_back_with_its_documents_readme_and_items(  #
     assert resp.status_code == 201, resp.text
     doc = _submit(client, collection="shopee", title="Cache", description="d", body="kept text")
     _hold_material(monkeypatch)
-    waiting = client.post(
-        "/api/v1/knowledge/material",
-        json={"collection": "shopee", "title": "Waiting", "description": "d", "body": "b"},
-    )
-    assert waiting.status_code == 201, waiting.text
+    assert _submit_material(
+        client, collection="shopee", title="Waiting", description="d", body="b"
+    ).pending
     old_uid = _uid(client, "shopee")
 
     deleted = client.delete(f"/api/v1/resources/{old_uid}")

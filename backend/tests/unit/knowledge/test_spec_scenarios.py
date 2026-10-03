@@ -14,13 +14,12 @@ from typing import Any
 
 import pytest
 
-from coffer.application.builtin_tools import BuiltinToolRegistry
-from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
 from coffer.application.knowledge.curate import pending_items
 from coffer.application.knowledge.curate_tools import Counters, build_tools
 from coffer.application.knowledge.curate_worker import CurationWorker
 from coffer.application.knowledge.guide_render import render_catalogue
 from coffer.application.knowledge.ingest import IngestService
+from coffer.application.knowledge.intake import adopt_dropped_files
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.upkeep_runs import UpkeepRunRegistry
 from coffer.domain.errors import ResourceNotFound
@@ -178,19 +177,25 @@ def test_the_catalogue_says_read_the_files_with_your_own_tool(root: pathlib.Path
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="refuse a write to a scope name instead of resolving it"
+    spec="knowledge",
+    scenario="leave a file under a scope name uncatalogued instead of resolving it",
 )
 @pytest.mark.anyio
-async def test_a_write_to_global_is_refused_and_provisions_nothing(root: pathlib.Path) -> None:
-    registry = BuiltinToolRegistry()
-    register_knowledge_builtin_tools(registry, knowledge_service=_service("shopee"))
-    write = {t.name: t for t in registry.list()}["write"].handler
+async def test_a_file_under_global_is_left_alone_and_provisions_nothing(
+    root: pathlib.Path,
+) -> None:
+    note = root / "global" / ".inbox" / "note.md"
+    note.parent.mkdir(parents=True)
+    note.write_text("an agent's note\n", encoding="utf-8")
+    service = _service("shopee")
 
-    with pytest.raises(ValueError) as raised:
-        await write({"agent": "codex", "collection": "global", "title": "t", "description": "d"})
+    assert await adopt_dropped_files(service) == []
 
-    assert "shopee" in str(raised.value)
-    assert sorted(p.name for p in root.iterdir()) == ["shopee"]
+    # Left exactly where it is, with no frontmatter added, and not a collection.
+    assert note.read_text(encoding="utf-8") == "an agent's note\n"
+    assert [c.name for c in await service.list_collections()] == ["shopee"]
+    assert await service.collection_names() == ["shopee"]
+    assert not (root / "project-1").exists()
 
 
 # ----- converted material --------------------------------------------------

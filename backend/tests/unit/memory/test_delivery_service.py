@@ -215,12 +215,15 @@ async def test_install_into_a_config_holding_foreign_hooks_leaves_them_untouched
     assert written["env"] == {}
     assert written["theme"] == "dark"
     # Foreign entries stay first and unchanged; Coffer's one is appended after.
-    for event in ("UserPromptSubmit", "PreToolUse"):
-        assert written["hooks"][event][:-1] == foreign["hooks"][event]
-        assert MARKER in written["hooks"][event][-1]["hooks"][0]["command"]
+    event = "UserPromptSubmit"
+    assert written["hooks"][event][:-1] == foreign["hooks"][event]
+    assert MARKER in written["hooks"][event][-1]["hooks"][0]["command"]
+    # A foreign hook on an event Coffer does not install on is left alone, and
+    # Coffer adds nothing there.
+    assert written["hooks"]["PreToolUse"] == foreign["hooks"]["PreToolUse"]
     assert written["hooks"]["Stop"] == foreign["hooks"]["Stop"]
     assert len(written["hooks"]["SessionStart"]) == 1
-    assert len(written["hooks"]["PostToolUse"]) == 1
+    assert "PostToolUse" not in written["hooks"]
 
 
 @pytest.mark.acceptance(spec="memory", scenario="hook installation is marker-scoped and removable")
@@ -454,3 +457,30 @@ async def test_malformed_config_fails_loudly_with_the_path(
 async def test_unknown_agent_raises_resource_not_found(svc: DeliveryService) -> None:
     with pytest.raises(ResourceNotFound):
         await svc.install("00000000000000000000000000000000", actor="tester")
+
+
+@pytest.mark.acceptance(
+    spec="memory", scenario="an install clears marked entries on events it no longer uses"
+)
+async def test_install_clears_marked_entries_on_events_it_no_longer_uses(
+    svc: DeliveryService, store: FakeStore
+) -> None:
+    first = await svc.install(_CC_UID, actor="tester")
+    command = first.command
+    marked = {"hooks": [{"type": "command", "command": command, "timeout": 5}]}
+    foreign = {"hooks": [{"type": "command", "command": "/skynet/beforeShell.sh"}]}
+    doc = json.loads(store._files[_CC_SETTINGS_PATH])
+    # An earlier build also hung Coffer's entry on the two shell-tool events.
+    doc["hooks"]["PreToolUse"] = [foreign, {"matcher": "Bash", **marked}]
+    doc["hooks"]["PostToolUse"] = [{"matcher": "Bash", **marked}]
+    store._files[_CC_SETTINGS_PATH] = json.dumps(doc)
+
+    await svc.install(_CC_UID, actor="tester")
+
+    written = json.loads(store._files[_CC_SETTINGS_PATH])
+    assert written["hooks"]["PreToolUse"] == [foreign]
+    assert "PostToolUse" not in written["hooks"]
+    for event in ("SessionStart", "UserPromptSubmit"):
+        entries = written["hooks"][event]
+        assert len(entries) == 1
+        assert entries[0]["hooks"][0]["command"] == command

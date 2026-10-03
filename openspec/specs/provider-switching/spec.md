@@ -311,10 +311,8 @@ the keys left in its file rather than silently routing it elsewhere.
 - **AND** the Codex agent still runs on A, with its `config.toml` and `connection_uid` untouched
 
 ### Requirement: Switch one agent at a time
-`POST /api/v1/providers/{uid}/activate` with body `{agent_type}` (and
-`coffer provider switch <name> [--agent claude_code|codex]`) MUST switch THAT agent onto the
-connection; with no `--agent` the command switches every registered, enabled agent the connection
-reaches, one request each. The operation:
+`POST /api/v1/providers/{uid}/activate` with body `{agent_type}` (the agent's Change model dialog calls it) MUST switch THAT agent onto the
+connection. The operation:
 
 1. requires the connection to exist, else 404, and the agent of that type to be registered, else 404;
 2. refuses with 409 `PROVIDER_DOES_NOT_REACH_AGENT` when the connection or the agent is switched off or
@@ -334,8 +332,8 @@ Reach is the framework's per-agent `scope`
 `compatible_agents` field in the config, in `ProviderCreate` or in `ProviderPatch`. A new connection
 is pre-filled from its wire through the kind's `default_scope` hook — unscoped for a credentialed
 wire (including `unknown`, so an inconclusive probe hides nothing and the user decides), which reaches
-every agent including one registered later, and nothing (`scope = []`) for `ollama`. Re-targeting is a scope edit (`PUT /api/v1/resources/{uid}/scope`,
-`coffer provider scope <name> --agents …`). `scope = []` is dormant: the connection reaches no
+every agent including one registered later, and nothing (`scope = []`) for `ollama`. Re-targeting is a scope edit (`PUT /api/v1/resources/{uid}/scope`, which the
+connection's scope control calls). `scope = []` is dormant: the connection reaches no
 agent, so no agent resolves its key. The projection writer MUST be chosen by AGENT type, not by
 protocol: a connection reaching `claude_code` writes Claude's `settings.json` in the anthropic shape
 and one reaching `codex` writes Codex's `config.toml`, which is how an OpenAI-compatible gateway is
@@ -436,41 +434,41 @@ because its config holds no secret.
 A connection's `protocol` MUST be correctable — the probe that guessed the wire can be wrong, and
 re-entering the key to fix it is a worse answer than editing it. But the wire is not inert, so
 changing it MUST be refused with 409 `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while an agent runs on
-the connection, with a message that names the way out (`coffer provider builtin <agent_type>` for each
-agent that runs on it). A keyless (`ollama`) connection covers no agent whatever its
+the connection, with a message that names the way out (switching each agent that runs on it back to its built-in
+login, `POST /api/v1/providers/use-builtin/{agent_type}`). A keyless (`ollama`) connection covers no agent whatever its
 scope says (see "Keep ollama connections internal-only").
 Moving the wire of a connection an agent runs on would leave the native config Coffer
 already wrote standing, with nothing left that would ever take it off. Silently de-projecting instead
 MUST NOT be the answer: the developer asked to change a field, not to take their agents off a
 gateway. Re-sending the wire the connection already has is not a change, so a client that submits a
 whole form is never told its unchanged dropdown is a conflict. The refusal MUST be reachable on every
-surface that offers the edit — REST, `coffer provider edit`, and the connection's form.
+surface that offers the edit — REST and the connection's form.
 
 #### Scenario: correcting a mis-probed wire is refused while the connection is live
 - **GIVEN** a connection that an agent runs on and is projected into,
 - **WHEN** the user patches its `protocol` to a different wire,
-- **THEN** the request is refused `409` `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`, the stored wire is unchanged, and the message names `coffer provider builtin <agent_type>` for each agent running on it as the way out
+- **THEN** the request is refused `409` `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`, the stored wire is unchanged, and the message names switching each agent running on it back to its built-in login (`POST /api/v1/providers/use-builtin/{agent_type}`) as the way out
 - **AND** re-sending the wire the connection already has is not a change and succeeds, so a client that submits a whole form is never told its unchanged dropdown is a conflict; once the agents are back on their own login, the same patch succeeds (see "Refuse to move the wire of a live connection")
 
-### Requirement: Offer every connection operation on REST, CLI and web
-Create, switch, revert-to-built-in, rename and delete MUST be available via (a) the REST API, (b)
-`coffer provider list|show|add|edit|rm|enable|disable|scope|switch|builtin|detect-local|order|price` with `--json` on
-`list` and `show` (`switch <name> [--agent claude_code|codex]` switches one agent, or with no `--agent` every registered, enabled agent the connection reaches; the list carries no Active column) — the lifecycle verbs being the ones every kind's group offers, and rename being
-`coffer provider edit <name> --name <new>` (see "Rename a connection without moving anything
-else") — and (c) the web surfaces — the Model providers library for create and delete, the Agent
-detail page for the switch, the connection's own page for the rename. Editing a connection MUST be
+### Requirement: Offer every connection operation on REST and the web
+Create, switch, revert-to-built-in, rename, edit, enable and disable, scope, order and delete MUST be
+available via (a) the REST API and (b) the web surfaces — the Model providers library for create and
+delete, the Agent detail page for the switch and the revert, the connection's own page for the
+rename, the edit, the scope control and the enabled switch (see "Rename a connection without moving
+anything else"). Coffer has no `provider` command group: the list carries no Active column, and a
+connection's lifecycle verbs are the ones every kind's page offers. Editing a connection MUST be
 available over REST (`PATCH /api/v1/providers/{uid}`: `base_url`, `protocol`, `models`,
-`secret_value`, `description`, `fallback`), over the CLI
-(`coffer provider edit <name> [--name <new>] [--title <text>] [--description <text>] [--protocol <wire>] [--base-url <url>] [--secret <value>] [--fallback|--no-fallback]`)
-and from its detail page, including correcting the wire. `coffer provider add <name> --protocol <p>
---base-url <url> [--secret <value> | --secret-ref <ref> | --local]` takes no model; `--local`
-creates a local runtime connection (see "Configure a local model connection"). No command or route
-returns a provider's key: the agents reach a connection through the local model proxy, which injects
-the key itself (see "Reach API-key and local connections through the local model proxy"). Reverting is
-`coffer provider builtin <agent_type>`: a surface that can put an agent onto a Coffer connection and
-not take it off again is half an operation. Which connection the internal engine and speech-to-text
-run on is set through `coffer config` (see "Set the internal-engine default" and "Keep an
-independent speech-to-text default"), not through a `provider` subcommand.
+`secret_value`, `description`, `fallback`) and from its detail page, including correcting the wire.
+Creating one (`POST /api/v1/providers` with a name, a protocol, a base URL and an inline secret, a
+secret ref or the `local_runtime` detection) takes no model; a local runtime connection is created
+without a key (see "Configure a local model connection"). No route returns a provider's key: the
+agents reach a connection through the local model proxy, which injects the key itself (see "Reach
+API-key and local connections through the local model proxy"). Reverting is
+`POST /api/v1/providers/use-builtin/{agent_type}`, offered by the agent's Change model dialog as its
+built-in login: a surface that can put an agent onto a Coffer connection and not take it off again is
+half an operation. Which connection the internal engine and speech-to-text run on is chosen in
+Settings › General (see "Set the internal-engine default" and "Keep an independent speech-to-text
+default"), not on the connection's own page.
 
 The web surfaces:
 
@@ -489,8 +487,7 @@ The web surfaces:
   preset list (an unmatched endpoint gets Coffer's neutral provider glyph); the name is the user's
   own, and the row links to the detail page by `uid`.
 - The add-connection dialog asks for the vendor from a grid of eight equal buttons — Anthropic, OpenAI, Google Gemini, DeepSeek, OpenRouter, Ollama, LM Studio and Custom — which fill in the
-  endpoint and protocol (Custom reveals a manual protocol selector; the CLI takes
-  `--protocol`), in two steps, Endpoint and then Models. A local runtime (Ollama, LM Studio) asks for no key and,
+  endpoint and protocol (Custom reveals a manual protocol selector), in two steps, Endpoint and then Models. A local runtime (Ollama, LM Studio) asks for no key and,
   until a runtime is chosen or an address is filled in, does not let the user go on to Models; the connection's Name
   appears once a runtime is chosen. The dialog surfaces test-connection and list-models with an inline, not-yet-saved
   secret.
@@ -510,11 +507,11 @@ The web surfaces:
 - **GIVEN** a connection exists,
 - **WHEN** the user patches `base_url` (no `secret_value`),
 - **THEN** only that field is updated, `secret_ref` is unchanged, and `resource_updated` is audited.
-#### Scenario: the command line covers create, list, switch and revert
+#### Scenario: the routes cover create, list, switch and revert
 - **GIVEN** the daemon is running,
-- **WHEN** the user runs `coffer provider add`, `coffer provider list --json`, `coffer provider switch <name> --agent <agent_type>` and `coffer provider builtin <agent_type>` from the CLI,
-- **THEN** each operation succeeds with the same effect as the HTTP API and `list --json` returns machine-readable output,
-- **AND** after the revert the agent's `connection_uid` is empty, so a terminal-only user can undo the switch they made.
+- **WHEN** a client calls `POST /api/v1/providers`, `GET /api/v1/providers`, `POST /api/v1/providers/{uid}/activate` with an `agent_type` and `POST /api/v1/providers/use-builtin/{agent_type}`,
+- **THEN** each operation succeeds and the list answers with the connections as JSON,
+- **AND** after the revert the agent's `connection_uid` is empty, so the switch that was made can be undone.
 #### Scenario: the connections page lists profiles and their compatible agents
 - **GIVEN** the connections page is rendered with two mock connections whose reach differs,
 - **WHEN** the page renders,
@@ -614,13 +611,12 @@ rule (see "Store an inline secret under a minted opaque ref") stands.
 - **THEN** it persists with `secret_ref` null, no vault entry is created, it reaches no agent, and `ProviderOut` shows `internal_default=false`.
 
 ### Requirement: Set the internal-engine default
-`POST /api/v1/providers/{uid}/internal-default` (and `coffer config set engine.provider <name>`)
+`POST /api/v1/providers/{uid}/internal-default` (which Settings › General calls)
 MUST set the named connection as the internal-engine default (applying "Keep at most one
 internal-engine default"), emit a `provider_internal_default_set` audit event, and return the
-updated `ProviderOut`. `coffer config get engine.provider` MUST print the name of the connection
-that carries the flag, or that none does. No operation clears the flag without moving it, so
-`coffer config unset engine.provider` MUST be refused with a message saying the flag moves by
-naming another connection, and nothing is written.
+updated `ProviderOut`. Which connection carries the flag, or that none does, is read from
+`GET /api/v1/providers`. No operation clears the flag without moving it: it moves by naming another
+connection.
 Setting the internal default MUST notify the engine so it can apply its own drop rule
 ([internal-engine](../internal-engine/spec.md) "Drop the engine model when its connection moves"); the notification is a port, not an import, so this operation never
 reads or writes the engine's own settings row, which lives under `/api/v1/internal-engine-config`. A
@@ -633,11 +629,11 @@ the flagged connection from a setting of its own ([internal-engine](../internal-
 - **WHEN** the user sets the second as the internal default,
 - **THEN** its `internal_default` becomes true, the other stays false, and a `provider_internal_default_set` audit entry is recorded.
 
-#### Scenario: the command line names the internal engine's connection
+#### Scenario: the internal engine's connection is named over REST
 - **GIVEN** the daemon is running with two connections, `alpha` flagged as the internal default and `beta` unflagged,
-- **WHEN** the user runs `coffer config set engine.provider beta`, then `coffer config get engine.provider`, then `coffer config unset engine.provider`,
-- **THEN** `beta` carries the flag, `alpha` no longer does, a `provider_internal_default_set` entry names `beta`, and `get` prints `beta`,
-- **AND** `unset` exits non-zero with a message saying the flag moves by naming another connection, and `beta` still carries it.
+- **WHEN** a client calls `POST /api/v1/providers/{beta uid}/internal-default`, then `GET /api/v1/providers`,
+- **THEN** `beta` carries the flag, `alpha` no longer does, and a `provider_internal_default_set` entry names `beta`,
+- **AND** the list shows `beta` as the only connection flagged.
 
 ### Requirement: Introspect an unsaved connection with an inline secret
 The endpoint-introspection routes MUST remain available to callers holding a connection that is not
@@ -684,8 +680,8 @@ the `resource_updated` audit event provider updates already emit.
 
 ### Requirement: Rename a connection without moving anything else
 A connection MUST be renamable through the framework's own kind-agnostic route — the `name` field on
-`PATCH /api/v1/resources/{uid}` — and from the CLI with `coffer provider edit <name> --name <new>`,
-which calls that route; this kind MUST NOT serve a rename route of its own. The
+`PATCH /api/v1/resources/{uid}` — and from the connection's edit dialog, which calls that
+route; this kind MUST NOT serve a rename route of its own. The
 operation MUST change the label and NOTHING else: the resource keeps its `uid`, its `secret_ref`
 MUST be left where it is (the ref is an opaque address, never derived from the name), the
 `audit_log` rows MUST NOT be repointed — they follow the resource by uid and go on spelling the name
@@ -695,8 +691,8 @@ goes stale until the next projection rewrites it. It MUST record a `resource_ren
 naming both names. A name another connection already holds MUST be refused with
 `RESOURCE_ALREADY_EXISTS` (409) BEFORE anything is written; an absent connection MUST be a 404;
 renaming to the current name MUST be a no-op and MUST record nothing. The optional display title
-every resource carries ([resource-framework](../resource-framework/spec.md), edited with
-`--title`) is not a rename and leaves the name alone. On the web, the edit dialog's
+every resource carries ([resource-framework](../resource-framework/spec.md), set
+through the same `PATCH /api/v1/resources/{uid}`) is not a rename and leaves the name alone. On the web, the edit dialog's
 Name field submits this rename ahead of the patch, and the page stays where it is, because its route
 is the uid.
 
@@ -708,11 +704,11 @@ is the uid.
 - **GIVEN** two connections `acme` and `taken`,
 - **WHEN** `acme` is renamed to `taken`,
 - **THEN** the response is 409 `RESOURCE_ALREADY_EXISTS` and both connections still carry their original labels, each still reachable at its own uid with its secret intact.
-#### Scenario: rename a connection from the command line
+#### Scenario: rename a connection over REST
 - **GIVEN** the daemon is running with a connection `acme`,
-- **WHEN** the user runs `coffer provider edit acme --name acme-eu`, and then `coffer provider edit acme-eu --name taken` while another connection is named `taken`,
+- **WHEN** a client patches the connection's `name` to `acme-eu` through `PATCH /api/v1/resources/<uid>`, and then patches it to `taken` while another connection is named `taken`,
 - **THEN** the first answers under the label `acme-eu` at the same `uid` and records a `resource_renamed` entry naming both names,
-- **AND** the second exits non-zero with the `RESOURCE_ALREADY_EXISTS` error the route gives, and the connection is still `acme-eu`.
+- **AND** the second is refused with 409 `RESOURCE_ALREADY_EXISTS`, and the connection is still `acme-eu`.
 
 ### Requirement: Introspect the endpoint when the Models tab opens
 A connection's Models section MUST introspect the endpoint when the connection opens, once per visit, without a user action, and
@@ -859,15 +855,14 @@ own drop rule ([internal-engine](../internal-engine/spec.md) "Drop the speech-to
 or clear the other, and neither MUST fall back to the other at resolution time — and one connection
 MAY carry both. It is a second flag because the two name different models: a gateway serving chat
 completions commonly serves no `/audio/transcriptions` at all, so borrowing the engine's connection
-aimed every voice message at a 404. `POST /api/v1/providers/{uid}/transcribe-default` and
-`coffer config set transcribe.provider <name>` MUST be the surfaces, the route returning the updated
-`ProviderOut`. `coffer config get transcribe.provider` MUST print the name of the connection that
-carries the flag, or that none does, and `coffer config unset transcribe.provider` MUST be refused
-the way `unset engine.provider` is (see "Set the internal-engine default").
+aimed every voice message at a 404. `POST /api/v1/providers/{uid}/transcribe-default`, which Settings › General calls, MUST be the
+surface, returning the updated `ProviderOut`. Which connection carries the flag, or that none does,
+is read from `GET /api/v1/providers`, and no operation clears the flag without moving it, as for the
+internal-engine default (see "Set the internal-engine default").
 
 Like the internal-engine default, the flag is declared in the kind's exclusive flags, so the
 vault's validation refuses any document that flags a second connection, and a generic resource
-write (`PATCH /api/v1/resources/{uid}`, `POST /api/v1/resources`, `coffer provider edit`) that would
+write (`PATCH /api/v1/resources/{uid}`, `POST /api/v1/resources`) that would
 set it while another connection holds it MUST be refused before anything is written with 409
 `PROVIDER_TRANSCRIBE_DEFAULT_TAKEN`, naming the holder.
 
@@ -882,14 +877,14 @@ set it while another connection holds it MUST be refused before anything is writ
 - **THEN** B's `transcribe_default` becomes true and A's becomes false, and a `provider_transcribe_default_set` entry is audited
 - **AND** A is still the internal-engine default and B still is not
 
-#### Scenario: the command line names the speech-to-text connection
+#### Scenario: the speech-to-text connection is named over REST
 - **GIVEN** the daemon is running with connection A flagged as both the internal-engine and the speech-to-text default, and connection B carrying neither,
-- **WHEN** the user runs `coffer config set transcribe.provider B`, then `coffer config get transcribe.provider`,
-- **THEN** B carries `transcribe_default`, `get` prints B, and a `provider_transcribe_default_set` entry names B,
+- **WHEN** a client calls `POST /api/v1/providers/{B uid}/transcribe-default`, then `GET /api/v1/providers`,
+- **THEN** B carries `transcribe_default`, the list shows B as the only one flagged, and a `provider_transcribe_default_set` entry names B,
 - **AND** A is still the internal-engine default.
 
 ### Requirement: Revert an agent type to its built-in login
-`POST /api/v1/providers/use-builtin/{agent_type}` (and `coffer provider builtin <agent_type>`) MUST
+`POST /api/v1/providers/use-builtin/{agent_type}` MUST
 remove every key Coffer wrote from the enabled agent of that type — for Claude Code `apiKeyHelper`,
 `env.ANTHROPIC_BASE_URL`, the top-level `model` and `effortLevel`, the four
 `env.ANTHROPIC_DEFAULT_<TIER>_MODEL` pins, Coffer's `modelPicker`, the local-runtime compatibility
@@ -902,13 +897,13 @@ count as Coffer's only while Coffer's `apiKeyHelper` is in the file ([data-model
 "What is Coffer's"); a user's own `ANTHROPIC_BASE_URL` or tier pins beside no Coffer helper are left
 untouched and are not reported as drift. It also clears that agent's `connection_uid`, idempotently — succeeding when
 the agent was on no connection — and touches only that agent: another agent that runs on the same
-connection stays on it. The route and the command take an agent
+connection stays on it. The route takes an agent
 type; a wire is not accepted, because a connection reaches agents through its scope and no protocol
 names an agent.
 
 #### Scenario: switch an agent back to its built-in login
 - **GIVEN** the Claude Code agent runs on a connection and is projected into it,
-- **WHEN** the user switches Claude Code back to built-in (`POST /providers/use-builtin/claude_code`, or `coffer provider builtin claude_code`),
+- **WHEN** the user switches Claude Code back to built-in (`POST /providers/use-builtin/claude_code`),
 - **THEN** Coffer's managed keys are removed from the agent's native config so it falls back to its own login, and the agent's `connection_uid` is empty; the operation is idempotent (a no-op when the agent is on no connection). Another agent running on the same connection is untouched. A connection is an optional override.
 
 #### Scenario: a wire no longer names an agent to revert
@@ -1019,7 +1014,7 @@ carries, and printed by `coffer proxy token --agent-uid <uid>` (`GET /api/v1/pro
 one of those tokens, as `Authorization: Bearer` or `x-api-key`, compared in constant time, and MUST
 refuse anything else — no token, a claude.ai OAuth token (`sk-ant-oat…`), a provider key — with 401
 in the wire's own error shape, forwarding nothing. The token names the agent, which is how usage is
-attributed. `coffer proxy rotate <agent>` (`POST /api/v1/proxy/tokens/{agent_uid}/rotate`) replaces
+attributed. `POST /api/v1/proxy/tokens/{agent_uid}/rotate` (the agent page's Rotate proxy token) replaces
 it; the old token is refused from the moment the rotation answers. For an agent this machine does
 not have, the token route answers 404 and the command exits 4 with nothing on stdout, so a stale
 helper fails closed. The token keeps browsers and other users' processes off the proxy; it is not a
@@ -1093,11 +1088,11 @@ is never a fallback. A session stays on one member until that member fails.
 ### Requirement: Configure a local model connection
 A local model connection — one whose endpoint is a model runtime on this machine (Ollama, LM
 Studio, vLLM, llama.cpp's `llama-server`) speaking the agent's own protocol — MUST be creatable
-without a key (`coffer provider add <name> --protocol <wire> --base-url <loopback url> --local`, or
-`POST /api/v1/providers` with the `local_runtime` detection returned), MUST point at a loopback
+without a key (`POST /api/v1/providers` with the `local_runtime` detection returned, from the Add provider
+dialog's local path), MUST point at a loopback
 address, and is reached through the proxy like any other connection. There is no protocol
 translation: a runtime that serves neither Anthropic Messages nor OpenAI Responses natively
-(`mlx_lm.server`) is not a supported upstream. `--local` curates the runtime's models that it does
+(`mlx_lm.server`) is not a supported upstream. A local connection curates the runtime's models that it does
 not report as unable to call tools, each with the context window the runtime serves it with. For
 Claude Code, Coffer sets `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` and
 `CLAUDE_CODE_MAX_CONTEXT_TOKENS` to the chosen model's window, and pins every tier to the one model;
@@ -1110,7 +1105,7 @@ levels with each curated model"). Neither compatibility key is a field the user 
 
 #### Scenario: create a keyless local runtime connection
 - **GIVEN** an Ollama runtime answering on a loopback port
-- **WHEN** the user runs `coffer provider add ollama --protocol anthropic --base-url http://127.0.0.1:11434 --local`
+- **WHEN** the user creates a connection `ollama` through `POST /api/v1/providers` with protocol `anthropic`, base URL `http://127.0.0.1:11434` and the detected `local_runtime`
 - **THEN** the connection persists with no secret, records the runtime, version and wires it serves, and curates its tool-capable models with their served windows
 
 #### Scenario: a local connection sets Claude Code's compatibility key
@@ -1134,7 +1129,7 @@ levels with each curated model"). Neither compatibility key is a field the user 
 - **THEN** the catalogue entry for `qwen-coder` carries no window and no compaction limit
 
 ### Requirement: Detect a local model runtime without changing it
-`POST /api/v1/providers/detect-local` and `coffer provider detect-local [--base-url <url>]` MUST
+`POST /api/v1/providers/detect-local` (the Add provider dialog's Detect, with an optional base URL) MUST
 report which runtime answers at a loopback URL — or, with none given, at each runtime's default port
 (Ollama 11434, LM Studio 1234, llama-server 8080; vLLM's default 8000 is the daemon's own port, so
 vLLM is found only on a URL the user gives) — by fingerprint rather than port, with its version, the
@@ -1151,7 +1146,7 @@ versions from which Ollama and LM Studio serve both wires; that an agent needs a
 model with a window of at least 64k tokens — preferring Ollama or LM Studio, pulling one
 tool-calling chat model that fits, confirming it answers on its default port, and then telling
 the person to press Detect; it MUST name no installer or command, and it MUST be `null` once a
-runtime answers. `coffer provider detect-local` MUST print the same prompt when it finds nothing.
+runtime answers.
 The Add provider dialog's local path MUST offer that prompt beside its note that nothing
 answered, and keep typing the address of a runtime that is already running.
 
@@ -1248,11 +1243,10 @@ cost MUST be stored with the label of the price it used (`override:<connection u
 `provider:<connection uid>`, `bundled:<list version>` or `local`) so a later list never rewrites
 history. A cache category a price leaves out is charged at its input rate. A model none of them
 prices MUST be marked unpriced, never costed at zero. `POST /api/v1/providers/{uid}/prices`
-resolves the same prices for the Models section, each with its source; `coffer provider price
-<name> [<model> --input <usd> --output <usd> | --reset]` shows them and sets or resets the price
-the user records. Every surface labels cost as estimated. Where nothing in a cost is priced, the web
-UI and the CLI MUST show `—` in its place, never `$0.00`, and the web UI MUST say why and where a
-price is set in the dash's tooltip and accessible name. Subscription logins do not pass through
+resolves the same prices for the Models section, each with its source, and the section's **Set
+price…** sets or resets the price the user records. Every surface labels cost as estimated. Where
+nothing in a cost is priced, the web UI MUST show `—` in its place, never `$0.00`, and MUST say why
+and where a price is set in the dash's tooltip and accessible name. Subscription logins do not pass through
 Coffer and are not metered.
 
 #### Scenario: a known model is priced per category
@@ -1283,21 +1277,21 @@ Coffer and are not metered.
 
 #### Scenario: a model with no price reads as a dash, never zero
 - **GIVEN** usage of a model through a connection that records no price for it, whose API reported none, and that the bundled list does not know
-- **WHEN** the Usage tab and `coffer usage` show that model's row
+- **WHEN** the Usage tab shows that model's row
 - **THEN** its cost reads `—`, not `$0.00`, with the unpriced request count
 - **AND** on the Usage tab the dash's tooltip says no price is known for it and that a price is set on its provider, and the Cost tile says "1 model unpriced" once, as a link to that provider's Models section; no other place repeats the count
 
 ### Requirement: Report usage by model, agent or day over a range
-`GET /api/v1/usage/summary` and `coffer usage [--range today|24h|7d|30d|month|custom] [--from <day> --to <day>] [--by model|agent|day] [--agent <agent type>] [--provider <name>] [--json]`
+`GET /api/v1/usage/summary`, taking the range (`today`, `24h`, `7d`, `30d`, `month` or `custom` with a first and last day), the grouping (`model`, `agent` or `day`) and the filters as query parameters,
 MUST report, for the range in the machine's local days (today; the last 24 hours up to now, summed from the per-request rows because the window cuts through a local day; the last 7 or 30 days including today;
 this calendar month; or an inclusive custom range), one row per model (with the connection that
 served it, by uid and name), per agent or per day: requests, the token totals per category, the
 estimated cost, how many requests were unpriced or had unknown usage, and the agent types that sent
 the row's requests, most requests first. The summary MUST be narrowable to one agent type
 (`agent_type`) and to one connection (`connection_uid`); a filtered summary's rows and totals count
-only the requests that match every filter. `GET /api/v1/usage/requests` and `coffer usage requests`
-page through the per-request detail, newest first. `GET /api/v1/usage/export.csv` and
-`coffer usage --csv` return the same summary, with the same filters, as CSV. The web UI shows the summary as the Usage tab of Model providers ("Show metered usage on a Usage tab of Model providers").
+only the requests that match every filter. `GET /api/v1/usage/requests`
+pages through the per-request detail, newest first. `GET /api/v1/usage/export.csv`
+returns the same summary, with the same filters, as CSV, and the Usage tab exports it. The web UI shows the summary as the Usage tab of Model providers ("Show metered usage on a Usage tab of Model providers").
 
 #### Scenario: usage by model names the connection
 - **GIVEN** usage of two models over two connections
@@ -1349,11 +1343,10 @@ restart of the daemon or the proxy.
 The Model providers list MUST have an order the user sets, and that order MUST be the order the
 proxy tries fallbacks in: the agent's own connection first, then the other eligible connections in
 list order. The order is saved as each connection's position (`PUT /api/v1/providers/order` with
-every connection's uid exactly once, else 422; `coffer provider order <name>…` puts the named ones
-first); a connection never placed sorts after the placed ones, by name. The list offers a drag
+every connection's uid exactly once, else 422); a connection never placed sorts after the placed ones, by name. The list offers a drag
 handle on each row, moves with the keyboard, and explains in its help that order is fallback
 priority. Each connection MUST carry **Use as fallback for other providers** (`fallback`, on by
-default; `PATCH /api/v1/providers/{uid}`, `coffer provider edit --fallback|--no-fallback`): switched
+default; `PATCH /api/v1/providers/{uid}`): switched
 off, it is never tried for another connection's request, though its own agents still fail over from
 it. A local runtime is never a fallback and its detail says so. Where an agent's requests go is read from
 `GET /api/v1/proxy/routes/{agent_uid}?model=<model>`, and the agent's Overview › Model shows only that its route is through Coffer's proxy, with **Test**; the agent's own proxy token is replaced
@@ -1406,8 +1399,7 @@ it) before it is kept, and cached atomically at `~/.coffer/derived/genai-prices.
 was fetched. Pricing MUST use whichever of the cache and the bundled snapshot is fresher, and MUST
 never wait on the network: a failed fetch keeps the list in use and is logged once per run of
 failures, not on every attempt. The refresh is on by default and is switched per machine —
-**Refresh model prices** in Settings › General under Coffer's model, `coffer config set
-prices.refresh on|off`, `PUT /api/v1/providers/price-list` — and `COFFER_PRICE_REFRESH=off` pins it
+**Refresh model prices** in Settings › General under Coffer's model, `PUT /api/v1/providers/price-list` — and `COFFER_PRICE_REFRESH=off` pins it
 off. `GET /api/v1/providers/price-list` says which list is in use, the day its data is from, and
 the refresh's state; the Models section's price-source line reads "bundled with Coffer, updated <that day>" for a bundled price.
 

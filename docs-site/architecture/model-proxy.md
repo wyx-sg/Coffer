@@ -30,7 +30,7 @@ Codex ──► http://127.0.0.1:8001/openai/v1/responses ───────�
 ```
 
 - **A separate process, from the daemon's binary.** A frozen build runs the proxy as `coffer-daemon proxy`, so there is no fourth binary to build and sign; from source it is `python -m coffer.infrastructure.model_proxy.entry`. It is its own process because the daemon restarts on every upgrade and runs migrations at start. A proxy inside the daemon would cut every in-flight model stream at each restart, including sessions in the user's own terminal.
-- **Supervised by the daemon.** At start the daemon reads `~/.coffer/proxy.json` (`port`, `pid`, `started_at`, `version` and a control token, mode `0600`). If a proxy of the same version answers there, the daemon re-attaches to it. If the proxy is from another build, the daemon asks it to drain and replaces it once it has exited. If none is running, the daemon spawns one. A health check every few seconds restarts a crashed proxy. When the daemon stops, it stops *supervising*; the proxy keeps running. `coffer proxy status` shows what the supervisor sees.
+- **Supervised by the daemon.** At start the daemon reads `~/.coffer/proxy.json` (`port`, `pid`, `started_at`, `version` and a control token, mode `0600`). If a proxy of the same version answers there, the daemon re-attaches to it. If the proxy is from another build, the daemon asks it to drain and replaces it once it has exited. If none is running, the daemon spawns one. A health check every few seconds restarts a crashed proxy. When the daemon stops, it stops *supervising*; the proxy keeps running.
 - **A fixed port.** The proxy binds `127.0.0.1:8001` by default (`proxy_port` in `daemon-config.json`). A fixed port keeps the URL written into the agents' files from moving on its own. There is no option to bind another interface.
 
 ## What the agents are given
@@ -56,7 +56,6 @@ An agent on its own subscription login is never pointed at the proxy. The proxy 
 Each managed agent has its own random 256-bit token, minted on first use. It is kept as Fernet ciphertext in the secret store under `proxy-token/<agent_uid>`, a machine-local ref that vault sync never carries.
 
 - `coffer proxy token --agent-uid <uid>` prints the token. It is the command both agents run.
-- `coffer proxy rotate <agent>` replaces it. The old token is refused from the moment the command answers.
 
 The proxy is never given the tokens themselves, only their SHA-256 digests, and it compares the digest of what a request presents in constant time.
 

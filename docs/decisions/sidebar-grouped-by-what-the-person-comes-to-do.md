@@ -21,7 +21,7 @@ spec web-ui "Call a surface by one name everywhere",
 spec web-ui "Manage stored secrets on the Secrets page",
 spec web-ui "Open Settings as a modal from the sidebar footer",
 spec chat "Show every conversation on the Conversations page",
-spec provider-switching "Offer every connection operation on REST, CLI and web",
+spec provider-switching "Offer every connection operation on REST and the web",
 spec secret "Refuse to delete a secret still in use",
 spec web-ui "Show what needs the user and each area's health on Overview",
 spec chat "Mirror a web reply into the channel it came from",
@@ -227,7 +227,7 @@ Coffer into a channel-opened conversation is also delivered back to that channel
 
 **Model providers belongs with Agents.** A provider is the endpoint and key an agent's model is
 served from, and a connection and model are chosen per agent, on that agent's page (spec
-provider-switching "Offer every connection operation on REST, CLI and web";
+provider-switching "Offer every connection operation on REST and the web";
 [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md)).
 The provider page is each agent's model configuration seen from the connection side — the page a
 user visits while setting an agent up, not a capability the agent gains and not a machine

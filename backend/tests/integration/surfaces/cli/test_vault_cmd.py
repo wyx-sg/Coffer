@@ -1,6 +1,5 @@
-"""``coffer vault history | diff | show | restore | problems``
-(coffer.surfaces.cli.vault_cmd; spec vault-storage "Show, compare and
-restore any version of a vault file").
+"""``coffer vault problems`` (coffer.surfaces.cli.vault_cmd; spec vault-storage
+"Keep the last valid version when a hand edit is invalid").
 
 The CLI client is pointed at the vault router over this test's own HOME, so
 each command runs the route it names against a real vault repository.
@@ -19,10 +18,7 @@ from typer.testing import CliRunner
 
 import coffer.surfaces.cli._client as _cli_client
 from coffer.domain.vault.writers import WRITER_USER, CommitMeta
-from coffer.domain.vault.writes import Expect
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
-from coffer.infrastructure.vault.home import vault_root
-from coffer.infrastructure.vault.instance import vault_repository, vault_writer
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
@@ -73,52 +69,6 @@ def daemon(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (_Persistent(client), info))
     with client:
         yield
-
-
-def _two_versions() -> tuple[str, str]:
-    first = vault_writer().write_file(
-        "skills/pdf/SKILL.md", b"v1\n", meta=USER, expected=Expect.ABSENT
-    )
-    second = vault_writer().write_file("skills/pdf/SKILL.md", b"v2\n", meta=USER)
-    assert first and second
-    return first, second
-
-
-def test_history_lists_versions_newest_first() -> None:
-    first, second = _two_versions()
-    r = _runner.invoke(cli_app, ["vault", "history", "skills/pdf/SKILL.md", "--json"])
-    assert r.exit_code == 0, r.output
-    versions = json.loads(r.output)["versions"]
-    assert [v["version"] for v in versions] == [second, first]
-    table = _runner.invoke(cli_app, ["vault", "history", "skills/pdf/"])
-    assert table.exit_code == 0, table.output
-    assert second[:10] in table.output and "you" in table.output
-
-
-def test_diff_and_show_print_a_version() -> None:
-    first, second = _two_versions()
-    diff = _runner.invoke(cli_app, ["vault", "diff", "skills/pdf/SKILL.md", second])
-    assert diff.exit_code == 0, diff.output
-    assert "-v1" in diff.output and "+v2" in diff.output
-    show = _runner.invoke(cli_app, ["vault", "show", "skills/pdf/SKILL.md", first])
-    assert show.exit_code == 0 and show.output == "v1\n"
-
-
-def test_restore_reads_the_current_fingerprint_first() -> None:
-    first, _second = _two_versions()
-    r = _runner.invoke(cli_app, ["vault", "restore", "skills/pdf/SKILL.md", first, "--yes"])
-    assert r.exit_code == 0, r.output
-    assert (vault_root() / "skills/pdf/SKILL.md").read_bytes() == b"v1\n"
-    assert vault_repository().log(limit=1)[0].meta.restored_from == first
-    again = _runner.invoke(cli_app, ["vault", "restore", "skills/pdf/SKILL.md", first, "--yes"])
-    assert "nothing to restore" in again.output
-
-
-def test_restore_asks_before_writing() -> None:
-    first, _second = _two_versions()
-    r = _runner.invoke(cli_app, ["vault", "restore", "skills/pdf/", first], input="n\n")
-    assert r.exit_code == 1
-    assert (vault_root() / "skills/pdf/SKILL.md").read_bytes() == b"v2\n"
 
 
 @pytest.mark.acceptance(

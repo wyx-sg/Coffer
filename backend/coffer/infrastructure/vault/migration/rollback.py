@@ -34,7 +34,6 @@ from coffer.infrastructure.vault.migration.places import (
     DAEMON_CONFIG,
     DAEMON_CONFIG_BACKUP,
     HOLD_MARKER,
-    IN_PLACE,
     KNOWLEDGE_GIT_BACKUP,
     LEGACY_DB,
     RUNS_DB,
@@ -105,13 +104,6 @@ def rollback(home: Path) -> list[str]:
             moved = _aside(at(home, name), ts)
             if moved is not None:
                 aside.append(moved.name)
-        # A tree the previous layout already kept inside ``vault/`` goes back
-        # there: the previous build reads it at that path.
-        for rel in IN_PLACE if "vault" not in record.created else ():
-            kept = at(home, rel.replace("vault/", f"vault.rolled-back-{ts}/", 1))
-            if kept.exists():
-                at(home, rel).parent.mkdir(parents=True, exist_ok=True)
-                kept.rename(at(home, rel))
         for name in CLASS_DIRS:
             path = at(home, name)
             if name in ("vault", "local") or name not in record.created or not path.exists():

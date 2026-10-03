@@ -128,7 +128,7 @@ A process an agent controls cannot read the master key in a signed release, so i
 
 Around the three operations:
 
-- **No other path returns plaintext.** There is no plaintext read route and no `coffer secret get --show`; `coffer secret get` checks presence only. There is no key export command or route. The browser UI shows **Open in Coffer app** where these actions would be. The one other place plaintext leaves the daemon is `coffer run`'s resolve of standalone secrets, which is confined to the `secret/` namespace and covered under [What stays exposed](#what-stays-exposed).
+- **No other path returns plaintext.** There is no plaintext read route; `coffer secret list` shows names only. There is no key export command or route. The browser UI shows **Open in Coffer app** where these actions would be. The one other place plaintext leaves the daemon is `coffer run`'s resolve of standalone secrets, which is confined to the `secret/` namespace and covered under [What stays exposed](#what-stays-exposed).
 - **The master key never crosses the API.** A key backup is written by the daemon into the folder you chose, as `coffer-master-key.cfk`, mode `0600`, never over an existing file; the response carries only the path and the fingerprint. The file holds the key encrypted under a key scrypt derives from a passphrase you type in the app (at least eight characters), so a copy that lands somewhere shared opens nothing without it. The passphrase goes from the page to the shell to the daemon's request and is never stored, logged or audited; validation failures are logged without the submitted values for the same reason.
 - **Every release is audited:** a reveal as `secret_revealed` with the ref only, a backup as `master_key_exported`, an approval as `secret_approval_approved`.
 - **Writing stays open, with two exceptions.** Any surface may store a resource's secret: whoever supplies a value already has it. A new standalone secret (`secret/<name>`) and a new value for a secret already in use are held encrypted until you approve them in the desktop app, because once stored they reach a `coffer run` child or a destination that was approved for the old value.
@@ -159,7 +159,7 @@ Two more changes widen where a secret goes and wait for the same approval:
 - **Replacing a value in use.** A new value for a ref an approved destination receives, or for any standalone secret, is held encrypted until you approve; the old value stays in use. Replacing a channel's bot token with the attacker's bot would redirect your conversations.
 - **Switching the protection off** (`secrets.require_approval`). Switching it on applies at once.
 
-Approving takes a presence grant. Rejecting does not — refusing only narrows what Coffer does — and works from every surface, including `coffer secret reject`. The desktop app raises a notification for each new pending approval and opens a sheet to answer it; the CLI prints `waiting for approval in the Coffer app` and exits `9`, or waits with `--wait`. Several approvals can be answered under one presence check: the grant is signed over a digest of exactly the approvals and targets you were shown, so it approves that list and nothing else, and any item whose target changed since is skipped (see [Secrets → Answering several at once](/guides/secrets#answering-several-at-once)). See [Secrets → Approvals](/guides/secrets#approvals).
+Approving takes a presence grant. Rejecting does not — refusing only narrows what Coffer does — and works from every surface. The desktop app raises a notification for each new pending approval and opens a sheet to answer it; `coffer run` prints `waiting for approval in the Coffer app` and exits `9`, or waits with `--wait`. Several approvals can be answered under one presence check: the grant is signed over a digest of exactly the approvals and targets you were shown, so it approves that list and nothing else, and any item whose target changed since is skipped (see [Secrets → Answering several at once](/guides/secrets#answering-several-at-once)). See [Secrets → Approvals](/guides/secrets#approvals).
 
 The boundary's state is machine-local: its bindings, pending approvals, switches and the time each ref was first stored here are JSON files under `~/.coffer/local/secret-boundary/`, written atomically, never committed to the vault and never synced. A pending replacement value waits there as ciphertext.
 
@@ -236,7 +236,7 @@ At every start the daemon mints a fresh random URL-safe token from 32 bytes (256
 
 Every route under `/api/v1/*` and the `/mcp` endpoint require an `X-Coffer-Token` header, compared in constant time against the daemon's in-process token. A missing or wrong token is `401`; a request that arrives before the daemon has published its token is `503`. The one unauthenticated API route is `GET /api/v1/daemon/status`, the readiness probe the CLI and shim call before they have a token; it returns lifecycle phase, version, executable, port, feature switches, machine name and an aggregate upstream health summary — nothing secret.
 
-`coffer daemon rotate-token` (or `POST /api/v1/daemon/rotate-token`) mints a new token, rewrites `daemon.json`, invalidates the old token immediately, and records `token_rotated` in the audit log.
+**Rotate…** on **Settings › Security** (or `POST /api/v1/daemon/rotate-token`) mints a new token, rewrites `daemon.json`, invalidates the old token immediately, and records `token_rotated` in the audit log.
 
 ### Getting it into the page
 
@@ -244,7 +244,7 @@ The web UI needs the token too, and a URL is the wrong channel: it ends up in br
 
 - The document is served `Cache-Control: no-store`, with no ETag or Last-Modified, so a restarted daemon's browser never gets the previous daemon's token from a cache. Hashed files under `/assets` keep normal caching.
 - The page persists nothing: reload after a daemon restart and it is authenticated against the new daemon.
-- `coffer open` carries no credential. It reads the daemon's port from `daemon.json` and opens the browser there.
+- The address you open, `http://127.0.0.1:8000/` by default, carries no credential. The token arrives only in the page body.
 
 The token in the page is exactly what makes the [Host check](#host-dns-rebinding) mandatory; neither exists without the other.
 
@@ -334,7 +334,7 @@ A skill can declare the command-line tools it needs ([Skill requirements](/archi
 When Coffer installs its MCP entry into an agent, it writes `coffer-mcp-shim --agent-uid <uid>`. The shim stamps that uid onto the MCP handshake, in the `_meta` field under the key `coffer/agent-uid`, and the gateway uses it for two things:
 
 1. **Reach.** Every scoped resource is filtered by whether its scope covers the session's agent uid. A session with no identity — a shim you configured by hand — matches only unscoped resources, so it sees strictly less, never more. An older shim sending a name-based key is read as unidentified; there is no fallback that could match a stale label against a scope.
-2. **Attribution.** Every builtin tool call carries an `agent` argument naming the caller, which tools such as `coffer__write` record. The gateway **always** sets it from the handshake identity (resolved to the agent's current name): a value the client supplied is dropped unconditionally, and with no identity the argument is simply absent. No builtin tool advertises the argument, so a model has nothing to fill in.
+2. **Attribution.** Every builtin tool call carries an `agent` argument naming the caller. The gateway **always** sets it from the handshake identity (resolved to the agent's current name): a value the client supplied is dropped unconditionally, and with no identity the argument is simply absent. No builtin tool advertises the argument, so a model has nothing to fill in.
 
 The identity is self-reported by a process running as you. It is not a security boundary against a malicious local process — any such process already holds the token — and the spec says so rather than implying stronger isolation.
 
@@ -342,7 +342,7 @@ The identity is self-reported by a process running as you. It is not a security 
 
 A channel is the one surface through which someone outside your machine can make an agent act, so it has exactly one gate: **owner pairing**.
 
-- You issue a pairing code from the channel's page or with `coffer channel`. A code is 8 characters from an alphabet without look-alikes (no `0`, `O`, `1`, `I`), single-use, valid for one hour, allows 10 wrong guesses before it is invalidated, and lives only in memory — a daemon restart drops it.
+- You issue a pairing code from the channel's page. A code is 8 characters from an alphabet without look-alikes (no `0`, `O`, `1`, `I`), single-use, valid for one hour, allows 10 wrong guesses before it is invalidated, and lives only in memory — a daemon restart drops it.
 - You send the code to the bot from your own account (or tap the start link that carries it). That binds your platform identity as the channel's owner and records `channel_paired` in the audit log.
 - From then on the channel obeys only messages whose sender is the owner. In a group, a message addressed to the bot by anyone else gets a one-line refusal; in a paired chat, a message from a different member is ignored silently and cannot re-pair the channel; an unpaired direct chat can do nothing but present a pairing code. When a sender's identity cannot be established in a group, the message is refused, never assumed to be the owner's.
 - A channel's **inverted scope** limits which agents it may drive at all, and a channel whose scope is empty does not start.
@@ -359,14 +359,14 @@ Channel secrets are refs, resolved from the secret store when the adapter starts
 
 Vault sync pulls and pushes the vault repository with a git remote you own. It is off until you configure a remote, and its security rests on what does and does not travel:
 
-- **Secrets travel only if you opt in** (`coffer sync remote set --with-secret`, or **Include encrypted secrets**), and then only as Fernet ciphertext, the `secret/<ref>.enc` files. Until then `secret/` is excluded from the repository. What lands in the repository cannot be decrypted on its own, and ciphertext that has been pushed cannot be withdrawn: revoking a secret means rotating it. Machine-local ciphertext in `local/secret/` never travels.
-- **The master key never travels with the data.** You carry it between machines yourself: the desktop app writes a passphrase-protected key backup on one machine behind a presence check, `coffer sync key import` or **Settings › Security › Import a master key** installs it on another, and `coffer sync key fingerprint` lets you compare the two. Importing a different key first keeps the existing one as a backup — a timestamped `master.key.bak-*` file in a development build, a second Keychain item in a signed release — because it may be the only key that decrypts existing ciphertext.
+- **Secrets travel only if you opt in** (**Include encrypted secrets**), and then only as Fernet ciphertext, the `secret/<ref>.enc` files. Until then `secret/` is excluded from the repository. What lands in the repository cannot be decrypted on its own, and ciphertext that has been pushed cannot be withdrawn: revoking a secret means rotating it. Machine-local ciphertext in `local/secret/` never travels.
+- **The master key never travels with the data.** You carry it between machines yourself: the desktop app writes a passphrase-protected key backup on one machine behind a presence check, **Settings › Security › Import a master key** installs it on another, and shows both fingerprints so you can compare the two. Importing a different key first keeps the existing one as a backup — a timestamped `master.key.bak-*` file in a development build, a second Keychain item in a signed release — because it may be the only key that decrypts existing ciphertext.
 - **The push token goes only to the URL it was approved for.** Pointing it at a new remote URL waits for an approval, like any new destination.
 - **A machine without the matching key** reports the refs it holds ciphertext for but cannot decrypt, and the **Machines** tab flags a machine whose key fingerprint differs, rather than failing silently.
 - **The secret boundary stays on the machine.** Its bindings, approvals and switches are in `local/secret-boundary/`, never in the vault, so another machine cannot pre-approve a destination for this one.
 - **Reach does not travel.** Which resources are enabled, and for which agents, is decided on each machine, so another machine's round can never widen what this one exposes.
 - **Deletions are guarded.** A round that would lose 20 files or more than 20% of an area, in either direction, holds for your answer.
-- **Conflicting ciphertexts are never shown to you.** Two ciphertexts for one ref are ordered by the encryption time the token carries in clear, and the fresher wins; and a secret has no readable history or restore through `coffer vault`.
+- **Conflicting ciphertexts are never shown to you.** Two ciphertexts for one ref are ordered by the encryption time the token carries in clear, and the fresher wins; and a secret has no readable history or restore through the vault's History.
 
 See [Vault sync](/architecture/vault-sync) for the full protocol.
 

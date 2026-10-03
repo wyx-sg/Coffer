@@ -1,7 +1,7 @@
 // frontend/src/pages/settings/ExperimentalFeaturesSettings.tsx
 //
 // Settings → Features: the experimental features and the switch for each (spec
-// experimental-features "Switch a feature from the settings page or the command line"). The tab
+// experimental-features "Switch a feature from the settings page or over REST"). The tab
 // is in every build.
 //
 // One row per registered feature, in the daemon's registry order: its name and

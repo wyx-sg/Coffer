@@ -18,7 +18,7 @@ rather than an agent's:
 | Pass | What the model does | Code |
 | --- | --- | --- |
 | Memory distil | Rewrites the derived digest of the agents' aggregated memory | `application/memory/distil*.py`, one-shot `LangchainLlmCompletion` |
-| Knowledge curation | Merges inbox material into a collection's documents and carries a person's edit through the rest | `infrastructure/llm/agentic_reorg.py` — a LangGraph ReAct loop with four internal write tools |
+| Knowledge curation | Merges inbox material into a collection's documents and carries an out-of-band edit through the rest | `infrastructure/llm/agentic_reorg.py` — a LangGraph ReAct loop with four internal write tools |
 | Knowledge ingest | Writes the one-line description of an ingested document | `application/knowledge/ingest.py`, one-shot completion |
 | Voice transcription | Turns an inbound voice message into text for the turn | `infrastructure/llm/transcription.py`, on its own connection |
 

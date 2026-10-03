@@ -52,7 +52,7 @@ class RoundDeps:
     validate: Validator | None = None
     cloud_folder: Callable[[], str | None] = lambda: None
     #: ``(line, key)`` for each plaintext secret in a file's text — the
-    #: detection ``coffer secret scan`` uses. ``None`` reads nothing before a
+    #: detection the Secrets page's scan uses. ``None`` reads nothing before a
     #: push (spec vault-sync "Refuse to push a plaintext secret").
     find_plaintext: Callable[[str], Sequence[tuple[int, str]]] | None = None
     clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC)

@@ -1,7 +1,7 @@
 export type Lang = "en" | "zh";
 
 export const PROMPT =
-  "Install Coffer on this machine by following https://wyx-sg.github.io/Coffer/start/install — pick the install path that fits this machine (a release build if one is published for this OS and architecture, otherwise from source). Ask me before running anything with sudo or editing my shell profile. When it is installed, check it with `coffer daemon status`. Then, for each coding agent installed here (claude-code, codex), run `coffer agent add <type>` and `coffer agent connect <type>`, telling me which config files connect will change before you run it. Do not handle any credentials: if a step needs a login, tell me what to do instead.";
+  "Install Coffer on this machine by following https://wyx-sg.github.io/Coffer/start/install — pick the install path that fits this machine (a release build if one is published for this OS and architecture, otherwise from source). Ask me before running anything with sudo or editing my shell profile. When it is installed, check it with `coffer daemon status`. Then tell me to open Coffer's Agents page and press Connect on each coding agent installed here (Claude Code, Codex); the dialog shows which config files it will change. Do not handle any credentials: if a step needs a login, tell me what to do instead.";
 
 export const SHELL_CMD =
   "curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh";

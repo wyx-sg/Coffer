@@ -298,6 +298,62 @@ paths:
       summary: Get Note
       tags:
       - memory
+    put:
+      description: |-
+        A person's edit from the page's editor ("Edit a memory in the web UI or
+        on disk"): the body is replaced, the frontmatter kept, ``updated_at``
+        stamped, and a stale fingerprint is a 409 ``MEMORY_NOTE_CONFLICT`` that
+        carries the note as it is now and leaves the file alone.
+      operationId: save_note_api_v1_memory_partitions__uid__notes__slug__put
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: path
+        name: slug
+        required: true
+        schema:
+          title: Slug
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoteSave'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Save Note
+      tags:
+      - memory
   /api/v1/memory/partitions/{uid}/retired:
     get:
       description: |-
@@ -429,227 +485,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Sync
-      tags:
-      - memory
-  /api/v1/memory/triggers:
-    get:
-      operationId: list_triggers_api_v1_memory_triggers_get
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TriggerListOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: List Triggers
-      tags:
-      - memory
-    post:
-      operationId: add_trigger_api_v1_memory_triggers_post
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TriggerIn'
-        required: true
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TriggerOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Add Trigger
-      tags:
-      - memory
-  /api/v1/memory/triggers/{trigger_id}:
-    delete:
-      operationId: delete_trigger_api_v1_memory_triggers__trigger_id__delete
-      parameters:
-      - in: path
-        name: trigger_id
-        required: true
-        schema:
-          title: Trigger Id
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      responses:
-        '204':
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Delete Trigger
-      tags:
-      - memory
-  /api/v1/memory/triggers/{trigger_id}/arm:
-    post:
-      operationId: arm_trigger_api_v1_memory_triggers__trigger_id__arm_post
-      parameters:
-      - in: path
-        name: trigger_id
-        required: true
-        schema:
-          title: Trigger Id
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TriggerOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Arm Trigger
-      tags:
-      - memory
-  /api/v1/memory/triggers/{trigger_id}/disarm:
-    post:
-      operationId: disarm_trigger_api_v1_memory_triggers__trigger_id__disarm_post
-      parameters:
-      - in: path
-        name: trigger_id
-        required: true
-        schema:
-          title: Trigger Id
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TriggerOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Disarm Trigger
       tags:
       - memory
 components:
@@ -908,20 +743,12 @@ components:
         agent_uid:
           title: Agent Uid
           type: string
-        command:
-          default: ''
-          title: Command
-          type: string
         cwd:
           default: ''
           title: Cwd
           type: string
         event:
           title: Event
-          type: string
-        output:
-          default: ''
-          title: Output
           type: string
         prompt:
           default: ''
@@ -930,10 +757,6 @@ components:
         session_id:
           default: ''
           title: Session Id
-          type: string
-        tool_name:
-          default: ''
-          title: Tool Name
           type: string
       required:
       - agent_uid
@@ -993,6 +816,10 @@ components:
           default: ''
           title: File Path
           type: string
+        fingerprint:
+          default: ''
+          title: Fingerprint
+          type: string
         key:
           title: Key
           type: string
@@ -1035,7 +862,24 @@ components:
       - file_path
       - body
       - origins
+      - fingerprint
       title: NoteOut
+      type: object
+    NoteSave:
+      description: A note's new body, from the web UI's editor. The frontmatter is kept.
+      properties:
+        body:
+          minLength: 1
+          title: Body
+          type: string
+        expected_fingerprint:
+          minLength: 1
+          title: Expected Fingerprint
+          type: string
+      required:
+      - body
+      - expected_fingerprint
+      title: NoteSave
       type: object
     NoteSummaryOut:
       description: |-
@@ -1309,105 +1153,4 @@ components:
       - replaced_by
       - retired_at
       title: RetiredNoteOut
-      type: object
-    TriggerIn:
-      description: A trigger a person writes; it is armed by them as it is written.
-      properties:
-        body:
-          default: ''
-          title: Body
-          type: string
-        command:
-          default: ''
-          title: Command
-          type: string
-        error:
-          default: ''
-          title: Error
-          type: string
-        kind:
-          default: block
-          enum:
-          - block
-          - context
-          title: Kind
-          type: string
-        note:
-          title: Note
-          type: string
-        unless:
-          default: ''
-          title: Unless
-          type: string
-      required:
-      - note
-      title: TriggerIn
-      type: object
-    TriggerListOut:
-      properties:
-        triggers:
-          items:
-            $ref: '#/components/schemas/TriggerOut'
-          title: Triggers
-          type: array
-      required:
-      - triggers
-      title: TriggerListOut
-      type: object
-    TriggerOut:
-      properties:
-        armed:
-          title: Armed
-          type: boolean
-        armed_at:
-          title: Armed At
-          type: string
-        armed_by:
-          title: Armed By
-          type: string
-        body:
-          title: Body
-          type: string
-        command:
-          title: Command
-          type: string
-        created:
-          title: Created
-          type: string
-        error:
-          title: Error
-          type: string
-        id:
-          title: Id
-          type: string
-        kind:
-          title: Kind
-          type: string
-        note:
-          title: Note
-          type: string
-        path:
-          title: Path
-          type: string
-        proposed_by:
-          title: Proposed By
-          type: string
-        unless:
-          title: Unless
-          type: string
-      required:
-      - id
-      - note
-      - kind
-      - command
-      - unless
-      - error
-      - armed
-      - armed_by
-      - armed_at
-      - proposed_by
-      - created
-      - body
-      - path
-      title: TriggerOut
       type: object

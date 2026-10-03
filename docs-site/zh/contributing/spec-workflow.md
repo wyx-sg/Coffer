@@ -51,7 +51,7 @@ openspec/
 | [`mcp-gateway`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md) | 聚合在一个端点之后的上游 MCP 服务器 |
 | [`memory`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md) | 把每个智能体的原生记忆聚合成 Coffer 自己的笔记 |
 | [`provider-switching`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/provider-switching/spec.md) | 投射到每个智能体配置中的模型提供商连接 |
-| [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) | 与类型无关的资源模型、scope、审计日志、保留策略、REST/CLI 对等 |
+| [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) | 与类型无关的资源模型、scope、审计日志、保留策略、最小 CLI 规则 |
 | [`skill-manager`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/skill-manager/spec.md) | 技能主存储以及向智能体的投递 |
 | [`vault-storage`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-storage/spec.md) | `~/.coffer/` 下的五类存储、作为 git 仓库并通过一次经过校验的提交写入的保险库，以及一次性升级 |
 | [`vault-sync`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md) | 让保险库与用户自己的 git 远端收敛 |
@@ -200,9 +200,9 @@ pytest 标记以 `--strict-markers` 注册，所以标记名拼错会导致收�
 
 ## 端到端可交付规则 {#the-end-to-end-deliverable-rule}
 
-一项能力只有在用户真正能操作它时才算交付。这意味着后端持久化，加上暴露它的每一个入口（CLI、经由 `coffer-mcp-shim` 的 MCP、REST，以及如果有的话 Web 界面），全部连通，并且每个场景都有通过的测试覆盖。只有后端没有入口，或者只有页面没有后端，都不算完成。
+一项能力只有在用户真正能操作它时才算交付。这意味着后端持久化，加上暴露它的每一个入口（REST、Web 界面、经由 `coffer-mcp-shim` 的 MCP，以及在需要时的一条 CLI 命令），全部连通，并且每个场景都有通过的测试覆盖。只有后端没有入口，或者只有页面没有后端，都不算完成。
 
-有一条规则适用于所有规格：**每一次修改操作，以及每一次对非普通文件状态的读取，都能同时从 REST 和 `coffer` CLI 访问到**，使用同一个守护进程和同一套错误模型。对于归属规格声明为可直接读取或编辑的普通文件（知识文档、记忆笔记、技能文件夹、智能体自己的配置文件、守护进程日志），CLI 通过 `coffer path` 给出该文件来满足这条规则；提供这类文件的 REST 路由为 Web 界面保留，因为它读不了磁盘。[`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) 规格在整棵命令树上测试这一点。无法遵守这条规则的规格要在它的 `## Purpose` 里记下这个缺口。
+有一条规则适用于所有规格：**CLI 只承载确实需要它的东西。** 一条命令只因四种理由之一而存在：Coffer 安装或写入的程序会运行它、守护进程宕机时它也必须能用、Coffer 交给智能体的提示词让智能体去运行它，或者 Web 界面做不到。其余一切操作都是 REST 加 Web 界面的一个页面；归属规格声明为可直接读取或编辑的普通文件（知识文档、记忆笔记、技能文件夹、智能体自己的配置文件、守护进程日志），则用普通工具读取和编辑。[`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) 规格测试命令树等于经过审阅的命令清单及其理由。
 
 ## 文档随代码一起改 {#docs-change-with-the-code}
 

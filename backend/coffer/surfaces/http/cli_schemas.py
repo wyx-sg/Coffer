@@ -1,6 +1,8 @@
-"""Wire shapes of ``/api/v1/clis`` (spec skill-manager "Serve required
-commands on REST, the command line and the web", "Declare a command-line tool
-without a skill")."""
+"""Wire shapes of ``/api/v1/clis``.
+
+Spec skill-manager "Serve required commands on REST and the web" and
+"Declare a command-line tool without a skill".
+"""
 
 from __future__ import annotations
 

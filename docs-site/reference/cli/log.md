@@ -21,7 +21,6 @@ This page matches what `coffer log --help` prints. Add `--help` to any command b
 | [`log audit`](#log-audit) | Read the audit log, newest first, one page at a time. |
 | [`log mcp`](#log-mcp) | Read the MCP invocation log, newest first. |
 | [`log daemon`](#log-daemon) | Read the tail of the daemon log, newest first, normalised as the Activity page shows it. |
-| [`log prune`](#log-prune) | Prune every registered log table now (or only --table), by its retention period. |
 
 ## log audit
 
@@ -91,19 +90,3 @@ coffer log daemon [OPTIONS]
 | `--limit` <span class="cli-chip">option</span> | integer (1-500) | `100` | Most records to print |
 | `--trace` <span class="cli-chip">option</span> | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
 | `--json` <span class="cli-chip">option</span> | flag |  | JSON output for scripts |
-
-## log prune
-
-Prune every registered log table now (or only --table), by its retention period.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer log prune [OPTIONS]
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `--table` <span class="cli-chip">option</span> | text |  | Prune only this table |

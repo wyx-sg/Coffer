@@ -7,7 +7,7 @@ from the wire never means hiding one from the layer itself.
 
 What is *absent* is the point of the current shape. There is no search request,
 no search hit and no grep match, because this surface exposes no retrieval at
-all (spec knowledge "Expose exactly one knowledge tool"): an agent reads the
+all (spec knowledge "Expose no knowledge tool"): an agent reads the
 files with
 its own tools at the paths its delivered skill carries, and the human reads
 them through ``tree``/``file``. A model here would be a second retrieval
@@ -16,9 +16,9 @@ surface no one asked for.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Literal
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field
 
 
 class CollectionOut(BaseModel):
@@ -119,36 +119,6 @@ class FileSave(BaseModel):
     #: The ``fingerprint`` the editor's read carried. A file changed since is
     #: refused with 409 ``KNOWLEDGE_FILE_CONFLICT``.
     expected_fingerprint: str = Field(min_length=1)
-
-
-class MaterialIn(BaseModel):
-    """New knowledge for a collection ("Submit every entrance's input as
-    material")."""
-
-    #: The collection's directory NAME: a filesystem value, like every path on
-    #: this family — see the route module's docstring.
-    collection: str = Field(min_length=1)
-    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
-    #: Required: the skill's catalogue is how a document is ever found, and
-    #: material that fails to describe itself is unfindable ("Carry title,
-    #: description and actor in frontmatter").
-    description: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
-    body: str = ""
-
-
-class SubmissionOut(BaseModel):
-    """What became of submitted material.
-
-    ``status`` is ``pending`` when it waits in the inbox for a pass to merge,
-    and ``written`` when it was promoted to a document on the spot because no
-    internal model is configured ("Promote material directly when no model is
-    configured") — ``path`` is that document.
-    """
-
-    status: Literal["pending", "written"]
-    collection: str
-    title: str
-    path: str | None = None
 
 
 class CurationRequest(BaseModel):

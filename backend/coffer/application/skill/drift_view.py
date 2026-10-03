@@ -1,4 +1,4 @@
-"""``coffer skill verify`` and ``verify --fix``, read from the reconciler.
+"""The skill drift report and its repair, read from the reconciler.
 
 The drift report and the repair result keep their wire shape
 (``DriftReport`` / ``RepairResult``), but neither computes anything of its

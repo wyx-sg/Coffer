@@ -49,18 +49,6 @@ Coffer 只在 SeaTalk 消息渠道启动时才导入 SDK，从不在守护进程
 
 ## 3. 登记消息渠道 {#_3-register-the-channel}
 
-::: code-group
-
-```sh [CLI]
-# Paste the App Secret at the prompt; it is read from stdin
-coffer secret set channel/st/app-secret
-
-coffer channel add my-seatalk --type seatalk \
-  --app-id <APP_ID> \
-  --app-secret-ref channel/st/app-secret \
-  --agent claude-code
-```
-
 ```text [Web UI]
 Channels → Add channel
   Type:           SeaTalk
@@ -71,31 +59,9 @@ Channels → Add channel
 → Create
 ```
 
-:::
-
 配置内容是 App ID 和指向 App Secret 的引用，外加每个消息渠道都有的字段。消息渠道绑定到这台机器，并立刻开始连接。
 
-检查连接：
-
-```sh
-coffer channel show my-seatalk
-```
-
-```text
-channel:  my-seatalk (seatalk)
-uid:      4c7a…
-agent:    claude-code
-gating:   require_mention=on  ignore_other_mentions=off
-idle:     new conversation after 24 h idle
-secret:   app_secret_ref = channel/st/app-secret
-enabled:  True    running: True
-runs on:  3f9c… (this machine)
-pairing:  no pending code
-peer:     not paired
-inbound:  websocket (connected)
-```
-
-等到 `connected` 再做下一步。消息渠道页面状态行上的 **SeaTalk connection** 标记显示的是同样的状态。
+检查连接：消息渠道状态行上的 **SeaTalk connection** 标记连上后显示**已连接**（Connected）。等到它连上再做下一步。
 
 ## 4. 把应用切换到 WebSocket 投递 {#_4-switch-the-app-to-websocket-delivery}
 
@@ -104,7 +70,7 @@ inbound:  websocket (connected)
 
 ## 5. 配对你的账号 {#_5-pair-your-account}
 
-1. 在消息渠道的**总览**里选**生成配对码**，或运行 `coffer channel pair my-seatalk`。
+1. 在消息渠道的**总览**里选**生成配对码**。
 2. 在 SeaTalk 里打开和机器人的私聊，发送那个八位配对码。
 3. 机器人确认配对，并发一次帮助卡片。SeaTalk 没有命令菜单，所以机器人靠这张卡片告诉你它接受什么；发送 `/help` 可以再看一次。
 
@@ -114,7 +80,7 @@ SeaTalk 没有启动链接，所以要你手动输入配对码。它只能用一
 
 ## 连接状态 {#connection-states}
 
-`coffer channel show` 和消息渠道页面上的 **SeaTalk connection** 标记把连接作为消息渠道的入站状态报告。用 `--json` 时，字段是 `status.inbound.websocket_state` 和 `status.inbound.websocket_error`。
+消息渠道页面上的 **SeaTalk connection** 标记把连接作为消息渠道的入站状态报告。通过 REST 读取时，字段是 `status.inbound.websocket_state` 和 `status.inbound.websocket_error`。
 
 | 状态 | 消息渠道页面上的显示 | 含义 |
 | --- | --- | --- |
@@ -157,7 +123,7 @@ SeaTalk 没有启动链接，所以要你手动输入配对码。它只能用一
 
 因为在主聊天里 @ 提及总会开一个新线程，所以在主聊天里发的命令设置的是**群组默认值**：`@bot /model …`、`@bot /dir …` 和 `@bot /new <agent>` 决定群组里每个新线程从什么开始，`@bot /status` 显示这些默认值和正在运行的线程，`@bot /stop` 停止群组里正在运行的所有轮次。在线程里，命令只作用于该线程。见 [SeaTalk 上的群组默认值](/zh/reference/channel-commands#group-defaults-on-seatalk)。
 
-如果希望机器人不理会同时 @ 了其他人的消息，在消息渠道**设置**标签页的**群聊中**下打开**忽略同时 @ 了其他人的消息**，或者运行 `coffer channel edit my-seatalk --ignore-other-mentions`。SeaTalk 没有**仅在被 @ 时回复**开关：它本来就只投递 @ 提及。
+如果希望机器人不理会同时 @ 了其他人的消息，在消息渠道**设置**标签页的**群聊中**下打开**忽略同时 @ 了其他人的消息**。SeaTalk 没有**仅在被 @ 时回复**开关：它本来就只投递 @ 提及。
 
 机器人从不读取群组主聊天里的最近消息。SeaTalk 不给自建应用这个权限，而且你发给机器人的那条消息本就应该带上它需要的内容。
 
@@ -216,10 +182,10 @@ SeaTalk 能附带的一切都会驱动一个轮次：图片、文件和文档、
 检查 `~/.coffer/vendor/seatalk_oapi_sdk/`（或 `$COFFER_SEATALK_SDK_DIR/seatalk_oapi_sdk/`）是否存在；如果你用了 `COFFER_SEATALK_SDK_DIR`，确认它设置在守护进程启动的环境里，而不只是你当前的 shell。在此期间回复和通知仍然可用。
 
 **状态是 `kicked`。**
-另一个进程占用了这个应用的连接。常见原因：同一个应用在第二台机器上也登记成了消息渠道，或者某个测试脚本用了同一个 App ID。停掉另一个；Coffer 大约一分钟内会重连。要在机器之间迁移消息渠道，在当前运行它的机器上用 `coffer channel bind`。
+另一个进程占用了这个应用的连接。常见原因：同一个应用在第二台机器上也登记成了消息渠道，或者某个测试脚本用了同一个 App ID。停掉另一个；Coffer 大约一分钟内会重连。要在机器之间迁移消息渠道，在当前运行它的机器上，到它的**设置**标签页修改**运行在**。
 
 **开发者后台里 Re-verify 失败。**
-消息渠道还没连上。等 `coffer channel show` 显示 `connected` 后再点一次 **Re-verify**。
+消息渠道还没连上。等 **SeaTalk connection** 标记显示已连接（Connected）后再点一次 **Re-verify**。
 
 **显示 `connected`，但机器人从不回答。**
 检查配对（`peer: not paired` 表示机器人不回复任何人），以及在群组里你是否 @ 了它。然后检查后台的投递方式是否设为 WebSocket；用其他投递方式时，SeaTalk 会把事件发到别处。

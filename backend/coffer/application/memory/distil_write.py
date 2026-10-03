@@ -60,27 +60,25 @@ WRITE_SYSTEM = (
     "You are given the note as it currently stands (empty when it is new) and "
     "new entries about the same subject, read out of the developer's coding "
     "agents' own memories. Rewrite the note so that it says everything still "
-    "true from both. Keep what the current note already says unless an entry "
-    "contradicts it, in which case the entry is newer and wins. Do not pad, do "
-    "not hedge, and do not repeat the same point in title, description and "
-    "body.\n"
+    "true from both. The current note is the note as it stands now, whoever "
+    "wrote or edited it: nothing in it is exempt because a person or an agent "
+    "wrote it. Keep what it says unless an entry contradicts it. When they "
+    "disagree, the newer statement wins unless the older one is shown to be "
+    "right by a source, a date, a command's output or the code; an older entry "
+    "with no evidence does not overwrite a newer statement in the note. Keep "
+    "a superseded statement legible: say in the body when it changed. Do not "
+    "pad, do not hedge, and do not repeat the same point in title, description "
+    "and body.\n"
     "The description is the most important line you write. It is the INDEX "
     "entry, and the index — one line per note — is the whole of what a session "
     "is given before it reads anything. Write ONE line that carries the "
     "conclusion itself, so that reading it is usually the end of the errand: "
     '"worktrees have no .venv, symlink the main one first", not "notes about '
     'the virtualenv situation".\n'
-    "Only when the note records a known trap that one specific shell command "
-    "walks into (a wrong tool version, a flag this machine lacks, a variable "
-    "the command needs), you MAY add a trigger: a Python regex matching the "
-    "command as it executes (program and arguments), and optionally an "
-    "`unless` regex matching a command that already does it right. A person "
-    "reviews every trigger before it takes effect; omit it (null) otherwise.\n"
     "Reply with EXACTLY ONE JSON object and nothing else — no prose, no "
     "markdown code fences:\n"
     '{"title": "<short subject>", "description": "<one line, the conclusion>", '
-    '"body": "<the note, in Markdown, your own words>", '
-    '"trigger": null | {"command": "<regex>", "unless": "<regex or empty>"}}'
+    '"body": "<the note, in Markdown, your own words>"}'
 )
 
 
@@ -98,19 +96,6 @@ class WrittenNote:
     title: str
     description: str
     body: str
-    #: A guard distil proposes for a known trap, or ``None``. It lands unarmed.
-    trigger: tuple[str, str] | None = None
-
-
-def _parse_trigger(raw: object) -> tuple[str, str] | None:
-    """``(command, unless)`` from the model's optional ``trigger``, or ``None``."""
-    if not isinstance(raw, dict):
-        return None
-    command = raw.get("command")
-    unless = raw.get("unless")
-    if not isinstance(command, str) or not command.strip():
-        return None
-    return command.strip(), unless.strip() if isinstance(unless, str) else ""
 
 
 def _current_payload(existing: Note | None) -> dict[str, str]:
@@ -180,7 +165,6 @@ def parse_written(text: str) -> WrittenNote | None:
         # depend on.
         description=one_line,
         body=body.strip() + "\n",
-        trigger=_parse_trigger(parsed.get("trigger")),
     )
 
 

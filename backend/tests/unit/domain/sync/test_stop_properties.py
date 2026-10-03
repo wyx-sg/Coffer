@@ -32,7 +32,7 @@ from coffer.domain.sync.stops import (
 _BLOB = st.text("0123456789abcdef", min_size=40, max_size=40)
 _PATH = st.builds(
     lambda area, name: f"{area}/{name}.md",
-    st.sampled_from(("knowledge", "skills", "memory-triggers")),
+    st.sampled_from(("knowledge", "skills", "secret")),
     st.text("abcdefghij", min_size=1, max_size=8),
 )
 _TIME = st.none() | st.just("2026-10-01T09:30:00+00:00")

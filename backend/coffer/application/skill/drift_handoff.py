@@ -69,7 +69,7 @@ def orphan_master_handoff(*, name: str, folder: str, backup: pathlib.Path) -> st
                 "In Coffer I choose one of two: Add to library (registers the folder in place; "
                 f"its SKILL.md must name it {name}) or Delete folder (moved to {backup}/orphans/, "
                 "not deleted).",
-                "`coffer skill list` lists the skills in my library.",
+                "The skills already in my library are the other folders in that store.",
             ),
             steps=(
                 "Read the folder: say what the skill does and whether its SKILL.md is valid and "
@@ -94,8 +94,8 @@ def missing_master_handoff(*, skill: str, master: str, backup: pathlib.Path) -> 
                 f"Where its master folder belongs: {master}",
                 f"Folders Coffer set aside are under {backup}/ (per agent, and orphans/), named "
                 f"{skill}-<time>.",
-                f"`coffer skill show {skill} --json` prints where the skill came from (its "
-                "`source`: a Git repository, a folder or an archive).",
+                "The skill's page in Coffer shows where it came from (its source: a Git "
+                "repository, a folder or an archive); ask me if you need it.",
                 "An agent's skills folder may still hold a copied (not linked) copy of it.",
                 "The master folder is in Coffer's vault, whose history keeps its earlier "
                 "versions: Restore on the skill's Files tab in Coffer puts back the newest "

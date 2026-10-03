@@ -67,7 +67,7 @@ const COFFER_STORE: NativeMemoryStore = {
 };
 
 const COFFER_HOOK: CofferHook = {
-  event: "PostToolUse,PreToolUse,SessionStart,UserPromptSubmit",
+  event: "SessionStart,UserPromptSubmit",
   path: "/Users/xing/.claude/settings.json",
   health: "current",
   trust: "not_required",
@@ -106,7 +106,7 @@ describe("AgentMemoryTab", () => {
     const section = within(screen.getByTestId("coffer-memory-section"));
     expect(section.getByRole("heading", { name: "Coffer’s memory" })).toBeInTheDocument();
     expect(section.getByText("Experimental")).toBeInTheDocument();
-    expect(section.getByText("4 events in")).toBeInTheDocument();
+    expect(section.getByText("2 events in")).toBeInTheDocument();
     expect(section.getByText("~/.claude/settings.json")).toBeInTheDocument();
     expect(section.getByText("Current")).toBeInTheDocument();
     expect(section.getByText("2 hours ago")).toBeInTheDocument();

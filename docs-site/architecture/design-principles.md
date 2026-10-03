@@ -40,7 +40,7 @@ Coffer is a **custodian, not an owner**. It holds your assets on your machine, h
 **The bounded exception.** Coffer can sync the vault with a git remote *you* own, so your own machines hold one vault rather than several. The exception holds only while three conditions all hold:
 
 1. **The remote is a rendezvous, never a system of record.** Every machine's local vault stays authoritative and complete, so the remote can be deleted and rebuilt from any one machine.
-2. **Secrets travel as ciphertext only.** The master key leaves a machine only through an explicit out-of-band transfer: a key backup the desktop app writes behind a presence check, installed on the other machine with `coffer sync key import`.
+2. **Secrets travel as ciphertext only.** The master key leaves a machine only through an explicit out-of-band transfer: a key backup the desktop app writes behind a presence check, installed on the other machine from **Settings › Security › Import a master key**.
 3. **It is off by default** and pointed only at a repository you configure.
 
 Sync is bidirectional but only under the sync spec's safety rules: git computes the merge outside the vault, only a clean merge is applied, any conflict stops the round for you with nothing changed, a round that would lose too much stops and asks, and every round can be rolled back from its snapshot.
@@ -109,7 +109,7 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 **Rationale.** Anything in the MCP handshake or a session-start hook is charged to every session whether or not it is needed. A skill has the opposite cost structure: its short description is always in context, its body costs nothing until a model opens it. So the resident budget is spent once, on one description a model can match against.
 
-**In the code.** The gateway's handshake `instructions` are capped at 800 characters: what Coffer is, the builtin tool names, the per-session count of hidden upstream tools, and a pointer to the skill. `coffer-guide` is an ordinary `skill` resource rendered by the knowledge layer and delivered by the skill kind. The only context Coffer delivers into a session is memory, at three moments (the index at session start, up to three matching notes with each prompt, and a guard before a known trap in a shell command). All three go through hooks that connecting an agent installs and disconnecting removes, and every fire is an audit event.
+**In the code.** The gateway's handshake `instructions` are capped at 800 characters: what Coffer is, the builtin tool names, the per-session count of hidden upstream tools, and a pointer to the skill. `coffer-guide` is an ordinary `skill` resource rendered by the knowledge layer and delivered by the skill kind. The only context Coffer delivers into a session is memory, at two moments (the index at session start, and up to three matching notes with each prompt). Both go through hooks that connecting an agent installs and disconnecting removes, and every fire is an audit event.
 
 **Rules out.** Silently installed hooks; context injected into a session without an audit trail; writing Coffer's output into an agent's own memory; a catalogue spread across several always-resident skills.
 
@@ -119,7 +119,7 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 **Rationale.** A synced reach would be set from wherever you happen to sit, about machines you cannot see, and two machines editing it would put a permission through a text merge where whichever round ran last silently decides what the other machine exposes. A machine-local reach has nothing to merge and can always be verified where it takes effect. The cost is honest: a resource arriving on a machine for the first time starts at that kind's default reach there.
 
-**In the code.** Reach is stored in `~/.coffer/local/reach.json`, outside the vault repository, so it cannot be committed or pushed at all; the resource file holds no `enabled` or `scope`. The experimental-feature switches live in `~/.coffer/daemon-config.json` for the same reason. Surfaces say so where reach is set: each kind's `scope` command (`coffer skill scope --help`, for example) states that the scope applies to this machine only.
+**In the code.** Reach is stored in `~/.coffer/local/reach.json`, outside the vault repository, so it cannot be committed or pushed at all; the resource file holds no `enabled` or `scope`. The experimental-feature switches live in `~/.coffer/daemon-config.json` for the same reason. Surfaces say so where reach is set: each kind's scope control states that the scope applies to this machine only.
 
 **Rules out.** Machine ids inside a scope; a "newest write wins" reach; any permission that changes because another machine's round ran.
 

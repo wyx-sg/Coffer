@@ -23,7 +23,7 @@ from coffer.domain.vault.content_ids import EMPTY_BLOB
 from coffer.domain.vault.layout import area_of
 
 #: Content areas the breaker counts, and the registry areas it never does.
-_AREAS = ("knowledge", "skills", "memory-triggers")
+_AREAS = ("knowledge", "skills", "secret")
 _NOT_COUNTED = ("machines/m.json", "manifest.json", "stray.txt")
 
 
@@ -106,9 +106,9 @@ def test_losing_more_never_releases_a_hold(total: int, lost: int, more: int) -> 
 
 @given(st.integers(1, 40))
 def test_a_loss_in_an_area_the_losing_side_never_counted_always_holds(lost: int) -> None:
-    gone = _area_files("memory-triggers", lost)
+    gone = _area_files("secret", lost)
     (breach,) = breached(losses(_gone(gone)), totals(_area_files("knowledge", 50)))
-    assert (breach.area, breach.lost, breach.total) == ("memory-triggers", lost, 0)
+    assert (breach.area, breach.lost, breach.total) == ("secret", lost, 0)
 
 
 @given(st.lists(st.sampled_from(_NOT_COUNTED), min_size=1))

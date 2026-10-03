@@ -1,22 +1,19 @@
 """Claude Code's memory hook adapter.
 
-Coffer installs one entry on each of four events in `~/.claude/settings.json`
+Coffer installs one entry on each of two events in `~/.claude/settings.json`
 (the allowlisted `"settings"` key — `domain.agent.allowlists._claude_code_files`),
 the same file a developer's own `env`, `permissions` and hand-wired hooks live
 in: `SessionStart` (matched on every source that starts a session —
-`startup|resume|clear|compact`), `UserPromptSubmit`, and `PreToolUse` /
-`PostToolUse` matched on the `Bash` tool. Every entry runs the same
-`coffer memory hook` command, which reads the event from stdin and prints the
-event's JSON `hookSpecificOutput` (`domain.memory.hook_output`).
+`startup|resume|clear|compact`) and `UserPromptSubmit`. Both entries run the
+same `coffer memory hook` command, which reads the event from stdin and prints
+the event's JSON `hookSpecificOutput` (`domain.memory.hook_output`).
 
 Claude Code keeps a hook's output inline up to about 10,000 characters; the
 session-start payload is bounded under that
-(`domain.memory.delivery.DELIVERY_CEILING_BYTES`). Its `PreToolUse`
-`additionalContext` arrives only after the command ran, which is why the guard
-denies instead. Claude Code runs every hook in its settings; there is no trust
-step, so `trust` always answers `NOT_REQUIRED`. The CLI is still called by
-absolute path: Claude Code started from the Dock or an IDE does not inherit the
-login shell's `PATH`.
+(`domain.memory.delivery.DELIVERY_CEILING_BYTES`). Claude Code runs every hook
+in its settings; there is no trust step, so `trust` always answers
+`NOT_REQUIRED`. The CLI is still called by absolute path: Claude Code started
+from the Dock or an IDE does not inherit the login shell's `PATH`.
 """
 
 from __future__ import annotations

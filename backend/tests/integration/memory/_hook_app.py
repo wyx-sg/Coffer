@@ -1,11 +1,9 @@
 """The whole daemon on a fake home, for the memory-hook integration tests
-(spec memory "Retrieve the notes a prompt names", "Guard a known trap once per
-session", "Keep triggers in the vault, armed only by a person", "Count what
-memory delivered and what was read").
+(spec memory "Retrieve the notes a prompt names", "Count what memory delivered
+and what was read").
 
 :func:`boot` starts ``create_app`` with every root Coffer writes under pointed
-into ``tmp_path`` (``HOME`` included, so the triggers land in the fake
-``~/.coffer/vault/memory-triggers``), the ``memory`` feature on, and both of the
+into ``tmp_path`` (``HOME`` included), the ``memory`` feature on, and both of the
 CLI's ways to reach a daemon routed at one ``TestClient``: the person-facing
 commands through ``client_or_exit``, and ``coffer memory hook`` — which only
 ever calls ``live_daemon`` and ``httpx.post`` — through those two names.
@@ -199,10 +197,6 @@ def extract_json(output: str) -> Any:
     return json.loads(output)
 
 
-def triggers_dir(app: HookApp) -> pathlib.Path:
-    return app.home / ".coffer" / "vault" / "memory-triggers"
-
-
 __all__ = [
     "PORT",
     "TOKEN",
@@ -216,5 +210,4 @@ __all__ = [
     "register",
     "seed_repository",
     "sync",
-    "triggers_dir",
 ]
