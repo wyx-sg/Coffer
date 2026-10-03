@@ -37,6 +37,8 @@ export function DeletePartitionDialog({ partition, onClose, onDeleted }: Props) 
       title={t("memory.delete.title", { name })}
       description={t("memory.delete.body", { count: partition?.note_count ?? 0 })}
       confirmLabel={t("memory.delete.confirm")}
+      pendingLabel={t("common.deleting")}
+      errorTitle={t("common.couldntDelete", { name: name })}
       variant="destructive"
       pending={del.isPending}
       error={del.error}

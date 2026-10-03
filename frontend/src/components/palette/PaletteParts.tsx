@@ -68,6 +68,7 @@ export function PaletteRow({ item, variant, query, at, index, id, selected, ...o
   if (variant === "best") {
     if (isPage) meta.push(kindWord);
     else if (status) meta.push(status);
+    if (!isPage && item.note) meta.push(item.note);
   } else if (isPage) {
     if (variant === "recent" && at) meta.push(relativeTime(at, i18n.language));
     else if (item.id === "settings-general") meta.push(shortcutLabel(","));
@@ -90,7 +91,7 @@ export function PaletteRow({ item, variant, query, at, index, id, selected, ...o
         selected && "bg-surface-selected",
       )}
     >
-      {Icon ? <Icon className="size-4 shrink-0 text-text-muted" aria-hidden /> : null}
+      {Icon ? <Icon className="size-[15px] shrink-0 text-text-subtle" aria-hidden /> : null}
       <span className="min-w-0 truncate text-sm text-text">
         <span data-testid="palette-row-label">
           <Highlighted text={item.label} query={query} />
@@ -100,12 +101,12 @@ export function PaletteRow({ item, variant, query, at, index, id, selected, ...o
         ) : null}
       </span>
       {item.detail ? (
-        <span className="min-w-0 truncate font-mono text-xs text-text-muted">
+        <span className="min-w-0 truncate font-mono text-xs text-text-subtle">
           <Highlighted text={item.detail} query={query} />
         </span>
       ) : null}
       {meta.length > 0 ? (
-        <span className="ml-auto shrink-0 whitespace-nowrap pl-2 text-xs text-text-muted">
+        <span className="ml-auto shrink-0 whitespace-nowrap pl-2 text-xs text-text-subtle">
           {meta.map((part, i) => (
             <span key={i}>
               {i > 0 ? " · " : null}
@@ -130,7 +131,7 @@ export function StatusLine({
       role="status"
       className={cn(
         "flex min-h-control-lg items-center px-2.5 text-xs",
-        tone === "danger" ? "text-danger" : "text-text-muted",
+        tone === "danger" ? "text-danger" : "text-text-subtle",
       )}
     >
       {children}

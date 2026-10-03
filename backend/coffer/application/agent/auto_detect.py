@@ -56,6 +56,8 @@ class AgentTypeDetection:
     #: Another directory seen for this type — the one its environment variable
     #: names — offered as "use a different config directory", never added.
     other_config_dir: str | None = None
+    #: The product's official install page.
+    install_url: str = ""
 
     @property
     def name(self) -> str:
@@ -215,6 +217,7 @@ class AutoDetectService:
                     version=program.version,
                     uid=agent.uid if agent is not None else None,
                     other_config_dir=str(others[0]) if others else None,
+                    install_url=descriptor.install_url,
                 )
             )
         return rows

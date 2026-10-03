@@ -2341,8 +2341,16 @@ components:
       type: object
     SyncStatusOut:
       properties:
+        ahead:
+          default: 0
+          title: Ahead
+          type: integer
         areas:
           $ref: '#/components/schemas/AreaCountsOut'
+        behind:
+          default: 0
+          title: Behind
+          type: integer
         configured:
           title: Configured
           type: boolean
@@ -2420,6 +2428,8 @@ components:
       - conflicts
       - held
       - join_choices
+      - ahead
+      - behind
       title: SyncStatusOut
       type: object
     WaitingCommitOut:

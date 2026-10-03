@@ -4,7 +4,8 @@
 // with the overlay shadow, a 15px status icon, one 13/600 action 12px after
 // the message. A card that will leave on its own draws a 2px line along its
 // bottom edge that shrinks with the time it has left, and stops with the clock
-// while the pointer or focus is on the card. Timing itself is the provider's
+// while the pointer or focus is on the card; an error stays until dismissed
+// and draws no line. Timing itself is the provider's
 // (toast.tsx); the line is only its picture.
 import { useEffect, useRef, useState, type ButtonHTMLAttributes } from "react";
 import { AlertTriangle, Check, Info, X } from "lucide-react";
@@ -116,7 +117,7 @@ function ToastCard({ toast, onDismiss, onPause, onResume }: CardProps) {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) hold(focus, false);
       }}
       className={cn(
-        "group pointer-events-auto relative min-w-[280px] max-w-[420px] overflow-hidden rounded-xl bg-surface-raised text-sm text-text shadow-[var(--shadow-toast)]",
+        "group pointer-events-auto relative min-w-[280px] max-w-[420px] overflow-hidden rounded-xl bg-surface-raised text-sm text-text shadow-overlay",
         "animate-in fade-in-0 slide-in-from-bottom-2 duration-slow ease-out",
       )}
     >

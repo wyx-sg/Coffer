@@ -1188,6 +1188,11 @@ components:
         unresolvable:
           title: Unresolvable
           type: boolean
+        updated_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updated At
         waiting_agents:
           items:
             type: string
@@ -1210,6 +1215,7 @@ components:
       - sources
       - waiting_entries
       - waiting_agents
+      - updated_at
       title: PartitionOut
       type: object
     ReadFailureOut:

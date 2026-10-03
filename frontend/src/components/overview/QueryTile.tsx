@@ -25,5 +25,13 @@ export function QueryTile<T>({
     : query.isError
       ? ({ kind: "error", error: query.error, retry: () => void query.refetch() } as const)
       : ({ kind: "ready", content: content(query.data as T) } as const);
-  return <HealthTile to={area.to} label={label} icon={entry.icon} state={state} />;
+  return (
+    <HealthTile
+      to={area.to}
+      label={label}
+      area={area.to.slice(1)}
+      icon={entry.icon}
+      state={state}
+    />
+  );
 }

@@ -2,9 +2,10 @@
 //
 // Three rows in a 112-high card: the area and its status word; a big number
 // and its unit; one muted line of detail. Each tile loads and fails on its
-// own — a failed one says so, with Retry and a link to its page, while the
-// rest keep working (Overview board 1.3.04 "One area failed to load").
-import type { LucideIcon } from "lucide-react";
+// own — a failed one says what failed, the failed request in mono (method,
+// path, area, status, trace), Retry and a link to its page, while the rest
+// keep working (Overview board 1.2.04 "Partial failure").
+import { RotateCcw, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -32,6 +33,8 @@ export interface TileContent {
 interface Props {
   to: string;
   label: string;
+  /** The area's name in the failed-request line ("knowledge", "mcp-servers"). */
+  area: string;
   icon: LucideIcon;
   state:
     | { kind: "loading" }
@@ -60,14 +63,33 @@ function TileHead({
   );
 }
 
-export function HealthTile({ to, label, icon, state }: Props) {
+/** "GET /api/v1/overview · knowledge · 503 · trace 01JA2M7X4Q": the failed request, with the area
+ *  after its path; empty when the error never reached the daemon. */
+function failedRequest(error: unknown, area: string): string {
+  const r = error instanceof ApiError ? error.request : undefined;
+  if (!r) return "";
+  return [
+    r.path ? `GET ${r.path}` : null,
+    area,
+    r.status !== undefined ? String(r.status) : null,
+    r.trace ? `trace ${r.trace}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+export function HealthTile({ to, label, area, icon, state }: Props) {
   const { t } = useTranslation();
 
   if (state.kind === "error") {
     // Not a link: it holds two actions of its own.
-    const code = state.error instanceof ApiError ? state.error.code : null;
+    const failed = failedRequest(state.error, area);
     return (
-      <div className={TILE} role="group" aria-label={label}>
+      <div
+        className={TILE}
+        role="group"
+        aria-label={t("overview.health.loadFailedLabel", { area: label })}
+      >
         <TileHead
           icon={icon}
           label={label}
@@ -75,10 +97,11 @@ export function HealthTile({ to, label, icon, state }: Props) {
         />
         <div className="flex min-w-0 flex-col gap-[3px]">
           <p className="truncate text-sm text-text">{translateApiError(t, state.error)}</p>
-          {code ? <p className="truncate font-mono text-2xs text-text-subtle">{code}</p> : null}
+          {failed ? <p className="truncate font-mono text-2xs text-text-subtle">{failed}</p> : null}
         </div>
         <div className="mt-auto flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={state.retry}>
+            <RotateCcw aria-hidden />
             {t("overview.retry")}
           </Button>
           <Link

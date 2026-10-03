@@ -69,7 +69,7 @@ describe("SkillFileViewer", () => {
 
   test("SKILL.md opens rendered without its frontmatter, with Preview / Source and Edit", () => {
     stubContent({ content: "---\nname: s\ndescription: d\n---\n# Heading\n\nbody" });
-    renderViewer(<SkillFileViewer uid={SKILL_UID} path="SKILL.md" />);
+    renderViewer(<SkillFileViewer uid={SKILL_UID} owner="demo" path="SKILL.md" />);
     expect(screen.getByRole("heading", { name: "Heading" })).toBeInTheDocument();
     expect(screen.queryByText("description")).not.toBeInTheDocument();
     expect(screen.getByText("2.3 KB")).toBeInTheDocument();
@@ -80,7 +80,7 @@ describe("SkillFileViewer", () => {
 
   test("another text file shows Edit and Open in editor", () => {
     stubContent({ path: "scripts/search.py", content: "print(1)" });
-    renderViewer(<SkillFileViewer uid={SKILL_UID} path="scripts/search.py" />);
+    renderViewer(<SkillFileViewer uid={SKILL_UID} owner="demo" path="scripts/search.py" />);
     expect(screen.getByRole("button", { name: /^edit$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Preview" })).not.toBeInTheDocument();
@@ -88,7 +88,7 @@ describe("SkillFileViewer", () => {
 
   test("a binary file offers its own app and Finder, and no editor", () => {
     stubContent({ path: "flow.png", binary: true, size: 49152 });
-    renderViewer(<SkillFileViewer uid={SKILL_UID} path="flow.png" />);
+    renderViewer(<SkillFileViewer uid={SKILL_UID} owner="demo" path="flow.png" />);
     expect(screen.getByText("Binary file · 48 KB")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open in default app/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
@@ -98,7 +98,7 @@ describe("SkillFileViewer", () => {
   test("editing and saving sends the content with the fingerprint it read", async () => {
     stubContent({ content: "old", fingerprint: "fp-1" });
     writeMock.mockResolvedValue({ fingerprint: "fp-2" } as never);
-    renderViewer(<SkillFileViewer uid={SKILL_UID} path="SKILL.md" />);
+    renderViewer(<SkillFileViewer uid={SKILL_UID} owner="demo" path="SKILL.md" />);
 
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
@@ -118,7 +118,7 @@ describe("SkillFileViewer", () => {
   test("⌘S saves while the text has focus", async () => {
     stubContent({ content: "old" });
     writeMock.mockResolvedValue({ fingerprint: "fp-2" } as never);
-    renderViewer(<SkillFileViewer uid={SKILL_UID} path="SKILL.md" />);
+    renderViewer(<SkillFileViewer uid={SKILL_UID} owner="demo" path="SKILL.md" />);
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     const box = screen.getByRole("textbox");
     fireEvent.change(box, { target: { value: "typed" } });
@@ -132,7 +132,7 @@ describe("SkillFileViewer", () => {
     async () => {
       stubContent({ content: "old", fingerprint: "fp-1" });
       writeMock.mockRejectedValue(new ApiError("SKILL_FILE_STALE", "changed on disk"));
-      renderViewer(<SkillFileViewer uid={SKILL_UID} path="SKILL.md" />);
+      renderViewer(<SkillFileViewer uid={SKILL_UID} owner="demo" path="SKILL.md" />);
 
       fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
       fireEvent.change(screen.getByRole("textbox"), { target: { value: "my work" } });
@@ -152,7 +152,7 @@ describe("SkillFileViewer", () => {
 
   test("a truncated file shows its start read-only, with Open in editor", () => {
     stubContent({ path: "big.jsonl", content: "aaa", truncated: true, size: 18_000_000 });
-    renderViewer(<SkillFileViewer uid={SKILL_UID} path="big.jsonl" />);
+    renderViewer(<SkillFileViewer uid={SKILL_UID} owner="demo" path="big.jsonl" />);
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
     expect(screen.getByText(/too large to show or edit here/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
@@ -162,7 +162,7 @@ describe("SkillFileViewer", () => {
   // built-in banner above the files says why; the viewer offers no Edit.
   test("a builtin skill's files are read-only", () => {
     stubContent({ content: "# Guide" });
-    renderViewer(<SkillFileViewer uid={SKILL_UID} path="SKILL.md" builtin />);
+    renderViewer(<SkillFileViewer uid={SKILL_UID} owner="demo" path="SKILL.md" builtin />);
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });

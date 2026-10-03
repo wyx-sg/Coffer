@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
 import { createBrowserRouter, type RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout";
+import { UnsavedGuardProvider } from "./components/shell/UnsavedGuard";
 import { SettingsIndexRedirect } from "./components/shell/redirects";
 import { FeatureGate } from "./components/FeatureGate";
 import { PageFallback } from "./components/PageFallback";
@@ -204,7 +205,14 @@ const settingsRoutes: RouteObject[] = [
 export const appRoutes: RouteObject[] = [...pageRoutes, ...settingsRoutes];
 
 export const routes: RouteObject[] = [
-  { path: "*", element: <Layout pageRoutes={pageRoutes} settingsRoutes={settingsRoutes} /> },
+  {
+    path: "*",
+    element: (
+      <UnsavedGuardProvider>
+        <Layout pageRoutes={pageRoutes} settingsRoutes={settingsRoutes} />
+      </UnsavedGuardProvider>
+    ),
+  },
 ];
 
 export const router = createBrowserRouter(routes);

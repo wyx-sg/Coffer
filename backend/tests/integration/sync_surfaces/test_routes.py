@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from coffer.domain.sync.remote import SyncRemote
+
 from .conftest import client_for
 from .harness import Box
 
@@ -174,3 +176,25 @@ def test_a_round_is_rolled_back_through_the_route(pair: tuple[Box, Box]) -> None
         again = c.get(f"/sync/runs/{rolled['id']}/rollback-plan")
         assert again.status_code == 409
     assert mini.disk(DOC) == b"Primary on-call rotates every Monday.\n"
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="the status counts commits ahead of and behind the remote"
+)
+def test_status_counts_commits_ahead_of_and_behind_the_remote(pair: tuple[Box, Box]) -> None:
+    mac, mini = pair
+    mac.put("knowledge/team/deploy.md", "Deploy on Tuesdays.\n")
+    with client_for(mac) as c:
+        status = c.get("/sync/status").json()
+        assert (status["ahead"], status["behind"]) == (1, 0)
+        c.post("/sync/run")
+        status = c.get("/sync/status").json()
+        assert (status["ahead"], status["behind"]) == (0, 0)
+    mini.put("knowledge/team/oncall.md", "Rotate weekly.\n")
+    with client_for(mini) as c:
+        c.post("/sync/run")
+    # Fetched, not yet merged: the remote has a commit this vault lacks.
+    mac.git.fetch(SyncRemote(url=mac.url).branch, None)
+    with client_for(mac) as c:
+        status = c.get("/sync/status").json()
+        assert (status["ahead"], status["behind"]) == (0, 1)

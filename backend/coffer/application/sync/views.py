@@ -76,6 +76,10 @@ class SyncStatus:
     conflicts: int = 0
     held: int = 0
     join_choices: int = 0
+    #: How many commits this vault has that the remote (as last fetched) does
+    #: not, and how many the remote has that this vault does not.
+    ahead: int = 0
+    behind: int = 0
 
 
 @dataclass(frozen=True)

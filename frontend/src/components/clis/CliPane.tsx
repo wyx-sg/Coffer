@@ -10,9 +10,10 @@
 // Needed by) and Commands (the tool's whole interface, read from its help). A
 // command not in the list (a deep link the list has not caught up with) is
 // read on its own.
-import { SquareTerminal } from "lucide-react";
+import { Terminal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { DetailNotFound } from "@/components/DetailNotFound";
 import { EmptyState } from "@/components/EmptyState";
 import { PageFallback } from "@/components/PageFallback";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
@@ -20,7 +21,7 @@ import { StatusPill } from "@/components/status/StatusPill";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Cli } from "@/lib/api/clis";
-import { translateApiError } from "@/lib/api/errors";
+import { ApiError, translateApiError } from "@/lib/api/errors";
 import { cliTone, neededByCount } from "@/lib/clis/format";
 import { CLI_TABS, DEFAULT_CLI_TAB } from "@/lib/clis/tabs";
 import { useDetailTab } from "@/lib/detailTabs";
@@ -94,7 +95,7 @@ function CliDetail({ cli, onRemoved }: { cli: Cli; onRemoved: () => void }) {
             <CliCommandsTab command={cli.command} iface={iface} />
           ) : (
             <EmptyState
-              icon={SquareTerminal}
+              icon={Terminal}
               title={t("clis.commands.unavailable")}
               description={t("clis.commands.unavailableBody", { command: cli.command })}
             />
@@ -112,9 +113,13 @@ export function CliPane({ command, listed, onRemoved }: Props) {
 
   if (cli) return <CliDetail cli={cli} onRemoved={onRemoved} />;
   if (lookup.isPending) return <PageFallback />;
+  // A command the daemon does not know is gone; any other failure keeps its own message.
+  if (lookup.error instanceof ApiError && lookup.error.code.endsWith("NOT_FOUND")) {
+    return <DetailNotFound kind="clis" id={command} backTo="/clis" icon={Terminal} />;
+  }
   return (
     <EmptyState
-      icon={SquareTerminal}
+      icon={Terminal}
       tone="error"
       title={t("clis.detail.notFound")}
       description={lookup.error ? translateApiError(t, lookup.error) : undefined}

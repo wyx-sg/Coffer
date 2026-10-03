@@ -112,6 +112,11 @@ function ok(data: unknown) {
   return Promise.resolve({ data, error: undefined });
 }
 const FAIL = { error: { code: "INTERNAL_ERROR", message: "boom" } };
+const FAILED_RESPONSE = {
+  status: 503,
+  url: "http://127.0.0.1:8000/api/v1/skills",
+  headers: new Headers({ "X-Coffer-Trace": "01JA2M7X4Q" }),
+};
 
 function install(setup: Setup = {}) {
   routed = [];
@@ -125,12 +130,13 @@ function install(setup: Setup = {}) {
   const get = vi
     .fn()
     .mockImplementation((path: string, init?: { params?: { query?: Record<string, unknown> } }) => {
-      if (state.failing.includes(path)) return Promise.resolve({ data: undefined, error: FAIL });
+      if (state.failing.includes(path))
+        return Promise.resolve({ data: undefined, error: FAIL, response: FAILED_RESPONSE });
       const query = init?.params?.query ?? {};
       switch (path) {
         case "/attention":
           return state.attention === "fail"
-            ? Promise.resolve({ data: undefined, error: FAIL })
+            ? Promise.resolve({ data: undefined, error: FAIL, response: FAILED_RESPONSE })
             : ok(withHandoffs(state.attention));
         case "/daemon/status":
           return ok({ status: "ready", version: "0", port: 1, features: state.features });
@@ -138,8 +144,8 @@ function install(setup: Setup = {}) {
           if (query.kind === "mcp_server") {
             return ok({
               resources: [
-                { uid: "m-github", name: "github" },
-                { uid: "m-jira", name: "jira" },
+                { uid: "m-github", name: "github", enabled: true },
+                { uid: "m-jira", name: "jira", enabled: true },
               ],
             });
           }
@@ -200,9 +206,18 @@ function install(setup: Setup = {}) {
                 actor: "ui",
                 details: null,
               },
+              {
+                id: 2,
+                timestamp: ago(120_000),
+                event_type: "resource_created",
+                resource_kind: "provider",
+                resource_name: "anthropic-direct",
+                actor: "ui",
+                details: null,
+              },
             ],
             next_cursor: null,
-            total: 1,
+            total: 2,
           });
         default:
           try {
@@ -253,12 +268,14 @@ function install(setup: Setup = {}) {
               display_name: "Claude Code",
               config_dir: "/Users/me/.claude",
               state: state.types === "none-found" ? "missing" : "installed_active",
+              install_url: "https://docs.claude.com/en/docs/claude-code/setup",
             },
             {
               type: "codex",
               display_name: "Codex",
               config_dir: "/Users/me/.codex",
               state: "missing",
+              install_url: "https://developers.openai.com/codex/cli",
             },
           ],
           install_handoff:
@@ -308,6 +325,9 @@ function install(setup: Setup = {}) {
       case "/sync/status":
         return {
           configured: true,
+          problem: null,
+          held: 0,
+          conflicts: 0,
           last_run: { status: "ok" },
           remote: { url: "git@example:vault.git" },
         };
@@ -420,6 +440,7 @@ describe("overview lists what needs the user, most severe first", () => {
       ),
     ).toBeInTheDocument();
     expect(within(needsYou()).getByText("github")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/^Channels couldn't be checked/);
     // A partial list is not "all good".
     expect(screen.queryByText("Nothing needs you")).toBeNull();
   });
@@ -437,7 +458,12 @@ describe("overview shows a calm card when nothing needs the user", () => {
     install();
     renderPage();
     expect(await screen.findByText("Nothing needs you")).toBeInTheDocument();
-    expect(screen.getByText("Anything that needs you shows up here.")).toBeInTheDocument();
+    // One sentence on what is fine, built from the agents, servers and sync status.
+    expect(
+      await screen.findByText(
+        "Both agents are connected, 2 servers are answering and your vault is in sync. Anything that needs you shows up here.",
+      ),
+    ).toBeInTheDocument();
     expect(needsYou().querySelector("time")).not.toBeNull();
     // Healthy tiles are quiet; the numbers still read.
     const mcp = await within(health()).findByRole("link", { name: "MCP servers" });
@@ -489,26 +515,128 @@ describe("overview welcomes a first run with the agents to connect", () => {
     expect(screen.queryByRole("button", { name: /Review and connect/ })).toBeNull();
   });
 
-  acceptance(
-    "web-ui",
-    "with no agent found overview offers the install prompt to copy",
-    async () => {
-      install({ agents: [], types: "none-found" });
-      renderPage();
-      expect(await screen.findByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
-      // There is no agent to ask, and no installer link of Coffer's own.
-      expect(screen.queryByRole("button", { name: /ask an agent/i })).toBeNull();
-      expect(screen.queryByRole("link", { name: /install/i })).toBeNull();
-    },
-  );
+  acceptance("web-ui", "with no agent found overview links each agent's install page", async () => {
+    install({ agents: [], types: "none-found" });
+    renderPage();
+    expect(await screen.findByText(/and found neither\./)).toBeInTheDocument();
+    // Each agent not found carries an Install link to its official page; the
+    // page itself offers no install prompt and no Ask an agent.
+    expect(screen.getByRole("link", { name: "Install Claude Code" })).toHaveAttribute(
+      "href",
+      "https://docs.claude.com/en/docs/claude-code/setup",
+    );
+    expect(screen.getByRole("link", { name: "Install Codex" })).toHaveAttribute(
+      "href",
+      "https://developers.openai.com/codex/cli",
+    );
+    expect(screen.queryByRole("button", { name: "Copy prompt" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /ask an agent/i })).toBeNull();
+  });
+});
+
+describe("each health tile carries the numbers and lines the board shows", () => {
+  acceptance("web-ui", "health tiles carry the numbers and lines of Overview's board", async () => {
+    const base = routeFallback;
+    const minutes = (n: number) => ago(n * 60_000);
+    const attention = (
+      kind: string,
+      uid: string,
+      title: string,
+      reason_code: string,
+      since?: string,
+    ) => ({
+      kind,
+      uid,
+      title,
+      reason_code,
+      reason: "x",
+      severity: "warning",
+      since: since ?? null,
+      action: action("check"),
+    });
+    install({
+      attention: {
+        ...EMPTY_ATTENTION,
+        items: [
+          attention("agent", "a-codex", "Codex", "agent_not_connected"),
+          // A hook edited by hand is no missing connection.
+          attention("agent", "a-claude", "Claude Code", "stale_command"),
+          attention("channel", "c1", "SeaTalk", "channel_reconnecting", minutes(30)),
+          attention("cli", "gh", "gh", "cli_logged_out"),
+        ],
+      },
+    });
+    routeFallback = (path) => {
+      if (path === "/knowledge/collections") {
+        return {
+          collections: [{ uid: "k1", name: "shopee", document_count: 142, updated_at: minutes(1) }],
+        };
+      }
+      if (path === "/memory/partitions") {
+        return {
+          partitions: [{ uid: "mp1", name: "coffer", note_count: 9, updated_at: minutes(14) }],
+        };
+      }
+      if (path === "/sync/status") {
+        return {
+          configured: true,
+          problem: null,
+          held: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 1,
+          last_round: { status: "pulled", finished_at: minutes(4) },
+          remote: { url: "git@example:vault.git" },
+        };
+      }
+      return base(path);
+    };
+    renderPage();
+    const tile = async (name: string) => {
+      const link = await within(health()).findByRole("link", { name });
+      await waitFor(() => expect(link).not.toHaveTextContent("…"));
+      return link;
+    };
+
+    const agents = await tile("Agents");
+    await waitFor(() => expect(agents).toHaveTextContent("1 of 2"));
+    expect(agents).toHaveTextContent("connected");
+    expect(agents).toHaveTextContent("1 to connect");
+
+    const channels = await tile("Channels");
+    await waitFor(() => expect(channels).toHaveTextContent("0 of 1"));
+    expect(channels).toHaveTextContent(/SeaTalk reconnecting since \d\d:\d\d/);
+
+    await waitFor(async () =>
+      expect(await tile("Knowledge")).toHaveTextContent(/1 collection · edited (today )?\d/),
+    );
+    await waitFor(async () =>
+      expect(await tile("Memory")).toHaveTextContent("Last update 14 min ago"),
+    );
+    const sync = await tile("Sync");
+    await waitFor(() => expect(sync).toHaveTextContent("4 min ago"));
+    expect(sync).toHaveTextContent("last round");
+    expect(sync).toHaveTextContent("1 behind · 0 ahead");
+    await waitFor(async () => expect(await tile("CLIs")).toHaveTextContent("1 not logged in"));
+    await waitFor(async () => expect(await tile("Secrets")).toHaveTextContent("1 unused"));
+    const usage = await tile("Usage");
+    await waitFor(() => expect(usage).toHaveTextContent("2.1M"));
+    expect(usage).toHaveTextContent("Last 24 h");
+    const providers = await tile("Model providers");
+    await waitFor(() => expect(providers).toHaveTextContent("Anthropic"));
+  });
 });
 
 describe("one area failing to load leaves the rest of overview working", () => {
   acceptance("web-ui", "one area failing to load leaves the rest of overview working", async () => {
     install({ failing: ["/skills"] });
     renderPage();
-    const skills = await within(health()).findByRole("group", { name: "Skills" });
+    const skills = await within(health()).findByRole("group", { name: "Skills: couldn’t load" });
     expect(within(skills).getByText("Couldn't load")).toBeInTheDocument();
+    // The failed request, as the board draws it: path, area, status, trace.
+    expect(
+      within(skills).getByText("GET /api/v1/skills · skills · 503 · trace 01JA2M7X4Q"),
+    ).toBeInTheDocument();
     expect(within(skills).getByRole("button", { name: "Retry" })).toBeInTheDocument();
     expect(within(skills).getByRole("link", { name: "Open Skills" })).toHaveAttribute(
       "href",
@@ -564,6 +692,14 @@ describe("overview hides an area whose backend or feature is off", () => {
     ]);
     // Nothing of a switched-off feature was asked for, so nothing can have failed.
     expect(gatedRequests(get)).toEqual([]);
+  });
+
+  test("recent activity leaves out entries of a switched-off feature", async () => {
+    install({ features: { ...ALL_ON, models: false } });
+    renderPage();
+    const recent = await screen.findByRole("region", { name: "Recent activity" });
+    expect(await within(recent).findByText("github")).toBeInTheDocument();
+    expect(within(recent).queryByText("anthropic-direct")).toBeNull();
   });
 
   test("with every feature on, each area has its tile", async () => {

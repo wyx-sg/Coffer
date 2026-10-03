@@ -34,9 +34,9 @@ export function KnowledgeDeleteDocument({ open, onOpenChange, path, filePath, on
       }}
       title={t("knowledge.deleteDocument.title", { name })}
       description={t("knowledge.deleteDocument.body")}
-      confirmLabel={
-        removeFile.isPending ? t("common.deleting") : t("knowledge.deleteDocument.confirm")
-      }
+      confirmLabel={t("knowledge.deleteDocument.confirm")}
+      pendingLabel={t("common.deleting")}
+      errorTitle={t("common.couldntDelete", { name: name })}
       pending={removeFile.isPending}
       error={removeFile.error}
       onConfirm={() =>

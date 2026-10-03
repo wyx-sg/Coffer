@@ -8,7 +8,7 @@
 // "Load more" (design 6.1.01, 6.1.02, 6.1.10).
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, RotateCw, ScrollText } from "lucide-react";
+import { AlertCircle, RotateCw, Activity } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState";
@@ -88,7 +88,7 @@ export function ActivityBody({
   if (feed.rows.length === 0) {
     return narrowed ? (
       <EmptyState
-        icon={ScrollText}
+        icon={Activity}
         title={t("activity.empty.noMatch")}
         description={t("activity.empty.noMatchBody")}
         action={
@@ -100,7 +100,7 @@ export function ActivityBody({
     ) : (
       <div className="border-t border-border-subtle">
         <EmptyState
-          icon={ScrollText}
+          icon={Activity}
           title={t("activity.empty.title")}
           description={t("activity.empty.body")}
           action={

@@ -3,6 +3,8 @@
 // The brand mark linking home and, at md and wider, the collapse toggle. The
 // desktop shell has neither: its title strip holds the traffic lights, the
 // toggle and the history arrows, and the sidebar starts at the search box.
+// Expanded the row is 44px high like the strip, its mark 20px with the 14px
+// wordmark; on the rail the mark sits 10px from the top with the toggle under it.
 import { Link } from "react-router-dom";
 
 import { cn } from "@/lib/utils";
@@ -20,8 +22,10 @@ export function SidebarBrandRow({ collapsed, showToggle, onToggle }: Props) {
   return (
     <div
       className={cn(
-        "flex pt-3.5",
-        collapsed ? "flex-col items-center gap-2 px-2" : "items-center justify-between px-4",
+        "flex",
+        collapsed
+          ? "flex-col items-center gap-1.5 px-2 pt-2.5"
+          : "h-11 shrink-0 items-center justify-between pl-5 pr-3",
       )}
     >
       <Link
@@ -29,7 +33,7 @@ export function SidebarBrandRow({ collapsed, showToggle, onToggle }: Props) {
         className="flex items-center rounded-item text-text"
         aria-label={collapsed ? "Coffer" : undefined}
       >
-        <CofferLogo size={22} markOnly={collapsed} />
+        <CofferLogo size={20} markOnly={collapsed} />
       </Link>
       {/* The same spot, under the mark on the rail, expands it again. */}
       {showToggle ? (

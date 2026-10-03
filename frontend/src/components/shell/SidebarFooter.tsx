@@ -50,12 +50,7 @@ export function SidebarFooter({ collapsed }: Props) {
   );
 
   return (
-    <div
-      className={cn(
-        "flex flex-col",
-        collapsed ? "items-center gap-3.5 pb-3.5" : "gap-0.5 px-2.5 pb-2",
-      )}
-    >
+    <div className={cn("flex flex-col", collapsed ? "items-center pb-3" : "gap-2 px-2.5 pb-2.5")}>
       <UpdateCard collapsed={collapsed} />
       {collapsed ? (
         <Tooltip>

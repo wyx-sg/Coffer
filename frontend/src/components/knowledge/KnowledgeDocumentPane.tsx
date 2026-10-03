@@ -128,6 +128,7 @@ function LoadedDocument({ collection, file, tab, tabs, reload }: LoadedProps) {
     save: (body, expected) =>
       saveFile({ path: file.path, body, expected_fingerprint: expected ?? "" }),
     reload,
+    guard: { file: file.path.split("/").pop() ?? file.path, owner: collection.name },
   });
   const name = file.path.split("/").pop() ?? file.path;
   const cancel = () => (draft.dirty ? setConfirmDiscard(true) : draft.cancel());

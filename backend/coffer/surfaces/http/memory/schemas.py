@@ -73,6 +73,9 @@ class PartitionOut(BaseModel):
     #: which agents they came from.
     waiting_entries: int = 0
     waiting_agents: list[str] = Field(default_factory=list)
+    #: When the partition's newest memory was last updated; ``null`` when it
+    #: holds none — the Overview's "Last update 14 min ago".
+    updated_at: str | None = None
 
 
 class PartitionListOut(BaseModel):

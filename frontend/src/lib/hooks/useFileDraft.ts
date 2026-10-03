@@ -1,7 +1,7 @@
 // frontend/src/lib/hooks/useFileDraft.ts — specs agent-registry / skill-manager / knowledge.
 // Draft state for an in-app file editor, shared by the agent config-file pane,
-// the skill master-file pane and the knowledge document pane. Both edit a file that ALSO lives on the
-// user's disk and is edited there, so both need the same three things: a draft
+// the skill file pane and the knowledge document pane. Each edits a file that ALSO lives on the
+// user's disk and is edited there, so each needs the same three things: a draft
 // separate from the loaded content, an explicit save, and a conflict the user
 // can act on rather than a silent overwrite.
 //
@@ -14,6 +14,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import { ApiError } from "@/lib/api/errors";
+import { useUnsavedGuard } from "@/lib/hooks/useUnsavedGuard";
 
 /** @ui-only hook options; never crosses the wire. */
 export interface FileDraftOptions {
@@ -27,6 +28,9 @@ export interface FileDraftOptions {
   save: (content: string, expectedFingerprint: string | null) => Promise<string | undefined>;
   /** Re-reads the file from the daemon (the answer to a conflict). */
   reload: () => Promise<unknown>;
+  /** What the unsaved-edits guard names when the user tries to leave with a
+   *  dirty draft: the file ("SKILL.md") and whose it is ("sentry-issue-triage"). */
+  guard: { file: string; owner: string };
 }
 
 /** True when the error is the daemon refusing a save because the file changed
@@ -48,18 +52,22 @@ export function useFileDraft(opts: FileDraftOptions) {
   // not 409 against its own previous save.
   const [current, setCurrent] = useState<string | undefined>(opts.fingerprint);
   const loadedRef = useRef(opts.loaded);
+  const fileId = `${opts.guard.owner}/${opts.guard.file}`;
+  const fileIdRef = useRef(fileId);
 
   // A different file (or a reload) replaced the content underneath us. Drop the
   // draft and leave edit mode: the draft belonged to the old bytes, and keeping
-  // it would silently re-apply it to a different file.
+  // it would silently re-apply it to a different file — two files with equal
+  // content included, so the file's identity counts as well as its bytes.
   useEffect(() => {
-    if (opts.loaded !== loadedRef.current) {
+    if (opts.loaded !== loadedRef.current || fileId !== fileIdRef.current) {
       loadedRef.current = opts.loaded;
+      fileIdRef.current = fileId;
       setDraft(null);
       setEditing(false);
     }
     setCurrent(opts.fingerprint);
-  }, [opts.loaded, opts.fingerprint]);
+  }, [opts.loaded, opts.fingerprint, fileId]);
 
   const baseline = opts.loaded ?? "";
   const value = draft ?? baseline;
@@ -78,6 +86,13 @@ export function useFileDraft(opts: FileDraftOptions) {
     },
   });
 
+  useUnsavedGuard({
+    dirty,
+    file: opts.guard.file,
+    owner: opts.guard.owner,
+    save: () => mutation.mutateAsync(),
+  });
+
   return {
     value,
     dirty,
@@ -91,6 +106,8 @@ export function useFileDraft(opts: FileDraftOptions) {
       mutation.reset();
     },
     save: () => mutation.mutate(),
+    /** The same save as a promise, for "Save and leave": rejects when refused. */
+    saveAsync: () => mutation.mutateAsync(),
     saving: mutation.isPending,
     error: mutation.error,
     conflict: isStaleConflict(mutation.error),

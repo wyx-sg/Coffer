@@ -1123,7 +1123,17 @@ export interface components {
         };
         /** SyncStatusOut */
         SyncStatusOut: {
+            /**
+             * Ahead
+             * @default 0
+             */
+            ahead: number;
             areas: components["schemas"]["AreaCountsOut"];
+            /**
+             * Behind
+             * @default 0
+             */
+            behind: number;
             /** Configured */
             configured: boolean;
             /** Conflicts */

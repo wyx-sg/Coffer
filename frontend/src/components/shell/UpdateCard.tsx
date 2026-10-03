@@ -1,6 +1,6 @@
 // src/components/shell/UpdateCard.tsx — the dismissible "update ready" card above the sidebar footer.
 //
-// Board 1.2.07 and the behaviour sheet (1.2.20, "Updates"): the desktop shell
+// Board 1.1.08 (and the behaviour sheet, 1.1.04 "Updates"): the desktop shell
 // checks at launch and every few hours; when a newer version is on offer a
 // card above the footer names it with Restart and What's new. Restart asks the
 // shell to download, verify and install it, then relaunch; a refusal (a bad
@@ -11,7 +11,7 @@
 // "Check for updates against a signed release manifest").
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUpCircle, X } from "lucide-react";
+import { Download, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -40,7 +40,7 @@ export function UpdateCard({ collapsed }: { collapsed: boolean }) {
       className="mx-0.5 flex shrink-0 flex-col gap-2 rounded-xl border border-border bg-surface-raised p-3"
     >
       <div className="flex items-center gap-2">
-        <ArrowUpCircle className="size-[15px] text-accent-text" strokeWidth={1.75} aria-hidden />
+        <Download className="size-3.5 text-accent" strokeWidth={1.75} aria-hidden />
         <span className="text-sm font-semibold text-text">{t("nav.update.title")}</span>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -70,7 +70,7 @@ export function UpdateCard({ collapsed }: { collapsed: boolean }) {
         <Button size="sm" loading={installing} onClick={() => void updates.install()}>
           {t("nav.update.restart")}
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => openSettings("about")}>
+        <Button size="sm" variant="ghost" className="px-1.5" onClick={() => openSettings("about")}>
           {t("nav.update.whatsNew")}
         </Button>
       </div>

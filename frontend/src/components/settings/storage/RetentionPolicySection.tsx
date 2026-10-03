@@ -114,7 +114,9 @@ export function RetentionPolicySection({ policy, onUpdate, updating, failed = fa
             disabled={updating}
             onCheckedChange={toggleForever}
           />
-          <Label htmlFor={foreverId}>{t("settings.retention.keepForever")}</Label>
+          <Label htmlFor={foreverId} className="text-xs font-normal text-text-muted">
+            {t("settings.retention.keepForever")}
+          </Label>
         </div>
         {!keepForever ? (
           <div className="flex items-center gap-2">
@@ -137,7 +139,7 @@ export function RetentionPolicySection({ policy, onUpdate, updating, failed = fa
               onKeyDown={(e) => {
                 if (e.key === "Enter") e.currentTarget.blur();
               }}
-              className="w-20"
+              className="w-20 font-mono"
             />
           </div>
         ) : null}

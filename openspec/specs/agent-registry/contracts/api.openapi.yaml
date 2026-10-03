@@ -2274,6 +2274,10 @@ components:
           anyOf:
           - $ref: '#/components/schemas/HandoffOut'
           - type: 'null'
+        install_url:
+          default: ''
+          title: Install Url
+          type: string
         name:
           title: Name
           type: string
@@ -2312,6 +2316,7 @@ components:
       - addable
       - other_config_dir
       - install_handoff
+      - install_url
       title: AgentTypeOut
       type: object
     AgentTypesOut:

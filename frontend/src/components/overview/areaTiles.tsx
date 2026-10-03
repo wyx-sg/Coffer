@@ -2,6 +2,9 @@
 //
 // Each area's tile is its own component reading its own list hook, so a tile
 // loads and fails on its own; HealthTiles decides which of them are shown.
+// The numbers and detail lines follow Overview board 1.2.09 (every tile in its
+// normal state): "1 of 2 connected" for Agents and Channels. Knowledge,
+// Memory and Sync, which show when they last changed, are in contextTiles.tsx.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -10,18 +13,18 @@ import { useActivityInvocations } from "@/lib/hooks/useActivityInvocations";
 import { useAgents } from "@/lib/hooks/useAgents";
 import type { AttentionItem } from "@/lib/hooks/useAttention";
 import { useChannels } from "@/lib/hooks/useChannels";
-import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
-import { useMemoryPartitions } from "@/lib/hooks/useMemory";
 import { useProviders } from "@/lib/hooks/useProviders";
 import { useResources } from "@/lib/hooks/useResources";
 import { useSkills } from "@/lib/hooks/useSkills";
-import { useSyncStatus } from "@/lib/hooks/useSync";
 import {
+  CONNECT_REASONS,
   deliveredAgentCount,
   tileStatus,
   uidsWithProblems,
   type Area,
 } from "@/lib/overview/health";
+import { joinNames, reconnectingText } from "@/lib/overview/tileText";
+import { KnowledgeTile, MemoryTile, SyncTile } from "./contextTiles";
 import { QueryTile } from "./QueryTile";
 import { ClisTile, CustomToolsTile, SecretsTile, UsageTile } from "./systemTiles";
 
@@ -40,12 +43,18 @@ function AgentsTile({ area, items }: AreaProps) {
       area={area}
       query={useAgents()}
       content={(agents) => {
-        const troubled = items ? uidsWithProblems(items, "agent") : null;
+        // Only connecting counts: a hook edited by hand is a Needs you row, not a missing connection.
+        const troubled = items ? uidsWithProblems(items, "agent", CONNECT_REASONS) : null;
         return {
           status: tileStatus(t, area, items, agents.length > 0),
-          value: troubled ? agents.length - troubled.size : agents.length,
+          value: troubled
+            ? t("overview.health.ofTotal", {
+                count: agents.length - troubled.size,
+                total: agents.length,
+              })
+            : agents.length,
           unit: troubled
-            ? t("overview.health.agents.unit", { total: agents.length })
+            ? t("overview.health.connected")
             : t("overview.health.agents.unitRegistered", { count: agents.length }),
           summary:
             agents.length > 0 ? (
@@ -53,7 +62,6 @@ function AgentsTile({ area, items }: AreaProps) {
                 agents={agents.map((a) => ({
                   type: a.type,
                   name: a.display_name,
-                  state: troubled?.has(a.uid) ? "not-connected" : undefined,
                 }))}
               />
             ) : null,
@@ -61,13 +69,6 @@ function AgentsTile({ area, items }: AreaProps) {
       }}
     />
   );
-}
-
-/** Up to three names, then "+N". */
-function names(list: readonly { name: string; title?: string | null }[]): string {
-  const shown = list.slice(0, 3).map((x) => x.title || x.name);
-  const rest = list.length - shown.length;
-  return rest > 0 ? `${shown.join(", ")} +${rest}` : shown.join(", ");
 }
 
 function ProvidersTile({ area, items }: AreaProps) {
@@ -80,24 +81,43 @@ function ProvidersTile({ area, items }: AreaProps) {
         status: tileStatus(t, area, items, providers.length > 0),
         value: providers.length,
         unit: t("overview.health.providers.unit", { count: providers.length }),
-        summary: providers.length > 0 ? names(providers) : t("overview.health.providers.none"),
+        summary: providers.length > 0 ? joinNames(providers) : t("overview.health.providers.none"),
       })}
     />
   );
 }
 
 function ChannelsTile({ area, items }: AreaProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   return (
     <QueryTile
       area={area}
       query={useChannels()}
-      content={(channels) => ({
-        status: tileStatus(t, area, items, channels.length > 0),
-        value: channels.length,
-        unit: t("overview.health.channels.unit", { count: channels.length }),
-        summary: channels.length > 0 ? names(channels) : t("overview.health.channels.none"),
-      })}
+      content={(channels) => {
+        const troubled = items ? uidsWithProblems(items, "channel") : null;
+        // The oldest reconnecting channel is the one the line names.
+        const reconnecting = items
+          ?.filter((i) => i.kind === "channel" && i.reason_code === "channel_reconnecting")
+          .sort((a, b) => (a.since ?? "").localeCompare(b.since ?? ""))[0];
+        return {
+          status: tileStatus(t, area, items, channels.length > 0),
+          value: troubled
+            ? t("overview.health.ofTotal", {
+                count: channels.length - troubled.size,
+                total: channels.length,
+              })
+            : channels.length,
+          unit: troubled
+            ? t("overview.health.connected")
+            : t("overview.health.channels.unit", { count: channels.length }),
+          summary:
+            channels.length === 0
+              ? t("overview.health.channels.none")
+              : reconnecting
+                ? reconnectingText(t, i18n.language, reconnecting.title, reconnecting.since ?? null)
+                : joinNames(channels),
+        };
+      }}
     />
   );
 }
@@ -151,63 +171,6 @@ function SkillsTile({ area, items }: AreaProps) {
                 : t("overview.health.skills.notDelivered"),
         };
       }}
-    />
-  );
-}
-
-function KnowledgeTile({ area, items }: AreaProps) {
-  const { t } = useTranslation();
-  return (
-    <QueryTile
-      area={area}
-      query={useKnowledgeCollections()}
-      content={(collections) => {
-        const docs = collections.reduce((n, c) => n + c.document_count, 0);
-        return {
-          status: tileStatus(t, area, items, collections.length > 0),
-          value: docs,
-          unit: t("overview.health.knowledge.unit", { count: docs }),
-          summary: t("overview.health.knowledge.collections", { count: collections.length }),
-        };
-      }}
-    />
-  );
-}
-
-function MemoryTile({ area, items }: AreaProps) {
-  const { t } = useTranslation();
-  return (
-    <QueryTile
-      area={area}
-      query={useMemoryPartitions()}
-      content={(partitions) => {
-        const notes = partitions.reduce((n, p) => n + p.note_count, 0);
-        return {
-          status: tileStatus(t, area, items, partitions.length > 0),
-          value: partitions.length,
-          unit: t("overview.health.memory.unit", { count: partitions.length }),
-          summary: t("overview.health.memory.notes", { count: notes }),
-        };
-      }}
-    />
-  );
-}
-
-function SyncTile({ area, items }: AreaProps) {
-  const { t } = useTranslation();
-  return (
-    <QueryTile
-      area={area}
-      query={useSyncStatus()}
-      content={(sync) => ({
-        status: tileStatus(t, area, items, sync.configured),
-        value: sync.configured
-          ? t(`overview.health.sync.round.${sync.last_round?.status ?? "none"}`, {
-              defaultValue: sync.last_round?.status ?? "",
-            })
-          : t("overview.health.sync.notSetUp"),
-        summary: sync.remote?.url ?? t("overview.health.sync.noRemote"),
-      })}
     />
   );
 }

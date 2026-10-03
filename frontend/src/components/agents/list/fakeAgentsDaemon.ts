@@ -55,6 +55,7 @@ export function typeRow(over: Partial<AgentTypeOut> & Pick<AgentTypeOut, "type">
     uid: null,
     version: over.type === "codex" ? "0.41.0" : "2.1.281",
     install_handoff: null,
+    install_url: "",
     ...over,
   };
 }

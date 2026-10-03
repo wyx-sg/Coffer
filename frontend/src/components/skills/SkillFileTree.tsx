@@ -108,7 +108,15 @@ function SkillFileSplit({
   );
 }
 
-export function SkillFileTree({ uid, builtin = false }: { uid: string; builtin?: boolean }) {
+export function SkillFileTree({
+  uid,
+  owner,
+  builtin = false,
+}: {
+  uid: string;
+  owner: string;
+  builtin?: boolean;
+}) {
   const tree = useSkillFiles(uid);
   const { selected, select } = useSelectedFile();
   const [dirtyPath, setDirtyPath] = useState<string | null>(null);
@@ -122,6 +130,7 @@ export function SkillFileTree({ uid, builtin = false }: { uid: string; builtin?:
         <SkillFileViewer
           key={selected}
           uid={uid}
+          owner={owner}
           path={selected}
           builtin={builtin}
           onDirtyChange={(dirty) => setDirtyPath(dirty ? selected : null)}

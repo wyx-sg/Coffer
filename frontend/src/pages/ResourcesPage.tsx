@@ -12,7 +12,8 @@ import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plus, Server } from "lucide-react";
 
-import { EmptyState } from "@/components/EmptyState";
+import { DetailNotFound } from "@/components/DetailNotFound";
+import { NothingSelected } from "@/components/ListPaneStates";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { AddMcpServerDialog } from "@/components/mcp/AddMcpServerDialog";
@@ -20,7 +21,6 @@ import { McpFirstRun } from "@/components/mcp/server/McpFirstRun";
 import { BUILTIN_NAME, McpServerList } from "@/components/mcp/server/McpServerList";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { translateApiError } from "@/lib/api/errors";
 import { isCustomToolGroup } from "@/lib/customTools/groups";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 import { useResources } from "@/lib/hooks/useResources";
@@ -71,23 +71,10 @@ export function ResourcesPage() {
 
   // Nothing registered: the welcome takes the page's whole width, no list (board 4.1.20).
   const firstRun = !list.error && !list.isPending && servers.length === 0 && !nameParam;
-  let pane: JSX.Element;
-  if (list.error) {
-    pane = (
-      <EmptyState
-        tone="error"
-        icon={Server}
-        title={t("resources.loadFailed")}
-        description={translateApiError(t, list.error)}
-        action={
-          <Button variant="outline" onClick={() => void list.refetch()}>
-            {t("common.retry")}
-          </Button>
-        }
-      />
-    );
-  } else if (list.isPending) {
-    pane = <PaneSkeleton />;
+  // While the list loads or failed (its pane shows why), the right pane stays empty.
+  let pane: JSX.Element | null;
+  if (list.error || list.isPending) {
+    pane = null;
   } else if (match) {
     pane = (
       <Suspense fallback={<PaneSkeleton />}>
@@ -107,21 +94,15 @@ export function ResourcesPage() {
       </Suspense>
     );
   } else if (nameParam) {
-    pane = (
-      <EmptyState
-        icon={Server}
-        title={t("errors.RESOURCE_NOT_FOUND")}
-        description={t("mcp.page.notFound", { name: nameParam })}
-      />
-    );
+    pane = <DetailNotFound kind="mcp" id={nameParam} backTo="/mcp-servers" icon={Server} />;
   } else if (servers.length === 0) {
     pane = <McpFirstRun onAdd={() => setAdd("paste")} onImport={() => setAdd("importAgents")} />;
   } else {
     pane = (
-      <EmptyState
+      <NothingSelected
         icon={Server}
-        title={t("mcp.page.choose.title")}
-        description={t("mcp.page.choose.body")}
+        addLabel={t("resources.addServer")}
+        onAdd={() => setAdd("paste")}
       />
     );
   }
@@ -153,6 +134,8 @@ export function ResourcesPage() {
             <McpServerList
               servers={servers}
               isLoading={list.isPending}
+              error={list.error}
+              onRetry={() => void list.refetch()}
               selectedName={match?.name ?? null}
               hrefFor={hrefFor}
               builtinSelected={!match && nameParam === BUILTIN_NAME}

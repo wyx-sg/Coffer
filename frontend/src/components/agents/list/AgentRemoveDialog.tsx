@@ -41,6 +41,7 @@ export function AgentRemoveDialog({ row, open, onOpenChange }: Props) {
         dir: abbreviateHomePath(row.config_dir),
       })}
       confirmLabel={t("agents.removeDialog.confirm")}
+      errorTitle={t("common.couldntRemove", { name })}
       pending={disconnect.isPending || remove.isPending}
       onConfirm={confirm}
     />

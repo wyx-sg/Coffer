@@ -3,9 +3,9 @@
 // First the agents card (FirstRunAgents): the supported agents, which were
 // found on this Mac, and connecting them through the review that shows every
 // file change first — or, with none found, scanning again. Below, the areas
-// an agent shares, each with its first step; "each can wait until you need
-// it". An area whose sidebar entry carries an experimental feature is offered
-// only while that feature is on (Overview boards 1.3.03, 1.3.07).
+// an agent shares, each with its first step; "Each can wait until you need
+// it" sits inline at the right of that title row. An area whose sidebar entry carries an experimental feature is offered
+// only while that feature is on (Overview boards 1.2.06, 1.2.07).
 import { ArrowRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -37,9 +37,12 @@ export function FirstRun() {
       <Section
         as="h2"
         gap="snug"
+        compact
         labelled
         title={t("overview.firstRun.thenTitle")}
-        help={t("overview.firstRun.thenHint")}
+        actions={
+          <span className="text-xs text-text-subtle">{t("overview.firstRun.thenHint")}</span>
+        }
       >
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {shared.map((s) => {

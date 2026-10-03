@@ -13,13 +13,13 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
 
+import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { ReachFilter } from "@/components/reach/ReachFilter";
 import { SearchInput } from "@/components/SearchInput";
 import { SkillLibraryRow } from "@/components/skills/SkillLibraryRow";
 import { SkillOrphanList } from "@/components/skills/SkillOrphanList";
 import { SkillsBulkBar } from "@/components/skills/SkillsBulkBar";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useClis } from "@/lib/hooks/useClis";
@@ -29,6 +29,9 @@ import { matchesReach, type ReachFilterValue } from "@/lib/reachFilter";
 interface Props {
   skills: SkillOut[];
   isLoading: boolean;
+  /** The list read failed: the pane shows the error block under the filter. */
+  error?: unknown;
+  onRetry?: () => void;
   /** The open skill's name, highlighted in the list. */
   selectedName: string | null;
   /** Where a row leads for a skill name — the same tab as the open one. */
@@ -50,6 +53,8 @@ interface Props {
 export function SkillLibrary({
   skills,
   isLoading,
+  error,
+  onRetry,
   selectedName,
   hrefFor,
   onOpenSkill,
@@ -134,14 +139,19 @@ export function SkillLibrary({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-        {isLoading ? (
-          <div className="space-y-2 px-2.5 py-1" aria-busy="true">
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-10 w-full" />
-            ))}
-          </div>
+        {error ? (
+          <ListLoadError kind="skills" error={error} onRetry={() => onRetry?.()} />
+        ) : isLoading ? (
+          <ListLoadingRows />
         ) : shown === 0 && skills.length > 0 ? (
-          <p className="px-2.5 py-3 text-xs text-text-muted">{t("skills.noMatches")}</p>
+          <ListNoMatch
+            kind="skills"
+            query={query}
+            onClear={() => {
+              setQuery("");
+              setFilter("all");
+            }}
+          />
         ) : (
           <div data-testid="skill-library">
             {GROUP_ORDER.map((group) => {

@@ -89,6 +89,9 @@ class PartitionSummary:
     #: distil".
     waiting_entries: int = 0
     waiting_agents: tuple[str, ...] = ()
+    #: When the partition's newest memory was last updated, or ``None`` when it
+    #: holds none.
+    updated_at: str | None = None
 
 
 def placement_of(row: Resource) -> Placement:
@@ -127,6 +130,7 @@ def summary_of(row: Resource, placement: Placement) -> PartitionSummary:
         sources=tuple(sorted(a for a in agents if a)),
         waiting_entries=len(waiting),
         waiting_agents=tuple(sorted({e.agent for e in waiting if e.agent})),
+        updated_at=(newest.updated_at or None) if newest is not None else None,
     )
 
 

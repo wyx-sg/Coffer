@@ -1,6 +1,9 @@
 // src/components/ui/skeleton.test.tsx
 import { describe, expect, test } from "vitest";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+
+import { acceptance } from "@/test/acceptance";
+import { PageFallback } from "@/components/PageFallback";
 
 import { Skeleton } from "./skeleton";
 
@@ -18,5 +21,18 @@ describe("Skeleton", () => {
     const el = container.firstElementChild as HTMLElement;
     expect(el.className).toContain("h-4");
     expect(el.className).toContain("w-24");
+  });
+
+  acceptance("web-ui", "a loading placeholder waits 300 ms before it shows", () => {
+    // `animate-shimmer` and `animate-appear` both begin with the 300 ms
+    // delayed appearance (tailwind.config.js), so neither paints before it.
+    const { container } = render(
+      <>
+        <Skeleton />
+        <PageFallback />
+      </>,
+    );
+    expect((container.firstElementChild as HTMLElement).className).toContain("animate-shimmer");
+    expect(screen.getByRole("status").className).toContain("animate-appear");
   });
 });

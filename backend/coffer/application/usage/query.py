@@ -30,7 +30,7 @@ from coffer.application.usage.ports import (
     UsageRepo,
 )
 from coffer.domain.pagination import Page, decode_cursor, paginate, position_of, time_and_id
-from coffer.domain.usage.ranges import DateRange, resolve_range
+from coffer.domain.usage.ranges import DateRange, RangeName, local_day, resolve_range
 
 _REQUESTS_LIST = "usage_requests"
 
@@ -118,6 +118,38 @@ class UsageSummary:
     )
 
 
+#: The most per-request rows a 24-hour summary reads.
+_WINDOW_ROWS = 100_000
+
+
+def _as_daily(stored: StoredUsage, tz: tzinfo) -> DailyUsage:
+    """One request as the rollup row it would have contributed to."""
+    rec = stored.record
+    known = rec.usage_known
+
+    def tokens(value: int | None) -> int:
+        return (value or 0) if known else 0
+
+    return DailyUsage(
+        day=local_day(rec.started_at, tz),
+        agent_uid=rec.agent_uid or None,
+        agent_type=rec.agent_type or None,
+        connection_uid=rec.connection_uid or None,
+        model=rec.model or None,
+        requests=1,
+        unknown_requests=0 if known else 1,
+        unpriced_requests=1 if stored.unpriced else 0,
+        input_tokens=tokens(rec.input_tokens),
+        cache_write_5m_tokens=tokens(rec.cache_write_5m_tokens),
+        cache_write_1h_tokens=tokens(rec.cache_write_1h_tokens),
+        cache_read_tokens=tokens(rec.cache_read_tokens),
+        output_tokens=tokens(rec.output_tokens),
+        reasoning_tokens=tokens(rec.reasoning_tokens),
+        web_search_requests=tokens(rec.web_search_requests),
+        cost_usd=stored.cost_usd or 0.0,
+    )
+
+
 def _group_key(group_by: GroupBy, row: DailyUsage) -> tuple[str | None, ...]:
     if group_by is GroupBy.MODEL:
         return (row.model, row.connection_uid)
@@ -165,9 +197,12 @@ class UsageQueryService:
         span = self.resolve(range_name, start, end)
         grouping = GroupBy(group_by)
         narrowed = filters or SummaryFilters()
-        daily = [
-            r for r in await self._repo.daily(span.start_day, span.end_day) if narrowed.keeps(r)
-        ]
+        if range_name == RangeName.LAST_24_HOURS:
+            daily = [r for r in await self._last_24_hours() if narrowed.keeps(r)]
+        else:
+            daily = [
+                r for r in await self._repo.daily(span.start_day, span.end_day) if narrowed.keeps(r)
+            ]
         groups: dict[tuple[str | None, ...], tuple[DailyUsage, UsageTotals]] = {}
         senders: dict[tuple[str | None, ...], dict[str, int]] = {}
         total = UsageTotals()
@@ -196,6 +231,16 @@ class UsageQueryService:
         else:
             rows.sort(key=lambda r: (-r.totals.cost_usd, -r.totals.requests, r.key))
         return UsageSummary(range=span, group_by=grouping, rows=rows, totals=total)
+
+    async def _last_24_hours(self) -> list[DailyUsage]:
+        """The per-request rows of the 24 hours up to now, as rollup rows: a
+        rolling window cuts through a local day, which ``usage_daily`` cannot."""
+        now = self._clock.now()
+        since = now - timedelta(hours=24)
+        stored = await self._repo.requests(
+            filters=RequestFilters(since=since), limit=_WINDOW_ROWS, after=None
+        )
+        return [_as_daily(s, self._tz) for s in stored]
 
     @staticmethod
     def _row(grouping: GroupBy, first: DailyUsage, sums: UsageTotals) -> SummaryRow:

@@ -12,7 +12,7 @@
 //   • A footer line (no box) to the Secrets page, because no stored secret is listed,
 //     added, revealed or deleted here.
 import { useTranslation } from "react-i18next";
-import { ArrowRight, KeyRound } from "lucide-react";
+import { ArrowRight, IdCard } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,7 @@ function SecretsFooter() {
   const navigate = useNavigate();
   return (
     <div className="flex items-center gap-2">
-      <KeyRound className="size-3.5 text-text-muted" aria-hidden />
+      <IdCard className="size-3.5 text-text-muted" aria-hidden />
       <span className="text-sm text-text-muted">{t("settings.security.secretsFooter")}</span>
       <Button
         variant="link"

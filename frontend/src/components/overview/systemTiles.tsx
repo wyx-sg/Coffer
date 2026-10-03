@@ -4,8 +4,8 @@
 // and fails on its own. Custom tools and CLIs take their word from the
 // attention items of their kinds, like every other area; Secrets and Usage
 // have no attention source, so Secrets words what its own list says (a
-// secret missing on this Mac, one nothing uses) and Usage shows only its
-// period, never a health it does not have.
+// secret missing on this Mac; one nothing uses is plain subtle text, not a
+// status) and Usage shows only its period, never a health it does not have.
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
@@ -16,7 +16,7 @@ import { useUsageSummary } from "@/lib/hooks/useUsage";
 import type { SecretRef } from "@/lib/api/secret";
 import type { UsageSummary } from "@/lib/api/usage";
 import { tileStatus } from "@/lib/overview/health";
-import { allUnpriced, formatCost, formatTokens } from "@/lib/usage/format";
+import { allUnpriced, formatCost, formatCount } from "@/lib/usage/format";
 import type { AreaProps } from "./areaTiles";
 import type { TileContent } from "./HealthTile";
 import { QueryTile } from "./QueryTile";
@@ -99,8 +99,12 @@ function secretsContent(t: TFunction, refs: readonly SecretRef[]): TileContent {
         : missing > 0
           ? { tone: "warn", text: t("overview.health.secrets.missing", { count: missing }) }
           : unused > 0
-            ? { tone: "ok", text: t("overview.health.secrets.unused", { count: unused }) }
+            ? null
             : { tone: "ok", text: t("overview.health.secrets.ok") },
+    note:
+      missing === 0 && unused > 0
+        ? t("overview.health.secrets.unused", { count: unused })
+        : undefined,
     value: refs.length,
     unit: t("overview.health.secrets.unit", { count: refs.length }),
     summary:
@@ -115,6 +119,16 @@ export function SecretsTile({ area }: AreaProps) {
   return (
     <QueryTile area={area} query={useSecrets()} content={(list) => secretsContent(t, list.refs)} />
   );
+}
+
+/** A token count to one decimal from a thousand up: 2.1M, 696.4K (the board's "2.1M tokens"). */
+function compactTokens(n: number, lang: string): string {
+  if (Math.abs(n) < 1000) return formatCount(n, lang);
+  return new Intl.NumberFormat(lang.startsWith("zh") ? "zh-CN" : "en-US", {
+    notation: "compact",
+    minimumFractionDigits: lang.startsWith("zh") ? 0 : 1,
+    maximumFractionDigits: 1,
+  }).format(n);
 }
 
 /** "$4.12 · Anthropic 71% · Acme gateway 29%": the cost, then each provider's share of the tokens. */
@@ -142,11 +156,11 @@ export function UsageTile({ area }: AreaProps) {
   return (
     <QueryTile
       area={area}
-      query={useUsageSummary({ range: "today", group_by: "model" })}
+      query={useUsageSummary({ range: "24h", group_by: "model" })}
       content={(summary) => ({
         status: null,
         note: t("overview.health.usage.period"),
-        value: formatTokens(
+        value: compactTokens(
           summary.totals.input_tokens + summary.totals.output_tokens,
           i18n.language,
         ),

@@ -446,6 +446,8 @@ export interface components {
             pending_count: number;
             /** Uid */
             uid: string;
+            /** Updated At */
+            updated_at: string | null;
         };
         /** CurationOut */
         CurationOut: {

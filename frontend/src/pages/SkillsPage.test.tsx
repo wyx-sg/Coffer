@@ -115,7 +115,7 @@ acceptance("skill-manager", "desktop and CLI cover every operation", async () =>
   expect(screen.getByRole("button", { name: "Check copies" })).toBeInTheDocument();
 
   // One Add skill action, opening the add dialog.
-  fireEvent.click(screen.getByRole("button", { name: /add skill/i }));
+  fireEvent.click(screen.getAllByRole("button", { name: /add skill/i })[0]);
   expect(await screen.findByRole("dialog")).toBeInTheDocument();
 });
 
@@ -242,12 +242,12 @@ describe("SkillsPage library", () => {
 
   test("nothing selected asks the reader to choose a skill", async () => {
     renderSkillsPage("/skills");
-    expect(await screen.findByText("Choose a skill")).toBeInTheDocument();
+    expect(await screen.findByText("Nothing selected")).toBeInTheDocument();
   });
 
   test("the list column is folded by dragging its divider, not by a button", async () => {
     renderSkillsPage("/skills");
-    await screen.findByText("Choose a skill");
+    await screen.findByText("Nothing selected");
     expect(screen.getByRole("separator")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /hide list/i })).toBeNull();
   });
@@ -362,7 +362,7 @@ describe("SkillsPage library", () => {
   test("a failed list shows the error with a retry", async () => {
     vi.mocked(skillsApi.list).mockRejectedValueOnce(new Error("boom"));
     renderSkillsPage("/skills");
-    expect(await screen.findByText("Failed to load skills")).toBeInTheDocument();
+    expect(await screen.findByText("Couldn’t load skills")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 });

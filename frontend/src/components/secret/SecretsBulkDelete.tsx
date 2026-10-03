@@ -54,6 +54,8 @@ export function SecretsBulkDelete({ items, label, disabledReason, onDone }: Prop
             : t("secrets.bulk.deleteBody", { names })
         }
         confirmLabel={t("secrets.bulk.deleteConfirm", { count: items.length })}
+        pendingLabel={t("common.deleting")}
+        errorTitle={t("common.couldntDeleteSelected")}
         pending={bulk.isPending}
         onConfirm={async () => {
           await bulk.run(items.map((i) => i.row.ref));

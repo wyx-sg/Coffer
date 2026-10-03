@@ -59,6 +59,8 @@ export function makeStatus(over: Partial<SyncStatus> = {}): SyncStatus {
     conflicts: 0,
     held: 0,
     join_choices: 0,
+    ahead: 0,
+    behind: 0,
     ...over,
   };
 }

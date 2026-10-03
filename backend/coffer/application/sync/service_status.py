@@ -95,6 +95,7 @@ class StatusMixin:
         head = d.git.head()
         files = d.git.files(head) if head else {}
         stop = d.state.stop()
+        ahead, behind = self._divergence(remote, head)
         return SyncStatus(
             remote=remote,
             machine_id=self._machine.machine_id(),
@@ -118,7 +119,29 @@ class StatusMixin:
             conflicts=len(stop.unanswered) if stop and stop.kind is StopKind.CONFLICTS else 0,
             held=len(stop.hold.paths) if stop and stop.hold else 0,
             join_choices=len(d.state.join_choices()),
+            ahead=ahead,
+            behind=behind,
         )
+
+    def _divergence(self, remote: SyncRemote | None, head: str | None) -> tuple[int, int]:
+        """``(ahead, behind)`` against the remote as last fetched; ``(0, 0)``
+        while there is no remote, no commit, or no fetch to compare with."""
+        if remote is None or head is None:
+            return 0, 0
+        git = self._engine.d.git
+        tip = git.remote_tip(remote.branch)
+        if tip is None or tip == head:
+            return 0, 0
+
+        def carrying(since: str, until: str) -> int:
+            """Commits that changed content — a machine's own registry entry is not a change."""
+            return sum(
+                1
+                for c in git.commits_between(since, until)
+                if any(_content(p.path) for p in c.paths)
+            )
+
+        return carrying(tip, head), carrying(head, tip)
 
     def _current_problem(
         self, remote: SyncRemote | None, last: RoundRecord | None

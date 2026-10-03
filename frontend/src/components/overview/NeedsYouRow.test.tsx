@@ -2,7 +2,7 @@
 //
 // Real QueryClientProvider and router; only the agent-providers api is mocked.
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
@@ -106,4 +106,37 @@ test("every row's menu ends with Ignore", async () => {
   openMenu();
   fireEvent.click(await screen.findByRole("menuitem", { name: "Ignore" }));
   expect(onIgnore).toHaveBeenCalledTimes(1);
+});
+
+acceptance("web-ui", "a needs-you row's action reads what it does for its kind", () => {
+  const verbOf = (verb: string): AttentionItem["action"] => ({
+    verb,
+    method: "GET",
+    path: "/api/v1/x",
+    body: null,
+  });
+  renderRow(
+    item({
+      kind: "channel",
+      title: "SeaTalk",
+      reason_code: "channel_disconnected",
+      action: verbOf("check"),
+    }),
+    false,
+  );
+  // A channel's check reads Reconnect channel, behind its verb's 14px icon.
+  const reconnect = screen.getByRole("link", { name: "Reconnect channel: SeaTalk" });
+  expect(reconnect.querySelector("svg")).not.toBeNull();
+  cleanup();
+  renderRow(
+    item({
+      kind: "sync",
+      uid: null,
+      title: "Vault sync",
+      reason_code: "held",
+      action: verbOf("review"),
+    }),
+    false,
+  );
+  expect(screen.getByRole("link", { name: "Review held changes: Vault sync" })).toBeInTheDocument();
 });

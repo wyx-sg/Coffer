@@ -18,6 +18,13 @@ interface BaseProps {
   mono?: boolean;
 }
 
+interface TextProps extends BaseProps {
+  /** Wrap onto this many lines before the ellipsis (default 1: a single line). */
+  lines?: 2;
+  /** The clipped content when it is more than `text` (a sentence with a mono name in it); `text` is still the tooltip. */
+  children?: React.ReactNode;
+}
+
 /** Wraps `children` so the tooltip opens only if `probe` finds clipped text. */
 function ClipTooltip({
   text,
@@ -40,19 +47,28 @@ function ClipTooltip({
   );
 }
 
-export function TruncatedText({ text, className, mono }: BaseProps) {
+export function TruncatedText({ text, className, mono, lines, children }: TextProps) {
   const ref = React.useRef<HTMLSpanElement>(null);
   return (
     <ClipTooltip
       text={text}
-      isClipped={() => (ref.current ? ref.current.scrollWidth > ref.current.clientWidth : false)}
+      isClipped={() => {
+        const el = ref.current;
+        if (!el) return false;
+        return lines ? el.scrollHeight > el.clientHeight : el.scrollWidth > el.clientWidth;
+      }}
     >
       <span
         ref={ref}
         data-truncated-text=""
-        className={cn("block min-w-0 max-w-full truncate", mono && "font-mono", className)}
+        className={cn(
+          "block min-w-0 max-w-full",
+          lines ? "line-clamp-2 break-words" : "truncate",
+          mono && "font-mono",
+          className,
+        )}
       >
-        {text}
+        {children ?? text}
       </span>
     </ClipTooltip>
   );

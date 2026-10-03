@@ -54,13 +54,9 @@ export function SkillDeleteDialog({ skill, open, onOpenChange, onDeleted }: Prop
       }}
       title={t("skills.delete.title", { name: skill.name })}
       description={description}
-      confirmLabel={
-        remove.isPending
-          ? t("common.deleting")
-          : remove.error
-            ? t("skills.tryAgain")
-            : t("skills.delete.confirm")
-      }
+      confirmLabel={remove.error ? t("common.tryAgain") : t("skills.delete.confirm")}
+      pendingLabel={t("common.deleting")}
+      errorTitle={t("common.couldntDelete", { name: skill.name })}
       pending={remove.isPending}
       error={remove.error && refused === null ? remove.error : undefined}
       onConfirm={() =>

@@ -71,7 +71,9 @@ export function ConversationsBulkBar({ selected, archivedView, onClear }: Props)
           titles:
             titles.join(", ") + (more > 0 ? t("conversations.bulk.andMore", { count: more }) : ""),
         })}
-        confirmLabel={batch.isPending ? t("common.deleting") : t("common.delete")}
+        confirmLabel={t("common.delete")}
+        pendingLabel={t("common.deleting")}
+        errorTitle={t("common.couldntDeleteSelected")}
         pending={batch.isPending}
         onConfirm={remove}
       />

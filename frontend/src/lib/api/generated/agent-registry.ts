@@ -725,6 +725,11 @@ export interface components {
             /** Display Name */
             display_name: string;
             install_handoff: components["schemas"]["HandoffOut"] | null;
+            /**
+             * Install Url
+             * @default
+             */
+            install_url: string;
             /** Name */
             name: string;
             /** Other Config Dir */

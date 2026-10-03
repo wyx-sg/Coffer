@@ -5,10 +5,11 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Wrench } from "lucide-react";
 
+import { DetailNotFound } from "@/components/DetailNotFound";
 import { EmptyState } from "@/components/EmptyState";
 import { SectionStack } from "@/components/Section";
 import { Skeleton } from "@/components/ui/skeleton";
-import { translateApiError } from "@/lib/api/errors";
+import { ApiError, translateApiError } from "@/lib/api/errors";
 import { useCustomToolGroup } from "@/lib/hooks/useCustomTools";
 import { DeleteGroupDialog } from "./DeleteGroupDialog";
 import { EditGroupDialog } from "./EditGroupDialog";
@@ -41,6 +42,10 @@ export function GroupPane({ name, onAddRequest }: Props) {
         <Skeleton className="h-40 w-full" />
       </div>
     );
+  }
+  // A group the daemon does not know is gone; any other failure keeps its own message.
+  if (error instanceof ApiError && error.code.endsWith("NOT_FOUND")) {
+    return <DetailNotFound kind="customTools" id={name} backTo="/custom-tools" icon={Wrench} />;
   }
   if (error || !group) {
     return (

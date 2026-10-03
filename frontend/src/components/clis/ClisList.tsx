@@ -6,8 +6,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { SearchInput } from "@/components/SearchInput";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { Cli } from "@/lib/api/clis";
 import { groupClis } from "@/lib/clis/format";
 import { CliRow } from "./CliRow";
@@ -15,11 +15,14 @@ import { CliRow } from "./CliRow";
 interface Props {
   items: Cli[];
   loading: boolean;
+  /** The list read failed: the pane shows the error block under the filter. */
+  error?: unknown;
+  onRetry?: () => void;
   selected: string | null;
   onOpen: (command: string) => void;
 }
 
-export function ClisList({ items, loading, selected, onOpen }: Props) {
+export function ClisList({ items, loading, error, onRetry, selected, onOpen }: Props) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState("");
   const { needsYou, ready } = groupClis(items, filter);
@@ -38,13 +41,12 @@ export function ClisList({ items, loading, selected, onOpen }: Props) {
         shortcut="/"
       />
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
-        {loading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
+        {error ? (
+          <ListLoadError kind="clis" error={error} onRetry={() => onRetry?.()} />
+        ) : loading ? (
+          <ListLoadingRows />
         ) : groups.length === 0 ? (
-          <p className="px-2 text-xs text-text-muted">{t("clis.list.noMatch")}</p>
+          <ListNoMatch kind="clis" query={filter} onClear={() => setFilter("")} />
         ) : (
           groups.map(({ key, rows }) => (
             <section key={key} aria-label={t(`clis.list.${key}`)}>

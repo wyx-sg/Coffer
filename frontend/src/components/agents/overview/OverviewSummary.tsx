@@ -15,7 +15,7 @@ import {
   FileCog,
   Plug,
   Server,
-  Sparkles,
+  Sparkle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -70,7 +70,7 @@ export function OverviewSummary({ agent, typeRow, disabled, notConnected = false
 
   const rows: { tab: AgentTab; icon: LucideIcon; summary: SummaryLine | undefined }[] = [
     { tab: "mcp-servers", icon: Server, summary: mcpLine(t, counts.mcp, ctx) },
-    { tab: "skills", icon: Sparkles, summary: skillsLine(t, counts.skills, ctx) },
+    { tab: "skills", icon: Sparkle, summary: skillsLine(t, counts.skills, ctx) },
     { tab: "plugins", icon: Plug, summary: pluginsLine(t, counts.plugins) },
     { tab: "hooks", icon: Anchor, summary: hooksLine(t, counts.hooks, ctx) },
     { tab: "memory", icon: Brain, summary: memoryLine(t, counts.memoryStores) },

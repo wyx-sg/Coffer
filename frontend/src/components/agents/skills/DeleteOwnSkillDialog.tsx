@@ -51,6 +51,8 @@ export function DeleteOwnSkillDialog({
           : t("agents.skillsTab.deleteBody", { path, count })
       }
       confirmLabel={t("common.delete")}
+      pendingLabel={t("common.deleting")}
+      errorTitle={t("common.couldntDelete", { name: target?.name ?? "" })}
       pending={pending}
       onConfirm={() => {
         if (target) onConfirm(target);

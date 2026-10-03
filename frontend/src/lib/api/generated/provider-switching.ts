@@ -2172,7 +2172,7 @@ export interface operations {
     usage_export_csv_api_v1_usage_export_csv_get: {
         parameters: {
             query?: {
-                /** @description today | 7d | 30d | month | custom */
+                /** @description today | 24h | 7d | 30d | month | custom */
                 range?: string;
                 /** @description First local day (custom range) */
                 from?: string | null;
@@ -2396,7 +2396,7 @@ export interface operations {
     usage_summary_api_v1_usage_summary_get: {
         parameters: {
             query?: {
-                /** @description today | 7d | 30d | month | custom */
+                /** @description today | 24h | 7d | 30d | month | custom */
                 range?: string;
                 /** @description First local day (custom range) */
                 from?: string | null;

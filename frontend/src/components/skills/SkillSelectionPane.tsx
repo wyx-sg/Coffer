@@ -4,7 +4,7 @@
 // every selected skill) and Delete N skills…. Coffer's built-in skill has no
 // checkbox, and the pane says so by name.
 import { useTranslation } from "react-i18next";
-import { Sparkles } from "lucide-react";
+import { Sparkle } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { BulkReachActions } from "@/components/reach/BulkReachActions";
@@ -37,7 +37,7 @@ export function SkillSelectionPane({ skills, builtin, onDone }: Props) {
 
   return (
     <EmptyState
-      icon={Sparkles}
+      icon={Sparkle}
       title={t("skills.selection.title", { count: skills.length })}
       description={description}
       action={

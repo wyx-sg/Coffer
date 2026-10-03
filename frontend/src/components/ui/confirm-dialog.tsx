@@ -59,12 +59,18 @@ interface Props {
   children?: ReactNode;
   /** The caller's mutation is running (see "Pending" above). */
   pending?: boolean;
-  /** The confirm label while pending ("Removing…"); defaults to "Working…". */
+  /** The confirm label while pending ("Deleting…"); defaults to "Working…".
+   *  `confirmLabel` stays the resting label — a caller never swaps it itself. */
   pendingLabel?: string;
+  /** The confirm button is unavailable until the user has done what the dialog
+   *  asks first (typing the name); not a pending state, so no spinner. */
+  confirmDisabled?: boolean;
   /** A failure to show inline — typically a mutation's `error`. While one is
    *  shown the dialog stays open, so the user can read it and retry. */
   error?: unknown;
-  /** The banner's title over the reason ("Couldn’t delete sentry"). */
+  /** The banner's title over the reason ("Couldn’t delete sentry"): every
+   *  destructive dialog names the verb and the object. Without one the banner
+   *  reads "Couldn’t finish that". */
   errorTitle?: string;
   /** The confirm label after a failure; defaults to "Try again". */
   retryLabel?: string;
@@ -88,6 +94,7 @@ export function ConfirmDialog({
   variant = "destructive",
   pending = false,
   pendingLabel,
+  confirmDisabled = false,
   error,
   errorTitle,
   retryLabel,
@@ -160,7 +167,7 @@ export function ConfirmDialog({
           <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
             {t("common.cancel")}
           </Button>
-          <Button variant={variant} loading={busy} onClick={confirm}>
+          <Button variant={variant} loading={busy} disabled={confirmDisabled} onClick={confirm}>
             {busy ? null : failure ? <RotateCw aria-hidden /> : confirmIcon}
             {busy
               ? (pendingLabel ?? t("common.working"))

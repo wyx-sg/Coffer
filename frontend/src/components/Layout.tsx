@@ -16,11 +16,12 @@
 //
 // The desktop shell draws its own title strip across the top (board 1.1.02):
 // the sidebar toggle and the back / forward arrows live there, and the
-// sidebar and the page both start under it. The page keeps 16px above its
-// content and 32px at each side.
+// sidebar and the page both start under it. The sidebar's content starts 12px
+// below the strip; the page keeps 16px above its content and 32px at each side.
 //
 // The daemon's connection states are drawn in the workspace, in line
-// (board 1.2.17 / 1.2.18): while reconnecting the page stays under a bar,
+// (boards 1.1.18 / 1.1.19): the bar sits right under the title strip; while
+// reconnecting the page stays under it,
 // dimmed and inert; once offline it makes way for the offline screen; when the
 // daemon answers again every query refetches and a toast says so.
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -51,7 +52,7 @@ import { useShellShortcuts } from "./shell/useShellShortcuts";
 const COLLAPSE_KEY = "coffer.nav.collapsed";
 // Tailwind's `md` breakpoint — the width at which the sidebar may expand.
 const MD_QUERY = "(min-width: 768px)";
-// The expanded sidebar's bounds and default (design board 1.1.21).
+// The expanded sidebar's bounds and default (the sidebar component board).
 const SIDEBAR_MIN = 200;
 const SIDEBAR_MAX = 300;
 const SIDEBAR_DEFAULT = 220;
@@ -135,7 +136,7 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
   });
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider>
       {/* h-[100vh] + overflow-hidden pins the app to the viewport; the sidebar
           and the main content each own an independent scroll region. */}
       <div className="flex h-[100vh] overflow-hidden bg-background text-foreground">
@@ -161,11 +162,11 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
         <PendingApprovalsSheet />
         <aside
           className={cn(
-            "flex shrink-0 flex-col gap-3 bg-surface-sidebar",
+            "flex shrink-0 flex-col gap-3.5 bg-surface-sidebar",
             collapsed ? "w-rail border-r border-border" : null,
-            // The desktop shell's sidebar starts under the title strip, with
+            // The desktop shell's sidebar starts 12px under the title strip, with
             // no brand row; the strip holds the traffic lights, the toggle and the arrows.
-            overlay ? "pt-[var(--titlebar-inset)]" : null,
+            overlay ? "pt-[calc(var(--titlebar-inset)+12px)]" : null,
           )}
           // The dragged width is state, not a token: the one inline style is
           // this theming-free bridge from the divider to the rail.
@@ -193,15 +194,16 @@ export function Layout({ pageRoutes, settingsRoutes }: Props) {
             label={t("nav.resizeSidebar")}
           />
         )}
-        <main id="main" tabIndex={-1} className="flex min-w-0 flex-1 flex-col outline-none">
+        {/* The main column starts under the title strip, so neither the
+            connection bar nor a page header ever sits beneath it; full-bleed
+            pages (`h-screen`) shrink by the same inset through index.css. */}
+        <main
+          id="main"
+          tabIndex={-1}
+          className="flex min-w-0 flex-1 flex-col pt-[var(--titlebar-inset)] outline-none"
+        >
           <DaemonStatusBar connection={daemon.connection} onRetry={daemon.retryNow} />
-          {/* The page starts under the title strip, so no page header ever sits
-              beneath it; full-bleed pages (`h-screen`) shrink by the same
-              inset through index.css. */}
-          <div
-            className="flex min-h-0 flex-1 flex-col overflow-y-auto pt-[var(--titlebar-inset)]"
-            data-testid="page-scroll"
-          >
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-testid="page-scroll">
             {phase === "offline" ? (
               <DaemonOfflineState connection={daemon.connection} onRetry={daemon.retryNow} />
             ) : (

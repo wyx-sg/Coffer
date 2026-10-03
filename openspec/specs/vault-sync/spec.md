@@ -687,6 +687,13 @@ timer-driven, so a notice that re-raised itself on each would cover every page
 hourly with something the user read the first time. A mark keyed on what is
 wrong asks once, and asks again only when the answer would be different.
 
+The status MUST also say how far this vault and the remote (as last fetched) have drifted: `ahead`, the commits this vault has that the remote lacks, and `behind`, the commits the remote has that this vault lacks. The Overview's Sync tile words them as "1 behind · 0 ahead".
+
+#### Scenario: the status counts commits ahead of and behind the remote
+- **GIVEN** a vault with two commits the remote lacks and a remote with one commit the vault lacks
+- **WHEN** the status is read
+- **THEN** it reports `ahead` 2 and `behind` 1, and both 0 once the vault and the remote agree
+
 #### Scenario: a held vault says so where the user already is
 - **GIVEN** a round held at the deletion guard, so nothing converges and nothing is backed up until someone answers it,
 - **WHEN** the user is anywhere other than the sync page — at a terminal, on another page of the web UI, or with only the desktop shell in front of them,

@@ -149,16 +149,73 @@ describe("ResourcesPage", () => {
     renderAt();
     expect(screen.getByRole("heading", { name: /mcp servers/i })).toBeInTheDocument();
     expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+    // Seven two-line rows, the shape of the real ones; the right pane stays empty.
+    expect(document.querySelectorAll('[aria-busy="true"] > .h-\\[52px\\]')).toHaveLength(7);
   });
 
   acceptance("web-ui", "a server error never reads as an unexpected error", () => {
     stubQuery({ error: new ApiError("INTERNAL_ERROR", "internal error") });
     const { container } = renderAt();
-    expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
+    expect(screen.getByText(/couldn.t load mcp servers/i)).toBeInTheDocument();
     // A readable message that says where to look, not a shrug.
     expect(screen.getByText(/activity/i)).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/unexpected error/i);
     expect(container.textContent).not.toContain("INTERNAL_ERROR");
+  });
+
+  acceptance("web-ui", "a failed list shows its error block in the list pane", () => {
+    const error = new ApiError("INTERNAL_ERROR", "internal error", undefined, {
+      status: 500,
+      path: "/api/v1/resources?kind=mcp_server",
+      trace: "01J9Z4K2QX",
+    });
+    stubQuery({ error });
+    renderAt();
+    // The header and the filter stay; the block sits in the list pane.
+    expect(screen.getByRole("heading", { name: /mcp servers/i })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Filter servers" })).toBeInTheDocument();
+    const block = screen.getByRole("alert");
+    expect(within(block).getByText("Couldn’t load MCP servers")).toBeInTheDocument();
+    expect(block).toHaveTextContent("Nothing was changed.");
+    expect(block).toHaveTextContent(
+      "GET /api/v1/resources?kind=mcp_server · 500 · trace 01J9Z4K2QX",
+    );
+    fireEvent.click(within(block).getByRole("button", { name: "Retry" }));
+    fireEvent.click(within(block).getByRole("button", { name: "Open daemon log" }));
+    expect(where.url).toBe("/activity?tab=daemon");
+  });
+
+  acceptance(
+    "web-ui",
+    "a filter that matches nothing names the filter and offers Clear filter",
+    () => {
+      stubQuery({ data: [server("u1", "github")] });
+      renderAt();
+      const filter = screen.getByRole("textbox", { name: "Filter servers" });
+      fireEvent.change(filter, { target: { value: "terraform" } });
+      expect(screen.getByText("No server matches “terraform”")).toBeInTheDocument();
+      expect(screen.getByText("Filters names, titles, commands and URLs.")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Clear filter" }));
+      expect(filter).toHaveValue("");
+      expect(screen.getByRole("link", { name: /github/ })).toBeInTheDocument();
+    },
+  );
+
+  acceptance("web-ui", "a detail whose object is gone says so and leads back", async () => {
+    stubQuery({ data: [server("u1", "github")] });
+    renderAt("/mcp-servers/sentry-old");
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "This server no longer exists" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("sentry-old")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to MCP servers" })).toHaveAttribute(
+      "href",
+      "/mcp-servers",
+    );
+    expect(screen.getByRole("link", { name: "View in Activity" })).toHaveAttribute(
+      "href",
+      "/activity?tab=changes",
+    );
   });
 
   acceptance("web-ui", "empty resources list renders a welcome view", () => {
@@ -177,8 +234,9 @@ describe("ResourcesPage", () => {
   acceptance("web-ui", "the add dialog links to importing from agents", () => {
     stubQuery({ data: [server("u1", "github")] });
     renderAt();
+    // The page header's Add and the right pane's Nothing selected Add.
     const adds = screen.getAllByRole("button", { name: /add server/i });
-    expect(adds).toHaveLength(1);
+    expect(adds).toHaveLength(2);
     expect(screen.queryByRole("button", { name: /paste json|import json/i })).toBeNull();
   });
 

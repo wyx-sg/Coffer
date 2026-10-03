@@ -41,6 +41,9 @@ class CollectionOut(BaseModel):
     #: The collection directory's absolute path — what Reveal folder opens
     #: ("Return absolute paths on reads").
     folder_path: str = ""
+    #: When a document in the collection was last written (ISO 8601, UTC);
+    #: ``null`` when it holds none — the Overview's "edited today 13:30".
+    updated_at: str | None = None
 
 
 class CollectionListOut(BaseModel):

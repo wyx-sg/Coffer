@@ -18,6 +18,7 @@ export const COLLECTION: CollectionOut = {
   document_count: 2,
   pending_count: 1,
   folder_path: `/home/u/.coffer/knowledge/${NAME}`,
+  updated_at: "2026-09-30T13:30:00Z",
 };
 
 export const OTHER: CollectionOut = {
@@ -27,6 +28,7 @@ export const OTHER: CollectionOut = {
   document_count: 0,
   pending_count: 0,
   folder_path: "/home/u/.coffer/knowledge/runbooks",
+  updated_at: null,
 };
 
 function file(path: string, over: Partial<FileOut> = {}): FileOut {

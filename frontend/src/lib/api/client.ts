@@ -64,6 +64,7 @@ function raise(result: Settled<unknown>): never {
     result.error as Envelope,
     "INTERNAL_ERROR",
     `request failed: ${result.response?.status}`,
+    result.response,
   );
 }
 

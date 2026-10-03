@@ -98,6 +98,8 @@ export function SkillsPage() {
           <SkillLibrary
             skills={skills}
             isLoading={list.isPending}
+            error={list.error}
+            onRetry={() => void list.refetch()}
             selectedName={match?.name ?? null}
             hrefFor={hrefFor}
             onOpenSkill={() => setShowCopies(false)}

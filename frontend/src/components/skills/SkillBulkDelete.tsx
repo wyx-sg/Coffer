@@ -42,6 +42,8 @@ export function SkillBulkDelete({ skills, onDone, label }: Props) {
           ),
         })}
         confirmLabel={t("skills.bulk.deleteConfirm", { count: skills.length })}
+        pendingLabel={t("common.deleting")}
+        errorTitle={t("common.couldntDeleteSelected")}
         pending={bulk.isPending}
         onConfirm={async () => {
           await bulk.run(skills);

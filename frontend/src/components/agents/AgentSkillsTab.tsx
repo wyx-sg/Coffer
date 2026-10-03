@@ -10,7 +10,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Sparkles } from "lucide-react";
+import { Sparkle } from "lucide-react";
 
 import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
 import { AgentSkillsTable } from "@/components/agents/skills/AgentSkillsTable";
@@ -98,7 +98,7 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
           void unmanaged.refetch();
         }}
         empty={{
-          icon: Sparkles,
+          icon: Sparkle,
           title: t("agents.skillsTab.emptyTitle", { agent: agentLabel }),
           description: t("agents.skillsTab.emptyDescription", { agent: agentLabel }),
         }}

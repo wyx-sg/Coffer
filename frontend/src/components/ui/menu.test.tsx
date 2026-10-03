@@ -69,4 +69,19 @@ describe("ActionMenu", () => {
     expect(screen.getByRole("menu")).toBeInTheDocument();
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
+
+  test("a menu whose items carry descriptions is the wide one, a plain menu stays compact", () => {
+    const { unmount } = render(
+      <ActionMenu
+        label="Wide"
+        actions={[{ key: "a", label: "Copy prompt", description: "Copy it", onSelect: vi.fn() }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Wide" }));
+    expect(screen.getByRole("menu").parentElement).toHaveClass("w-[300px]");
+    unmount();
+    renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Codex" }));
+    expect(screen.getByRole("menu").parentElement).not.toHaveClass("w-[300px]");
+  });
 });

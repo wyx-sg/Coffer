@@ -1086,6 +1086,11 @@ components:
         uid:
           title: Uid
           type: string
+        updated_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updated At
       required:
       - uid
       - name
@@ -1093,6 +1098,7 @@ components:
       - document_count
       - pending_count
       - folder_path
+      - updated_at
       title: CollectionOut
       type: object
     CurationOut:

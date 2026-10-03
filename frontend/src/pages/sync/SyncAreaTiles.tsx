@@ -5,7 +5,7 @@
 // whether encrypted secrets travel with the rest. One bordered strip, four
 // cells — a glance, not a table.
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, Lock, Server, Sparkles } from "lucide-react";
+import { BookOpen, Lock, Server, Sparkle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import type { SyncStatus } from "@/lib/api/sync";
@@ -35,7 +35,7 @@ export function SyncAreaTiles({ areas }: { areas: SyncStatus["areas"] }) {
         value={t("sync.areas.documents", { count: areas.knowledge_documents })}
       />
       <Tile
-        icon={Sparkles}
+        icon={Sparkle}
         label={t("sync.areas.skills")}
         value={t("sync.areas.skillCount", { count: areas.skills })}
       />

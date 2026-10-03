@@ -8,6 +8,11 @@
 // danger role; a separator groups them apart. The icon-only trigger carries the
 // tooltip "More actions" (it only names the control) while its aria-label stays
 // the specific one callers pass; the tooltip stays shut while the menu is open.
+//
+// A menu whose items carry descriptions is the wide one (300): items 8×10 apart
+// with a 10 gap, a 15px text-subtle icon, a 13/500 label over a 12/1.4
+// text-muted description, and a separator inset 4×6 (Foundations 0.4 menu,
+// Overview 1.2.09). A menu of plain items keeps the narrow compact geometry.
 import * as React from "react";
 import { MoreHorizontal, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -44,6 +49,7 @@ export function ActionMenu({ label, actions, align = "end", className }: Props) 
   const { t } = useTranslation();
   const [open, setOpen] = React.useState(false);
   const listRef = React.useRef<HTMLDivElement>(null);
+  const described = actions.some((a) => a.description);
 
   const items = () =>
     Array.from(
@@ -88,7 +94,7 @@ export function ActionMenu({ label, actions, align = "end", className }: Props) 
       </TooltipProvider>
       <PopoverContent
         align={align}
-        className="w-auto min-w-[180px] p-1"
+        className={cn("p-1", described ? "w-[300px]" : "w-auto min-w-[180px]")}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           items()[0]?.focus();
@@ -107,7 +113,10 @@ export function ActionMenu({ label, actions, align = "end", className }: Props) 
             return (
               <React.Fragment key={action.key}>
                 {action.separated ? (
-                  <div role="separator" className="my-1 h-px bg-border-subtle" />
+                  <div
+                    role="separator"
+                    className={cn("h-px bg-border-subtle", described ? "mx-1.5 my-1" : "my-1")}
+                  />
                 ) : null}
                 <button
                   type="button"
@@ -117,21 +126,30 @@ export function ActionMenu({ label, actions, align = "end", className }: Props) 
                     setOpen(false);
                     action.onSelect();
                   }}
-                  // Foundations-Overlays "Menu": item 30 high, 8 across, r6,
-                  // 13/400, a 14px text-muted icon 9 before the label, the
-                  // shortcut 11 text-muted on the right; danger reads danger.
+                  // Plain menu (Foundations-Overlays "Menu"): item 30 high, 8
+                  // across, r6, 13/400, a 14px text-muted icon 9 before the
+                  // label, the shortcut 11 text-muted on the right; danger
+                  // reads danger. The described menu is laid out above.
                   className={cn(
-                    "flex items-center gap-[9px] rounded-item px-2 text-left text-sm font-normal outline-none transition-colors duration-fast",
+                    "flex w-full rounded-item text-left text-sm outline-none transition-colors duration-fast",
                     "hover:bg-surface-hover focus-visible:bg-surface-hover disabled:pointer-events-none disabled:opacity-disabled",
-                    action.description ? "min-h-control-md py-1.5" : "h-control-md",
+                    described
+                      ? "gap-2.5 px-2.5 py-2 font-medium"
+                      : "items-center gap-[9px] px-2 font-normal " +
+                          (action.description ? "min-h-control-md py-1.5" : "h-control-md"),
                     action.destructive ? "text-danger" : "text-text",
                   )}
                 >
                   {Icon ? (
                     <Icon
                       className={cn(
-                        "size-3.5 shrink-0",
-                        action.destructive ? "text-danger" : "text-text-muted",
+                        "shrink-0",
+                        described ? "mt-px size-[15px]" : "size-3.5",
+                        action.destructive
+                          ? "text-danger"
+                          : described
+                            ? "text-text-subtle"
+                            : "text-text-muted",
                       )}
                       aria-hidden
                     />
@@ -139,7 +157,7 @@ export function ActionMenu({ label, actions, align = "end", className }: Props) 
                   {action.description ? (
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="truncate">{action.label}</span>
-                      <span className="text-2xs leading-snug text-text-muted">
+                      <span className="text-xs font-normal leading-[1.4] text-text-muted">
                         {action.description}
                       </span>
                     </span>

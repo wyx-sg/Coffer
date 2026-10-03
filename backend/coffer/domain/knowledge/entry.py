@@ -39,6 +39,9 @@ class CollectionEntry:
     #: The collection directory's absolute path, so a surface can reveal it
     #: ("Return absolute paths on reads"); empty where it was not read.
     folder_path: str = ""
+    #: When a document in the collection was last written (ISO 8601, UTC);
+    #: ``None`` when it holds none.
+    updated_at: str | None = None
 
 
 @dataclass(frozen=True)

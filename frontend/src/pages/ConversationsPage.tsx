@@ -59,7 +59,9 @@ export function ConversationsPage() {
           title: c.deletingConversation?.title ?? "",
           agent: deletingAgent,
         })}
-        confirmLabel={c.deletePending ? t("common.deleting") : t("conversations.delete.confirm")}
+        confirmLabel={t("conversations.delete.confirm")}
+        pendingLabel={t("common.deleting")}
+        errorTitle={t("common.couldntDeleteConversation")}
         pending={c.deletePending}
         onConfirm={c.confirmDelete}
       />

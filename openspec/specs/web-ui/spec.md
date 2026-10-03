@@ -358,13 +358,64 @@ each carry this filter.
 ### Requirement: Make empty, loading and error states first-class
 No surface may render a blank page, or a generic error, where a next action
 exists. Empty, loading and error states MUST be first-class on every surface,
-not an afterthought on some of them.
+not an afterthought on some of them. A split-view list page (MCP servers,
+Skills, CLIs, Channels, Custom tools, Model providers, Knowledge) keeps its
+header and filter in every state and states each inside the pane it belongs to:
+while the list loads, seven two-line skeleton rows stand in the list pane and
+the right pane is empty; when the list read fails, a compact danger block in the
+list pane titled "Couldn’t load <kind>" says nothing was changed and offers
+Retry, Open daemon log (Activity › Daemon log) and the failed request as
+`GET <path> · <status> · trace <id>`; when a filter hides every row, the list
+pane names the filter ("No server matches “terraform”") with what the filter
+searches and a Clear filter button, and the right pane reads Nothing selected
+with the page's Add action as an outline button. A detail whose object no
+longer exists is a page-size state — "This server no longer exists", the
+address that was asked for, Last seen and Audit rows read from the audit log,
+Back to the list and View in Activity.
 
 #### Scenario: a list surface shows first-class loading and error states
 - **GIVEN** a list surface whose query is still pending, and then one whose query fails
 - **WHEN** each renders
 - **THEN** the pending one keeps its page header over skeleton rows rather than a blank page
-- **AND** the failed one shows an error card with a readable message rather than an empty page
+- **AND** the failed one shows an error block in the list pane with a readable message rather than an empty page
+
+#### Scenario: a failed list shows its error block in the list pane
+- **GIVEN** the MCP servers list read fails with a 500 and a trace id
+- **WHEN** the page renders
+- **THEN** the header and the filter stay, and the list pane shows "Couldn’t load MCP servers" with Retry, Open daemon log and the line `GET /api/v1/resources?kind=mcp_server · 500 · trace <id>`
+- **AND** Open daemon log leads to Activity's Daemon log tab
+
+#### Scenario: a filter that matches nothing names the filter and offers Clear filter
+- **GIVEN** the MCP servers list with servers
+- **WHEN** the user types a filter no server matches
+- **THEN** the list pane reads "No server matches “terraform”" with what the filter searches and a Clear filter button
+- **AND** Clear filter empties the field and brings the rows back
+
+#### Scenario: a detail whose object is gone says so and leads back
+- **GIVEN** the address names an MCP server that is not registered
+- **WHEN** the detail pane renders
+- **THEN** it reads "This server no longer exists" with the address, and offers Back to MCP servers and View in Activity
+
+### Requirement: Show loading only when it lasts
+A loading placeholder (a skeleton row, the page fallback) MUST stay invisible for
+its first 300 ms and then appear, so an answer that arrives quickly never
+flashes one.
+
+#### Scenario: a loading placeholder waits 300 ms before it shows
+- **GIVEN** a skeleton block and the page fallback
+- **WHEN** either renders
+- **THEN** each carries the 300 ms delayed-appearance animation, so it is invisible until the wait is over
+
+### Requirement: Keep an error toast until it is dismissed
+A toast that reports an error MUST stay on screen until the user dismisses it and
+MUST draw no countdown line; a success or info toast leaves on its own after 5
+seconds (8 with Undo) and draws that line.
+
+#### Scenario: an error toast stays until dismissed
+- **GIVEN** a failed action that raised an error toast
+- **WHEN** a minute passes
+- **THEN** the toast is still on screen with no timer line
+- **AND** dismissing it removes it
 
 ### Requirement: Never show a generic error text
 A view MUST NOT show the literal text "unexpected error" or `INTERNAL_ERROR`.
@@ -405,9 +456,11 @@ it was, dimmed and not interactive, under a reconnecting bar at the top of the
 workspace that names the attempt, when the next one runs and that nothing is
 lost, with a Retry now control. After that the page MUST make way for an
 offline state in the workspace — the sidebar stays — naming the recovery the
-host can offer: in a browser the `coffer daemon start` command, in the desktop
-shell a Start daemon control, because only one of the two can spawn a daemon;
-both with Retry, when the next check runs and when the daemon last answered.
+host can offer: in the desktop shell a Start daemon control, because only it can
+spawn a daemon; in both hosts Retry, the `coffer daemon start` command to copy
+("Or start it from a terminal"), and a footer line with when the next check
+runs, when the daemon last answered and Open daemon log. The reconnecting bar
+marks its state with a still partial ring, not a spinner.
 Both MUST clear themselves once the daemon is reachable again, with no manual
 page reload: every query is read again and a toast says the app reconnected.
 The reconnecting bar and the offline state express the daemon's state; the
@@ -416,8 +469,13 @@ sidebar's Settings row carries none of it.
 #### Scenario: daemon-offline banner appears when daemon is unreachable
 - **GIVEN** the daemon is not running (no reachable `127.0.0.1:<port>` from `~/.coffer/daemon.json`, or the file is absent)
 - **WHEN** the user has the app open and any authenticated request to the daemon fails to connect
-- **THEN** the reconnecting bar shows first, and after 10 seconds of failures the offline state renders in the workspace naming the recovery the host can actually offer — in a browser, the `coffer daemon start` command to run, because the page cannot start a daemon; in the desktop shell, a Start daemon control, because it can
+- **THEN** the reconnecting bar shows first, and after 10 seconds of failures the offline state renders in the workspace offering the recovery the host can actually give — the `coffer daemon start` command to copy in both hosts, and in the desktop shell also a Start daemon control, because only it can spawn a daemon
 - **AND** the offline state disappears automatically once the daemon becomes reachable again, without a manual page reload
+
+#### Scenario: the offline screen links to the daemon log
+- **GIVEN** the offline state is showing
+- **WHEN** the user reads its footer line
+- **THEN** it carries an Open daemon log link to Activity's Daemon log tab
 
 #### Scenario: a daemon that comes back within seconds leaves the page in place
 - **GIVEN** a page open with a running daemon
@@ -853,7 +911,7 @@ machine only is a setting shown on the tab it belongs to:
   worker's schedule (at daemon start and every six hours), with a
   **Clear expired now** action behind a confirmation, which reports what it
   removed, and a muted line naming `coffer config` for the
-  other retention settings; a saved value survives a reload. Shortening a
+  other retention settings; the last cleanup reads "Last cleared today at 12:00 — 1,284 rows" ("30 Sep at 12:00" for another day); a saved value survives a reload. Shortening a
   window (or turning Keep forever off) MUST ask first, and the confirmation
   MUST say how many records the shorter window deletes at the next cleanup and
   how many the table holds now and would hold after, counted by the daemon
@@ -1258,8 +1316,9 @@ application.
 An address no route matches MUST render a not-found page in the workspace,
 with the shell around it, that names the address, suggests the sidebar page
 closest to its first segment when one is close ("Did you mean /mcp-servers"),
-and offers **Back to Overview** and **Search Coffer**, which opens the command
-palette over the page. The address of a page that belongs to a switched-off
+and offers **Back to Overview** (outline) and **Search Coffer ⌘K** (ghost),
+which opens the command palette over the page; the suggestion is a bordered card
+with the page's icon, "Did you mean" over its path and a trailing chevron. The address of a page that belongs to a switched-off
 experimental feature is an address no route matches: it MUST render this page,
 with no notice that the feature is switched off (spec
 [experimental-features](../experimental-features/spec.md) "Make a switched-off
@@ -1330,9 +1389,9 @@ architecture and the `PATH` Coffer looks programs up on — choosing the install
 this machine, keeping any settings folder that already exists, confirming the program with
 `--version`, leaving signing in to the person, and then coming back to Scan again; it MUST name
 no installer, package manager or command, and it MUST be `null` once any supported agent is
-installed. Overview's first run with no agent found MUST offer that prompt through **Copy
-prompt** only: there is no agent of Coffer's to ask, and the page MUST carry no install link of
-its own.
+installed. Overview's first run with no agent found MUST NOT offer that prompt: its agent rows
+name each agent, so each one not found carries an **Install** link to the agent's official install
+page (agent-registry "Report every supported type's detection state", `install_url`).
 
 #### Scenario: with no agent found the install prompt is built by the daemon
 - **GIVEN** neither supported agent's program is installed on this machine
@@ -1341,11 +1400,11 @@ its own.
   folders, no installer, and the standing rules every hand-off ends with
 - **AND** the second carries none
 
-#### Scenario: with no agent found overview offers the install prompt to copy
+#### Scenario: with no agent found overview links each agent's install page
 - **GIVEN** a first run on a machine where no supported agent is found
 - **WHEN** Overview renders
-- **THEN** beside Scan again it offers Copy prompt with the daemon's install prompt
-- **AND** it offers no Ask an agent and no install link
+- **THEN** each agent row reads Not found with an Install link to that agent's official install page
+- **AND** it offers no install prompt and no Ask an agent
 
 ### Requirement: Hand an agent's missing program to an agent on the agent pages
 Wherever the web UI shows an agent type whose program is not found — its Agents list row and
@@ -1704,6 +1763,81 @@ Port controls MUST be disabled.
 - **THEN** the status card reads offline and names the host's recovery
 - **AND** the Start at login and Port controls are disabled
 
+### Requirement: Guard unsaved edits when leaving a document editor
+A document editor — a skill file, a knowledge document, an agent config file —
+that holds edits not yet saved MUST register them with one shell-level guard, and
+the guard MUST stop every way out of the page the edits live on: a route change
+(a sidebar entry, a command-palette jump, the title bar's back and forward
+arrows, a tab or file switch) and closing or reloading the window. Opening or
+closing the Settings modal is not leaving, since the page stays mounted beneath
+it. A clean editor MUST never be stopped.
+
+A stopped route change opens one dialog, **Leave without saving?**, 460 wide,
+naming the file and whose it is: "You edited SKILL.md in sentry-issue-triage. If
+you leave now, those edits are lost." It carries **Discard changes** (an outline
+danger button, left), **Keep editing** (ghost) and **Save and leave** (primary).
+Discard changes goes on without saving; Keep editing stays with the edits intact;
+Save and leave runs the editor's own save and then goes on, and a refused save
+keeps the dialog open under "Couldn’t save <file>" with the reason. Closing or
+reloading the window asks through the browser's own confirmation.
+
+#### Scenario: a dirty editor stops leaving and asks first
+- **GIVEN** a skill file with unsaved edits is open
+- **WHEN** the user follows a link to another page
+- **THEN** "Leave without saving?" names the file and the skill and the page does not change
+- **AND** Keep editing closes the dialog with the user still on the page
+
+#### Scenario: Discard changes leaves without saving
+- **GIVEN** the dialog is open over a dirty editor
+- **WHEN** the user chooses Discard changes
+- **THEN** the navigation goes on and nothing was saved
+
+#### Scenario: Save and leave saves, then goes on
+- **GIVEN** the dialog is open over a dirty editor
+- **WHEN** the user chooses Save and leave
+- **THEN** the editor's save runs once and the navigation goes on
+
+#### Scenario: a refused save keeps the guard open and says why
+- **GIVEN** the dialog is open over a dirty editor whose save the daemon refuses
+- **WHEN** the user chooses Save and leave
+- **THEN** the dialog stays, titled "Couldn’t save" with the file name, and the user is still on the page
+
+#### Scenario: a clean editor and the Settings modal are never stopped
+- **GIVEN** an editor with no unsaved edits
+- **WHEN** the user follows a link to another page
+- **THEN** the page changes and no dialog opens
+
+#### Scenario: closing or reloading the window with unsaved edits asks the browser
+- **GIVEN** an editor holds unsaved edits
+- **WHEN** the window is about to close or reload
+- **THEN** the browser's confirmation is requested, and it is not once the edits are gone
+
+### Requirement: Confirm a destructive action in one dialog that names its cost
+A destructive or irreversible action MUST ask in the shell's one confirmation
+dialog, 420 wide: a title naming the object ("Delete sentry?"), one sentence on
+what cannot be undone, the consequences as a list of label and value rows where
+there are several, and a confirm button that says the verb ("Delete server").
+While the action runs the button reads its pending label ("Deleting…") and no
+other way out of the dialog works. The dialog MUST close only when the action
+succeeded; a failure stays in it under a title naming the verb and the object
+("Couldn’t delete sentry") with the reason, and the button becomes Retry.
+
+Deleting an MCP server MUST list the tools that disappear and the agents they
+disappear from, and one row per secret the server cites saying it stays in
+Secrets: a server's delete never deletes a secret. A footnote says past calls stay
+in Activity.
+
+#### Scenario: Delete server lists what it costs and keeps its secrets
+- **GIVEN** an MCP server that two agents reach and that cites two secrets
+- **WHEN** the user opens its Delete dialog
+- **THEN** a Tools row says how many tools disappear from which agents, and one Secret row per secret says it stays in Secrets
+- **AND** the dialog offers no control to delete a secret, and confirming deletes the server only
+
+#### Scenario: a refused delete stays open under its error title
+- **GIVEN** the daemon refuses to delete the server
+- **WHEN** the user confirms
+- **THEN** the dialog stays open under "Couldn’t delete" and the server's name, with the reason and a Retry button
+
 ### Requirement: Jump to any page or object from a command palette
 The shell MUST offer a command palette, opened with ⌘K on macOS and Ctrl+K
 elsewhere from any page, and from a search control in the sidebar. It MUST do
@@ -1727,7 +1861,10 @@ this browser, a convenience that is safe to lose — above every page. Under a
 query it MUST show the single best hit as **Best match** (an exact name first,
 then a match at the start of a name), then the other matching pages, then the
 matching objects in one group per kind, named as the kind's sidebar entry and
-in sidebar order, each group holding a few; typing more narrows them.
+in sidebar order, each group holding a few; typing more narrows them. Recent is
+not shown under a query: the list holds only what matches it. A skill's row
+names the agents it is delivered to (by their display names, from the skill's
+own list row), as a secret's row names who uses it.
 
 A page or object of a switched-off experimental feature MUST NOT appear. The
 palette MUST read the list routes the pages already read and add no route of its
@@ -1762,6 +1899,16 @@ searches, rather than show an empty panel.
 - **GIVEN** the user chose an MCP server and then the Usage page from the palette
 - **WHEN** they open the palette again with an empty query
 - **THEN** Recent lists Usage and then the server, and every page is listed below it
+
+#### Scenario: a skill result names the agents that get it
+- **GIVEN** a skill delivered to Claude Code and Codex
+- **WHEN** the user types part of the skill's name in the palette
+- **THEN** its row reads "Skill" and "Claude Code · Codex"
+
+#### Scenario: a query lists only its matches
+- **GIVEN** an entry chosen earlier from the palette, so Recent has it
+- **WHEN** the user types a query that entry does not match
+- **THEN** no Recent group is shown and the entry is not listed
 
 #### Scenario: the palette leaves out switched-off features
 - **GIVEN** a registered experimental feature that is switched off, owning a sidebar entry
@@ -2301,7 +2448,12 @@ first: one row per item of the attention list ([resource-framework](../resource-
 "Report what needs a person across every kind"), most severe first and then
 oldest, each with its resource and kind, the reason in a sentence, since when
 where that is known, and exactly one action that opens the page — or the tab —
-where the item is dealt with. An action that is a non-GET call into Coffer's
+where the item is dealt with. The action reads what it does for that kind and
+reason, not the bare verb — a channel's check is **Reconnect channel**, sync's
+review **Review held changes**, a memory hook's repair **Repair hook** — behind a
+small icon for its verb (a key for a secret, an eye for a review, a plug for connecting,
+a wrench for repairing, a refresh for checking or testing again), and the reason
+may wrap to two lines before it is cut, its whole text on hover. An action that is a non-GET call into Coffer's
 own state needing no preview — testing an MCP server again, probing a command
 again — MUST run in place instead: the button turns into a disabled
 "Retrying…" or "Checking…", the reason gains an accent line ("Starting
@@ -2315,32 +2467,52 @@ carry a ⋯ menu — Copy prompt, Ask an agent while a managed agent is availabl
 then Ignore — with the daemon's prompt as given (every item carries one, the
 kind's own where it has one); the list scrolls inside a frame of about six
 rows, under its title, which shows how many items it holds. An attention source that failed MUST be named
-above the rows, saying that what it would report is missing. Rows MUST clear
+above the rows in one muted status line, saying that what it would report is missing. Rows MUST clear
 themselves as problems resolve: the page follows the daemon's event stream and
 rereads the list when an `attention` change arrives. **Health** follows: one
 tile per sidebar area whose feature is switched on — Agents, MCP servers,
 Skills, Knowledge, Memory, Model providers, Channels, Sync, Custom tools, CLIs,
 Secrets and Usage, in that order (Conversations show in Recent activity) —
 each with a status word drawn from that area's attention items (Secrets, which
-has no attention source, words its own list: a secret missing on this machine,
-one nothing uses; Usage shows its period and no health), a count from its own
-list and a one-line summary, opening the area's page; an area with no backend
-has no tile. Each tile loads and fails
-on its own: a failed tile says so with Retry and a link to its page while the
-rest of the page keeps working. **Recent activity** lists the last few changes
-with a link to Activity. With nothing needing the user the list is a calm "all
-good" card rather than an empty space. With no agent registered the page is
+has no attention source, words its own list: a secret missing on this machine is
+a warning, one nothing uses is plain subtle text with no dot; Usage shows its
+period, "Last 24 h", and no health), a count from its own list and a one-line
+summary, opening the area's page; an area with no backend has no tile. Agents
+and Channels count "1 of 2" with the unit "connected" — for Agents only the
+items about connecting count, so a hook edited by hand does not make an agent
+"not connected" — and Channels names the reconnecting one ("SeaTalk
+reconnecting since 13:41"), otherwise the names joined with " · ". Knowledge's
+line reads "4 collections · edited today 13:30", Memory's "Last update 14 min
+ago", Sync's number is when its last round ended ("4 min ago", "last round")
+over "1 behind · 0 ahead", and Usage counts the tokens of the last 24 hours in
+one decimal ("2.1M"). A CLI tile words its problem by reason when every item
+shares one ("1 not logged in", "1 outdated", "1 missing") and generically
+("2 need attention") otherwise. Each tile loads and fails
+on its own: a failed tile says what failed, shows the failed request in mono
+("GET /api/v1/overview · knowledge · 503 · trace 01JA2M7X4Q"), and offers Retry
+and a link to its page while the rest of the page keeps working. **Recent activity** lists the last few changes
+with a link to Activity, leaving out changes to a resource whose experimental
+feature is switched off. With nothing needing the user the list is a calm "all
+good" card rather than an empty space, with one sentence on what is fine — the
+agents connected, the servers answering and, while sync is on and has nothing
+held, the vault in sync — each clause only for an area with something to report. With no agent registered the page is
 the first-run panel alone: the supported agents with their config folders and
 whether each was found on this machine, the found ones ticked, and **Review
 and connect** opening the connection review for the ticked ones (every file
 change shown before Coffer writes it); with none found it says so and its first
-step is **Scan again**; both offer adding an agent by hand, and the first step
+step is **Scan again**, each agent not found carrying an **Install** link to its
+official install page; both offer adding an agent by hand, and the first step
 for what agents share follows.
 
 #### Scenario: overview lists what needs the user, most severe first
 - **GIVEN** two failing MCP servers, one failing for five hours and one for two, a skill whose link drifted an hour ago, and an agent the user has not connected
 - **WHEN** the user opens Overview
 - **THEN** Needs you lists the older failing server first, then the other, then the skill, then the agent, each with its reason, since when where that is known, and one action opening the page or tab where it is dealt with
+
+#### Scenario: health tiles carry the numbers and lines of Overview's board
+- **GIVEN** two agents where one is not connected and the other's hook was edited by hand, a reconnecting channel, a knowledge collection edited a minute ago, a memory partition updated 14 minutes ago, a sync round that ended 4 minutes ago with one commit behind, a command that is not logged in, and a secret nothing uses
+- **WHEN** the user opens Overview
+- **THEN** Agents reads "1 of 2 connected" and "1 to connect", Channels "0 of 1" with "SeaTalk reconnecting since" a time, Knowledge "1 collection · edited" a time, Memory "Last update 14 min ago", Sync "4 min ago", "last round" and "1 behind · 0 ahead", CLIs "1 not logged in", Secrets "1 unused", and Usage "2.1M" with "Last 24 h"
 
 #### Scenario: a row's action that runs in place shows it is in progress
 - **GIVEN** a failing MCP server in Needs you whose action is to test it again, and an agent row whose action is to connect it
@@ -2355,9 +2527,14 @@ for what agents share follows.
 - **AND** with no managed agent available the menu offers Copy prompt only, and every row's menu ends with Ignore
 
 #### Scenario: overview shows a calm card when nothing needs the user
-- **GIVEN** an attention list with no items and no failed source
+- **GIVEN** an attention list with no items and no failed source, two connected agents, two enabled MCP servers and sync on with nothing held
 - **WHEN** the user opens Overview
-- **THEN** Needs you shows "Nothing needs you" with when it was checked, and the health tiles show their areas as fine
+- **THEN** Needs you shows "Nothing needs you" with when it was checked and the sentence "Both agents are connected, 2 servers are answering and your vault is in sync. Anything that needs you shows up here.", and the health tiles show their areas as fine
+
+#### Scenario: a needs-you row's action reads what it does for its kind
+- **GIVEN** an attention item on a channel whose verb is check, and one on sync whose verb is review
+- **WHEN** the user opens Overview
+- **THEN** the channel's action reads Reconnect channel and carries an icon, and sync's reads Review held changes
 
 #### Scenario: overview welcomes a first run with the agents to connect
 - **GIVEN** a vault with no agent registered
@@ -2368,7 +2545,7 @@ for what agents share follows.
 #### Scenario: one area failing to load leaves the rest of overview working
 - **GIVEN** the skills read fails while every other read answers
 - **WHEN** the user opens Overview
-- **THEN** the Skills tile says it could not load, with Retry and a link to Skills, and every other tile and the Needs you list render
+- **THEN** the Skills tile says it could not load, with the failed request in mono, Retry and a link to Skills, and every other tile and the Needs you list render
 
 #### Scenario: overview hides an area whose backend or feature is off
 - **GIVEN** an area owned by a registered experimental feature that is switched off

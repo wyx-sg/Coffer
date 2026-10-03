@@ -27,7 +27,7 @@ import {
   NAV_ROW_IDLE,
   navIndent,
 } from "@/components/knowledge/navRow";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ListLoadingRows } from "@/components/ListPaneStates";
 import type { CollectionOut } from "@/lib/api/knowledge";
 import { withinDays } from "@/lib/knowledge/changes";
 import { KNOWLEDGE_ROOT, type KnowledgeTab } from "@/lib/knowledge/routes";
@@ -83,10 +83,7 @@ export function KnowledgeNav(props: Props) {
           <span className="ml-auto font-book tabular-nums">{props.collections.length}</span>
         </p>
         {props.isLoading ? (
-          <div className="space-y-2 px-2" aria-busy>
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
-          </div>
+          <ListLoadingRows />
         ) : (
           <ul className="flex flex-col gap-px">
             {props.collections.map((c) => (

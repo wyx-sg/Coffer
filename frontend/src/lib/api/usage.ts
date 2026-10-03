@@ -18,7 +18,7 @@ export type QuotaWindow = Schemas["QuotaWindowOut"];
 export type QuotaRefresh = Schemas["QuotaRefreshOut"];
 
 /** The named ranges the summary resolves in local days. */
-export type UsageRangeName = "today" | "7d" | "30d" | "month" | "custom";
+export type UsageRangeName = "today" | "24h" | "7d" | "30d" | "month" | "custom";
 
 /**
  * One summary request: a range (with its inclusive local days when custom), a

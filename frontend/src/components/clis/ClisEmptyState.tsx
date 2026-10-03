@@ -1,5 +1,5 @@
 // src/components/clis/ClisEmptyState.tsx — the CLIs page before any tool is added and before any skill declares `requires:`.
-import { ExternalLink, Plus, SquareTerminal } from "lucide-react";
+import { ExternalLink, Plus, Terminal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState";
@@ -13,7 +13,7 @@ export function ClisEmptyState({ onAdd }: Props) {
   const { t } = useTranslation();
   return (
     <EmptyState
-      icon={SquareTerminal}
+      icon={Terminal}
       title={t("clis.empty.title")}
       description={t("clis.empty.description")}
       action={

@@ -130,6 +130,8 @@ def status_out(s: SyncStatus) -> SyncStatusOut:
         conflicts=s.conflicts,
         held=s.held,
         join_choices=s.join_choices,
+        ahead=s.ahead,
+        behind=s.behind,
     )
 
 

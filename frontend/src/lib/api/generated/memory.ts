@@ -617,6 +617,8 @@ export interface components {
             uid: string;
             /** Unresolvable */
             unresolvable: boolean;
+            /** Updated At */
+            updated_at: string | null;
             /** Waiting Agents */
             waiting_agents: string[];
             /**

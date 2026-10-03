@@ -10,8 +10,7 @@ import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plus, Radio } from "lucide-react";
 
-import { EmptyState } from "@/components/EmptyState";
-import { PageFallback } from "@/components/PageFallback";
+import { DetailNotFound } from "@/components/DetailNotFound";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { AddChannelDialog } from "@/components/channel/AddChannelDialog";
@@ -21,7 +20,6 @@ import { ChannelList } from "@/components/channel/ChannelList";
 import { CHANNEL_GROUPS } from "@/lib/channels/channelState";
 import { Button } from "@/components/ui/button";
 import type { ChannelType } from "@/lib/api/channels";
-import { translateApiError } from "@/lib/api/errors";
 import { useDetailTab } from "@/lib/detailTabs";
 import { CHANNEL_TABS, DEFAULT_CHANNEL_TAB, channelPath } from "@/lib/channels/tabs";
 import { useChannels, useChannelViews } from "@/lib/hooks/useChannels";
@@ -91,23 +89,10 @@ export function ChannelsPage() {
     );
   }
 
-  let pane: JSX.Element;
-  if (list.error) {
-    pane = (
-      <EmptyState
-        tone="error"
-        icon={Radio}
-        title={t("channels.loadFailed")}
-        description={translateApiError(t, list.error)}
-        action={
-          <Button variant="outline" onClick={() => void list.refetch()}>
-            {t("common.retry")}
-          </Button>
-        }
-      />
-    );
-  } else if (list.isPending) {
-    pane = <PageFallback />;
+  // While the list loads or failed (its pane says why), the right pane stays empty.
+  let pane: JSX.Element | null;
+  if (list.error || list.isPending) {
+    pane = null;
   } else if (current) {
     pane = (
       <ChannelDetailPane
@@ -124,13 +109,7 @@ export function ChannelsPage() {
       />
     );
   } else {
-    pane = (
-      <EmptyState
-        icon={Radio}
-        title={t("channels.notFound")}
-        description={t("channels.notFoundBody")}
-      />
-    );
+    pane = <DetailNotFound kind="channels" id={uid} backTo="/channels" icon={Radio} />;
   }
 
   return (
@@ -149,6 +128,8 @@ export function ChannelsPage() {
               channels={channels}
               views={views}
               isLoading={list.isPending}
+              error={list.error}
+              onRetry={() => void list.refetch()}
               selectedUid={current?.uid ?? null}
               hrefFor={(id) => channelPath(id, tab)}
             />

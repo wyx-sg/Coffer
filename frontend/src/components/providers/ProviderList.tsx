@@ -10,8 +10,8 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { HelpTip } from "@/components/HelpTip";
+import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { SearchInput } from "@/components/SearchInput";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { Provider } from "@/lib/api/providers";
 import type { ProviderUse } from "@/lib/providers/usedBy";
 import { searchableName } from "@/lib/resourceTitle";
@@ -22,6 +22,9 @@ import { ReorderHandle, moved } from "./ReorderHandle";
 interface Props {
   providers: Provider[];
   isLoading: boolean;
+  /** The list read failed: the pane shows the error block under the filter. */
+  error?: unknown;
+  onRetry?: () => void;
   selectedUid: string | undefined;
   usageOf: (provider: Provider) => ProviderUse;
   /** The open provider's rejected-key status, when its probe found one. */
@@ -31,6 +34,8 @@ interface Props {
 export function ProviderList({
   providers,
   isLoading,
+  error,
+  onRetry,
   selectedUid,
   usageOf,
   selectedRejected,
@@ -69,13 +74,12 @@ export function ProviderList({
           </HelpTip>
           <span className="ml-auto font-book">{providers.length}</span>
         </div>
-        {isLoading ? (
-          <div className="flex flex-col gap-2 px-2.5" aria-busy="true">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
+        {error ? (
+          <ListLoadError kind="providers" error={error} onRetry={() => onRetry?.()} />
+        ) : isLoading ? (
+          <ListLoadingRows />
         ) : rows.length === 0 ? (
-          <p className="px-2.5 py-2 text-xs text-text-muted">{t("providers.list.noMatch")}</p>
+          <ListNoMatch kind="providers" query={filter} onClear={() => setFilter("")} />
         ) : (
           rows.map((p, index) => (
             <div

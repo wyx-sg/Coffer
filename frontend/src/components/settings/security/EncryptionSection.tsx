@@ -15,8 +15,10 @@
 // compared at a glance.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { RotateCcw } from "lucide-react";
 
 import { StatusWord } from "@/components/status/StatusWord";
+import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -29,7 +31,6 @@ import { useMasterKeyFingerprint } from "@/lib/hooks/useSecurity";
 
 import { formatFingerprint } from "./fingerprint";
 import { ImportKeyRow } from "./ImportKeyRow";
-import { LoadError } from "@/components/LoadError";
 import { MasterKeyBackupRow } from "./MasterKeyBackupRow";
 import { SettingRow, SettingsSection } from "@/components/settings/SettingsLayout";
 
@@ -46,7 +47,16 @@ export function EncryptionSection() {
           <Skeleton className="h-10 w-full" />
         </div>
       ) : error ? (
-        <LoadError className="py-3" error={error} onRetry={() => void refetch()} />
+        <SettingRow label={t("settings.security.masterKey.label")}>
+          <span className="flex items-center gap-3" role="alert">
+            <span className="text-sm text-danger">
+              {t("settings.security.masterKey.readFailed")}
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => void refetch()}>
+              <RotateCcw aria-hidden /> {t("common.retry")}
+            </Button>
+          </span>
+        </SettingRow>
       ) : (
         <KeyRows storage={data!.master_key_storage ?? null} />
       )}

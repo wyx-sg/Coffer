@@ -100,7 +100,7 @@ export function SkillDetailPane({ skill, tab, onTabChange, onDeleted }: Props) {
                 </Alert>
               ) : null}
               {skill.source.type === "git_import" ? <SkillGitSourcePanel skill={skill} /> : null}
-              <SkillFileTree uid={skill.uid} builtin={skill.builtin} />
+              <SkillFileTree uid={skill.uid} owner={skill.name} builtin={skill.builtin} />
             </>
           )}
         </TabsContent>
