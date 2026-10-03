@@ -464,7 +464,7 @@ coffer skill verify --fix
 
 In the web UI, **Check copies** on the Skills page runs the same report and lists each finding with the skill, the agent (or Library), what differs and whether it needs you. A missing or repointed link has **Repair**, which puts it back; a folder in the way, a missing master and a folder not in your library have **Review…**, which opens the place to answer it. A skill's **Delivery** tab has **Check again**, which does the same for that one skill's copies.
 
-Those three kinds need a judgement Coffer does not make for you — which of two folders to keep, what a stray folder is, where a lost master can be found — so each also offers a prompt for your agent, with **Copy prompt** and **Ask an agent** beside the finding, in the compare dialog, on the folder's pane and on the Files tab. The agent looks and tells you which button to press; it moves, deletes and edits nothing itself. The same prompts appear on the Overview's "needs you" list, and `coffer skill verify --prompt` prints them.
+Those three kinds need a judgement Coffer does not make for you — which of two folders to keep, what a stray folder is, where a lost master can be found — so each also offers a prompt for your agent, with **Ask an agent** (and **Copy prompt** in its menu) beside the finding, in the compare dialog, on the folder's pane and on the Files tab. The agent looks and tells you which button to press; it moves, deletes and edits nothing itself. The same prompts appear on the Overview's "needs you" list, and `coffer skill verify --prompt` prints them.
 
 ### Resolve a folder in the way
 

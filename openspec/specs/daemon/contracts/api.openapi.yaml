@@ -932,6 +932,10 @@ components:
           - type: string
           - type: 'null'
           title: Event
+        handoff:
+          anyOf:
+          - $ref: '#/components/schemas/HandoffOut'
+          - type: 'null'
         level:
           anyOf:
           - type: string
@@ -955,6 +959,7 @@ components:
       - event
       - offset
       - record
+      - handoff
       title: DaemonLogRecordOut
       type: object
     DaemonPortIn:

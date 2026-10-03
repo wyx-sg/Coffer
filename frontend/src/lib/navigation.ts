@@ -7,7 +7,7 @@
 // The sidebar is grouped by what the person comes to do (ADR
 // sidebar-grouped-by-what-the-person-comes-to-do): Overview under no heading,
 // then Agents · Run · Capabilities · Context · System — fourteen entries, and no
-// sixteenth without a spec change (spec web-ui "Keep the sidebar to its
+// fifteenth without a spec change (spec web-ui "Keep the sidebar to its
 // fourteen entries"). Settings is not an entry: it is a modal opened from the
 // labelled row in the sidebar footer, from ⌘, and from the palette.
 import {

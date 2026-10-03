@@ -4,23 +4,19 @@
 // is the page's one primary button whichever tab is open, and the tab rail's
 // hairline runs the full width of the page. The tab is the address:
 // `/model-providers` and `/model-providers/<uid>` are Providers,
-// `/model-providers/usage` is Usage.
+// `/model-providers?tab=usage` is Usage. Switching is a replace-navigation, so
+// the tab does not pile up history.
 import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
-import { ExperimentalTag } from "@/components/ExperimentalTag";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-type ModelProvidersTab = "providers" | "usage";
-
-const MODEL_PROVIDERS_PATH = "/model-providers";
-export const USAGE_PATH = "/model-providers/usage";
+import { providersTabPath, type ProvidersTab } from "@/lib/providers/tabs";
 
 interface Props {
-  tab: ModelProvidersTab;
+  tab: ProvidersTab;
   onAdd: () => void;
 }
 
@@ -32,7 +28,7 @@ export function ModelProvidersHeader({ tab, onAdd }: Props) {
       <div className="px-8 pb-3 pt-4">
         <PageHeader
           title={t("providers.title")}
-          badges={<ExperimentalTag />}
+          experimental
           subtitle={t("providers.subtitle")}
           actions={
             <Button onClick={onAdd}>
@@ -43,7 +39,9 @@ export function ModelProvidersHeader({ tab, onAdd }: Props) {
       </div>
       <Tabs
         value={tab}
-        onValueChange={(next) => navigate(next === "usage" ? USAGE_PATH : MODEL_PROVIDERS_PATH)}
+        onValueChange={(next) => {
+          if (next !== tab) navigate(providersTabPath(next as ProvidersTab), { replace: true });
+        }}
         className="border-b border-border px-8"
       >
         <TabsList className="border-b-0">

@@ -1,5 +1,5 @@
 """Review-then-apply of one agent's model change, over REST on a fake HOME
-(spec provider-switching "Review a model change before it is written").
+(spec provider-switching "Review a model change before writing it").
 
 The preview names every file the switch changes (Codex: ``config.toml`` AND
 Coffer's own model catalogue) without writing; the apply refuses when a

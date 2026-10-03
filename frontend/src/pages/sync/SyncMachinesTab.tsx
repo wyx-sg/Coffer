@@ -1,4 +1,4 @@
-// frontend/src/pages/sync/SyncMachinesTab.tsx — Sync › Machines (board 6.5.20).
+// frontend/src/pages/sync/SyncMachinesTab.tsx — Sync › Machines (board 6.4.24).
 //
 // The registry (spec vault-sync "Derive the registry from the descriptors"):
 // every Mac that has converged with this remote, as a derived view of
@@ -9,24 +9,45 @@
 // so here without anyone having to retire it first. The Mac that curates
 // knowledge for the whole vault carries a read-only "Runs curation" tag; the
 // owner is chosen in Knowledge, not here.
+//
+// Retire runs at once and the toast offers Undo (6.4.26): the registry entry
+// is all it removes, so the mistake it can make is cheap to take back.
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
+import { translateApiError } from "@/lib/api/errors";
+import type { Machine } from "@/lib/api/sync";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useInternalEngineConfig } from "@/lib/hooks/useInternalEngine";
-import { useMachines } from "@/lib/hooks/useMachines";
+import { useMachines, useRestoreMachine, useRetireMachine } from "@/lib/hooks/useMachines";
 import { SyncMachineRow } from "./SyncMachineRow";
 
 const COLUMNS = ["icon", "name", "lastSeen", "lastRound", "version", "agents", "actions"] as const;
 
 export function SyncMachinesTab() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const { data, isPending } = useMachines();
+  const retire = useRetireMachine();
+  const restore = useRestoreMachine();
   const engine = useInternalEngineConfig();
   const curator = engine.data?.curate_owner_machine_id ?? null;
   const machines = data?.machines ?? [];
   const now = new Date();
+
+  const onRetire = (machine: Machine) =>
+    retire.mutate(machine.machine_id, {
+      onSuccess: () =>
+        toast.info(t("sync.machines.retired", { name: machine.name }), {
+          undo: () =>
+            restore.mutate(machine.machine_id, {
+              onError: (error) => toast.error(translateApiError(t, error)),
+            }),
+        }),
+      onError: (error) => toast.error(translateApiError(t, error)),
+    });
 
   return (
     <div className="flex flex-col gap-3" data-testid="sync-machines">
@@ -39,31 +60,34 @@ export function SyncMachinesTab() {
       ) : machines.length === 0 ? (
         <EmptyState title={t("sync.machines.empty")} />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {COLUMNS.map((column) => (
-                <TableHead key={column} className={column === "icon" ? "w-8" : undefined}>
-                  {column === "icon" || column === "actions" ? (
-                    <span className="sr-only">{t(`sync.machines.columns.${column}`)}</span>
-                  ) : (
-                    t(`sync.machines.columns.${column}`)
-                  )}
-                </TableHead>
+        <div className="overflow-hidden rounded-xl border border-border bg-surface-raised">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {COLUMNS.map((column) => (
+                  <TableHead key={column} className={column === "icon" ? "w-8" : undefined}>
+                    {column === "icon" || column === "actions" ? (
+                      <span className="sr-only">{t(`sync.machines.columns.${column}`)}</span>
+                    ) : (
+                      t(`sync.machines.columns.${column}`)
+                    )}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {machines.map((machine) => (
+                <SyncMachineRow
+                  key={machine.machine_id}
+                  machine={machine}
+                  curates={curator !== null && machine.machine_id === curator}
+                  now={now}
+                  onRetire={onRetire}
+                />
               ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {machines.map((machine) => (
-              <SyncMachineRow
-                key={machine.machine_id}
-                machine={machine}
-                curates={curator !== null && machine.machine_id === curator}
-                now={now}
-              />
-            ))}
-          </TableBody>
-        </Table>
+            </TableBody>
+          </Table>
+        </div>
       )}
     </div>
   );

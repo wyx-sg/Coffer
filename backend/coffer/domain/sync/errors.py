@@ -30,6 +30,19 @@ class SyncNoRemote(CofferError):  # noqa: N818
         super().__init__("no sync remote is configured; set one first")
 
 
+class SyncNothingToRestore(CofferError):  # noqa: N818
+    """Undo for something that was not stopped or retired (or was set up again
+    since). Maps to 409."""
+
+    code = "SYNC_NOTHING_TO_RESTORE"
+
+
+class SyncRemoteExists(CofferError):  # noqa: N818
+    """Restoring a remote while another is set. Maps to 409."""
+
+    code = "SYNC_REMOTE_EXISTS"
+
+
 class SyncRoundNotFound(CofferError):  # noqa: N818
     """No recorded round has this id. Maps to 404."""
 
@@ -100,6 +113,37 @@ class MasterKeyPassphraseTooShort(CofferError):  # noqa: N818
         self.minimum = minimum
 
 
+class SyncVaultTargetInvalid(CofferError):  # noqa: N818
+    """The folder to move the vault to is unusable: not an absolute path, inside
+    or around the current vault, or its parent cannot be written. Maps to 422."""
+
+    code = "SYNC_VAULT_TARGET_INVALID"
+
+
+class SyncVaultTargetInCloud(CofferError):  # noqa: N818
+    """The folder to move the vault to is itself inside a folder another tool
+    synchronises. Maps to 422."""
+
+    code = "SYNC_VAULT_TARGET_IN_CLOUD"
+
+    def __init__(self, path: str, tool: str) -> None:
+        super().__init__(f"{path} is inside {tool}")
+        self.tool = tool
+
+
+class SyncVaultTargetNotEmpty(CofferError):  # noqa: N818
+    """The folder to move the vault to already holds something. Maps to 409."""
+
+    code = "SYNC_VAULT_TARGET_NOT_EMPTY"
+
+
+class SyncVaultMoveFailed(CofferError):  # noqa: N818
+    """The move or the check of the vault at its new place failed; the vault is
+    back where it was. Maps to 500."""
+
+    code = "SYNC_VAULT_MOVE_FAILED"
+
+
 __all__ = [
     "CannotRetireSelf",
     "MasterKeyFileInvalid",
@@ -109,5 +153,11 @@ __all__ = [
     "SyncMachineNotFound",
     "SyncNoPlaintextFound",
     "SyncNoRemote",
+    "SyncNothingToRestore",
+    "SyncRemoteExists",
     "SyncRoundNotFound",
+    "SyncVaultMoveFailed",
+    "SyncVaultTargetInCloud",
+    "SyncVaultTargetInvalid",
+    "SyncVaultTargetNotEmpty",
 ]

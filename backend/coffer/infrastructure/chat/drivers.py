@@ -28,7 +28,7 @@ from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
 from coffer.infrastructure.chat.prompt_memory import MemoryRetriever
 
 if TYPE_CHECKING:
-    from coffer.application.chat.ports import AgentProvider, QuotaObserver
+    from coffer.application.chat.ports import AgentProvider
     from coffer.infrastructure.chat.persistence import ConversationRepo
 
 
@@ -36,8 +36,7 @@ if TYPE_CHECKING:
 class DriverDeps:
     """What every driver may need. ``resolve_home_env`` is a per-agent resolver
     the composition builds from the agent's own key, so a driver never looks
-    another agent up. ``observe_quota`` receives the agent's official
-    subscription-quota reports (``None`` ⇒ dropped)."""
+    another agent up."""
 
     conversations: ConversationRepo
     list_models: ModelLister | None
@@ -45,7 +44,6 @@ class DriverDeps:
     compose_memory_context: MemoryContextComposer | None
     resolve_channel: ChannelNoteResolver | None
     resolve_home_env: Callable[[str], HomeEnvResolver]
-    observe_quota: QuotaObserver | None = None
     #: Per-agent "is an enabled agent of this type managed" check (``None`` ⇒ not asked).
     is_managed: Callable[[str], ManagedCheck] | None = None
     #: A channel turn's per-prompt memory retrieval (``None`` ⇒ none).
@@ -68,7 +66,6 @@ class ClaudeSdkDriver:
             resolve_channel=deps.resolve_channel,
             resolve_home_env=deps.resolve_home_env(self.agent_key),
             is_managed=deps.is_managed(self.agent_key) if deps.is_managed else None,
-            observe_quota=deps.observe_quota,
         )
 
 
@@ -88,7 +85,6 @@ class CodexAppServerDriver:
             resolve_channel=deps.resolve_channel,
             resolve_home_env=deps.resolve_home_env(self.agent_key),
             is_managed=deps.is_managed(self.agent_key) if deps.is_managed else None,
-            observe_quota=deps.observe_quota,
         )
 
 

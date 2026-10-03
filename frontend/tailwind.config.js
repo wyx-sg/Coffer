@@ -58,6 +58,7 @@ export default {
           strong: role("danger-strong"),
         },
         neutral: { DEFAULT: role("neutral"), soft: role("neutral-soft") },
+        // Chart bars and data marks; the accent stays for actions and selection.
         data: role("data"),
         "on-accent": role("on-accent"),
         "on-status": role("on-status"),

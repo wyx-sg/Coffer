@@ -124,7 +124,7 @@ backend/coffer/
 │   ├── memory/             # note, partition, budget, reader protocol
 │   ├── provider/           # provider config, projection rules, local runtimes
 │   ├── model_proxy/        # the state the daemon pushes the model proxy
-│   ├── usage/              # usage records, stream usage readers, prices, ranges, quota
+│   ├── usage/              # usage records, stream usage readers, prices, ranges
 │   ├── vault/              # layout, storage classes, documents, format versions, writers
 │   └── sync/               # round statuses, stops, joins, the deletion breaker, machines
 ├── application/            # each kind package holds its services, ports and make_<kind>_kind()
@@ -149,7 +149,7 @@ backend/coffer/
 │   ├── chat/               # turn orchestrator, runner, conversation service
 │   ├── memory/             # aggregate, distil, delivery, session-start context
 │   ├── provider/           # provider service, projection, projection target, proxy tokens and state
-│   ├── usage/              # usage ingest, reports, subscription quota
+│   ├── usage/              # usage ingest and reports
 │   ├── vault/              # validation rules, history and restore, problems
 │   └── sync/               # the thin round, answers, join, rollback, worker
 ├── infrastructure/

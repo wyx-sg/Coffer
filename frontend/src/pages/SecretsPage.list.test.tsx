@@ -1,4 +1,4 @@
-// src/pages/SecretsPage.list.test.tsx — the Secrets list at scale: readable names, filters, sort, the by-owner view, batching, and bulk selection.
+// src/pages/SecretsPage.list.test.tsx — the Secrets list at scale: readable names, status and search, time-column sort, batching, and bulk selection.
 //
 // Only the network boundary (`secretsApi`) and the desktop shell's seam are mocked.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -9,7 +9,6 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import type { SecretRef } from "@/lib/api/secret";
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { acceptance } from "@/test/acceptance";
 import { SecretsPage } from "./SecretsPage";
 
 vi.mock("@/lib/api/secret", () => ({
@@ -17,8 +16,14 @@ vi.mock("@/lib/api/secret", () => ({
     list: vi.fn(),
     remove: vi.fn(),
     pendingApprovals: vi.fn(),
-    refusedApprovals: vi.fn(),
     secretBoundary: vi.fn(),
+  },
+}));
+vi.mock("@/lib/api/attention", () => ({
+  attentionApi: {
+    read: () => Promise.resolve({ items: [], ignored: [], counts_by_kind: {}, errors: [] }),
+    ignore: vi.fn(),
+    unignore: vi.fn(),
   },
 }));
 vi.mock("@/lib/tauri", () => ({
@@ -61,8 +66,20 @@ const GROQ = ref({
   cited_by: [{ kind: "provider", name: "groq", uid: "u-groq" }],
   readable_by_local_processes: true,
 });
-const OLD_A = ref({ ref: "secret/old-a", uri: "coffer://secret/old-a", unreferenced: true });
-const OLD_B = ref({ ref: "secret/old-b", uri: "coffer://secret/old-b", unreferenced: true });
+const OLD_A = ref({
+  ref: "secret/old-a",
+  uri: "coffer://secret/old-a",
+  unreferenced: true,
+  last_used_at: "2026-09-01T10:00:00Z",
+  created_at: "2026-03-02T10:00:00Z",
+});
+const OLD_B = ref({
+  ref: "secret/old-b",
+  uri: "coffer://secret/old-b",
+  unreferenced: true,
+  last_used_at: "2026-09-20T10:00:00Z",
+  created_at: "2026-06-02T10:00:00Z",
+});
 
 function Where() {
   const location = useLocation();
@@ -103,24 +120,23 @@ beforeEach(() => {
   localStorage.clear();
   api.list.mockResolvedValue({ refs: [JIRA, SEATALK, GROQ, OLD_A, OLD_B] });
   api.pendingApprovals.mockResolvedValue({ approvals: [] });
-  api.refusedApprovals.mockResolvedValue({ approvals: [] });
   api.remove.mockResolvedValue(undefined);
 });
 afterEach(() => vi.clearAllMocks());
 
 describe("SecretsPage list", () => {
-  acceptance("web-ui", "a secret is listed by its own name with its owner in words", async () => {
+  test("a secret is listed by its own short name, with its users in the Used by column", async () => {
     renderPage();
     const row = (await screen.findByText("JIRA_PERSONAL_TOKEN")).closest("tr")!;
-    expect(within(row).getByText("MCP server · jira")).toBeInTheDocument();
+    // No owner line under the name: what uses a secret is the Used by column.
+    expect(within(row).queryByText("MCP server · jira")).not.toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: /is used by 1 thing/ })).toHaveTextContent(
+      "jira",
+    );
     expect(screen.queryByText(JIRA.ref)).not.toBeInTheDocument();
-    const channel = screen.getByText("app-secret").closest("tr")!;
-    expect(within(channel).getByText("Channel · seatalk")).toBeInTheDocument();
     // The mark for a value local processes can read stays.
     const groq = screen.getByText("key").closest("tr")!;
     expect(within(groq).getByLabelText("Readable by local processes")).toBeInTheDocument();
-    const standalone = screen.getByText("old-a").closest("tr")!;
-    expect(within(standalone).getByText("Standalone secret")).toBeInTheDocument();
     // The full reference stays one hover away, and copyable.
     fireEvent.click(within(row).getByRole("button", { name: `Actions for ${JIRA.ref}` }));
     expect(
@@ -128,22 +144,64 @@ describe("SecretsPage list", () => {
     ).toBeInTheDocument();
   });
 
-  test("the status filter has counts and narrows the list; the owner type narrows it too", async () => {
+  test("Used by names the first two users and +N, and the popover finds and scrolls", async () => {
+    const many = ref({
+      ref: "secret/shared",
+      uri: "coffer://secret/shared",
+      cited_by: [
+        { kind: "mcp_server", name: "github", uid: "g" },
+        { kind: "provider", name: "OpenAI", uid: "o" },
+        ...Array.from({ length: 6 }, (_, i) => ({
+          kind: "skill",
+          name: `skill-${i}`,
+          uid: `s${i}`,
+        })),
+      ],
+    });
+    api.list.mockResolvedValue({ refs: [many] });
     renderPage();
-    await screen.findByText("key");
-    expect(screen.getByRole("button", { name: "All 5" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "In use 3" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Not used 2" }));
-    expect(names()).toEqual(["old-a", "old-b"]);
-    expect(where()).toBe("/secrets?status=unused");
-    fireEvent.click(screen.getByRole("button", { name: "All 5" }));
-    fireEvent.keyDown(screen.getByRole("combobox", { name: "Used by type" }), { key: "ArrowDown" });
-    fireEvent.click(await screen.findByRole("option", { name: "Channel" }));
-    expect(names()).toEqual(["app-secret"]);
-    expect(where()).toBe("/secrets?kind=channel");
+    const trigger = await screen.findByRole("button", { name: /is used by 8 things/ });
+    expect(trigger).toHaveTextContent("github, OpenAI");
+    expect(trigger).toHaveTextContent("+6");
+    expect(trigger.textContent).not.toMatch(/^8/);
+    fireEvent.click(trigger);
+    // The type blocks come in order: Model provider first, then MCP server, then Skills.
+    const find = await screen.findByRole("textbox", { name: "Find…" });
+    expect(find).toHaveFocus();
+    const rows = screen.getAllByRole("link").map((l) => l.textContent);
+    expect(rows[0]).toContain("OpenAI");
+    expect(rows[1]).toContain("github");
+    fireEvent.change(find, { target: { value: "skill-3" } });
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    fireEvent.change(find, { target: { value: "mcp" } });
+    expect(screen.getAllByRole("link")).toHaveLength(1);
   });
 
-  test("a waiting approval and a refusal each have their status", async () => {
+  test("the status segments have no counts and narrow the list", async () => {
+    renderPage();
+    await screen.findByText("key");
+    expect(screen.getByRole("button", { name: "All" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "In use" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Not used" }));
+    expect(names()).toEqual(["old-a", "old-b"]);
+    expect(where()).toBe("/secrets?status=unused");
+    // No Waiting / Refused segments, no type dropdown, no by-owner view.
+    expect(screen.queryByRole("button", { name: /Waiting|Refused/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "By owner" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Delete unused/ })).not.toBeInTheDocument();
+  });
+
+  test("no match offers Clear filters, which resets the search and the status", async () => {
+    renderPage("/secrets?status=unused&q=nothing-here");
+    expect(await screen.findByText("No secret matches this search.")).toBeInTheDocument();
+    const clears = screen.getAllByRole("button", { name: "Clear filters" });
+    fireEvent.click(clears[clears.length - 1]);
+    expect(where()).toBe("/secrets");
+    expect(await screen.findByText("key")).toBeInTheDocument();
+  });
+
+  test("a waiting approval puts its row first, with its status word", async () => {
     api.pendingApprovals.mockResolvedValue({
       approvals: [
         {
@@ -166,132 +224,104 @@ describe("SecretsPage list", () => {
       ],
     });
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Waiting for approval 1" }));
-    expect(names()).toEqual(["key"]);
-    // Waiting for approval leads the default order too.
-    fireEvent.click(screen.getByRole("button", { name: "All 5" }));
+    const row = (await screen.findByText("key")).closest("tr")!;
+    expect(await within(row).findByText("Waiting for approval")).toBeInTheDocument();
     expect(names()[0]).toBe("key");
-    expect(screen.getByRole("button", { name: "Refused 0" })).toBeInTheDocument();
+    expect(screen.queryByText("Refused")).not.toBeInTheDocument();
   });
 
-  test("filters, sort and view come from the URL", async () => {
-    renderPage("/secrets?status=inUse&q=o&sort=name&dir=desc");
+  test("search and status come from the URL", async () => {
+    renderPage("/secrets?status=inUse&q=o");
     await screen.findByText("key");
     expect((screen.getByRole("textbox", { name: "Find a secret" }) as HTMLInputElement).value).toBe(
       "o",
     );
-    // "o" matches app-secret? no — only names or owners containing it: groq's "key" via owner, jira's.
-    expect(names()).toEqual(["key", "JIRA_PERSONAL_TOKEN"]);
-    expect(screen.getByRole("button", { name: "Sort by Name" })).toHaveAttribute(
-      "data-sort",
-      "desc",
+    // "o" matches a secret's name or the name of what uses it; unused ones are out.
+    expect(names()).toEqual(["JIRA_PERSONAL_TOKEN", "key"]);
+  });
+
+  test("only time columns sort, in three clicks, and the sort stays in the URL", async () => {
+    renderPage();
+    await screen.findByText("key");
+    // Names never sort.
+    expect(screen.queryByRole("button", { name: "Name" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Used by" })).not.toBeInTheDocument();
+    const lastUsed = () => screen.getByRole("button", { name: "Last used" });
+    expect(names().slice(-2)).toEqual(["old-a", "old-b"]);
+    fireEvent.click(lastUsed());
+    expect(where()).toBe("/secrets?sort=last_used");
+    expect(names().slice(0, 2)).toEqual(["old-b", "old-a"]);
+    fireEvent.click(lastUsed());
+    expect(where()).toBe("/secrets?sort=last_used%3Aasc");
+    expect(names().slice(0, 2)).toEqual(["old-a", "old-b"]);
+    fireEvent.click(lastUsed());
+    expect(where()).toBe("/secrets");
+    fireEvent.click(screen.getByRole("button", { name: "Created" }));
+    expect(where()).toBe("/secrets?sort=created");
+    // Newest first: the two oldest are last.
+    expect(names().slice(-2)).toEqual(["old-b", "old-a"]);
+  });
+
+  test("a thousand secrets render in batches while search covers all of them", async () => {
+    const many = Array.from({ length: 1000 }, (_, i) =>
+      ref({
+        ref: `secret/key-${String(i).padStart(4, "0")}`,
+        uri: `coffer://secret/key-${String(i).padStart(4, "0")}`,
+        unreferenced: true,
+      }),
     );
+    api.list.mockResolvedValue({ refs: many });
+    renderPage();
+    await screen.findByText("key-0000");
+    expect(screen.getAllByRole("row")).toHaveLength(51);
+    expect(screen.getByText("Showing 50 of 1000")).toBeInTheDocument();
+    expect(screen.queryByText("key-0999")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load 50 more" }));
+    expect(screen.getAllByRole("row")).toHaveLength(101);
+    fireEvent.change(screen.getByRole("textbox", { name: "Find a secret" }), {
+      target: { value: "key-0999" },
+    });
+    expect(await screen.findByText("key-0999")).toBeInTheDocument();
+    expect(screen.queryByText(/^Showing/)).toBeNull();
   });
 
-  test("a column header sorts, then reverses", async () => {
+  test("the header box selects every secret the filters show, and the bar reads N of M", async () => {
     renderPage();
     await screen.findByText("key");
-    expect(names()).toEqual(["app-secret", "JIRA_PERSONAL_TOKEN", "key", "old-a", "old-b"]);
-    fireEvent.click(screen.getByRole("button", { name: "Sort by Name" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sort by Name" }));
-    expect(names()).toEqual(["old-b", "old-a", "key", "JIRA_PERSONAL_TOKEN", "app-secret"]);
-    expect(where()).toBe("/secrets?sort=name&dir=desc");
-  });
-
-  test("the by-owner view groups, collapses, and is remembered", async () => {
-    renderPage();
-    await screen.findByText("key");
-    fireEvent.click(screen.getByRole("button", { name: "By owner" }));
-    expect(where()).toBe("/secrets?view=owner");
-    const jira = screen.getByRole("region", { name: "jira" });
-    expect(within(jira).getByText("JIRA_PERSONAL_TOKEN")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Not used by anything" })).toHaveTextContent("old-a");
-    fireEvent.click(within(jira).getByRole("button", { expanded: true }));
-    expect(screen.queryByText("JIRA_PERSONAL_TOKEN")).not.toBeInTheDocument();
-    expect(localStorage.getItem("coffer.secrets.view")).toBe("owner");
-  });
-
-  test("a remembered by-owner view opens without the URL naming it", async () => {
-    localStorage.setItem("coffer.secrets.view", "owner");
-    renderPage();
-    expect(await screen.findByRole("region", { name: "groq" })).toBeInTheDocument();
-  });
-
-  acceptance(
-    "web-ui",
-    "a thousand secrets render in batches while search covers all of them",
-    async () => {
-      const many = Array.from({ length: 1000 }, (_, i) =>
-        ref({
-          ref: `secret/key-${String(i).padStart(4, "0")}`,
-          uri: `coffer://secret/key-${String(i).padStart(4, "0")}`,
-          unreferenced: true,
-        }),
-      );
-      api.list.mockResolvedValue({ refs: many });
-      renderPage();
-      await screen.findByText("key-0000");
-      expect(screen.getAllByRole("row")).toHaveLength(51);
-      expect(screen.getByText("Showing 50 of 1000")).toBeInTheDocument();
-      expect(screen.queryByText("key-0999")).not.toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: "Load 50 more" }));
-      expect(screen.getAllByRole("row")).toHaveLength(101);
-      fireEvent.change(screen.getByRole("textbox", { name: "Find a secret" }), {
-        target: { value: "key-0999" },
-      });
-      expect(await screen.findByText("key-0999")).toBeInTheDocument();
-      expect(screen.getByText("Showing 1 of 1")).toBeInTheDocument();
-    },
-  );
-
-  test("ticking a secret swaps the filters for the selection bar, which selects all matching", async () => {
-    renderPage();
-    await screen.findByText("key");
+    // The checkbox column is always first, the header box is the select-all.
+    const first = screen.getAllByRole("row")[0];
+    expect(within(first).getAllByRole("checkbox")).toHaveLength(1);
     fireEvent.click(screen.getByRole("checkbox", { name: "Select old-a" }));
     const bar = screen.getByRole("region", { name: "Selected secrets" });
-    expect(bar).toHaveTextContent("1 selected");
+    expect(bar).toHaveTextContent("1 of 5 selected");
     expect(screen.queryByRole("textbox", { name: "Find a secret" })).not.toBeInTheDocument();
-    fireEvent.click(within(bar).getByRole("checkbox", { name: "Select all secrets" }));
-    expect(bar).toHaveTextContent("5 selected");
-    fireEvent.click(within(bar).getByRole("button", { name: "Clear" }));
+    expect(within(bar).queryByRole("checkbox")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all secrets" }));
+    expect(bar).toHaveTextContent("5 of 5 selected");
+    // Esc clears the selection and brings the filters back.
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.getByRole("textbox", { name: "Find a secret" })).toBeInTheDocument();
   });
 
-  acceptance("web-ui", "only secrets nothing uses can be deleted in bulk", async () => {
+  test("a bulk delete skips and names what is in use, and deletes only the rest", async () => {
     renderPage();
     await screen.findByText("key");
     fireEvent.click(screen.getByRole("checkbox", { name: "Select old-a" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Select key" }));
-    const bar = screen.getByRole("region", { name: "Selected secrets" });
-    const del = within(bar).getByRole("button", { name: "Delete" });
-    expect(del).toBeDisabled();
-    expect(del).toHaveAttribute("title", "1 in use or waiting for approval");
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select key" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Select old-b" }));
-    fireEvent.click(within(bar).getByRole("button", { name: "Delete" }));
-    const dialog = await screen.findByRole("dialog", { name: "Delete 2 secrets?" });
+    const bar = screen.getByRole("region", { name: "Selected secrets" });
+    // A secret in use does not turn Delete off: the confirmation names it and skips it.
+    const del = within(bar).getByRole("button", { name: "Delete…" });
+    expect(del).toBeEnabled();
+    fireEvent.click(del);
+    const dialog = await screen.findByRole("dialog", { name: "Delete 3 secrets?" });
+    expect(dialog).toHaveTextContent("old-a and old-b");
+    expect(dialog).toHaveTextContent("key is in use and will be skipped.");
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete 2 secrets" }));
     await waitFor(() => expect(api.remove).toHaveBeenCalledTimes(2));
     expect(api.remove).toHaveBeenCalledWith("secret/old-a");
     expect(api.remove).toHaveBeenCalledWith("secret/old-b");
+    expect(api.remove).not.toHaveBeenCalledWith(GROQ.ref);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-  });
-
-  test("Delete unused… confirms with the count and names, then deletes only unused secrets", async () => {
-    renderPage();
-    await screen.findByText("key");
-    fireEvent.click(screen.getByRole("button", { name: "Delete unused…" }));
-    const dialog = await screen.findByRole("dialog", { name: "Delete 2 secrets?" });
-    expect(dialog).toHaveTextContent("old-a and old-b");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete 2 secrets" }));
-    await waitFor(() => expect(api.remove).toHaveBeenCalledTimes(2));
-    expect(api.remove).not.toHaveBeenCalledWith(JIRA.ref);
-  });
-
-  test("no Delete unused… when everything is in use", async () => {
-    api.list.mockResolvedValue({ refs: [JIRA] });
-    renderPage();
-    await screen.findByText("JIRA_PERSONAL_TOKEN");
-    expect(screen.queryByRole("button", { name: "Delete unused…" })).not.toBeInTheDocument();
   });
 });

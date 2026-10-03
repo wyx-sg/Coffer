@@ -13,8 +13,7 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 
-import { AskAgentButton } from "@/components/handoff/AskAgentButton";
-import { HelpTip } from "@/components/HelpTip";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { translateApiError } from "@/lib/api/errors";
 import type { DetectLocalOut } from "@/lib/api/providers";
 import { cn } from "@/lib/utils";
@@ -38,12 +37,7 @@ export function AddLocalRuntime({ detect, requested, chosen, onChoose, vendorRun
   const handoff = detect.data?.handoff?.prompt;
   const missing =
     vendorRuntime && !found.some((f) => f.runtime.runtime === vendorRuntime) ? vendorRuntime : null;
-  const ask = handoff ? (
-    <>
-      <AskAgentButton prompt={handoff} />
-      <HelpTip>{t("handoff.help")}</HelpTip>
-    </>
-  ) : null;
+  const ask = handoff ? <AgentHandoff size="sm" prompt={handoff} /> : null;
 
   return (
     <div className="flex flex-col gap-2">

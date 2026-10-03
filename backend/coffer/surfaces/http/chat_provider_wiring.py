@@ -16,7 +16,6 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from coffer.application.agent.answering import AgentLister, answering_agent_config
-from coffer.application.chat.ports import QuotaObserver
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.engine.resolve import resolve_transcribe_connection
 from coffer.domain.agent.facets import AgentCatalog
@@ -83,7 +82,6 @@ def build_agent_provider_registry(
     secret_resolver: Callable[[str], str] | None = None,
     compose_memory_context: MemoryContextComposer | None = None,
     resolve_channel: ChannelNoteResolver | None = None,
-    observe_quota: QuotaObserver | None = None,
     retrieve_memory: MemoryRetriever | None = None,
 ) -> AgentProviderRegistry:
     """Construct and populate the agent-provider registry.
@@ -113,12 +111,6 @@ def build_agent_provider_registry(
     (``memory_turn_wiring.memory_context_composer``) and hands it through
     ``wire_chat``. ``None`` means no memory append at all, not a header with
     nothing under it.
-
-    ``observe_quota`` receives each driven agent's official subscription-quota
-    report — Claude Code's ``rate_limit_event``, Codex's
-    ``account/rateLimits/updated`` (ADR usage-is-metered-at-the-proxy-and-
-    subscriptions-show-only-official-quota); the composition root binds the
-    usage kind's quota service. ``None`` means the reports are dropped.
 
     ``retrieve_memory`` ranks a channel turn's prompt against the notes (spec
     memory "Retrieve the notes a prompt names for a channel turn"); the
@@ -160,7 +152,6 @@ def build_agent_provider_registry(
         resolve_channel=resolve_channel,
         resolve_home_env=agent_home_env_resolver,
         is_managed=agent_is_managed,
-        observe_quota=observe_quota,
         retrieve_memory=retrieve_memory,
     )
     # Every agent with a driver facet, in agent-type order.

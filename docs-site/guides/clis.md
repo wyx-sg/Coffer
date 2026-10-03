@@ -78,10 +78,12 @@ Check with me before running anything that needs sudo or changes system settings
 If a login is needed, tell me how and I will log in myself; do not handle my credentials.
 ```
 
-A launcher adds the servers that start with it (`` - Needed by the MCP servers Coffer starts: duckdb (started with `uvx`). ``). A command that is too old gets the same prompt asking for an update, with the version found and where. The prompt names no install command: choosing one is the agent's job. The command's page and the skill's **Requires** tab offer two ways to use it:
+A launcher adds the servers that start with it (`` - Needed by the MCP servers Coffer starts: duckdb (started with `uvx`). ``). A command that is too old gets the same prompt asking for an update, with the version found and where. The prompt names no install command: choosing one is the agent's job. The command's page and the skill's **Requires** tab offer one split button, **Ask an agent ▾**:
 
-- **Copy prompt** — paste it into whichever agent you use, in a terminal or an IDE.
-- **Ask an agent** — choose one of the agents Coffer manages and a folder, and a new [conversation](/guides/chat) opens with the prompt already in the message box. **Nothing is sent until you press Send**: a managed agent runs with full permissions, so read what it is about to be asked first. Without a managed agent on this machine only Copy prompt is offered.
+- **Ask an agent** — a new [conversation](/guides/chat) opens as a draft with the prompt already in the message box; its agent and folder are pickers in the reply box, defaulting to the last you used.
+- **Copy prompt**, in the ▾ menu — paste it into whichever agent you use, in a terminal or an IDE. A toast reads "Prompt copied".
+
+The first one **Nothing is sent until you press Send**: a managed agent runs with full permissions, so read what it is about to be asked first. Without a managed agent on this machine only Copy prompt is offered.
 
 When the agent is done, press **Check again**.
 

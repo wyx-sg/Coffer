@@ -3,7 +3,7 @@ import { useState, type ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { PILL_TRIGGER } from "@/components/activity/FilterPill";
+import { pillClass } from "@/components/filters/pillStyles";
 import { SearchInput } from "@/components/SearchInput";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { Modality } from "@/lib/api/providers";
@@ -48,10 +48,7 @@ export function ModelsToolbar({
       />
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <button
-            type="button"
-            className={cn(PILL_TRIGGER, "border-dashed", (chosen || open) && "bg-surface-selected")}
-          >
+          <button type="button" className={cn(pillClass(!!chosen, open), "px-2.5")}>
             <span className={cn(chosen && "text-text-muted")}>
               {chosen ? `${t("providers.models.typeFilter")}:` : t("providers.models.typeFilter")}
             </span>

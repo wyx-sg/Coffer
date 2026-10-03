@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Archive, ArchiveRestore, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { BulkBar } from "@/components/DataTableSelection";
+import { ListSelectionBar } from "@/components/ListSelectionBar";
 import { TableActionButton } from "@/components/table/TableActionButton";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { Conversation } from "@/lib/api/chat";
@@ -18,11 +18,13 @@ const TITLES_SHOWN = 3;
 interface Props {
   selected: Conversation[];
   archivedView: boolean;
+  /** How many conversations the filters show. */
+  total: number;
   /** Drops the selection (after a run that finished, or on Clear). */
   onClear: () => void;
 }
 
-export function ConversationsBulkBar({ selected, archivedView, onClear }: Props) {
+export function ConversationsBulkBar({ selected, archivedView, total, onClear }: Props) {
   const { t } = useTranslation();
   const batch = useConversationBatch();
   const [confirming, setConfirming] = useState(false);
@@ -41,10 +43,11 @@ export function ConversationsBulkBar({ selected, archivedView, onClear }: Props)
   };
 
   return (
-    <div role="region" aria-label={t("conversations.bulk.label")} aria-busy={batch.isPending}>
-      <BulkBar
-        label={t("conversations.bulk.selected", { count: selected.length })}
-        clearLabel={t("common.clear")}
+    <div aria-busy={batch.isPending}>
+      <ListSelectionBar
+        label={t("conversations.bulk.label")}
+        count={selected.length}
+        total={total}
         onClear={onClear}
       >
         <TableActionButton
@@ -62,7 +65,7 @@ export function ConversationsBulkBar({ selected, archivedView, onClear }: Props)
           disabled={batch.isPending}
           onClick={() => setConfirming(true)}
         />
-      </BulkBar>
+      </ListSelectionBar>
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}

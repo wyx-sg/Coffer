@@ -26,8 +26,8 @@ vi.mock("@/lib/hooks/useSync", () => ({
 }));
 
 // The four experimental features (knowledge, memory, sync, models) own five of
-// the fifteen entries. All are on unless a test says otherwise, so every other
-// assertion here is about the full fifteen.
+// the fourteen entries. All are on unless a test says otherwise, so every other
+// assertion here is about the full fourteen.
 const ALL_ON: Record<string, boolean> = {
   knowledge: true,
   memory: true,

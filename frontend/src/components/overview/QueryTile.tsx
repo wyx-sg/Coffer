@@ -2,8 +2,6 @@
 import type { UseQueryResult } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-import { Gauge } from "lucide-react";
-
 import { NAV_ENTRIES } from "@/lib/navigation";
 import type { Area } from "@/lib/overview/health";
 import { HealthTile, type TileContent } from "./HealthTile";
@@ -19,11 +17,7 @@ export function QueryTile<T>({
   content: (data: T) => TileContent;
 }) {
   const { t } = useTranslation();
-  // Usage is a tab of Model providers, so it has no sidebar entry of its own.
-  const entry =
-    area.id === "usage"
-      ? { labelKey: "providers.tabs.usage", icon: Gauge }
-      : NAV_ENTRIES.find((e) => e.to === area.to);
+  const entry = area.own ?? NAV_ENTRIES.find((e) => e.to === area.to);
   if (!entry) return null;
   const label = t(entry.labelKey);
   const state = query.isPending
@@ -35,7 +29,7 @@ export function QueryTile<T>({
     <HealthTile
       to={area.to}
       label={label}
-      area={area.to.slice(1)}
+      area={area.own?.key ?? area.to.slice(1)}
       icon={entry.icon}
       state={state}
     />

@@ -108,7 +108,7 @@ const agent = (
 
 function Where() {
   const location = useLocation();
-  return <output data-testid="where">{location.pathname}</output>;
+  return <output data-testid="where">{location.pathname + location.search}</output>;
 }
 
 function renderAt(path = "/model-providers") {
@@ -120,7 +120,6 @@ function renderAt(path = "/model-providers") {
       <QueryClientProvider client={qc}>
         <Routes>
           <Route path="/model-providers" element={<ModelProvidersPage />} />
-          <Route path="/model-providers/usage" element={<ModelProvidersPage />} />
           <Route path="/model-providers/:uid" element={<ModelProvidersPage />} />
           <Route path="/model-providers/:uid/:tab" element={<ModelProvidersPage />} />
           <Route path="*" element={null} />
@@ -217,28 +216,39 @@ describe("ModelProvidersPage", () => {
     },
   );
 
-  acceptance(
-    "provider-switching",
-    "Providers and Usage are two tabs under one header",
-    async () => {
-      serve([makeProvider({ name: "official" })]);
-      renderAt();
-      // The open provider is one column — Used by, Endpoint, Models — under the
-      // page header and its Providers | Usage tabs.
-      expect(await screen.findByRole("heading", { name: "Endpoint" })).toBeInTheDocument();
-      expect(screen.getByText("Experimental")).toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: "Providers" })).toHaveAttribute(
-        "data-state",
-        "active",
-      );
-      fireEvent.mouseDown(screen.getByRole("tab", { name: "Usage" }));
-      await waitFor(() => expect(where()).toBe("/model-providers/usage"));
-      expect(await screen.findByText("usage tab body")).toBeInTheDocument();
-      // The header, with its Add provider, is the same one on both tabs.
-      expect(screen.getByRole("button", { name: "Add provider" })).toBeInTheDocument();
-      expect(screen.queryByRole("heading", { name: "Endpoint" })).toBeNull();
-    },
-  );
+  acceptance("provider-switching", "the provider library has no tabs", async () => {
+    serve([makeProvider({ name: "official" })]);
+    renderAt();
+    // The open provider is one column — Used by, Endpoint, Models — and the
+    // only tab strip is the page header's Providers | Usage.
+    expect(await screen.findByRole("heading", { name: "Endpoint" })).toBeInTheDocument();
+    expect(screen.getAllByRole("tablist")).toHaveLength(1);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Providers", "Usage"]);
+  });
+
+  acceptance("provider-switching", "Usage is a tab of Model providers", async () => {
+    serve([makeProvider({ name: "official" })]);
+    renderAt();
+    expect(await screen.findByRole("heading", { name: "Model providers" })).toBeInTheDocument();
+    // The header names the feature as experimental and carries the primary
+    // button for both tabs.
+    expect(screen.getByText("Experimental")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Where your agents’ models come from, and what requests through Coffer cost.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Add provider/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Providers" })).toHaveAttribute("aria-selected", "true");
+    // Radix tabs switch on mousedown.
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Usage" }));
+    await waitFor(() => expect(where()).toBe("/model-providers?tab=usage"));
+    expect(await screen.findByText("usage tab body")).toBeInTheDocument();
+    // The header, with its Add provider, is the same one on both tabs.
+    expect(screen.getByRole("button", { name: /Add provider/ })).toBeInTheDocument();
+    expect(screen.getByText("Experimental")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Endpoint" })).toBeNull();
+  });
 
   test("?provider= opens that provider and hands ?model= to its Models search", async () => {
     serve([
@@ -246,7 +256,7 @@ describe("ModelProvidersPage", () => {
       makeProvider({ name: "agnes", protocol: "openai" }),
     ]);
     renderAt(`/model-providers?provider=${UIDS.agnes}&model=gpt-9`);
-    await waitFor(() => expect(where()).toBe(`/model-providers/${UIDS.agnes}`));
+    await waitFor(() => expect(where()).toBe(`/model-providers/${UIDS.agnes}?model=gpt-9`));
     await waitFor(() => expect(rowFor("agnes")).toHaveAttribute("aria-current", "page"));
   });
 

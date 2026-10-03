@@ -217,10 +217,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # The Usage page (ADR usage-is-metered-at-the-proxy-and-subscriptions-show-
     # only-official-quota): the bare group is the summary (GET /usage/summary,
     # or /usage/export.csv with --csv); `requests` is GET /usage/requests;
-    # `quota` is GET /usage/quota (POST /usage/quota/refresh with --refresh);
-    # `statusline` is the opt-in Claude Code statusLine wrapper that posts to
-    # /usage/quota/statusline and chains the user's own command.
-    "usage": {"requests", "quota", "statusline"},
+    "usage": {"requests"},
     # The local model proxy (spec provider-switching "Authenticate each agent
     # to the proxy with its own local token"): `token` is GET
     # /proxy/tokens/{uid} — what both agents' projected config runs — `rotate`
@@ -369,6 +366,7 @@ _FILE_ROUTES_WITH_A_COMMAND: dict[str, str] = {
     # A stopped sync round's files: answered and hand-merged from the CLI too.
     "POST /sync/stop/files/answer": "sync resolve",
     "POST /sync/stop/files/editor": "sync edit",
+    "POST /sync/stop/files/discard": "sync edit",
     "GET /sync/stop/files/versions": "sync conflicts",
     # A plugin's skill folder lives in the plugin cache; `agent plugin show`
     # says where, and its files are read with ordinary file tools.

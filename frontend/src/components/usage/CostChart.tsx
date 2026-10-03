@@ -1,10 +1,10 @@
-// src/components/usage/CostChart.tsx — "Cost per day": one `data`-colored bar per local day of the range, today's lighter.
+// src/components/usage/CostChart.tsx — "Cost per day": one data-colour bar per local day of the range, today's lighter.
 //
 // A single series, so no legend box beyond "Today, so far" (today's bar is
 // partial). Bars sit on the baseline with rounded tops and a 2px gap; each one
 // is focusable and names its day and cost in a tooltip. Only a sample of days
-// is labelled on the axis so a 30-day range does not collide. The By day tab
-// below is the table view of the same numbers.
+// is labelled on the axis so a 30-day range does not collide. The By day view
+// below is the table of the same numbers.
 import { useTranslation } from "react-i18next";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -30,13 +30,13 @@ export function CostChart({ byDay }: { byDay: UsageSummary }) {
   const digits = step >= 1 ? 0 : 2;
   const every = Math.ceil(days.length / MAX_AXIS_LABELS);
   const labelled = (i: number) => days.length <= MAX_AXIS_LABELS || i % every === 0;
-  const dayName = (d: (typeof days)[number], style: "short" | "long") =>
+  const dayName = (d: (typeof days)[number], style: "short" | "month") =>
     d.today ? t("usage.chart.todayShort") : formatDay(parseDay(d.day), lang, style);
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div className="flex items-center gap-2">
-        <span className="text-[13px] font-semibold text-text">{t("usage.chart.title")}</span>
+        <span className="text-xs font-semibold text-text-muted">{t("usage.chart.title")}</span>
         {days.some((d) => d.today) ? (
           <span className="ml-auto inline-flex items-center gap-1.5 text-2xs text-text-muted">
             <span aria-hidden className="size-2 rounded-xs bg-data/50" />
@@ -46,7 +46,7 @@ export function CostChart({ byDay }: { byDay: UsageSummary }) {
       </div>
       <figure aria-label={t("usage.chart.title")} className="m-0 flex min-w-0 flex-col gap-1.5">
         <div className="flex gap-2.5">
-          <div className="relative h-36 w-9 shrink-0" aria-hidden>
+          <div className="relative h-28 w-9 shrink-0" aria-hidden>
             {ticks.map((v) => (
               <span
                 key={v}
@@ -58,7 +58,7 @@ export function CostChart({ byDay }: { byDay: UsageSummary }) {
               </span>
             ))}
           </div>
-          <div className="relative h-36 flex-1">
+          <div className="relative h-28 flex-1">
             {ticks.map((v) => (
               <div
                 key={v}
@@ -110,7 +110,7 @@ export function CostChart({ byDay }: { byDay: UsageSummary }) {
               key={d.day}
               className="min-w-0 flex-1 overflow-visible whitespace-nowrap text-center text-2xs text-text-muted"
             >
-              {labelled(i) ? dayName(d, days.length <= MAX_AXIS_LABELS ? "short" : "long") : ""}
+              {labelled(i) ? dayName(d, days.length <= MAX_AXIS_LABELS ? "short" : "month") : ""}
             </span>
           ))}
         </div>

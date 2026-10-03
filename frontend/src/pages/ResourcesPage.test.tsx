@@ -305,7 +305,7 @@ describe("ResourcesPage", () => {
     });
     renderAt();
     const choose = async (name: string) => {
-      fireEvent.keyDown(screen.getByRole("combobox", { name: "Reach" }), { key: "ArrowDown" });
+      fireEvent.click(screen.getByRole("button", { name: /^Reach/ }));
       fireEvent.click(await screen.findByRole("option", { name }));
     };
     await choose("Only selected agents");

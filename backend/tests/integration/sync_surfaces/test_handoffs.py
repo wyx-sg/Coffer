@@ -1,7 +1,7 @@
-"""The chores sync hands to the person's agent (spec vault-sync "Hand a
-conflict's merge to an agent", "Hand a remote's failure to an agent"): the
-prompt a stopped round, a refused push and a missing git carry, what it may
-and may not contain, and "I merged it"."""
+"""The chores sync hands to the person's agent (spec vault-sync "Hand
+conflicting files to an agent", "Hand a remote's failure to an agent"): the
+prompt a stopped round, a refused push and a missing git carry, and what it may
+and may not contain. The merge itself is in ``test_agent_merge``."""
 
 from __future__ import annotations
 
@@ -26,44 +26,6 @@ def _conflict(mac: Box, mini: Box) -> None:
     mac.put(DOC, "Mac rotates on Mondays.\n")
     mac.round()
     mini.put(DOC, "Mini rotates on Fridays.\n")
-
-
-@pytest.mark.acceptance(
-    spec="vault-sync",
-    scenario="a conflict's merge is handed to an agent and recorded with I merged it",
-)
-def test_a_stopped_round_hands_its_merge_to_an_agent(pair: tuple[Box, Box]) -> None:
-    mac, mini = pair
-    _conflict(mac, mini)
-    with client_for(mini) as c:
-        assert c.post("/sync/run").json()["status"] == "stopped"
-        stopped = c.get("/sync/stop").json()["round"]
-        (f,) = stopped["files"]
-        assert f["agent_merge"] is True and f["secret"] is False
-        prompt = stopped["handoff"]["prompt"]
-        vault = str(mini.repo.root)
-        assert vault in prompt and DOC in prompt
-        assert stopped["local"] in prompt and stopped["remote"] in prompt
-        assert f"git -C {vault} diff" in prompt
-        assert "coffer sync resolve --merged" in prompt and "coffer sync continue" in prompt
-        assert "do not edit the vault's own files" in prompt
-        # The marked-up copy the prompt names is the one "Open in editor" opens.
-        copy = Path(c.post("/sync/stop/files/editor", json={"path": DOC}).json()["editor_path"])
-        assert str(copy) in prompt and b"<<<<<<<" in copy.read_bytes()
-
-        refused = c.post("/sync/stop/merged")
-        assert refused.status_code == 422
-        assert refused.json()["error"]["code"] == "SYNC_CONFLICT_MARKERS_LEFT"
-        assert c.get("/sync/stop").json()["round"]["unanswered"] == 1
-
-        copy.write_text("Both rotate: Mac on Mondays, Mini on Fridays.\n")
-        versions = c.get("/sync/stop/files/versions", params={"path": DOC}).json()
-        assert versions["edited"] == "Both rotate: Mac on Mondays, Mini on Fridays.\n"
-        merged = c.post("/sync/stop/merged").json()
-        assert merged["round"]["unanswered"] == 0
-        assert merged["round"]["files"][0]["answer"] == "edited"
-        assert c.post("/sync/continue").json()["status"] in ("pushed", "pulled_and_pushed")
-    assert mini.disk(DOC) == b"Both rotate: Mac on Mondays, Mini on Fridays.\n"
 
 
 def _with_secret_conflict(box: Box) -> None:
@@ -96,13 +58,15 @@ def test_a_secret_file_in_conflict_is_never_handed_to_an_agent(pair: tuple[Box, 
         assert c.post("/sync/stop/files/answer", json={"path": DOC, "answer": "mine"}).is_success
         stopped = c.get("/sync/stop").json()["round"]
         (f,) = [f for f in stopped["files"] if f["path"] == SECRET_FILE]
-        assert (f["secret"], f["agent_merge"]) == (True, False)
-        assert "ciphertext" not in (stopped["handoff"] or {}).get("prompt", "")
+        assert (f["secret"], f["agent_mergeable"]) == (True, False)
         editor = c.post("/sync/stop/files/editor", json={"path": SECRET_FILE})
         assert editor.json()["error"]["code"] == "SYNC_SECRET_NOT_EDITABLE"
         edited = c.post("/sync/stop/files/answer", json={"path": SECRET_FILE, "answer": "edited"})
         assert edited.json()["error"]["code"] == "SYNC_SECRET_NOT_EDITABLE"
-        assert c.post("/sync/stop/merged").status_code == 409, "nothing left for an agent"
+        nothing = c.post("/sync/stop/handoff", json={})
+        assert nothing.status_code == 409, "nothing left for an agent"
+        by_path = c.post("/sync/stop/handoff", json={"paths": [SECRET_FILE]})
+        assert by_path.json()["error"]["code"] == "SYNC_SECRET_NOT_EDITABLE"
         kept = c.post("/sync/stop/files/answer", json={"path": SECRET_FILE, "answer": "theirs"})
         assert kept.json()["round"]["unanswered"] == 0
 

@@ -155,7 +155,7 @@ def include_all_routers(app: FastAPI) -> None:
         model_switch_router,  # spec provider-switching: review + apply a model change
         provider_router,  # spec provider-switching
         proxy_router,  # spec provider-switching (the local model proxy)
-        usage_router,  # spec provider-switching (usage metering + subscription quota)
+        usage_router,  # spec provider-switching (usage metering)
     )
     for router in routers:
         _include(app, router)

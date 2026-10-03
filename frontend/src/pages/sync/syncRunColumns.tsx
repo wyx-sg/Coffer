@@ -1,34 +1,31 @@
 // frontend/src/pages/sync/syncRunColumns.tsx
 //
-// The Rounds table's columns (6.5.01): when a round finished, how it ended
-// (a dot and a word, then the clause that tells it apart), how many files it
-// pulled and pushed, the commits it moved the vault between, and Roll back on
-// the rounds that can be rolled back. Pulled and pushed are two columns and
-// not one, because they are different facts: a machine that pushes every
-// round and pulls nothing is the one everybody else is following.
+// The Rounds table's columns (6.4.01): when a round finished, how it ended
+// (a dot and a word, then the clause that tells it apart), and how many files
+// it pulled and pushed. Pulled and pushed are two columns and not one, because
+// they are different facts: a machine that pushes every round and pulls nothing
+// is the one everybody else is following. There is no Commits column and no
+// Roll back on a row — the commits are in the round's drawer, and so is the
+// only Roll back.
 //
 // A folded row states its outcome once with its count ("Nothing to do ×6")
 // and its span in the When column; it moved nothing by construction, so its
 // number cells stay empty.
 import type { TFunction } from "i18next";
-import { Undo2 } from "lucide-react";
 
 import type { Column } from "@/components/DataTable";
-import { TableActionButton } from "@/components/table/TableActionButton";
 import type { SyncRound } from "@/lib/api/sync";
 import { SyncRoundOutcome as Outcome } from "./SyncRoundOutcome";
-import { canRollBack } from "./syncRowActions";
-import { commitsCell, movedCells, outcomeLabel, roundLabel } from "./syncRoundLabel";
+import { movedCells, outcomeLabel, roundLabel } from "./syncRoundLabel";
 import { groupSpan, type SyncRunRow } from "./syncRunRows";
 import { dayTime, daySpan } from "./syncTime";
 
 interface Context {
   runs: SyncRound[];
   nextRoundAt: string | null;
-  onRollback: (run: SyncRound & { id: number }) => void;
 }
 
-const NUM = "w-16 whitespace-nowrap font-mono text-xs text-text-muted";
+const NUM = "w-20 whitespace-nowrap text-right text-xs text-text-muted";
 
 export function syncRunColumns(t: TFunction, ctx: Context): Column<SyncRunRow>[] {
   const newestId = (() => {
@@ -84,25 +81,6 @@ export function syncRunColumns(t: TFunction, ctx: Context): Column<SyncRunRow>[]
       header: t("sync.rounds.columns.pushed"),
       className: NUM,
       cell: (row) => (row.kind === "run" ? movedCells(row.run).pushed : null),
-    },
-    {
-      key: "commits",
-      header: t("sync.rounds.columns.commits"),
-      className: "w-40 whitespace-nowrap font-mono text-xs text-text-muted",
-      cell: (row) => (row.kind === "run" ? commitsCell(row.run) : null),
-    },
-    {
-      key: "actions",
-      header: "",
-      className: "w-28 text-right",
-      cell: (row) =>
-        row.kind === "run" && canRollBack(row.run) ? (
-          <TableActionButton
-            icon={Undo2}
-            label={t("sync.rollback.action")}
-            onClick={() => ctx.onRollback(row.run as SyncRound & { id: number })}
-          />
-        ) : null,
     },
   ];
 }

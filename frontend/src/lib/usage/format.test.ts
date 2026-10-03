@@ -46,10 +46,10 @@ describe("formatCount and formatCost", () => {
 
 describe("dates and times", () => {
   const at = new Date(2026, 8, 23, 14, 2);
-  test("days read day-first in English", () => {
+  test("days read month-first in English", () => {
     expect(formatDay(at, "en", "short")).toBe("Wed 23");
-    expect(formatDay(at, "en", "long")).toBe("Wed 23 Sep");
-    expect(formatDay(at, "en", "date")).toBe("23 Sep 2026");
+    expect(formatDay(at, "en", "long")).toBe("Wed Sep 23");
+    expect(formatDay(at, "en", "month")).toBe("Sep 23");
   });
   test("durations split into days, hours and minutes", () => {
     expect(splitDuration((2 * 60 + 24) * 60_000)).toEqual({ days: 0, hours: 2, minutes: 24 });

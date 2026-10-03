@@ -189,13 +189,13 @@ describe("CommandPalette", () => {
     renderPalette();
     await settled();
     // Their pages are not listed, and nothing of theirs is asked for: no
-    // provider, knowledge, memory, sync or usage list is read.
+    // provider, knowledge, memory or sync list is read.
     for (const name of ["Model providers", "Knowledge", "Memory", "Sync"]) {
       type(name);
       expect(options()).toEqual([]);
     }
     const asked = call.mock.calls.map(([path]) => path as string);
-    expect(asked.filter((p) => /^\/(providers|knowledge|memory|sync|usage)/.test(p))).toEqual([]);
+    expect(asked.filter((p) => /^\/(providers|knowledge|memory|sync)/.test(p))).toEqual([]);
     const kinds = api.GET.mock.calls
       .filter(([path]) => path === "/resources")
       .map(([, init]) => (init as { params: { query: { kind?: string } } }).params.query.kind);

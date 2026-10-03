@@ -44,16 +44,17 @@ export function allUnpriced(totals: { requests: number; unpriced_requests: numbe
 }
 
 /**
- * A local day for display. `short` is the chart's axis ("Wed 23"), `long` the
- * tooltip and table ("Wed 23 Sep"), `date` a picker field ("1 Sep 2026").
+ * A local day for display. `short` is the chart's axis for a short range
+ * ("Wed 23"), `long` the table and tooltip ("Wed Sep 23"), `month` the axis of
+ * a long range ("Sep 23").
  */
-export function formatDay(day: Date, lang: string, style: "short" | "long" | "date"): string {
+export function formatDay(day: Date, lang: string, style: "short" | "long" | "month"): string {
   const options: Intl.DateTimeFormatOptions =
     style === "short"
       ? { weekday: "short", day: "numeric" }
       : style === "long"
         ? { weekday: "short", day: "numeric", month: "short" }
-        : { day: "numeric", month: "short", year: "numeric" };
+        : { day: "numeric", month: "short" };
   const fmt = new Intl.DateTimeFormat(intlLocale(lang), options);
   if (lang.startsWith("zh")) return fmt.format(day);
   const part = Object.fromEntries(fmt.formatToParts(day).map((p) => [p.type, p.value]));
@@ -61,8 +62,8 @@ export function formatDay(day: Date, lang: string, style: "short" | "long" | "da
     style === "short"
       ? [part.weekday, part.day]
       : style === "long"
-        ? [part.weekday, part.day, part.month]
-        : [part.day, part.month, part.year];
+        ? [part.weekday, part.month, part.day]
+        : [part.month, part.day];
   return order.join(" ");
 }
 

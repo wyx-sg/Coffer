@@ -53,11 +53,11 @@ describe("syncState", () => {
     expect(syncState(makeStatus()).kind).toBe("in_sync");
   });
 
-  test("the header's action per state", () => {
-    expect(primaryAction("unreachable").label).toBe("tryAgain");
-    expect(primaryAction("auth_failed").label).toBe("tryAgain");
-    expect(primaryAction("push_failed")).toEqual({ label: "syncNow", disabled: false });
-    expect(primaryAction("syncing")).toEqual({ label: "syncing", disabled: true });
+  test("the header's action is always Sync now, disabled while syncing or stopped", () => {
+    expect(primaryAction("unreachable")).toEqual({ syncing: false, disabled: false });
+    expect(primaryAction("auth_failed")).toEqual({ syncing: false, disabled: false });
+    expect(primaryAction("push_failed")).toEqual({ syncing: false, disabled: false });
+    expect(primaryAction("syncing")).toEqual({ syncing: true, disabled: true });
     expect(primaryAction("conflicts").disabled).toBe(true);
   });
 });

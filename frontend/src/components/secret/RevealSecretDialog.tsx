@@ -3,7 +3,7 @@
 // A warning first (anyone who can see the screen can read it; it shows for
 // 30 seconds; the reveal is recorded in Activity), then the desktop app's
 // presence check (Touch ID or the login password), then the value with Copy
-// and Hide and a countdown. When the time runs out, or the dialog closes, the
+// and a countdown ("Hides in 24 s · Recorded in Activity"); Done closes it. When the time runs out, or the dialog closes, the
 // value is dropped (spec secret "Release plaintext only to a present
 // human in the desktop app"). The menu never opens this in a browser.
 import { useEffect, useState } from "react";
@@ -24,12 +24,22 @@ import type { SecretRef } from "@/lib/api/secret";
 import { translateApiError } from "@/lib/api/errors";
 import { useRevealSecret } from "@/lib/hooks/useSecrets";
 import { toneTextClass } from "@/lib/statusColors";
-import { cn, formatDateTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { displayName } from "./secretRows";
 import { shortDate } from "./secretTimes";
 
 /** How long a revealed value stays on screen. */
 const REVEAL_SECONDS = 30;
+
+/** "14:40:12", local time. */
+const clock = (iso: string | null) =>
+  iso
+    ? new Date(iso).toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    : "";
 
 interface Props {
   row: SecretRef | null;
@@ -80,13 +90,13 @@ export function RevealSecretDialog({ row, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(next) => !reveal.isPending && onOpenChange(next)}>
-      <DialogContent className="max-w-[480px]">
+      <DialogContent className="max-w-[420px]">
         {value !== undefined ? (
           <>
             <DialogHeader>
               <DialogTitle className="font-mono">{name}</DialogTitle>
               <DialogDescription>
-                {t("secrets.reveal.revealedAt", { time: formatDateTime(revealedAt ?? "") })}
+                {t("secrets.reveal.revealedAt", { time: clock(revealedAt) })}
               </DialogDescription>
             </DialogHeader>
             <div className="flex items-center gap-2">
@@ -98,9 +108,6 @@ export function RevealSecretDialog({ row, onOpenChange }: Props) {
               </code>
               <Button variant="outline" size="sm" onClick={copy}>
                 {t("common.copy")}
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-                {t("secrets.reveal.hide")}
               </Button>
             </div>
             <p className="text-xs text-text-muted" aria-live="polite">
@@ -130,16 +137,12 @@ export function RevealSecretDialog({ row, onOpenChange }: Props) {
                 </p>
               </div>
             </div>
-            <dl className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
-              <dt className="text-text-muted">{t("secrets.replace.secret")}</dt>
-              <dd className="truncate font-mono text-text">{name}</dd>
-              {row.created_at ? (
-                <>
-                  <dt className="text-text-muted">{t("secrets.cols.created")}</dt>
-                  <dd className="text-text">{shortDate(row.created_at, i18n.language)}</dd>
-                </>
-              ) : null}
-            </dl>
+            {row.created_at ? (
+              <dl className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+                <dt className="text-text-muted">{t("secrets.cols.created")}</dt>
+                <dd className="text-text">{shortDate(row.created_at, i18n.language)}</dd>
+              </dl>
+            ) : null}
             {reveal.error ? (
               <p role="alert" className="text-xs text-danger">
                 {translateApiError(t, reveal.error)}

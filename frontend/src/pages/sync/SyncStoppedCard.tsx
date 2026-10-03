@@ -2,71 +2,47 @@
 //
 // What a stopped round is waiting on, on the Status tab between the area
 // tiles and the Rounds table (spec vault-sync). A round stopped on conflicts
-// lists the files both Macs changed (6.5.05); a round the deletion breaker
+// lists the files both Macs changed (6.4.05); a round the deletion breaker
 // held lists the folders it would delete from, with each folder's share
-// (6.5.08). Every row opens the sub-view that answers it — Resolve conflicts
+// (6.4.09). Every row opens the sub-view that answers it — Resolve conflicts
 // at that file, or Review held deletions. The status banner above the tiles
 // carries the explanation and the page's button; this card is the list.
 //
 // Gated on the status the page already polls, so the stop is fetched only
 // while the status says a round is stopped.
-import { FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
-import { StatusPill } from "@/components/status/StatusPill";
 import type { StoppedRound, SyncHold } from "@/lib/api/sync";
 import { useSyncStatus } from "@/lib/hooks/useSync";
-import { Section } from "@/components/Section";
 import { useSyncStop } from "@/lib/hooks/useSyncStop";
-import { areaLabel, clock, otherMachine, share } from "./syncConflictFormat";
+import { SyncDifferRows } from "./SyncDifferRows";
+import { share } from "./syncConflictFormat";
 
 const CARD = "overflow-hidden rounded-xl border border-border bg-surface-raised";
 const ROW_LINK =
   "flex min-w-0 items-center gap-2.5 px-3.5 transition-colors duration-fast hover:bg-surface-hover";
 
 function ConflictsCard({ round }: { round: StoppedRound }) {
-  const { t, i18n } = useTranslation();
-  const locale = i18n.language;
+  const { t } = useTranslation();
   return (
-    <Section
-      title={t("sync.conflicts.title")}
-      gap="tight"
-      labelled
-      testId="sync-conflicts"
-      className={`${CARD} [&>div:first-child]:px-3.5`}
+    <section
+      className="flex flex-col gap-2.5"
+      data-testid="sync-conflicts"
+      aria-label={t("sync.conflicts.title")}
     >
-      <ul>
-        {round.files.map((file) => (
-          <li key={file.path} className="border-t border-border-subtle">
-            <Link
-              to={`/sync/conflicts?path=${encodeURIComponent(file.path)}`}
-              className={`${ROW_LINK} min-h-11 py-1.5`}
-              data-testid={`conflict-${file.path}`}
-            >
-              <FileText className="size-3.5 shrink-0 text-text-subtle" aria-hidden />
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate font-mono text-xs text-text">{file.path}</span>
-                <span className="text-xs text-text-muted">
-                  {t("sync.conflicts.row", {
-                    area: areaLabel(t, file.area),
-                    mine: clock(file.ours_time, locale),
-                    machine: otherMachine(t, file),
-                    theirs: clock(file.theirs_time, locale),
-                  })}
-                </span>
-              </span>
-              <StatusPill
-                tone={file.answer ? "ok" : "err"}
-                className="ml-auto h-5 rounded-sm px-[7px] text-2xs font-label"
-              >
-                {file.answer ? t("sync.conflicts.resolved") : t("sync.conflicts.unresolved")}
-              </StatusPill>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </Section>
+      <h2 className="text-md font-semibold text-text">{t("sync.conflicts.title")}</h2>
+      <SyncDifferRows
+        files={round.files}
+        href={(file) => `/sync/conflicts?path=${encodeURIComponent(file.path)}`}
+        status={(file) =>
+          file.answer
+            ? { tone: "ok", label: t("sync.conflicts.resolved") }
+            : { tone: "err", label: t("sync.conflicts.unresolved") }
+        }
+        testId={(file) => `conflict-${file.path}`}
+      />
+    </section>
   );
 }
 

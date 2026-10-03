@@ -1,17 +1,17 @@
 ---
 title: Usage
-description: What your agents spent on API-key and local providers, by model, agent or day — the Usage tab of Model providers and the coffer usage command — and, on the command line, how much of a subscription's allowance is left.
+description: What your agents spent on API-key and local providers, by model, agent or day — the Usage tab of Model providers and the coffer usage command.
 ---
 
 # Usage
 
-Usage is the second tab of **Model providers**, at `/model-providers/usage`. It answers one question: what did the requests your agents sent through an API-key or local provider cost? An agent on a provider pays per token, and Coffer counts every request it makes, because every such request goes through the [local model proxy](/architecture/model-proxy). Agents on their own subscription login never pass through Coffer, so they do not appear here.
+Usage is the second tab of **Model providers**, at `/model-providers?tab=usage`. It answers one question: what did the requests your agents sent through an API-key or local provider cost? An agent on a provider pays per token, and Coffer counts every request it makes, because every such request goes through the [local model proxy](/architecture/model-proxy). Agents on their own subscription login never pass through Coffer, so they do not appear here.
 
 ## The Usage tab
 
 Open **Model providers** and choose **Usage** beside **Providers**. The page header — the title, the **Experimental** tag and **Add provider** — is the same one the Providers tab has. There is no Usage entry in the sidebar.
 
-- The filter row starts with the **time range** — **Today**, **Last 7 days** (the default), **Last 30 days**, **This month** or **Custom range…**, picked as dates; the picker notes the first day that still has per-request detail, since older days keep only their daily totals, which the page still reports. Next come **Agent** and **Provider**, which narrow everything below to one agent and one provider, and **Export CSV** at the right, which downloads exactly the range, filters and breakdown you are looking at — the same file `coffer usage --csv` writes with the same options. The range, the filters and the breakdown are part of the page's address, so a refresh, a bookmark or Back keeps them. There is no Refresh button: the numbers are Coffer's own.
+- The filter row starts with the **time range** — **Today**, **Last 7 days** (the default), **Last 30 days**, **This month** or **Custom range…**, picked as dates on a calendar that reaches up to 90 days back; the picker notes the first day that still has per-request detail, since older days keep only their daily totals, which the page still reports. Next come **Agent** and **Provider**, which narrow everything below to one agent and one provider, and **Export CSV** at the right, which downloads exactly the range, filters and breakdown you are looking at — the same file `coffer usage --csv` writes with the same options. The range, the filters and the breakdown are part of the page's address, so a refresh, a bookmark or Back keeps them. There is no Refresh button: the numbers are Coffer's own.
 - Five figures sum up the range: **Cost (estimated)** — its help tip says how the estimate is worked out — with the request count, **Input** (uncached), **Output** (reasoning included), **Cache read** and **Cache write** (a category only Anthropic's wire reports). If some models have no price, **1 model unpriced** appears once, in the Cost figure, as a link to that model on its provider, where you set one; nothing else on the page repeats it.
 - **Cost per day** draws one bar per day of the range; hover a bar for its day and cost. Today's bar is lighter because the day is not over.
 - The table breaks the range down **By model** (with the provider that served it, and the agents that used it), **By agent** or **By day** (newest first; the latest week shows first and **Show all** lists the rest), and ends with a Total row — the cost of the priced models. A model with no price reads **—** — never $0.00 — and its tooltip says why and where to set one; a cost marked `*` leaves out some unpriced requests, and a request count marked `*` includes requests whose usage never arrived. Hover the marker for the count.
@@ -33,7 +33,7 @@ A response cut off before its final usage event is counted with usage **unknown*
 
 Only traffic through the proxy is counted. Requests another tool made with the same key, or an agent made before it was switched onto the provider, are not.
 
-### Reading it
+## Reading it
 
 ```sh
 coffer usage                          # today, by model
@@ -47,7 +47,7 @@ coffer usage requests --limit 20      # the latest requests, newest first
 
 Ranges are local days: **today**, **7d** and **30d** (both including today), **month** (this calendar month) and **custom** (both ends inclusive). A row per model names the provider that served it; every row lists the agents that sent its requests, most first. `--agent` takes an agent type (`claude_code`, `codex`) and `--provider` a provider's name; over REST they are the `agent_type` and `connection_uid` query parameters of the summary and the CSV. The REST routes are `GET /api/v1/usage/summary`, `GET /api/v1/usage/requests` and `GET /api/v1/usage/export.csv`.
 
-### Cost
+## Cost
 
 Cost is an **estimate**, worked out per model and per token category:
 
@@ -56,45 +56,9 @@ Cost is an **estimate**, worked out per model and per token category:
 - A model no source prices is marked **unpriced** and counted separately — never costed at zero. Its cost reads `—` on the tab and in `coffer usage` until you set a price on the provider.
 - Each request's cost is stored with the price it was costed with, so a later price list never rewrites history.
 
-### How long it is kept
+## How long it is kept
 
 Per-request rows are kept as long as the MCP invocation log (30 days by default; change it with `coffer config set retention.mcp_invocations <days>`). Daily totals are kept for a year.
-
-## Subscription quota
-
-The web UI shows no subscription quota. Coffer can still read the vendor's own remaining allowance for an agent on its own login, from the command line and the REST API (`GET /api/v1/usage/quota`):
-
-```sh
-coffer usage quota            # the latest windows per agent, with when they were seen
-coffer usage quota --refresh  # ask Codex now
-```
-
-Every value is shown **as of** the moment its source produced it. With no fresh value there is no number: Coffer says when it last saw one, or that it has not. A window whose reset time has passed shows no number.
-
-### Codex
-
-Coffer asks Codex's own `codex app-server` (`account/rateLimits/read`), the same source Codex's `/status` uses. It reads when you ask, and in the background at most every five minutes while a Codex agent is on its own login; a manual refresh is allowed at most every 30 seconds. Sessions Coffer drives also push updates as they happen. Each window shows its used percentage, its length and when it resets.
-
-### Claude Code
-
-Claude Code reports its quota in the sessions Coffer drives ([chat](/guides/chat) and [channel](/guides/channels) turns): each `rate_limit_event` updates the five-hour and weekly windows. A Claude Code agent you only ever use from your own terminal therefore shows nothing — unless you opt in to the statusline wrapper below.
-
-Coffer never reads Claude Code's or Codex's login token and never calls an undocumented usage endpoint: Anthropic's terms forbid other tools from collecting a claude.ai token, and the numbers above come without one.
-
-### Opt-in: Claude Code's statusline
-
-Claude Code passes a statusline command the documented `rate_limits` object on every refresh. `coffer usage statusline` forwards it to Coffer and then runs your own statusline command with the same input, printing its output — so your statusline keeps working, even when the daemon is down. Coffer never installs it and nothing in it edits your settings for you. While Claude Code has no reading, `coffer usage quota --prompt` prints a prompt for your agent: it names your Claude Code agent's `settings.json`, asks the agent to wrap your current `statusLine.command` as `coffer usage statusline -- '<it>'` (or add one that runs `coffer usage statusline` alone) and to show you the diff before saving. To do it yourself, set it in `~/.claude/settings.json` (or the config folder your Claude Code agent uses):
-
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "coffer usage statusline -- ~/.claude/my-statusline.sh"
-  }
-}
-```
-
-With no command after `--` it prints nothing. It waits at most a second for the daemon and never starts one.
 
 ## Related
 

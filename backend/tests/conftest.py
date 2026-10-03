@@ -54,9 +54,6 @@ os.environ.setdefault("COFFER_LOG_DIR", str(_TEST_LOG_DIR))
 # of the proxy and its supervisor build their own; everything else runs
 # without one (``surfaces/http/model_proxy_wiring.AUTOSTART_ENV``).
 os.environ.setdefault("COFFER_MODEL_PROXY", "off")
-# Same reason for the background Codex quota read, which spawns a short-lived
-# ``codex app-server`` (``surfaces/http/usage_wiring.QUOTA_POLL_ENV``).
-os.environ.setdefault("COFFER_QUOTA_POLL", "off")
 # The daily price-list refresh fetches genai-prices over the network
 # (``infrastructure/usage/price_refresh.REFRESH_ENV``); tests price from the
 # snapshot in the tree.

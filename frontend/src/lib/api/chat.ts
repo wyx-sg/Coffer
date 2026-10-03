@@ -49,9 +49,6 @@ export type ChannelPlatform = NonNullable<Schemas["ChannelBindingOut"]["platform
 
 export type ConversationListOut = Schemas["ConversationListOut"];
 
-/** The outcome of a bulk archive / unarchive / delete: one result per id. */
-export type ConversationBatchResult = Schemas["ConversationBatchResultOut"];
-
 export type ConversationBatchAction = Schemas["ConversationBatchIn"]["action"];
 
 export type ConversationCreate = Schemas["ConversationCreate"];

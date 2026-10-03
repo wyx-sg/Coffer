@@ -4,6 +4,7 @@
 // the attention items of its kinds — one source per fact, so a tile can never
 // say "All answering" beside a "Needs you" row about the same server.
 import type { TFunction } from "i18next";
+import { Gauge, type LucideIcon } from "lucide-react";
 
 import type { FeatureKey } from "@/lib/features";
 import type { AttentionItem } from "@/lib/hooks/useAttention";
@@ -27,6 +28,8 @@ export interface Area {
   id: AreaId;
   /** The area's page — also the key its sidebar entry (label, icon) is found by. */
   to: string;
+  /** For an area with no sidebar entry (Usage lives on a Model providers tab): its tile's name and icon, and the key a failed request is named by. */
+  own?: { labelKey: string; icon: LucideIcon; key: string };
   /** The attention kinds whose items count against this area. */
   kinds: readonly string[];
   /** The experimental feature the area belongs to; the tile is hidden while it is off. */
@@ -48,7 +51,13 @@ export const AREAS: readonly Area[] = [
   { id: "customTools", to: "/custom-tools", kinds: ["custom_tool"] },
   { id: "clis", to: "/clis", kinds: ["cli"] },
   { id: "secrets", to: "/secrets", kinds: [] },
-  { id: "usage", to: "/model-providers/usage", kinds: [], feature: "models" },
+  {
+    id: "usage",
+    to: "/model-providers?tab=usage",
+    own: { labelKey: "overview.health.usage.label", icon: Gauge, key: "usage" },
+    kinds: [],
+    feature: "models",
+  },
 ];
 
 /** Agent items that are only about connecting — the rest (a hook changed by

@@ -41,15 +41,13 @@ Chat), Resources (MCP servers, Skills, Knowledge, Memory, Model providers, Chann
 (Activity, Sync, Settings) — chosen so that "a new asset kind is one more Resources row and never
 a new group".
 
-The rebuild of the UI makes that promise expensive. Five entries arrive with it: **Overview**, the landing
+The rebuild of the UI makes that promise expensive. Four entries arrive with it: **Overview**, the landing
 page; **Secrets**, a page that lists every stored secret with what uses it, which the
 secret store has never had
 ([Standalone Secrets Are Named `coffer://secret/` References](standalone-secrets-are-named-references-injected-into-one-child.md)
-makes every stored secret listable with its reference count); and **Usage**, token use metered
-at the model proxy and the official remaining quota of subscription agents, which is in 1.0;
-**Custom tools**, HTTP APIs Coffer serves to agents as tools, imported from an OpenAPI document
+makes every stored secret listable with its reference count); **Custom tools**, HTTP APIs Coffer serves to agents as tools, imported from an OpenAPI document
 or defined by hand; and **CLIs**, the command-line tools skills require. One entry leaves: **Settings**
-becomes a modal opened from the sidebar footer (argued below). That is fifteen. The roadmap
+becomes a modal opened from the sidebar footer (argued below). That is fourteen. The roadmap
 after 1.0 already names three more entries, and several additions that must *not* become
 entries:
 
@@ -61,9 +59,9 @@ entries:
 | More agents; agentic development environments (ADEs) as delivery targets | rows on Agents |
 | More channels (IM transports) | rows on Channels |
 
-So the navigation has to hold about **eighteen entries** without being regrouped, and every
+So the navigation has to hold about **seventeen entries** without being regrouped, and every
 kind of growth that is "more of the same" has to land inside a page. The criterion every option
-below is measured against: **at ~18 entries, no group grows past ~5**. Five is where a group
+below is measured against: **at ~17 entries, no group grows past ~5**. Five is where a group
 heading still reads as one idea at a glance; past it, a group becomes a list the eye scans row by
 row, which is what grouping was meant to avoid.
 
@@ -86,8 +84,8 @@ contested while the rebuild was designed:
 
 ## Options Considered
 
-Entry counts below are *1.0* (15, with Overview, Secrets, Usage, Custom tools and CLIs, and
-Settings as a modal) → *at ~18* (with Workflows, Rules and Sources). Overview is ungrouped in every option, for the
+Entry counts below are *1.0* (14, with Overview, Secrets, Custom tools and CLIs, and
+Settings as a modal) → *at ~17* (with Workflows, Rules and Sources). Overview is ungrouped in every option, for the
 reason given under the Decision, and Settings is a modal in every option, for the reason given
 under the placement questions.
 
@@ -96,14 +94,14 @@ under the placement questions.
 Keep the three role groups of the eleven-entry sidebar — **Agents** (the consumers), **Resources**
 (the assets agents draw on, exactly one entry per resource kind with a list surface; a channel sits
 here as a credentialed transport the vault owns, a model provider as a vendor endpoint and its key)
-and **System** (cross-cutting tooling) — and add the new entries where its rule puts them: Secrets, Custom tools and CLIs as Resources rows, Usage under System,
+and **System** (cross-cutting tooling) — and add the new entries where its rule puts them: Secrets, Custom tools and CLIs as Resources rows,
 Workflows under Agents (a thing done with agents), Rules and Sources under Resources.
 
-| Group | 1.0 | At ~18 |
+| Group | 1.0 | At ~17 |
 | --- | --- | --- |
 | Agents | Agents, Chat (2) | + Workflows (3) |
 | Resources | MCP servers, Custom tools, Skills, CLIs, Knowledge, Memory, Model providers, Channels, Secrets (9) | + Rules, Sources (11) |
-| System | Activity, Usage, Sync (3) | 3 |
+| System | Activity, Sync (2) | 2 |
 
 Pros: no migration of the user's mental map; the rule that places an entry is one question
 ("consumer, asset or tooling?") and has never been hard to answer; a new asset kind is one more
@@ -121,11 +119,11 @@ Group what the user *does* by intent — a Run group (Conversations, Channels, l
 — and keep one Resources group for everything that is configured: Agents, Model providers, MCP
 servers, Custom tools, Skills, CLIs, Knowledge, Memory, Secrets.
 
-| Group | 1.0 | At ~18 |
+| Group | 1.0 | At ~17 |
 | --- | --- | --- |
 | Run | Conversations, Channels (2) | + Workflows (3) |
 | Resources | Agents, Model providers, MCP servers, Custom tools, Skills, CLIs, Knowledge, Memory, Secrets (9) | + Rules, Sources (11) |
-| System | Activity, Usage, Sync (3) | 3 |
+| System | Activity, Sync (2) | 2 |
 
 Pros: Conversations and Channels sit together, where a user looks for "talking to an agent"; three
 headings stay easy to learn. Cons: it moves the problem rather than solving it — Resources is
@@ -138,13 +136,13 @@ a list of the things agents use, the mislabelling a single-axis grouping (everyt
 Split the configured nouns by what the user comes to do with them, so every group is one
 intent:
 
-| Group | What the user comes to do | 1.0 | At ~18 |
+| Group | What the user comes to do | 1.0 | At ~17 |
 | --- | --- | --- | --- |
 | Agents | set up the agents and the models they run on | Agents, Model providers (2) | 2 |
 | Run | put an agent to work, directly or through an IM bot | Conversations, Channels (2) | + Workflows (3) |
 | Capabilities | give agents things they can do | MCP servers, Custom tools, Skills, CLIs (4) | + Rules, Sources (6) |
 | Context | give agents things they know | Knowledge, Memory (2) | 2 |
-| System | look after Coffer and what every part shares | Secrets, Activity, Usage, Sync (4) | 4 |
+| System | look after Coffer and what every part shares | Secrets, Activity, Sync (3) | 3 |
 
 The group is named **Run** rather than "Work": it is where an agent is set running — a
 conversation, from Coffer or from an IM bot, later a workflow and its runs — and "work" reads as the user's own job,
@@ -152,46 +150,46 @@ which every group serves.
 
 Pros: it passes the criterion at 1.0 — no group is over four — and the growth that is "more of
 the same" (more agents, ADE targets, more channels, another custom tool) adds rows inside
-Agents, Channels and Custom tools and no entry at all. At eighteen it is the only option that
+Agents, Channels and Custom tools and no entry at all. At seventeen it is the only option that
 misses by one group rather than by construction: Capabilities reaches six when both Rules and
 Sources land, which under the rules below makes that change revisit Capabilities instead of
 appending. Every heading is a word a user
 would say ("give Claude a new capability", "what context does it have"), not a framework term.
 Each planned entry already has an obvious home, which is the test of a grouping that will not
-be re-argued. Cons: five headings over fifteen entries means three groups of two at 1.0, so the
+be re-argued. Cons: five headings over fourteen entries means three groups of two at 1.0, so the
 sidebar carries more headings than it strictly needs until the planned entries land;
 Capabilities is the fullest group and is the one to split or trim when Rules and Sources arrive; the line
 between Capabilities and Context ("can do" against "knows") has to be learnt once, and a future
 kind that is both — a skill that is mostly reference text — is filed by its kind, not its
 content.
-**Wins**: it is the only grouping that meets the criterion at 1.0 and stays within one entry of it at eighteen while keeping every
+**Wins**: it is the only grouping that meets the criterion at 1.0 and stays within one entry of it at seventeen while keeping every
 heading a single intent; the cost is a few lines of heading until the groups fill.
 
 ### Option D — one flat list, ordered by how often each entry is used
 
-No headings: the fifteen entries in one list, most-used first (Conversations, Agents, Skills, MCP
+No headings: the fourteen entries in one list, most-used first (Conversations, Agents, Skills, MCP
 servers, …), Sync last.
 
-| Group | 1.0 | At ~18 |
+| Group | 1.0 | At ~17 |
 | --- | --- | --- |
-| (none) | 15 | 18 |
+| (none) | 14 | 17 |
 
-Pros: fewest pixels, no taxonomy to learn, the daily entries at the top. Cons: eighteen
+Pros: fewest pixels, no taxonomy to learn, the daily entries at the top. Cons: seventeen
 undifferentiated rows is well past what a person scans at a glance — the reason a flat list already
 stops being scannable at eleven. "Most used" differs per person (a channel operator lives on
 Channels; most people open it once) and shifts as features ship, so the order would either be
 re-argued with every entry or silently wrong for most users. A flat list also hides the
 distinctions the UI depends on: an agent is a consumer, a secret is shared infrastructure.
 Frequency is better served by the command palette and by Overview, both of which the same
-change adds. **Loses**: the criterion is failed by construction — one group of eighteen.
+change adds. **Loses**: the criterion is failed by construction — one group of seventeen.
 
 ### Option E — fewer entries, each a page with tabs
 
 Collapse the sidebar to six entries — Overview, Agents, Run, Capabilities, Context, System —
 each a page whose tabs are the entries (Capabilities › MCP servers | Custom tools | Skills |
-CLIs; System › Secrets | Activity | Usage | Sync).
+CLIs; System › Secrets | Activity | Sync).
 
-| Group | 1.0 | At ~18 |
+| Group | 1.0 | At ~17 |
 | --- | --- | --- |
 | (entries) | 6 | 6, with up to 6 tabs each |
 
@@ -202,7 +200,7 @@ own — so the user reads two tab strips to find one table, and an address becom
 sidebar shows them; attention dots would need a second rendering on tabs; and Conversations is a
 full-height workspace with its own conversation list that cannot sit as a tab beside Channels
 without giving up the screen it needs. It also merges pages with nothing in common but a heading
-(Secrets and Usage) under one page header. **Loses**: it meets the size criterion only by
+(Secrets and Activity) under one page header. **Loses**: it meets the size criterion only by
 moving the groups one level down, where they cost more to use.
 
 ### Placement questions, answered under C
@@ -256,8 +254,7 @@ entered where the thing that needs it is configured.
 the daemon, move the master key, set retention, see the version — and what it holds is about this machine, not
 about the vault's agents, capabilities or context. A sidebar row is the most visible place the
 product has; spending one on a page opened a few times a year puts it beside pages used every
-day, and with Usage in 1.0 it would fill System to five, the ceiling, before anything else
-arrives. Desktop applications have a settled convention for this: preferences open from a fixed
+day, and it would add a fourth row to System before anything else arrives. Desktop applications have a settled convention for this: preferences open from a fixed
 control and ⌘, into a window of their own (macOS apps' Settings, VS Code, Linear), and a user
 reaching for ⌘, looks nowhere else. So Settings opens from a labelled Settings row at the bottom of the sidebar, above
 the daemon status, and from ⌘,, as a large modal over the current page (spec web-ui "Open
@@ -289,14 +286,16 @@ The sidebar is grouped by what the person comes to do:
 - **Run** — put an agent to work, directly or through an IM bot: Conversations, Channels.
 - **Capabilities** — give agents things they can do: MCP servers, Custom tools, Skills, CLIs.
 - **Context** — give agents things they know: Knowledge, Memory.
-- **System** — look after Coffer and what every part shares: Secrets, Activity, Usage, Sync.
+- **System** — look after Coffer and what every part shares: Secrets, Activity, Sync.
+
+Usage is not an entry: what requests through Coffer cost is the **Usage** tab of Model providers, beside the providers those requests went through.
 - A labelled Settings row in the sidebar footer, above the daemon status, opens Settings as a
   modal (also on ⌘,); it is in no group.
 
 Fourteen entries with every experimental feature on; spec web-ui "Keep the sidebar to its fourteen
 entries" owns the list and the routes, and `NAV_GROUPS` in `frontend/src/lib/navigation.ts` is the
 one list the sidebar, the command palette and the Settings modal read. An entry whose experimental
-feature is switched off is left out; the four experimental features own Model providers, Usage,
+feature is switched off is left out; the four experimental features own Model providers (with its Usage tab),
 Knowledge, Memory and Sync, and Conversations and Channels are always there.
 
 Overview is ungrouped because it summarises every group; filing it under one would misname it,

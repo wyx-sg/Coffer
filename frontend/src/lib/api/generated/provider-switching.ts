@@ -470,57 +470,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/usage/quota": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Usage Quota */
-        get: operations["usage_quota_api_v1_usage_quota_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/usage/quota/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Usage Quota Refresh */
-        post: operations["usage_quota_refresh_api_v1_usage_quota_refresh_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/usage/quota/statusline": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Usage Quota Statusline */
-        post: operations["usage_quota_statusline_api_v1_usage_quota_statusline_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/usage/requests": {
         parameters: {
             query?: never;
@@ -579,20 +528,6 @@ export interface components {
             agent: string;
             agent_type: components["schemas"]["AgentType"];
             protocol: components["schemas"]["Protocol"];
-        };
-        /** AgentQuotaOut */
-        AgentQuotaOut: {
-            /** Agent Type */
-            agent_type: string;
-            handoff: components["schemas"]["HandoffOut"] | null;
-            /** Has Value */
-            has_value: boolean;
-            /** Last Observed At */
-            last_observed_at: string | null;
-            /** Plan */
-            plan: string | null;
-            /** Windows */
-            windows: components["schemas"]["QuotaWindowOut"][];
         };
         /**
          * AgentType
@@ -1210,62 +1145,11 @@ export interface components {
             /** Rotated */
             rotated: boolean;
         };
-        /** QuotaListOut */
-        QuotaListOut: {
-            /** Agents */
-            agents: components["schemas"]["AgentQuotaOut"][];
-        };
-        /** QuotaRefreshOut */
-        QuotaRefreshOut: {
-            /** Agents */
-            agents: components["schemas"]["AgentQuotaOut"][];
-            /** Reason */
-            reason: string | null;
-            /** Refreshed */
-            refreshed: boolean;
-        };
-        /** QuotaWindowOut */
-        QuotaWindowOut: {
-            /**
-             * As Of
-             * Format: date-time
-             */
-            as_of: string;
-            /** Key */
-            key: string;
-            /** Label */
-            label: string;
-            /** Resets At */
-            resets_at: string | null;
-            /** Source */
-            source: string;
-            /** Stale */
-            stale: boolean;
-            /** Used Percent */
-            used_percent: number | null;
-            /** Window Minutes */
-            window_minutes: number | null;
-        };
         /**
          * Runtime
          * @enum {string}
          */
         Runtime: "ollama" | "lmstudio" | "vllm" | "llama_server";
-        /**
-         * StatuslineQuotaIn
-         * @description The statusLine stdin JSON's ``rate_limits`` object, as Claude Code sent it.
-         */
-        StatuslineQuotaIn: {
-            /** Rate Limits */
-            rate_limits?: {
-                [key: string]: unknown;
-            };
-        };
-        /** StatuslineQuotaOut */
-        StatuslineQuotaOut: {
-            /** Accepted */
-            accepted: boolean;
-        };
         /** TestConnectionIn */
         TestConnectionIn: {
             /** Base Url */
@@ -2515,130 +2399,6 @@ export interface operations {
                 };
                 content: {
                     "text/csv": unknown;
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    usage_quota_api_v1_usage_quota_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QuotaListOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    usage_quota_refresh_api_v1_usage_quota_refresh_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QuotaRefreshOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    usage_quota_statusline_api_v1_usage_quota_statusline_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StatuslineQuotaIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StatuslineQuotaOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

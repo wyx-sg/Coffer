@@ -1,8 +1,7 @@
 // src/components/mcp/server/McpServersBulkBar.tsx — the MCP servers list's selection bar, at the top of the column while rows are ticked.
 //
-// Select-all (every listed server the filters show; the built-in one cannot
-// take a bulk action and is never in it, indeterminate when only some are
-// ticked), how many are selected, Clear, the selection's reach — the same
+// How many of the listed servers are selected (the built-in one cannot take a
+// bulk action and is never counted), Clear, the selection's reach — the same
 // three-way choice the server's header carries (spec web-ui "Mount one reach
 // control in three places") — and Delete.
 import { useTranslation } from "react-i18next";
@@ -15,22 +14,19 @@ import { useBulkDeleteResources } from "@/lib/hooks/useResourceMutations";
 
 interface Props {
   servers: ResourceOut[];
-  /** Every selectable server the current filters show are ticked. */
-  allChecked: boolean;
-  onToggleAll: (on: boolean) => void;
+  /** How many servers the current filters show. */
+  total: number;
   onDone: () => void;
 }
 
-export function McpServersBulkBar({ servers, allChecked, onToggleAll, onDone }: Props) {
+export function McpServersBulkBar({ servers, total, onDone }: Props) {
   const { t } = useTranslation();
   const bulk = useBulkDeleteResources();
   return (
     <ListSelectionBar
       label={t("mcp.page.bulkLabel")}
-      selectAllLabel={t("mcp.page.selectAll")}
       count={servers.length}
-      allChecked={allChecked}
-      onToggleAll={onToggleAll}
+      total={total}
       onClear={onDone}
     >
       <BulkReachActions rows={servers} onDone={onDone} />

@@ -9,11 +9,13 @@
 import { useTranslation } from "react-i18next";
 
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
+import { ShowAllRow } from "@/components/LongList";
+import { useLongList } from "@/components/useLongList";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { HelpTip } from "@/components/HelpTip";
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { SecretScan } from "@/lib/api/secret";
+import { cn } from "@/lib/utils";
 import { fileCount, shortPath } from "./scanPlan";
 
 interface Props {
@@ -37,6 +39,7 @@ export function ScanFindingsStep({
 }: Props) {
   const { t } = useTranslation();
   const { findings, mentions } = scan;
+  const mentionList = useLongList(mentions, { scrollInside: "max-h-32" });
   const count = ticked.size;
   const all = count === findings.length && count > 0;
 
@@ -51,7 +54,7 @@ export function ScanFindingsStep({
           })}
         </DialogDescription>
       </DialogHeader>
-      <div className="max-h-[360px] min-w-0 overflow-auto rounded-md border border-border-subtle">
+      <div className="max-h-[380px] min-w-0 overflow-auto rounded-md border border-border-subtle">
         <table className="w-full table-fixed text-xs">
           <thead className="sticky top-0 bg-surface-raised text-left text-text-muted">
             <tr className="border-b border-border-subtle">
@@ -111,13 +114,21 @@ export function ScanFindingsStep({
       {mentions.length > 0 ? (
         <div className="min-w-0 space-y-1 rounded-md bg-surface-sunken px-3 py-2 text-xs text-text-muted">
           <p>{t("secrets.scan.mentions", { count: mentions.length })}</p>
-          <ul className="max-h-24 space-y-0.5 overflow-y-auto font-mono">
-            {mentions.map((m) => (
+          <ul className={cn("space-y-0.5 font-mono", mentionList.listClassName)}>
+            {mentionList.visible.map((m) => (
               <li key={`${m.path}:${m.line}`} className="truncate" title={m.path}>
                 {m.skill} · {shortPath(m.path)}:{m.line}
               </li>
             ))}
           </ul>
+          {mentionList.collapsed ? (
+            <ShowAllRow
+              shown={mentionList.shown}
+              total={mentionList.total}
+              onShowAll={mentionList.expand}
+              className="border-0 px-0"
+            />
+          ) : null}
           {scan.handoff ? (
             <div className="pt-1">
               <AgentHandoff prompt={scan.handoff.prompt} size="sm" />
@@ -125,12 +136,10 @@ export function ScanFindingsStep({
           ) : null}
         </div>
       ) : null}
+      <p className="text-xs text-text-muted">{t("secrets.scan.hint")}</p>
       <DialogFooter className="items-center">
-        <span className="mr-auto flex items-center gap-1.5 text-xs text-text-muted">
+        <span className="mr-auto text-xs text-text-muted">
           {t("secrets.scan.ticked", { count, total: findings.length })}
-          <HelpTip>
-            <p className="text-xs">{t("secrets.scan.hint")}</p>
-          </HelpTip>
         </span>
         <Button variant="ghost" onClick={onCancel}>
           {t("common.cancel")}

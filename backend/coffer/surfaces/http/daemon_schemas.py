@@ -172,6 +172,11 @@ class DaemonLogRecordOut(BaseModel):
     #: file only grows at its end, so it names the same record on every read.
     offset: int
     record: dict[str, Any]
+    #: For an ERROR about something outside Coffer (a refused connection, a
+    #: name that will not resolve, a file it may not read): the chore of finding
+    #: out why, for the person's agent. Null for every other record, a Coffer
+    #: internal error included.
+    handoff: HandoffOut | None = None
 
 
 class DaemonLogListOut(BaseModel):

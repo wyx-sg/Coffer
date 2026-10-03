@@ -27,4 +27,15 @@ describe("PageHeader", () => {
     expect(screen.getByTestId("badge")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
   });
+
+  test("experimental puts the tag beside the title, outside the heading's name", () => {
+    renderHeader(<PageHeader title="Usage" experimental />);
+    expect(screen.getByRole("heading", { level: 1, name: "Usage" })).toBeInTheDocument();
+    expect(screen.getByText("Experimental")).toBeInTheDocument();
+  });
+
+  test("no tag unless asked", () => {
+    renderHeader(<PageHeader title="Usage" />);
+    expect(screen.queryByText("Experimental")).toBeNull();
+  });
 });

@@ -23,12 +23,13 @@ from coffer.application.channel.attention import ChannelAttentionSource
 from coffer.application.channel.service import ChannelService
 from coffer.application.mcp.attention import McpAttentionSource
 from coffer.application.resource_service import ResourceService
-from coffer.application.secret.attention import SecretAttentionSource
+from coffer.application.secret.attention import PendingApprovalsPort, SecretAttentionSource
 from coffer.application.skill.cli_attention import CliAttentionSource
 from coffer.application.skill.cli_requirements import CliRequirementService
 from coffer.application.sync.attention import SyncAttentionSource
 from coffer.application.sync.service import SyncService
 from coffer.domain.features import MEMORY
+from coffer.domain.secrets import SecretApproval
 from coffer.infrastructure.mcp.health_repo import MCPServerHealthRepo
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.surfaces.http.channel_handoff import sdk_missing_handoff
@@ -48,6 +49,7 @@ def build_attention_sources(
     agent_hooks: AgentHooksService | None = None,
     protections_on: Callable[[], bool] | None = None,
     memory_on: Callable[[], bool] | None = None,
+    approvals: PendingApprovalsPort | None = None,
 ) -> list[AttentionSource]:
     """Every kind's source, in the order the Overview groups them."""
     sources: list[AttentionSource] = []
@@ -80,8 +82,24 @@ def build_attention_sources(
     if cli_service is not None:
         sources.append(CliAttentionSource(cli_service))
     if protections_on is not None:
-        sources.append(SecretAttentionSource(protections_on))
+        sources.append(
+            SecretAttentionSource(
+                protections_on,
+                resources=resource_svc,
+                store=secret_store,
+                approvals=approvals,
+            )
+        )
     return sources
+
+
+class _LiveApprovals:
+    """The boundary, looked up when asked: it is built after these sources."""
+
+    def list(self, *, status: str | None = None) -> list[SecretApproval]:
+        from coffer.surfaces.http.secret_boundary_wiring import get_secret_boundary
+
+        return get_secret_boundary().list(status=status)
 
 
 def lifespan_attention_sources(
@@ -118,6 +136,7 @@ def lifespan_attention_sources(
         agent_hooks=get_agent_hooks_service(),
         protections_on=lambda: get_secret_boundary().protections_on(),
         memory_on=memory_on,
+        approvals=_LiveApprovals(),
     )
 
 

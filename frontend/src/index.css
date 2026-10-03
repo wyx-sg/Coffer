@@ -95,7 +95,7 @@
     --warning: 148 88 0; /* #945800 */
     --danger: 200 55 45; /* #c8372d */
     --neutral: 160 165 174; /* #a0a5ae */
-    --data: 124 133 153; /* #7c8599 — chart bars and data marks */
+    --data: 124 133 153; /* #7c8599 — chart bars and data marks (0.6.06) */
     --success-soft: 233 245 239; /* #e9f5ef */
     --warning-soft: 251 243 228; /* #fbf3e4 */
     --on-warning: 255 255 255; /* #ffffff */

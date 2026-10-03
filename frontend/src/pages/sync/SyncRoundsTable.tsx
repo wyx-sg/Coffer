@@ -1,13 +1,13 @@
 // frontend/src/pages/sync/SyncRoundsTable.tsx
 //
-// "Rounds" on the Status tab (6.5.01): every round this Mac has run, newest
+// "Rounds" on the Status tab (6.4.01): every round this Mac has run, newest
 // first, in the shared DataTable — without a search box or a status filter,
 // because the boards draw none: rounds that repeated one outcome are FOLDED
 // instead (see `syncRunRows.ts` for why listing or dropping them is worse),
 // which is what keeps the history short enough to read.
 //
-// A row opens the round's drawer (6.5.04); Roll back, on the row or in the
-// drawer, asks first with the plan the daemon states (6.5.10).
+// A row opens the round's drawer (6.4.04); Roll back lives only there, and
+// asks first with the plan the daemon states (6.4.12).
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RotateCcw } from "lucide-react";
@@ -52,16 +52,10 @@ export function SyncRoundsTable({
   const [open, setOpen] = useState<SyncRunRow | null>(null);
   const [rollingBack, setRollingBack] = useState<(SyncRound & { id: number }) | null>(null);
 
-  const columns = syncRunColumns(t, { runs, nextRoundAt, onRollback: setRollingBack });
+  const columns = syncRunColumns(t, { runs, nextRoundAt });
 
   return (
-    <Section
-      title={t("sync.rounds.title")}
-      help={t("sync.rounds.hint")}
-      as="h2"
-      labelled
-      testId="sync-rounds"
-    >
+    <Section title={t("sync.rounds.title")} as="h2" labelled testId="sync-rounds">
       {/* Rendered inside the tab, so a failing history never blanks the page. */}
       {error ? (
         <EmptyState
@@ -94,6 +88,7 @@ export function SyncRoundsTable({
       )}
       <SyncRunDetail
         row={open}
+        rows={rows}
         onClose={() => setOpen(null)}
         onOpen={setOpen}
         onRollback={(run) => {

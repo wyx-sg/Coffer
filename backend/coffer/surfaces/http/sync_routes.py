@@ -40,6 +40,8 @@ from coffer.surfaces.http.sync_schemas import (
     SyncRemoteStateOut,
     SyncRunListOut,
     SyncStatusOut,
+    VaultMoveIn,
+    VaultMoveOut,
 )
 
 _ACTOR = "user"
@@ -109,8 +111,19 @@ async def put_remote(body: SyncRemoteIn) -> SyncRemoteOut:
 
 @router.delete("/remote", response_model=SyncRemoteClearedOut)
 async def delete_remote() -> SyncRemoteClearedOut:
-    """Stop syncing: forget the remote. The vault and its history stay."""
-    return SyncRemoteClearedOut(cleared=await get_sync_service().clear_remote())
+    """Stop syncing: forget the remote. The vault and its history stay. No
+    confirmation: ``POST /remote/restore`` puts it back while nothing else is set."""
+    cleared = await get_sync_service().clear_remote()
+    return SyncRemoteClearedOut(cleared=cleared, restorable=cleared)
+
+
+@router.post("/remote/restore", response_model=SyncRemoteOut)
+async def restore_remote() -> SyncRemoteOut:
+    """Undo Stop syncing: the remote that was forgotten (its push secret is
+    still only a name), and what this machine knew about it. 409
+    ``SYNC_NOTHING_TO_RESTORE`` when none was stopped, ``SYNC_REMOTE_EXISTS``
+    when another is set."""
+    return remote_out(await get_sync_service().restore_remote())
 
 
 @router.post("/remote/check", response_model=RemoteCheckOut)
@@ -125,6 +138,20 @@ async def check_remote(body: RemoteCheckIn) -> RemoteCheckOut:
         layout=found.layout,
         detail=found.detail,
     )
+
+
+# --- the vault's place ----------------------------------------------------------------
+
+
+@router.post("/vault/move", response_model=VaultMoveOut, response_model_by_alias=True)
+async def move_vault(body: VaultMoveIn) -> VaultMoveOut:
+    """Move the vault out of a synchronised folder: rounds and writes are held
+    off, the folder is moved and its git repository checked at the new place.
+    The old folder is left empty. 422 ``SYNC_VAULT_TARGET_INVALID`` /
+    ``SYNC_VAULT_TARGET_IN_CLOUD``, 409 ``SYNC_VAULT_TARGET_NOT_EMPTY``, 500
+    ``SYNC_VAULT_MOVE_FAILED`` (the vault is back where it was)."""
+    moved = await get_sync_service().move_vault(body.to)
+    return VaultMoveOut.model_validate({"from": moved.origin, "to": moved.target})
 
 
 # --- machines -----------------------------------------------------------------------
@@ -143,9 +170,17 @@ async def rename_self(body: MachineRenameIn) -> MachineOut:
 
 @router.delete("/machines/{machine_id}", response_model=MachineRemovedOut)
 async def retire_machine(machine_id: str) -> MachineRemovedOut:
-    """Retire another machine: its descriptor goes, in a commit of yours."""
+    """Retire another machine: its descriptor goes, in a commit of yours; no
+    confirmation, ``POST /machines/{id}/restore`` registers it again."""
     await get_sync_service().retire_machine(machine_id, actor=_ACTOR)
     return MachineRemovedOut(removed=True)
+
+
+@router.post("/machines/{machine_id}/restore", response_model=MachineOut)
+async def restore_machine(machine_id: str) -> MachineOut:
+    """Undo a retire: register the machine again with the descriptor it had.
+    404 ``SYNC_MACHINE_NOT_FOUND`` when it was never registered here."""
+    return machine_out(await get_sync_service().restore_machine(machine_id, actor=_ACTOR))
 
 
 # --- the master key -------------------------------------------------------------------

@@ -532,12 +532,11 @@ describe("reach conventions (web-ui)", () => {
       expect(options.map((o) => o.label)).toEqual(panelLabels);
       expect(options.map((o) => o.label)).toEqual(["Off", "Every agent", "Only selected agents"]);
 
-      // The control a list mounts is headed Reach and offers All plus those states.
+      // The control a list mounts is a Reach pill offering those states (none chosen = All).
       render(<ReachFilter value="all" onChange={() => {}} />);
-      const trigger = screen.getByRole("combobox", { name: "Reach" });
-      fireEvent.keyDown(trigger, { key: "ArrowDown" });
+      fireEvent.click(screen.getByRole("button", { name: "Reach" }));
       const offered = (await screen.findAllByRole("option")).map((o) => o.textContent);
-      expect(offered).toEqual(["All", ...panelLabels]);
+      expect(offered).toEqual(panelLabels);
     },
   );
 

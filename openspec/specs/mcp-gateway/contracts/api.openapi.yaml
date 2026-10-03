@@ -770,7 +770,8 @@ paths:
           - type: 'null'
           description: The previous page's next_cursor. Bound to the filters it was issued with; any other value is 400 CURSOR_INVALID.
           title: Cursor
-      - in: query
+      - description: One outcome, or ``failed`` for every outcome but ``ok`` (an error, a timeout or a denial).
+        in: query
         name: status
         required: false
         schema:
@@ -780,8 +781,10 @@ paths:
             - error
             - timeout
             - denied
+            - failed
             type: string
           - type: 'null'
+          description: One outcome, or ``failed`` for every outcome but ``ok`` (an error, a timeout or a denial).
           title: Status
       - description: Only the calls made by this agent's sessions — the uid its shim reported. Calls from a session that reported no agent match no value.
         in: query
@@ -2409,6 +2412,10 @@ components:
           - type: string
           - type: 'null'
           title: Error Message
+        handoff:
+          anyOf:
+          - $ref: '#/components/schemas/HandoffOut'
+          - type: 'null'
         id:
           title: Id
           type: integer
@@ -2455,6 +2462,7 @@ components:
       - session_id
       - trace_id
       - agent_uid
+      - handoff
       title: InvocationOut
       type: object
     InvocationSummaryOut:

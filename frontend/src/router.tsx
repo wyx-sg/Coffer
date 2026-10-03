@@ -165,7 +165,8 @@ const pageRoutes: RouteObject[] = gateRoutes([
     path: "sync",
     element: lazyPage(() => import("./pages/sync/SyncPage"), "SyncPage"),
   },
-  // Sub-views of a stopped round, without tabs, each with a "‹ Sync" back link.
+  // Sub-views of a stopped round, without tabs. Resolve conflicts also serves a
+  // first join's differing files (`?mode=join`).
   {
     path: "sync/conflicts",
     element: lazyPage(
@@ -180,10 +181,9 @@ const pageRoutes: RouteObject[] = gateRoutes([
       "SyncDeletionReviewPage",
     ),
   },
-  // One page: the Providers list beside the open provider, and the Usage tab.
-  // `usage` is declared before `:uid` so it is never read as a provider.
+  // One page: the Providers list beside the open provider, and the Usage tab
+  // (`?tab=usage`).
   { path: "model-providers", element: <ModelProvidersPage /> },
-  { path: "model-providers/usage", element: <ModelProvidersPage /> },
   { path: "model-providers/:uid", element: <ModelProvidersPage /> },
   { path: "secrets", element: lazyPage(() => import("./pages/SecretsPage"), "SecretsPage") },
   {

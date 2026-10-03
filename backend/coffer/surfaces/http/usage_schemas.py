@@ -4,11 +4,8 @@ subscriptions-show-only-official-quota)."""
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
 
 from pydantic import BaseModel, Field
-
-from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 
 class UsageTotalsOut(BaseModel):
@@ -93,61 +90,7 @@ class UsageRequestListOut(BaseModel):
     next_cursor: str | None
 
 
-class QuotaWindowOut(BaseModel):
-    key: str
-    label: str
-    #: ``None`` once the window has reset since it was observed.
-    used_percent: float | None
-    window_minutes: int | None
-    resets_at: datetime | None
-    #: When the source produced this value.
-    as_of: datetime
-    source: str
-    stale: bool
-
-
-class AgentQuotaOut(BaseModel):
-    agent_type: str
-    #: False when no official value has ever been observed — show no number.
-    has_value: bool
-    plan: str | None
-    last_observed_at: datetime | None
-    windows: list[QuotaWindowOut]
-    #: Claude Code's row with no value: the prompt that hands opting in to the
-    #: statusline wrapper to the person's agent
-    #: (``application/usage/statusline_handoff.py``). ``None`` otherwise.
-    handoff: HandoffOut | None = None
-
-
-class QuotaListOut(BaseModel):
-    agents: list[AgentQuotaOut]
-
-
-class QuotaRefreshOut(BaseModel):
-    refreshed: bool
-    #: Why no read happened: ``too_soon``, ``codex_unavailable``,
-    #: ``no_subscription``, ``read_failed``, ``no_windows``.
-    reason: str | None
-    agents: list[AgentQuotaOut]
-
-
-class StatuslineQuotaIn(BaseModel):
-    """The statusLine stdin JSON's ``rate_limits`` object, as Claude Code sent it."""
-
-    rate_limits: dict[str, Any] = Field(default_factory=dict)
-
-
-class StatuslineQuotaOut(BaseModel):
-    accepted: bool
-
-
 __all__ = [
-    "AgentQuotaOut",
-    "QuotaListOut",
-    "QuotaRefreshOut",
-    "QuotaWindowOut",
-    "StatuslineQuotaIn",
-    "StatuslineQuotaOut",
     "UsageRequestListOut",
     "UsageRequestOut",
     "UsageSummaryOut",

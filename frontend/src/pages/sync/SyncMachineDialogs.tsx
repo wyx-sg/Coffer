@@ -1,17 +1,14 @@
 // frontend/src/pages/sync/SyncMachineDialogs.tsx
 //
-// The Machines tab's two dialogs. Rename (6.5.29) changes only this Mac's
-// name in the list — nothing keys on the label, and other Macs see it after
-// their next round. Retire (6.5.21) removes another Mac's descriptor from the
-// registry and nothing else: its rounds stay in history, nothing on that Mac
-// or in the repository changes, and if it syncs again it reappears. Both
-// close only on success, so a refusal stays up with its reason.
+// The Machines tab's Rename dialog (6.4.25): changes only this Mac's name in
+// the list — nothing keys on the label, and other Macs see it after their next
+// round. It closes only on success, so a refusal stays up with its reason.
+// (Retire has no dialog: it runs at once with an Undo toast.)
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Info } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog, DialogErrorBanner } from "@/components/ui/confirm-dialog";
+import { DialogErrorBanner } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
   DialogContent,
@@ -24,8 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { translateApiError } from "@/lib/api/errors";
 import type { Machine } from "@/lib/api/sync";
-import { useRenameSelf, useRetireMachine } from "@/lib/hooks/useMachines";
-import { lastSeenLabel } from "./syncMachineTimes";
+import { useRenameSelf } from "@/lib/hooks/useMachines";
 
 interface Props {
   machine: Machine;
@@ -82,38 +78,5 @@ export function RenameMachineDialog({ machine, onClose }: Props) {
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-export function RetireMachineDialog({ machine, now, onClose }: Props & { now: Date }) {
-  const { t, i18n } = useTranslation();
-  const retire = useRetireMachine();
-
-  return (
-    <ConfirmDialog
-      open
-      onOpenChange={(open) => {
-        if (open) return;
-        retire.reset();
-        onClose();
-      }}
-      title={t("sync.machines.retireTitle", { name: machine.name })}
-      description={t("sync.machines.retireSeen", {
-        when: lastSeenLabel(machine.last_round_at, now, t, i18n.language),
-        version: machine.coffer_version,
-      })}
-      confirmLabel={t("sync.machines.retire")}
-      pending={retire.isPending}
-      error={retire.error}
-      onConfirm={() => retire.mutate(machine.machine_id, { onSuccess: onClose })}
-    >
-      <div className="flex items-start gap-3 rounded-lg border border-border-subtle px-3.5 py-3">
-        <Info className="mt-0.5 size-4 shrink-0 text-text-muted" aria-hidden />
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-label text-text">{t("sync.machines.retireSafeTitle")}</p>
-          <p className="text-xs text-text-muted">{t("sync.machines.retireSafe")}</p>
-        </div>
-      </div>
-    </ConfirmDialog>
   );
 }

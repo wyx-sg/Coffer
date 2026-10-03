@@ -34,7 +34,6 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 | `COFFER_WEBUI_DIR` | 内置 | 存放已构建 Web 界面（`index.html`）的目录。不设置时，守护进程提供冻结二进制中打包的界面，在源码检出中则提供 `frontend/dist`。 |
 | `COFFER_PRICE_REFRESH` | 未设置 | `off` 强制关闭每日模型价格表刷新，无论 `price_refresh` 怎么设；价格取自构建中附带的列表。测试套件和 e2e 守护进程会设置它。 |
 | `COFFER_MODEL_PROXY` | 未设置 | `off` 让守护进程不启动也不监管[本地模型代理](/zh/architecture/model-proxy)；其他任何值或不设置则保持开启。测试套件会设置它。 |
-| `COFFER_QUOTA_POLL` | 未设置 | `off` 停止在后台拉取 Codex 的订阅额度（每次拉取会起一个短命的 `codex app-server`）。测试套件会设置它。 |
 
 ### MCP 网关 {#mcp-gateway}
 

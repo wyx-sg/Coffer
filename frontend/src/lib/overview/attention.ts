@@ -74,6 +74,18 @@ const PAGES: Record<string, { list: string; detail?: (a: Address) => string | nu
   cli: { list: "/clis", detail: (a) => `/clis/${encode(a.uid)}` },
 };
 
+/** The secret signals about the Secrets page's own banners (not the approval switch, which lives
+ *  in Settings): a missing value is added on Secrets, and waiting approvals are shown on Secrets
+ *  too (their Review opens the global dialog). Both share the banners' ignore state, so the page
+ *  header there says "ignored on Overview". */
+const SECRETS_PAGE_REASONS = new Set(["secret_missing_here", "secret_approvals_pending"]);
+
+/** Whether an item is the "N changes waiting for approval" row, whose Review opens the global
+ *  approvals dialog instead of a page. */
+export function opensApprovals(item: AttentionItem): boolean {
+  return item.kind === "secret" && item.reason_code === "secret_approvals_pending";
+}
+
 /** The item's detail page, or null when it has none (no uid, or an agent
  *  whose type is not known yet). */
 function detailPage(item: AttentionItem, agentType: string | undefined): string | null {
@@ -85,6 +97,7 @@ function detailPage(item: AttentionItem, agentType: string | undefined): string 
 /** The page an item's name opens: its detail page, its kind's list, or
  *  Activity. `agentType` is the type of the agent an agent item is about. */
 export function itemPage(item: AttentionItem, agentType?: string): string {
+  if (item.kind === "secret" && SECRETS_PAGE_REASONS.has(item.reason_code)) return "/secrets";
   const page = PAGES[item.kind];
   if (!page) return "/activity";
   return detailPage(item, agentType) ?? page.list;
@@ -146,6 +159,8 @@ export function itemActionLabelKey(item: AttentionItem): string {
   if (isHookItem(item) && verb === "repair") return "overview.actions.repairHook";
   if (item.kind === "channel" && verb === "check") return "overview.actions.reconnectChannel";
   if (item.kind === "sync" && verb === "review") return "overview.actions.reviewHeld";
+  if (item.kind === "secret" && item.reason_code === "secret_missing_here")
+    return "overview.actions.openSecrets";
   return actionLabelKey(verb);
 }
 

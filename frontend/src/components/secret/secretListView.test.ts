@@ -1,18 +1,10 @@
-// src/components/secret/secretListView.test.ts — the Secrets list's owners, short names, filters, sort, counts and groups.
+// src/components/secret/secretListView.test.ts — the Secrets list's short names, filters, default order and URL state.
 import { describe, expect, test } from "vitest";
 
 import type { SecretRef } from "@/lib/api/secret";
-import { listStateParams, parseListState, type SecretListState } from "@/lib/secrets/listState";
-import { ownerOf, shortName } from "./secretOwners";
-import {
-  decorate,
-  groupByOwner,
-  isDeletable,
-  matchesStatus,
-  searchAndKind,
-  sortItems,
-  statusCounts,
-} from "./secretListView";
+import { parseListState, withListState, type SecretListState } from "@/lib/secrets/listState";
+import { shortName } from "./secretRows";
+import { decorate, defaultOrder, filterItems, isDeletable } from "./secretListView";
 
 function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
   return {
@@ -33,23 +25,16 @@ function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
 const state = (over: Partial<SecretListState> = {}): SecretListState => ({
   q: "",
   status: "all",
-  kind: "all",
-  sort: null,
-  dir: "asc",
-  view: "list",
   ...over,
 });
 
 const JIRA = ref({
   ref: "mcp_server/26dddfa9ff00/JIRA_PERSONAL_TOKEN",
   cited_by: [{ kind: "mcp_server", name: "jira", uid: "26dd" }],
-  last_used_at: "2026-09-30T10:00:00Z",
-  created_at: "2026-08-01T10:00:00Z",
 });
 const SEATALK = ref({
   ref: "channel/4c838e8fa72e/app-secret",
   cited_by: [{ kind: "channel", name: "seatalk", uid: "4c83" }],
-  created_at: "2026-09-01T10:00:00Z",
 });
 const GROQ = ref({
   ref: "provider/b7b7526c/key",
@@ -62,7 +47,7 @@ const POSTMAN = ref({
 const OLD = ref({ ref: "secret/old-key", uri: "coffer://secret/old-key", unreferenced: true });
 const ALL = [JIRA, SEATALK, GROQ, POSTMAN, OLD];
 
-describe("secret owners", () => {
+describe("secret names", () => {
   test("a ref shows its last segment, and a dotted name drops its owner's prefix", () => {
     expect(shortName(JIRA)).toBe("JIRA_PERSONAL_TOKEN");
     expect(shortName(SEATALK)).toBe("app-secret");
@@ -70,95 +55,59 @@ describe("secret owners", () => {
     expect(shortName(POSTMAN)).toBe("AUTHORIZATION");
     expect(shortName(ref({ ref: "aws.access_key" }))).toBe("aws.access_key");
   });
-
-  test("the owner is the first citer; a sync remote counts as sync; nothing citing it is none", () => {
-    expect(ownerOf(JIRA)).toMatchObject({ kind: "mcp_server", name: "jira", more: 0 });
-    expect(
-      ownerOf(ref({ ref: "x", cited_by: [{ kind: "sync_remote", name: "git", uid: "r" }] })).kind,
-    ).toBe("sync");
-    expect(
-      ownerOf(ref({ ref: "x", cited_by: [{ kind: "agent", name: "a", uid: "u" }] })).kind,
-    ).toBe("other");
-    expect(ownerOf(OLD)).toMatchObject({ key: "none", name: null });
-    expect(ownerOf(ref({ ref: "channel/u/app-secret", unreferenced: true })).kind).toBe("channel");
-  });
 });
 
 describe("secret list view", () => {
-  const items = decorate(ALL, new Set([GROQ.ref]), new Set([SEATALK.ref]));
+  const items = decorate(ALL, new Set([GROQ.ref]));
 
-  test("status filters and their counts", () => {
-    expect(statusCounts(items)).toEqual({ all: 5, inUse: 4, unused: 1, pending: 1, refused: 1 });
+  test("status keeps in use or not used", () => {
     const only = (status: SecretListState["status"]) =>
-      items.filter((i) => matchesStatus(i, status)).map((i) => i.short);
+      filterItems(items, state({ status })).map((i) => i.short);
     expect(only("unused")).toEqual(["old-key"]);
-    expect(only("pending")).toEqual(["key"]);
-    expect(only("refused")).toEqual(["app-secret"]);
+    expect(only("inUse")).toHaveLength(4);
+    expect(only("all")).toHaveLength(5);
   });
 
-  test("search matches the ref, the short name and the owner's name; the kind narrows by owner", () => {
-    const names = (s: SecretListState) => searchAndKind(items, s).map((i) => i.short);
+  test("search matches the ref, the short name and the names of what uses it", () => {
+    const names = (s: SecretListState) => filterItems(items, s).map((i) => i.short);
     expect(names(state({ q: "jira" }))).toEqual(["JIRA_PERSONAL_TOKEN"]);
     expect(names(state({ q: "APP-SEC" }))).toEqual(["app-secret"]);
-    expect(names(state({ kind: "provider" }))).toEqual(["key"]);
-    expect(names(state({ kind: "other" }))).toEqual(["old-key"]);
+    expect(names(state({ q: "groq" }))).toEqual(["key"]);
   });
 
-  test("the default order puts what waits for approval first, then names; a column sorts both ways", () => {
-    expect(sortItems(items, state()).map((i) => i.short)).toEqual([
+  test("the default order puts no-value and waiting rows first, then names", () => {
+    const withMissing = decorate(
+      [...ALL, ref({ ref: "secret/zeta", uri: "coffer://secret/zeta", present: false })],
+      new Set([GROQ.ref]),
+    );
+    expect(defaultOrder(withMissing).map((i) => i.short)).toEqual([
       "key",
+      "zeta",
       "app-secret",
       "AUTHORIZATION",
       "JIRA_PERSONAL_TOKEN",
       "old-key",
     ]);
-    expect(sortItems(items, state({ sort: "name" })).map((i) => i.short)[0]).toBe("app-secret");
-    expect(sortItems(items, state({ sort: "name", dir: "desc" })).map((i) => i.short)[0]).toBe(
-      "old-key",
-    );
-    expect(sortItems(items, state({ sort: "created", dir: "desc" })).map((i) => i.short)[0]).toBe(
-      "app-secret",
-    );
-    expect(sortItems(items, state({ sort: "lastUsed", dir: "desc" })).map((i) => i.short)[0]).toBe(
-      "JIRA_PERSONAL_TOKEN",
-    );
   });
 
   test("only a stored secret nothing uses and nothing waits on can be deleted", () => {
     expect(items.filter(isDeletable).map((i) => i.short)).toEqual(["old-key"]);
-    const waiting = decorate([OLD], new Set([OLD.ref]), new Set());
+    const waiting = decorate([OLD], new Set([OLD.ref]));
     expect(isDeletable(waiting[0])).toBe(false);
-  });
-
-  test("groups by owner, with what nothing uses last", () => {
-    const groups = groupByOwner(items);
-    expect(groups.map((g) => g.key)).toEqual([
-      "mcp_server:26dd",
-      "channel:4c83",
-      "provider:b7b7",
-      "custom_tool:p1",
-      "none",
-    ]);
-    expect(groups.at(-1)!.items.map((i) => i.short)).toEqual(["old-key"]);
   });
 });
 
 describe("secret list state in the URL", () => {
-  test("defaults are not spelled out and the state round-trips", () => {
-    expect(listStateParams(state(), "list").toString()).toBe("");
-    const s = state({ q: "jira", status: "unused", kind: "mcp_server", sort: "name", dir: "desc" });
-    const params = listStateParams(s, "list");
-    expect(parseListState(params, "list")).toEqual(s);
+  test("defaults are not spelled out, the sort is left alone, and the state round-trips", () => {
+    expect(withListState(new URLSearchParams(), state()).toString()).toBe("");
+    const s = state({ q: "jira", status: "unused" });
+    const params = withListState(new URLSearchParams("sort=created"), s);
+    expect(params.get("sort")).toBe("created");
+    expect(parseListState(params)).toEqual(s);
+    expect(withListState(params, state()).toString()).toBe("sort=created");
   });
 
-  test("the view is written unless it is the list the browser also opens", () => {
-    expect(listStateParams(state({ view: "owner" }), "list").get("view")).toBe("owner");
-    expect(listStateParams(state({ view: "owner" }), "owner").get("view")).toBe("owner");
-    expect(listStateParams(state({ view: "list" }), "list").has("view")).toBe(false);
-    expect(listStateParams(state({ view: "list" }), "owner").get("view")).toBe("list");
-    expect(parseListState(new URLSearchParams(), "owner").view).toBe("owner");
-    expect(parseListState(new URLSearchParams("status=bogus&kind=x&sort=y"), "list")).toEqual(
-      state(),
-    );
+  test("an unknown status falls back to all", () => {
+    expect(parseListState(new URLSearchParams("status=pending&kind=x"))).toEqual(state());
   });
 });

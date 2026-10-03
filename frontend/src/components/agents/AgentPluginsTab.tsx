@@ -18,7 +18,7 @@ import { PluginInfoDialog } from "@/components/agents/PluginInfoDialog";
 import { PluginUninstallDialog } from "@/components/agents/PluginUninstallDialog";
 import { AgentKindTab } from "@/components/agents/tabs/AgentKindTab";
 import { Dot, KindRow } from "@/components/agents/tabs/KindRow";
-import { AskAgentButton } from "@/components/handoff/AskAgentButton";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Switch } from "@/components/ui/switch";
 import { ActionMenu } from "@/components/ui/menu";
@@ -62,7 +62,9 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
           <span className="min-w-0 flex-1">
             {t("agents.pluginsTab.programMissing", { agent: agentName })}
           </span>
-          {agent.install_handoff ? <AskAgentButton prompt={agent.install_handoff.prompt} /> : null}
+          {agent.install_handoff ? (
+            <AgentHandoff size="sm" help={false} prompt={agent.install_handoff.prompt} />
+          ) : null}
         </div>
       ) : null}
     </>

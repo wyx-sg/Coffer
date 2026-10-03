@@ -51,7 +51,7 @@ starts scoped to no agent and never projects (`_provider_default_scope` in
 `application/provider/kind.py`). `application/provider/targets.py` resolves a
 scope's agent uids to agent types and intersects them with `enabled`. One pure
 function, `connection_for_agent`, answers which connection an agent is on, and
-projection, the proxy's route, the chat model list, the quota check and the
+projection, the proxy's route, the chat model list and the
 protocol lock all ask it. A pointer that names a missing, switched-off or
 out-of-scope connection means the agent is treated as on its built-in login.
 

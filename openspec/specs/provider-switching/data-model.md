@@ -34,7 +34,7 @@ by construction. A connection SERVES an agent when `connection_uid` names it, it
 exists, is enabled, is not `ollama` and its scope reaches the agent;
 `connection_for_agent(agent, connections)` in `application/provider/targets.py`
 is the one function that decides, used by projection, the proxy state, the chat
-model list, the quota check, the switch operations and the protocol lock. A
+model list, the switch operations and the protocol lock. A
 pointer that fails the test means the agent is on its own login.
 
 Reach — which agents the connection projects into — is deliberately NOT a field
@@ -444,7 +444,7 @@ from the stored document when unset.
 cache_read?, web_search?}`, USD per million tokens / per thousand searches), each
 omitted from the stored document while unknown.
 
-### Usage (`usage_requests`, `usage_daily`, `quota_snapshots` in `runs.db`; migration 0111)
+### Usage (`usage_requests`, `usage_daily` in `runs.db`; migration 0111)
 
 - `usage_requests` — one row per proxied upstream attempt: every field of
   `UsageRecord` (`domain/usage/records.py`) plus `cost_usd`, `price_version`
@@ -453,6 +453,6 @@ omitted from the stored document while unknown.
 - `usage_daily` — per local day, agent, connection and model: request,
   unknown-usage and unpriced counts, token sums per category, estimated cost.
   Grouping columns use `''` for "none". Kept 365 days.
-- `quota_snapshots` — the latest official window per `(agent_type,
-  window_key)`: used percent, window length, reset time, label, source, when it
-  was seen, plan. An older observation never replaces a newer one.
+
+Migration 0140 dropped `quota_snapshots`, the table that held each subscription
+agent's latest official quota window: Coffer no longer shows quota.

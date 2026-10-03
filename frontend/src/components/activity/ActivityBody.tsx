@@ -2,10 +2,10 @@
 //
 // Loading is skeleton rows; a tab whose every log failed says so with Retry
 // (spec web-ui "Query only the visible Activity tab and isolate failures");
-// nothing yet says what to do next, and filters that match nothing offer to
-// clear them. Otherwise the rows, with the line above them saying what the
-// list holds, and under them the next page — loaded when scrolled to, or by
-// "Load more" (design 6.1.01, 6.1.02, 6.1.10).
+// filters that match nothing offer to clear them; a time range with nothing in
+// it says so. When Coffer has recorded nothing at all the page shows the first
+// run instead (design 6.2.09, `FirstRun`). Otherwise the rows in their box,
+// with the next page's footer as its last row (design 6.2.01, 6.2.02).
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AlertCircle, RotateCw, Activity } from "lucide-react";
@@ -15,12 +15,35 @@ import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
-import { everyLogFailed, failedNames, listSummary } from "@/lib/activity/feedText";
+import { everyLogFailed, failedNames } from "@/lib/activity/feedText";
 import type { ActivityRecord, ActivityTab } from "@/lib/activity/records";
 import type { ActivityFeed } from "@/lib/hooks/useActivityFeed";
+import type { TableSort } from "@/lib/tableSort";
 import { ActivityList } from "./ActivityList";
 import { LoadOlder } from "./ActivityNotices";
 import type { AgentLook } from "./activityCells";
+
+/** Nothing has been recorded at all: the whole-page empty state. */
+export function FirstRun() {
+  const { t } = useTranslation();
+  return (
+    <EmptyState
+      icon={Activity}
+      title={t("activity.empty.title")}
+      description={t("activity.empty.body")}
+      action={
+        <Button asChild>
+          <Link to="/agents">{t("activity.empty.connect")}</Link>
+        </Button>
+      }
+      secondaryAction={
+        <Button asChild variant="outline">
+          <Link to="/mcp-servers">{t("activity.empty.addServer")}</Link>
+        </Button>
+      }
+    />
+  );
+}
 
 interface Props {
   tab: ActivityTab;
@@ -31,13 +54,10 @@ interface Props {
   agents: ReadonlyMap<string, AgentLook>;
   selectedKey: string | null;
   onSelect: (key: string) => void;
-  /** The time window's key and its words, for the summary and the MCP calls line. */
-  timeRange: string;
-  windowLabel: string;
+  sort: TableSort | null;
+  onSort: (sort: TableSort | null) => void;
   /** What an open Daemon log row shows under itself. */
   renderExpanded?: (r: ActivityRecord) => ReactNode;
-  /** Above the Daemon log's rows: the file it reads and whether it follows it. */
-  logLine?: ReactNode;
 }
 
 export function ActivityBody({
@@ -48,18 +68,15 @@ export function ActivityBody({
   agents,
   selectedKey,
   onSelect,
-  timeRange,
-  windowLabel,
+  sort,
+  onSort,
   renderExpanded,
-  logLine,
 }: Props) {
-  const { t, i18n } = useTranslation();
-  const names = failedNames(t, feed);
-  const summary = listSummary(t, i18n.language, tab, feed, timeRange);
+  const { t } = useTranslation();
 
   if (feed.isLoading) {
     return (
-      <div className="flex flex-col gap-2 px-3 pt-3" aria-busy="true">
+      <div className="flex flex-col gap-2 pt-1" aria-busy="true">
         {Array.from({ length: 8 }, (_, i) => (
           <Skeleton key={i} className="h-6 w-full" />
         ))}
@@ -71,7 +88,7 @@ export function ActivityBody({
       <EmptyState
         tone="error"
         icon={AlertCircle}
-        title={t("activity.failed.title", { sources: names })}
+        title={t("activity.failed.title", { sources: failedNames(t, feed) })}
         description={translateApiError(t, feed.failed[0].error)}
         action={
           <Button variant="outline" onClick={() => feed.failed.forEach((s) => s.retry())}>
@@ -84,7 +101,13 @@ export function ActivityBody({
   }
   // Everything loaded so far is hidden by a client-side filter or the merge
   // frontier, and older records exist: keep reading rather than say "none".
-  if (feed.rows.length === 0 && feed.hasOlder) return <LoadOlder feed={feed} />;
+  if (feed.rows.length === 0 && feed.hasOlder) {
+    return (
+      <div className="overflow-hidden rounded-xl border border-border bg-surface-raised">
+        <LoadOlder feed={feed} />
+      </div>
+    );
+  }
   if (feed.rows.length === 0) {
     return narrowed ? (
       <EmptyState
@@ -98,39 +121,24 @@ export function ActivityBody({
         }
       />
     ) : (
-      <div className="border-t border-border-subtle">
-        <EmptyState
-          icon={Activity}
-          title={t("activity.empty.title")}
-          description={t("activity.empty.body")}
-          action={
-            <Button asChild>
-              <Link to="/agents">{t("activity.empty.connect")}</Link>
-            </Button>
-          }
-          secondaryAction={
-            <Button asChild variant="outline">
-              <Link to="/mcp-servers">{t("activity.empty.addServer")}</Link>
-            </Button>
-          }
-        />
-      </div>
+      <EmptyState
+        icon={Activity}
+        title={t("activity.empty.window")}
+        description={t("activity.empty.windowBody")}
+      />
     );
   }
   return (
-    <>
-      {logLine}
-      <ActivityList
-        tab={tab}
-        rows={feed.rows}
-        agents={agents}
-        selectedKey={selectedKey}
-        onSelect={onSelect}
-        summary={summary}
-        windowLabel={windowLabel}
-        renderExpanded={renderExpanded}
-      />
-      <LoadOlder feed={feed} />
-    </>
+    <ActivityList
+      tab={tab}
+      rows={feed.rows}
+      agents={agents}
+      selectedKey={selectedKey}
+      onSelect={onSelect}
+      sort={sort}
+      onSort={onSort}
+      renderExpanded={renderExpanded}
+      footer={<LoadOlder feed={feed} />}
+    />
   );
 }

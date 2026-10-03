@@ -17,8 +17,7 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { KeyRound, Lock } from "lucide-react";
 
-import { AskAgentButton } from "@/components/handoff/AskAgentButton";
-import { HelpTip } from "@/components/HelpTip";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
@@ -85,14 +84,14 @@ export function ProviderEndpoint({
           title={t("providers.endpoint.unreachableTitle", { host })}
           body={t("providers.endpoint.unreachableBody", { reason })}
         >
-          <AskAgentButton
+          <AgentHandoff
+            size="sm"
             prompt={t("providers.endpoint.unreachablePrompt", {
               name: provider.name,
               url: provider.base_url,
               reason,
             })}
           />
-          <HelpTip>{t("handoff.help")}</HelpTip>
         </ProblemBox>
       ) : null}
       {rejected ? (

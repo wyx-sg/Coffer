@@ -1,6 +1,6 @@
 // frontend/src/pages/sync/SyncSetup.test.tsx
 //
-// First run (6.5.16 → 6.5.17 / 6.5.18): nothing is stored until Check
+// First run (6.4.20 → 6.4.21 / 6.4.22): nothing is stored until Check
 // repository has looked at the draft. An empty repository says what the
 // first round pushes and, on Push and start syncing, stores the remote and
 // joins; a vault stores the remote so the join preview follows; anything
@@ -66,7 +66,9 @@ function fillAndCheck(url: string) {
 describe("SyncSetup", () => {
   test("opens on the defaults, and Check repository waits for a URL", () => {
     render(<SyncSetup status={notSetUp()} />);
-    expect(screen.getByText("Keep this vault in a git repository you own")).toBeInTheDocument();
+    // Sections and hairline rows, no card; the lead rides in the page header.
+    expect(screen.getByRole("heading", { name: "Remote" })).toBeInTheDocument();
+    expect(screen.getByText("Where this vault syncs to.")).toBeInTheDocument();
     expect(screen.getByLabelText("Branch")).toHaveValue("main");
     expect(screen.getByRole("combobox", { name: "Run a round" })).toHaveTextContent("Every hour");
     expect(screen.getByRole("button", { name: "Check repository" })).toBeDisabled();

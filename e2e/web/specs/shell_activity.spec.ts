@@ -142,17 +142,16 @@ test("export from the menu writes only the filtered records", async ({
       timeout: 10_000,
     });
 
-    await page.getByLabel("Filter records").fill(kept);
+    await page.getByLabel("Filter changes").fill(kept);
     await expect(
       page.locator("tr[data-record]", { hasText: other }),
     ).toHaveCount(0);
 
-    // The header has no export button; the ⋯ menu carries it.
-    await expect(page.getByRole("button", { name: /export/i })).toHaveCount(0);
-    await page.getByRole("button", { name: "More" }).click();
+    // Export is a ghost button in the header with a JSON / CSV menu.
+    await page.getByRole("button", { name: "Export" }).click();
     const [download] = await Promise.all([
       page.waitForEvent("download"),
-      page.getByRole("menuitem", { name: "Export as CSV" }).click(),
+      page.getByRole("menuitem", { name: "CSV" }).click(),
     ]);
     const file = await download.path();
     const csv = fs.readFileSync(file, "utf-8");

@@ -87,7 +87,6 @@ function ServerTabs({ name }: { name: string }) {
   return (
     <McpServerDetailTabs
       basePath={`/mcp-servers/${name}`}
-      counts={{}}
       overview={<div>server overview</div>}
       tools={<div>server tools</div>}
       resources={null}
@@ -145,7 +144,6 @@ acceptance("web-ui", "detail pages share one tab layout", () => {
     "/mcp-servers/:name/:tab?",
     <McpServerDetailTabs
       basePath="/mcp-servers/srv"
-      counts={{}}
       overview={<div>server overview</div>}
       tools={<div>server tools</div>}
       resources={null}
@@ -197,7 +195,6 @@ acceptance("web-ui", "a server's detail page opens on its Overview", () => {
     "/mcp-servers/:name/:tab?",
     <McpServerDetailTabs
       basePath="/mcp-servers/srv"
-      counts={{}}
       overview={<div>npx -y srv</div>}
       tools={<div>server tools</div>}
       resources={null}

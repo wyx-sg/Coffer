@@ -204,7 +204,7 @@ def test_history_rows_are_in_runs_db_keyed_to_uids(legacy: LegacyHome) -> None:
     _migrate(legacy)
     assert not legacy.db.exists()
     with sqlite3.connect(legacy.coffer / "runs.db") as conn:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0139",)
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0140",)
         assert conn.execute("SELECT id, resource_uid FROM audit_log ORDER BY id").fetchall() == [
             (1, UIDS["github"]),
             (2, UIDS["tg"]),

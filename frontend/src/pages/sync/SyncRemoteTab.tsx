@@ -1,4 +1,4 @@
-// frontend/src/pages/sync/SyncRemoteTab.tsx — Sync › Remote (board 6.5.22).
+// frontend/src/pages/sync/SyncRemoteTab.tsx — Sync › Remote (board 6.4.27).
 //
 // The one git repository this vault syncs with, as settings that save
 // themselves like the rest of the app: a text field saves on blur (or Enter),
@@ -16,11 +16,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 
-import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import type { SyncStatus } from "@/lib/api/sync";
 import { useSaveSyncRemote } from "@/lib/hooks/useSync";
-import { SyncRemoteFields } from "./SyncRemoteFields";
+import { SyncRemoteFields, SyncSecretsSection } from "./SyncRemoteFields";
 import { SyncStopSyncing } from "./SyncStopSyncing";
 import { SyncVaultPath } from "./SyncVaultPath";
 import {
@@ -64,23 +63,19 @@ export function SyncRemoteTab({ status }: { status: SyncStatus }) {
     });
   };
 
+  const fields = {
+    form: draft,
+    onEdit,
+    errors,
+    busy: save.isPending,
+    secrets: status.areas.secrets,
+  };
   return (
-    <div className="flex max-w-[680px] flex-col gap-4" data-testid="sync-remote-tab">
-      <Card className="flex flex-col gap-4 p-4">
-        <SyncRemoteFields
-          form={draft}
-          onEdit={onEdit}
-          errors={errors}
-          busy={save.isPending}
-          secrets={status.areas.secrets}
-          confirmSecrets
-          focusSecret={params.get("focus") === "secret"}
-        />
-        <SyncVaultPath path={status.vault_path} synchroniser={status.synchroniser} />
-      </Card>
-      <Card className="p-4">
-        <SyncStopSyncing status={status} />
-      </Card>
+    <div className="flex flex-col gap-6" data-testid="sync-remote-tab">
+      <SyncRemoteFields {...fields} focusSecret={params.get("focus") === "secret"} />
+      <SyncSecretsSection {...fields} />
+      <SyncVaultPath status={status} />
+      <SyncStopSyncing />
     </div>
   );
 }

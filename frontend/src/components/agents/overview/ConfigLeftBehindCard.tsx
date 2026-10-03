@@ -7,7 +7,7 @@
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
 
-import { AskAgentButton } from "@/components/handoff/AskAgentButton";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Section } from "@/components/Section";
 import { Button } from "@/components/ui/button";
 import { abbreviateHomePath, agentProgramName, agentTypeLabel } from "@/lib/agents/display";
@@ -55,7 +55,7 @@ export function ConfigLeftBehindCard({ agent, typeRow }: Props) {
               {t(`${K}.checkAgain`)}
             </Button>
             {agent.install_handoff ? (
-              <AskAgentButton prompt={agent.install_handoff.prompt} />
+              <AgentHandoff size="sm" help={false} prompt={agent.install_handoff.prompt} />
             ) : null}
           </>
         }

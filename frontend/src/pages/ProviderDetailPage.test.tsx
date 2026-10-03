@@ -207,9 +207,9 @@ describe("ProviderDetailPage", () => {
     expect(screen.getByText("coffer://secret/provider/acme")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open Secrets" })).toHaveAttribute("href", "/secrets");
     expect(screen.queryByText("2 of 3 offered")).not.toBeInTheDocument();
-    // One column: the Models section sits under Used by and Endpoint (the only
-    // tabs are the page's Providers | Usage).
-    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    // One column, no tabs: the Models section sits under Used by and Endpoint.
+    // Only the page header's Providers | Usage tabs: the provider itself has none.
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Providers", "Usage"]);
     expect(screen.getByRole("switch", { name: /gpt-5-codex/ })).toBeInTheDocument();
   });
 

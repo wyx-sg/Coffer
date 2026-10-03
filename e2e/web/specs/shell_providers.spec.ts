@@ -5,8 +5,9 @@
 // tabs of its own), Used by naming Coffer's engine once the provider carries
 // it (and linking Settings › General), Edit renaming in place, and Delete —
 // confirmed with a consequence line while the provider is the engine's, done
-// for an unused one. Usage (/model-providers/usage) is first-run on a fresh
-// daemon; the range, filters, tiles and breakdown are covered in
+// for an unused one. Usage (/model-providers?tab=usage) is reached from
+// the Providers tab and covered by shell_usage.spec.ts; its range, filters,
+// tiles and breakdown are covered in
 // frontend/src/components/usage/UsageTab.test.tsx.
 //
 // Every provider here is created through the REST API with a loopback base
@@ -186,25 +187,18 @@ test("an unused provider is deleted after a confirmation", async ({ page }) => {
   }
 });
 
-test("Usage is a tab of Model providers and starts empty on a fresh daemon", async ({
+test("Usage is a tab of Model providers, under the same header", async ({
   page,
 }) => {
   await page.goto("/model-providers");
   await page.getByRole("tab", { name: "Usage" }).click();
-  await expect(page).toHaveURL(/\/model-providers\/usage$/);
+  await expect(page).toHaveURL(/\/model-providers\?tab=usage$/);
   await expect(
     page.getByRole("heading", { name: "Model providers" }),
   ).toBeVisible();
 
-  // Nothing has gone through the local proxy: only the empty state, with no
-  // range, filters or export to narrow nothing, and a way back to Providers.
-  await expect(page.getByText("No API-key usage yet")).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Open Providers" }),
-  ).toHaveAttribute("href", "/model-providers");
-  await expect(page.getByRole("button", { name: "Export CSV" })).toHaveCount(0);
-
-  // A range in the address still lands on the same state.
-  await page.goto("/model-providers/usage?range=30d");
+    page.getByRole("button", { name: "Add provider" }),
+  ).toBeVisible();
   await expect(page.getByText("No API-key usage yet")).toBeVisible();
 });

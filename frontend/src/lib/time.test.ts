@@ -1,7 +1,14 @@
 import { describe, expect, test } from "vitest";
 import type { TFunction } from "i18next";
 
-import { formatClock, formatClockOrMoment, formatDay, formatMoment } from "./time";
+import {
+  formatClock,
+  formatClockOrMoment,
+  formatDay,
+  formatExact,
+  formatMoment,
+  formatRelative,
+} from "./time";
 
 // The English templates, as the locale ships them.
 const t = ((key: string, o: Record<string, string>) =>
@@ -31,5 +38,35 @@ describe("time formats", () => {
   test("a check time is the clock today and the moment otherwise", () => {
     expect(formatClockOrMoment(new Date(2026, 9, 3, 14, 2), "en", t, NOW)).toBe("14:02");
     expect(formatClockOrMoment(new Date(2026, 8, 30, 14, 2), "en", t, NOW)).toBe("30 Sep at 14:02");
+  });
+});
+
+describe("relative time", () => {
+  const rt = ((key: string, o?: { count: number }) =>
+    ({
+      "common.time.justNow": "just now",
+      "common.time.minAgo": `${o?.count} min ago`,
+      "common.time.hAgo": `${o?.count} h ago`,
+      "common.time.yesterday": "Yesterday",
+    })[key]) as TFunction;
+  const at = (d: Date) => formatRelative(d, "en", rt, NOW);
+
+  test("steps from just now to minutes to hours to yesterday to a date", () => {
+    expect(at(new Date(2026, 9, 3, 14, 59, 40))).toBe("just now");
+    expect(at(new Date(2026, 9, 3, 14, 48))).toBe("12 min ago");
+    expect(at(new Date(2026, 9, 3, 12, 0))).toBe("3 h ago");
+    expect(at(new Date(2026, 9, 2, 23, 0))).toBe("Yesterday");
+    expect(at(new Date(2026, 8, 29, 10, 0))).toBe("Sep 29");
+    expect(at(new Date(2025, 6, 3, 10, 0))).toBe("Jul 3, 2025");
+  });
+
+  test("Chinese dates and the exact time", () => {
+    expect(formatRelative(new Date(2026, 8, 29), "zh", rt, NOW)).toBe("9月29日");
+    expect(formatExact(new Date(2026, 9, 3, 9, 41, 7), "en")).toBe("Oct 3, 2026 at 09:41:07");
+    expect(formatExact(new Date(2026, 9, 3, 9, 41, 7), "zh")).toBe("2026年10月3日 09:41:07");
+  });
+
+  test("a time that is not a date is printed as given", () => {
+    expect(formatRelative("nope", "en", rt, NOW)).toBe("nope");
   });
 });

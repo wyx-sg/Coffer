@@ -9,9 +9,11 @@
 // drives search through `search.value`/`search.onChange`; each page it hands
 // over is kept and shown under the ones before — DataTableLoadMore.tsx); and
 // infinite (cursor-paged: every row passed is shown, see `InfiniteRows`).
-// Row rendering (data, skeleton, empty state) lives in DataTableBody.tsx.
-import { useMemo, useState, type ReactNode } from "react";
+// Row rendering lives in DataTableBody.tsx; sorting (DataTableSort.ts) and its
+// props (DataTable.types.ts) are split out to keep this file within budget.
+import { useMemo, useState } from "react";
 
+import { sortRows } from "@/components/DataTableSort";
 import { DataTableToolbar } from "@/components/DataTableToolbar";
 import { DataTableHead } from "@/components/DataTableHead";
 import { DataRows, EmptyRow, SkeletonRows } from "@/components/DataTableBody";
@@ -24,58 +26,18 @@ import { Table, TableBody } from "@/components/ui/table";
 import {
   skeletonCount,
   type Column,
+  type DataTableProps,
   type FilterDef,
-  type InfiniteRows,
-  type ListLoading,
-  type ServerPagination,
-  type TableSelection,
+  type TableSort,
 } from "@/components/DataTable.types";
+import { nextSort } from "@/lib/tableSort";
 // Re-exported so call sites keep importing these from "@/components/DataTable".
-export type { Column, FilterDef };
+export type { Column, FilterDef, TableSort };
 
 // Cap the body at 20 rows (row ≈ 3rem): beyond that it scrolls under the
 // sticky header (#227), keeping Load more and the toolbar on screen. Tailwind's
 // max-h scale stops at 24rem, so the arbitrary value lives here, named.
 const BODY_MAX_HEIGHT = "max-h-[60rem]";
-
-interface Props<T> extends ListLoading {
-  rows: T[];
-  columns: Column<T>[];
-  rowKey: (row: T) => string;
-  // Search box: `accessor` drives the client-side filter (omit in server mode);
-  // `value`/`onChange` make it a controlled input that searches the server.
-  search?: {
-    accessor?: (row: T) => string;
-    placeholder: string;
-    value?: string;
-    onChange?: (v: string) => void;
-  };
-  filters?: FilterDef<T>[];
-  onRowClick?: (row: T) => void;
-  /** Rows returning false do not open on click. */
-  isRowClickable?: (row: T) => boolean;
-  /** A full-width row under a row — a notice about it; null renders nothing. */
-  rowFooter?: (row: T) => ReactNode;
-  /** When set, rows expand to a full-width detail sub-row (excludes onRowClick). */
-  getRowDetail?: (row: T) => ReactNode;
-  /** When set, a leading checkbox column + bulk action bar are rendered. */
-  selection?: TableSelection<T>;
-  /** Rows returning false get no checkbox and are left out of bulk. */
-  isSelectable?: (row: T) => boolean;
-  /** How many rows show at first and each "Load N more" adds (default: Settings). */
-  pageSize?: number;
-  /** When set, page on demand against the server instead of slicing in memory. */
-  serverPagination?: ServerPagination;
-  infinite?: InfiniteRows;
-  /** Fixed table layout: columns take the widths their `className` sets (e.g.
-   *  `w-[36%]`) and the rest share what is left, so no cell stretches the table.
-   *  Pair it with `TruncatedText` / `TruncatedPath` in cells that can be long. */
-  fixed?: boolean;
-  emptyMessage: string;
-  footer?: boolean; // false drops the "Showing x of y" footer (an always-short list)
-  /** Under the empty message, e.g. the primary "create" button. */
-  emptyAction?: ReactNode;
-}
 
 export function DataTable<T>({
   rows,
@@ -96,8 +58,10 @@ export function DataTable<T>({
   emptyAction,
   fixed = false,
   footer = true,
+  sort: controlledSort,
+  onSortChange,
   isLoading = false,
-}: Props<T>) {
+}: DataTableProps<T>) {
   const server = serverPagination;
   // Search may be controlled (server mode) or internal (client mode).
   const controlledQuery = search?.value;
@@ -106,6 +70,14 @@ export function DataTable<T>({
   const setQuery = (v: string) => {
     if (search?.onChange) search.onChange(v);
     else setInternalQuery(v);
+  };
+
+  const [internalSort, setInternalSort] = useState<TableSort | null>(null);
+  const sort = controlledSort === undefined ? internalSort : controlledSort;
+  const changeSort = (key: string) => {
+    const next = nextSort(sort, key);
+    if (onSortChange) onSortChange(next);
+    else setInternalSort(next);
   };
 
   const [filterVals, setFilterVals] = useState<Record<string, string>>({});
@@ -135,7 +107,10 @@ export function DataTable<T>({
     });
   }, [rows, query, filterVals, filters, search]);
 
-  const filtered = server ? rows : clientFiltered;
+  const filtered = useMemo(
+    () => (server ? rows : sortRows(clientFiltered, columns, sort)),
+    [server, rows, clientFiltered, columns, sort],
+  );
 
   const size = server ? server.pageSize : (pageSize ?? globalDefault);
   const resetKey = `${query}␟${JSON.stringify(filterVals)}␟${size}`;
@@ -159,7 +134,9 @@ export function DataTable<T>({
     server: Boolean(server),
     resetKey,
   });
-  const hasToolbar = Boolean(search) || filters.length > 0;
+  // The bulk bar takes the filter row's place while rows are ticked.
+  const bulkShown = Boolean(selection) && (sel.selectedRows.length > 0 || ps.allMatching);
+  const hasToolbar = (Boolean(search) || filters.length > 0) && !bulkShown;
 
   return (
     <div className="space-y-4">
@@ -197,6 +174,8 @@ export function DataTable<T>({
             someSelected={ps.pageSomeSelected}
             ariaSelectAll={selection?.ariaSelectAll}
             onToggleAll={ps.togglePage}
+            sort={sort}
+            onSort={changeSort}
           />
           <TableBody>
             {isLoading && pageRows.length === 0 ? (

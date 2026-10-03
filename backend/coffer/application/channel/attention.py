@@ -83,8 +83,7 @@ class ChannelAttentionSource:
             code, severity = "channel_secret_approval", Severity.WARNING
             if status.secret_approval.state == "refused":
                 reason = (
-                    "Its secret was refused in the Coffer app, so it is not running. "
-                    "Ask again from the Secrets page."
+                    "Its secret was refused in the Coffer app (Secrets page), so it is not running."
                 )
             else:
                 reason = (

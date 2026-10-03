@@ -91,7 +91,7 @@ describe("FeatureGate", () => {
 // sidebar entry carries: a deep link lands on the not-found page, not on the page.
 describe("the route table", () => {
   const GATED: Record<string, string[]> = {
-    models: ["/model-providers", "/model-providers/abc", "/model-providers/usage"],
+    models: ["/model-providers", "/model-providers/abc"],
     knowledge: ["/knowledge", "/knowledge/abc/history"],
     memory: ["/memory", "/memory/abc/delivered"],
     sync: ["/sync", "/sync/conflicts", "/sync/deletions"],

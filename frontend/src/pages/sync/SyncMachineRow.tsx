@@ -7,7 +7,8 @@
 // nothing.
 //
 // The "More" menu offers Rename on this Mac's row only — a machine writes its
-// own descriptor and no other machine's — and Retire on every other row.
+// own descriptor and no other machine's — and Retire on every other row, which
+// retires at once (the tab's toast carries Undo).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Laptop, Monitor } from "lucide-react";
@@ -19,7 +20,7 @@ import { TableCell, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Machine } from "@/lib/api/sync";
 import { cn } from "@/lib/utils";
-import { RenameMachineDialog, RetireMachineDialog } from "./SyncMachineDialogs";
+import { RenameMachineDialog } from "./SyncMachineDialogs";
 import { isStale, lastSeenLabel, roundTime } from "./syncMachineTimes";
 import { statusLabel } from "./syncRoundStatus";
 
@@ -51,11 +52,13 @@ interface Props {
   /** This machine is the vault's curation owner. */
   curates: boolean;
   now: Date;
+  /** Retire this machine now; the tab's toast offers Undo. */
+  onRetire: (machine: Machine) => void;
 }
 
-export function SyncMachineRow({ machine, curates, now }: Props) {
+export function SyncMachineRow({ machine, curates, now, onRetire }: Props) {
   const { t, i18n } = useTranslation();
-  const [dialog, setDialog] = useState<"rename" | "retire" | null>(null);
+  const [renaming, setRenaming] = useState(false);
   const Icon = /book/i.test(`${machine.name} ${machine.hostname}`) ? Laptop : Monitor;
 
   const actions: MenuAction[] = machine.is_self
@@ -63,7 +66,7 @@ export function SyncMachineRow({ machine, curates, now }: Props) {
         {
           key: "rename",
           label: t("sync.machines.rename"),
-          onSelect: () => setDialog("rename"),
+          onSelect: () => setRenaming(true),
         },
       ]
     : [
@@ -71,7 +74,7 @@ export function SyncMachineRow({ machine, curates, now }: Props) {
           key: "retire",
           label: t("sync.machines.retire"),
           destructive: true,
-          onSelect: () => setDialog("retire"),
+          onSelect: () => onRetire(machine),
         },
       ];
 
@@ -129,11 +132,8 @@ export function SyncMachineRow({ machine, curates, now }: Props) {
       </TableCell>
       <TableCell className="w-10 text-right">
         <ActionMenu label={t("sync.machines.more", { name: machine.name })} actions={actions} />
-        {dialog === "rename" ? (
-          <RenameMachineDialog machine={machine} onClose={() => setDialog(null)} />
-        ) : null}
-        {dialog === "retire" ? (
-          <RetireMachineDialog machine={machine} now={now} onClose={() => setDialog(null)} />
+        {renaming ? (
+          <RenameMachineDialog machine={machine} onClose={() => setRenaming(false)} />
         ) : null}
       </TableCell>
     </TableRow>

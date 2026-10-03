@@ -105,7 +105,7 @@ describe("ScanSecretsDialog", () => {
     // Beside the mentions, the manual list stays and the hand-off is offered.
     expect(within(dialog).getByText(/deploy/)).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Copy prompt" }));
-    expect(writeText).toHaveBeenCalledWith(SCAN.handoff?.prompt);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(SCAN.handoff?.prompt));
   });
 
   test("review runs a dry run of the ticked findings; apply runs the import", async () => {
@@ -217,6 +217,15 @@ describe("ScanSecretsDialog", () => {
       "couldn't be rewritten: it is read-only. The key is saved as the secret npm-publish-token",
     );
     expect(result).toHaveTextContent("Every change is in Activity");
+    // The key is saved, so this is a warning, not a failure; the permission fix can go to an agent.
+    expect(within(result).getByText("Saved · file not changed")).toBeInTheDocument();
+    expect(result).toHaveClass("max-w-[640px]");
+    const footer = within(result)
+      .getAllByRole("button")
+      .map((b) => b.textContent);
+    expect(footer.indexOf("Copy prompt")).toBeGreaterThan(-1);
+    expect(footer.indexOf("Retry")).toBeGreaterThan(footer.indexOf("Copy prompt"));
+    expect(within(result).queryByRole("button", { name: "Show file" })).toBeNull();
     fireEvent.click(within(result).getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(api.importFindings).toHaveBeenLastCalledWith(["f1"], false));
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
@@ -227,6 +236,7 @@ describe("ScanSecretsDialog", () => {
     renderDialog();
     const dialog = await screen.findByRole("dialog", { name: "No plaintext keys found" });
     expect(dialog).toHaveTextContent("Coffer checked 214 files and found no API keys or tokens");
+    expect(dialog).toHaveClass("max-w-[480px]");
   });
   test("a whole-file finding (line 0) names no line, and the table stays inside the panel", async () => {
     api.scan.mockResolvedValue({

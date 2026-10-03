@@ -1,13 +1,13 @@
 // frontend/src/pages/sync/SyncHeader.tsx — the Sync page's header (every 6.5 board).
 //
-// One row: "Sync", the "?" that explains adding another Mac, the status pill,
-// and the primary action on the right ("Sync now", "Syncing…", or "Try again"
-// when the last round could not reach or sign in to the remote). Under it the
-// remote itself: its URL in mono with a copy button, the branch, and how often
-// a round runs. A Mac that is not set up shows "Not set up" and no action —
-// the body below is the setup flow, which has its own buttons.
+// One row: "Sync", the Experimental tag, the status pill, and the primary
+// action on the right — always "Sync now" (6.4 Status group), "Syncing…" and
+// disabled while a round runs. Under it the description line is the remote:
+// "Keeps this vault in step with <url> [copy] · main · every hour". A Mac that
+// is not set up shows "Not set up", the setup lead and no action — the body
+// below is the setup flow, which has its own buttons.
 import { useTranslation } from "react-i18next";
-import { Check, Copy, RefreshCw, RotateCw } from "lucide-react";
+import { Check, Copy, RefreshCw } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { StatusPill } from "@/components/status/StatusPill";
@@ -43,7 +43,8 @@ function RemoteLine({ remote }: { remote: SyncRemote }) {
   const { t } = useTranslation();
   const { copied, copy } = useCopyText();
   return (
-    <p className="flex flex-wrap items-center gap-x-1 text-sm text-text-subtle">
+    <span className="flex flex-wrap items-center gap-x-1">
+      <span>{t("sync.header.keeps")}</span>
       <span className="whitespace-nowrap font-mono text-xs text-text-muted">{remote.url}</span>
       <Button
         type="button"
@@ -59,7 +60,7 @@ function RemoteLine({ remote }: { remote: SyncRemote }) {
       <span>
         · {remote.branch} · {intervalPhrase(remote.interval_seconds, t)}
       </span>
-    </p>
+    </span>
   );
 }
 
@@ -74,27 +75,21 @@ export function SyncHeader({ state, remote, onRun }: Props) {
   const action = primaryAction(state.kind);
   const setUp = state.kind !== "setup";
   return (
-    <div className="flex flex-col gap-1">
-      <PageHeader
-        title={t("sync.title")}
-        subtitle={t("sync.subtitle")}
-        badges={<SyncPill state={state} />}
-        actions={
-          setUp ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onRun}
-              disabled={action.disabled}
-              loading={action.label === "syncing"}
-            >
-              {action.label === "tryAgain" ? <RotateCw aria-hidden /> : <RefreshCw aria-hidden />}
-              {t(`sync.header.${action.label}`)}
-            </Button>
-          ) : undefined
-        }
-      />
-      {remote ? <RemoteLine remote={remote} /> : null}
-    </div>
+    <PageHeader
+      title={t("sync.title")}
+      experimental
+      subtitle={
+        setUp && remote ? <RemoteLine remote={remote} /> : setUp ? undefined : t("sync.setup.lead")
+      }
+      badges={<SyncPill state={state} />}
+      actions={
+        setUp ? (
+          <Button type="button" onClick={onRun} disabled={action.disabled} loading={action.syncing}>
+            <RefreshCw aria-hidden />
+            {t(action.syncing ? "sync.header.syncing" : "sync.header.syncNow")}
+          </Button>
+        ) : undefined
+      }
+    />
   );
 }

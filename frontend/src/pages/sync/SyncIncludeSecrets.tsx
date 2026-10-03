@@ -2,7 +2,7 @@
 //
 // "Include encrypted secrets": whether this Mac's secrets travel to the
 // remote as ciphertext. Turning it ON on a stored remote asks first (board
-// 6.5.23), naming the repository and how many secrets that is, because from
+// 6.4.28), naming the repository and how many secrets that is, because from
 // the next round everyone with access to the repository sees that they exist
 // and what they are called. The master key never leaves this Mac. Turning it
 // off needs no question: nothing more is pushed.

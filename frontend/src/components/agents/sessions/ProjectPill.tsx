@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 import { Check, ChevronDown } from "lucide-react";
 
 import { projectName } from "@/components/agents/sessions/sessionTime";
-import { PILL_TRIGGER } from "@/components/activity/FilterPill";
+import { pillClass } from "@/components/filters/pillStyles";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAgentTranscripts } from "@/lib/hooks/useAgentTranscripts";
 import { cn } from "@/lib/utils";
@@ -48,10 +48,7 @@ export function ProjectPill({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(PILL_TRIGGER, (value || open) && "bg-surface-selected")}
-        >
+        <button type="button" className={cn(pillClass(!!value, open), "px-2.5")}>
           <span className={cn(value && "font-label text-text")}>
             {value
               ? t("agents.sessionsTab.projectChosen", { project: projectName(value) ?? value })
