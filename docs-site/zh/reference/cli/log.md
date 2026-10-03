@@ -1,83 +1,109 @@
 ---
 title: coffer log
 description: "Read Coffer's records: the audit log, MCP calls and the daemon log"
+pageClass: cli-ref
 ---
 
 # coffer log
 
-属于 [CLI 参考](/zh/reference/cli)，由 CLI 自己的命令树生成；用 `make docs-reference` 重新生成，不要手工编辑。
+Read Coffer's records: the audit log, MCP calls and the daemon log
 
 ```sh
 coffer log [OPTIONS] COMMAND [ARGS]...
 ```
 
-Read Coffer's records: the audit log, MCP calls and the daemon log
+本页与 `coffer log --help` 打印的内容一致。在下面任何命令后加 `--help`，即可在终端里查看它的选项。
+
+## 命令 {#commands}
+
+| 命令 | 说明 |
+| --- | --- |
+| [`log audit`](#log-audit) | Read the audit log, newest first, one page at a time. |
+| [`log mcp`](#log-mcp) | Read the MCP invocation log, newest first. |
+| [`log daemon`](#log-daemon) | Read the tail of the daemon log, newest first, normalised as the Activity page shows it. |
+| [`log prune`](#log-prune) | Prune every registered log table now (or only --table), by its retention period. |
 
 ## log audit
+
+Read the audit log, newest first, one page at a time.
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer log audit [OPTIONS]
 ```
 
-Read the audit log, newest first, one page at a time.
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `--kind` | 选项 | text |  | Only this resource kind |
-| `--name` | 选项 | text |  | Only this resource (needs --kind) |
-| `--event-type` | 选项 | text |  | Only this event type |
-| `--since` | 选项 | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
-| `--limit` | 选项 | integer (1-500) | `50` | Most entries to print |
-| `--cursor` | 选项 | text |  | Read the page after this one: the next_cursor a previous read printed |
-| `--trace` | 选项 | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
-| `--json` | 选项 | 开关 |  | JSON output for scripts |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--kind` <span class="cli-chip">选项</span> | text |  | Only this resource kind |
+| `--name` <span class="cli-chip">选项</span> | text |  | Only this resource (needs --kind) |
+| `--event-type` <span class="cli-chip">选项</span> | text |  | Only this event type |
+| `--since` <span class="cli-chip">选项</span> | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
+| `--limit` <span class="cli-chip">选项</span> | integer (1-500) | `50` | Most entries to print |
+| `--cursor` <span class="cli-chip">选项</span> | text |  | Read the page after this one: the next_cursor a previous read printed |
+| `--trace` <span class="cli-chip">选项</span> | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
 
 ## log mcp
-
-```sh
-coffer log mcp [OPTIONS]
-```
 
 Read the MCP invocation log, newest first.
 
 Without --server this is the log the Activity page shows, Coffer's own calls (server ``coffer``) and the rows of servers since deleted included.
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `--server` | 选项 | text |  | One server; omit for every server |
-| `--status` | 选项 | text |  | ok \| error |
-| `--since` | 选项 | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
-| `--limit` | 选项 | integer (1-500) | `20` | Most calls to print |
-| `--cursor` | 选项 | text |  | Read the page after this one: the next_cursor a previous read printed |
-| `--trace` | 选项 | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
-| `--json` | 选项 | 开关 |  | JSON output for scripts |
-
-## log daemon
+<p class="cli-label">概要</p>
 
 ```sh
-coffer log daemon [OPTIONS]
+coffer log mcp [OPTIONS]
 ```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--server` <span class="cli-chip">选项</span> | text |  | One server; omit for every server |
+| `--status` <span class="cli-chip">选项</span> | text |  | ok \| error |
+| `--since` <span class="cli-chip">选项</span> | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
+| `--limit` <span class="cli-chip">选项</span> | integer (1-500) | `20` | Most calls to print |
+| `--cursor` <span class="cli-chip">选项</span> | text |  | Read the page after this one: the next_cursor a previous read printed |
+| `--trace` <span class="cli-chip">选项</span> | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
+
+## log daemon
 
 Read the tail of the daemon log, newest first, normalised as the Activity page shows it.
 
 ``--trace`` keeps the lines of one request or turn, the same id ``coffer log audit --trace`` and ``coffer log mcp --trace`` filter on.
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `--since` | 选项 | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
-| `--errors` | 选项 | 开关 |  | Only errors |
-| `--limit` | 选项 | integer (1-500) | `100` | Most records to print |
-| `--trace` | 选项 | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
-| `--json` | 选项 | 开关 |  | JSON output for scripts |
+<p class="cli-label">概要</p>
+
+```sh
+coffer log daemon [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--since` <span class="cli-chip">选项</span> | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
+| `--errors` <span class="cli-chip">选项</span> | 开关 |  | Only errors |
+| `--limit` <span class="cli-chip">选项</span> | integer (1-500) | `100` | Most records to print |
+| `--trace` <span class="cli-chip">选项</span> | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
 
 ## log prune
+
+Prune every registered log table now (or only --table), by its retention period.
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer log prune [OPTIONS]
 ```
 
-Prune every registered log table now (or only --table), by its retention period.
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `--table` | 选项 | text |  | Prune only this table |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--table` <span class="cli-chip">选项</span> | text |  | Prune only this table |

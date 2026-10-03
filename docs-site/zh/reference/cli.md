@@ -23,12 +23,12 @@ description: 每一个 coffer 命令、参数和选项，由 CLI 自身生成。
 coffer [OPTIONS] COMMAND [ARGS]...
 ```
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `--verbose, -v` | 选项 | 开关 |  | Show full tracebacks and HTTP request/response context on error. |
-| `--version` | 选项 | 开关 |  | Print Coffer's version and exit. |
-| `--install-completion` | 选项 | 开关 |  | Install completion for the current shell. |
-| `--show-completion` | 选项 | 开关 |  | Show completion for the current shell, to copy it or customize the installation. |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--verbose, -v` <span class="cli-chip">选项</span> | 开关 |  | Show full tracebacks and HTTP request/response context on error. |
+| `--version` <span class="cli-chip">选项</span> | 开关 |  | Print Coffer's version and exit. |
+| `--install-completion` <span class="cli-chip">选项</span> | 开关 |  | Install completion for the current shell. |
+| `--show-completion` <span class="cli-chip">选项</span> | 开关 |  | Show completion for the current shell, to copy it or customize the installation. |
 
 ## 命令组 {#command-groups}
 

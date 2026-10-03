@@ -1,48 +1,71 @@
 ---
 title: coffer provider
 description: "Manage LLM connections and switch agents onto them"
+pageClass: cli-ref
 ---
 
 # coffer provider
 
-属于 [CLI 参考](/zh/reference/cli)，由 CLI 自己的命令树生成；用 `make docs-reference` 重新生成，不要手工编辑。
+Manage LLM connections and switch agents onto them
 
 ```sh
 coffer provider [OPTIONS] COMMAND [ARGS]...
 ```
 
-Manage LLM connections and switch agents onto them
+本页与 `coffer provider --help` 打印的内容一致。在下面任何命令后加 `--help`，即可在终端里查看它的选项。
+
+## 命令 {#commands}
+
+| 命令 | 说明 |
+| --- | --- |
+| [`provider list`](#provider-list) | List every LLM connection. |
+| [`provider show`](#provider-show) | Show one connection, by name or uid. |
+| [`provider add`](#provider-add) | Create an LLM connection. |
+| [`provider edit`](#provider-edit) | Rename a connection, or change its title, description, endpoint, wire, key or fallback. |
+| [`provider rm`](#provider-rm) | Remove a connection (its stored key goes with it when nothing else cites it). |
+| [`provider enable`](#provider-enable) | Enable a connection. |
+| [`provider disable`](#provider-disable) | Disable a connection. |
+| [`provider scope`](#provider-scope) | Show or set which agents a connection reaches (this machine only). |
+| [`provider switch`](#provider-switch) | Switch agents onto this connection and write their native config. |
+| [`provider builtin`](#provider-builtin) | Switch's other half: put the agent of this type back on its OWN login. |
+| [`provider detect-local`](#provider-detect-local) | Find local model runtimes (read-only: nothing is pulled or loaded). |
+| [`provider order`](#provider-order) | Put providers in this order; the rest keep theirs, after them. |
+| [`provider price`](#provider-price) | Show each model's price on a provider and its source, or set one. |
 
 ## provider list
+
+List every LLM connection.
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer provider list [OPTIONS]
 ```
 
-List every LLM connection.
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `--json` | 选项 | 开关 |  | JSON output for scripts |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
 
 ## provider show
+
+Show one connection, by name or uid.
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer provider show [OPTIONS] NAME
 ```
 
-Show one connection, by name or uid.
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Name or uid |
-| `--json` | 选项 | 开关 |  | JSON output for scripts |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `NAME` <span class="cli-chip">参数</span> | text | 必填 | Name or uid |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
 
 ## provider add
-
-```sh
-coffer provider add [OPTIONS] NAME
-```
 
 Create an LLM connection.
 
@@ -52,23 +75,27 @@ For anthropic/openai/unknown supply exactly one of --secret / --secret-ref; an o
 
 A --secret-ref key that already goes somewhere else waits for approval in the Coffer app before this connection may send it: the command says so and exits 9, or waits for the answer with --wait.
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Connection name |
-| `--protocol` | 选项 | text | 必填 | Protocol: anthropic \| openai \| ollama \| unknown |
-| `--base-url` | 选项 | text | 必填 | Upstream endpoint base URL |
-| `--secret` | 选项 | text |  | API key (stored encrypted) |
-| `--secret-ref` | 选项 | text |  | Reuse an existing secret ref instead of --secret |
-| `--title` | 选项 | text |  | Display title (≤80 chars) |
-| `--description` | 选项 | text |  |  |
-| `--local` | 选项 | 开关 |  | A model runtime on this machine (Ollama, LM Studio, vLLM, llama-server): detect it, curate its tool-capable models, no key needed |
-| `--wait` | 选项 | 开关 |  | Wait for approval in the Coffer app instead of exiting |
-
-## provider edit
+<p class="cli-label">概要</p>
 
 ```sh
-coffer provider edit [OPTIONS] NAME
+coffer provider add [OPTIONS] NAME
 ```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `NAME` <span class="cli-chip">参数</span> | text | 必填 | Connection name |
+| `--protocol` <span class="cli-chip">选项</span> | text | 必填 | Protocol: anthropic \| openai \| ollama \| unknown |
+| `--base-url` <span class="cli-chip">选项</span> | text | 必填 | Upstream endpoint base URL |
+| `--secret` <span class="cli-chip">选项</span> | text |  | API key (stored encrypted) |
+| `--secret-ref` <span class="cli-chip">选项</span> | text |  | Reuse an existing secret ref instead of --secret |
+| `--title` <span class="cli-chip">选项</span> | text |  | Display title (≤80 chars) |
+| `--description` <span class="cli-chip">选项</span> | text |  |  |
+| `--local` <span class="cli-chip">选项</span> | 开关 |  | A model runtime on this machine (Ollama, LM Studio, vLLM, llama-server): detect it, curate its tool-capable models, no key needed |
+| `--wait` <span class="cli-chip">选项</span> | 开关 |  | Wait for approval in the Coffer app instead of exiting |
+
+## provider edit
 
 Rename a connection, or change its title, description, endpoint, wire, key or fallback.
 
@@ -78,142 +105,186 @@ A wire change is refused while the connection is switched on, because the wire d
 
 A new --base-url for a connection whose key is already sent somewhere, or a new --secret for a key in use, waits for approval in the Coffer app: the change is saved, the command says what waits and exits 9, or waits for the answer with --wait.
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Name or uid |
-| `--name` | 选项 | text |  | New name |
-| `--title` | 选项 | text |  | Display title (≤80 chars); empty clears it |
-| `--description` | 选项 | text |  |  |
-| `--protocol` | 选项 | text |  | Correct the wire format: anthropic \| openai \| ollama \| unknown |
-| `--base-url` | 选项 | text |  |  |
-| `--secret` | 选项 | text |  | Rotate the stored API key |
-| `--fallback / --no-fallback` | 选项 | boolean |  | Whether other providers' requests may fail over to this one |
-| `--wait` | 选项 | 开关 |  | Wait for approval in the Coffer app instead of exiting |
+<p class="cli-label">概要</p>
+
+```sh
+coffer provider edit [OPTIONS] NAME
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `NAME` <span class="cli-chip">参数</span> | text | 必填 | Name or uid |
+| `--name` <span class="cli-chip">选项</span> | text |  | New name |
+| `--title` <span class="cli-chip">选项</span> | text |  | Display title (≤80 chars); empty clears it |
+| `--description` <span class="cli-chip">选项</span> | text |  |  |
+| `--protocol` <span class="cli-chip">选项</span> | text |  | Correct the wire format: anthropic \| openai \| ollama \| unknown |
+| `--base-url` <span class="cli-chip">选项</span> | text |  |  |
+| `--secret` <span class="cli-chip">选项</span> | text |  | Rotate the stored API key |
+| `--fallback / --no-fallback` <span class="cli-chip">选项</span> | boolean |  | Whether other providers' requests may fail over to this one |
+| `--wait` <span class="cli-chip">选项</span> | 开关 |  | Wait for approval in the Coffer app instead of exiting |
 
 ## provider rm
+
+Remove a connection (its stored key goes with it when nothing else cites it).
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer provider rm [OPTIONS] NAME
 ```
 
-Remove a connection (its stored key goes with it when nothing else cites it).
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Name or uid |
-| `--force, --yes, -f, -y` | 选项 | 开关 |  | Do not ask |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `NAME` <span class="cli-chip">参数</span> | text | 必填 | Name or uid |
+| `--force, --yes, -f, -y` <span class="cli-chip">选项</span> | 开关 |  | Do not ask |
 
 ## provider enable
+
+Enable a connection.
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer provider enable [OPTIONS] NAME
 ```
 
-Enable a connection.
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Name or uid |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `NAME` <span class="cli-chip">参数</span> | text | 必填 | Name or uid |
 
 ## provider disable
+
+Disable a connection.
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer provider disable [OPTIONS] NAME
 ```
 
-Disable a connection.
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Name or uid |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `NAME` <span class="cli-chip">参数</span> | text | 必填 | Name or uid |
 
 ## provider scope
+
+Show or set which agents a connection reaches (this machine only).
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer provider scope [OPTIONS] NAME
 ```
 
-Show or set which agents a connection reaches (this machine only).
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Name or uid |
-| `--agents` | 选项 | text |  | Only these agents (a,b) |
-| `--all` | 选项 | 开关 |  | Every agent |
-| `--none` | 选项 | 开关 |  | No agent (dormant) |
-| `--json` | 选项 | 开关 |  | JSON output for scripts |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `NAME` <span class="cli-chip">参数</span> | text | 必填 | Name or uid |
+| `--agents` <span class="cli-chip">选项</span> | text |  | Only these agents (a,b) |
+| `--all` <span class="cli-chip">选项</span> | 开关 |  | Every agent |
+| `--none` <span class="cli-chip">选项</span> | 开关 |  | No agent (dormant) |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
 
 ## provider switch
+
+Switch agents onto this connection and write their native config.
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer provider switch [OPTIONS] NAME
 ```
 
-Switch agents onto this connection and write their native config.
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Connection to switch onto |
-| `--agent` | 选项 | text |  | Agent type to switch: claude_code \| codex. Default: every registered, enabled agent the connection reaches |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `NAME` <span class="cli-chip">参数</span> | text | 必填 | Connection to switch onto |
+| `--agent` <span class="cli-chip">选项</span> | text |  | Agent type to switch: claude_code \| codex. Default: every registered, enabled agent the connection reaches |
 
 ## provider builtin
-
-```sh
-coffer provider builtin [OPTIONS] AGENT_TYPE
-```
 
 Switch's other half: put the agent of this type back on its OWN login.
 
 Removes Coffer's projection from its native config and clears its connection. Only that agent changes. Idempotent — a no-op when the agent already runs built-in.
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `AGENT_TYPE` | 参数 | text | 必填 | Agent type: claude_code \| codex |
+<p class="cli-label">概要</p>
+
+```sh
+coffer provider builtin [OPTIONS] AGENT_TYPE
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `AGENT_TYPE` <span class="cli-chip">参数</span> | text | 必填 | Agent type: claude_code \| codex |
 
 ## provider detect-local
+
+Find local model runtimes (read-only: nothing is pulled or loaded).
+
+<p class="cli-label">概要</p>
 
 ```sh
 coffer provider detect-local [OPTIONS]
 ```
 
-Find local model runtimes (read-only: nothing is pulled or loaded).
+<p class="cli-label">参数与选项</p>
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `--base-url` | 选项 | text |  | A loopback URL to probe; default: each runtime's default port |
-| `--json` | 选项 | 开关 |  | Machine-readable output |
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--base-url` <span class="cli-chip">选项</span> | text |  | A loopback URL to probe; default: each runtime's default port |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Machine-readable output |
 
 ## provider order
-
-```sh
-coffer provider order [OPTIONS] NAME...
-```
 
 Put providers in this order; the rest keep theirs, after them.
 
 The order is fallback priority: when an agent's model is offered by more than one enabled provider, the proxy tries the agent's own provider first, then the others in this order, before the first byte of the answer.
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `NAME...` | 参数 | text（可变个数） | 必填 | Providers, first to last |
-
-## provider price
+<p class="cli-label">概要</p>
 
 ```sh
-coffer provider price [OPTIONS] NAME [MODEL]
+coffer provider order [OPTIONS] NAME...
 ```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `NAME...` <span class="cli-chip">参数</span> | text（可变个数） | 必填 | Providers, first to last |
+
+## provider price
 
 Show each model's price on a provider and its source, or set one.
 
 Without MODEL: every model the provider offers, with its price per 1M tokens (input · output) and where it came from — You set, From &lt;provider&gt; (its own API reported it), Bundled (the price list shipped with this release) or — when nothing prices it. With MODEL and --input/--output: record your own price, which wins over every other source. --reset removes it.
 
-| 名称 | 类别 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `NAME` | 参数 | text | 必填 | Provider name or uid |
-| `[MODEL]` | 参数 | text |  | Model to set or reset |
-| `--input` | 选项 | float |  | USD per 1M input tokens |
-| `--output` | 选项 | float |  | USD per 1M output tokens |
-| `--cache-read` | 选项 | float |  | USD per 1M cache reads |
-| `--cache-write` | 选项 | float |  | USD per 1M cache writes (5-minute) |
-| `--reset` | 选项 | 开关 |  | Remove the price you set on MODEL |
-| `--json` | 选项 | 开关 |  | Machine-readable output |
+<p class="cli-label">概要</p>
+
+```sh
+coffer provider price [OPTIONS] NAME [MODEL]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `NAME` <span class="cli-chip">参数</span> | text | 必填 | Provider name or uid |
+| `[MODEL]` <span class="cli-chip">参数</span> | text |  | Model to set or reset |
+| `--input` <span class="cli-chip">选项</span> | float |  | USD per 1M input tokens |
+| `--output` <span class="cli-chip">选项</span> | float |  | USD per 1M output tokens |
+| `--cache-read` <span class="cli-chip">选项</span> | float |  | USD per 1M cache reads |
+| `--cache-write` <span class="cli-chip">选项</span> | float |  | USD per 1M cache writes (5-minute) |
+| `--reset` <span class="cli-chip">选项</span> | 开关 |  | Remove the price you set on MODEL |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Machine-readable output |
