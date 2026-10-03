@@ -9,7 +9,7 @@
 // which, for a secret something still uses, says what does instead. No value
 // is ever on this page until Reveal is chosen.
 import { useMemo, useState } from "react";
-import { KeyRound, Plus, RotateCcw, ScanSearch } from "lucide-react";
+import { IdCard, Plus, RotateCcw, ScanSearch } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { AddSecretDialog } from "@/components/secret/AddSecretDialog";
@@ -95,7 +95,7 @@ export function SecretsPage() {
         />
       ) : firstRun ? (
         <EmptyState
-          icon={KeyRound}
+          icon={IdCard}
           title={t("secrets.empty.title")}
           description={t("secrets.empty.body")}
           action={addButton}

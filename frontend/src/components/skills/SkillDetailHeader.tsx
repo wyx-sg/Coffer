@@ -8,7 +8,7 @@
 //   the built-in skill: Written by Coffer · Regenerated today at 09:02
 //   a skill whose master folder is gone: its master folder · master missing
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, GitBranch, GitCommitHorizontal, Sparkles } from "lucide-react";
+import { AlertTriangle, GitBranch, GitCommitHorizontal, Sparkle } from "lucide-react";
 
 import { ScopeControl } from "@/components/ScopeControl";
 import { SkillActionsMenu } from "@/components/skills/SkillActionsMenu";
@@ -115,7 +115,7 @@ export function SkillDetailHeader({
           {masterMissing ? (
             <AlertTriangle className="size-4" strokeWidth={1.75} aria-hidden />
           ) : (
-            <Sparkles className="size-4" strokeWidth={1.75} aria-hidden />
+            <Sparkle className="size-4" strokeWidth={1.75} aria-hidden />
           )}
         </span>
         <h2 className="min-w-0 truncate font-mono text-lg font-bold">{skill.name}</h2>

@@ -5,11 +5,11 @@
 // (ConfigEditorPane), or a directory entry's files (ConfigDirectoryPane).
 // Secret and machine-state files are not on the allowlist, so never here.
 //
-// An unsaved draft is guarded three ways: picking another file asks first
-// (the selection is parked in useConfigEditorState until confirmed), the page
-// asks before switching tabs (`onDirtyChange`), and the browser asks before
-// unload. The selected file is in the URL (`?file=`).
-import { useEffect, useState } from "react";
+// An unsaved draft is guarded by the shell, not here: the file picker, the tab
+// strip and every other way out are location changes, and the shell's guard
+// dialog asks first (useUnsavedGuard, registered by the draft itself). The
+// selected file is in the URL (`?file=`).
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { LoadError } from "@/components/LoadError";
@@ -17,14 +17,12 @@ import { ConfigDirectoryPane } from "@/components/agents/ConfigDirectoryPane";
 import { ConfigEditorPane } from "@/components/agents/ConfigEditorPane";
 import { ConfigFileTree } from "@/components/agents/ConfigFileTree";
 import { NewConfigFileDialog } from "@/components/agents/NewConfigFileDialog";
-import { UnsavedChangesDialog } from "@/components/agents/UnsavedChangesDialog";
 import { FILE_PANE_COLUMN, useFillToBottom } from "@/components/filePane";
 import { SplitView } from "@/components/SplitView";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { baseName } from "@/lib/agents/configFiles";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
-import { useBeforeUnload } from "@/lib/hooks/useBeforeUnload";
 import { useCreateConfigChild, useDeleteConfigChild } from "@/lib/hooks/useConfigDirFiles";
 import { useConfigEditorState } from "@/lib/hooks/useConfigEditorState";
 
@@ -45,17 +43,13 @@ const QUIET =
 
 interface Props {
   agent: AgentOut;
-  /** Reports whether an unsaved draft is on screen, so the page can guard
-   *  tab switches that would unmount this tab. */
-  onDirtyChange?: (dirty: boolean) => void;
 }
 
-export function AgentConfigFilesTab({ agent, onDirtyChange }: Props) {
+export function AgentConfigFilesTab({ agent }: Props) {
   const { t } = useTranslation();
-  const s = useConfigEditorState(agent.uid);
-  const fill = useFillToBottom();
-  const dirty = s.draft.dirty;
   const agentName = agentTypeLabel(agent.type);
+  const s = useConfigEditorState(agent.uid, agentName);
+  const fill = useFillToBottom();
   const createChild = useCreateConfigChild(agent.uid);
   const deleteChild = useDeleteConfigChild(agent.uid);
   const [newFileOpen, setNewFileOpen] = useState(false);
@@ -65,20 +59,12 @@ export function AgentConfigFilesTab({ agent, onDirtyChange }: Props) {
     path: string;
   } | null>(null);
 
-  useBeforeUnload(dirty);
-  useEffect(() => {
-    onDirtyChange?.(dirty);
-    return () => onDirtyChange?.(false);
-  }, [dirty, onDirtyChange]);
-
   const description =
     s.selectedKey && DESCRIBED_KEYS.has(s.selectedKey) && !s.selectedChild
       ? t(`agents.config.desc.${s.selectedKey}`, { agent: agentName })
       : null;
   // The content response resolves the actual file on disk; the listing covers
   // a top-level file before its content has loaded.
-  // The file with the edits on screen, for the discard confirmation.
-  const editingName = s.selectedChild ?? (s.selectedInfo ? baseName(s.selectedInfo.path) : "");
   const filePath = s.activeContent?.path ?? (s.selectedChild ? undefined : s.selectedInfo?.path);
 
   const list = s.files.isPending ? (
@@ -139,13 +125,6 @@ export function AgentConfigFilesTab({ agent, onDirtyChange }: Props) {
         detailClassName="pl-4"
         list={list}
         detail={detail}
-      />
-      <UnsavedChangesDialog
-        open={s.hasPendingSelection}
-        file={editingName}
-        target={s.pendingTarget}
-        onKeepEditing={s.cancelPendingSelection}
-        onDiscard={s.confirmPendingSelection}
       />
       {s.selectedInfo && s.isDirSelected ? (
         <NewConfigFileDialog

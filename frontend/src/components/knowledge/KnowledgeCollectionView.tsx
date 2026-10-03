@@ -13,7 +13,7 @@
 // knowledge "Serve every collection to every agent").
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderOpen, Library, Pencil, Plus, Upload } from "lucide-react";
+import { FolderOpen, Book, Pencil, Plus, Upload } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { SectionStack } from "@/components/Section";
@@ -59,7 +59,7 @@ export function KnowledgeCollectionView({ collection, modelSet, onAdd, onUpload 
       {empty && !editing ? (
         <div className="flex min-h-0 flex-1 items-center justify-center p-6">
           <EmptyState
-            icon={Library}
+            icon={Book}
             title={t("knowledge.collection.emptyTitle", { name: collection.name })}
             description={t("knowledge.collection.emptyBody")}
             action={

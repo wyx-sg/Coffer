@@ -5,7 +5,7 @@
 // commits in the range on one line under it.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Sparkles } from "lucide-react";
+import { Sparkle } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import type { SkillOut, SkillUpdatePreview } from "@/lib/api/skills";
@@ -33,7 +33,7 @@ function WhatWillHappen({ skill, preview }: { skill: SkillOut; preview: SkillUpd
         {t("skills.update.whatWillHappen")}
       </span>
       <p className="flex gap-2 text-xs leading-[1.45] text-text-muted">
-        <Sparkles className="mt-0.5 size-3.5 shrink-0 text-text-subtle" aria-hidden />
+        <Sparkle className="mt-0.5 size-3.5 shrink-0 text-text-subtle" aria-hidden />
         <span>
           <span className="font-label text-text">{t("skills.update.coffer")}</span>{" "}
           {t("skills.update.cofferMoves", {

@@ -26,10 +26,9 @@ function fromInteractiveChild(e: KeyboardEvent<HTMLTableRowElement>): boolean {
 }
 
 // Skeleton rows are shaped like the real ones (44 high, 10px bars, r4) and
-// appear only after 300ms of waiting, so a fast answer never flashes them
-// (Foundations-Tables "Loading", Shell-ListLoading). The header stays mounted.
-const SKELETON_ROW =
-  "hover:bg-transparent animate-in fade-in-0 fill-mode-both delay-300 duration-fast";
+// appear only after 300ms of waiting (animate-appear), so a fast answer never
+// flashes them (Foundations-Tables "Loading"). The header stays mounted.
+const SKELETON_ROW = "hover:bg-transparent animate-appear";
 
 export function SkeletonRows({ count, colCount }: { count: number; colCount: number }) {
   return (

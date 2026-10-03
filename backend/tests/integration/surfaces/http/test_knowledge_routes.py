@@ -27,6 +27,9 @@ rule.
 
 from __future__ import annotations
 
+import os
+import pathlib
+
 import pytest
 from starlette.testclient import TestClient
 
@@ -92,6 +95,30 @@ def test_the_listing_counts_documents_and_pending_material_apart(  # type: ignor
     assert listed.status_code == 200, listed.text
     [entry] = listed.json()["collections"]
     assert (entry["document_count"], entry["pending_count"]) == (2, 1)
+
+
+def _listed(client: TestClient) -> dict[str, dict]:  # type: ignore[type-arg]
+    found = client.get("/api/v1/knowledge/collections").json()["collections"]
+    return {c["name"]: c for c in found}
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a collection lists when its newest document was written"
+)
+def test_the_listing_carries_when_the_newest_document_was_written(client) -> None:  # type: ignore[no-untyped-def]
+    _create_collection(client, "shopee")
+    _create_collection(client, "empty")
+    older = _document(client, "shopee", "Older")
+    newer = _document(client, "shopee", "Newer")
+
+    listed = _listed(client)
+    folder = pathlib.Path(listed["shopee"]["folder_path"])
+    os.utime(folder.parent / older, (1_700_000_000, 1_700_000_000))
+    os.utime(folder.parent / newer, (1_800_000_000, 1_800_000_000))
+
+    listed = _listed(client)
+    assert listed["shopee"]["updated_at"] == "2027-01-15T08:00:00+00:00"
+    assert listed["empty"]["updated_at"] is None
 
 
 def test_the_listing_reads_the_description_off_disk_every_time(client, tmp_path) -> None:  # type: ignore[no-untyped-def]

@@ -8,7 +8,7 @@
 // by the depth, size or time bound says that too. The open command is the
 // page's `?node=`. Left: the command tree (SplitView, foldable); right: the
 // open command.
-import { RefreshCw, SquareTerminal } from "lucide-react";
+import { RefreshCw, Terminal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSearchParamsKeepingState as useSearchParams } from "@/lib/hooks/useSearchParamsKeepingState";
 
@@ -42,7 +42,7 @@ export function CliCommandsTab({ command, iface }: Props) {
     return (
       <EmptyState
         tone="error"
-        icon={SquareTerminal}
+        icon={Terminal}
         title={t("clis.commands.loadFailed")}
         description={translateApiError(t, query.error)}
         action={
@@ -57,7 +57,7 @@ export function CliCommandsTab({ command, iface }: Props) {
     return (
       <EmptyState
         tone="error"
-        icon={SquareTerminal}
+        icon={Terminal}
         title={t("clis.commands.readFailed")}
         description={translateApiError(t, read.error)}
         action={
@@ -89,7 +89,7 @@ export function CliCommandsTab({ command, iface }: Props) {
     const unavailable = data.status === "unavailable";
     return (
       <EmptyState
-        icon={SquareTerminal}
+        icon={Terminal}
         title={t(unavailable ? "clis.commands.unavailable" : "clis.commands.noHelpTitle")}
         description={data.message ?? undefined}
         action={unavailable ? undefined : readAgain}

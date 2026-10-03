@@ -59,8 +59,8 @@ acceptance("web-ui", "a list surface shows first-class loading and error states"
   stub({ error: new ApiError("RESOURCE_NOT_FOUND", "no such thing") });
   renderPage();
   expect(screen.getByRole("heading", { level: 1, name: "MCP servers" })).toBeInTheDocument();
-  expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
-  expect(screen.getByText("Resource not found")).toBeInTheDocument();
+  expect(screen.getByText(/couldn.t load mcp servers/i)).toBeInTheDocument();
+  expect(screen.getByText(/Resource not found\. Nothing was changed/)).toBeInTheDocument();
 });
 
 acceptance("web-ui", "page headers share one typographic scale", () => {

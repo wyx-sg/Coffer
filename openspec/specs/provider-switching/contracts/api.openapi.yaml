@@ -977,13 +977,13 @@ paths:
     get:
       operationId: usage_export_csv_api_v1_usage_export_csv_get
       parameters:
-      - description: today | 7d | 30d | month | custom
+      - description: today | 24h | 7d | 30d | month | custom
         in: query
         name: range
         required: false
         schema:
           default: today
-          description: today | 7d | 30d | month | custom
+          description: today | 24h | 7d | 30d | month | custom
           title: Range
           type: string
       - description: First local day (custom range)
@@ -1253,13 +1253,13 @@ paths:
     get:
       operationId: usage_summary_api_v1_usage_summary_get
       parameters:
-      - description: today | 7d | 30d | month | custom
+      - description: today | 24h | 7d | 30d | month | custom
         in: query
         name: range
         required: false
         schema:
           default: today
-          description: today | 7d | 30d | month | custom
+          description: today | 24h | 7d | 30d | month | custom
           title: Range
           type: string
       - description: First local day (custom range)

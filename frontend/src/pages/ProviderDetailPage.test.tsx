@@ -490,6 +490,6 @@ describe("ProviderDetailPage", () => {
     api.list.mockResolvedValue({ providers: [makeProvider({ uid: "cn-other", name: "other" })] });
     api.get.mockRejectedValue(new ApiError("RESOURCE_NOT_FOUND", "nope"));
     renderPage("/model-providers/cn-missing");
-    expect(await screen.findByText("Model provider not found")).toBeInTheDocument();
+    expect(await screen.findByText("This provider no longer exists")).toBeInTheDocument();
   });
 });

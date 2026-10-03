@@ -21,7 +21,6 @@ import { useNavigate } from "react-router-dom";
 import { DialogOverlay } from "@/components/ui/dialog";
 import { useOpenSettings } from "@/lib/settingsModal";
 import { cn } from "@/lib/utils";
-import { Kbd } from "@/components/ui/kbd";
 import { Hint } from "./PaletteParts";
 import { PaletteList } from "./PaletteList";
 import type { PaletteItem } from "./paletteItems";
@@ -122,7 +121,7 @@ function PaletteBody({ close }: { close: () => void }) {
         <KindSource key={kind} kind={kind} query={query} onState={model.onKindState} />
       ))}
       <div className="flex h-12 shrink-0 items-center gap-2.5 border-b border-border-subtle px-4">
-        <Search className="size-4 shrink-0 text-text-muted" aria-hidden />
+        <Search className="size-4 shrink-0 text-text-subtle" aria-hidden />
         {/* No autoFocus: the dialog focuses its first field on open, and an
             autoFocus would run first and hide from Radix the element focus
             must return to on close. */}
@@ -137,17 +136,8 @@ function PaletteBody({ close }: { close: () => void }) {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={onKeyDown}
-          className="h-full min-w-0 flex-1 bg-transparent text-md text-text outline-none placeholder:text-text-muted"
+          className="h-full min-w-0 flex-1 bg-transparent text-md text-text outline-none placeholder:text-text-subtle"
         />
-        <button
-          type="button"
-          tabIndex={-1}
-          aria-label={t("palette.close")}
-          onClick={close}
-          className="shrink-0 cursor-pointer"
-        >
-          <Kbd>esc</Kbd>
-        </button>
       </div>
       <div ref={listRef} className="flex min-h-0 flex-1 flex-col">
         <PaletteList
@@ -160,11 +150,10 @@ function PaletteBody({ close }: { close: () => void }) {
           onChoose={choose}
         />
       </div>
-      <div className="flex shrink-0 items-center gap-3.5 border-t border-border-subtle px-4 py-2 text-xs text-text-muted">
+      <div className="flex shrink-0 items-center gap-3.5 border-t border-border-subtle px-4 py-2 text-2xs text-text-subtle">
         <Hint keys="↑↓" label={t("palette.navigate")} />
         <Hint keys="↵" label={t("palette.open")} />
         <Hint keys="esc" label={t("palette.close")} />
-        <span className="ml-auto truncate">{t("palette.footerNote")}</span>
       </div>
     </>
   );

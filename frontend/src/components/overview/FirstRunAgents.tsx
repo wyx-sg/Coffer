@@ -5,8 +5,9 @@
 // to start); "Review and connect N agents" opens the connection review
 // (AgentConnectionChangeDialog, the one the Agents page uses), which shows
 // every file change before Coffer writes it. When none was found the card
-// says so, and its first step is Scan again (Overview boards 1.3.03, 1.3.07).
-// Either way "Add an agent by hand" leads to the Agents page, where an
+// says so, and its first step is Scan again; each agent not found carries an
+// accent "Install ↗" to its official install page (Overview boards 1.2.06,
+// 1.2.07). Either way "Add an agent by hand" leads to the Agents page, where an
 // agent's config folder can be chosen.
 import { Plug, RefreshCw, Search, UserPlus } from "lucide-react";
 import { useState } from "react";
@@ -22,12 +23,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import type { AgentTypeOut } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
-import { AgentHandoff } from "@/components/handoff/AgentHandoff";
-import { useAgentInstallHandoff, useAgentTypes } from "@/lib/hooks/useAgentTypes";
+import { useAgentTypes } from "@/lib/hooks/useAgentTypes";
 import { formatClock } from "@/lib/overview/time";
 
 const INSTALLED = new Set(["installed_active", "installed_never_run"]);
 const isFound = (row: AgentTypeOut) => INSTALLED.has(row.state);
+
+/** "Claude Code and Codex"; with more, "A, B and C". */
+function listNames(names: readonly string[], and: string): string {
+  if (names.length < 3) return names.join(and);
+  return `${names.slice(0, -1).join(", ")}${and}${names[names.length - 1]}`;
+}
 
 export function FirstRunAgents() {
   const { t } = useTranslation();
@@ -39,9 +45,6 @@ export function FirstRunAgents() {
   const [reviewing, setReviewing] = useState<AgentTypeOut[] | null>(null);
   const chosen = found.filter((row) => !unticked.has(row.type));
   const none = types.isSuccess && found.length === 0;
-  // With none installed, installing one is handed to the person's assistant as
-  // a prompt the daemon writes (Principle IV); there is no agent here to ask.
-  const installPrompt = useAgentInstallHandoff(none).data ?? null;
   const scannedAt = types.dataUpdatedAt > 0 ? new Date(types.dataUpdatedAt).toISOString() : null;
   const toggle = (type: string) =>
     setUnticked((prev) => {
@@ -65,14 +68,20 @@ export function FirstRunAgents() {
             <Plug className="size-5" strokeWidth={1.75} aria-hidden />
           )}
         </span>
-        <h2 id="overview-first-run" className="text-md font-bold text-text">
+        <h2 id="overview-first-run" className="text-[16px] font-[650] tracking-[-0.01em] text-text">
           {t(none ? "overview.firstRun.noneTitle" : "overview.firstRun.title")}
         </h2>
         <p className="text-sm leading-[1.55] text-text-muted">
           {none
-            ? t("overview.firstRun.noneBody", {
-                names: rows.map((r) => r.display_name).join(t("overview.firstRun.and")),
-              })
+            ? t(
+                rows.length === 2 ? "overview.firstRun.noneBody" : "overview.firstRun.noneBodyMany",
+                {
+                  names: listNames(
+                    rows.map((r) => r.display_name),
+                    t("overview.firstRun.and"),
+                  ),
+                },
+              )
             : types.isSuccess
               ? t("overview.firstRun.foundBody", { count: found.length })
               : t("overview.firstRun.body")}
@@ -109,7 +118,6 @@ export function FirstRunAgents() {
                 <RefreshCw aria-hidden />
                 {t("overview.firstRun.scan")}
               </Button>
-              {installPrompt ? <AgentHandoff prompt={installPrompt} /> : null}
             </>
           ) : (
             <Button disabled={chosen.length === 0} onClick={() => setReviewing(chosen)}>
@@ -183,8 +191,19 @@ function AgentRow({
         <span className="truncate font-mono text-xs text-text-muted">
           {abbreviateHomePath(row.config_dir)}
         </span>
-        <span className="ml-auto whitespace-nowrap text-xs text-text-muted">
+        <span className="ml-auto inline-flex items-center gap-2.5 whitespace-nowrap text-xs text-text-muted">
           {t(found ? "overview.firstRun.found" : "overview.firstRun.notFound")}
+          {!found && row.install_url ? (
+            <a
+              href={row.install_url}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={t("overview.firstRun.installFor", { name: row.display_name })}
+              className="rounded-xs font-label text-accent-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+            >
+              {t("overview.firstRun.install")}
+            </a>
+          ) : null}
         </span>
       </label>
     </li>

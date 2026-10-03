@@ -107,6 +107,34 @@ async def test_summary_by_agent_and_by_day(sm, tmp_path: Path) -> None:  # type:
 
 @pytest.mark.acceptance(
     spec="provider-switching",
+    scenario="the last 24 hours is a rolling window",
+)
+async def test_the_last_24_hours_is_a_rolling_window(sm, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    spool = tmp_path / "spool"
+    write_spool(
+        spool,
+        "a.jsonl",
+        [
+            record(1, started_at=NOW - timedelta(hours=2)),
+            record(2, started_at=NOW - timedelta(hours=23)),
+            record(3, started_at=NOW - timedelta(hours=25)),
+        ],
+    )
+    repo = SqlAlchemyUsageRepo(sm)
+    await UsageIngestService(
+        repo=repo, spool=FileSpoolReader(spool), prices=FakePrices(), tz=UTC
+    ).ingest_once()
+    svc = UsageQueryService(repo=repo, connection_names=FakeNames({}), clock=FakeClock(), tz=UTC)
+
+    summary = await svc.summary("24h")
+    assert summary.totals.requests == 2
+    # The 25-hour-old request is on the same local day as the 23-hour-old one's
+    # neighbour yesterday, which the daily rollup would have counted whole.
+    assert (await svc.summary("7d")).totals.requests == 3
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
     scenario="usage narrowed to one agent and one provider",
 )
 async def test_summary_filters_and_the_agents_behind_each_row(sm, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]

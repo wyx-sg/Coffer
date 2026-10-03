@@ -436,39 +436,36 @@ describe("McpServerPane", () => {
     expect(copied.sentry.transport.secret_refs.Authorization).toBe("SENTRY_TOKEN");
   });
 
-  test("Delete says what it costs and can take the secrets only this server uses", async () => {
+  acceptance("web-ui", "Delete server lists what it costs and keeps its secrets", async () => {
     const { onDeleted } = renderPane();
     fireEvent.click(await screen.findByRole("button", { name: /more actions for sentry/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: /delete/i }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Delete sentry?")).toBeInTheDocument();
+    expect(within(dialog).getByText(/Agents lose access at their next tool call/)).toBeVisible();
     expect(
-      within(dialog).getByText(
-        /Both agents lose its 5 tools on their next call: Claude Code and Codex/,
-      ),
+      within(dialog).getByText("5 tools disappear from Claude Code and Codex"),
     ).toBeInTheDocument();
-    // Only the secret nobody else cites is offered.
-    const box = await within(dialog).findByRole("checkbox", {
-      name: /also delete the secret SENTRY_TOKEN/i,
-    });
-    fireEvent.click(box);
+    // One row per secret it cites; they stay on the Secrets page.
+    expect(within(dialog).getByText("SENTRY_TOKEN stays in Secrets")).toBeInTheDocument();
+    expect(within(dialog).getByText("SHARED stays in Secrets")).toBeInTheDocument();
+    expect(within(dialog).getByText("Past calls stay in Activity.")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("checkbox")).toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: /delete server/i }));
     await waitFor(() => expect(resourcesApi.remove).toHaveBeenCalledWith("u-sentry"));
-    await waitFor(() => expect(secretsApi.remove).toHaveBeenCalledWith("SENTRY_TOKEN"));
-    expect(secretsApi.remove).not.toHaveBeenCalledWith("SHARED");
+    expect(secretsApi.remove).not.toHaveBeenCalled();
     expect(onDeleted).toHaveBeenCalled();
   });
-  test("a secret that cannot be deleted with its server is reported, not swallowed", async () => {
-    vi.mocked(secretsApi.remove).mockRejectedValueOnce(new Error("in use"));
+
+  acceptance("web-ui", "a refused delete stays open under its error title", async () => {
+    vi.mocked(resourcesApi.remove).mockRejectedValueOnce(new Error("in use"));
     renderPane();
     fireEvent.click(await screen.findByRole("button", { name: /more actions for sentry/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: /delete/i }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(
-      await within(dialog).findByRole("checkbox", { name: /also delete the secret SENTRY_TOKEN/i }),
-    );
     fireEvent.click(within(dialog).getByRole("button", { name: /delete server/i }));
-    expect(await screen.findByText(/Couldn't delete 1 secret/)).toBeInTheDocument();
+    expect(await within(dialog).findByText("Couldn’t delete sentry")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 
   test("a failing server's header is tinted, and its tools come from the saved switches at once", async () => {

@@ -340,6 +340,6 @@ describe("SkillDetailPane", () => {
 
   test("an unknown name says there is no such skill", async () => {
     renderSkillsPage("/skills/nope");
-    expect(await screen.findByText("No skill named “nope”")).toBeInTheDocument();
+    expect(await screen.findByText("This skill no longer exists")).toBeInTheDocument();
   });
 });

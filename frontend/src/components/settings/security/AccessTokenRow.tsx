@@ -103,7 +103,7 @@ export function AccessTokenRow() {
           })
         }
       >
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg bg-surface-sunken px-3 py-2 text-xs">
+        <dl className="grid grid-cols-[90px_1fr] gap-x-3 gap-y-1 rounded-lg bg-surface-sunken px-3 py-2 text-xs">
           <dt className="text-text-muted">{t("settings.security.token.tokenFile")}</dt>
           <dd className="font-mono text-text">{TOKEN_FILE}</dd>
         </dl>

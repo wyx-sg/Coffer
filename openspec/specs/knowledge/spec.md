@@ -99,7 +99,12 @@ The system MUST NOT derive any boundary from the agent's cwd. There MUST be no `
 - **AND** no `global` directory and no `project-` directory exists afterwards
 
 ### Requirement: Read a collection's description from its README
-A collection's one-line description MUST be the first paragraph of its `README.md`, absent when there is none, and MUST be read off disk on every listing. It MUST NOT be stored in the database — not even in the `resources` row's own generic `description` column, which for this kind stays empty: a copy written once and read by nothing is wrong from the first time the person edits the file. It is also what the delivered skill's own description draws on (see "Describe Coffer and the collections' subjects in the skill description"), so a collection that fails to describe itself is a collection an agent never recognises.
+A collection's one-line description MUST be the first paragraph of its `README.md`, absent when there is none, and MUST be read off disk on every listing. It MUST NOT be stored in the database — not even in the `resources` row's own generic `description` column, which for this kind stays empty: a copy written once and read by nothing is wrong from the first time the person edits the file. It is also what the delivered skill's own description draws on (see "Describe Coffer and the collections' subjects in the skill description"), so a collection that fails to describe itself is a collection an agent never recognises. Each listing MUST also carry when the collection's newest document was written (`updated_at`, absent for a collection holding none), read off the files' times, which is what the Overview's Knowledge tile words as "edited today 13:30".
+
+#### Scenario: a collection lists when its newest document was written
+- **GIVEN** a collection holding two documents written at different times, and an empty one
+- **WHEN** the collections are listed
+- **THEN** the first carries the later document's write time as `updated_at` and the empty one carries none
 
 #### Scenario: the catalogue lists collections with their README description
 - **GIVEN** a collection created with the description "First description", whose `README.md` is then edited by hand to open with "Edited by hand."

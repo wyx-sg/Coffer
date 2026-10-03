@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 
 import type { AttentionItem } from "@/lib/hooks/useAttention";
 import {
+  actionIcon,
   actionLabelKey,
   actionPage,
   itemActionLabelKey,
@@ -145,4 +146,28 @@ test("an error is red and anything else amber", () => {
   expect(severityTone("error")).toBe("err");
   expect(severityTone("warning")).toBe("warn");
   expect(severityTone("info")).toBe("warn");
+});
+
+test("a channel's check and sync's review read by what they do", () => {
+  const channel = item({
+    kind: "channel",
+    action: { verb: "check", method: "GET", path: "/x", body: null },
+  });
+  expect(itemActionLabelKey(channel)).toBe("overview.actions.reconnectChannel");
+  const sync = item({
+    kind: "sync",
+    action: { verb: "review", method: "GET", path: "/x", body: null },
+  });
+  expect(itemActionLabelKey(sync)).toBe("overview.actions.reviewHeld");
+  // Another kind's check keeps the plain verb.
+  expect(itemActionLabelKey(item({ kind: "cli", action: channel.action }))).toBe(
+    "overview.actions.check",
+  );
+});
+
+test("every verb that has an icon names one, the others none", () => {
+  for (const verb of ["set_secret", "review", "connect", "repair", "check", "test"]) {
+    expect(actionIcon(verb)).toBeDefined();
+  }
+  expect(actionIcon("open")).toBeUndefined();
 });

@@ -25,7 +25,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plus, Upload } from "lucide-react";
 
-import { EmptyState } from "@/components/EmptyState";
+import { ListLoadError } from "@/components/ListPaneStates";
 import { KnowledgeAutomaticPopover } from "@/components/knowledge/KnowledgeAutomaticPopover";
 import { KnowledgeDialogs, type KnowledgeDialog } from "@/components/knowledge/KnowledgeDialogs";
 import { KnowledgeNav } from "@/components/knowledge/KnowledgeNav";
@@ -35,7 +35,6 @@ import { KnowledgeWelcomePanel } from "@/components/knowledge/KnowledgeWelcomePa
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { Button } from "@/components/ui/button";
-import { translateApiError } from "@/lib/api/errors";
 import { knowledgeKey } from "@/lib/api/queryKeys";
 import { useDetailTab } from "@/lib/detailTabs";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
@@ -120,22 +119,6 @@ export function KnowledgePage() {
   // workspace whose panes each scroll on their own.
   const shell = "-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10";
 
-  if (collections.error) {
-    return (
-      <div className={shell}>
-        {header}
-        <div className="p-6">
-          <EmptyState
-            tone="error"
-            title={t("knowledge.loadFailed")}
-            description={translateApiError(t, collections.error)}
-            action={<Button onClick={() => void collections.refetch()}>{t("common.retry")}</Button>}
-          />
-        </div>
-      </div>
-    );
-  }
-
   if (empty) {
     return (
       <div className={shell}>
@@ -162,30 +145,41 @@ export function KnowledgePage() {
         listClassName="flex min-h-0 flex-col bg-surface-sidebar"
         detailClassName="flex min-h-0 min-w-0 flex-col"
         list={
-          <KnowledgeNav
-            collections={list}
-            isLoading={collections.isPending}
-            currentUid={uid ?? null}
-            tab={tab}
-            file={file}
-            atRecent={!uid && !version}
-            modelSet={modelSet}
-            onCreate={() => setDialog("create")}
-          />
+          collections.error ? (
+            // Unreadable: the tree pane says so under the header, the right pane stays empty.
+            <ListLoadError
+              kind="knowledge"
+              error={collections.error}
+              onRetry={() => void collections.refetch()}
+            />
+          ) : (
+            <KnowledgeNav
+              collections={list}
+              isLoading={collections.isPending}
+              currentUid={uid ?? null}
+              tab={tab}
+              file={file}
+              atRecent={!uid && !version}
+              modelSet={modelSet}
+              onCreate={() => setDialog("create")}
+            />
+          )
         }
         detail={
-          <KnowledgePane
-            uid={uid ?? null}
-            version={version ?? null}
-            collection={current}
-            collections={list}
-            collectionsLoading={collections.isPending}
-            tab={tab}
-            file={file}
-            modelSet={modelSet}
-            onAdd={() => setDialog("add")}
-            onUpload={() => setDialog("upload")}
-          />
+          collections.error ? null : (
+            <KnowledgePane
+              uid={uid ?? null}
+              version={version ?? null}
+              collection={current}
+              collections={list}
+              collectionsLoading={collections.isPending}
+              tab={tab}
+              file={file}
+              modelSet={modelSet}
+              onAdd={() => setDialog("add")}
+              onUpload={() => setDialog("upload")}
+            />
+          )
         }
       />
       {dialogs}

@@ -78,6 +78,9 @@ class AgentDescriptor:
     #: The executable the agent runs as (``claude``, ``codex``) — what the
     #: dependency probe looks for on the agent's ``PATH``.
     program: str = ""
+    #: The product's official install page — where the Overview's first-run
+    #: card sends a person whose machine does not have the program.
+    install_url: str = ""
 
     # --- mechanism facets (bound at the composition root; None here) ----------
     #: What Coffer can place into the agent, keyed by asset type x landing.
@@ -111,6 +114,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         config_files=_claude_code_files,
         home_env_var="CLAUDE_CONFIG_DIR",
         program="claude",
+        install_url="https://docs.claude.com/en/docs/claude-code/setup",
         hook_source_keys=("settings", "settings_local"),
         mcp=McpInjectionSpec(
             config_key="global",
@@ -137,6 +141,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         config_files=_codex_files,
         home_env_var="CODEX_HOME",
         program="codex",
+        install_url="https://developers.openai.com/codex/cli",
         hook_source_keys=("hooks",),
         mcp=McpInjectionSpec(
             config_key="config",

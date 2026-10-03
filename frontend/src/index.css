@@ -85,7 +85,7 @@
     --border: 230 232 236; /* #e6e8ec */
     --border-subtle: 240 241 244; /* #f0f1f4 */
     --text: 22 24 29; /* #16181d */
-    --text-muted: 91 97 110; /* #5b616e */
+    --text-muted: 75 81 93; /* #4b515d */
     --text-subtle: 107 113 125; /* #6b717d */
     --accent: 67 83 216; /* #4353d8 */
     --on-accent: 255 255 255; /* #ffffff */
@@ -111,7 +111,6 @@
 
     /* --- elevation: the one real shadow, plus the in-page lift ----------- */
     --shadow-overlay: 0 12px 32px rgba(22, 24, 29, 0.14), 0 0 0 1px rgba(22, 24, 29, 0.06);
-    --shadow-toast: 0 2px 8px rgba(22, 24, 29, 0.08), 0 0 0 1px rgba(22, 24, 29, 0.06);
     --shadow-lifted: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px rgb(var(--border));
     --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.2);
     --shadow-focus: 0 0 0 2px rgb(var(--focus-ring));
@@ -192,7 +191,6 @@
     --focus-ring: 116 128 242; /* #7480f2 */
 
     --shadow-overlay: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
-    --shadow-toast: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.06);
   }
 
   /* Before theme.ts has run (one frame at most) a dark-system viewer would see
@@ -273,7 +271,25 @@
      padding 0 10 4). The space above a group belongs to the list that
      stacks the groups, not to the label. */
   .nav-group-label {
-    @apply px-2.5 pb-1 text-2xs font-semibold text-text-subtle;
+    @apply px-2.5 pb-1 text-2xs font-semibold text-text-muted;
+  }
+
+  /* A scroll window's thin overlay-style thumb (Overview 1.2.09): 4px, the
+     text colour at .22 (rgba(22,24,29,.22) in light), no track, so a list that
+     scrolls looks the same as one that does not. */
+  .scroll-overlay {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--text) / 0.22) transparent;
+  }
+  .scroll-overlay::-webkit-scrollbar {
+    width: 4px;
+  }
+  .scroll-overlay::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-overlay::-webkit-scrollbar-thumb {
+    border-radius: 2px;
+    background: rgb(var(--text) / 0.22);
   }
 
   /* A flat card: hairline, no shadow (elevation 0). */

@@ -10,14 +10,15 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Boxes, Plus, RotateCcw } from "lucide-react";
+import { ArrowLeft, Box, Plus } from "lucide-react";
 
+import { DetailNotFound } from "@/components/DetailNotFound";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { translateApiError } from "@/lib/api/errors";
+import { ApiError, translateApiError } from "@/lib/api/errors";
 import type { Provider } from "@/lib/api/providers";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useInternalEngineConfig } from "@/lib/hooks/useInternalEngine";
@@ -80,20 +81,7 @@ export function ProvidersSplit({ uid }: { uid?: string }) {
 
   let body;
   let split = false;
-  if (providers.error) {
-    body = (
-      <EmptyState
-        tone="error"
-        title={t("providers.loadFailed")}
-        description={translateApiError(t, providers.error)}
-        action={
-          <Button variant="outline" onClick={() => void providers.refetch()}>
-            <RotateCcw aria-hidden /> {t("common.retry")}
-          </Button>
-        }
-      />
-    );
-  } else if (!providers.isPending && list.length === 0) {
+  if (!providers.error && !providers.isPending && list.length === 0) {
     body = (
       <ProviderWelcome
         agents={agentList}
@@ -103,7 +91,11 @@ export function ProvidersSplit({ uid }: { uid?: string }) {
     );
   } else {
     split = true;
-    const missing = !!uid && !provider && !detail.isPending && !providers.isPending;
+    const missing =
+      !!uid && !provider && !detail.isPending && !providers.isPending && !providers.error;
+    const gone =
+      !detail.error ||
+      (detail.error instanceof ApiError && detail.error.code.endsWith("NOT_FOUND"));
     body = (
       <SplitView
         storageKey="providers.list"
@@ -116,6 +108,8 @@ export function ProvidersSplit({ uid }: { uid?: string }) {
           <ProviderList
             providers={list}
             isLoading={providers.isPending}
+            error={providers.error}
+            onRetry={() => void providers.refetch()}
             selectedUid={uid}
             usageOf={usageOf}
             selectedRejected={rejected}
@@ -123,9 +117,11 @@ export function ProvidersSplit({ uid }: { uid?: string }) {
         }
         detail={
           <div className="px-7 pb-5 pt-5">
-            {missing ? (
+            {providers.error || providers.isPending ? null : missing && gone && uid ? (
+              <DetailNotFound kind="providers" id={uid} backTo="/model-providers" icon={Box} />
+            ) : missing ? (
               <EmptyState
-                icon={Boxes}
+                icon={Box}
                 tone={detail.error ? "error" : "default"}
                 title={t("providers.detail.notFound")}
                 description={detail.error ? translateApiError(t, detail.error) : undefined}
@@ -166,8 +162,7 @@ export function ProvidersSplit({ uid }: { uid?: string }) {
     />
   );
   // The split is a full-bleed workspace whose two panes scroll on their own
-  // (like Skills, MCP servers and Channels); welcome and error states are an
-  // ordinary page.
+  // (like Skills, MCP servers and Channels); the welcome is an ordinary page.
   return split ? (
     <>
       <div className="-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">

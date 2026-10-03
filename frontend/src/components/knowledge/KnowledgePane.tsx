@@ -8,8 +8,9 @@
 // where the delete can be undone (board 5.1.21).
 import { useTranslation } from "react-i18next";
 import { Link, useLocation } from "react-router-dom";
-import { FileX, Library } from "lucide-react";
+import { FileX, Book } from "lucide-react";
 
+import { DetailNotFound } from "@/components/DetailNotFound";
 import { EmptyState } from "@/components/EmptyState";
 import { KnowledgeChangeView } from "@/components/knowledge/KnowledgeChangeView";
 import { KnowledgeCollectionView } from "@/components/knowledge/KnowledgeCollectionView";
@@ -57,16 +58,7 @@ export function KnowledgePane(props: Props) {
     }
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-        <EmptyState
-          icon={Library}
-          title={t("knowledge.notFound.title")}
-          description={t("knowledge.notFound.body")}
-          action={
-            <Button asChild variant="outline">
-              <Link to={KNOWLEDGE_ROOT}>{t("knowledge.recent.title")}</Link>
-            </Button>
-          }
-        />
+        <DetailNotFound kind="knowledge" id={props.uid} backTo={KNOWLEDGE_ROOT} icon={Book} />
       </div>
     );
   }

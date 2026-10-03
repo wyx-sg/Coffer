@@ -19,7 +19,7 @@ interface Props {
 
 function GroupLabel({ id, children }: { id: string; children: string }) {
   return (
-    <div id={id} className="px-2.5 pb-1 pt-2 text-2xs font-semibold text-text-muted">
+    <div id={id} className="px-2.5 pb-1 pt-2 text-2xs font-semibold text-text-subtle">
       {children}
     </div>
   );
@@ -47,14 +47,14 @@ export function PaletteList({ model, query, listboxId, baseId, ...props }: Props
       id={listboxId}
       role="listbox"
       aria-label={t("palette.label")}
-      className="flex max-h-[420px] min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-2 pt-1.5"
+      className="flex max-h-[420px] min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-2 py-2.5"
     >
       {model.groups.map((group) => {
         const labelId = `${baseId}-group-${group.key}`;
         const variant: RowVariant =
           group.key === "best" ? "best" : group.key === "recent" ? "recent" : "list";
         return (
-          <div key={group.key} role="group" aria-labelledby={labelId} className="flex flex-col">
+          <div key={group.key} role="group" aria-labelledby={labelId} className="flex flex-col gap-2.5">
             <GroupLabel id={labelId}>{groupTitle(group.key)}</GroupLabel>
             {group.items.map((item, i) => {
               const at = group.key === "recent" ? group.recent[i]?.at : undefined;
@@ -81,7 +81,7 @@ export function PaletteList({ model, query, listboxId, baseId, ...props }: Props
       {model.failed.map((kind) => {
         const labelId = `${baseId}-failed-${kind}`;
         return (
-          <div key={kind} role="group" aria-labelledby={labelId} className="flex flex-col">
+          <div key={kind} role="group" aria-labelledby={labelId} className="flex flex-col gap-2.5">
             <GroupLabel id={labelId}>{kindTitle(kind)}</GroupLabel>
             <StatusLine tone="danger">
               {t("palette.failed", { kind: t(`palette.kind.${kind}`) })}

@@ -1,6 +1,6 @@
 // src/components/shell/daemonConnection.ts — where the shell's connection to the daemon stands: ok, reconnecting or offline.
 //
-// Board 1.2.20 (Global states — behaviour), "Daemon connection": the status
+// Board 1.1.04 (Global states — behaviour), "Daemon connection": the status
 // probe polls every 30s; on a failure it retries at 1, 2, 4 and 8s. For the
 // first 10s of failures the page stays, under a "Reconnecting…" bar, dimmed
 // and inert; after that the full offline state replaces it. On recovery the

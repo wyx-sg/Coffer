@@ -16,7 +16,7 @@ import { Brain } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
-import { EmptyState } from "@/components/EmptyState";
+import { DetailNotFound } from "@/components/DetailNotFound";
 import { PartitionDeliveredTab } from "@/components/memory/PartitionDeliveredTab";
 import { PartitionMemoriesTab } from "@/components/memory/PartitionMemoriesTab";
 import { PartitionMenu } from "@/components/memory/PartitionMenu";
@@ -60,7 +60,7 @@ export function MemoryDetailPage() {
     return (
       <div className="space-y-6">
         <PageHeader title={t("memory.title")} />
-        <EmptyState icon={Brain} title={t("memory.detail.notFound")} />
+        <DetailNotFound kind="memory" id={uid} backTo="/memory" icon={Brain} />
       </div>
     );
   }

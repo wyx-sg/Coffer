@@ -6,8 +6,8 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { SearchInput } from "@/components/SearchInput";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { ResourceOut } from "@/lib/api/resources";
 import { searchableName } from "@/lib/resourceTitle";
 import { ChannelListRow } from "./ChannelListRow";
@@ -18,11 +18,22 @@ interface Props {
   channels: readonly ResourceOut[];
   views: Map<string, ChannelView>;
   isLoading: boolean;
+  /** The list read failed: the pane shows the error block under the filter. */
+  error?: unknown;
+  onRetry?: () => void;
   selectedUid: string | null;
   hrefFor: (uid: string) => string;
 }
 
-export function ChannelList({ channels, views, isLoading, selectedUid, hrefFor }: Props) {
+export function ChannelList({
+  channels,
+  views,
+  isLoading,
+  error,
+  onRetry,
+  selectedUid,
+  hrefFor,
+}: Props) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
 
@@ -45,14 +56,12 @@ export function ChannelList({ channels, views, isLoading, selectedUid, hrefFor }
         />
       </div>
       <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-2 pb-3">
-        {isLoading ? (
-          <div className="space-y-2 px-2.5 py-1" aria-busy="true">
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-10 w-full" />
-            ))}
-          </div>
+        {error ? (
+          <ListLoadError kind="channels" error={error} onRetry={() => onRetry?.()} />
+        ) : isLoading ? (
+          <ListLoadingRows />
         ) : visible.length === 0 ? (
-          <p className="px-2.5 py-3 text-xs text-text-muted">{t("channels.noMatches")}</p>
+          <ListNoMatch kind="channels" query={query} onClear={() => setQuery("")} />
         ) : (
           CHANNEL_GROUPS.map((group) => {
             const rows = visible.filter((c) => views.get(c.uid)?.group === group);

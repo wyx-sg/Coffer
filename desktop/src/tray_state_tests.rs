@@ -92,12 +92,16 @@ fn a_launch_is_connecting_not_offline() {
     assert_eq!(title(&s), None);
 }
 
+// acceptance(spec = "desktop-app", scenario = "the icon tooltip carries the count")
 #[test]
 fn the_tooltip_follows_the_state() {
     let mut s = running();
     assert_eq!(tooltip(&s, Lang::En), "Coffer");
     s.attention.count = 1;
-    assert_eq!(tooltip(&s, Lang::En), "Coffer — something needs you");
+    assert_eq!(tooltip(&s, Lang::En), "Coffer · 1 thing needs you");
+    s.attention.count = 9;
+    assert_eq!(tooltip(&s, Lang::En), "Coffer · 9 things need you");
+    assert_eq!(tooltip(&s, Lang::Zh), "Coffer · 9 件事需要你处理");
     s.daemon = Daemon::Offline;
-    assert_eq!(tooltip(&s, Lang::Zh), "Coffer — 守护进程离线");
+    assert_eq!(tooltip(&s, Lang::Zh), "Coffer");
 }

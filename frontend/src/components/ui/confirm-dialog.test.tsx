@@ -93,6 +93,21 @@ describe("ConfirmDialog closes only on success", () => {
     expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 
+  test("a failure is titled with the verb and the object the caller names", () => {
+    renderDialog({
+      error: new ApiError("RESOURCE_IN_USE", "still referenced"),
+      errorTitle: "Couldn’t delete sentry",
+      pendingLabel: "Deleting…",
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("Couldn’t delete sentry");
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
+  test("a confirm that waits on the user is disabled without a spinner", () => {
+    renderDialog({ confirmDisabled: true, pendingLabel: "Deleting…" });
+    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+  });
+
   test("no error, no alert", () => {
     renderDialog();
     expect(screen.queryByRole("alert")).toBeNull();

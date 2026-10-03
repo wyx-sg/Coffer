@@ -26,6 +26,7 @@ export const GLOBAL: PartitionOut = {
   sources: ["claude-code", "codex"],
   waiting_entries: 0,
   waiting_agents: [],
+  updated_at: "2026-09-30T09:00:00Z",
 };
 
 export const COFFER: PartitionOut = {
@@ -41,6 +42,7 @@ export const COFFER: PartitionOut = {
   sources: ["claude-code", "codex"],
   waiting_entries: 0,
   waiting_agents: [],
+  updated_at: "2026-09-30T09:00:00Z",
 };
 
 /** A partition whose repository has been deleted from disk. */
@@ -57,6 +59,7 @@ export const GONE: PartitionOut = {
   sources: ["claude-code"],
   waiting_entries: 0,
   waiting_agents: [],
+  updated_at: "2026-09-30T09:00:00Z",
 };
 
 const NOTE_BASE = {

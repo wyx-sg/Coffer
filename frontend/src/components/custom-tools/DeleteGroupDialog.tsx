@@ -41,7 +41,9 @@ export function DeleteGroupDialog({ group, open, onOpenChange, onDeleted }: Prop
       }}
       title={t("customTools.group.deleteTitle", { name: group.name })}
       description={`${body} ${secret}`}
-      confirmLabel={del.isPending ? t("common.deleting") : t("customTools.group.delete")}
+      confirmLabel={t("customTools.group.delete")}
+      pendingLabel={t("common.deleting")}
+      errorTitle={t("common.couldntDelete", { name: group.name })}
       pending={del.isPending}
       error={del.error}
       onConfirm={() =>

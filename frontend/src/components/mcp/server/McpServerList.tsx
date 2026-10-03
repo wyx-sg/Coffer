@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 
 import { ReachFilter } from "@/components/reach/ReachFilter";
 import { SearchInput } from "@/components/SearchInput";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useBuiltinMcpServer } from "@/lib/hooks/useMcpAddFlow";
@@ -30,6 +30,9 @@ export const BUILTIN_NAME = "coffer";
 interface Props {
   servers: ResourceOut[];
   isLoading: boolean;
+  /** The list read failed: the pane shows the error block under the filter. */
+  error?: unknown;
+  onRetry?: () => void;
   selectedName: string | null;
   hrefFor: (name: string) => string;
   /** The built-in `coffer` server is the open one. */
@@ -39,6 +42,8 @@ interface Props {
 export function McpServerList({
   servers,
   isLoading,
+  error,
+  onRetry,
   selectedName,
   hrefFor,
   builtinSelected = false,
@@ -121,14 +126,19 @@ export function McpServerList({
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-        {isLoading ? (
-          <div className="space-y-2 px-2.5 py-1" aria-busy="true">
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-10 w-full" />
-            ))}
-          </div>
+        {error ? (
+          <ListLoadError kind="mcp" error={error} onRetry={() => onRetry?.()} />
+        ) : isLoading ? (
+          <ListLoadingRows />
         ) : shown === 0 && servers.length > 0 && (query.trim() !== "" || reach !== "all") ? (
-          <p className="px-2.5 py-3 text-xs text-text-muted">{t("mcp.page.noMatches")}</p>
+          <ListNoMatch
+            kind="mcp"
+            query={query}
+            onClear={() => {
+              setQuery("");
+              setReach("all");
+            }}
+          />
         ) : (
           GROUP_ORDER.map((group) => {
             const rows = groups.get(group) ?? [];
@@ -162,7 +172,7 @@ export function McpServerList({
             );
           })
         )}
-        {isLoading || !showBuiltin || !builtin ? null : (
+        {isLoading || error || !showBuiltin || !builtin ? null : (
           <McpBuiltinRow server={builtin} to={hrefFor(BUILTIN_NAME)} current={builtinSelected} />
         )}
       </div>

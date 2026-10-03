@@ -80,7 +80,7 @@ describe("SkillLibrary", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Filter skills" }), {
       target: { value: "zzz" },
     });
-    expect(screen.getByText("No skill matches.")).toBeInTheDocument();
+    expect(screen.getByText("No skill matches “zzz”")).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Filter skills" }), {
       target: { value: "guide" },
     });

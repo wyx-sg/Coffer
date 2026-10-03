@@ -6,9 +6,11 @@
 // complete one. Items ignored on this machine (an agent left unconnected on
 // purpose) leave the daemon's `items`, and with them the Overview, the counts
 // the sidebar and the menu bar read; no ignored list is shown here. A list
-// longer than about six rows scrolls inside its frame under the title. With
-// nothing left, the list is the calm "Nothing needs you" card.
-import { AlertTriangle, Check } from "lucide-react";
+// longer than about six rows scrolls inside its frame under the title, behind
+// a thin overlay thumb. A source that failed is one muted status line, its
+// icon red (Overview board 1.2.04). With nothing left, the list is the calm
+// "Nothing needs you" card (AllGoodCard, board 1.2.03).
+import { AlertTriangle, CircleAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState";
@@ -21,14 +23,14 @@ import { useAttention, type AttentionItem } from "@/lib/hooks/useAttention";
 import { useIgnoreAttention } from "@/lib/hooks/useAttentionIgnore";
 import { useInPlaceActions } from "@/lib/hooks/useInPlaceAction";
 import { sortAttention } from "@/lib/overview/attention";
-import { formatClock } from "@/lib/overview/time";
 import { cn } from "@/lib/utils";
+import { AllGoodCard } from "./AllGoodCard";
 import { NEEDS_YOU_CELL, NEEDS_YOU_ROW_GRID, NeedsYouRow } from "./NeedsYouRow";
 
 const LIST = "divide-y divide-border-subtle rounded-xl border border-border bg-surface-raised";
 // A long list scrolls inside its own window (368px, about six rows) instead of pushing
 // the rest of the Overview down; the section title stays in view.
-const SCROLL = "max-h-[368px] overflow-y-auto overscroll-contain";
+const SCROLL = "scroll-overlay max-h-[368px] overflow-y-auto overscroll-contain";
 
 const rowKey = (item: AttentionItem, i: number) =>
   `${item.kind}:${item.uid ?? ""}:${item.reason_code}:${i}`;
@@ -49,6 +51,7 @@ export function NeedsYouList() {
     <Section
       as="h2"
       gap="snug"
+      compact
       labelled
       title={t("overview.needsYou.title")}
       aside={
@@ -89,8 +92,12 @@ export function NeedsYouList() {
       ) : (
         <>
           {errors.map((e) => (
-            <p key={e.source} className="flex items-start gap-2 text-xs text-warning">
-              <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
+            <p
+              key={e.source}
+              role="status"
+              className="flex items-center gap-2 text-xs text-text-muted"
+            >
+              <CircleAlert className="size-3.5 shrink-0 text-danger" aria-hidden />
               {t("overview.needsYou.sourceFailed", {
                 area: t(`overview.sources.${e.source}`, { defaultValue: e.source }),
               })}
@@ -110,31 +117,10 @@ export function NeedsYouList() {
               ))}
             </ul>
           ) : errors.length === 0 ? (
-            <AllGood checkedAt={attention.dataUpdatedAt} />
+            <AllGoodCard checkedAt={attention.dataUpdatedAt} />
           ) : null}
         </>
       )}
     </Section>
-  );
-}
-
-function AllGood({ checkedAt }: { checkedAt: number }) {
-  const { t } = useTranslation();
-  const iso = checkedAt > 0 ? new Date(checkedAt).toISOString() : null;
-  return (
-    <div className="flex items-center gap-[14px] rounded-xl border border-border bg-surface-raised px-[18px] py-4">
-      <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-success-soft text-success">
-        <Check className="size-4" strokeWidth={2} aria-hidden />
-      </span>
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <p className="text-sm font-semibold text-text">{t("overview.needsYou.empty.title")}</p>
-        <p className="text-xs text-text-muted">{t("overview.needsYou.empty.body")}</p>
-      </div>
-      {iso ? (
-        <p className="ml-auto whitespace-nowrap text-xs text-text-subtle">
-          {t("overview.needsYou.empty.checked")} <time dateTime={iso}>{formatClock(iso)}</time>
-        </p>
-      ) : null}
-    </div>
   );
 }

@@ -34,7 +34,7 @@ function NavRow({ entry, collapsed, active, signal }: RowProps) {
       aria-label={collapsed ? label : undefined}
       className={cn(
         "relative flex h-7 items-center rounded-item text-sm transition-colors duration-fast",
-        collapsed ? "mx-auto h-[34px] w-9 justify-center" : "gap-[9px] px-2.5",
+        collapsed ? "mx-auto w-8 justify-center" : "gap-[9px] px-2.5",
         active
           ? "bg-surface-selected font-label text-text"
           : "font-book text-text-muted hover:bg-surface-hover hover:text-text",
@@ -50,12 +50,11 @@ function NavRow({ entry, collapsed, active, signal }: RowProps) {
     </Link>
   );
   if (!collapsed) return link;
-  // The rail has no room for the count, so the tooltip carries it
-  // ("MCP servers · 1 needs you", board 1.1.01).
+  // The rail has no room for the count or the Experimental tag, so the tooltip
+  // carries both after the name ("MCP servers · 3 need you", "Knowledge ·
+  // Experimental"; boards 1.1.01 and 1.1.04).
   const name = experimental ? t("nav.experimentalLabel", { label }) : label;
-  const tip = signal
-    ? `${name} · ${t("nav.attentionCount", { count: signal.count })}`
-    : name;
+  const tip = signal ? `${name} · ${t("nav.attentionCount", { count: signal.count })}` : name;
   return (
     <Tooltip>
       <TooltipTrigger asChild>{link}</TooltipTrigger>
@@ -90,20 +89,21 @@ export function SidebarNav({ collapsed, pathname }: Props) {
     .filter((group) => group.entries.length > 0);
 
   return (
-    <nav className="flex-1 overflow-y-auto px-2.5 pb-1 text-sm" aria-label={t("nav.aria.primary")}>
-      {groups.map((group, i) => (
+    <nav
+      className="flex flex-1 flex-col gap-3.5 overflow-y-auto px-2.5 text-sm"
+      aria-label={t("nav.aria.primary")}
+    >
+      {groups.map((group) => (
+        // 14px between groups; inside one, 1px between rows on the sidebar and
+        // 2px on the rail. The rail has no headings and no rules, only the gap.
         <div
           key={group.labelKey ?? "ungrouped"}
-          className="mb-1"
+          className={cn("flex flex-col", collapsed ? "gap-0.5" : "gap-px")}
           role="group"
           aria-label={group.labelKey ? t(group.labelKey) : undefined}
         >
-          {group.labelKey === null ? null : collapsed ? (
-            i > 0 ? (
-              <div className="mx-1 my-2 border-t border-border-subtle" />
-            ) : null
-          ) : (
-            <div className="nav-group-label pt-3">{t(group.labelKey)}</div>
+          {group.labelKey === null || collapsed ? null : (
+            <div className="nav-group-label">{t(group.labelKey)}</div>
           )}
           {group.entries.map((entry) => (
             <NavRow

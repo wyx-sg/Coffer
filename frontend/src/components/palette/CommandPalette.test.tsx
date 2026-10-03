@@ -26,7 +26,7 @@ const call = vi.fn();
 type Row = { uid: string; name: string; title: string | null };
 
 const MCP: Row[] = [{ uid: "u-gh", name: "github-mcp", title: "Octo bridge" }];
-const SKILLS: Row[] = [{ uid: "s-pdf", name: "pdf", title: null }];
+const SKILLS = [{ uid: "s-pdf", name: "pdf", title: null, bindings: [] }];
 const COLLECTIONS: Row[] = [{ uid: "k-notes", name: "team-notes", title: null }];
 
 const ALL_ON = { knowledge: true, memory: true, sync: true, models: true };
@@ -304,6 +304,50 @@ describe("CommandPalette", () => {
       "Octo bridge",
     ]);
     expect(within(group("Pages")).getAllByRole("option")).toHaveLength(21);
+  });
+
+  acceptance("web-ui", "a skill result names the agents that get it", async () => {
+    callAnswers["/agents"] = async () => ({
+      items: [
+        { uid: "a-cc", name: "claude-code", display_name: "Claude Code" },
+        { uid: "a-cx", name: "codex", display_name: "Codex" },
+      ],
+    });
+    callAnswers["/skills"] = async () => ({
+      items: [
+        {
+          uid: "s-tri",
+          name: "issue-triage",
+          title: null,
+          enabled: true,
+          bindings: [
+            { agent_uid: "a-cc", agent_name: "claude-code" },
+            { agent_uid: "a-cx", agent_name: "codex" },
+          ],
+        },
+      ],
+    });
+    renderPalette();
+    await settled();
+    type("issue-tri");
+    await waitFor(() =>
+      expect(within(group("Best match")).getByRole("option")).toHaveTextContent(
+        "issue-triageSkillClaude Code · Codex",
+      ),
+    );
+  });
+
+  acceptance("web-ui", "a query lists only its matches", async () => {
+    renderPalette();
+    await settled();
+    type("octo");
+    fireEvent.keyDown(input(), { key: "Enter" });
+    fireEvent.click(screen.getByText("reopen"));
+    await waitFor(() => expect(group("Recent")).toBeInTheDocument());
+    type("usage");
+    expect(screen.queryByRole("group", { name: "Recent" })).not.toBeInTheDocument();
+    expect(options()).toEqual(expect.arrayContaining(["Usage"]));
+    expect(options()).not.toContain("Octo bridge");
   });
 
   test("Escape closes the palette and focus returns where it was", async () => {

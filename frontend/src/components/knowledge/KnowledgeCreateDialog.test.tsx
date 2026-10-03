@@ -63,6 +63,7 @@ describe("KnowledgeCreateDialog", () => {
       document_count: 0,
       pending_count: 0,
       folder_path: "/home/u/.coffer/knowledge/team-notes",
+      updated_at: null,
     });
     const onOpenChange = renderDialog();
 

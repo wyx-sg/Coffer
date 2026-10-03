@@ -20,7 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { useUpgradeHandoff } from "@/lib/hooks/useDaemon";
 import { useShellUpdates } from "@/lib/hooks/useShellUpdates";
 import type { UpdateStatus } from "@/lib/shellUpdates";
-import { formatDateTime, formatLocalDateTime } from "@/lib/utils";
+import { formatClockOrMoment, formatDay } from "@/lib/time";
 
 function percent(status: UpdateStatus): string {
   const { downloaded, total } = status;
@@ -28,7 +28,7 @@ function percent(status: UpdateStatus): string {
 }
 
 export function UpdatesSection() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { inShell, status, actionError, check, install, setAutoCheck } = useShellUpdates();
   const upgrade = useUpgradeHandoff(!inShell);
 
@@ -54,7 +54,7 @@ export function UpdatesSection() {
   const failed = phase === "failed";
   const lastChecked = status?.lastCheckedAt
     ? t("settings.about.updates.lastChecked", {
-        time: formatLocalDateTime(new Date(status.lastCheckedAt)),
+        time: formatClockOrMoment(new Date(status.lastCheckedAt), i18n.language, t),
       })
     : t("settings.about.updates.neverChecked");
 
@@ -71,8 +71,13 @@ export function UpdatesSection() {
     headline = t("settings.about.updates.notChecked");
   }
 
+  const releaseDate = offer?.date ? new Date(offer.date) : null;
+  const releasedOn =
+    releaseDate && !Number.isNaN(releaseDate.getTime())
+      ? formatDay(releaseDate, i18n.language)
+      : null;
   const detail = [
-    offer?.date ? t("settings.about.updates.released", { date: formatDateTime(offer.date) }) : null,
+    releasedOn ? t("settings.about.updates.released", { date: releasedOn }) : null,
     lastChecked,
     offer && !failed ? t("settings.about.updates.availableHelp") : null,
   ]
@@ -127,11 +132,11 @@ export function UpdatesSection() {
         </div>
 
         {notes.length > 0 ? (
-          <div className="space-y-1 rounded-md bg-surface-sunken px-3 py-2 text-text-muted">
-            <p className="text-xs font-semibold uppercase">
+          <div className="space-y-1 rounded-md bg-surface-sunken px-3 py-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.04em] text-text-muted">
               {t("settings.about.updates.whatsNew")}
             </p>
-            <ul className="list-disc space-y-0.5 pl-4">
+            <ul className="list-disc space-y-0.5 pl-4 text-sm leading-[1.6] text-text">
               {notes.map((line) => (
                 <li key={line}>{line}</li>
               ))}

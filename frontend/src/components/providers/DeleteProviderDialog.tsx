@@ -56,7 +56,9 @@ export function DeleteProviderDialog({ open, provider, use, onClose }: Props) {
             ? t("providers.delete.confirmWithSecret", { name, ref: provider.secret_ref })
             : t("providers.delete.confirm", { name })
         }
-        confirmLabel={del.isPending ? t("common.deleting") : t("providers.actions.delete")}
+        confirmLabel={t("providers.actions.delete")}
+        pendingLabel={t("common.deleting")}
+        errorTitle={t("common.couldntDelete", { name: name })}
         pending={del.isPending}
         onConfirm={() =>
           del.mutate(provider.uid, {

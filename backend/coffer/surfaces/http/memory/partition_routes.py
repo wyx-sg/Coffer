@@ -57,6 +57,7 @@ async def list_partitions(
                 sources=list(p.sources),
                 waiting_entries=p.waiting_entries,
                 waiting_agents=list(p.waiting_agents),
+                updated_at=p.updated_at,
             )
             for p in found
         ]

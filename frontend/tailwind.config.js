@@ -103,6 +103,7 @@ export default {
       // colour, not size jumps. `base` is body too, so an unclassed block and a
       // `text-base` one read the same.
       fontSize: {
+        "3xs": ["10px", { lineHeight: "14px" }], // count badge: the sidebar's attention pill
         "2xs": ["11px", { lineHeight: "14px" }], // label: group labels, table heads, chips
         xs: ["12px", { lineHeight: "16px" }], // meta: help, status words, mono
         sm: ["13px", { lineHeight: "19px" }], // body and controls
@@ -128,17 +129,21 @@ export default {
         knob: "var(--shadow-knob)",
         focus: "var(--shadow-focus)",
       },
-      // Skeleton shimmer: a soft highlight sweeps each placeholder, starting
-      // only after 300ms of waiting (reduced motion stops it, index.css).
+      // Loading is invisible for its first 300ms (`appear`: held at opacity 0,
+      // then shown at once), so a fast answer never flashes a placeholder; the
+      // skeleton's shimmer sweeps from that moment (reduced motion stops the
+      // sweep, index.css, and keeps the wait).
       keyframes: {
         shimmer: {
           from: { backgroundPosition: "200% 0" },
           to: { backgroundPosition: "-200% 0" },
         },
         "spinner-show": { to: { opacity: "1" } },
+        appear: { from: { opacity: "0" }, to: { opacity: "1" } },
       },
       animation: {
-        shimmer: "shimmer 1200ms linear 300ms infinite",
+        appear: "appear 0s linear 300ms both",
+        shimmer: "appear 0s linear 300ms both, shimmer 1200ms linear 300ms infinite",
         // The inline spinner (Foundations-Feedback): one turn every 700ms.
         spinner: "spin 700ms linear infinite",
         // The same, held invisible for its first 300ms (an answer that comes

@@ -22,7 +22,8 @@ import { cn } from "@/lib/utils";
 interface Props {
   icon?: LucideIcon;
   title: string;
-  description?: string;
+  /** One short paragraph; a node when part of it is set in mono (an id). */
+  description?: ReactNode;
   /** The first step — usually a primary Button (or Button asChild + Link). */
   action?: ReactNode;
   /** An optional second, secondary action beside the first. */
@@ -40,10 +41,19 @@ interface Props {
   className?: string;
 }
 
-function Actions({ action, secondary }: { action?: ReactNode; secondary?: ReactNode }) {
+function Actions({
+  action,
+  secondary,
+  start,
+}: {
+  action?: ReactNode;
+  secondary?: ReactNode;
+  /** Left-aligned, for the compact error block. */
+  start?: boolean;
+}) {
   if (!action && !secondary) return null;
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2">
+    <div className={cn("flex flex-wrap items-center gap-2", !start && "justify-center")}>
       {action}
       {secondary}
     </div>
@@ -80,7 +90,7 @@ export function EmptyState({
           <p className="text-xs leading-[1.45] text-text-muted">{description}</p>
         ) : null}
         {children}
-        <Actions action={action} secondary={secondaryAction} />
+        <Actions action={action} secondary={secondaryAction} start />
         {detail ? <p className={DETAIL}>{detail}</p> : null}
       </div>
     );
@@ -88,9 +98,7 @@ export function EmptyState({
 
   if (size === "compact") {
     return (
-      <div
-        className={cn("flex flex-col items-center gap-2 px-4 py-9 text-center", className)}
-      >
+      <div className={cn("flex flex-col items-center gap-2 px-4 py-9 text-center", className)}>
         <p className="text-sm font-label text-text">{title}</p>
         {description ? <p className="text-xs text-text-muted">{description}</p> : null}
         {children}

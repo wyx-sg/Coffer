@@ -11,7 +11,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { useSearchParamsKeepingState as useSearchParams } from "@/lib/hooks/useSearchParamsKeepingState";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft, Sparkle } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
@@ -67,7 +67,7 @@ export function UnmanagedSkillDetailPage() {
   if (error || route.error || !skill) {
     return (
       <EmptyState
-        icon={Sparkles}
+        icon={Sparkle}
         title={t("agents.skillsTab.unmanagedDetail.notFound")}
         description={error || route.error ? translateApiError(t, error ?? route.error) : undefined}
         action={

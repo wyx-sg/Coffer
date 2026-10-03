@@ -4,11 +4,13 @@
 // rendered by the ToastProvider. Error toasts are role="alert" so a failed
 // mutation is announced rather than silent. Outside a provider, useToast()
 // returns a safe no-op so isolated components don't throw. The timing rules
-// (5s, 8s with Undo, errors stay, hover pauses) and the three-card cap are
+// (5s, 8s with Undo, errors stay until dismissed, hover pauses) and the three-card cap are
 // pinned with fake timers.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { useRef } from "react";
 import { render, screen, fireEvent, act } from "@testing-library/react";
+
+import { acceptance } from "@/test/acceptance";
 
 import { ToastProvider, useToast, type ToastOptions } from "./toast";
 
@@ -139,16 +141,17 @@ describe("toast timing", () => {
     expect(screen.queryByRole("status")).toBeNull();
   });
 
-  test("an error stays 8s, then leaves on its own", () => {
+  acceptance("web-ui", "an error toast stays until dismissed", () => {
     render(
       <ToastProvider>
         <Trigger />
       </ToastProvider>,
     );
     fire();
-    advance(7_000);
+    advance(60_000);
     expect(screen.getByRole("alert")).toBeInTheDocument();
-    advance(1_500);
+    expect(screen.queryByTestId("toast-timer")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -190,16 +193,6 @@ describe("toast timing", () => {
     render(
       <ToastProvider>
         <Trigger kind="success" message="Saved" />
-      </ToastProvider>,
-    );
-    fire();
-    expect(screen.getByTestId("toast-timer")).toBeInTheDocument();
-  });
-
-  test("an error draws a timer line too", () => {
-    render(
-      <ToastProvider>
-        <Trigger />
       </ToastProvider>,
     );
     fire();

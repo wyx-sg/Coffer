@@ -87,6 +87,10 @@
     "summaryWithCoffer": "{{agents}}和 Coffer 中的{{changes}}"
   },
   "common": {
+    "time": {
+      "todayAt": "今天 {{time}}",
+      "dayAt": "{{day}} {{time}}"
+    },
     "moreActions": "更多操作",
     "enabled": "已启用",
     "close": "关闭",
@@ -113,6 +117,18 @@
       "body": "你对这个文件的修改将丢失。",
       "confirm": "放弃"
     },
+    "leaveGuard": {
+      "title": "不保存就离开？",
+      "body": "你在 {{owner}} 中修改了 {{file}}。现在离开，这些修改将丢失。",
+      "discard": "放弃修改",
+      "keep": "继续编辑",
+      "saveAndLeave": "保存并离开",
+      "saveFailed": "无法保存 {{file}}"
+    },
+    "couldntDelete": "无法删除 {{name}}",
+    "couldntRemove": "无法移除 {{name}}",
+    "couldntDeleteSelected": "无法删除所选项",
+    "couldntDeleteConversation": "无法删除该对话",
     "bulk": {
       "selected": "已选 {{count}} 项",
       "pageSelected": "已选中本页全部",
@@ -202,7 +218,6 @@
     "title": "MCP 服务器",
     "subtitle": "Coffer 运行的 MCP 服务器，通过同一个端点提供给你的智能体。",
     "addServer": "添加服务器",
-    "loadFailed": "加载资源失败",
     "status": {
       "all": "全部"
     },
@@ -523,28 +538,22 @@
       "calledBy": "调用方",
       "calls_one": "次调用",
       "calls_other": "次调用",
-      "choose": {
-        "title": "选择一个服务器",
-        "body": "在左侧选择一个服务器，查看它为什么处于当前状态、谁在调用它，以及它的工具。"
-      },
       "colCalls": "调用",
       "colCalls24h": "24 小时调用",
       "colErrors": "错误",
       "colLastCall": "最近调用",
       "configCopied": "配置已复制 — 其中只有密钥名称，从不包含密钥值。",
       "delete": {
-        "bodyOne": "{{agents}} 会在下次调用时失去{{tools}}。它的调用记录仍保留在活动中。",
-        "bodyBoth": "两个智能体都会在下次调用时失去{{tools}}：{{agents}}。它的调用记录仍保留在活动中。",
-        "bodyMany": "{{agentCount}} 个智能体会在下次调用时失去{{tools}}：{{agents}}。它的调用记录仍保留在活动中。",
         "title": "删除 {{name}}？",
-        "bodyNoAgents": "目前没有智能体使用它。它的调用记录仍保留在活动中。",
-        "confirm": "删除服务器",
-        "alsoSecrets_one": "同时删除密钥",
-        "alsoSecrets_other": "同时删除密钥",
-        "secretsKept_one": "有 {{count}} 个密钥未能删除，仍保留在密钥页面。",
-        "secretsKept_other": "有 {{count}} 个密钥未能删除，仍保留在密钥页面。",
-        "noOtherUser": "没有其他服务器使用它。",
-        "pause": "此操作无法撤销。如果只想暂停一段时间，请改为关闭它。"
+        "description": "此操作无法撤销。智能体在下次调用工具时将失去访问权限。",
+        "toolsLabel": "工具",
+        "toolsGone_one": "{{count}} 个工具将从 {{agents}} 中消失",
+        "toolsGone_other": "{{count}} 个工具将从 {{agents}} 中消失",
+        "toolsGoneAny": "它的工具将从 {{agents}} 中消失",
+        "secretLabel": "密钥",
+        "secretStays": "{{name}} 仍保留在密钥中",
+        "footnote": "过去的调用仍保留在活动中。",
+        "confirm": "删除服务器"
       },
       "deleteManyTitle_one": "删除 {{count}} 个服务器？",
       "deleteManyTitle_other": "删除 {{count}} 个服务器？",
@@ -609,8 +618,6 @@
       },
       "mostBehindSearch": "大多通过搜索",
       "noCalls": "最近 24 小时没有调用。",
-      "noMatches": "没有匹配的服务器。",
-      "notFound": "没有名为 {{name}} 的 MCP 服务器。",
       "offBody": "Coffer 不会为任何会话启动它。开启后，它会重新提供给你上次选择的智能体。",
       "offTitle": "已关闭 — 没有智能体能使用它",
       "openInActivity": "在活动中查看",
@@ -1223,6 +1230,8 @@
     },
     "security": {
       "masterKey": {
+        "label": "主密钥",
+        "readFailed": "无法读取主密钥设置。",
         "fileNote": "主密钥：数据库旁的文件（无钥匙串弹窗）。",
         "keychainNote": "主密钥：系统钥匙串（每次守护进程启动可能弹窗一次）。",
         "toggle": "将主密钥存入系统钥匙串",
@@ -1487,7 +1496,7 @@
       "outOfDateBody": "当前应用复用了上一个版本残留的旧后台服务。请重启守护进程，使应用与守护进程运行同一版本。",
       "restart": "重启守护进程",
       "restarting": "正在重启…",
-      "webRestartHint": "浏览器无法启动它——请在终端运行："
+      "webRestartHint": "或者在终端里启动它"
     },
     "reconnect": {
       "title": "正在重新连接守护进程…",
@@ -1504,7 +1513,87 @@
       "starting": "正在启动…",
       "retry": "重试",
       "checkingIn": "{{seconds}} 秒后重新检查",
-      "lastReply": "上次响应 {{time}}"
+      "lastReply": "上次响应 {{time}}",
+      "openLog": "打开守护进程日志"
+    }
+  },
+  "listStates": {
+    "loadFailedTitle": "无法加载{{kinds}}",
+    "loadFailedBody": "{{reason}}。没有任何改动。",
+    "openDaemonLog": "打开守护进程日志",
+    "noMatch": "没有{{kind}}匹配“{{query}}”",
+    "noMatchFilters": "没有{{kind}}符合这些筛选条件",
+    "clearFilter": "清除筛选",
+    "nothingSelected": "未选择任何项",
+    "nothingSelectedBody": "从列表中选一项，或添加你要找的那一项。",
+    "notFound": {
+      "lastSeen": "最后一次出现",
+      "lastSeenValue": "{{when}} · {{actor}}",
+      "noRecord": "审计日志里没有记录",
+      "audit": "审计",
+      "viewInActivity": "在活动中查看"
+    },
+    "kinds": {
+      "mcp": {
+        "plural": "MCP 服务器",
+        "singular": "服务器",
+        "filterHelp": "按名称、标题、命令和 URL 筛选。",
+        "notFoundTitle": "这个服务器已不存在",
+        "notFoundBody": "没有登记为 <mono>{{id}}</mono> 的 MCP 服务器。它已被删除或改名。",
+        "back": "返回 MCP 服务器"
+      },
+      "skills": {
+        "plural": "技能",
+        "singular": "技能",
+        "filterHelp": "按名称和描述筛选。",
+        "notFoundTitle": "这个技能已不存在",
+        "notFoundBody": "没有名为 <mono>{{id}}</mono> 的技能。它已被删除或改名。",
+        "back": "返回技能"
+      },
+      "clis": {
+        "plural": "命令行工具",
+        "singular": "命令",
+        "filterHelp": "按命令名和标题筛选。",
+        "notFoundTitle": "这个命令已不存在",
+        "notFoundBody": "列表中没有 <mono>{{id}}</mono> 这个命令。它已被删除或改名。",
+        "back": "返回命令行工具"
+      },
+      "channels": {
+        "plural": "渠道",
+        "singular": "渠道",
+        "filterHelp": "按平台、名称和标题筛选。",
+        "notFoundTitle": "这个渠道已不存在",
+        "notFoundBody": "没有登记为 <mono>{{id}}</mono> 的渠道。它已被删除。",
+        "back": "返回渠道"
+      },
+      "customTools": {
+        "plural": "自定义工具",
+        "singular": "分组",
+        "filterHelp": "按分组名、主机和工具名筛选。",
+        "notFoundTitle": "这个分组已不存在",
+        "notFoundBody": "没有名为 <mono>{{id}}</mono> 的自定义工具分组。它已被删除或改名。",
+        "back": "返回自定义工具"
+      },
+      "providers": {
+        "plural": "模型提供方",
+        "singular": "提供方",
+        "filterHelp": "按名称、端点和描述筛选。",
+        "notFoundTitle": "这个提供方已不存在",
+        "notFoundBody": "没有登记为 <mono>{{id}}</mono> 的模型提供方。它已被删除。",
+        "back": "返回模型提供方"
+      },
+      "knowledge": {
+        "plural": "集合",
+        "notFoundTitle": "这个集合已不存在",
+        "notFoundBody": "没有登记为 <mono>{{id}}</mono> 的集合。它已被删除或改名。",
+        "back": "返回知识"
+      },
+      "memory": {
+        "plural": "分区",
+        "notFoundTitle": "这个分区已不存在",
+        "notFoundBody": "没有登记为 <mono>{{id}}</mono> 的记忆分区。它已被删除。",
+        "back": "返回记忆"
+      }
     }
   },
   "notFound": {
@@ -2234,14 +2323,7 @@
       "newFileSavedAs": "保存为 {{path}}",
       "newFileInvalid": "请使用以 .md 结尾、不含斜杠的文件名。",
       "newFileExists": "已经有同名文件。",
-      "newFileCreate": "创建",
-      "unsaved": {
-        "title": "放弃对 {{file}} 的修改？",
-        "body": "你有未保存的修改。打开 {{target}} 会放弃它；磁盘上的文件保持原样。",
-        "leaveBody": "你有未保存的修改。离开会放弃它；磁盘上的文件保持原样。",
-        "keep": "继续编辑",
-        "discard": "放弃修改"
-      }
+      "newFileCreate": "创建"
     },
     "sessionsTab": {
       "count_one": "{{count}} 个会话",
@@ -2519,10 +2601,8 @@
     "subtitle": "Coffer 管理的技能：一份主文件夹，链接到你选择的每个智能体。",
     "builtinBadge": "内置",
     "title": "技能",
-    "loadFailed": "加载技能失败",
     "add": "添加技能",
     "searchPlaceholder": "筛选技能",
-    "noMatches": "没有匹配的技能。",
     "selectAll": "全选当前列出的技能",
     "group": {
       "inUse": "已启用",
@@ -2538,7 +2618,6 @@
         "requires": "依赖",
         "history": "历史"
       },
-      "notFound": "没有名为「{{name}}」的技能",
       "source": {
         "builtin": "由 Coffer 生成"
       },
@@ -2582,10 +2661,6 @@
       "deleteBody": "删除 {{names}} 的主文件夹，并从所有拥有它们的智能体中移除链接。无法撤销。",
       "deleteConfirm_one": "删除 {{count}} 个技能",
       "deleteConfirm_other": "删除 {{count}} 个技能"
-    },
-    "choose": {
-      "title": "选择一个技能",
-      "body": "从技能库中选一个技能，查看它的文件以及哪些智能体拿到了它。"
     },
     "firstRun": {
       "title": "还没有技能",
@@ -2717,7 +2792,6 @@
         "orphan_master": "技能库目录里一个 Coffer 不认识的文件夹。"
       }
     },
-    "tryAgain": "重试",
     "review": "查看…",
     "row": {
       "masterMissing": "主文件夹不见了",
@@ -2866,7 +2940,6 @@
   "knowledge": {
     "subtitle": "你和 Coffer 共同编写的文档，每个集合一棵树。",
     "title": "知识",
-    "loadFailed": "无法加载知识集",
     "nav": {
       "label": "知识集与文档",
       "collections": "知识集",
@@ -2876,10 +2949,6 @@
     "tree": {
       "empty": "还没有文档",
       "emptyFolder": "这里还没有内容"
-    },
-    "notFound": {
-      "title": "找不到这个知识集",
-      "body": "它可能已被删除，或者链接来自另一台机器。"
     },
     "stats": {
       "documents": "文档",
@@ -3295,7 +3364,6 @@
       "projects_other": "{{count}} 个项目"
     },
     "detail": {
-      "notFound": "该分区已不存在。",
       "tabs": {
         "memories": "记忆条目",
         "delivered": "投递内容"
@@ -3576,10 +3644,6 @@
   "channels": {
     "subtitle": "接入聊天应用，让智能体在你常用的地方回复。",
     "title": "消息渠道",
-    "loadFailed": "加载消息渠道失败",
-    "noMatches": "没有匹配的消息渠道。",
-    "notFound": "这个消息渠道已不存在",
-    "notFoundBody": "请从列表中选择一个消息渠道。",
     "list": {
       "filter": "筛选",
       "groups": {
@@ -4666,7 +4730,16 @@
       "empty": {
         "title": "没有需要你处理的事",
         "body": "需要你处理的事会显示在这里。",
-        "checked": "检查于"
+        "checked": "检查于",
+        "agentsOne": "你的智能体已连接",
+        "agentsBoth": "两个智能体都已连接",
+        "agentsMany": "{{count}} 个智能体都已连接",
+        "servers_one": "{{count}} 个服务器在正常响应",
+        "servers_other": "{{count}} 个服务器在正常响应",
+        "vault": "你的 vault 已同步",
+        "sep": "，",
+        "and": "，",
+        "stop": "。"
       },
       "pending": {
         "test": "重试中…",
@@ -4692,6 +4765,8 @@
       "repair": "修复偏移",
       "open": "打开",
       "repairHook": "修复钩子",
+      "reconnectChannel": "重新连接渠道",
+      "reviewHeld": "查看被暂缓的变更",
       "turn_on": "开启"
     },
     "kinds": {
@@ -4715,19 +4790,36 @@
       "channel": "消息渠道",
       "sync": "同步",
       "reconcile": "智能体配置检查",
-      "secret": "密钥审批"
+      "secret": "密钥审批",
+      "vault": "vault 检查",
+      "cli": "命令行工具",
+      "skill": "技能",
+      "knowledge": "知识库",
+      "memory": "记忆",
+      "provider": "模型提供商",
+      "custom_tool": "自定义工具"
     },
     "health": {
       "title": "健康状况",
       "loadFailed": "加载失败",
       "open": "打开{{area}}",
+      "connected": "已连接",
+      "ofTotal": "{{count}} / {{total}}",
+      "loadFailedLabel": "{{area}}：加载失败",
+      "ago": {
+        "now": "刚刚",
+        "minutes": "{{count}} 分钟前",
+        "hours": "{{count}} 小时前",
+        "days": "{{count}} 天前"
+      },
+      "edited": "{{day}}编辑",
+      "editedToday": "今天 {{time}} 编辑",
       "failing_one": "{{count}} 个失败",
       "failing_other": "{{count}} 个失败",
       "agents": {
         "ok": "全部已连接",
         "warn_one": "{{count}} 个待连接",
         "warn_other": "{{count}} 个待连接",
-        "unit": "/ {{total}} 已连接",
         "unitRegistered_one": "已添加",
         "unitRegistered_other": "已添加"
       },
@@ -4745,7 +4837,9 @@
         "warn_other": "{{count}} 个重新连接中",
         "unit_one": "个渠道",
         "unit_other": "个渠道",
-        "none": "还没有消息渠道"
+        "none": "还没有消息渠道",
+        "reconnecting": "{{name}} 重新连接中",
+        "reconnectingSince": "{{name}} 自 {{time}} 起重新连接中"
       },
       "mcpServers": {
         "ok": "全部可响应",
@@ -4780,35 +4874,16 @@
         "warn_other": "{{count}} 个需要关注",
         "unit_one": "个分区",
         "unit_other": "个分区",
-        "notes_one": "{{count}} 条笔记",
-        "notes_other": "{{count}} 条笔记"
+        "lastUpdate": "最近更新：{{ago}}"
       },
       "sync": {
         "ok": "已同步",
         "warn_one": "{{count}} 轮被暂扣",
         "warn_other": "{{count}} 轮被暂扣",
         "notSetUp": "未设置",
-        "noRemote": "还没有设置远端",
-        "round": {
-          "nothing_to_do": "已同步",
-          "pulled": "已同步",
-          "pushed": "已同步",
-          "pulled_and_pushed": "已同步",
-          "joined": "已同步",
-          "rolled_back": "已同步",
-          "push_failed": "推送失败",
-          "plaintext_found": "发现明文密钥",
-          "stopped": "有冲突",
-          "held": "已拦下",
-          "waiting_on_edit": "等待编辑完成",
-          "join_required": "等待加入",
-          "unreachable": "不可达",
-          "auth_failed": "登录被拒",
-          "paused_cloud_folder": "已暂停",
-          "remote_too_new": "远端版本过新",
-          "failed": "失败",
-          "none": "尚未同步过"
-        }
+        "noRound": "尚未同步过",
+        "lastRound": "上一轮",
+        "drift": "落后 {{behind}} · 领先 {{ahead}}"
       },
       "attention_one": "{{count}} 个需要关注",
       "attention_other": "{{count}} 个需要关注",
@@ -4823,8 +4898,12 @@
       },
       "clis": {
         "ok": "全部就绪",
-        "warn_one": "{{count}} 个未就绪",
-        "warn_other": "{{count}} 个未就绪",
+        "notLoggedIn_one": "{{count}} 个未登录",
+        "notLoggedIn_other": "{{count}} 个未登录",
+        "outdated_one": "{{count}} 个版本过旧",
+        "outdated_other": "{{count}} 个版本过旧",
+        "missing_one": "{{count}} 个缺失",
+        "missing_other": "{{count}} 个缺失",
         "unit_one": "个命令行工具",
         "unit_other": "个命令行工具",
         "neededBy_one": "{{count}} 个技能需要 · {{names}}",
@@ -4845,7 +4924,7 @@
         "none": "还没有密钥"
       },
       "usage": {
-        "period": "今天",
+        "period": "过去 24 小时",
         "unit": "tokens"
       }
     },
@@ -4886,7 +4965,10 @@
       "foundBody_one": "Coffer 在这台 Mac 上找到了 {{count}} 个智能体。连接它会把 Coffer 的网关加进它的配置，让它和你之后添加的每个智能体共享同一套 MCP 服务器和技能。",
       "foundBody_other": "Coffer 在这台 Mac 上找到了 {{count}} 个智能体。连接其中一个会把 Coffer 的网关加进它的配置，让每个智能体共享同一套 MCP 服务器和技能。",
       "noneTitle": "没有找到编程智能体",
-      "noneBody": "Coffer 在你的主目录里查找了 {{names}}，一个也没有找到。安装其中一个后重新扫描，或手动指定智能体的配置文件夹。",
+      "noneBody": "Coffer 在你的主目录里查找了 {{names}}，两个都没有找到。安装其中一个后重新扫描，或手动指定智能体的配置文件夹。",
+      "noneBodyMany": "Coffer 在你的主目录里查找了 {{names}}，一个也没有找到。安装其中一个后重新扫描，或手动指定智能体的配置文件夹。",
+      "install": "安装 ↗",
+      "installFor": "安装 {{name}}",
       "and": "和",
       "confirmOnly": "Coffer 只连接你确认过的智能体。",
       "notFound": "未找到",
@@ -4914,7 +4996,6 @@
     "list": {
       "toolCount_other": "{{count}} 个工具",
       "filter": "筛选分组",
-      "noMatch": "没有匹配的分组。",
       "section": {
         "attention": "需要处理",
         "healthy": "正常",
@@ -4924,9 +5005,6 @@
       "approvalPending": "等待批准 · {{secret}}",
       "lastCallFailed": "最近一次调用失败",
       "hostTools_other": "{{host}} · {{count}} 个工具",
-      "loadFailed": "无法加载自定义工具",
-      "pickTitle": "选择一个分组",
-      "pickBody": "在左侧选择一个分组，查看它的定义和工具。",
       "toolCount_one": "{{count}} 个工具",
       "hostTools_one": "{{host}} · {{count}} 个工具",
       "allAgents": "全部智能体"
@@ -5238,7 +5316,6 @@
     "checkAgain": "重新检查",
     "checking": "正在检查…",
     "checkedAgo": "检查于 {{when}}",
-    "loadFailed": "无法加载命令行工具",
     "status": {
       "missing": "未找到",
       "outdated": "版本过旧",
@@ -5318,7 +5395,8 @@
       "title": "移除 {{command}}？",
       "body": "Coffer 不再列出它，工具本身仍保留在机器上。",
       "bodyStays": "仍有技能或 MCP 服务器需要它，所以它还会留在列表里；只去掉你添加的这一条。",
-      "pending": "正在移除…"
+      "pending": "正在移除…",
+      "failed": "无法移除 {{command}}"
     },
     "commands": {
       "search": "筛选此工具的命令",
@@ -5369,7 +5447,6 @@
     "list": {
       "needsYou": "需要你处理",
       "ready": "就绪",
-      "noMatch": "没有匹配的命令",
       "outdatedLine": "{{version}} · 要求 ≥ {{min}}",
       "loggedInLine": "{{version}} · 已登录",
       "missingServersLine_one": "未找到 · {{servers}} 需要它",
@@ -5893,7 +5970,6 @@
     "bestMatch": "最佳匹配",
     "recent": "最近",
     "noResultsHint": "请检查拼写。{{shortcut}} 可按名称查找页面、服务器、技能、密钥和对话。",
-    "footerNote": "跳转到页面和对象；操作在各自页面上进行",
     "untitled": "未命名对话",
     "usedBy_one": "被 {{name}} 使用",
     "usedBy_other": "被 {{name}} 等 {{count}} 处使用",
@@ -5950,7 +6026,6 @@
     "list": {
       "filter": "筛选",
       "heading": "提供商",
-      "noMatch": "没有匹配的提供商。",
       "engineOnly": "仅供 Coffer 引擎",
       "allModels": "全部模型",
       "models_one": "{{count}} 个模型",

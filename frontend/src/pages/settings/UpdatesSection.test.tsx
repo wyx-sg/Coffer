@@ -105,7 +105,7 @@ describe("UpdatesSection", () => {
   acceptance("web-ui", "about shows the version and when updates were last checked", async () => {
     renderSection();
     expect(await screen.findByText("Coffer is up to date")).toBeInTheDocument();
-    expect(screen.getByText(/Last checked 2026-09-30 09:15:00/)).toBeInTheDocument();
+    expect(screen.getByText(/Last checked 30 Sep at 09:15/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /check for updates/i })).toBeEnabled();
     expect(screen.getByRole("switch", { name: /check automatically/i })).toBeChecked();
   });
@@ -124,7 +124,7 @@ describe("UpdatesSection", () => {
     expect(shell.check).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Coffer 1.0.1 is available")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /download and restart/i })).toBeEnabled();
-    expect(screen.getByText(/2026-09-30 09:16:00/)).toBeInTheDocument();
+    expect(screen.getByText(/30 Sep at 09:16/)).toBeInTheDocument();
     expect(screen.getByText("Secrets have their own page.")).toBeInTheDocument();
   });
 
@@ -164,7 +164,7 @@ describe("UpdatesSection", () => {
     expect(await screen.findByText("Couldn't check for updates")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(/timed out.*You are on 1\.0\.0/);
     // The last successful check's time is still the one shown.
-    expect(screen.getByText(/Last checked 2026-09-30 09:15:00/)).toBeInTheDocument();
+    expect(screen.getByText(/Last checked 30 Sep at 09:15/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /retry/i })).toBeEnabled();
   });
 

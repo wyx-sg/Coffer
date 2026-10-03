@@ -6,7 +6,7 @@
 // Skills tab. It lists nothing from there.
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Archive, Folder, GitBranch, Sparkles } from "lucide-react";
+import { Archive, Folder, GitBranch, Sparkle } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import type { SkillAddSource } from "@/components/skills/SkillAddDialog";
@@ -23,7 +23,7 @@ export function SkillFirstRun({ hasBuiltin, onAdd }: Props) {
   return (
     <div className="flex flex-col items-center gap-4">
       <EmptyState
-        icon={Sparkles}
+        icon={Sparkle}
         title={hasBuiltin ? t("skills.firstRun.titleBuiltinOnly") : t("skills.firstRun.title")}
         description={t("skills.firstRun.body")}
         action={

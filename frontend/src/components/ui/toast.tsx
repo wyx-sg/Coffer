@@ -7,9 +7,9 @@
 // The rules the stack keeps (Shell-Behaviour):
 //   • success and info leave after 5s; a toast carrying Undo stays 8s, so the
 //     undo is reachable. Hovering or focusing a card pauses its clock.
-//   • an error stays 8s (hover or focus holds it) — longer, so it can be read
-//     and its Details opened — and always offers a next step: the caller's action (Retry, View log) or a Details toggle that
-//     shows the whole message and any `details` text.
+//   • an error stays until it is dismissed, and always offers a next step: the
+//     caller's action (Retry, View log) or a Details toggle that shows the
+//     whole message and any `details` text.
 //   • newest at the bottom, at most three shown; older ones fold into a
 //     "N more" chip that unfolds them.
 //
@@ -75,7 +75,6 @@ interface ToastContextValue {
 
 export const TOAST_DURATION_MS = 5000;
 export const UNDO_TOAST_DURATION_MS = 8000;
-export const ERROR_TOAST_DURATION_MS = 8000;
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
@@ -96,12 +95,7 @@ function toItem(
     o.action ??
     (o.undo ? { label: t("common.undo"), onClick: o.undo } : undefined) ??
     (o.retry ? { label: t("common.retry"), onClick: o.retry } : undefined);
-  const duration =
-    variant === "error"
-      ? ERROR_TOAST_DURATION_MS
-      : o.undo
-        ? UNDO_TOAST_DURATION_MS
-        : TOAST_DURATION_MS;
+  const duration = variant === "error" ? null : o.undo ? UNDO_TOAST_DURATION_MS : TOAST_DURATION_MS;
   return { id, variant, message, action, details: o.details, duration };
 }
 

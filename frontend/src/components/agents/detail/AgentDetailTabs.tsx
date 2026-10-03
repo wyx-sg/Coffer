@@ -5,8 +5,8 @@
 // through REST, CLI and the Agents page"). The open tab is the path segment (`useDetailTab`); only the open
 // tab is mounted, so a tab reads its data when it is opened. The list tabs
 // carry their count, read from the same queries the tabs make. Leaving Config
-// files with an unsaved draft asks first.
-import { useState } from "react";
+// files with an unsaved draft asks first, through the shell's unsaved-changes
+// guard, like every other way out of an editor.
 import { useTranslation } from "react-i18next";
 
 import { AgentConfigFilesTab } from "@/components/agents/AgentConfigFilesTab";
@@ -19,7 +19,6 @@ import { AgentSkillsTab } from "@/components/agents/AgentSkillsTab";
 import type { useAgentRowActions } from "@/components/agents/list/useAgentRowActions";
 import { AgentModelTab } from "@/components/agents/model/AgentModelTab";
 import { AgentSessionsTab } from "@/components/agents/sessions/AgentSessionsTab";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AGENT_TABS, agentBasePath, DEFAULT_AGENT_TAB, type AgentTab } from "@/lib/agents/routes";
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
@@ -54,15 +53,6 @@ export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
   const [tab, setTab] = useDetailTab(tabs, DEFAULT_AGENT_TAB, agentBasePath(agent.type), {
     enabled: models !== undefined,
   });
-  const [configDirty, setConfigDirty] = useState(false);
-  const [pendingTab, setPendingTab] = useState<string | null>(null);
-
-  const requestTab = (next: string) => {
-    if (next === tab) return;
-    if (configDirty && tab === "config") setPendingTab(next);
-    else setTab(next);
-  };
-
   const { open } = rowActions;
   const overviewActions = {
     onConnection: (kind: "connect" | "disconnect") => open.change(kind),
@@ -73,7 +63,7 @@ export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
   };
 
   return (
-    <Tabs value={tab} onValueChange={requestTab} className="flex min-h-0 flex-col">
+    <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-col">
       <TabsList className="overflow-x-auto">
         {tabs.map((id) => (
           <TabsTrigger key={id} value={id}>
@@ -90,23 +80,10 @@ export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
         {tab === "mcp-servers" && <AgentMcpServersTab agent={agent} />}
         {tab === "plugins" && <AgentPluginsTab agent={agent} />}
         {tab === "hooks" && <AgentHooksTab agent={agent} onRepair={() => open.change("connect")} />}
-        {tab === "config" && <AgentConfigFilesTab agent={agent} onDirtyChange={setConfigDirty} />}
+        {tab === "config" && <AgentConfigFilesTab agent={agent} />}
         {tab === "memory" && <AgentMemoryTab agent={agent} />}
         {tab === "sessions" && <AgentSessionsTab agent={agent} />}
       </TabsContent>
-
-      <ConfirmDialog
-        open={pendingTab !== null}
-        onOpenChange={(o) => !o && setPendingTab(null)}
-        title={t("common.discardChanges.title")}
-        description={t("common.discardChanges.body")}
-        confirmLabel={t("common.discardChanges.confirm")}
-        onConfirm={() => {
-          if (pendingTab) setTab(pendingTab);
-          setPendingTab(null);
-          setConfigDirty(false);
-        }}
-      />
     </Tabs>
   );
 }

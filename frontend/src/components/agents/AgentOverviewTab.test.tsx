@@ -53,6 +53,7 @@ const TYPE_ROW: AgentTypeOut = {
   default_skill_dir: `${HOME}/.claude/skills`,
   version: "2.1.281",
   install_handoff: null,
+  install_url: "",
   uid: "u-cc",
 };
 const HOOK: CofferHook = {

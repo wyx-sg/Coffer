@@ -172,7 +172,7 @@ pub fn render(app: &AppHandle) {
         }
         // The count beside the icon; `None` clears it.
         let _ = tray.set_title(view::title(&state));
-        let _ = tray.set_tooltip(Some(view::tooltip(&state, lang)));
+        let _ = tray.set_tooltip(Some(&view::tooltip(&state, lang)));
     }
 }
 

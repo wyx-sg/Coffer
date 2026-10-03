@@ -217,6 +217,7 @@ def test_list_every_supported_type_whether_added_or_not(home: pathlib.Path) -> N
         assert codex["addable"] is True
         for row in rows:
             assert {"display_name", "default_skill_dir", "other_config_dir"} <= set(row)
+            assert row["install_url"].startswith("https://")
 
         # Claude Code's program is not found beside its folder: the type row
         # and the agent's own record carry the same reinstall prompt; Codex's

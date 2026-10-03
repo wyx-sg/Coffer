@@ -89,8 +89,8 @@ describe("Layout", () => {
     renderShell();
     const strip = screen.getByTestId("window-drag-region");
     expect(strip).toHaveAttribute("data-tauri-drag-region");
-    // The page scrolls below the strip, so no header sits under it.
-    expect(screen.getByTestId("page-scroll").className).toContain("var(--titlebar-inset)");
+    // The main column (the connection bar included) starts below the strip.
+    expect(screen.getByRole("main").className).toContain("var(--titlebar-inset)");
     // No brand row: the sidebar starts under the strip, at the search.
     const side = screen.getByTestId("sidebar");
     expect(side.className).toContain("var(--titlebar-inset)");

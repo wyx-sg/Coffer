@@ -11,26 +11,25 @@
 // fifteen entries"). Settings is not an entry: it is a modal opened from the
 // labelled row in the sidebar footer, from ⌘, and from the palette.
 import {
-  Activity as DaemonIcon,
+  Activity,
+  Book,
   Bot,
-  Boxes,
+  Box,
   Brain,
   Database,
   FlaskConical,
   Gauge,
+  IdCard,
   Info,
-  KeyRound,
   LayoutDashboard,
-  Library,
   MessageSquare,
   Radio,
   RefreshCw,
-  ScrollText,
   Server,
   ShieldCheck,
   SlidersHorizontal,
-  Sparkles,
-  SquareTerminal,
+  Sparkle,
+  Terminal,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
@@ -65,7 +64,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     labelKey: "nav.group.agents",
     entries: [
       { to: "/agents", labelKey: "nav.agents", icon: Bot },
-      { to: "/model-providers", labelKey: "nav.modelProviders", icon: Boxes, feature: "models" },
+      { to: "/model-providers", labelKey: "nav.modelProviders", icon: Box, feature: "models" },
     ],
   },
   {
@@ -82,15 +81,15 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     entries: [
       { to: "/mcp-servers", labelKey: "nav.mcpServers", icon: Server },
       { to: "/custom-tools", labelKey: "nav.customTools", icon: Wrench },
-      { to: "/skills", labelKey: "nav.skills", icon: Sparkles },
-      { to: "/clis", labelKey: "nav.clis", icon: SquareTerminal },
+      { to: "/skills", labelKey: "nav.skills", icon: Sparkle },
+      { to: "/clis", labelKey: "nav.clis", icon: Terminal },
     ],
   },
   {
     // Give agents things they know.
     labelKey: "nav.group.context",
     entries: [
-      { to: "/knowledge", labelKey: "nav.knowledge", icon: Library, feature: "knowledge" },
+      { to: "/knowledge", labelKey: "nav.knowledge", icon: Book, feature: "knowledge" },
       { to: "/memory", labelKey: "nav.memory", icon: Brain, feature: "memory" },
     ],
   },
@@ -98,8 +97,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     // Look after Coffer and what every other part shares.
     labelKey: "nav.group.system",
     entries: [
-      { to: "/secrets", labelKey: "nav.secrets", icon: KeyRound },
-      { to: "/activity", labelKey: "nav.activity", icon: ScrollText },
+      { to: "/secrets", labelKey: "nav.secrets", icon: IdCard },
+      { to: "/activity", labelKey: "nav.activity", icon: Activity },
       { to: "/usage", labelKey: "nav.usage", icon: Gauge, feature: "models" },
       { to: "/sync", labelKey: "nav.sync", icon: RefreshCw, feature: "sync" },
     ],
@@ -126,7 +125,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   { id: "general", labelKey: "settings.tabs.general", icon: SlidersHorizontal },
   { id: "security", labelKey: "settings.tabs.security", icon: ShieldCheck },
   { id: "data", labelKey: "settings.tabs.data", icon: Database },
-  { id: "daemon", labelKey: "settings.tabs.daemon", icon: DaemonIcon },
+  { id: "daemon", labelKey: "settings.tabs.daemon", icon: Activity },
   { id: "features", labelKey: "settings.tabs.features", icon: FlaskConical },
   { id: "about", labelKey: "settings.tabs.about", icon: Info },
 ];

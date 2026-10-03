@@ -1,23 +1,23 @@
 // frontend/src/components/skills/SkillsReadingPane.tsx
 // The Skills page's right-hand pane: one of, in this order — what Check copies
 // found (SkillCopiesPanel), the rows ticked in the library (SkillSelectionPane),
-// the list's load error, the open skill (SkillDetailPane, loaded on first open
-// because its Files tab pulls in the editor and the Markdown pipeline), a
-// skill name that matches nothing, the first run while the library holds
-// nothing of the user's own, or a prompt to choose a skill.
+// nothing while the list loads or failed (its pane says why), the open skill
+// (SkillDetailPane, loaded on first open because its Files tab pulls in the
+// editor and the Markdown pipeline), a skill name that matches nothing, the
+// first run while the library holds nothing of the user's own, or Nothing
+// selected.
 import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
-import { Sparkles } from "lucide-react";
+import { Sparkle } from "lucide-react";
 
-import { EmptyState } from "@/components/EmptyState";
+import { DetailNotFound } from "@/components/DetailNotFound";
+import { NothingSelected } from "@/components/ListPaneStates";
 import { PageFallback } from "@/components/PageFallback";
 import type { SkillAddSource } from "@/components/skills/SkillAddDialog";
 import { SkillCopiesPanel } from "@/components/skills/SkillCopiesPanel";
 import { SkillFirstRun } from "@/components/skills/SkillFirstRun";
 import { SkillOrphanPane } from "@/components/skills/SkillOrphanPane";
 import { SkillSelectionPane } from "@/components/skills/SkillSelectionPane";
-import { Button } from "@/components/ui/button";
-import { translateApiError } from "@/lib/api/errors";
 import type { SkillOut } from "@/lib/api/skills";
 import type { SkillTab } from "@/lib/skills/tabs";
 
@@ -56,22 +56,8 @@ export function SkillsReadingPane(props: Props) {
       />
     );
   }
-  if (list.error) {
-    return (
-      <EmptyState
-        tone="error"
-        icon={Sparkles}
-        title={t("skills.loadFailed")}
-        description={translateApiError(t, list.error)}
-        action={
-          <Button variant="outline" onClick={() => void list.refetch()}>
-            {t("common.retry")}
-          </Button>
-        }
-      />
-    );
-  }
-  if (list.isPending) return <PageFallback />;
+  // The list pane says why it is empty (loading, or the error block).
+  if (list.error || list.isPending) return null;
   if (props.orphan) return <SkillOrphanPane name={props.orphan} />;
   if (match) {
     return (
@@ -86,22 +72,16 @@ export function SkillsReadingPane(props: Props) {
     );
   }
   if (nameParam) {
-    return (
-      <EmptyState
-        icon={Sparkles}
-        title={t("skills.detail.notFound", { name: nameParam })}
-        description={t("skills.choose.body")}
-      />
-    );
+    return <DetailNotFound kind="skills" id={nameParam} backTo="/skills" icon={Sparkle} />;
   }
   if (skills.every((s) => s.builtin)) {
     return <SkillFirstRun hasBuiltin={skills.length > 0} onAdd={props.onAdd} />;
   }
   return (
-    <EmptyState
-      icon={Sparkles}
-      title={t("skills.choose.title")}
-      description={t("skills.choose.body")}
+    <NothingSelected
+      icon={Sparkle}
+      addLabel={t("skills.add")}
+      onAdd={() => props.onAdd("folder")}
     />
   );
 }

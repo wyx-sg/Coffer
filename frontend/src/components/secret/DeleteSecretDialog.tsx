@@ -123,7 +123,9 @@ export function DeleteSecretDialog({ row, onOpenChange }: Props) {
       onOpenChange={(next) => !remove.isPending && onOpenChange(next)}
       title={t("secrets.delete.title", { name })}
       description={t("secrets.delete.body")}
-      confirmLabel={remove.isPending ? t("secrets.delete.submitting") : t("secrets.delete.submit")}
+      confirmLabel={t("secrets.delete.submit")}
+      pendingLabel={t("secrets.delete.submitting")}
+      errorTitle={t("common.couldntDelete", { name: name })}
       pending={remove.isPending}
       error={inUseError ? undefined : (remove.error ?? undefined)}
       onConfirm={() => void confirm()}

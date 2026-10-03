@@ -17,6 +17,7 @@ from __future__ import annotations
 import dataclasses
 import os
 import pathlib
+from datetime import UTC, datetime
 
 from coffer.domain.knowledge.entry import (
     ACTOR_AGENT,
@@ -80,6 +81,21 @@ def count_files(directory: pathlib.Path, *, markdown_only: bool = False) -> int:
     return total
 
 
+def latest_edit(directory: pathlib.Path) -> str | None:
+    """When the newest document under ``directory`` was written (ISO 8601,
+    UTC), by file time; ``None`` when it holds none."""
+    newest = 0.0
+    for root, dirnames, filenames in os.walk(directory):
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        for f in filenames:
+            path = pathlib.Path(root) / f
+            if is_markdown(f) and not is_collection_readme(path):
+                newest = max(newest, path.stat().st_mtime)
+    if not newest:
+        return None
+    return datetime.fromtimestamp(newest, tz=UTC).isoformat()
+
+
 def readme_description(collection: str) -> str:
     """A collection's one-line description: its README's first paragraph.
 
@@ -125,6 +141,7 @@ def list_collections() -> tuple[CollectionEntry, ...]:
             document_count=count_files(d, markdown_only=True),
             pending_count=_count_inbox(d.name),
             folder_path=str(d),
+            updated_at=latest_edit(d),
         )
         for d in found
     )

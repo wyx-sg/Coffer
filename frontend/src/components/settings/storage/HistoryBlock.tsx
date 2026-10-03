@@ -7,11 +7,10 @@
 // says so above the blocks with Try again, and the row reads "Not saved".
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderOpen } from "lucide-react";
+import { FolderOpen, TriangleAlert } from "lucide-react";
 
 import { LoadError } from "@/components/LoadError";
 import { SettingRow } from "@/components/settings/SettingsLayout";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,7 +20,7 @@ import {
   useRetentionPolicies,
   useUpdateRetentionPolicy,
 } from "@/lib/hooks/useRetention";
-import { formatDateTime } from "@/lib/utils";
+import { formatMoment } from "@/lib/time";
 import { RetentionPolicySection } from "./RetentionPolicySection";
 import { DataBlock } from "./DataBlock";
 
@@ -34,7 +33,7 @@ interface Props {
 }
 
 export function HistoryBlock({ size, onReveal }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const policies = useRetentionPolicies();
   const update = useUpdateRetentionPolicy();
   const prune = usePruneNow();
@@ -83,22 +82,29 @@ export function HistoryBlock({ size, onReveal }: Props) {
   return (
     <>
       {update.isError ? (
-        <Alert variant="destructive" data-testid="settings-data-save-failed">
-          <AlertTitle>{t("settings.data.saveFailedTitle")}</AlertTitle>
-          <AlertDescription className="flex flex-wrap items-center gap-3">
-            <span>
+        <div
+          role="alert"
+          className="flex items-start gap-2.5 rounded-lg bg-danger-soft px-3 py-2.5"
+          data-testid="settings-data-save-failed"
+        >
+          <TriangleAlert aria-hidden className="mt-px size-[15px] shrink-0 text-danger" />
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-sm font-label text-text">
+              {t("settings.data.saveFailedTitle")}
+            </span>
+            <span className="text-xs text-text-muted">
               {translateApiError(t, update.error)}
               {stillKept ? ` ${stillKept}` : null}
             </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => update.variables && update.mutate(update.variables)}
-            >
-              {t("settings.data.tryAgain")}
-            </Button>
-          </AlertDescription>
-        </Alert>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => update.variables && update.mutate(update.variables)}
+          >
+            {t("settings.data.tryAgain")}
+          </Button>
+        </div>
       ) : null}
       <DataBlock
         title={t("settings.data.history.title")}
@@ -141,7 +147,10 @@ export function HistoryBlock({ size, onReveal }: Props) {
         <SettingRow
           label={
             lastAt
-              ? t("settings.data.lastCleared", { when: formatDateTime(lastAt), rows: lastRows })
+              ? t("settings.data.lastCleared", {
+                  when: formatMoment(lastAt, i18n.language, t),
+                  rows: lastRows,
+                })
               : t("settings.retention.neverPruned")
           }
           description={t("settings.data.clearedOnSchedule")}

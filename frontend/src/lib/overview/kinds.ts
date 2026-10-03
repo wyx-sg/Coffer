@@ -5,17 +5,17 @@
 // MCP server's and a skill's name is fixed once registered, so it is shown in
 // mono as an identifier; every other kind's name is prose.
 import {
+  Book,
   Bot,
-  Boxes,
+  Box,
   Brain,
   CircleDot,
-  KeyRound,
-  Library,
+  IdCard,
   Radio,
   RefreshCw,
   Server,
-  Sparkles,
-  SquareTerminal,
+  Sparkle,
+  Terminal,
   Workflow,
   Wrench,
   type LucideIcon,
@@ -31,16 +31,16 @@ export interface KindMeta {
 
 const KINDS: Record<string, KindMeta> = {
   agent: { labelKey: "overview.kinds.agent", icon: Bot, identifier: false },
-  provider: { labelKey: "overview.kinds.provider", icon: Boxes, identifier: false },
+  provider: { labelKey: "overview.kinds.provider", icon: Box, identifier: false },
   mcp_server: { labelKey: "overview.kinds.mcp_server", icon: Server, identifier: true },
-  skill: { labelKey: "overview.kinds.skill", icon: Sparkles, identifier: true },
+  skill: { labelKey: "overview.kinds.skill", icon: Sparkle, identifier: true },
   channel: { labelKey: "overview.kinds.channel", icon: Radio, identifier: false },
-  knowledge: { labelKey: "overview.kinds.knowledge", icon: Library, identifier: false },
+  knowledge: { labelKey: "overview.kinds.knowledge", icon: Book, identifier: false },
   memory: { labelKey: "overview.kinds.memory", icon: Brain, identifier: false },
   sync: { labelKey: "overview.kinds.sync", icon: RefreshCw, identifier: false },
   reconcile: { labelKey: "overview.kinds.reconcile", icon: Workflow, identifier: false },
-  cli: { labelKey: "overview.kinds.cli", icon: SquareTerminal, identifier: true },
-  secret: { labelKey: "overview.kinds.secret", icon: KeyRound, identifier: false },
+  cli: { labelKey: "overview.kinds.cli", icon: Terminal, identifier: true },
+  secret: { labelKey: "overview.kinds.secret", icon: IdCard, identifier: false },
   custom_tool: { labelKey: "overview.kinds.custom_tool", icon: Wrench, identifier: true },
 };
 

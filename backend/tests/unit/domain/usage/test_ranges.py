@@ -47,3 +47,10 @@ def test_custom_range_is_inclusive_and_validated() -> None:
 def test_local_day_of_an_instant() -> None:
     assert local_day(_NOW, _SGT) == "2026-10-01"
     assert local_day(_NOW.replace(tzinfo=None), UTC) == "2026-09-30"
+
+
+def test_the_last_24_hours_spans_the_local_days_its_ends_fall_on() -> None:
+    span = resolve_range("24h", now=_NOW, tz=_SGT)
+    assert (span.start, span.end) == (date(2026, 9, 30), date(2026, 10, 1))
+    span = resolve_range("24h", now=_NOW, tz=UTC)
+    assert (span.start, span.end) == (date(2026, 9, 29), date(2026, 9, 30))

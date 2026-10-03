@@ -55,10 +55,11 @@ export function KnowledgeDeleteCollection({ collection }: { collection: Collecti
           documents: collection.document_count,
           items: collection.pending_count,
         })}
-        confirmLabel={
-          del.isPending ? t("common.deleting") : t("knowledge.deleteCollection.confirm")
-        }
-        pending={del.isPending || typed !== collection.name}
+        confirmLabel={t("knowledge.deleteCollection.confirm")}
+        pendingLabel={t("common.deleting")}
+        errorTitle={t("common.couldntDelete", { name: collection.name })}
+        confirmDisabled={typed !== collection.name}
+        pending={del.isPending}
         error={del.error}
         onConfirm={() =>
           del.mutate(

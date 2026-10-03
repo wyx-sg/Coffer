@@ -1264,8 +1264,8 @@ only their official quota.
 - **AND** on the Usage page the dash's tooltip says no price is known for it and that a price is set in Model providers
 
 ### Requirement: Report usage by model, agent or day over a range
-`GET /api/v1/usage/summary` and `coffer usage [--range today|7d|30d|month|custom] [--from <day> --to <day>] [--by model|agent|day] [--agent <agent type>] [--provider <name>] [--json]`
-MUST report, for the range in the machine's local days (today; the last 7 or 30 days including today;
+`GET /api/v1/usage/summary` and `coffer usage [--range today|24h|7d|30d|month|custom] [--from <day> --to <day>] [--by model|agent|day] [--agent <agent type>] [--provider <name>] [--json]`
+MUST report, for the range in the machine's local days (today; the last 24 hours up to now, summed from the per-request rows because the window cuts through a local day; the last 7 or 30 days including today;
 this calendar month; or an inclusive custom range), one row per model (with the connection that
 served it, by uid and name), per agent or per day: requests, the token totals per category, the
 estimated cost, how many requests were unpriced or had unknown usage, and the agent types that sent
@@ -1295,6 +1295,11 @@ page through the per-request detail, newest first. `GET /api/v1/usage/export.csv
 - **GIVEN** a clock on a known local day
 - **WHEN** the ranges today, 7d, 30d and this month are resolved
 - **THEN** each spans the local days it names, today included
+
+#### Scenario: the last 24 hours is a rolling window
+- **GIVEN** requests 2 hours ago, 23 hours ago and 25 hours ago
+- **WHEN** the summary is read for the range `24h`
+- **THEN** it counts the first two requests and not the third
 
 #### Scenario: export usage as CSV
 - **GIVEN** usage in the range

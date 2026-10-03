@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { ReachFilter } from "@/components/reach/ReachFilter";
 import { SearchInput } from "@/components/SearchInput";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { CustomToolGroup } from "@/lib/api/customTools";
 import { sectionGroups } from "@/lib/customTools/groups";
 import type { ReachFilterValue } from "@/lib/reachFilter";
@@ -14,11 +14,14 @@ import { GroupRow } from "./GroupRow";
 interface Props {
   groups: CustomToolGroup[];
   loading: boolean;
+  /** The list read failed: the pane shows the error block under the filter. */
+  error?: unknown;
+  onRetry?: () => void;
   selected: string | undefined;
   onOpen: (name: string) => void;
 }
 
-export function GroupList({ groups, loading, selected, onOpen }: Props) {
+export function GroupList({ groups, loading, error, onRetry, selected, onOpen }: Props) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState("");
   const [reach, setReach] = useState<ReachFilterValue>("all");
@@ -34,13 +37,19 @@ export function GroupList({ groups, loading, selected, onOpen }: Props) {
       />
       <ReachFilter value={reach} onChange={setReach} />
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
-        {loading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
+        {error ? (
+          <ListLoadError kind="customTools" error={error} onRetry={() => onRetry?.()} />
+        ) : loading ? (
+          <ListLoadingRows />
         ) : sections.length === 0 ? (
-          <p className="px-2 text-xs text-text-muted">{t("customTools.list.noMatch")}</p>
+          <ListNoMatch
+            kind="customTools"
+            query={filter}
+            onClear={() => {
+              setFilter("");
+              setReach("all");
+            }}
+          />
         ) : (
           sections.map(({ section, groups: inSection }) => (
             <section key={section} aria-label={t(`customTools.list.section.${section}`)}>

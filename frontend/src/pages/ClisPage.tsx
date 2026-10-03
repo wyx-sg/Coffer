@@ -11,9 +11,8 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Plus, RefreshCw, SquareTerminal } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 
-import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { AddCliDialog } from "@/components/clis/AddCliDialog";
@@ -22,7 +21,6 @@ import { ClisEmptyState } from "@/components/clis/ClisEmptyState";
 import { ClisList } from "@/components/clis/ClisList";
 import { ClisWarnings } from "@/components/clis/ClisWarnings";
 import { Button } from "@/components/ui/button";
-import { translateApiError } from "@/lib/api/errors";
 import { useCheckClis, useClis } from "@/lib/hooks/useClis";
 
 export function ClisPage() {
@@ -38,21 +36,7 @@ export function ClisPage() {
   const firstRun = !isPending && !error && items.length === 0 && !command;
 
   let body: JSX.Element;
-  if (error) {
-    body = (
-      <EmptyState
-        tone="error"
-        icon={SquareTerminal}
-        title={t("clis.loadFailed")}
-        description={translateApiError(t, error)}
-        action={
-          <Button variant="outline" onClick={() => void refetch()}>
-            {t("clis.checkAgain")}
-          </Button>
-        }
-      />
-    );
-  } else if (firstRun) {
+  if (firstRun) {
     body = (
       <div className="space-y-3 overflow-y-auto px-6 py-6 md:px-8">
         <ClisWarnings warnings={warnings} />
@@ -72,6 +56,8 @@ export function ClisPage() {
           <ClisList
             items={items}
             loading={isPending}
+            error={error}
+            onRetry={() => void refetch()}
             selected={selected}
             onOpen={(c) => navigate(`/clis/${encodeURIComponent(c)}`)}
           />

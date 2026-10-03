@@ -42,3 +42,18 @@ export function formatShortTime(iso: string, now: Date = new Date()): string {
   if (Number.isNaN(at.getTime())) return iso;
   return sameDay(at, now) ? formatClock(iso) : formatDateTime(iso).slice(0, 16);
 }
+
+/** @ui-only How long ago, in the coarsest whole unit: "14 min", "3 h", "2 d". */
+export type AgoLabel = { unit: "now" } | { unit: "minutes" | "hours" | "days"; count: number };
+
+/** Under a minute → now; under an hour → minutes; under a day → hours; else days. Null for no or a malformed time. */
+export function describeAgo(iso: string | null, now: Date = new Date()): AgoLabel | null {
+  if (!iso) return null;
+  const at = Date.parse(iso);
+  if (Number.isNaN(at)) return null;
+  const minutes = Math.max(0, Math.floor((now.getTime() - at) / 60_000));
+  if (minutes < 1) return { unit: "now" };
+  if (minutes < 60) return { unit: "minutes", count: minutes };
+  if (minutes < 24 * 60) return { unit: "hours", count: Math.floor(minutes / 60) };
+  return { unit: "days", count: Math.floor(minutes / (24 * 60)) };
+}

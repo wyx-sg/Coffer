@@ -185,7 +185,6 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
         open={deleting}
         onOpenChange={setDeleting}
         agentNames={agentNames}
-        agentCount={reachedAgents(resource, agents).length}
         toolCount={toolCount}
         onDeleted={onDeleted}
       />

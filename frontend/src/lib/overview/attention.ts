@@ -5,6 +5,8 @@
 // most severe first, then oldest first, and each row links to the page where
 // the person can act on it. The action's `method`/`path` name a daemon route,
 // not a page, so the page is chosen here from the item's kind and reason.
+import { Eye, KeyRound, Plug, RefreshCw, Wrench, type LucideIcon } from "lucide-react";
+
 import type { AttentionItem } from "@/lib/hooks/useAttention";
 import type { StatusTone } from "@/lib/statusTone";
 
@@ -134,11 +136,32 @@ export function actionLabelKey(verb: string): string {
   return `overview.actions.${VERBS.has(verb) ? verb : "open"}`;
 }
 
-/** One item's label key: a memory hook's repair reads "Repair hook" rather
- *  than "Repair drift"; everything else goes by its verb. */
+/** One item's label key. The label names what the button does for that kind
+ *  and reason, not the daemon's bare verb: a memory hook's repair reads
+ *  "Repair hook" (not "Repair drift"), a channel's check "Reconnect channel",
+ *  sync's review "Review held changes"; every other item goes by its verb. */
 export function itemActionLabelKey(item: AttentionItem): string {
-  if (isHookItem(item) && item.action.verb === "repair") return "overview.actions.repairHook";
-  return actionLabelKey(item.action.verb);
+  const verb = item.action.verb;
+  if (isHookItem(item) && verb === "repair") return "overview.actions.repairHook";
+  if (item.kind === "channel" && verb === "check") return "overview.actions.reconnectChannel";
+  if (item.kind === "sync" && verb === "review") return "overview.actions.reviewHeld";
+  return actionLabelKey(verb);
+}
+
+/** The 14px icon leading each verb's label: a key for adding a secret, an eye
+ *  for reviewing, a plug for connecting, a wrench for repairing, a refresh for
+ *  checking or testing again. A verb with no entry carries no icon. */
+const VERB_ICONS: Record<string, LucideIcon> = {
+  set_secret: KeyRound,
+  review: Eye,
+  connect: Plug,
+  repair: Wrench,
+  check: RefreshCw,
+  test: RefreshCw,
+};
+
+export function actionIcon(verb: string): LucideIcon | undefined {
+  return VERB_ICONS[verb];
 }
 
 /** The actions that run where the row is. An action runs in place only when

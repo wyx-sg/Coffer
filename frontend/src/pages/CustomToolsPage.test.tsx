@@ -66,8 +66,9 @@ describe("CustomToolsPage", () => {
       within(screen.getByRole("region", { name: "Off" })).getByText("status-page"),
     ).toBeInTheDocument();
 
+    // The page header's Add and the right pane's Nothing selected Add.
     const adds = screen.getAllByRole("button", { name: "Add custom tool" });
-    expect(adds).toHaveLength(1);
+    expect(adds).toHaveLength(2);
     fireEvent.click(adds[0]);
 
     const dialog = await screen.findByRole("dialog");

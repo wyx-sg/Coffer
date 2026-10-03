@@ -59,64 +59,66 @@ export function AboutPage() {
     ? t("settings.about.versionWithCommit", { version, commit: status.commit })
     : version;
   return (
-    <div className={SETTINGS_STACK}>
+    <div className="flex flex-col gap-5">
       <SettingsTabHeader title={t("settings.tabs.about")} intro={t("settings.about.intro")} />
-      <div className="flex items-center gap-3.5" data-testid="settings-about-head">
-        <CofferMark size={44} />
-        <div className="flex flex-col gap-0.5">
-          <p className="m-0 text-xl font-bold text-text">Coffer</p>
-          <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-text-muted">
-            <span>
-              {status
-                ? t("settings.about.versionLine", { version })
-                : t("settings.about.versionLineLoading")}
-            </span>
-            <button
-              type="button"
-              onClick={() => void copyDiagnostics()}
-              className="text-xs font-label text-accent underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-            >
-              {t("settings.about.copyDiagnostics")}
-            </button>
-          </p>
+      <div className={SETTINGS_STACK}>
+        <div className="flex items-center gap-3.5" data-testid="settings-about-head">
+          <CofferMark size={44} />
+          <div className="flex flex-col gap-0.5">
+            <p className="m-0 text-xl font-bold text-text">Coffer</p>
+            <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-text-muted">
+              <span>
+                {status
+                  ? t("settings.about.versionLine", { version })
+                  : t("settings.about.versionLineLoading")}
+              </span>
+              <button
+                type="button"
+                onClick={() => void copyDiagnostics()}
+                className="text-xs font-label text-accent underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+              >
+                {t("settings.about.copyDiagnostics")}
+              </button>
+            </p>
+          </div>
         </div>
+
+        <UpdatesSection />
+
+        <SettingsSection title={t("settings.about.details")}>
+          <SettingRow label={t("settings.about.fields.version")}>
+            <span className="font-mono text-xs">{build}</span>
+          </SettingRow>
+          <SettingRow label={t("settings.about.fields.license")}>
+            <span className="text-sm">MIT</span>
+          </SettingRow>
+          <SettingRow label={t("settings.about.fields.documentation")}>
+            <a
+              href={DOCS_URL[i18n.language?.startsWith("zh") ? "zh" : "en"]}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm text-accent hover:underline"
+            >
+              {t("settings.about.documentationLink")}
+            </a>
+          </SettingRow>
+          <SettingRow label={t("settings.about.fields.source")}>
+            <a
+              href={SOURCE_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm text-accent hover:underline"
+            >
+              github.com/wyx-sg/Coffer
+            </a>
+          </SettingRow>
+          <SettingRow label={t("settings.about.fields.dataFolder")}>
+            <span className="font-mono text-xs" data-visual-volatile>
+              {status?.data_dir ?? EMPTY}
+            </span>
+          </SettingRow>
+        </SettingsSection>
       </div>
-
-      <UpdatesSection />
-
-      <SettingsSection title={t("settings.about.details")}>
-        <SettingRow label={t("settings.about.fields.version")}>
-          <span className="font-mono text-xs">{build}</span>
-        </SettingRow>
-        <SettingRow label={t("settings.about.fields.license")}>
-          <span className="text-sm">MIT</span>
-        </SettingRow>
-        <SettingRow label={t("settings.about.fields.documentation")}>
-          <a
-            href={DOCS_URL[i18n.language?.startsWith("zh") ? "zh" : "en"]}
-            target="_blank"
-            rel="noreferrer"
-            className="text-sm text-accent hover:underline"
-          >
-            {t("settings.about.documentationLink")}
-          </a>
-        </SettingRow>
-        <SettingRow label={t("settings.about.fields.source")}>
-          <a
-            href={SOURCE_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="text-sm text-accent hover:underline"
-          >
-            github.com/wyx-sg/Coffer
-          </a>
-        </SettingRow>
-        <SettingRow label={t("settings.about.fields.dataFolder")}>
-          <span className="font-mono text-xs" data-visual-volatile>
-            {status?.data_dir ?? EMPTY}
-          </span>
-        </SettingRow>
-      </SettingsSection>
     </div>
   );
 }

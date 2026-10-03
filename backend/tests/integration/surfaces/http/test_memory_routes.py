@@ -279,6 +279,20 @@ def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> 
     assert global_notes[0]["type"] == "user"
 
 
+@pytest.mark.acceptance(
+    spec="memory", scenario="a partition lists when its newest memory was updated"
+)
+def test_a_partition_lists_when_its_newest_memory_was_updated(client, tmp_path) -> None:
+    _register_agent(client)
+    _seed(tmp_path, _repository(tmp_path), _default_files())
+    _sync(client)
+
+    listed = _partitions(client)
+    coffer_uid = _partition_uid(client, "coffer")
+    [note] = client.get(f"/api/v1/memory/partitions/{coffer_uid}/notes").json()["notes"]
+    assert listed["coffer"]["updated_at"] == note["updated_at"] != ""
+
+
 def test_unknown_partition_notes_is_not_found(client) -> None:
     """A uid nothing answers to — the only way to miss, now that the path
     carries an identity rather than a label a typo could mangle."""

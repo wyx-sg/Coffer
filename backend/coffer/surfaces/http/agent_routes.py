@@ -141,6 +141,8 @@ class AgentTypeOut(BaseModel):
     #: While its program is not found: the prompt that hands installing (or
     #: reinstalling) it to an agent; ``null`` otherwise.
     install_handoff: HandoffOut | None = None
+    #: The product's official install page (the Overview's first-run "Install").
+    install_url: str = ""
 
 
 class AgentTypesOut(BaseModel):
@@ -173,6 +175,7 @@ async def _type_out(row: AgentTypeDetection, detect: AutoDetectService) -> Agent
         addable=row.addable,
         other_config_dir=row.other_config_dir,
         install_handoff=handoff_out(prompt),
+        install_url=row.install_url,
     )
 
 

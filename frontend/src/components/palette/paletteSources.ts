@@ -79,7 +79,23 @@ const mapCustomTool = (g: PaletteObject & { health: string }) => ({
   status: CUSTOM_TOOL_STATUS[g.health],
 });
 const useCustomToolObjects = () => useMapped(useCustomToolGroups(), mapCustomTool);
-const useSkillObjects = () => useMapped(useSkills(), offWhenDisabled);
+// A skill names the agents it is delivered to (its bindings), by the display
+// names the Agents page shows; the listing already carries both.
+const useSkillObjects = (): KindState => {
+  const q = useSkills();
+  const agents = useAgents();
+  const items = useMemo(() => {
+    const names = new Map<string, string>(
+      agents.data?.map((a): [string, string] => [a.uid, a.display_name]),
+    );
+    return q.data?.map((skill) => ({
+      ...offWhenDisabled(skill),
+      note:
+        skill.bindings.map((b) => names.get(b.agent_uid) ?? b.agent_name).join(" · ") || undefined,
+    }));
+  }, [q.data, agents.data]);
+  return kindState({ status: q.status, data: items });
+};
 const useProviderObjects = () => useMapped(useProviders(), offWhenDisabled);
 const useChannelObjects = () => useMapped(useChannels(), offWhenDisabled);
 const useKnowledgeObjects = () => kindState(useKnowledgeCollections());

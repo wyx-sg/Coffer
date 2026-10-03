@@ -26,6 +26,7 @@ import {
 } from "@/components/settings/SettingsLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import {
@@ -78,17 +79,22 @@ export function ExperimentalFeaturesSettings() {
     reset.mutate(feature.key, { onError: (err) => setFailed({ key: feature.key, error: err }) });
   };
 
-  if (!data) return null;
-
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <SettingsTabHeader
         title={t("settings.tabs.features")}
         intro={t("settings.features.subtitle")}
       />
       <div className={SETTINGS_STACK}>
         <SettingsSection testId="experimental-features">
-          {data.features.map((feature) => {
+          {!data ? (
+            <div className="flex flex-col gap-2 py-3" data-testid="features-loading">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : null}
+          {data?.features.map((feature) => {
             const checked = pending[feature.key] ?? feature.enabled;
             const name = t(`settings.features.names.${feature.key}`, { defaultValue: feature.key });
             return (

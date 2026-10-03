@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { DaemonOfflineState, DaemonStatusBar } from "./DaemonOfflineBanner";
 import type { DaemonConnection } from "./shell/daemonConnection";
 import { acceptance } from "@/test/acceptance";
@@ -49,7 +50,11 @@ function DaemonOfflineBanner({ onRetry = () => {} }: { onRetry?: () => void }) {
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </QueryClientProvider>
+  );
 }
 
 describe("DaemonOfflineBanner", () => {
@@ -138,8 +143,32 @@ describe("DaemonOfflineBanner", () => {
     render(wrap(<DaemonOfflineBanner />));
     // The browser cannot start the daemon, so the recovery is the command
     // that does; Retry only probes again, and the retries clear the state.
+    expect(screen.getByText("Or start it from a terminal")).toBeInTheDocument();
     expect(screen.getByText("coffer daemon start")).toBeInTheDocument();
-    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Retry"]);
+    expect(screen.getAllByRole("button").map((b) => b.textContent?.trim())).toEqual([
+      "Retry",
+      "Copy",
+    ]);
+  });
+
+  acceptance("web-ui", "the offline screen links to the daemon log", () => {
+    useDaemonStatusMock.mockReturnValue({ isError: true, error: new Error("down") } as never);
+    useDaemonOutOfDateMock.mockReturnValue({ data: false } as never);
+    render(wrap(<DaemonOfflineBanner />));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveClass("font-bold");
+    expect(screen.getByRole("link", { name: "Open daemon log" })).toHaveAttribute(
+      "href",
+      "/activity?tab=daemon",
+    );
+  });
+
+  test("the reconnecting bar shows a still ring, not a spinner", () => {
+    useDaemonStatusMock.mockReturnValue({ isError: true, error: new Error("down") } as never);
+    useDaemonOutOfDateMock.mockReturnValue({ data: false } as never);
+    render(wrap(<DaemonStatusBar connection={RECONNECTING} onRetry={() => {}} />));
+    const ring = screen.getByTestId("daemon-reconnecting").querySelector("svg");
+    expect(ring).not.toBeNull();
+    expect(ring!.getAttribute("class")).not.toMatch(/animate-spin/);
   });
 });
 
@@ -229,7 +258,13 @@ describe("DaemonOfflineBanner (desktop restart branch)", () => {
     const ReloadedBanner = () => <Reloaded connection={OFFLINE} onRetry={() => {}} />;
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
-    render(<QueryClientProvider client={qc}>{<ReloadedBanner />}</QueryClientProvider>);
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <ReloadedBanner />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
 
     fireEvent.click(screen.getByTestId("daemon-banner-restart"));
 

@@ -3,15 +3,16 @@
 // lives (instructions beside settings, a not-created file marked so), the
 // selected file in the URL, a read-only preview behind an explicit Edit, JSON
 // checked while typing, a stale save that keeps the draft, a missing file that
-// can be created, a directory entry that lists its files, and the three-way
-// unsaved-draft guard.
+// can be created, a directory entry that lists its files, and the unsaved-draft
+// guard (the shell's, registered by the draft).
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { createMemoryRouter, RouterProvider, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 
 import { AgentConfigFilesTab } from "./AgentConfigFilesTab";
+import { UnsavedGuardProvider } from "@/components/shell/UnsavedGuard";
 import { agentsApi, type AgentOut, type ConfigFileInfo } from "@/lib/api/agents";
 import { ApiError } from "@/lib/api/errors";
 import { acceptance } from "@/test/acceptance";
@@ -125,14 +126,25 @@ function Location() {
   return <output data-testid="location">{useLocation().search}</output>;
 }
 
-function renderTab(search = "", extra: { onDirtyChange?: (d: boolean) => void } = {}) {
+function renderTab(search = "") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const router = createMemoryRouter(
+    [
+      {
+        path: "*",
+        element: (
+          <UnsavedGuardProvider>
+            <AgentConfigFilesTab agent={AGENT} />
+            <Location />
+          </UnsavedGuardProvider>
+        ),
+      },
+    ],
+    { initialEntries: [`/agents/claude_code/config${search}`] },
+  );
   const ui: ReactNode = (
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[`/agents/claude_code/config${search}`]}>
-        <AgentConfigFilesTab agent={AGENT} {...extra} />
-        <Location />
-      </MemoryRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   );
   return render(ui);
@@ -281,34 +293,31 @@ describe("AgentConfigFilesTab", () => {
     );
   });
 
-  test("switching files with a dirty draft asks first; cancel keeps the edit", () => {
+  test("switching files with a dirty draft asks first; keep editing stays", async () => {
     stub();
-    const onDirtyChange = vi.fn();
-    renderTab("?file=settings", { onDirtyChange });
+    renderTab("?file=settings");
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: '{"theme": "light"}' } });
-    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
 
     fireEvent.click(screen.getByText("CLAUDE.md"));
-    const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveTextContent(/discard your changes to settings\.json/i);
-    expect(dialog).toHaveTextContent(/opening CLAUDE\.md discards it/i);
+    const dialog = await screen.findByRole("dialog", { name: "Leave without saving?" });
+    expect(dialog).toHaveTextContent("You edited settings.json in Claude Code.");
     expect(fileParam()).toBe("settings");
     fireEvent.click(within(dialog).getByRole("button", { name: /keep editing/i }));
     expect(screen.getByRole("textbox")).toHaveValue('{"theme": "light"}');
   });
 
-  test("confirming the discard applies the parked selection", () => {
+  test("discarding at the guard opens the file picked", async () => {
     stub();
-    const onDirtyChange = vi.fn();
-    renderTab("?file=settings", { onDirtyChange });
+    renderTab("?file=settings");
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "changed" } });
     fireEvent.click(screen.getByText("CLAUDE.md"));
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /discard/i }));
-    expect(fileParam()).toBe("instructions");
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: /discard changes/i }),
+    );
+    await waitFor(() => expect(fileParam()).toBe("instructions"));
     expect(document.querySelector("textarea")).toBeNull();
-    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
   });
 
   test("a dirty draft blocks page unload; a clean one does not", () => {

@@ -45,13 +45,15 @@ function withoutFrontmatter(text: string): string {
 
 interface Props {
   uid: string;
+  /** The skill's name, for the unsaved-changes dialog's sentence. */
+  owner: string;
   path: string;
   builtin?: boolean;
   /** Told when the file gains or loses unsaved edits, for the tree's dot. */
   onDirtyChange?: (dirty: boolean) => void;
 }
 
-export function SkillFileViewer({ uid, path, builtin = false, onDirtyChange }: Props) {
+export function SkillFileViewer({ uid, owner, path, builtin = false, onDirtyChange }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const editor = usePreferredEditor();
@@ -73,6 +75,7 @@ export function SkillFileViewer({ uid, path, builtin = false, onDirtyChange }: P
       return saved.fingerprint;
     },
     reload: () => content.refetch(),
+    guard: { file: path, owner },
   });
   const dirty = draft.editing && draft.dirty;
   useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);

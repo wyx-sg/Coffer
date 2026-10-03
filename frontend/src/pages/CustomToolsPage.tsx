@@ -6,7 +6,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plus, Wrench } from "lucide-react";
 
-import { EmptyState } from "@/components/EmptyState";
+import { NothingSelected } from "@/components/ListPaneStates";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { AddCustomToolDialog } from "@/components/custom-tools/AddCustomToolDialog";
@@ -15,7 +15,6 @@ import { GroupList } from "@/components/custom-tools/GroupList";
 import { GroupPane } from "@/components/custom-tools/GroupPane";
 import type { AddStart } from "@/components/custom-tools/addFlow";
 import { Button } from "@/components/ui/button";
-import { translateApiError } from "@/lib/api/errors";
 import { useCustomToolGroups } from "@/lib/hooks/useCustomTools";
 
 export function CustomToolsPage() {
@@ -41,19 +40,7 @@ export function CustomToolsPage() {
           }
         />
       </div>
-      {error ? (
-        <EmptyState
-          icon={Wrench}
-          tone="error"
-          title={t("customTools.list.loadFailed")}
-          description={translateApiError(t, error)}
-          action={
-            <Button variant="outline" onClick={() => void refetch()}>
-              {t("common.retry")}
-            </Button>
-          }
-        />
-      ) : firstRun ? (
+      {firstRun ? (
         <div className="flex flex-1 items-center overflow-y-auto">
           <CustomToolsFirstRun onAdd={setAdding} />
         </div>
@@ -68,22 +55,24 @@ export function CustomToolsPage() {
             <GroupList
               groups={groups}
               loading={isPending}
+              error={error}
+              onRetry={() => void refetch()}
               selected={selected}
               onOpen={(name) => navigate(`/custom-tools/${encodeURIComponent(name)}`)}
             />
           }
           detail={
-            selected ? (
+            error || isPending ? null : selected ? (
               <GroupPane
                 key={selected}
                 name={selected}
                 onAddRequest={() => setAdding({ target: selected, step: "request" })}
               />
             ) : (
-              <EmptyState
+              <NothingSelected
                 icon={Wrench}
-                title={t("customTools.list.pickTitle")}
-                description={t("customTools.list.pickBody")}
+                addLabel={t("customTools.add.action")}
+                onAdd={() => setAdding({})}
               />
             )
           }

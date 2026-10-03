@@ -87,6 +87,10 @@
     "summaryWithCoffer": "{{changes}} in {{agents}} and Coffer"
   },
   "common": {
+    "time": {
+      "todayAt": "today at {{time}}",
+      "dayAt": "{{day}} at {{time}}"
+    },
     "moreActions": "More actions",
     "enabled": "Enabled",
     "close": "Close",
@@ -113,6 +117,18 @@
       "body": "Your edits to this file will be lost.",
       "confirm": "Discard"
     },
+    "leaveGuard": {
+      "title": "Leave without saving?",
+      "body": "You edited {{file}} in {{owner}}. If you leave now, those edits are lost.",
+      "discard": "Discard changes",
+      "keep": "Keep editing",
+      "saveAndLeave": "Save and leave",
+      "saveFailed": "Couldn’t save {{file}}"
+    },
+    "couldntDelete": "Couldn’t delete {{name}}",
+    "couldntRemove": "Couldn’t remove {{name}}",
+    "couldntDeleteSelected": "Couldn’t delete the selection",
+    "couldntDeleteConversation": "Couldn’t delete the conversation",
     "bulk": {
       "selected": "{{count}} selected",
       "pageSelected": "All on this page selected",
@@ -202,7 +218,6 @@
     "title": "MCP servers",
     "subtitle": "MCP servers Coffer runs and serves to your agents through one endpoint.",
     "addServer": "Add server",
-    "loadFailed": "Failed to load resources",
     "status": {
       "all": "All"
     },
@@ -523,28 +538,22 @@
       "calledBy": "Called by",
       "calls_one": "call",
       "calls_other": "calls",
-      "choose": {
-        "title": "Choose a server",
-        "body": "Pick a server on the left to see why it is in its state, who calls it, and its tools."
-      },
       "colCalls": "Calls",
       "colCalls24h": "Calls 24 h",
       "colErrors": "Errors",
       "colLastCall": "Last call",
       "configCopied": "Config copied — it carries secret names only, never their values.",
       "delete": {
-        "bodyOne": "{{agents}} loses {{tools}} on its next call. Its call history stays in Activity.",
-        "bodyBoth": "Both agents lose {{tools}} on their next call: {{agents}}. Its call history stays in Activity.",
-        "bodyMany": "{{agentCount}} agents lose {{tools}} on their next call: {{agents}}. Its call history stays in Activity.",
         "title": "Delete {{name}}?",
-        "bodyNoAgents": "No agent uses it now. Its call history stays in Activity.",
-        "confirm": "Delete server",
-        "alsoSecrets_one": "Also delete the secret",
-        "alsoSecrets_other": "Also delete the secrets",
-        "secretsKept_one": "Couldn't delete {{count}} secret; it stays on the Secrets page.",
-        "secretsKept_other": "Couldn't delete {{count}} secrets; they stay on the Secrets page.",
-        "noOtherUser": "No other server uses it.",
-        "pause": "This can't be undone. To stop it for a while, turn it off instead."
+        "description": "This can’t be undone. Agents lose access at their next tool call.",
+        "toolsLabel": "Tools",
+        "toolsGone_one": "{{count}} tool disappears from {{agents}}",
+        "toolsGone_other": "{{count}} tools disappear from {{agents}}",
+        "toolsGoneAny": "Its tools disappear from {{agents}}",
+        "secretLabel": "Secret",
+        "secretStays": "{{name}} stays in Secrets",
+        "footnote": "Past calls stay in Activity.",
+        "confirm": "Delete server"
       },
       "deleteManyTitle_one": "Delete {{count}} server?",
       "deleteManyTitle_other": "Delete {{count}} servers?",
@@ -609,8 +618,6 @@
       },
       "mostBehindSearch": "most behind search",
       "noCalls": "No calls in the last 24 hours.",
-      "noMatches": "No servers match.",
-      "notFound": "No MCP server is named {{name}}.",
       "offBody": "Coffer doesn't start it for any session. Turning it on gives it back to the agents you chose last time.",
       "offTitle": "Off — no agent can use it",
       "openInActivity": "View in Activity",
@@ -1223,6 +1230,8 @@
     },
     "security": {
       "masterKey": {
+        "label": "Master key",
+        "readFailed": "Couldn’t read the master key settings.",
         "fileNote": "Master key: file beside the database (no keychain prompts).",
         "keychainNote": "Master key: OS keychain (may prompt once per daemon start).",
         "toggle": "Store master key in OS keychain",
@@ -1487,7 +1496,7 @@
       "outOfDateBody": "This app reused an older background service left running from a previous version. Restart the daemon so the app and daemon run the same version.",
       "restart": "Restart daemon",
       "restarting": "Restarting…",
-      "webRestartHint": "The browser can't start it — run this in your terminal:"
+      "webRestartHint": "Or start it from a terminal"
     },
     "reconnect": {
       "title": "Reconnecting to the daemon…",
@@ -1504,7 +1513,87 @@
       "starting": "Starting…",
       "retry": "Retry",
       "checkingIn": "Checking again in {{seconds}}s",
-      "lastReply": "last reply {{time}}"
+      "lastReply": "last reply {{time}}",
+      "openLog": "Open daemon log"
+    }
+  },
+  "listStates": {
+    "loadFailedTitle": "Couldn’t load {{kinds}}",
+    "loadFailedBody": "{{reason}}. Nothing was changed.",
+    "openDaemonLog": "Open daemon log",
+    "noMatch": "No {{kind}} matches “{{query}}”",
+    "noMatchFilters": "No {{kind}} matches these filters",
+    "clearFilter": "Clear filter",
+    "nothingSelected": "Nothing selected",
+    "nothingSelectedBody": "Choose one from the list, or add the one you were looking for.",
+    "notFound": {
+      "lastSeen": "Last seen",
+      "lastSeenValue": "{{when}} · {{actor}}",
+      "noRecord": "No record in the audit log",
+      "audit": "Audit",
+      "viewInActivity": "View in Activity"
+    },
+    "kinds": {
+      "mcp": {
+        "plural": "MCP servers",
+        "singular": "server",
+        "filterHelp": "Filters names, titles, commands and URLs.",
+        "notFoundTitle": "This server no longer exists",
+        "notFoundBody": "No MCP server is registered as <mono>{{id}}</mono>. It was removed or renamed.",
+        "back": "Back to MCP servers"
+      },
+      "skills": {
+        "plural": "skills",
+        "singular": "skill",
+        "filterHelp": "Filters names and descriptions.",
+        "notFoundTitle": "This skill no longer exists",
+        "notFoundBody": "No skill is named <mono>{{id}}</mono>. It was removed or renamed.",
+        "back": "Back to Skills"
+      },
+      "clis": {
+        "plural": "CLIs",
+        "singular": "command",
+        "filterHelp": "Filters command names and titles.",
+        "notFoundTitle": "This command no longer exists",
+        "notFoundBody": "No command is listed as <mono>{{id}}</mono>. It was removed or renamed.",
+        "back": "Back to CLIs"
+      },
+      "channels": {
+        "plural": "channels",
+        "singular": "channel",
+        "filterHelp": "Filters platforms, names and titles.",
+        "notFoundTitle": "This channel no longer exists",
+        "notFoundBody": "No channel is registered as <mono>{{id}}</mono>. It was removed.",
+        "back": "Back to Channels"
+      },
+      "customTools": {
+        "plural": "custom tools",
+        "singular": "group",
+        "filterHelp": "Filters group names, hosts and tool names.",
+        "notFoundTitle": "This group no longer exists",
+        "notFoundBody": "No custom tool group is named <mono>{{id}}</mono>. It was removed or renamed.",
+        "back": "Back to Custom tools"
+      },
+      "providers": {
+        "plural": "model providers",
+        "singular": "provider",
+        "filterHelp": "Filters names, endpoints and descriptions.",
+        "notFoundTitle": "This provider no longer exists",
+        "notFoundBody": "No model provider is registered as <mono>{{id}}</mono>. It was removed.",
+        "back": "Back to Model providers"
+      },
+      "knowledge": {
+        "plural": "collections",
+        "notFoundTitle": "This collection no longer exists",
+        "notFoundBody": "No collection is registered as <mono>{{id}}</mono>. It was removed or renamed.",
+        "back": "Back to Knowledge"
+      },
+      "memory": {
+        "plural": "partitions",
+        "notFoundTitle": "This partition no longer exists",
+        "notFoundBody": "No memory partition is registered as <mono>{{id}}</mono>. It was removed.",
+        "back": "Back to Memory"
+      }
     }
   },
   "notFound": {
@@ -2234,14 +2323,7 @@
       "newFileSavedAs": "Saved as {{path}}",
       "newFileInvalid": "Use a plain file name ending in .md, without slashes.",
       "newFileExists": "A file with this name is already there.",
-      "newFileCreate": "Create",
-      "unsaved": {
-        "title": "Discard your changes to {{file}}?",
-        "body": "You have an unsaved change. Opening {{target}} discards it; the file on disk stays as it was.",
-        "leaveBody": "You have an unsaved change. Leaving discards it; the file on disk stays as it was.",
-        "keep": "Keep editing",
-        "discard": "Discard changes"
-      }
+      "newFileCreate": "Create"
     },
     "sessionsTab": {
       "count_one": "{{count}} session",
@@ -2519,10 +2601,8 @@
     "subtitle": "Skills Coffer manages: one master folder, linked into each agent you choose.",
     "builtinBadge": "Built-in",
     "title": "Skills",
-    "loadFailed": "Failed to load skills",
     "add": "Add skill",
     "searchPlaceholder": "Filter skills",
-    "noMatches": "No skill matches.",
     "selectAll": "Select all shown skills",
     "group": {
       "inUse": "In use",
@@ -2538,7 +2618,6 @@
         "requires": "Requires",
         "history": "History"
       },
-      "notFound": "No skill named “{{name}}”",
       "source": {
         "builtin": "Written by Coffer"
       },
@@ -2582,10 +2661,6 @@
       "deleteBody": "Deletes the master folders of {{names}} and removes their links from every agent that has them. There is no undo.",
       "deleteConfirm_one": "Delete {{count}} skill",
       "deleteConfirm_other": "Delete {{count}} skills"
-    },
-    "choose": {
-      "title": "Choose a skill",
-      "body": "Pick a skill from the library to read its files and see which agents have it."
     },
     "firstRun": {
       "title": "No skills yet",
@@ -2717,7 +2792,6 @@
         "orphan_master": "A folder in the skills store that Coffer doesn't know."
       }
     },
-    "tryAgain": "Retry",
     "review": "Review…",
     "row": {
       "masterMissing": "Master missing",
@@ -2866,7 +2940,6 @@
   "knowledge": {
     "subtitle": "Documents you and Coffer write together, one collection each.",
     "title": "Knowledge",
-    "loadFailed": "Couldn't load your collections",
     "nav": {
       "label": "Collections and documents",
       "collections": "Collections",
@@ -2876,10 +2949,6 @@
     "tree": {
       "empty": "No documents yet",
       "emptyFolder": "Nothing here yet"
-    },
-    "notFound": {
-      "title": "This collection isn't here",
-      "body": "It may have been deleted, or the link is from another machine."
     },
     "stats": {
       "documents": "Documents",
@@ -3295,7 +3364,6 @@
       "projects_other": "{{count}} projects"
     },
     "detail": {
-      "notFound": "This partition no longer exists.",
       "tabs": {
         "memories": "Memories",
         "delivered": "Delivered"
@@ -3576,10 +3644,6 @@
   "channels": {
     "subtitle": "Connect a chat app so your agents answer where you already talk.",
     "title": "Channels",
-    "loadFailed": "Failed to load channels",
-    "noMatches": "No channels match your search.",
-    "notFound": "This channel no longer exists",
-    "notFoundBody": "Choose a channel from the list.",
     "list": {
       "filter": "Filter",
       "groups": {
@@ -4666,7 +4730,16 @@
       "empty": {
         "title": "Nothing needs you",
         "body": "Anything that needs you shows up here.",
-        "checked": "Checked"
+        "checked": "Checked",
+        "agentsOne": "your agent is connected",
+        "agentsBoth": "both agents are connected",
+        "agentsMany": "all {{count}} agents are connected",
+        "servers_one": "{{count}} server is answering",
+        "servers_other": "{{count}} servers are answering",
+        "vault": "your vault is in sync",
+        "sep": ", ",
+        "and": " and ",
+        "stop": "."
       },
       "pending": {
         "test": "Retrying…",
@@ -4692,6 +4765,8 @@
       "repair": "Repair drift",
       "open": "Open",
       "repairHook": "Repair hook",
+      "reconnectChannel": "Reconnect channel",
+      "reviewHeld": "Review held changes",
       "turn_on": "Turn on"
     },
     "kinds": {
@@ -4715,19 +4790,36 @@
       "channel": "Channels",
       "sync": "Sync",
       "reconcile": "The agent-config check",
-      "secret": "Secret approval"
+      "secret": "Secret approval",
+      "vault": "The vault check",
+      "cli": "Command-line tools",
+      "skill": "Skills",
+      "knowledge": "Knowledge",
+      "memory": "Memory",
+      "provider": "Model providers",
+      "custom_tool": "Custom tools"
     },
     "health": {
       "title": "Health",
       "loadFailed": "Couldn't load",
       "open": "Open {{area}}",
+      "connected": "connected",
+      "ofTotal": "{{count}} of {{total}}",
+      "loadFailedLabel": "{{area}}: couldn’t load",
+      "ago": {
+        "now": "just now",
+        "minutes": "{{count}} min ago",
+        "hours": "{{count}} h ago",
+        "days": "{{count}} d ago"
+      },
+      "edited": "edited {{day}}",
+      "editedToday": "edited today {{time}}",
       "failing_one": "{{count}} failing",
       "failing_other": "{{count}} failing",
       "agents": {
         "ok": "All connected",
         "warn_one": "{{count}} to connect",
         "warn_other": "{{count}} to connect",
-        "unit": "of {{total}} connected",
         "unitRegistered_one": "added",
         "unitRegistered_other": "added"
       },
@@ -4745,7 +4837,9 @@
         "warn_other": "{{count}} reconnecting",
         "unit_one": "channel",
         "unit_other": "channels",
-        "none": "No channels yet"
+        "none": "No channels yet",
+        "reconnecting": "{{name}} reconnecting",
+        "reconnectingSince": "{{name}} reconnecting since {{time}}"
       },
       "mcpServers": {
         "ok": "All answering",
@@ -4780,35 +4874,16 @@
         "warn_other": "{{count}} need attention",
         "unit_one": "partition",
         "unit_other": "partitions",
-        "notes_one": "{{count}} note",
-        "notes_other": "{{count}} notes"
+        "lastUpdate": "Last update {{ago}}"
       },
       "sync": {
         "ok": "In sync",
         "warn_one": "{{count}} held",
         "warn_other": "{{count}} held",
         "notSetUp": "Not set up",
-        "noRemote": "No remote set up",
-        "round": {
-          "nothing_to_do": "In sync",
-          "pulled": "In sync",
-          "pushed": "In sync",
-          "pulled_and_pushed": "In sync",
-          "joined": "In sync",
-          "rolled_back": "In sync",
-          "push_failed": "Push failed",
-          "plaintext_found": "Plaintext secret found",
-          "stopped": "Conflicts",
-          "held": "Held",
-          "waiting_on_edit": "Waiting on an edit",
-          "join_required": "Waiting to join",
-          "unreachable": "Unreachable",
-          "auth_failed": "Sign-in refused",
-          "paused_cloud_folder": "Paused",
-          "remote_too_new": "Remote too new",
-          "failed": "Failed",
-          "none": "No round yet"
-        }
+        "noRound": "No round yet",
+        "lastRound": "last round",
+        "drift": "{{behind}} behind · {{ahead}} ahead"
       },
       "attention_one": "{{count}} needs attention",
       "attention_other": "{{count}} need attention",
@@ -4823,8 +4898,12 @@
       },
       "clis": {
         "ok": "All ready",
-        "warn_one": "{{count}} not ready",
-        "warn_other": "{{count}} not ready",
+        "notLoggedIn_one": "{{count}} not logged in",
+        "notLoggedIn_other": "{{count}} not logged in",
+        "outdated_one": "{{count}} outdated",
+        "outdated_other": "{{count}} outdated",
+        "missing_one": "{{count}} missing",
+        "missing_other": "{{count}} missing",
         "unit_one": "CLI",
         "unit_other": "CLIs",
         "neededBy_one": "Needed by {{count}} skill · {{names}}",
@@ -4845,7 +4924,7 @@
         "none": "No secrets yet"
       },
       "usage": {
-        "period": "Today",
+        "period": "Last 24 h",
         "unit": "tokens"
       }
     },
@@ -4886,7 +4965,10 @@
       "foundBody_one": "Coffer found {{count}} agent on this Mac. Connecting it adds Coffer's gateway to its config, so it gets the same MCP servers and skills as every agent you add.",
       "foundBody_other": "Coffer found {{count}} agents on this Mac. Connecting one adds Coffer's gateway to its config, so every agent shares the same MCP servers and skills.",
       "noneTitle": "No coding agents found",
-      "noneBody": "Coffer looked in your home folder for {{names}} and found none of them. Install one and scan again, or point Coffer at an agent's config folder by hand.",
+      "noneBody": "Coffer looked in your home folder for {{names}} and found neither. Install one and scan again, or point Coffer at an agent's config folder by hand.",
+      "noneBodyMany": "Coffer looked in your home folder for {{names}} and found none of them. Install one and scan again, or point Coffer at an agent's config folder by hand.",
+      "install": "Install ↗",
+      "installFor": "Install {{name}}",
       "and": " and ",
       "confirmOnly": "Coffer only connects agents you confirm.",
       "notFound": "Not found",
@@ -4915,7 +4997,6 @@
       "toolCount_one": "{{count}} tool",
       "toolCount_other": "{{count}} tools",
       "filter": "Filter groups",
-      "noMatch": "No group matches.",
       "section": {
         "attention": "Needs attention",
         "healthy": "Healthy",
@@ -4926,9 +5007,6 @@
       "lastCallFailed": "Last call failed",
       "hostTools_one": "{{host}} · {{count}} tool",
       "hostTools_other": "{{host}} · {{count}} tools",
-      "loadFailed": "Couldn't load custom tools",
-      "pickTitle": "Choose a group",
-      "pickBody": "Pick a group on the left to see its definition and tools.",
       "allAgents": "All agents"
     },
     "add": {
@@ -5238,7 +5316,6 @@
     "checkAgain": "Check again",
     "checking": "Checking…",
     "checkedAgo": "Checked {{when}}",
-    "loadFailed": "Couldn't load the CLIs",
     "status": {
       "missing": "Not found",
       "outdated": "Too old",
@@ -5318,7 +5395,8 @@
       "title": "Remove {{command}}?",
       "body": "Coffer stops listing it. The tool itself stays installed.",
       "bodyStays": "A skill or MCP server still needs it, so it stays listed; only the entry you added goes.",
-      "pending": "Removing…"
+      "pending": "Removing…",
+      "failed": "Couldn’t remove {{command}}"
     },
     "commands": {
       "search": "Filter this tool's commands",
@@ -5369,7 +5447,6 @@
     "list": {
       "needsYou": "Needs you",
       "ready": "Ready",
-      "noMatch": "No command matches",
       "outdatedLine": "{{version}} · needs ≥ {{min}}",
       "loggedInLine": "{{version}} · logged in",
       "missingServersLine_one": "Not found · {{servers}} needs it",
@@ -5893,7 +5970,6 @@
     "bestMatch": "Best match",
     "recent": "Recent",
     "noResultsHint": "Check the spelling. {{shortcut}} finds pages, servers, skills, secrets and conversations by name.",
-    "footerNote": "Jumps to pages and objects; actions live on their page",
     "untitled": "Untitled conversation",
     "usedBy_one": "used by {{name}}",
     "usedBy_other": "used by {{name}} +{{more}}",
@@ -5950,7 +6026,6 @@
     "list": {
       "filter": "Filter",
       "heading": "Providers",
-      "noMatch": "No provider matches.",
       "engineOnly": "Coffer's engine only",
       "allModels": "All models",
       "models_one": "{{count}} model",

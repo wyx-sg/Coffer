@@ -64,7 +64,9 @@ router = APIRouter(
     dependencies=[Depends(require_token)],
 )
 
-_RANGE = Query(default="today", alias="range", description="today | 7d | 30d | month | custom")
+_RANGE = Query(
+    default="today", alias="range", description="today | 24h | 7d | 30d | month | custom"
+)
 _FROM = Query(default=None, alias="from", description="First local day (custom range)")
 _TO = Query(default=None, alias="to", description="Last local day, inclusive (custom range)")
 _GROUP = Query(default=GroupBy.MODEL, description="model | agent | day")

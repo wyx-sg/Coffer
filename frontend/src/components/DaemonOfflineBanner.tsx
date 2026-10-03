@@ -1,7 +1,7 @@
 // src/components/DaemonOfflineBanner.tsx — the daemon's connection states in the workspace: the reconnecting bar, the offline state, the version warning.
 //
-// Boards 1.2.17 / 1.2.18 / 1.2.24 and the behaviour sheet (1.2.20, "Daemon
-// connection"). Both are drawn in line, at the top of the workspace, never
+// Boards 1.1.18 (reconnecting), 1.1.19 (offline), 1.1.12 (update) and the
+// behaviour sheet (1.1.04, "Daemon connection"). Both are drawn in line, at the top of the workspace, never
 // floating over the sidebar:
 //
 //   - Reconnecting — for the first seconds after the daemon stops answering,
@@ -10,9 +10,10 @@
 //   - Offline — after that, the page makes way for one screen that says the
 //     daemon isn't running and names the recovery the host can offer (spec
 //     web-ui "Show a self-clearing offline banner"): in the desktop shell a
-//     Start daemon control, because the shell can spawn one; in a browser the
-//     `coffer daemon start` command, because a page the daemon serves cannot.
-//     It clears itself as soon as the daemon answers again.
+//     Start daemon control, because the shell can spawn one. Both hosts show
+//     the `coffer daemon start` command with a Copy button ("Or start it from
+//     a terminal"), and a footer line with the next check, the last reply and
+//     Open daemon log. It clears itself as soon as the daemon answers again.
 //   - Version skew (desktop only) — the daemon answers, but an earlier app
 //     version left it running: a warning bar with the shell's Restart.
 //
@@ -20,8 +21,11 @@
 // which Layout mounts once; these components only render it.
 import { useEffect, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { Clock, Loader2, Play, Power, RotateCw } from "lucide-react";
+import { Clock, Play, Power, RotateCw } from "lucide-react";
+import { Link } from "react-router-dom";
 
+import { DAEMON_LOG_PATH } from "@/components/ListPaneStates";
+import { CopyableCommand } from "@/components/settings/CopyableCommand";
 import { Button } from "@/components/ui/button";
 import type { DaemonConnection } from "@/components/shell/daemonConnection";
 import { ApiError } from "@/lib/api/errors";
@@ -72,10 +76,19 @@ export function DaemonStatusBar({ connection, onRetry }: Props) {
         data-testid="daemon-reconnecting"
         className="flex h-10 shrink-0 items-center gap-2.5 border-b border-border bg-warning-soft px-8"
       >
-        <Loader2
-          className="size-3.5 shrink-0 animate-spin text-warning motion-reduce:animate-none"
+        {/* A partial ring, held still: the bar says "trying", the countdown is the motion. */}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
           aria-hidden
-        />
+          className="size-3.5 shrink-0 text-warning"
+        >
+          <path d="M12 3a9 9 0 1 0 9 9" />
+        </svg>
         <span className="shrink-0 text-sm font-label text-text">
           {connection.lastReplyAt === null
             ? t("daemon.reconnect.connectingTitle")
@@ -140,6 +153,12 @@ export function DaemonOfflineState({ connection, onRetry }: Props) {
   const port = status.data?.port ?? (Number(window.location.port) || null);
   const lastReply = connection.lastReplyAt;
   const restartError = restartMessage(restart.error);
+  const timing = [
+    seconds !== null ? t("daemon.offlineState.checkingIn", { seconds }) : null,
+    lastReply !== null ? t("daemon.offlineState.lastReply", { time: clockTime(lastReply) }) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div
@@ -153,7 +172,7 @@ export function DaemonOfflineState({ connection, onRetry }: Props) {
           <Power className="size-[22px]" strokeWidth={1.75} aria-hidden />
         </span>
         <div className="flex flex-col gap-1.5">
-          <h1 className="text-lg font-semibold tracking-tight text-text">
+          <h1 className="text-lg font-bold tracking-tight text-text">
             {t("daemon.offlineState.title")}
           </h1>
           <p className="text-sm leading-normal text-text-muted">
@@ -188,26 +207,18 @@ export function DaemonOfflineState({ connection, onRetry }: Props) {
           </Button>
         </div>
         {restartError ? <p className="text-xs text-danger">{restartError}</p> : null}
-        {inShell ? null : (
-          // The browser cannot start the daemon that serves it; the command is
-          // the recovery, and the retries clear this screen once it answers.
-          <p className="text-xs text-text-muted">
-            {t("daemon.offline.webRestartHint")}{" "}
-            <code className="rounded-xs bg-surface-sunken px-1 py-0.5 font-mono text-text">
-              coffer daemon start
-            </code>
-          </p>
-        )}
-        <p className="inline-flex items-center gap-2 text-xs text-text-muted">
+        {/* The command works in both hosts (a browser cannot start the daemon
+            that serves it); the retries clear this screen once it answers. */}
+        <div className="flex w-full flex-col gap-2 text-left">
+          <span className="text-xs text-text-muted">{t("daemon.offline.webRestartHint")}</span>
+          <CopyableCommand command="coffer daemon start" />
+        </div>
+        <p className="inline-flex flex-wrap items-center justify-center gap-x-2 text-xs text-text-muted">
           <Clock className="size-[13px] shrink-0" strokeWidth={1.75} aria-hidden />
-          {[
-            seconds !== null ? t("daemon.offlineState.checkingIn", { seconds }) : null,
-            lastReply !== null
-              ? t("daemon.offlineState.lastReply", { time: clockTime(lastReply) })
-              : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
+          {timing ? `${timing} ·` : null}
+          <Link to={DAEMON_LOG_PATH} className="font-label text-accent-text hover:underline">
+            {t("daemon.offlineState.openLog")}
+          </Link>
         </p>
       </div>
     </div>

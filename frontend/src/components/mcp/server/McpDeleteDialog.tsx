@@ -1,19 +1,16 @@
-// src/components/mcp/server/McpDeleteDialog.tsx — Delete <name>? with what it costs, and the secrets only it uses (design 4.1.12).
+// src/components/mcp/server/McpDeleteDialog.tsx — Delete <name>? with what it costs (boards 1.1.10, 1.1.11).
 //
-// Says which agents lose its tools on their next call and that its call
-// history stays in Activity; offers deleting each secret this server cites
-// that no other resource does (deleted only once the server is gone, since a
-// secret still cited is refused); and points to Turn off for a pause. It
-// closes only when the delete succeeded (ConfirmDialog), keeping its error.
-import { useState } from "react";
+// A confirmation says what the delete takes and what it leaves, in one fact
+// list: the tools that disappear from the agents that reach them, and each
+// secret the server cites — always kept, the Secrets page owns them. A footnote
+// says past calls stay in Activity. It closes only when the delete succeeded
+// (ConfirmDialog); a refusal stays in the dialog under "Couldn’t delete <name>".
+import { Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { Checkbox } from "@/components/ui/checkbox";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog, ConfirmFacts } from "@/components/ui/confirm-dialog";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
-import { useDeleteSecret, useSecrets } from "@/lib/hooks/useSecrets";
 import { secretLabel } from "@/lib/mcp/serverState";
 
 interface Props {
@@ -22,8 +19,6 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   /** The agents that lose its tools, already worded. */
   agentNames: string;
-  /** How many agents those are (the sentence reads "Both agents…" for two). */
-  agentCount: number;
   toolCount: number;
   onDeleted: () => void;
 }
@@ -31,7 +26,7 @@ interface Props {
 function citedRefs(config: unknown): string[] {
   const refs = (config as { transport?: { secret_refs?: Record<string, string> } } | null)
     ?.transport?.secret_refs;
-  return refs ? Object.values(refs) : [];
+  return refs ? [...new Set(Object.values(refs))] : [];
 }
 
 export function McpDeleteDialog({
@@ -39,21 +34,28 @@ export function McpDeleteDialog({
   open,
   onOpenChange,
   agentNames,
-  agentCount,
   toolCount,
   onDeleted,
 }: Props) {
   const { t } = useTranslation();
   const del = useDeleteResource();
-  const secrets = useSecrets();
-  const dropSecret = useDeleteSecret();
-  const { toast } = useToast();
-  const [dropSecrets, setDropSecrets] = useState(false);
 
-  const mine = new Set(citedRefs(resource.config));
-  const onlyMine = (secrets.data?.refs ?? []).filter(
-    (r) => mine.has(r.ref) && r.present && r.cited_by.every((c) => c.uid === resource.uid),
-  );
+  const facts: { label: string; value: string }[] = [];
+  if (agentNames) {
+    facts.push({
+      label: t("mcp.page.delete.toolsLabel"),
+      value:
+        toolCount > 0
+          ? t("mcp.page.delete.toolsGone", { count: toolCount, agents: agentNames })
+          : t("mcp.page.delete.toolsGoneAny", { agents: agentNames }),
+    });
+  }
+  for (const ref of citedRefs(resource.config)) {
+    facts.push({
+      label: t("mcp.page.delete.secretLabel"),
+      value: t("mcp.page.delete.secretStays", { name: secretLabel(ref) }),
+    });
+  }
 
   return (
     <ConfirmDialog
@@ -63,26 +65,11 @@ export function McpDeleteDialog({
         if (!next) del.reset();
       }}
       title={t("mcp.page.delete.title", { name: resource.name })}
-      description={
-        agentNames
-          ? t(
-              agentCount === 1
-                ? "mcp.page.delete.bodyOne"
-                : agentCount === 2
-                  ? "mcp.page.delete.bodyBoth"
-                  : "mcp.page.delete.bodyMany",
-              {
-                agents: agentNames,
-                agentCount,
-                tools:
-                  toolCount > 0
-                    ? t("mcp.page.itsTools", { count: toolCount })
-                    : t("mcp.page.itsToolsAny"),
-              },
-            )
-          : t("mcp.page.delete.bodyNoAgents")
-      }
-      confirmLabel={del.isPending ? t("common.deleting") : t("mcp.page.delete.confirm")}
+      description={t("mcp.page.delete.description")}
+      confirmLabel={t("mcp.page.delete.confirm")}
+      confirmIcon={<Trash2 aria-hidden />}
+      pendingLabel={t("common.deleting")}
+      errorTitle={t("common.couldntDelete", { name: resource.name })}
       pending={del.isPending}
       error={del.error}
       onConfirm={() =>
@@ -90,17 +77,6 @@ export function McpDeleteDialog({
           { kind: "mcp_server", uid: resource.uid },
           {
             onSuccess: () => {
-              if (dropSecrets) {
-                // The server is gone either way; a secret that cannot go
-                // stays on the Secrets page, and the user is told once.
-                void Promise.allSettled(onlyMine.map((s) => dropSecret.mutateAsync(s.ref))).then(
-                  (results) => {
-                    const failed = results.filter((r) => r.status === "rejected").length;
-                    if (failed > 0)
-                      toast.error(t("mcp.page.delete.secretsKept", { count: failed }));
-                  },
-                );
-              }
               onOpenChange(false);
               onDeleted();
             },
@@ -108,21 +84,8 @@ export function McpDeleteDialog({
         )
       }
     >
-      {onlyMine.length > 0 ? (
-        <label className="flex items-start gap-2 text-sm">
-          <Checkbox checked={dropSecrets} onChange={(e) => setDropSecrets(e.target.checked)} />
-          <span className="flex flex-col">
-            <span>
-              {t("mcp.page.delete.alsoSecrets", { count: onlyMine.length })}{" "}
-              <span className="font-mono">
-                {onlyMine.map((s) => secretLabel(s.ref)).join(", ")}
-              </span>
-            </span>
-            <span className="text-xs text-text-muted">{t("mcp.page.delete.noOtherUser")}</span>
-          </span>
-        </label>
-      ) : null}
-      <p className="text-xs text-text-muted">{t("mcp.page.delete.pause")}</p>
+      {facts.length > 0 ? <ConfirmFacts items={facts} /> : null}
+      <p className="text-xs text-text-subtle">{t("mcp.page.delete.footnote")}</p>
     </ConfirmDialog>
   );
 }

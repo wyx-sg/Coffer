@@ -44,6 +44,7 @@ export function CliActions({ cli, onRemoved }: Props) {
         description={t(stays ? "clis.remove.bodyStays" : "clis.remove.body")}
         confirmLabel={t("clis.remove.action")}
         pendingLabel={t("clis.remove.pending")}
+        errorTitle={t("clis.remove.failed", { command: cli.command })}
         variant="destructive"
         pending={remove.isPending}
         error={remove.error}

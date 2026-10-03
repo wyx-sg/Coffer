@@ -8,7 +8,9 @@ testable.
 
 Names: ``today``; ``7d`` and ``30d`` (today and the days before it, 7 or 30 in
 all); ``month`` (the first of this calendar month through today); ``custom``
-(``start`` … ``end``, inclusive, both required).
+(``start`` … ``end``, inclusive, both required); ``24h`` (the 24 hours up to
+now — a rolling window, so its days are the local days its two ends fall on and
+the sums come from the per-request rows, not the daily rollup).
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from enum import StrEnum
 
 class RangeName(StrEnum):
     TODAY = "today"
+    LAST_24_HOURS = "24h"
     LAST_7_DAYS = "7d"
     LAST_30_DAYS = "30d"
     MONTH = "month"
@@ -71,6 +74,9 @@ def resolve_range(
     today = (now if now.tzinfo is not None else now.replace(tzinfo=UTC)).astimezone(tz).date()
     if kind is RangeName.TODAY:
         return DateRange(today, today, tz)
+    if kind is RangeName.LAST_24_HOURS:
+        since = (now if now.tzinfo is not None else now.replace(tzinfo=UTC)) - timedelta(hours=24)
+        return DateRange(since.astimezone(tz).date(), today, tz)
     if kind is RangeName.LAST_7_DAYS:
         return DateRange(today - timedelta(days=6), today, tz)
     if kind is RangeName.LAST_30_DAYS:

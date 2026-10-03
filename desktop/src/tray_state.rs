@@ -128,12 +128,13 @@ pub fn daemon_action(state: &TrayState, lang: Lang) -> &'static str {
     }
 }
 
-pub fn tooltip(state: &TrayState, lang: Lang) -> &'static str {
+/// The icon's hover text: "Coffer · 9 things need you" when something needs
+/// the user, plain "Coffer" otherwise — offline included (canvas 1.3.01–1.3.03).
+pub fn tooltip(state: &TrayState, lang: Lang) -> String {
     let t = tray_text(lang);
-    match icon(state) {
-        Icon::Offline => t.tooltip_offline,
-        Icon::Normal if needs_you(state) > 0 => t.tooltip_attention,
-        Icon::Normal => t.tooltip,
+    match (icon(state), attention_label(state, lang)) {
+        (Icon::Normal, Some(label)) => format!("{} · {label}", t.tooltip),
+        _ => t.tooltip.to_owned(),
     }
 }
 

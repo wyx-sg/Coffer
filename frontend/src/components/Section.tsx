@@ -26,6 +26,8 @@ interface Props {
   as?: "h2" | "h3";
   /** Names the section as a landmark after its title. */
   labelled?: boolean;
+  /** A 22px title row (the Overview's sections, Foundations 0.5.03) instead of the 26px that fits a button. */
+  compact?: boolean;
   testId?: string;
   className?: string;
   children: ReactNode;
@@ -41,6 +43,7 @@ export function Section({
   gap = "normal",
   as: Heading = "h3",
   labelled = false,
+  compact = false,
   testId,
   className,
   children,
@@ -51,7 +54,7 @@ export function Section({
       data-testid={testId}
       aria-label={labelled ? title : undefined}
     >
-      <div className="flex min-h-control-sm items-center gap-2">
+      <div className={cn("flex items-center gap-2", compact ? "min-h-[22px]" : "min-h-control-sm")}>
         <Heading className="text-md font-semibold text-text">{title}</Heading>
         {help ? <HelpTip>{help}</HelpTip> : null}
         {aside}

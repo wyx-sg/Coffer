@@ -11,12 +11,13 @@
 // missing one can be created from here (the write creates it).
 //
 // Changing the selection replaces the loaded content, which drops the draft
-// (useFileDraft). So while the draft is dirty a selection is not applied
-// directly: it is parked as `pendingSelection` for the component to confirm
-// with the user, then applied (or dropped) through the two resolvers below.
+// (useFileDraft). The selection is a location change, so while the draft is
+// dirty the shell's unsaved-changes guard (useUnsavedGuard) stops it and asks
+// first; nothing here needs to hold a selection back.
 import { useState } from "react";
 import { useSearchParamsKeepingState as useSearchParams } from "@/lib/hooks/useSearchParamsKeepingState";
 
+import { baseName } from "@/lib/agents/configFiles";
 import { agentsApi } from "@/lib/api/agents";
 import {
   useAgentConfigChild,
@@ -33,19 +34,13 @@ function parseFileParam(value: string | null): { key: string | null; child: stri
   return { key: value.slice(0, slash), child: value.slice(slash + 1) || null };
 }
 
-export function useConfigEditorState(agentUid: string) {
+/** `owner` is the agent's name, for the unsaved-changes dialog's sentence. */
+export function useConfigEditorState(agentUid: string, owner: string) {
   const files = useAgentConfigFiles(agentUid);
   const [params, setParams] = useSearchParams();
   const { key: selectedKey, child: selectedChild } = parseFileParam(params.get("file"));
   // Directories start open (the tree shows their files); a click folds one.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  // A selection change held back because the draft is dirty; `null` = none.
-  // `target` names what it would open, for the confirmation's sentence.
-  const [pendingSelection, setPendingSelection] = useState<{
-    apply: () => void;
-    target: string;
-  } | null>(null);
-
   const allFiles = files.data ?? [];
   const selectedInfo = allFiles.find((f) => f.key === selectedKey);
   const isDirSelected = !selectedChild && selectedInfo?.kind === "directory";
@@ -72,6 +67,10 @@ export function useConfigEditorState(agentUid: string) {
       // file's metadata), so the next save re-reads for it via the reload below.
       return undefined;
     },
+    guard: {
+      file: selectedChild ?? (selectedInfo ? baseName(selectedInfo.path) : (selectedKey ?? "")),
+      owner,
+    },
     reload: async () => {
       await activeQuery.refetch();
       // A created file changes the listing (exists, size), not only the content.
@@ -90,45 +89,21 @@ export function useConfigEditorState(agentUid: string) {
     );
   }
 
-  // Apply a selection now, or park it while unsaved edits are on screen.
-  function guarded(target: string, apply: () => void) {
-    if (draft.dirty) setPendingSelection({ apply, target });
-    else apply();
-  }
-
-  const nameOf = (key: string) => {
-    const info = allFiles.find((f) => f.key === key);
-    if (!info) return key;
-    const base = info.path.split(/[\\/]/).filter(Boolean).pop() ?? key;
-    return info.kind === "directory" ? `${base}/` : base;
-  };
-
   function selectFile(key: string) {
-    guarded(nameOf(key), () => setFileParam(key));
+    setFileParam(key);
   }
 
   function selectDirectory(key: string) {
-    guarded(nameOf(key), () => {
-      setFileParam(key);
-      // Re-clicking the open directory folds it; picking another one opens it.
-      setCollapsed((prev) => ({
-        ...prev,
-        [key]: selectedKey === key && !selectedChild && !prev[key],
-      }));
-    });
+    setFileParam(key);
+    // Re-clicking the open directory folds it; picking another one opens it.
+    setCollapsed((prev) => ({
+      ...prev,
+      [key]: selectedKey === key && !selectedChild && !prev[key],
+    }));
   }
 
   function selectChild(key: string, relpath: string) {
-    guarded(relpath, () => setFileParam(`${key}/${relpath}`));
-  }
-
-  /** The user chose to drop the draft: apply the parked selection. */
-  function confirmPendingSelection() {
-    const pending = pendingSelection;
-    setPendingSelection(null);
-    if (!pending) return;
-    draft.cancel();
-    pending.apply();
+    setFileParam(`${key}/${relpath}`);
   }
 
   return {
@@ -146,11 +121,5 @@ export function useConfigEditorState(agentUid: string) {
     activeContent,
     missing,
     draft,
-    /** True while a selection waits on the discard-changes confirmation. */
-    hasPendingSelection: pendingSelection !== null,
-    /** What the parked selection would open ("CLAUDE.md", "agents/"), or null. */
-    pendingTarget: pendingSelection?.target ?? null,
-    confirmPendingSelection,
-    cancelPendingSelection: () => setPendingSelection(null),
   };
 }

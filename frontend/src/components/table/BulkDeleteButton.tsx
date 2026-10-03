@@ -48,7 +48,9 @@ export function BulkDeleteButton({ title, description, pending = false, onConfir
         onOpenChange={setOpen}
         title={title}
         description={description}
-        confirmLabel={pending ? t("common.deleting") : t("common.bulk.delete")}
+        confirmLabel={t("common.bulk.delete")}
+        pendingLabel={t("common.deleting")}
+        errorTitle={t("common.couldntDeleteSelected")}
         pending={pending}
         onConfirm={() => Promise.resolve(onConfirm())}
       />

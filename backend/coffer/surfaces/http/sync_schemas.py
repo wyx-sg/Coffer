@@ -251,6 +251,10 @@ class SyncStatusOut(BaseModel):
     conflicts: int
     held: int
     join_choices: int
+    #: Commits this vault has that the remote (as last fetched) lacks, and the
+    #: other way round — the Overview's "1 behind · 0 ahead".
+    ahead: int = 0
+    behind: int = 0
 
 
 class SyncPluginOut(BaseModel):

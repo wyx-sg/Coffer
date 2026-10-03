@@ -7,7 +7,7 @@
 // needs a collection to land in, so with none yet its button starts one first.
 import type { ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { Bot, FolderPlus, Library, Upload } from "lucide-react";
+import { Bot, FolderPlus, Book, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -22,7 +22,7 @@ export function KnowledgeWelcomePanel({ onCreate, onUpload }: Props) {
     <div className="mx-auto flex w-full max-w-[560px] flex-col gap-1 px-4 py-7">
       <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 text-center">
         <span className="inline-flex size-10 items-center justify-center rounded-lg border border-border-subtle bg-surface-sunken text-text-muted">
-          <Library className="size-5" aria-hidden />
+          <Book className="size-5" aria-hidden />
         </span>
         <div className="flex max-w-[360px] flex-col gap-1">
           <p className="text-[15px] font-semibold">{t("knowledge.welcome.title")}</p>
