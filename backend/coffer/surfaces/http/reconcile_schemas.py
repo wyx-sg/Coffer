@@ -18,10 +18,10 @@ from coffer.application.attention import (
     AttentionItem,
     AttentionReport,
     attention_key,
-    ignorable,
+    fallback_handoff,
 )
 from coffer.domain.reconcile import ItemResult, Outcome, PassReport
-from coffer.surfaces.http.handoff_schemas import HandoffOut, handoff_out
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 
 class ReconcileSubjectOut(BaseModel):
@@ -101,8 +101,6 @@ class AttentionItemOut(BaseModel):
     key: str = Field(
         description="`<kind>:<uid>:<reason_code>`; what `PUT /attention/ignored/{key}` takes."
     )
-    #: Only an informational item can be ignored; a broken thing stays listed.
-    ignorable: bool
     kind: str
     uid: str | None
     title: str
@@ -111,9 +109,9 @@ class AttentionItemOut(BaseModel):
     severity: Literal["error", "warning", "info"]
     since: datetime | None
     action: AttentionActionOut
-    #: The chore handed to an agent, when the item is one: the same prompt the
-    #: kind's own page offers. ``null`` when the action alone is the fix.
-    handoff: HandoffOut | None = None
+    #: The chore handed to an agent: the kind's own prompt when it has one,
+    #: otherwise one the service writes from the item.
+    handoff: HandoffOut
 
 
 class AttentionSourceErrorOut(BaseModel):
@@ -175,7 +173,6 @@ def attention_item_out(item: AttentionItem) -> AttentionItemOut:
     a = item.action
     return AttentionItemOut(
         key=attention_key(item),
-        ignorable=ignorable(item),
         kind=item.kind,
         uid=item.uid,
         title=item.title,
@@ -184,7 +181,7 @@ def attention_item_out(item: AttentionItem) -> AttentionItemOut:
         severity=item.severity.value,
         since=item.since,
         action=AttentionActionOut(verb=a.verb, method=a.method, path=a.path, body=a.body),  # type: ignore[arg-type]
-        handoff=handoff_out(item.handoff),
+        handoff=HandoffOut(prompt=item.handoff or fallback_handoff(item)),
     )
 
 

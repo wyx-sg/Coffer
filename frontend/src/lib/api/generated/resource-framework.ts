@@ -354,9 +354,7 @@ export interface components {
         /** AttentionItemOut */
         AttentionItemOut: {
             action: components["schemas"]["AttentionActionOut"];
-            handoff: components["schemas"]["HandoffOut"] | null;
-            /** Ignorable */
-            ignorable: boolean;
+            handoff: components["schemas"]["HandoffOut"];
             /**
              * Key
              * @description `<kind>:<uid>:<reason_code>`; what `PUT /attention/ignored/{key}` takes.

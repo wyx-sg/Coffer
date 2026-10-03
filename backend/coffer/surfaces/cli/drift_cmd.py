@@ -149,11 +149,9 @@ def attention(
         action = f"{a['verb']}: {a['method']} {a['path']}"
         table.add_row(i["severity"], i["kind"], i["title"], i["reason"], action)
     _console.print(table)
-    handoffs = [i for i in body["items"] if i.get("handoff")]
-    if handoffs:
-        typer.echo("A prompt to give an agent:")
-        for i in handoffs:
-            typer.echo(f"  {i['title']}: coffer attention --prompt {i['key']}")
+    typer.echo("A prompt to give an agent:")
+    for i in body["items"]:
+        typer.echo(f"  {i['title']}: coffer attention --prompt {i['key']}")
 
 
 def _print_prompt(body: dict[str, Any], key: str) -> None:
@@ -162,7 +160,4 @@ def _print_prompt(body: dict[str, Any], key: str) -> None:
     if item is None:
         typer.echo(f"{key}: nothing needs you under this key now", err=True)
         raise typer.Exit(int(ExitCode.NOT_FOUND))
-    if not item.get("handoff"):
-        typer.echo(f"{key}: this item has no hand-off; its action is the fix", err=True)
-        raise typer.Exit(int(ExitCode.GENERIC))
     typer.echo(item["handoff"]["prompt"])

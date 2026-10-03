@@ -1263,25 +1263,22 @@ the same tab.
 #### Scenario: a memory hook changed by hand opens the agent's hooks tab from overview
 - **GIVEN** the attention list holds the hand-edited memory hook of Claude Code
 - **WHEN** the user opens Overview
-- **THEN** Needs you shows a row on Claude Code with the reason and since when, its one action reads Repair hook and opens Claude Code's Hooks tab, its name opens Claude Code's page, and the row has no menu
+- **THEN** Needs you shows a row on Claude Code with the reason and since when, its one action reads Repair hook and opens Claude Code's Hooks tab, its name opens Claude Code's page, and the row has the ⋯ menu
 
-### Requirement: Let the user ignore an unconnected agent on Overview
-An agent that Overview lists only because it is not connected to Coffer — an informational item of
-the attention list — MUST carry a ⋯ menu with **Ignore** beside its Connect action. The daemon MUST
-remember an ignored item on this machine, by the item's stable key (its kind, resource and reason),
-and audit each ignore and each stop: `GET /api/v1/attention` then lists it under `ignored`, out of
-`items` and `counts_by_kind`, so Needs you, the Agents health tile, the sidebar's badges and the
-menu bar's count all leave it out alike. Overview MUST count the ignored items under the list as
-**N ignored · Show**; Show lists them again, muted, each with **Stop ignoring** in its menu.
-Ignoring changes nothing about the agent. Only an informational item can be ignored; asking to
-ignore anything else is refused with `ATTENTION_NOT_IGNORABLE`, because something broken stays
-until it is fixed.
+### Requirement: Let the user ignore any item on Overview
+Every row of Needs you — whatever its severity — MUST carry a ⋯ menu whose last entry is
+**Ignore**. The daemon MUST remember an ignored item on this machine, by the item's stable key
+(its kind, resource and reason), and audit each ignore and each stop: `GET /api/v1/attention` then
+lists it under `ignored`, out of `items` and `counts_by_kind`, so Needs you, the Agents health tile,
+the sidebar's badges and the menu bar's count all leave it out alike. Overview MUST NOT list ignored
+items or count them. Ignoring changes nothing about the resource itself. Asking to ignore a key that
+names no item in the list is refused with `ATTENTION_NOT_IGNORABLE`.
 
-#### Scenario: an ignored agent leaves needs you and is counted under it
+#### Scenario: an ignored item leaves needs you whatever its severity
 - **GIVEN** Overview listing Codex as not connected and an MCP server that fails
-- **WHEN** the user chooses Ignore in Codex's menu, then Show, then Stop ignoring on Codex
-- **THEN** Codex leaves the list while the server stays and "1 ignored · Show" appears under it; Show lists Codex again under the list; after Stop ignoring Codex is back in Needs you and nothing is counted as ignored
-- **AND** while Codex is ignored the daemon's attention list carries it only under `ignored`, its counts leave it out, both changes are audited, and ignoring the failing server is refused
+- **WHEN** the user chooses Ignore in Codex's menu, then Ignore in the failing server's menu
+- **THEN** each leaves Needs you in turn, and Overview shows no "ignored" line and no list of ignored items
+- **AND** the daemon's attention list carries them only under `ignored`, its counts leave them out, and both changes are audited
 
 ### Requirement: Hand installing an agent to the person when none is found
 While no supported agent is installed on this machine, `GET /api/v1/agents/types` MUST carry
@@ -2312,10 +2309,11 @@ first: one row per item of the attention list ([resource-framework](../resource-
 "Report what needs a person across every kind"), most severe first and then
 oldest, each with its resource and kind, the reason in a sentence, since when
 where that is known, and exactly one action that opens the page — or the tab —
-where the item is dealt with. A row whose item carries a hand-off MUST also
-offer it in the row's ⋯ menu — Copy prompt, and Ask an agent while a managed
-agent is available — with the daemon's prompt as given, the same hand-off the
-item's page offers. An attention source that failed MUST be named
+where the item is dealt with. Every row MUST also
+carry a ⋯ menu — Copy prompt, Ask an agent while a managed agent is available,
+then Ignore — with the daemon's prompt as given (every item carries one, the
+kind's own where it has one); the list scrolls inside a frame of about six
+rows, under its title, which shows how many items it holds. An attention source that failed MUST be named
 above the rows, saying that what it would report is missing. Rows MUST clear
 themselves as problems resolve: the page follows the daemon's event stream and
 rereads the list when an `attention` change arrives. **Health** follows: one
@@ -2347,7 +2345,7 @@ for what agents share follows.
 - **GIVEN** an attention item carrying a hand-off prompt, and a managed agent available
 - **WHEN** the user opens the row's ⋯ menu and chooses Copy prompt, then Ask an agent
 - **THEN** the daemon's prompt is copied as given, and Ask an agent opens New conversation and then the draft with the prompt in its composer, unsent
-- **AND** with no managed agent available the menu offers Copy prompt only, and a row whose item has no hand-off and cannot be ignored has no menu
+- **AND** with no managed agent available the menu offers Copy prompt only, and every row's menu ends with Ignore
 
 #### Scenario: overview shows a calm card when nothing needs the user
 - **GIVEN** an attention list with no items and no failed source

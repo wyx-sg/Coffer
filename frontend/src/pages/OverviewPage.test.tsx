@@ -33,6 +33,13 @@ interface Attention {
   ignored?: AttentionRow[];
 }
 
+// The daemon gives every item a hand-off prompt; fixtures that do not spell one get this.
+const withHandoffs = (a: Attention): Attention => ({
+  ...a,
+  items: a.items.map((i) => ({ handoff: { prompt: `Fix ${String(i.title)}.` }, ...i })),
+  ignored: (a.ignored ?? []).map((i) => ({ handoff: { prompt: `Fix ${String(i.title)}.` }, ...i })),
+});
+
 const EMPTY_ATTENTION: Attention = { items: [], errors: [], counts_by_kind: {} };
 
 const AGENTS = [
@@ -45,7 +52,6 @@ const action = (verb: string) => ({ verb, method: "POST", path: "/api/v1/x", bod
 const ITEMS = [
   {
     key: "agent:a-codex:agent_not_connected",
-    ignorable: true,
     kind: "agent",
     uid: "a-codex",
     title: "Codex",
@@ -125,7 +131,7 @@ function install(setup: Setup = {}) {
         case "/attention":
           return state.attention === "fail"
             ? Promise.resolve({ data: undefined, error: FAIL })
-            : ok(state.attention);
+            : ok(withHandoffs(state.attention));
         case "/daemon/status":
           return ok({ status: "ready", version: "0", port: 1, features: state.features });
         case "/resources":
@@ -665,30 +671,26 @@ acceptance(
       "href",
       "/agents/claude_code",
     );
-    // Not an item that can be ignored: no menu.
-    expect(within(row).queryByRole("button", { name: /More for/ })).toBeNull();
+    // Every row has the ⋯ menu.
+    expect(within(row).getByRole("button", { name: "More for Claude Code" })).toBeInTheDocument();
   },
 );
 
-acceptance("web-ui", "an ignored agent leaves needs you and is counted under it", async () => {
+acceptance("web-ui", "an ignored item leaves needs you whatever its severity", async () => {
   install({ attention: { ...EMPTY_ATTENTION, items: [ITEMS[0], ITEMS[1]] } });
   renderPage();
   await within(needsYou()).findByText("Codex");
   fireEvent.click(within(needsYou()).getByRole("button", { name: "More for Codex" }));
   fireEvent.click(await screen.findByRole("menuitem", { name: "Ignore" }));
-
   await waitFor(() => expect(within(needsYou()).queryByText("Codex")).toBeNull());
   expect(within(needsYou()).getByText("github")).toBeInTheDocument();
-  expect(within(needsYou()).getByText(/1 ignored/)).toBeInTheDocument();
 
-  // Show lists it again, muted, with Stop ignoring.
-  fireEvent.click(within(needsYou()).getByRole("button", { name: "Show" }));
-  const ignored = within(needsYou()).getByRole("list", { name: "Ignored" });
-  expect(within(ignored).getByText("Codex")).toBeInTheDocument();
-  fireEvent.click(within(ignored).getByRole("button", { name: "More for Codex" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Stop ignoring" }));
-  await waitFor(() => expect(within(needsYou()).queryByText(/ignored/)).toBeNull());
-  expect(within(needsYou()).getByText("Codex")).toBeInTheDocument();
+  // A failing item can be ignored too, and no "ignored" line or list remains.
+  fireEvent.click(within(needsYou()).getByRole("button", { name: "More for github" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Ignore" }));
+  await waitFor(() => expect(within(needsYou()).queryByText("github")).toBeNull());
+  expect(within(needsYou()).queryByText(/ignored/i)).toBeNull();
+  expect(within(needsYou()).queryByRole("button", { name: "Show" })).toBeNull();
 });
 
 acceptance("web-ui", "overview flags a required CLI that needs attention", async () => {

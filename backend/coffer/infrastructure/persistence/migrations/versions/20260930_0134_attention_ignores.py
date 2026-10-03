@@ -2,8 +2,8 @@
 
 The Overview lets a person ignore an informational "needs you" item — an agent
 left unconnected on purpose — so it leaves the list, the sidebar's badges and
-the menu bar's count alike (spec web-ui "Let the user ignore an unconnected
-agent on Overview"). One row per ignored item key. The downgrade drops the
+the menu bar's count alike (spec web-ui "Let the user ignore any item
+on Overview"). One row per ignored item key. The downgrade drops the
 table: an older build has no notion of ignoring and lists every item again.
 
 Revision ID: 0134

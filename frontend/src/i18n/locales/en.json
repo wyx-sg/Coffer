@@ -1673,7 +1673,7 @@
     "SECRET_MISSING": "Required secret is missing from the secret store — store it again on the resource's edit page",
     "SECRET_UNREADABLE": "Stored secret could not be decrypted with the current master key",
     "PROVIDER_SECRET_SOURCE_INVALID": "Supply exactly one of a saved secret or an inline key",
-    "ATTENTION_NOT_IGNORABLE": "Only an item that is worth knowing but not broken can be ignored, and this one isn't listed any more.",
+    "ATTENTION_NOT_IGNORABLE": "That item isn't listed any more, so there is nothing to ignore.",
     "MASTER_KEY_PASSPHRASE_WRONG": "That passphrase doesn't open this key file.",
     "MASTER_KEY_PASSPHRASE_TOO_SHORT": "Use a passphrase of at least 8 characters.",
     "KNOWLEDGE_RESTORE_CONFLICT": "Not restored: a document exists at that path again. Rename or delete it first.",
@@ -4680,13 +4680,7 @@
         "checked": "Checked"
       },
       "moreFor": "More for {{name}}",
-      "ignore": "Ignore",
-      "restore": "Stop ignoring",
-      "ignored_one": "{{count}} ignored",
-      "ignored_other": "{{count}} ignored",
-      "showIgnored": "Show",
-      "hideIgnored": "Hide",
-      "ignoredList": "Ignored"
+      "ignore": "Ignore"
     },
     "actions": {
       "connect": "Connect",

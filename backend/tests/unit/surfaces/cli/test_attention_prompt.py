@@ -79,23 +79,21 @@ def served(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     return body
 
 
-@pytest.mark.acceptance(
-    spec="resource-framework", scenario="an item that is a chore carries its kind's hand-off"
-)
-def test_the_command_prints_the_route_s_prompt_and_refuses_an_item_without_one(
+@pytest.mark.acceptance(spec="resource-framework", scenario="every item carries a hand-off prompt")
+def test_the_command_prints_the_route_s_prompt_for_any_item(
     served: dict[str, Any],
 ) -> None:
     fetch, plain = served["items"]
     assert fetch["handoff"] == {"prompt": PROMPT}
-    assert plain["handoff"] is None
+    assert plain["handoff"]["prompt"] and plain["handoff"]["prompt"] != PROMPT
 
     out = runner.invoke(cli, ["attention", "--prompt", fetch["key"]])
     assert out.exit_code == 0, out.output
     assert out.output == PROMPT + "\n"
 
     out = runner.invoke(cli, ["attention", "--prompt", plain["key"]])
-    assert out.exit_code != 0
-    assert "no hand-off" in out.output
+    assert out.exit_code == 0, out.output
+    assert out.output == plain["handoff"]["prompt"] + "\n"
 
 
 def test_the_table_points_at_the_prompt_and_an_unknown_key_is_not_found(

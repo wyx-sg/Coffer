@@ -111,6 +111,26 @@ async def test_a_switched_off_features_source_is_not_asked() -> None:
     assert len((await svc_on.report()).items) == 1
 
 
+async def test_every_item_carries_a_handoff_the_source_may_leave_to_the_service() -> None:
+    own = AttentionItem(
+        kind="cli",
+        uid="u",
+        title="jq",
+        reason_code="cli_missing",
+        reason="Missing.",
+        severity=Severity.WARNING,
+        action=AttentionAction("check", "GET", "/api/v1/cli"),
+        handoff="install jq",
+    )
+    bare = _item("sync", Severity.ERROR, title="Backup")
+    svc = AttentionService([_Source("a", [own, bare])], feature_enabled=lambda _k: True)
+    items = {i.kind: i for i in (await svc.report()).items}
+    assert items["cli"].handoff == "install jq"
+    fallback = items["sync"].handoff
+    assert fallback is not None
+    assert "Backup" in fallback and "Because." in fallback and "GET /api/v1/sync" in fallback
+
+
 # --- the drift source ----------------------------------------------------------
 
 

@@ -4,12 +4,11 @@
 // event stream refetches the list (useDaemonEvents). A source that could not
 // be checked says so above the rows, so a short list is never mistaken for a
 // complete one. Items ignored on this machine (an agent left unconnected on
-// purpose) are the daemon's `ignored` list, kept out of `items` and the
-// counts the sidebar and the menu bar read; they are counted under the list —
-// "1 ignored · Show" — and Show lists them again, muted, each with Stop
-// ignoring. With nothing left, the list is the calm "Nothing needs you" card.
+// purpose) leave the daemon's `items`, and with them the Overview, the counts
+// the sidebar and the menu bar read; no ignored list is shown here. A list
+// longer than about six rows scrolls inside its frame under the title. With
+// nothing left, the list is the calm "Nothing needs you" card.
 import { AlertTriangle, Check } from "lucide-react";
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/components/EmptyState";
@@ -19,16 +18,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useAttention, type AttentionItem } from "@/lib/hooks/useAttention";
-import { useIgnoreAttention, useUnignoreAttention } from "@/lib/hooks/useAttentionIgnore";
+import { useIgnoreAttention } from "@/lib/hooks/useAttentionIgnore";
 import { sortAttention } from "@/lib/overview/attention";
 import { formatClock } from "@/lib/overview/time";
 import { cn } from "@/lib/utils";
 import { NEEDS_YOU_CELL, NEEDS_YOU_ROW_GRID, NeedsYouRow } from "./NeedsYouRow";
 
 const LIST = "divide-y divide-border-subtle rounded-xl border border-border bg-surface-raised";
-// A long list scrolls inside its own window (about five rows) instead of pushing the
-// rest of the Overview down; the header and the ignored line stay in view.
-const SCROLL = "max-h-[23rem] overflow-y-auto overscroll-contain";
+// A long list scrolls inside its own window (368px, about six rows) instead of pushing
+// the rest of the Overview down; the section title stays in view.
+const SCROLL = "max-h-[368px] overflow-y-auto overscroll-contain";
 
 const rowKey = (item: AttentionItem, i: number) =>
   `${item.kind}:${item.uid ?? ""}:${item.reason_code}:${i}`;
@@ -41,14 +40,26 @@ export function NeedsYouList() {
   const agentType = (item: AttentionItem) =>
     item.kind === "agent" ? agents.data?.find((a) => a.uid === item.uid)?.type : undefined;
   const ignore = useIgnoreAttention();
-  const restore = useUnignoreAttention();
-  const [showIgnored, setShowIgnored] = useState(false);
   const items = attention.data ? sortAttention(attention.data.items) : [];
-  const hidden = attention.data ? sortAttention(attention.data.ignored ?? []) : [];
   const errors = attention.data?.errors ?? [];
 
   return (
-    <Section as="h2" gap="snug" labelled title={t("overview.needsYou.title")}>
+    <Section
+      as="h2"
+      gap="snug"
+      labelled
+      title={t("overview.needsYou.title")}
+      aside={
+        items.length > 0 ? (
+          <span
+            data-testid="needs-you-count"
+            className="inline-flex h-5 items-center rounded-[5px] bg-surface-sunken px-[7px] text-2xs font-label text-text-muted"
+          >
+            {items.length}
+          </span>
+        ) : null
+      }
+    >
       {attention.isPending ? (
         <ul aria-busy className={LIST}>
           {[0, 1, 2].map((i) => (
@@ -97,55 +108,9 @@ export function NeedsYouList() {
           ) : errors.length === 0 ? (
             <AllGood checkedAt={attention.dataUpdatedAt} />
           ) : null}
-          {hidden.length > 0 ? (
-            <IgnoredLine
-              count={hidden.length}
-              shown={showIgnored}
-              onToggle={() => setShowIgnored((v) => !v)}
-            />
-          ) : null}
-          {hidden.length > 0 && showIgnored ? (
-            <ul aria-label={t("overview.needsYou.ignoredList")} className={cn(LIST, SCROLL)}>
-              {hidden.map((item, i) => (
-                <NeedsYouRow
-                  key={rowKey(item, i)}
-                  item={item}
-                  agentType={agentType(item)}
-                  ignored
-                  onRestore={() => restore.mutate(item.key)}
-                />
-              ))}
-            </ul>
-          ) : null}
         </>
       )}
     </Section>
-  );
-}
-
-function IgnoredLine({
-  count,
-  shown,
-  onToggle,
-}: {
-  count: number;
-  shown: boolean;
-  onToggle: () => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <p className="flex justify-end px-1 pt-0.5 text-xs text-text-subtle">
-      {t("overview.needsYou.ignored", { count })}
-      {" · "}
-      <button
-        type="button"
-        aria-expanded={shown}
-        onClick={onToggle}
-        className="ml-1 rounded-xs font-label text-accent-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-      >
-        {shown ? t("overview.needsYou.hideIgnored") : t("overview.needsYou.showIgnored")}
-      </button>
-    </p>
   );
 }
 

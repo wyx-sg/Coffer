@@ -1,10 +1,10 @@
-// src/lib/hooks/useAttentionIgnore.ts — ignore an informational "needs you" item on this machine, or stop ignoring it.
+// src/lib/hooks/useAttentionIgnore.ts — ignore a "needs you" item on this machine.
 //
-// The daemon keeps the choice (PUT / DELETE /attention/ignored/{key}), so the
-// Overview, the sidebar's badges and the menu bar all read the same list: an
-// ignored item leaves `items` and `counts_by_kind` and is listed under
-// `ignored` (spec web-ui "Let the user ignore an unconnected agent on
-// Overview"). Both refetch the attention list; a failure is a toast.
+// The daemon keeps the choice (PUT /attention/ignored/{key}), so the Overview,
+// the sidebar's badges and the menu bar all read the same list: an ignored
+// item leaves `items` and `counts_by_kind` and is listed under `ignored` (spec
+// web-ui "Let the user ignore any item on Overview"). It refetches the
+// attention list; a failure is a toast.
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -13,24 +13,15 @@ import { attentionApi } from "@/lib/api/attention";
 import { translateApiError } from "@/lib/api/errors";
 import { attentionKey } from "@/lib/api/queryKeys";
 
-function useAttentionKeyMutation(method: "PUT" | "DELETE") {
+/** Ignore one item by its `key`. */
+export function useIgnoreAttention() {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: (key: string) =>
-      method === "PUT" ? attentionApi.ignore(key) : attentionApi.unignore(key),
+    mutationFn: (key: string) => attentionApi.ignore(key),
     onSuccess: () => void qc.invalidateQueries({ queryKey: attentionKey }),
     onError: (e) => toast.error(translateApiError(t, e)),
   });
 }
 
-/** Ignore one item by its `key`. */
-export function useIgnoreAttention() {
-  return useAttentionKeyMutation("PUT");
-}
-
-/** Stop ignoring one item by its `key`. */
-export function useUnignoreAttention() {
-  return useAttentionKeyMutation("DELETE");
-}

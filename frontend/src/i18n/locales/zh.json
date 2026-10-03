@@ -1673,7 +1673,7 @@
     "SECRET_MISSING": "所需密钥在密钥库中不存在——请在该资源的编辑页重新保存",
     "SECRET_UNREADABLE": "存储的密钥无法用当前主密钥解密",
     "PROVIDER_SECRET_SOURCE_INVALID": "已保存的密钥与内联密钥，二者必须且只能提供一个",
-    "ATTENTION_NOT_IGNORABLE": "只有值得知道但没有出问题的项可以忽略，而这一项已不在列表里。",
+    "ATTENTION_NOT_IGNORABLE": "这一项已不在列表里，没有可忽略的内容。",
     "MASTER_KEY_PASSPHRASE_WRONG": "这个口令打不开这个密钥文件。",
     "MASTER_KEY_PASSPHRASE_TOO_SHORT": "口令至少需要 8 个字符。",
     "KNOWLEDGE_RESTORE_CONFLICT": "没有恢复：这个路径上又有了文档。请先重命名或删除它。",
@@ -4680,13 +4680,7 @@
         "checked": "检查于"
       },
       "moreFor": "{{name}} 的更多操作",
-      "ignore": "忽略",
-      "restore": "不再忽略",
-      "ignored_one": "已忽略 {{count}} 项",
-      "ignored_other": "已忽略 {{count}} 项",
-      "showIgnored": "显示",
-      "hideIgnored": "收起",
-      "ignoredList": "已忽略"
+      "ignore": "忽略"
     },
     "actions": {
       "connect": "连接",

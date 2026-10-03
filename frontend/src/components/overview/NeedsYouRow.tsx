@@ -5,13 +5,10 @@
 // page — or the tab — where the person deals with it: a missing secret on
 // Secrets, a memory hook changed by hand in the agent's settings on that
 // agent's Hooks tab (lib/overview/attention). An item the daemon marks
-// `ignorable` — informational, such as an agent simply not connected — also
-// carries a ⋯ with Ignore (Stop ignoring once it is ignored). An item whose fix
-// is a chore for an agent carries the daemon's hand-off prompt, and its ⋯ then
-// offers Copy prompt and, with a managed agent available, Ask an agent — the
-// same hand-off the kind's page offers, in the menu because the action column
-// has room for one button. Any other row has no menu (Overview boards,
-// 1.3.01 / 1.3.05).
+// every row carries a ⋯ — Copy prompt and, with a managed agent available, Ask
+// an agent (the daemon gives every item a hand-off prompt), then Ignore, which
+// takes the item off the Overview, the sidebar badges and the menu-bar count
+// whatever its severity (Overview boards, 1.2.01 / 1.2.02).
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
@@ -22,14 +19,13 @@ import { Button } from "@/components/ui/button";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import type { AttentionItem } from "@/lib/hooks/useAttention";
 import { actionPage, itemActionLabelKey, itemPage, severityTone } from "@/lib/overview/attention";
-import { useHereOriginState } from "@/lib/origin";
 import { kindMeta } from "@/lib/overview/kinds";
 import { describeSince } from "@/lib/overview/time";
 import { cn } from "@/lib/utils";
 
-/** Dot · name 196 · reason · since 104 · action 176, 14 apart (board 1.3.01). */
+/** Dot · name 168 · reason · since 96 · action 212, 14 apart (board 1.2.09). */
 const ROW_GRID =
-  "grid min-h-[54px] grid-cols-[8px_minmax(0,1fr)] items-center gap-x-[14px] gap-y-1 px-4 py-2 md:grid-cols-[8px_196px_minmax(0,1fr)_104px_176px]";
+  "grid min-h-[54px] grid-cols-[8px_minmax(0,1fr)] items-center gap-x-[14px] gap-y-1 px-4 py-2 md:grid-cols-[8px_168px_minmax(0,1fr)_96px_212px]";
 // On a phone everything after the dot stacks in the second column.
 const CELL = "col-start-2 md:col-start-auto";
 
@@ -40,47 +36,39 @@ interface Props {
   item: AttentionItem;
   /** The type of the agent an agent item is about — its pages' address. */
   agentType?: string;
-  /** Shown under "N ignored · Show": the row is muted and offers Stop ignoring. */
-  ignored?: boolean;
-  onIgnore?: () => void;
-  onRestore?: () => void;
+  onIgnore: () => void;
 }
 
-export function NeedsYouRow({ item, agentType, ignored = false, onIgnore, onRestore }: Props) {
+export function NeedsYouRow({ item, agentType, onIgnore }: Props) {
   const { t } = useTranslation();
-  const origin = useHereOriginState();
   const meta = kindMeta(item.kind);
   const KindIcon = meta.icon;
   const since = describeSince(item.since);
   const action = t(itemActionLabelKey(item));
-  const run = ignored ? onRestore : onIgnore;
-  const handoff = useAgentHandoff(item.handoff?.prompt ?? "");
-  const menu: MenuAction[] = [];
-  if (item.handoff) {
-    menu.push({
+  const handoff = useAgentHandoff(item.handoff.prompt);
+  const menu: MenuAction[] = [
+    {
       key: "copy-prompt",
       label: t("handoff.copyPrompt"),
       description: t("handoff.copyPromptHint"),
       onSelect: handoff.copy,
+    },
+  ];
+  if (handoff.canAsk)
+    menu.push({
+      key: "ask-agent",
+      label: t("handoff.askAgent"),
+      description: t("handoff.askAgentHint"),
+      onSelect: handoff.ask,
     });
-    if (handoff.canAsk)
-      menu.push({
-        key: "ask-agent",
-        label: t("handoff.askAgent"),
-        description: t("handoff.askAgentHint"),
-        onSelect: handoff.ask,
-      });
-  }
-  if (item.ignorable && run) {
-    const separated = menu.length > 0;
-    menu.push(
-      ignored
-        ? { key: "restore", label: t("overview.needsYou.restore"), onSelect: run, separated }
-        : { key: "ignore", label: t("overview.needsYou.ignore"), onSelect: run, separated },
-    );
-  }
+  menu.push({
+    key: "ignore",
+    label: t("overview.needsYou.ignore"),
+    onSelect: onIgnore,
+    separated: true,
+  });
   return (
-    <li className={cn(ROW_GRID, ignored && "opacity-70")}>
+    <li className={ROW_GRID}>
       <span
         role="img"
         aria-label={t(
@@ -92,7 +80,6 @@ export function NeedsYouRow({ item, agentType, ignored = false, onIgnore, onRest
       </span>
       <Link
         to={itemPage(item, agentType)}
-        state={origin}
         className={cn(CELL, "group flex min-w-0 flex-col gap-0.5")}
       >
         <span
@@ -116,15 +103,12 @@ export function NeedsYouRow({ item, agentType, ignored = false, onIgnore, onRest
         <Button asChild variant="outline">
           <Link
             to={actionPage(item, agentType)}
-            state={origin}
             aria-label={t("overview.needsYou.actionFor", { action, name: item.title })}
           >
             {action}
           </Link>
         </Button>
-        {menu.length ? (
-          <ActionMenu label={t("overview.needsYou.moreFor", { name: item.title })} actions={menu} />
-        ) : null}
+        <ActionMenu label={t("overview.needsYou.moreFor", { name: item.title })} actions={menu} />
       </div>
     </li>
   );

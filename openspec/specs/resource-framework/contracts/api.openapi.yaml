@@ -1149,12 +1149,7 @@ components:
         action:
           $ref: '#/components/schemas/AttentionActionOut'
         handoff:
-          anyOf:
-          - $ref: '#/components/schemas/HandoffOut'
-          - type: 'null'
-        ignorable:
-          title: Ignorable
-          type: boolean
+          $ref: '#/components/schemas/HandoffOut'
         key:
           description: '`<kind>:<uid>:<reason_code>`; what `PUT /attention/ignored/{key}` takes.'
           title: Key
@@ -1191,7 +1186,6 @@ components:
           title: Uid
       required:
       - key
-      - ignorable
       - kind
       - uid
       - title
