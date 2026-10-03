@@ -3299,10 +3299,9 @@
   },
   "memory": {
     "title": "记忆",
-    "subtitle": "智能体学到的东西，按主题提炼成记忆条目，只读。",
+    "subtitle": "智能体学到的内容：读取它们各自的记忆，按主题提炼成记忆条目，只读。",
     "update": "更新记忆",
     "updating": "正在更新…",
-    "updateHint": "读取每个智能体最新的记忆，再把新增内容提炼进 Coffer 的记忆条目。",
     "syncDone": "读到 {{count}} 条新条目，更新了 {{partitions}} 个分区。",
     "syncFailures": "{{count}} 个来源解析失败——详见活动页面。",
     "loadFailed": "加载分区失败",
@@ -3332,10 +3331,9 @@
       "global": "所有项目",
       "memories": "记忆条目",
       "unresolvable": "仓库已不在",
-      "unresolvableHint": "该分区对应的仓库已不在磁盘上，因此它不会投递给任何智能体。之所以仍然列出，是因为要不要删掉由你决定。",
       "sample": "示例记忆",
       "sources": "来源",
-      "distil": "提炼"
+      "distil": "已提炼"
     },
     "delete": {
       "title": "删除 {{name}}？",
@@ -3346,12 +3344,12 @@
     },
     "welcome": {
       "title": "还没有提炼出任何东西",
-      "body": "你的智能体已经记住了不少关于你项目的事。Coffer 读取它们的记忆、从不写回，并为每个仓库按主题各提炼一条记忆条目。",
+      "body": "智能体已经记住了你项目里的不少事情。Coffer 读取它们的记忆（绝不写入），并为每个仓库按主题提炼成记忆条目。",
       "noAgentsTitle": "没有可读取的智能体记忆",
       "noAgentsBody": "记忆来自每个已连接智能体自己的记忆。还没有智能体连接到 Coffer，所以没有可提炼的内容。",
-      "connect": "连接智能体",
+      "connect": "打开智能体 →",
       "found": "在这台 Mac 上找到",
-      "foundMeta": "Coffer 也会按计时自动读取",
+      "foundMeta": "Coffer 也会每小时自行读取一次",
       "foundNone": "暂无记忆",
       "foundCount_one": "{{projects}}中共 {{count}} 个文件",
       "foundCount_other": "{{projects}}中共 {{count}} 个文件",
@@ -3385,19 +3383,18 @@
       "emptyWaiting_other": "Coffer 已为这个仓库从 {{agents}} 读取了 {{count}} 条，但尚未提炼。点击更新记忆，或者几小时内会自动进行。"
     },
     "noModel": {
-      "title": "Coffer 的模型尚未设置，所以每个智能体的条目各自成为一条记忆条目",
-      "body": "两个智能体学到的同一条经验，在设置模型之前会保留为两条记忆条目。",
-      "link": "设置 › 通用 › Coffer 的模型"
+      "title": "Coffer 的引擎尚未设置，所以每个智能体的条目各自保留为一条记忆条目",
+      "body": "同一条经验来自两个智能体时会保留为两条记忆，直到在设置 › 通用中设置引擎。",
+      "link": "打开设置"
     },
     "delivered": {
       "agentsLabel": "智能体",
       "intro": "在 {{path}} 中开始的会话会收到的内容 · 只读",
       "introGlobal": "每个会话开始时收到的内容 · 只读",
       "copy": "复制",
-      "characters_one": "{{count}} 个字符",
-      "characters_other": "{{count}} 个字符",
       "none": "还没有智能体连接到 Coffer，没有会话会以这个分区的记忆条目开始。",
-      "loadFailed": "加载投递内容失败。"
+      "loadFailed": "加载投递内容失败。",
+      "size": "{{size}} 个字符 · 未截断"
     },
     "automatic": {
       "title": "自动读取记忆",
@@ -3426,7 +3423,8 @@
       "kept": "{{agent}} 的记忆保持上次完整读取后的样子。",
       "keptSince": "{{agent}} 的记忆保持 {{date}} 上次完整读取后的样子。",
       "retry": "重试",
-      "openActivity": "打开活动"
+      "prompt": "Coffer 无法读取 {{agent}} 的记忆（{{path}}，原因：{{reason}}）。请查明读不了的原因（多半是权限问题），修好读取权限，让 Coffer 能再次读取。不要改动记忆本身的内容。",
+      "noReason": "无法读取"
     }
   },
   "conversations": {

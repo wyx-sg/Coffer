@@ -3299,10 +3299,9 @@
   },
   "memory": {
     "title": "Memory",
-    "subtitle": "What your agents learned, distilled into one memory per subject. Read-only.",
+    "subtitle": "What your agents learned, read from their own memory and distilled into one memory per subject. Read-only.",
     "update": "Update memory",
     "updating": "Updating…",
-    "updateHint": "Reads every agent's latest memory, then distils what is new into Coffer's memories.",
     "syncDone": "Read {{count}} new entries and updated {{partitions}} partitions.",
     "syncFailures": "{{count}} source(s) failed to parse — see the Activity page.",
     "loadFailed": "Failed to load partitions",
@@ -3332,10 +3331,9 @@
       "global": "Every project",
       "memories": "Memories",
       "unresolvable": "Repository missing",
-      "unresolvableHint": "This partition's repository is no longer on disk, so nothing is delivered from it. It stays listed because deleting it is yours to decide.",
       "sample": "Sample memory",
       "sources": "Sources",
-      "distil": "Distil"
+      "distil": "Distilled"
     },
     "delete": {
       "title": "Delete {{name}}?",
@@ -3346,12 +3344,12 @@
     },
     "welcome": {
       "title": "Nothing distilled yet",
-      "body": "Your agents already remember things about your projects. Coffer reads their memory, never writes to it, and distils one memory per subject for each repository.",
+      "body": "Your agents already remember things about your projects. Coffer reads their memory, never writes to it, and distils one memory per subject for each repo.",
       "noAgentsTitle": "No agent memory to read",
       "noAgentsBody": "Memory is read from each connected agent's own memory. No agent is connected to Coffer yet, so there is nothing to distil.",
-      "connect": "Connect an agent",
+      "connect": "Open Agents →",
       "found": "Found on this Mac",
-      "foundMeta": "Coffer also reads on its own on a timer",
+      "foundMeta": "Coffer also reads on its own every hour",
       "foundNone": "No memory yet",
       "foundCount_one": "{{count}} file in {{projects}}",
       "foundCount_other": "{{count}} files in {{projects}}",
@@ -3381,23 +3379,22 @@
       "loadFailed": "Couldn't load the memories.",
       "emptyTitle": "No memories for {{name}} yet",
       "emptyBody": "Coffer hasn't distilled anything for this partition yet. Update memory, or it happens on its own within a few hours.",
-      "emptyWaiting_one": "Coffer has read {{count}} entry from {{agents}} for this repository but hasn’t distilled it. Update memory, or it happens on its own within a few hours.",
-      "emptyWaiting_other": "Coffer has read {{count}} entries from {{agents}} for this repository but hasn’t distilled them. Update memory, or it happens on its own within a few hours."
+      "emptyWaiting_one": "Coffer has read {{count}} entry from {{agents}} for this repo but hasn’t distilled it. Update memory, or it happens on its own within a few hours.",
+      "emptyWaiting_other": "Coffer has read {{count}} entries from {{agents}} for this repo but hasn’t distilled them. Update memory, or it happens on its own within a few hours."
     },
     "noModel": {
-      "title": "Coffer's model isn't set, so each agent's entry becomes its own memory",
-      "body": "The same lesson from two agents stays as two memories until a model is set.",
-      "link": "Settings › General › Coffer's model"
+      "title": "Coffer’s engine isn’t set, so each agent’s entry stays its own memory",
+      "body": "The same lesson from two agents stays as two memories until it is set in Settings › General.",
+      "link": "Open Settings"
     },
     "delivered": {
       "agentsLabel": "Agent",
       "intro": "What a session in {{path}} starts with · read-only",
       "introGlobal": "What every session starts with · read-only",
       "copy": "Copy",
-      "characters_one": "{{count}} character",
-      "characters_other": "{{count}} characters",
       "none": "No agent is connected to Coffer, so no session starts with this partition's memories.",
-      "loadFailed": "Couldn't load what is delivered."
+      "loadFailed": "Couldn't load what is delivered.",
+      "size": "{{size}} characters · nothing trimmed"
     },
     "automatic": {
       "title": "Read memory automatically",
@@ -3426,7 +3423,8 @@
       "kept": "{{agent}}'s memories stay as its last full read left them.",
       "keptSince": "{{agent}}'s memories stay as they were after its last full read on {{date}}.",
       "retry": "Retry",
-      "openActivity": "Open Activity"
+      "prompt": "Coffer couldn't read {{agent}}'s memory at {{path}} ({{reason}}). Find out why it can't be read, most likely a permission problem, and fix the read permission so Coffer can read it again. Don't change anything inside the memory itself.",
+      "noReason": "it isn't readable"
     }
   },
   "conversations": {
