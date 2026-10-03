@@ -84,7 +84,7 @@ export function NewRecordsStrip({
   );
 }
 
-export function OlderHint({ oldest }: { oldest: ActivityRecord | undefined }) {
+function OlderHint({ oldest }: { oldest: ActivityRecord | undefined }) {
   const { t } = useTranslation();
   const policies = useRetentionPolicies().data?.policies ?? [];
   const days = (table: string) => {

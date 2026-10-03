@@ -1,5 +1,5 @@
 """``coffer channel pair`` and ``unpair`` — who a channel answers (spec channels
-"Serve several paired people"). Split out of ``channel_cmd`` for its size budget."""
+"Gate inbound traffic on sender identity"). Split out of ``channel_cmd`` for its size budget."""
 
 from __future__ import annotations
 

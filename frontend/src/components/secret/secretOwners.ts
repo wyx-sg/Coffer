@@ -18,7 +18,7 @@ export interface Owner {
 }
 
 /** The owner kind a citer's kind (or a ref's first segment) falls under. */
-export function ownerKindOf(kind: string): OwnerKind {
+function ownerKindOf(kind: string): OwnerKind {
   if (kind === "sync_remote") return "sync";
   return (OWNER_KINDS as readonly string[]).includes(kind) && kind !== "other"
     ? (kind as OwnerKind)

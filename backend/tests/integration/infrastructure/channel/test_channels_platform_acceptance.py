@@ -103,6 +103,6 @@ async def test_the_current_choice_is_sent_as_a_disabled_button(
     buttons = {b["callback_data"]: b for row in rows for b in row}
     chosen, other = buttons["model:opus"], buttons["model:sonnet"]
     assert "disabled" in chosen  # the platform's disabled state
-    assert chosen["text"] == "Opus ✓"  # marked as the current choice
+    assert chosen["text"] == "✓ Opus"  # marked as the current choice
     assert "disabled" not in other and "style" not in other
     assert other["text"] == "Sonnet"

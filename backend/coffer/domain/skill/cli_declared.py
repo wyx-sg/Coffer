@@ -1,5 +1,5 @@
 """A command-line tool the person declared by hand (spec skill-manager
-"Declare a command-line tool without a skill").
+"Declare the commands a skill requires").
 
 No skill or MCP server is involved: the person names a command, and may give
 it a title, a description, a minimum version and a login check. The

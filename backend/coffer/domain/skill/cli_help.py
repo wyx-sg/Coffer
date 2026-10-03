@@ -1,5 +1,5 @@
 """The interface of a command-line tool, as its own help describes it (spec
-skill-manager "Show a command-line tool's full interface").
+skill-manager "Serve required commands on REST, the command line and the web").
 
 A :class:`HelpNode` is one command in the tree — the tool itself (empty
 ``path``) or one of its subcommands — with what its ``--help`` printed parsed

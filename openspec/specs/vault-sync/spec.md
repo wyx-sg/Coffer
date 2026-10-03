@@ -410,16 +410,6 @@ from.
 - **THEN** the row that admitted this machine keeps its agents, and the row that excluded it and the uninterpretable row become `agents: []`, dormant
 - **AND** on a vault that cannot name the machine it was using, every machine-scoped row becomes `agents: []`
 
-### Requirement: Say where reach is set that it is machine-local
-A scope editor MUST state, where the user sets reach, that reach applies to this
-machine only and is not synced, and MUST say where a resource is dormant here.
-
-#### Scenario: the reach control says reach is machine-local
-- **GIVEN** the reach control open on a resource
-- **WHEN** the user reads the panel
-- **THEN** it states that reach is set on this machine only and is not synced
-- **AND** an empty agent list is named as dormant
-
 ### Requirement: Run a round as pull, merge, guard, check out, push
 A round MUST be these steps **in this order**:
 

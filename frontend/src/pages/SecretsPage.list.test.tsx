@@ -109,7 +109,7 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("SecretsPage list", () => {
-  acceptance("web-ui", "a secret is listed by its own name with its owner in words", async () => {
+  acceptance("web-ui", "the secrets page lists each secret with what uses it", async () => {
     renderPage();
     const row = (await screen.findByText("JIRA_PERSONAL_TOKEN")).closest("tr")!;
     expect(within(row).getByText("MCP server · jira")).toBeInTheDocument();
@@ -217,32 +217,28 @@ describe("SecretsPage list", () => {
     expect(await screen.findByRole("region", { name: "groq" })).toBeInTheDocument();
   });
 
-  acceptance(
-    "web-ui",
-    "a thousand secrets render in batches while search covers all of them",
-    async () => {
-      const many = Array.from({ length: 1000 }, (_, i) =>
-        ref({
-          ref: `secret/key-${String(i).padStart(4, "0")}`,
-          uri: `coffer://secret/key-${String(i).padStart(4, "0")}`,
-          unreferenced: true,
-        }),
-      );
-      api.list.mockResolvedValue({ refs: many });
-      renderPage();
-      await screen.findByText("key-0000");
-      expect(screen.getAllByRole("row")).toHaveLength(51);
-      expect(screen.getByText("Showing 50 of 1000")).toBeInTheDocument();
-      expect(screen.queryByText("key-0999")).not.toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: "Load 50 more" }));
-      expect(screen.getAllByRole("row")).toHaveLength(101);
-      fireEvent.change(screen.getByRole("textbox", { name: "Find a secret" }), {
-        target: { value: "key-0999" },
-      });
-      expect(await screen.findByText("key-0999")).toBeInTheDocument();
-      expect(screen.getByText("Showing 1 of 1")).toBeInTheDocument();
-    },
-  );
+  acceptance("web-ui", "the secrets page lists each secret with what uses it", async () => {
+    const many = Array.from({ length: 1000 }, (_, i) =>
+      ref({
+        ref: `secret/key-${String(i).padStart(4, "0")}`,
+        uri: `coffer://secret/key-${String(i).padStart(4, "0")}`,
+        unreferenced: true,
+      }),
+    );
+    api.list.mockResolvedValue({ refs: many });
+    renderPage();
+    await screen.findByText("key-0000");
+    expect(screen.getAllByRole("row")).toHaveLength(51);
+    expect(screen.getByText("Showing 50 of 1000")).toBeInTheDocument();
+    expect(screen.queryByText("key-0999")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load 50 more" }));
+    expect(screen.getAllByRole("row")).toHaveLength(101);
+    fireEvent.change(screen.getByRole("textbox", { name: "Find a secret" }), {
+      target: { value: "key-0999" },
+    });
+    expect(await screen.findByText("key-0999")).toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 1")).toBeInTheDocument();
+  });
 
   test("ticking a secret swaps the filters for the selection bar, which selects all matching", async () => {
     renderPage();
@@ -257,7 +253,7 @@ describe("SecretsPage list", () => {
     expect(screen.getByRole("textbox", { name: "Find a secret" })).toBeInTheDocument();
   });
 
-  acceptance("web-ui", "only secrets nothing uses can be deleted in bulk", async () => {
+  acceptance("web-ui", "a secret in use cannot be deleted from the secrets page", async () => {
     renderPage();
     await screen.findByText("key");
     fireEvent.click(screen.getByRole("checkbox", { name: "Select old-a" }));

@@ -17,10 +17,10 @@ export const OWNER_KINDS = [
 ] as const;
 export type OwnerKind = (typeof OWNER_KINDS)[number];
 
-export const SORT_KEYS = ["name", "usedBy", "lastUsed", "created"] as const;
+const SORT_KEYS = ["name", "usedBy", "lastUsed", "created"] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 
-export type SortDir = "asc" | "desc";
+type SortDir = "asc" | "desc";
 export type SecretView = "list" | "owner";
 
 /** `sort: null` is the default order: waiting for approval first, then by name. */
@@ -63,9 +63,4 @@ export function listStateParams(state: SecretListState, storedView: SecretView):
   }
   if (state.view !== "list" || storedView !== "list") out.set("view", state.view);
   return out;
-}
-
-/** Whether any filter narrows the list (the sort and the view never do). */
-export function isFiltered(state: SecretListState): boolean {
-  return state.q.trim() !== "" || state.status !== "all" || state.kind !== "all";
 }

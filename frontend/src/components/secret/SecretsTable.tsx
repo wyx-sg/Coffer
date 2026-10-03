@@ -20,7 +20,7 @@ import { displayName, isMissingHere } from "./secretRows";
 import { lastUsedLabel, shortDate } from "./secretTimes";
 
 /** How many rows render at first, and each "Load more" adds. */
-export const BATCH = 50;
+const BATCH = 50;
 
 interface Props {
   items: SecretItem[];

@@ -1,5 +1,5 @@
 """The help runner against real executables the test lays out in ``tmp_path``
-(spec skill-manager "Show a command-line tool's full interface"): what it
+(spec skill-manager "Serve required commands on REST, the command line and the web"): what it
 runs, with what environment, and where it stops."""
 
 from __future__ import annotations
