@@ -382,14 +382,16 @@ card.
 - **THEN** its switch is disabled and the row says the pin decided its state
 
 ### Requirement: Mark an experimental feature's sidebar entry
-While an experimental feature is switched on, its web sidebar entry MUST carry
-a marker that says the feature is experimental, beside the label on an expanded
-rail and in the tooltip on a collapsed one. An entry no registered feature owns
-MUST NOT carry it. The entries owned by a feature are Knowledge (`knowledge`),
-Memory (`memory`), Sync (`sync`), and Model providers and Usage (`models`).
+While an experimental feature is switched on, its web sidebar entry MUST say the
+feature is experimental in the tooltip of the collapsed rail ("Knowledge ·
+Experimental"). The expanded row carries no tag beside its label — the
+Experimental tag stays on the feature's page title and in Settings › Features —
+and an entry no registered feature owns MUST NOT say it at all. The entries owned
+by a feature are Knowledge (`knowledge`), Memory (`memory`), Sync (`sync`), and
+Model providers and Usage (`models`).
 
-#### Scenario: a switched-on feature's entry says it is experimental
+#### Scenario: a collapsed rail's tooltip says a feature's entry is experimental
 - **GIVEN** a sidebar entry owned by a registered feature that is switched on
-- **WHEN** the expanded sidebar renders
-- **THEN** that entry carries the experimental marker and no entry of a switched-off or unowned feature does
-- **AND** Overview, Agents, MCP servers, Custom tools, Skills, CLIs, Secrets, Conversations, Channels and Activity never carry it
+- **WHEN** the sidebar renders expanded, and again collapsed with the entry's tooltip open
+- **THEN** the expanded row carries no experimental tag, and the collapsed row's tooltip names the entry followed by "Experimental"
+- **AND** an entry no feature owns never says it

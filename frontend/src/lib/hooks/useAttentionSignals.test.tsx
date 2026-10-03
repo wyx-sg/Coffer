@@ -15,15 +15,15 @@ function item(kind: string, severity: string): AttentionItem {
 }
 
 describe("countByEntry", () => {
-  test("counts what needs the user per entry, danger while any is a failure", () => {
+  test("counts what needs the user per entry", () => {
     const signals = countByEntry([
       item("mcp_server", "warning"),
       item("mcp_server", "error"),
       item("channel", "warning"),
       item("channel", "warning"),
     ]);
-    expect(signals["/mcp-servers"]).toEqual({ count: 2, tone: "danger" });
-    expect(signals["/channels"]).toEqual({ count: 2, tone: "warning" });
+    expect(signals["/mcp-servers"]).toEqual({ count: 2 });
+    expect(signals["/channels"]).toEqual({ count: 2 });
   });
 
   test("an informational item never becomes a badge", () => {
@@ -42,19 +42,23 @@ describe("countByEntry", () => {
 });
 
 describe("AttentionDot", () => {
-  test("expanded it shows the count; on the rail a dot of the same tone with the same name", () => {
-    const { unmount } = render(
-      <AttentionDot entry="/mcp-servers" collapsed={false} count={3} tone="danger" />,
-    );
+  test("expanded it shows the count in the danger-strong tone, capped at 9+", () => {
+    const { unmount } = render(<AttentionDot entry="/mcp-servers" collapsed={false} count={3} />);
     const badge = screen.getByTestId("nav-dot-mcp-servers");
     expect(badge).toHaveTextContent("3");
-    expect(badge).toHaveAttribute("data-tone", "danger");
+    expect(badge).toHaveClass("bg-danger-strong");
     expect(badge).toHaveAccessibleName("Needs your attention");
     unmount();
 
-    render(<AttentionDot entry="/mcp-servers" collapsed count={3} tone="danger" />);
+    render(<AttentionDot entry="/mcp-servers" collapsed={false} count={12} />);
+    expect(screen.getByTestId("nav-dot-mcp-servers")).toHaveTextContent("9+");
+  });
+
+  test("on the rail it is a dot of the same colour with the same name", () => {
+    render(<AttentionDot entry="/mcp-servers" collapsed count={3} />);
     const dot = screen.getByTestId("nav-dot-mcp-servers");
     expect(dot).toHaveTextContent("");
-    expect(dot).toHaveAttribute("data-tone", "danger");
+    expect(dot).toHaveClass("bg-danger-strong");
+    expect(dot).toHaveAccessibleName("Needs your attention");
   });
 });

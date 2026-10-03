@@ -2,7 +2,7 @@
 // "Open Settings as a modal from the sidebar footer").
 //
 // Only the daemon's status probe is stubbed (unanswered); the footer, the
-// tooltip and the Settings opener are real.
+// tooltip and the Settings opener are real. The row carries no daemon state.
 import { expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -36,7 +36,8 @@ acceptance("web-ui", "the collapsed rail keeps Settings as a gear with a tooltip
 
   const gear = screen.getByTestId("sidebar-settings");
   // The gear alone: the word is gone from the rail, kept as its name.
-  expect(gear).toHaveAccessibleName(/^Settings/);
+  expect(gear).toHaveAccessibleName("Settings");
+  expect(gear.querySelector("[data-tone]")).toBeNull();
   expect(gear).not.toHaveTextContent("Settings");
   fireEvent.focus(gear);
   expect(await screen.findByRole("tooltip")).toHaveTextContent(/^Settings/);

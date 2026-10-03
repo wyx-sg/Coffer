@@ -177,8 +177,7 @@
     "activity": "Activity",
     "modelProviders": "Model providers",
     "sync": "Sync",
-    "experimental": "Experimental",
-    "experimentalLabel": "{{label}} (experimental)",
+    "experimentalLabel": "{{label}} · Experimental",
     "needsAttention": "Needs your attention",
     "overview": "Overview",
     "conversations": "Conversations",
@@ -188,20 +187,8 @@
     "usage": "Usage",
     "search": "Search or jump to…",
     "resizeSidebar": "Resize the sidebar",
-    "daemon": {
-      "connecting": "Connecting to the daemon…",
-      "running": "Daemon running on port {{port}}",
-      "outOfDate": "Daemon on port {{port}} is from a different app version",
-      "stopping": "Daemon stopping",
-      "offline": "Daemon offline",
-      "outOfDateShort": "Daemon out of date",
-      "reconnecting": "Reconnecting…"
-    },
-    "attentionCount": {
-      "danger": "{{count}} failing",
-      "warning_one": "{{count}} needs you",
-      "warning_other": "{{count}} need you"
-    },
+    "attentionCount_one": "{{count}} needs you",
+    "attentionCount_other": "{{count}} need you",
     "update": {
       "title": "Update ready",
       "body": "is available. Restart downloads it, checks its signature and reopens Coffer.",

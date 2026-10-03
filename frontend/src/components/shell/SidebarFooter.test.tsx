@@ -1,7 +1,5 @@
-// src/components/shell/SidebarFooter.test.tsx — the footer's one Settings row with the daemon's state on it, and the update card.
-//
-// Spec web-ui "Show the daemon's state in the shell footer".
-import { afterEach, beforeEach, describe, expect, vi } from "vitest";
+// src/components/shell/SidebarFooter.test.tsx — the footer's one Settings row (no daemon state on it) and the update card.
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
@@ -76,73 +74,21 @@ afterEach(() => {
 });
 
 describe("SidebarFooter", () => {
-  acceptance("web-ui", "the footer shows a running daemon", async () => {
-    answer({});
-    renderFooter();
-    // One row: the Settings entry, the sentence as its name and tooltip.
-    const row = await screen.findByRole("button", {
-      name: "Settings · Daemon running on port 8000 · v1.0.0",
-    });
-    expect(screen.getAllByRole("button")).toHaveLength(1);
-    // Quiet while all is well: the word Settings and a green dot, no state words, no version.
-    expect(row).toHaveTextContent(/^Settings$/);
-    expect(row.querySelector("[data-tone]")).toHaveAttribute("data-tone", "ok");
-    expect(row).toHaveAttribute("data-daemon", "running");
-    fireEvent.focus(row);
-    const tip = await screen.findByRole("tooltip");
-    expect(tip).toHaveTextContent("Daemon running on port 8000 · v1.0.0");
-    fireEvent.click(row);
-    expect(screen.getByTestId("where")).toHaveTextContent("/settings/general");
-    expect(screen.queryByTestId("version-menu")).not.toBeInTheDocument();
-  });
-
-  acceptance("web-ui", "the footer says connecting before the first answer", () => {
-    get.mockReturnValue(new Promise(() => {}));
+  test("the Settings row carries no daemon state and opens General", () => {
     renderFooter();
     const row = screen.getByTestId("sidebar-settings");
-    expect(row).toHaveAttribute("data-daemon", "connecting");
-    expect(row.querySelector("[data-tone]")).toHaveAttribute("data-tone", "off");
     expect(row).toHaveTextContent(/^Settings$/);
+    expect(row).toHaveAccessibleName("Settings");
+    expect(row.querySelector("[data-tone]")).toBeNull();
     fireEvent.click(row);
     expect(screen.getByTestId("where")).toHaveTextContent("/settings/general");
   });
 
-  acceptance("web-ui", "the footer shows an offline daemon", async () => {
-    get.mockRejectedValue(new TypeError("Failed to fetch"));
-    renderFooter();
-    const row = await screen.findByRole("button", { name: "Settings · Daemon offline" });
-    // The state in words, in its tone, replaces the quiet dot's silence.
-    expect(row).toHaveTextContent("Daemon offline");
-    expect(row.querySelector("[data-tone]")).toHaveAttribute("data-tone", "err");
-    // A problem lands on the tab that deals with it.
-    fireEvent.click(row);
-    expect(screen.getByTestId("where")).toHaveTextContent("/settings/daemon");
-  });
-
-  acceptance("web-ui", "the footer shows a stopping daemon", async () => {
-    answer({ status: "draining" });
-    renderFooter();
-    const row = await screen.findByRole("button", {
-      name: "Settings · Daemon stopping · v1.0.0",
-    });
-    expect(row).toHaveTextContent("Daemon stopping");
-    expect(row.querySelector("[data-tone]")).toHaveAttribute("data-tone", "warn");
-    fireEvent.click(row);
-    expect(screen.getByTestId("where")).toHaveTextContent("/settings/daemon");
-  });
-
-  acceptance("web-ui", "the collapsed rail keeps the daemon state", async () => {
+  test("the tooltip reads Settings and its shortcut", async () => {
     answer({});
-    renderFooter(true);
-    const gear = await screen.findByRole("button", {
-      name: "Settings · Daemon running on port 8000 · v1.0.0",
-    });
-    // The gear alone, with the state as a small dot at its corner.
-    expect(gear).not.toHaveTextContent("Settings");
-    expect(screen.getAllByRole("button")).toHaveLength(1);
-    expect(gear.querySelector("[data-tone]")).toHaveAttribute("data-tone", "ok");
-    fireEvent.click(gear);
-    expect(screen.getByTestId("where")).toHaveTextContent("/settings/general");
+    renderFooter();
+    fireEvent.focus(screen.getByTestId("sidebar-settings"));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/^Settings\s+\S/);
   });
 
   acceptance(

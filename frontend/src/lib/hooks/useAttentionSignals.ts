@@ -1,4 +1,4 @@
-// src/lib/hooks/useAttentionSignals.ts — which sidebar entries carry a count badge, how many, and how urgent.
+// src/lib/hooks/useAttentionSignals.ts — which sidebar entries carry a count badge, and how many.
 //
 // The web UI owns only the rendering (spec web-ui "Mark a sidebar entry whose
 // kind needs attention"); what raises and clears a signal belongs to the
@@ -27,13 +27,9 @@ import { useAttention, type AttentionItem } from "@/lib/hooks/useAttention";
 import { useClis } from "@/lib/hooks/useClis";
 import { useSyncAttention } from "@/lib/hooks/useSyncAttention";
 
-export type AttentionTone = "danger" | "warning";
-
 /** @ui-only derived view; never crosses the wire. */
 export interface AttentionSignal {
   count: number;
-  /** Danger while any counted item is a failure, warning otherwise. */
-  tone: AttentionTone;
 }
 
 export type AttentionSignals = Readonly<Record<string, AttentionSignal | undefined>>;
@@ -57,9 +53,7 @@ export function countByEntry(items: readonly AttentionItem[]): Record<string, At
     const entry = ENTRY_FOR_KIND[item.kind];
     if (!entry || item.severity === "info") continue;
     const prev = out[entry];
-    const tone: AttentionTone =
-      item.severity === "error" || prev?.tone === "danger" ? "danger" : "warning";
-    out[entry] = { count: (prev?.count ?? 0) + 1, tone };
+    out[entry] = { count: (prev?.count ?? 0) + 1 };
   }
   return out;
 }
@@ -71,12 +65,12 @@ export function useAttentionSignals(): AttentionSignals {
   const signals: Record<string, AttentionSignal | undefined> = attention.data
     ? countByEntry(attention.data.items ?? [])
     : {};
-  if (sync) signals["/sync"] = { count: 1, tone: "warning" };
+  if (sync) signals["/sync"] = { count: 1 };
   // A tool added by hand that nothing requires is a plain status, not a need.
   const clisNeedingYou = (clis.data?.items ?? []).filter(
     (cli) =>
       cli.status !== "ready" && (cli.needed_by.length > 0 || cli.needed_by_servers.length > 0),
   ).length;
-  if (clisNeedingYou > 0) signals["/clis"] = { count: clisNeedingYou, tone: "warning" };
+  if (clisNeedingYou > 0) signals["/clis"] = { count: clisNeedingYou };
   return signals;
 }
