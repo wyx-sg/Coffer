@@ -10,7 +10,9 @@ import {
   changeSentence,
   dayKey,
   groupByDay,
-  matchesWriter,
+  authorKey,
+  authorOptions,
+  matchesAuthor,
   undoneVersions,
   withinDays,
   writerLabel,
@@ -66,13 +68,23 @@ describe("wording", () => {
 });
 
 describe("filters and grouping", () => {
-  test("Agents holds agent writes and curation; You holds your own", () => {
+  test("the Author filter names each person, agent and Curation once", () => {
     const mine = change({});
-    const pass = change({ writer: "curation", operation: "pass" });
-    const agent = change({ writer: "agent" });
-    expect([mine, pass, agent].filter((c) => matchesWriter(c, "agents"))).toEqual([pass, agent]);
-    expect([mine, pass, agent].filter((c) => matchesWriter(c, "you"))).toEqual([mine]);
-    expect([mine, pass, agent].filter((c) => matchesWriter(c, "everyone"))).toHaveLength(3);
+    const pass = change({ writer: "curation", operation: "pass", agent: "codex" });
+    const codex = change({ writer: "agent", agent: "codex" });
+    const claude = change({ writer: "agent", agent: "claude-code" });
+    const all = [pass, claude, mine, codex, pass];
+    expect(authorKey(pass)).toBe("curation");
+    expect(authorKey(codex)).toBe("agent:codex");
+    expect(all.filter((c) => matchesAuthor(c, "agent:codex"))).toEqual([codex]);
+    expect(all.filter((c) => matchesAuthor(c, "user"))).toEqual([mine]);
+    expect(all.filter((c) => matchesAuthor(c, "any"))).toHaveLength(5);
+    expect(authorOptions(t, all)).toEqual([
+      { value: "user", label: "You" },
+      { value: "agent:claude-code", label: "Claude Code" },
+      { value: "agent:codex", label: "Codex" },
+      { value: "curation", label: "Curation" },
+    ]);
   });
 
   test("groups by day under today, yesterday and a date", () => {

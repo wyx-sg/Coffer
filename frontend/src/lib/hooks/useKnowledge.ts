@@ -7,8 +7,8 @@
 // curation pass may rewrite any level of it.
 import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 
 import { useToast } from "@/components/ui/toast";
 import { ApiError, translateApiError } from "@/lib/api/errors";
@@ -20,11 +20,9 @@ import {
   getTree,
   listCollections,
   saveFile,
-  submitMaterial,
   uploadFile,
   type CurationRunOut,
   type FileSave,
-  type MaterialIn,
 } from "@/lib/api/knowledge";
 import {
   knowledgeChangesRootKey,
@@ -36,7 +34,7 @@ import {
   knowledgeTreeRootKey,
   upkeepRunsKey,
 } from "@/lib/api/queryKeys";
-import { curateToastKey } from "@/lib/hooks/curateToast";
+import { curateOutcome } from "@/lib/hooks/curateToast";
 
 export function useKnowledgeCollections() {
   return useQuery({
@@ -105,16 +103,34 @@ export function useSaveKnowledgeFile() {
   );
 }
 
-/** The one toast a finished Curate now leaves: the last pass says how the run
- *  ended; `count` is how many items it curated (`ok`), or for `no_model` how
- *  many it wrote as documents as they stood. */
-function curateToastText(t: TFunction, result: CurationRunOut) {
-  const last = result.passes[result.passes.length - 1];
-  const promoted = result.passes.reduce((sum, p) => sum + p.promoted.length, 0);
-  const curated = result.passes.filter((p) => p.status === "ok").length;
-  return t(last ? curateToastKey(last) : "knowledge.curate.status.up_to_date", {
-    count: last?.status === "ok" ? curated : promoted,
-  });
+/** Announce a finished Curate now: one summary toast, or one error toast with
+ *  an Activity action to look into it. */
+function useAnnounceCurated() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const toActivity = {
+    label: t("nav.activity"),
+    onClick: () => navigate("/activity"),
+  };
+  return {
+    done: (passes: CurationRunOut["passes"]) => {
+      const out = curateOutcome(passes);
+      if (out.kind === "error") {
+        toast.error(t(out.key), { action: toActivity });
+        return;
+      }
+      toast.success(
+        out.key === "knowledge.curate.summary"
+          ? t(out.key, {
+              items: t("knowledge.curate.items", { count: out.vars.count }),
+              documents: t("knowledge.curate.documents", { count: out.vars.documents }),
+            })
+          : t(out.key, out.vars),
+      );
+    },
+    failed: (error: unknown) => toast.error(translateApiError(t, error), { action: toActivity }),
+  };
 }
 
 /**
@@ -130,17 +146,16 @@ function curateToastText(t: TFunction, result: CurationRunOut) {
  */
 export function useCurateCollection(collectionUid: string) {
   const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
+  const announce = useAnnounceCurated();
   return useMutation({
     mutationFn: (document?: string | null) => curateCollection(collectionUid, document),
     onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: knowledgeKey });
-      toast.success(curateToastText(t, result));
+      announce.done(result.passes);
     },
     onError: (error) => {
       if (error instanceof ApiError && error.code === "UPKEEP_ALREADY_RUNNING") return;
-      toast.error(translateApiError(t, error));
+      announce.failed(error);
     },
     onSettled: () => void qc.invalidateQueries({ queryKey: upkeepRunsKey }),
   });
@@ -154,8 +169,7 @@ export function useCurateCollection(collectionUid: string) {
  */
 export function useCurateCollections() {
   const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
+  const announce = useAnnounceCurated();
   return useMutation({
     mutationFn: async (uids: string[]) => {
       const results: CurationRunOut[] = [];
@@ -172,26 +186,10 @@ export function useCurateCollections() {
     },
     onSuccess: (results) => {
       void qc.invalidateQueries({ queryKey: knowledgeKey });
-      const last = results[results.length - 1];
-      if (last) toast.success(curateToastText(t, last));
+      if (results.length > 0) announce.done(results.flatMap((r) => r.passes));
     },
-    onError: (error) => toast.error(translateApiError(t, error)),
+    onError: (error) => announce.failed(error),
     onSettled: () => void qc.invalidateQueries({ queryKey: upkeepRunsKey }),
-  });
-}
-
-/**
- * Add a document: a title and body submitted as an ITEM into a collection's
- * inbox, curated like any other (see "Submit material through coffer__write").
- * Counts, the inbox and the timeline all move, so the whole subtree is
- * invalidated. No toast either way: the dialog says where the item went and
- * renders a refusal beside its fields.
- */
-export function useSubmitMaterial() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: MaterialIn) => submitMaterial(input),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
   });
 }
 
@@ -234,7 +232,8 @@ export function useUploadKnowledgeFile() {
   return useMutation({
     // `collection` is the collection's NAME here, not its uid: an upload lands
     // material in a directory, and the directory is named after the collection.
-    mutationFn: (vars: { collection: string; file: File }) => uploadFile(vars),
+    mutationFn: (vars: { collection: string; file: File; signal?: AbortSignal }) =>
+      uploadFile(vars),
     onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
   });
 }

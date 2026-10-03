@@ -2942,7 +2942,7 @@
     }
   },
   "knowledge": {
-    "subtitle": "你和 Coffer 共同编写的文档，每个集合一棵树。",
+    "subtitle": "你和智能体共同编写的文档，每个智能体都能读取。",
     "title": "知识",
     "nav": {
       "label": "知识集与文档",
@@ -2952,26 +2952,33 @@
     },
     "tree": {
       "empty": "还没有文档",
-      "emptyFolder": "这里还没有内容"
+      "emptyFolder": "这里还没有内容",
+      "unsaved": "有未保存的更改"
     },
     "stats": {
       "documents": "文档",
-      "waiting": "待整理",
-      "curated": "整理于",
-      "never": "尚未整理"
+      "waiting": "{{count}} 个待整理",
+      "curated": "上次整理",
+      "never": "从未",
+      "inbox": "收件箱",
+      "nothing": "无",
+      "openInbox": "打开收件箱",
+      "folder": "文件夹"
     },
     "noModel": {
       "line": "设置 Coffer 的模型，把新条目整理进你的文档 ·",
-      "link": "设置 › 通用"
+      "link": "设置 › 通用",
+      "engine": "整理需要 Coffer 的引擎"
     },
     "collection": {
-      "emptyTitle": "{{name}} 还是空的",
-      "emptyBody": "写下第一篇文档、上传已有的文档，或把 Markdown 文件放进这个文件夹。智能体已经能看到这个知识集，也能往它的收件箱里写条目。",
-      "editDescription": "编辑描述",
       "descriptionLabel": "这个知识集收录什么",
-      "descriptionHint": "即文件夹中 README.md 的首段；每个智能体都通过 coffer-guide 技能读到它。",
       "noDescription": "还没有描述。写下这里收录什么，智能体才认得出它。",
-      "revealFolder": "在访达中显示文件夹"
+      "emptyLine": "还没有文档。上传一篇，或把 Markdown 文件放进这个文件夹。",
+      "more": "{{name}} 的更多操作",
+      "copyPath": "复制路径",
+      "descriptionSaved": "描述已更新",
+      "descriptionUndoFailed": "无法恢复原描述",
+      "clickToEdit": "点击编辑"
     },
     "create": {
       "title": "新建知识集",
@@ -2985,32 +2992,14 @@
       "created": "已创建 {{name}}"
     },
     "deleteCollection": {
-      "zone": "危险操作",
-      "hint_one": "从磁盘删除这个文件夹及其中的 {{count}} 篇文档。",
-      "hint_other": "从磁盘删除这个文件夹及其中全部 {{count}} 篇文档。",
-      "button": "删除…",
-      "title": "删除 {{name}}？",
-      "body": "将删除这个文件夹、其中的 {{documents}} 篇文档和 {{items}} 个收件箱条目。智能体从下一次会话起不再看到它。它仍保留在知识库的历史中，可以在最近改动里恢复。",
-      "typeToConfirm": "输入 {{name}} 以确认",
-      "confirm": "删除知识集"
-    },
-    "add": {
-      "button": "添加文档",
-      "title": "添加文档",
-      "hint": "它会进入 {{collection}} 的收件箱，像其他条目一样被整理进合适的文档——一小时内自动整理。你不用选择文件，整理会决定。",
-      "hintNoModel": "Coffer 的模型尚未设置，因此它会按原样写成一篇文档。",
-      "collection": "知识集",
-      "titleField": "标题",
-      "body": "正文",
-      "submit": "放入收件箱",
-      "submitNoModel": "添加文档",
-      "pending": "已放入 {{collection}} 的收件箱——一小时内会被整理。",
-      "written": "已保存为 {{path}}。"
+      "menu": "删除知识集…",
+      "deleted": "已删除 {{name}}",
+      "undoFailed": "无法恢复 {{name}}"
     },
     "upload": {
       "button": "上传",
       "title": "上传文档",
-      "body": "Coffer 会把它转换成 Markdown；它会进入知识集的收件箱，并在一小时内被整理。原始文件不会保留。",
+      "body": "Coffer 会把它转换成 Markdown，并加入知识集的收件箱。原始文件不会保留。",
       "choose": "把文件拖到这里，或选择一个",
       "types": "PDF、Word、PowerPoint、Excel、HTML、CSV、Markdown 或纯文本 · 最大 20 MB",
       "remove": "移除这个文件",
@@ -3045,94 +3034,91 @@
         "failed": "整理没有完成。没有丢失任何内容——之后会再试。",
         "ok_one": "已把 {{count}} 个条目整理进你的文档",
         "ok_other": "已把 {{count}} 个条目整理进你的文档"
-      }
+      },
+      "summary": "已将{{items}}整理进{{documents}}",
+      "items_one": "{{count}} 条内容",
+      "items_other": "{{count}} 条内容",
+      "documents_one": "{{count}} 篇文档",
+      "documents_other": "{{count}} 篇文档"
     },
     "inbox": {
       "title": "收件箱",
-      "hint": "等待整理 · 一小时内自动整理",
-      "automatic": "一小时内自动整理",
       "waitingCount_one": "{{count}} 个条目待整理",
       "waitingCount_other": "{{count}} 个条目待整理",
       "empty": "没有待整理的条目。智能体写入和上传的新条目会先出现在这里。",
       "writtenBy": "由 {{who}} 写入 · {{when}}",
-      "readOnly": "条目以只读方式打开。整理会把每个条目并入文档，并把它移出收件箱。",
-      "heading": "收件箱 · {{name}}",
       "writtenWithWrite": "由 {{who}} 通过 coffer__write 写入 · {{when}}",
-      "writtenByYou": "由你写入 · {{when}}"
+      "writtenByYou": "由你写入 · {{when}}",
+      "note": "一小时内会整理进你的文档，然后从这里移除。",
+      "readOnlyTag": "只读",
+      "waitingToCurate": "等待整理"
     },
     "document": {
       "tab": "文档",
       "where": "这篇文档的位置",
       "more": "{{path}} 的更多操作",
-      "curatedBanner": "{{when}}把 {{agent}} 的条目整理进了这篇文档。",
-      "seePass": "查看这轮整理改了什么",
+      "seePass": "查看这一轮",
       "views": "文档视图",
-      "rail": "关于这篇文档",
-      "onThisPage": "本页内容",
-      "properties": "属性",
-      "edited": "编辑",
-      "created": "创建",
-      "curatedFrom": "整理来源",
-      "byWhen": "{{who}} · {{when}}",
-      "passes_one": "{{count}} 个收件箱条目",
-      "passes_other": "{{count}} 个收件箱条目"
+      "passes_one": "{{count}} 个收集箱条目",
+      "passes_other": "{{count}} 个收集箱条目",
+      "curated": "{{when}}整理自 {{source}}",
+      "passesFrom_one": "{{count}} 个 {{agent}} 收集箱条目",
+      "passesFrom_other": "{{count}} 个 {{agent}} 收集箱条目",
+      "createdBy": "{{date}}由{{who}}创建",
+      "you": "你",
+      "view": "视图",
+      "preview": "预览",
+      "source": "源码",
+      "created": "{{date}}创建"
     },
     "editor": {
       "label": "编辑 {{path}}",
-      "title": "标题",
-      "description": "描述",
-      "frontmatterNote": "此处只读 · 由整理保持更新",
       "conflictTitle": "你编辑期间，这篇文档在磁盘上被修改了",
-      "conflictBody": "你的文字没有保存：磁盘上的文件比你打开的版本更新。重新加载以获取当前版本，或先比较；如果想保留你的文字，请先复制。",
       "compare": "比较",
       "reload": "重新加载",
       "copyMine": "复制我的文字",
       "copyFailed": "无法复制你的文字",
       "compareTitle": "磁盘上的当前版本与你的文字",
       "compareBody": "标 − 的行只在磁盘上；标 + 的行只在你的文字里。",
-      "frontmatter": "Frontmatter",
       "editStands": "你的修改会被保留：之后整理的条目会绕开它，绝不覆盖它。",
-      "markdown": "Markdown",
       "unsaved": "有未保存的修改",
       "notSaved": "未保存",
-      "saveKey": "保存",
-      "cancelKey": "取消",
       "copied": "你的文字已复制到剪贴板",
-      "reloaded": "已重新加载磁盘上的版本"
+      "reloaded": "已重新加载磁盘上的版本",
+      "keptByCuration": "由整理维护",
+      "discard": "放弃",
+      "reloadAsk": "重新加载…",
+      "reloadTitle": "重新加载磁盘上的版本？",
+      "reloadBody": "你未保存的文字会被磁盘上的内容替换。想保留的话请先复制。",
+      "reloadConfirm": "重新加载",
+      "conflictCuration": "整理在 {{time}} 给 {{file}} 加了一点内容。你的文字还没有保存。",
+      "conflictOther": "{{who}}在 {{time}} 修改了 {{file}}。你的文字还没有保存。",
+      "conflictUnknown": "{{file}} 在磁盘上发生了变化。你的文字还没有保存。"
     },
     "deleteDocument": {
       "menu": "删除文档…",
-      "title": "删除 {{name}}？",
-      "body": "Coffer 将从磁盘删除这个文件：",
-      "afterwards": "智能体从下一次读取起不再找到它。它仍保留在知识库的历史中，可以作为新版本恢复。",
-      "confirm": "删除文档",
       "deletedToast": "已删除 {{name}}",
-      "goneTitle": "没有打开的文档",
-      "goneBody": "{{name}} 已删除。它的各个版本仍保留在知识库的历史中——最近改动里列出了这次删除，可以恢复它。"
+      "undoFailed": "无法恢复 {{name}}"
     },
     "history": {
       "tab": "历史",
       "current": "当前",
       "none": "还没有记录任何版本。",
       "versionLabel": "选中的版本",
-      "wholePass": "查看整轮整理",
       "restore": "恢复这个版本",
       "restored": "已作为新版本恢复",
       "failedTitle": "无法读取这篇文档的历史",
-      "failedFine": "文档本身没有问题。",
       "openActivity": "打开活动",
       "versions": "版本",
-      "countLabel_one": "{{count}} 个版本",
-      "countLabel_other": "{{count}} 个版本",
-      "newestFirst": "最新在前",
-      "oneOfPass_one": "这是这轮整理唯一改动的文档。",
-      "oneOfPass_other": "这轮整理改动的 {{count}} 篇文档之一。",
-      "restoreHint": "恢复会保存为一个新版本，之后的版本仍留在列表中。",
       "restoredToast": "已把 {{when}} 的版本恢复为新版本",
       "diffMode": "显示哪种差异",
       "changesInVersion": "这个版本的改动",
       "compareCurrent": "与当前版本比较",
-      "removedVersion": "这个版本删除了文档，没有可比较的内容。"
+      "removedVersion": "这个版本删除了文档，没有可比较的内容。",
+      "seePass": "查看这轮整理",
+      "needsGitTitle": "历史需要 git",
+      "needsGitBody": "请在这台 Mac 上安装 git 才能查看各版本。文档本身没有问题。",
+      "checkAgain": "重新检查"
     },
     "diff": {
       "none": "文字没有变化。"
@@ -3194,18 +3180,10 @@
       }
     },
     "recent": {
-      "waitingCount_one": "{{count}} 个条目待整理",
       "waitingCount_other": "{{count}} 个条目待整理",
       "title": "最近改动",
       "window": "最近 7 天",
-      "writerFilter": "改动者",
-      "writer": {
-        "everyone": "所有人",
-        "agents": "智能体",
-        "you": "你"
-      },
       "collectionFilter": "知识集",
-      "allCollections": "全部知识集",
       "waitingTitle": "等待整理",
       "waitingMeta": "{{collection}} · 由 {{who}} 写入 · {{when}}",
       "nothingWaiting": "没有待整理的条目。智能体写入和上传的新条目会先出现在这里。",
@@ -3213,7 +3191,6 @@
       "yesterday": "昨天",
       "empty": "最近 7 天没有改动。",
       "failed": "无法读取最近改动",
-      "open": "打开",
       "openItem": "打开 {{title}}",
       "seePass": "查看这轮整理",
       "more_one": "等 {{count}} 篇",
@@ -3230,8 +3207,19 @@
         "restore": "作为新版本放回；之前的历史保持不变。",
         "sync_one": "另一台 Mac 上改动了 {{count}} 行。",
         "sync_other": "另一台 Mac 上改动了 {{count}} 行。",
-        "pass": "来自一个收件箱条目"
-      }
+        "pass": "来自一个收件箱条目",
+        "too_large": "内容过大，无法一次整理，已单独保留为一篇文档",
+        "gave_up": "三次都触及步数上限，已单独保留为一篇文档"
+      },
+      "authorFilter": "作者",
+      "clearFilters": "清除筛选",
+      "waitingDesc": "一小时内整理进你的文档",
+      "needsGitTitle": "最近更改需要 git",
+      "needsGitBody": "在这台 Mac 上安装 git 才能查看改了什么。你的文档完好无损。",
+      "checkAgain": "重新检查",
+      "openActivity": "打开活动",
+      "waitingCount_one": "{{count}} 个条目待整理",
+      "open": "打开"
     },
     "pass": {
       "title": "整理 · {{when}}",
@@ -3242,7 +3230,6 @@
         "modified": "修改",
         "removed": "移除"
       },
-      "itemsLeft": "这轮整理处理过的收件箱条目已离开收件箱，它们的文字保留在各篇文档的历史中。",
       "undoTitle": "撤销这轮整理？",
       "undoBody": "把这轮整理改过的文档恢复到 {{when}} 之前的样子。",
       "undoEffect": {
@@ -3250,35 +3237,20 @@
         "modified": "恢复到整理前",
         "removed": "将被放回"
       },
-      "undoNote": "要么全部撤销，要么都不撤销：只要有一篇文档在这轮整理之后被改过，就什么都不撤销。每篇文档都会得到一个由你写入的新版本。收件箱条目不会重新排队。",
+      "undoNote": "只要有一篇文档在这轮整理之后被改过，就什么都不撤销。收件箱条目不会重新排队。",
       "undoConfirm": "撤销整理",
       "undoing": "正在撤销…",
-      "undoRefused": "{{document}} 在这轮整理之后被编辑过，因此没有撤销任何内容——每篇文档都保持原样。可以在单篇文档的历史中恢复，或让智能体手动撤销这轮整理并保留之后的编辑。",
+      "undoRefused": "{{document}} 在这轮整理之后被改过，因此没有撤销任何内容。",
       "undoneToast": "已撤销这轮整理。",
       "heading": "这轮整理改了什么",
-      "meta": "每篇文档一个新版本 · 来自一个收件箱条目",
-      "notUndone": "未撤销",
       "changedSince": "在这轮整理之后被修改过",
       "undoRefusedTitle": "无法撤销这轮整理",
       "undoneBy": "已由{{who}}于 {{when}} 撤销",
-      "undoneBody": "这轮整理写入的内容已作为你写入的一个新版本放回。最近改动里列出了这次撤销；收件箱条目不会重新排队。"
-    },
-    "welcome": {
-      "title": "还没有记下任何东西",
-      "body": "知识是这台 Mac 上的普通 Markdown，由你和智能体共同编辑。智能体用自己的文件工具读取它。",
-      "collection": {
-        "title": "新建一个知识集",
-        "body": "一个主题一个文件夹，比如你的架构或运维手册。"
-      },
-      "upload": {
-        "title": "导入已有的资料",
-        "body": "上传 PDF、Word 或 Markdown，Coffer 会把它变成文档。"
-      },
-      "agents": {
-        "title": "让智能体来写",
-        "body": "智能体用 <code>coffer__write</code> 记下学到的东西，它会进入收件箱。",
-        "automatic": "自动"
-      }
+      "undoneBody": "这轮整理写入的内容已作为你写入的一个新版本放回。最近改动里列出了这次撤销；收件箱条目不会重新排队。",
+      "fromItems_one": "来自 {{count}} 个收件箱条目（{{breakdown}}）",
+      "fromItems_other": "来自 {{count}} 个收件箱条目（{{breakdown}}）",
+      "fromAgent": "{{count}} 个来自 {{agent}}",
+      "openHistory": "打开它的历史"
     },
     "automatic": {
       "title": "自动整理",
@@ -3304,6 +3276,25 @@
     "when": {
       "today": "今天 {{time}}",
       "yesterday": "昨天 {{time}}"
+    },
+    "welcome": {
+      "title": "还没有知识集",
+      "body": "知识集是围绕一个主题的 Markdown 文档文件夹。智能体会读取每个知识集，并把学到的内容存入它的收件箱。"
+    },
+    "compare": {
+      "title": "保留哪个版本？",
+      "note": "没有保留的那个版本仍留在这篇文档的历史里。",
+      "keepMine": "保留我的修改",
+      "keepDisk": "采用磁盘上的版本",
+      "mineMeta": "未保存 · 开始于 {{when}}",
+      "diskMeta": "{{who}} · {{when}}",
+      "diskUnknown": "磁盘上的当前版本",
+      "modify": "修改",
+      "captionMine": "差异显示：保留你的修改后，文件会有哪些变化。",
+      "captionDisk": "差异显示：采用磁盘上的版本后，文件会有哪些变化。",
+      "back": "回到编辑",
+      "saveMine": "保存我的修改",
+      "useDisk": "使用磁盘上的版本"
     }
   },
   "memory": {

@@ -2,9 +2,11 @@
 //
 // ONE level of a collection's documents, and the recursion that walks it. The
 // rows are the Knowledge tree's rows (navRow.ts, boards 5.1.01, 5.1.09):
-// chevron, folder / open-folder or file icon, the file-system name in the mono
-// face — `port-and-handshake.md`, as it is on disk and as an agent reads it —
-// a 14px indent a level, and the open document filled `surface-selected`.
+// chevron, folder / open-folder or file icon, a folder's name in the sans face
+// and a file's in the mono face — `port-and-handshake.md`, as it is on disk and
+// as an agent reads it — a 16px indent a level, and the open document filled
+// `surface-selected`. The document with unsaved edits carries a small accent
+// dot at the row's right (board 5.1.03).
 //
 // What is NOT copied is the fetch. A collection descends a level per request,
 // so each expanded directory mounts another level and fetches its own listing
@@ -20,6 +22,7 @@ import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-
 
 import {
   NAV_CHEVRON,
+  NAV_FOLDER,
   NAV_ICON,
   NAV_NAME,
   NAV_ROW,
@@ -30,6 +33,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { useKnowledgeTree } from "@/lib/hooks/useKnowledge";
+import { useDirtyDocument } from "@/lib/knowledge/dirtyDocument";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -55,6 +59,7 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, onSelect, emptyL
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const { data, isPending, error } = useKnowledgeTree(path);
+  const dirty = useDirtyDocument();
 
   if (error) {
     return (
@@ -124,7 +129,7 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, onSelect, emptyL
               ) : (
                 <Folder className={NAV_ICON} aria-hidden />
               )}
-              <span className={NAV_NAME}>{dir.name}</span>
+              <span className={NAV_FOLDER}>{dir.name}</span>
             </button>
             {open ? (
               <KnowledgeTreeLevel
@@ -152,10 +157,17 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, onSelect, emptyL
             >
               {/* The chevron's width, blank, so file rows line up with folders. */}
               <span className={NAV_CHEVRON} />
-              <FileText className={cn(NAV_ICON, active && "text-accent")} aria-hidden />
+              <FileText className={NAV_ICON} aria-hidden />
               <span className={cn(NAV_NAME, active && "font-label")}>
                 {file.path.split("/").pop()}
               </span>
+              {dirty === file.path ? (
+                <span
+                  role="img"
+                  aria-label={t("knowledge.tree.unsaved")}
+                  className="size-[7px] shrink-0 rounded-full bg-accent"
+                />
+              ) : null}
             </button>
           </li>
         );

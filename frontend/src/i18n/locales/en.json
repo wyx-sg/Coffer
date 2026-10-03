@@ -2942,7 +2942,7 @@
     }
   },
   "knowledge": {
-    "subtitle": "Documents you and Coffer write together, one collection each.",
+    "subtitle": "Documents you and your agents write together. Every agent can read them.",
     "title": "Knowledge",
     "nav": {
       "label": "Collections and documents",
@@ -2952,26 +2952,33 @@
     },
     "tree": {
       "empty": "No documents yet",
-      "emptyFolder": "Nothing here yet"
+      "emptyFolder": "Nothing here yet",
+      "unsaved": "Unsaved changes"
     },
     "stats": {
       "documents": "Documents",
-      "waiting": "Waiting",
-      "curated": "Curated",
-      "never": "not yet"
+      "waiting": "{{count}} waiting",
+      "curated": "Last curated",
+      "never": "Never",
+      "inbox": "Inbox",
+      "nothing": "Nothing",
+      "openInbox": "Open Inbox",
+      "folder": "Folder"
     },
     "noModel": {
       "line": "Set Coffer's model to curate new items into your documents ·",
-      "link": "Settings › General"
+      "link": "Settings › General",
+      "engine": "Curation needs Coffer’s engine"
     },
     "collection": {
-      "emptyTitle": "{{name}} is empty",
-      "emptyBody": "Write the first document, upload one you already have, or drop Markdown files into the folder. Agents already see the collection and can write to its inbox.",
-      "editDescription": "Edit description",
       "descriptionLabel": "What belongs in this collection",
-      "descriptionHint": "The opening paragraph of the folder's README.md; every agent reads it through the coffer-guide skill.",
       "noDescription": "No description yet. Say what belongs in here so agents recognise it.",
-      "revealFolder": "Reveal folder"
+      "emptyLine": "No documents yet. Upload one, or drop Markdown files into the folder.",
+      "more": "More actions for {{name}}",
+      "copyPath": "Copy path",
+      "descriptionSaved": "Description updated",
+      "descriptionUndoFailed": "Couldn’t restore the description",
+      "clickToEdit": "Click to edit"
     },
     "create": {
       "title": "New collection",
@@ -2985,32 +2992,14 @@
       "created": "Created {{name}}"
     },
     "deleteCollection": {
-      "zone": "Danger zone",
-      "hint_one": "Removes the folder and its {{count}} document from disk.",
-      "hint_other": "Removes the folder and all {{count}} documents from disk.",
-      "button": "Delete…",
-      "title": "Delete {{name}}?",
-      "body": "Deletes the folder, its {{documents}} documents and {{items}} inbox items. Agents stop seeing it at their next session. It stays in the vault's history, so Recent changes can restore it.",
-      "typeToConfirm": "Type {{name}} to confirm",
-      "confirm": "Delete collection"
-    },
-    "add": {
-      "button": "Add a document",
-      "title": "Add a document",
-      "hint": "It goes to {{collection}}'s Inbox and is curated into the right document like any item — curated automatically within the hour. You don't choose a file; curation does.",
-      "hintNoModel": "Coffer's model isn't set, so it is written as a document as it is.",
-      "collection": "Collection",
-      "titleField": "Title",
-      "body": "Document",
-      "submit": "Add to Inbox",
-      "submitNoModel": "Add document",
-      "pending": "Added to {{collection}}'s Inbox — it will be curated within the hour.",
-      "written": "Saved as {{path}}."
+      "menu": "Delete collection…",
+      "deleted": "Deleted {{name}}",
+      "undoFailed": "Couldn’t restore {{name}}"
     },
     "upload": {
       "button": "Upload",
       "title": "Upload a document",
-      "body": "Coffer converts it to Markdown; it lands in the collection's Inbox and is curated within the hour. The original file is not kept.",
+      "body": "Coffer converts it to Markdown and adds it to the collection’s Inbox. The original file isn’t kept.",
       "choose": "Drop a file here, or choose one",
       "types": "PDF, Word, PowerPoint, Excel, HTML, CSV, Markdown or text · up to 20 MB",
       "remove": "Remove this file",
@@ -3045,94 +3034,91 @@
         "failed": "Curation didn't finish. Nothing was lost — it will try again.",
         "ok_one": "Curated {{count}} item into your documents",
         "ok_other": "Curated {{count}} items into your documents"
-      }
+      },
+      "summary": "Curated {{items}} into {{documents}}",
+      "items_one": "{{count}} item",
+      "items_other": "{{count}} items",
+      "documents_one": "{{count}} document",
+      "documents_other": "{{count}} documents"
     },
     "inbox": {
       "title": "Inbox",
-      "hint": "Waiting to be curated · Curated automatically within the hour",
-      "automatic": "Curated automatically within the hour",
       "waitingCount_one": "{{count}} item waiting",
       "waitingCount_other": "{{count}} items waiting",
       "empty": "Nothing waiting. New items from agents and uploads show up here first.",
       "writtenBy": "written by {{who}} {{when}}",
-      "readOnly": "Items open read-only. Curation folds each one into the documents and removes it from the Inbox.",
-      "heading": "Inbox · {{name}}",
       "writtenWithWrite": "Written by {{who}} with coffer__write · {{when}}",
-      "writtenByYou": "Written by you · {{when}}"
+      "writtenByYou": "Written by you · {{when}}",
+      "note": "Curated into your documents within the hour, then removed from here.",
+      "readOnlyTag": "Read-only",
+      "waitingToCurate": "Waiting to be curated"
     },
     "document": {
       "tab": "Document",
       "where": "Where this document is",
       "more": "More actions for {{path}}",
-      "curatedBanner": "Curated {{agent}}'s item into this document {{when}}.",
-      "seePass": "See what this pass changed",
+      "seePass": "See the pass",
       "views": "Document views",
-      "rail": "About this document",
-      "onThisPage": "On this page",
-      "properties": "Properties",
-      "edited": "Edited",
-      "created": "Created",
-      "curatedFrom": "Curated from",
-      "byWhen": "{{who}} · {{when}}",
       "passes_one": "{{count}} inbox item",
-      "passes_other": "{{count}} inbox items"
+      "passes_other": "{{count}} inbox items",
+      "curated": "Curated {{when}} from {{source}}",
+      "passesFrom_one": "{{count}} {{agent}} inbox item",
+      "passesFrom_other": "{{count}} {{agent}} inbox items",
+      "createdBy": "Created {{date}} by {{who}}",
+      "you": "you",
+      "view": "View",
+      "preview": "Preview",
+      "source": "Source",
+      "created": "Created {{date}}"
     },
     "editor": {
       "label": "Edit {{path}}",
-      "title": "Title",
-      "description": "Description",
-      "frontmatterNote": "Read-only here · curation keeps it current",
       "conflictTitle": "This document changed on disk while you were editing",
-      "conflictBody": "Your text was not saved: the file is newer than the copy you opened. Reload to get the current version, or compare first; copy your text if you want to keep it.",
       "compare": "Compare",
       "reload": "Reload",
       "copyMine": "Copy my text",
       "copyFailed": "Couldn't copy your text",
       "compareTitle": "On disk now, against your text",
       "compareBody": "Lines marked − are only on disk; lines marked + are only in your text.",
-      "frontmatter": "Frontmatter",
       "editStands": "Your edit stands: items curated later go around it, never over it.",
-      "markdown": "Markdown",
       "unsaved": "Unsaved changes",
       "notSaved": "Not saved",
-      "saveKey": "save",
-      "cancelKey": "cancel",
       "copied": "Your text is on the clipboard",
-      "reloaded": "Reloaded the version on disk"
+      "reloaded": "Reloaded the version on disk",
+      "keptByCuration": "Kept by curation",
+      "discard": "Discard",
+      "reloadAsk": "Reload…",
+      "reloadTitle": "Reload the version on disk?",
+      "reloadBody": "Your unsaved text is replaced by what is on disk. Copy it first if you want to keep it.",
+      "reloadConfirm": "Reload",
+      "conflictCuration": "Curation added a point to {{file}} at {{time}}. Your text isn’t saved yet.",
+      "conflictOther": "{{who}} changed {{file}} at {{time}}. Your text isn’t saved yet.",
+      "conflictUnknown": "{{file}} changed on disk. Your text isn’t saved yet."
     },
     "deleteDocument": {
       "menu": "Delete document…",
-      "title": "Delete {{name}}?",
-      "body": "Coffer deletes this file from disk:",
-      "afterwards": "Agents stop finding it from their next read. It stays in the vault's History, so it can be restored as a new version.",
-      "confirm": "Delete document",
       "deletedToast": "Deleted {{name}}",
-      "goneTitle": "No document open",
-      "goneBody": "{{name}} was deleted. Its versions stay in the vault's history — Recent changes lists the delete and can restore it."
+      "undoFailed": "Couldn’t restore {{name}}"
     },
     "history": {
       "tab": "History",
       "current": "Current",
       "none": "No versions recorded yet.",
       "versionLabel": "The chosen version",
-      "wholePass": "See the whole pass",
       "restore": "Restore this version",
       "restored": "Restored as a new version",
-      "failedTitle": "Couldn't read this document's history",
-      "failedFine": "The document itself is fine.",
+      "failedTitle": "Couldn’t read this document’s history",
       "openActivity": "Open Activity",
       "versions": "Versions",
-      "countLabel_one": "{{count}} version",
-      "countLabel_other": "{{count}} versions",
-      "newestFirst": "newest first",
-      "oneOfPass_one": "The only document this curation pass changed.",
-      "oneOfPass_other": "One of {{count}} documents changed in this curation pass.",
-      "restoreHint": "Restoring it saves a new version; later versions stay in the list.",
       "restoredToast": "Restored the {{when}} version as a new version",
       "diffMode": "Which diff",
       "changesInVersion": "Changes in this version",
       "compareCurrent": "Compare with current",
-      "removedVersion": "This version removed the document; there is nothing to compare."
+      "removedVersion": "This version removed the document; there is nothing to compare.",
+      "seePass": "See the pass",
+      "needsGitTitle": "History needs git",
+      "needsGitBody": "Install git on this Mac to see versions. The document itself is fine.",
+      "checkAgain": "Check again"
     },
     "diff": {
       "none": "No changes to the text."
@@ -3194,18 +3180,10 @@
       }
     },
     "recent": {
-      "waitingCount_one": "{{count}} item waiting",
       "waitingCount_other": "{{count}} items waiting",
       "title": "Recent changes",
       "window": "Last 7 days",
-      "writerFilter": "Who made the change",
-      "writer": {
-        "everyone": "Everyone",
-        "agents": "Agents",
-        "you": "You"
-      },
       "collectionFilter": "Collection",
-      "allCollections": "All collections",
       "waitingTitle": "Waiting to be curated",
       "waitingMeta": "{{collection}} · written by {{who}} {{when}}",
       "nothingWaiting": "Nothing waiting. New items from agents and uploads show up here first.",
@@ -3213,7 +3191,6 @@
       "yesterday": "Yesterday",
       "empty": "No changes in the last 7 days.",
       "failed": "Couldn't read recent changes",
-      "open": "Open",
       "openItem": "Open {{title}}",
       "seePass": "See the pass",
       "more_one": "and {{count}} more",
@@ -3230,8 +3207,19 @@
         "restore": "Put back as a new version; the history before it stays.",
         "sync_one": "{{count}} line changed on another Mac.",
         "sync_other": "{{count}} lines changed on another Mac.",
-        "pass": "From one inbox item"
-      }
+        "pass": "From one inbox item",
+        "too_large": "Too large for one pass, so it was kept as its own document",
+        "gave_up": "Cut off by the step limit three times, so it was kept as its own document"
+      },
+      "authorFilter": "Author",
+      "clearFilters": "Clear filters",
+      "waitingDesc": "Curated into your documents within the hour",
+      "needsGitTitle": "Recent changes needs git",
+      "needsGitBody": "Install git on this Mac to see what changed. Your documents are fine.",
+      "checkAgain": "Check again",
+      "openActivity": "Open Activity",
+      "waitingCount_one": "{{count}} item waiting",
+      "open": "Open"
     },
     "pass": {
       "title": "Curation pass · {{when}}",
@@ -3242,7 +3230,6 @@
         "modified": "Modify",
         "removed": "Remove"
       },
-      "itemsLeft": "The inbox items this pass curated left the Inbox. Their text stays in each document's History.",
       "undoTitle": "Undo this curation pass?",
       "undoBody": "Puts the documents this pass changed back to how they were before {{when}}.",
       "undoEffect": {
@@ -3250,35 +3237,20 @@
         "modified": "back to before the pass",
         "removed": "put back"
       },
-      "undoNote": "All or nothing: if a document changed after this pass, nothing is undone. Each document gets a new version by you. The inbox items are not queued again.",
+      "undoNote": "If any document changed after this pass, nothing is undone. The inbox items aren’t queued again.",
       "undoConfirm": "Undo pass",
       "undoing": "Undoing…",
-      "undoRefused": "{{document}} was edited after this pass, so nothing was undone — every document is as it was. Restore a single document from its History, or have your agent undo the pass by hand and keep the later edits.",
+      "undoRefused": "{{document}} changed after it, so nothing was undone.",
       "undoneToast": "Undid the pass.",
       "heading": "What this curation pass changed",
-      "meta": "one new version per document · from one inbox item",
-      "notUndone": "Not undone",
       "changedSince": "changed after this pass",
-      "undoRefusedTitle": "Couldn't undo this pass",
+      "undoRefusedTitle": "Couldn’t undo this pass",
       "undoneBy": "Undone by {{who}} at {{when}}",
-      "undoneBody": "What this pass wrote was put back as one new version by you. Recent changes lists the undo; the inbox item is not queued again."
-    },
-    "welcome": {
-      "title": "Nothing written down yet",
-      "body": "Knowledge is plain Markdown on this Mac that you and your agents edit together. Agents read it with their own file tools.",
-      "collection": {
-        "title": "Start a collection",
-        "body": "A folder for one subject, like your architecture or your runbooks."
-      },
-      "upload": {
-        "title": "Bring in what you have",
-        "body": "Upload PDF, Word or Markdown; Coffer turns it into documents."
-      },
-      "agents": {
-        "title": "Let agents write",
-        "body": "Agents file what they learn with <code>coffer__write</code>; it lands in the inbox.",
-        "automatic": "Automatic"
-      }
+      "undoneBody": "What this pass wrote was put back as one new version by you. Recent changes lists the undo; the inbox item is not queued again.",
+      "fromItems_one": "from {{count}} inbox item ({{breakdown}})",
+      "fromItems_other": "from {{count}} inbox items ({{breakdown}})",
+      "fromAgent": "{{count}} from {{agent}}",
+      "openHistory": "Open its History"
     },
     "automatic": {
       "title": "Automatic curation",
@@ -3304,6 +3276,25 @@
     "when": {
       "today": "Today {{time}}",
       "yesterday": "Yesterday {{time}}"
+    },
+    "welcome": {
+      "title": "No collections yet",
+      "body": "A collection is a folder of Markdown documents for one subject. Agents read every collection and file what they learn into its Inbox."
+    },
+    "compare": {
+      "title": "Which version to keep?",
+      "note": "The one you don’t keep stays in this document’s History.",
+      "keepMine": "Keep my edit",
+      "keepDisk": "Take the version on disk",
+      "mineMeta": "Unsaved · started {{when}}",
+      "diskMeta": "{{who}} · {{when}}",
+      "diskUnknown": "On disk now",
+      "modify": "Modify",
+      "captionMine": "The diff shows what changes in the file if you keep your edit.",
+      "captionDisk": "The diff shows what changes in the file if you take the version on disk.",
+      "back": "Back to editing",
+      "saveMine": "Save my edit",
+      "useDisk": "Use the disk version"
     }
   },
   "memory": {

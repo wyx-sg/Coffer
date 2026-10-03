@@ -37,9 +37,7 @@ import type {
   FileOut,
   FileSave,
   IngestedDocumentOut,
-  MaterialIn,
   VersionBodyOut,
-  SubmissionOut,
   TreeOut,
   VersionDiffOut,
 } from "./knowledgeTypes";
@@ -133,19 +131,6 @@ export function curateCollection(uid: string, document?: string | null): Promise
       body: { document: document ?? null },
     }),
   );
-}
-
-// --- material -----------------------------------------------------------------
-
-/**
- * Submit a new document as an ITEM (see "Submit material through
- * coffer__write"): it waits in the collection's inbox with the web UI's actor
- * (`user`) until curation files it into the right document, and with no
- * model it is written as a document as it is. The caller never picks a path —
- * curation does.
- */
-export function submitMaterial(payload: MaterialIn): Promise<SubmissionOut> {
-  return unwrap(getApiClient().POST("/knowledge/material", { body: payload }));
 }
 
 // --- history ------------------------------------------------------------------
@@ -254,6 +239,8 @@ export function uploadFile(params: {
   /** The collection's NAME: this lands material in its directory. */
   collection: string;
   file: File;
+  /** Aborts the request — the upload dialog's Cancel while it converts. */
+  signal?: AbortSignal;
 }): Promise<IngestedDocumentOut> {
   const form = new FormData();
   form.append("file", params.file);
@@ -262,6 +249,7 @@ export function uploadFile(params: {
   // multipart boundary itself. `body` only carries the generated type.
   return unwrap(
     getApiClient().POST("/knowledge/upload", {
+      signal: params.signal,
       body: { collection: params.collection, file: "" },
       bodySerializer: () => form,
     }),

@@ -1,11 +1,11 @@
 // frontend/src/components/knowledge/KnowledgeUploadDialog.tsx
 //
-// Upload a document into a collection (boards 5.1.17, 5.1.18, 5.1.23,
-// 5.1.28): Coffer converts it to Markdown and it joins the collection's Inbox
+// Upload a document into a collection (boards 5.1.26–5.1.28): Coffer converts it to Markdown and it joins the collection's Inbox
 // as an item, curated like any other (with no model it is written as a
 // document on the spot). The original file is not kept. A file is dropped on
 // the zone or chosen; its name, kind and size and the target collection show
-// before anything is sent; converting is its own state. A file that cannot
+// before anything is sent; converting is its own state, and Cancel stays live
+// in it — it aborts the request. A file that cannot
 // become text is refused in the dialog, beside the file, with what to do
 // instead — a ZIP or anything over 20 MB before it is sent, a scanned PDF or
 // an unsupported type once the daemon has looked at it.
@@ -45,6 +45,7 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
   const [file, setFile] = useState<File | null>(null);
   const [collection, setCollection] = useState("");
   const [dragging, setDragging] = useState(false);
+  const aborter = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -65,8 +66,10 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
 
   const send = () => {
     if (!file || early) return;
+    const controller = new AbortController();
+    aborter.current = controller;
     upload.mutate(
-      { collection, file },
+      { collection, file, signal: controller.signal },
       {
         onSuccess: (doc) => {
           toast.success(
@@ -78,6 +81,13 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
         },
       },
     );
+  };
+
+  // Cancel while converting abandons the request; otherwise it just closes.
+  const cancel = () => {
+    aborter.current?.abort();
+    aborter.current = null;
+    onOpenChange(false);
   };
 
   const onDrop = (e: DragEvent) => {
@@ -93,8 +103,8 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
     : "";
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+    <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(next) : cancel())}>
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("knowledge.upload.title")}</DialogTitle>
           <DialogDescription>{t("knowledge.upload.body")}</DialogDescription>
@@ -109,7 +119,7 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
                   <FileText className="size-4 shrink-0 text-text-subtle" aria-hidden />
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm">{file.name}</p>
+                  <p className="truncate text-xs">{file.name}</p>
                   <p className="text-xs text-text-subtle">{meta}</p>
                 </div>
                 {upload.isPending ? null : (
@@ -180,7 +190,7 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="ghost" onClick={cancel}>
             {t("common.cancel")}
           </Button>
           <Button

@@ -17,9 +17,6 @@ import { timeAgo } from "@/lib/timeAgo";
 import type { ChangeOut } from "@/lib/api/knowledge";
 import { pathInCollection } from "@/lib/knowledge/routes";
 
-/** The timeline's writer filter: Everyone, Agents, You. */
-export type WriterFilter = "everyone" | "agents" | "you";
-
 /** Operations the page has words for (`knowledge.changes.op.<operation>`). */
 const WORDED_OPERATIONS = new Set([
   "pass",
@@ -126,13 +123,37 @@ export function feedWords(
   };
 }
 
-/** Whether a change passes the writer filter. A curation pass is the agents'
- *  (it curates what agents and uploads submitted); your own saves, restores
- *  and undos are yours. */
-export function matchesWriter(change: ChangeOut, filter: WriterFilter): boolean {
-  if (filter === "everyone") return true;
-  const agents = change.writer === "agent" || change.writer === "curation";
-  return filter === "agents" ? agents : change.writer === "user";
+/** The Author filter's "no filter" value. */
+export const ANY_AUTHOR = "any";
+
+/** Who a change is by, as a filter value: `user`, `curation`, `sync`, `disk`,
+ *  or `agent:<name>` for an agent's own write (its resource name, so two agents
+ *  never merge). A curation pass is Curation's, whoever submitted the item. */
+export function authorKey(change: ChangeOut): string {
+  return change.writer === "agent" ? `agent:${change.agent ?? "agent"}` : change.writer;
+}
+
+/** Whether a change passes the Author filter. */
+export function matchesAuthor(change: ChangeOut, author: string): boolean {
+  return author === ANY_AUTHOR || authorKey(change) === author;
+}
+
+/** The Author pill's choices, from the changes themselves: You first, then each
+ *  agent by name, then Curation, Sync and disk edits — only those that appear. */
+export function authorOptions(
+  t: TFunction,
+  changes: ChangeOut[],
+): { value: string; label: string }[] {
+  const seen = new Map<string, string>();
+  for (const c of changes) {
+    const key = authorKey(c);
+    if (!seen.has(key)) seen.set(key, writerLabel(t, c));
+  }
+  const rank = (key: string) =>
+    key === "user" ? 0 : key.startsWith("agent:") ? 1 : key === "curation" ? 2 : 3;
+  return [...seen.entries()]
+    .sort(([ka, la], [kb, lb]) => rank(ka) - rank(kb) || la.localeCompare(lb))
+    .map(([value, label]) => ({ value, label }));
 }
 
 /** Whether `iso` falls within the last `days` days of `now`. */
