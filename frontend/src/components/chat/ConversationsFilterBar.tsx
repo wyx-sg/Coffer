@@ -120,6 +120,7 @@ export function ConversationsFilterBar({
         className="w-60"
       />
       <ChecklistPill
+        bareWhenEmpty
         label={t("conversations.filters.source")}
         valueLabel={chosen(
           filters.source,
@@ -131,6 +132,7 @@ export function ConversationsFilterBar({
         summary={summary(filters.source)}
       />
       <ChecklistPill
+        bareWhenEmpty
         label={t("conversations.filters.agent")}
         valueLabel={chosen(filters.agent, (v) => agentItems.find((i) => i.value === v)?.text ?? v)}
         groups={[{ items: agentItems }]}

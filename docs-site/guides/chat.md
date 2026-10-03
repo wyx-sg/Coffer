@@ -168,7 +168,7 @@ Video, archives and other binary files are refused, because neither agent can us
 
 An image's type is read from its bytes, not from its name or what the browser reported: a JPEG saved as `photo.png` is stored and shown as `image/jpeg`. A file that claims to be an image but is not PNG, JPEG, GIF or WEBP, such as a HEIC photo or an SVG, is kept as a plain file (`application/octet-stream`).
 
-Attachments also reach a conversation through a [channel](/guides/channels): a photo, file or voice message you send to the bot. Both kinds show in the thread as chips naming the file and its type, and read the same after a reload.
+Attachments also reach a conversation through a [channel](/guides/channels): a photo, file or voice message you send to the bot. Both kinds show in the thread as chips naming the file and its type (and its size, for a file you attached on the page), and read the same after a reload. An image you attached on the page shows as a thumbnail instead of a chip, for as long as the file is kept; once it is pruned, or for a file a channel received, the chip is shown.
 
 How the agent receives an attachment depends on its kind, whichever way it arrived:
 

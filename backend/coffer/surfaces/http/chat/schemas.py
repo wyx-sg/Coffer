@@ -83,6 +83,10 @@ class ContentBlockOut(BaseModel):
     duration_ms: int | None = None
     filename: str | None = None
     mime: str | None = None
+    #: An ``attachment``'s id (what ``GET .../attachments/{id}`` takes) and byte
+    #: size; null on channel media and on older blocks.
+    attachment_id: str | None = None
+    size: int | None = None
     #: The question of a ``question`` block.
     question: QuestionOut | None = None
 

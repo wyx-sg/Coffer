@@ -81,7 +81,11 @@ def test_resend_carries_the_original_attachments(env: _Env) -> None:
         ("attachment", "shot.png"),
     ]
     stored = Attachment(
-        path=str(env.media / f"{png['id']}.png"), mime="image/png", filename="shot.png"
+        path=str(env.media / f"{png['id']}.png"),
+        mime="image/png",
+        filename="shot.png",
+        id=png["id"],
+        size=png["size"],
     )
     # Both the original turn and the retry hand the agent the same file.
     assert env.adapter.recorded_attachments == [[stored], [stored]]

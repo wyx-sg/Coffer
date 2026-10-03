@@ -38,6 +38,7 @@ from coffer.surfaces.http.agent_workspace_routes import router as agent_workspac
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.channel_routes import router as channel_router
 from coffer.surfaces.http.chat.agent_provider_routes import router as agent_provider_router
+from coffer.surfaces.http.chat.attachment_bytes_routes import router as chat_attachment_bytes_router
 from coffer.surfaces.http.chat.attachment_routes import router as chat_attachment_router
 from coffer.surfaces.http.chat.conversation_batch_routes import router as chat_batch_router
 from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
@@ -151,6 +152,7 @@ def include_all_routers(app: FastAPI) -> None:
         chat_batch_router,  # archive / unarchive / delete several at once
         chat_turn_router,  # … and its turn/SSE half
         chat_attachment_router,  # … and the composer's file uploads
+        chat_attachment_bytes_router,  # … and a thread thumbnail's bytes
         channel_router,  # spec channels
         price_list_router,  # spec provider-switching (before /providers/{uid})
         provider_router,  # spec provider-switching

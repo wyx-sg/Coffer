@@ -19,7 +19,7 @@ import { replyText } from "@/lib/chat/replyText";
 import { unfinishedWork } from "@/lib/chat/stopped";
 import { ReplyFooter, ReplyStateText, StoppedLine, type ReplyState } from "./ReplyParts";
 import { FilesChangedCard } from "./FilesChangedCard";
-import { AttachmentChip } from "./AttachmentChip";
+import { ThreadAttachment } from "./ThreadAttachment";
 import { ToolCallCard } from "./ToolCallCard";
 import { buildRows } from "@/lib/chat/replyRows";
 import { ToolCallGroup } from "./ToolCallGroup";
@@ -100,11 +100,10 @@ function MessageBubbleImpl({
         {attachments.length > 0 && (
           <div className="flex max-w-[min(540px,100%)] flex-wrap justify-end gap-1.5">
             {attachments.map((a, i) => (
-              <AttachmentChip
-                key={`${a.filename ?? "file"}-${i}`}
-                name={a.filename}
-                detail={a.mime}
-                mime={a.mime}
+              <ThreadAttachment
+                key={`${a.attachment_id ?? a.filename ?? "file"}-${i}`}
+                conversationId={message.conversation_id}
+                block={a}
               />
             ))}
           </div>

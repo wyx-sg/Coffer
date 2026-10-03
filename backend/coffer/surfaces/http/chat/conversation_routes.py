@@ -187,7 +187,13 @@ def _block_out(block: ContentBlock) -> ContentBlockOut:
         )
     if isinstance(block, AttachmentBlock):
         # Reference only — filename/mime for the chip; never the local path.
-        return ContentBlockOut(type="attachment", filename=block.filename, mime=block.mime)
+        return ContentBlockOut(
+            type="attachment",
+            filename=block.filename,
+            mime=block.mime,
+            attachment_id=block.id,
+            size=block.size,
+        )
     if isinstance(block, QuestionBlock):
         return ContentBlockOut(type="question", question=question_out(block))
     # Unreachable given the ContentBlock union, but keeps mypy happy.

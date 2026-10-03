@@ -1298,10 +1298,28 @@ type — including the just-sent echo of a message before its row lands. Because
 references, a reload, a second tab and a message sent from a channel show the
 same chips. The path is never shown.
 
+A web upload's reference MUST carry its id and byte size, and
+`GET /api/v1/chat/conversations/{id}/attachments/{attachment_id}` MUST stream
+its bytes under their stored type, only when a message of THAT conversation
+references the id and only by resolving it through the media store (never from
+a client path); anything else, including a file the retention sweep has
+deleted, MUST be `ATTACHMENT_UNAVAILABLE` (404), and the chip then stays a
+plain chip with the type. References saved without an id keep the plain chip.
+
 #### Scenario: an attached file is shown in the thread after a reload
 - **GIVEN** a message sent from the Conversations page with an attached file
 - **WHEN** the conversation is reloaded
 - **THEN** the message shows a chip naming the file under its text
+
+#### Scenario: an attached image is fetched by its id for the thread's thumbnail
+- **GIVEN** a message sent with an uploaded image
+- **WHEN** the thread fetches the attachment route with the reference's id
+- **THEN** the image's bytes are returned under its type and the message shows a thumbnail with its size
+
+#### Scenario: another conversation's attachment and a pruned one are not served
+- **GIVEN** an uploaded image referenced by one conversation's message
+- **WHEN** another conversation asks for its id, or the file has been pruned
+- **THEN** the response is 404 `ATTACHMENT_UNAVAILABLE` and the chip stays a plain chip
 
 ### Requirement: Ship Claude Code and Codex subprocess providers on the type's one agent
 System MUST ship subprocess-backed agent providers for Claude Code and Codex.

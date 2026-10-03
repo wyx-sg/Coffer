@@ -107,6 +107,18 @@ class AttachmentExpired(CofferError):  # noqa: N818
         self.filename = filename
 
 
+class AttachmentUnavailable(CofferError):  # noqa: N818
+    """A thread asked for the bytes of a file no message of that conversation
+    references, or one the media sweep has since deleted (spec chat "Show a
+    message's attachments in the thread"). The chip stays a plain chip."""
+
+    code = "ATTACHMENT_UNAVAILABLE"
+
+    def __init__(self, attachment_id: str) -> None:
+        super().__init__(f"attachment not available: {attachment_id!r}")
+        self.attachment_id = attachment_id
+
+
 class QuestionClosed(CofferError):  # noqa: N818
     """An answer to a question that is no longer waiting — already answered
     (the first answer wins), cancelled, or gone with its turn (spec chat "Pause a

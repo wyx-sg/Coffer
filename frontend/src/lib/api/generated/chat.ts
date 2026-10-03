@@ -211,6 +211,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/conversations/{id}/attachments/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Attachment Bytes
+         * @description The bytes of a file attached to one of this conversation's messages, for
+         *     the thread's thumbnail (spec chat "Show a message's attachments in the
+         *     thread"). Only an id a message of THIS conversation references resolves, and
+         *     only through the media store, so no client-supplied path is ever read; an
+         *     unknown id, another conversation's file or a pruned one is 404.
+         */
+        get: operations["get_attachment_bytes_api_v1_chat_conversations__id__attachments__attachment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/conversations/{id}/events": {
         parameters: {
             query?: never;
@@ -552,6 +576,8 @@ export interface components {
          *     "Re-materialise attachments from persisted history").
          */
         ContentBlockOut: {
+            /** Attachment Id */
+            attachment_id: string | null;
             /** Duration Ms */
             duration_ms: number | null;
             /** Error */
@@ -565,6 +591,8 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             question: components["schemas"]["QuestionOut"] | null;
+            /** Size */
+            size: number | null;
             /** Text */
             text: string | null;
             /** Tool Input */
@@ -1566,6 +1594,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_attachment_bytes_api_v1_chat_conversations__id__attachments__attachment_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                id: string;
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

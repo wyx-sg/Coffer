@@ -77,6 +77,11 @@ class AttachmentBlock:
     path: str  # absolute local path in the media dir (NOT emitted to the wire)
     mime: str
     filename: str
+    #: A web upload's id and byte size, so the thread can fetch its bytes and
+    #: show its size; ``None`` on channel media and on blocks saved before these
+    #: existed (those keep the plain chip).
+    id: str | None = None
+    size: int | None = None
     type: Literal["attachment"] = "attachment"
 
 
@@ -109,12 +114,17 @@ def block_to_dict(block: ContentBlock) -> dict[str, Any]:
             "duration_ms": block.duration_ms,
         }
     if isinstance(block, AttachmentBlock):
-        return {
+        out: dict[str, Any] = {
             "type": "attachment",
             "path": block.path,
             "mime": block.mime,
             "filename": block.filename,
         }
+        if block.id is not None:
+            out["id"] = block.id
+        if block.size is not None:
+            out["size"] = block.size
+        return out
     if isinstance(block, QuestionBlock):
         return _question.block_to_dict(block)
     # This branch is unreachable given the union, but makes mypy happy.
@@ -150,6 +160,8 @@ def block_from_dict(data: dict[str, Any]) -> ContentBlock:
                 path=data["path"],
                 mime=data["mime"],
                 filename=data["filename"],
+                id=data.get("id"),
+                size=data.get("size"),
             )
         if block_type == "question":
             return _question.block_from_dict(data)

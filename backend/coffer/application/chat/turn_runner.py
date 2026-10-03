@@ -95,7 +95,7 @@ def _attachments_from_history(history: Sequence[Message]) -> list[Attachment]:
     for msg in reversed(history):
         if msg.role is Role.USER:
             return [
-                Attachment(path=b.path, mime=b.mime, filename=b.filename)
+                Attachment(path=b.path, mime=b.mime, filename=b.filename, id=b.id, size=b.size)
                 for b in msg.content
                 if isinstance(b, AttachmentBlock)
             ]

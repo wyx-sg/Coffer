@@ -332,7 +332,9 @@ class TurnOrchestrator:
                 content=[
                     TextBlock(text=message.text),
                     *(
-                        AttachmentBlock(path=a.path, mime=a.mime, filename=a.filename)
+                        AttachmentBlock(
+                            path=a.path, mime=a.mime, filename=a.filename, id=a.id, size=a.size
+                        )
                         for a in message.attachments
                     ),
                 ],

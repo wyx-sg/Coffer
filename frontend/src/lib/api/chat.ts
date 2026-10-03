@@ -200,6 +200,20 @@ export const chatApi = {
       }),
     ),
 
+  // The bytes of a file attached to one of this conversation's messages (the
+  // thread's thumbnail). Fetched here, not through an <img src>, because the
+  // request needs the X-Coffer-Token header; a pruned or foreign file is 404.
+  attachmentBlob: async (conversationId: string, attachmentId: string): Promise<Blob> => {
+    const result = await getApiClient().GET(
+      "/chat/conversations/{id}/attachments/{attachment_id}",
+      {
+        params: { path: { id: conversationId, attachment_id: attachmentId } },
+        parseAs: "blob",
+      },
+    );
+    return unwrap(Promise.resolve(result)) as Promise<Blob>;
+  },
+
   // Upload one file for a later send. Not tied to a conversation, so a draft
   // can attach before its conversation exists. `signal` cancels it (the
   // composer does when the chip is removed).

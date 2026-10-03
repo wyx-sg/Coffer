@@ -46,6 +46,8 @@ interface Props {
   summary: string | null;
   /** A box that narrows the rows by their words. */
   searchPlaceholder?: string;
+  /** Show just the name ("Source") while nothing is chosen, not "Source: Any". */
+  bareWhenEmpty?: boolean;
 }
 
 function Box({ checked }: { checked: boolean | "mixed" }) {
@@ -74,6 +76,7 @@ export function ChecklistPill({
   onClear,
   summary,
   searchPlaceholder,
+  bareWhenEmpty = false,
 }: Props) {
   const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -96,10 +99,16 @@ export function ChecklistPill({
           type="button"
           className={cn(PILL_TRIGGER, (valueLabel !== null || open) && "bg-surface-selected")}
         >
-          {label}:
-          <span className="max-w-56 truncate font-label text-text">
-            {valueLabel ?? t("activity.filters.any")}
-          </span>
+          {bareWhenEmpty && valueLabel === null ? (
+            label
+          ) : (
+            <>
+              {label}:
+              <span className="max-w-56 truncate font-label text-text">
+                {valueLabel ?? t("activity.filters.any")}
+              </span>
+            </>
+          )}
           <ChevronDown className="size-3.5 text-text-subtle" aria-hidden />
         </button>
       </PopoverTrigger>

@@ -562,6 +562,57 @@ paths:
       summary: Archive Conversation
       tags:
       - chat
+  /api/v1/chat/conversations/{id}/attachments/{attachment_id}:
+    get:
+      description: |-
+        The bytes of a file attached to one of this conversation's messages, for
+        the thread's thumbnail (spec chat "Show a message's attachments in the
+        thread"). Only an id a message of THIS conversation references resolves, and
+        only through the media store, so no client-supplied path is ever read; an
+        unknown id, another conversation's file or a pruned one is 404.
+      operationId: get_attachment_bytes_api_v1_chat_conversations__id__attachments__attachment_id__get
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          title: Id
+          type: string
+      - in: path
+        name: attachment_id
+        required: true
+        schema:
+          title: Attachment Id
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Attachment Bytes
+      tags:
+      - chat
   /api/v1/chat/conversations/{id}/events:
     get:
       description: |-
@@ -1256,6 +1307,11 @@ components:
         local ``path`` is deliberately NOT surfaced (leak/security — spec chat
         "Re-materialise attachments from persisted history").
       properties:
+        attachment_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Attachment Id
         duration_ms:
           anyOf:
           - type: integer
@@ -1286,6 +1342,11 @@ components:
           anyOf:
           - $ref: '#/components/schemas/QuestionOut'
           - type: 'null'
+        size:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Size
         text:
           anyOf:
           - type: string
@@ -1327,6 +1388,8 @@ components:
       - duration_ms
       - filename
       - mime
+      - attachment_id
+      - size
       - question
       title: ContentBlockOut
       type: object
