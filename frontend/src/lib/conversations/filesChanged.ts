@@ -101,3 +101,10 @@ export function filesChanged(blocks: readonly ContentBlock[]): FileChange[] {
   }
   return [...byPath.values()];
 }
+
+/** A file's path as the thread shows it: relative to the conversation's working folder when inside it, else as is. */
+export function relativeToCwd(path: string, cwd: string | null | undefined): string {
+  if (!cwd) return path;
+  const root = cwd.endsWith("/") ? cwd : `${cwd}/`;
+  return path.startsWith(root) && path.length > root.length ? path.slice(root.length) : path;
+}

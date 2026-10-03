@@ -3588,6 +3588,14 @@
     "files": {
       "title": "Files changed"
     },
+    "diff": {
+      "position": "{{n}} of {{total}}",
+      "previous": "Previous file",
+      "next": "Next file",
+      "binary": "This file is binary",
+      "tooLarge": "This file is too large to show (over 1 MB)",
+      "empty": "Nothing to show for this file"
+    },
     "question": {
       "needsYou": "Needs you",
       "progress": "Question {{current}} of {{total}}",

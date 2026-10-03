@@ -3588,6 +3588,14 @@
     "files": {
       "title": "改动的文件"
     },
+    "diff": {
+      "position": "第 {{n}} 个，共 {{total}} 个",
+      "previous": "上一个文件",
+      "next": "下一个文件",
+      "binary": "此文件是二进制文件",
+      "tooLarge": "此文件太大，无法显示（超过 1 MB）",
+      "empty": "此文件没有可显示的内容"
+    },
     "question": {
       "needsYou": "等你处理",
       "progress": "第 {{current}} 个，共 {{total}} 个问题",

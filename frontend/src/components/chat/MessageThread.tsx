@@ -17,6 +17,7 @@ import { retryTargetFor } from "@/lib/chat/threadView";
 import type { PendingEcho } from "@/lib/hooks/useChatTurn";
 import { Button } from "@/components/ui/button";
 import { ChatErrorBanner } from "./ChatErrorBanner";
+import { useDiffDrawer } from "./useDiffDrawer";
 import { ThreadMessages } from "./ThreadMessages";
 import { Composer, type ComposerHandle } from "./Composer";
 import type { MessageThreadProps } from "./messageThreadProps";
@@ -53,10 +54,9 @@ export function MessageThread({
   readOnly,
   onUnarchive,
   unarchivePending,
-  onOpenFile,
-  selectedPath,
 }: MessageThreadProps) {
   const { t } = useTranslation();
+  const diffDrawer = useDiffDrawer(conversation.id);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<ComposerHandle>(null);
@@ -167,8 +167,8 @@ export function MessageThread({
               banner={failedBanner}
               bannerState={turnError ? "failed" : streamLost ? "lost" : undefined}
               waiting={waitingQuestion !== null}
-              onOpenFile={onOpenFile}
-              selectedPath={selectedPath}
+              onOpenFile={diffDrawer.open}
+              openFile={diffDrawer.openFile}
             />
           </QuestionContext.Provider>
 
@@ -201,6 +201,8 @@ export function MessageThread({
           />
         ) : null}
       </div>
+
+      {diffDrawer.drawer}
 
       {readOnly ? (
         <ArchivedNotice onUnarchive={onUnarchive} pending={unarchivePending} />
