@@ -2770,6 +2770,16 @@ components:
             type: string
           - type: 'null'
           title: Failing Since
+        failure_reason:
+          anyOf:
+          - enum:
+            - auth_rejected
+            - unreachable
+            - command_not_found
+            - other
+            type: string
+          - type: 'null'
+          title: Failure Reason
         handoff:
           anyOf:
           - $ref: '#/components/schemas/HandoffOut'
@@ -2831,6 +2841,7 @@ components:
       - last_error_at
       - failing_since
       - last_checked_at
+      - failure_reason
       - last_ok_at
       - last_ok_capability
       - missing_secret
@@ -2879,11 +2890,12 @@ components:
             - timeout
             - initialize_failed
             - connect_failed
+            - auth_rejected
             - stored_secret_not_released
             - unsupported_transport
             type: string
           - type: 'null'
-          description: 'Why the test failed: url_refused (a typed URL resolves to a loopback, private or link-local host), spawn_failed (the command or working directory does not exist), exited (the process exited; see exit_code), timeout (the time limit), initialize_failed (MCP initialize or tools/list failed), connect_failed (the URL could not be reached), stored_secret_not_released (the config cites a stored secret, released only to a registered server), unsupported_transport.'
+          description: 'Why the test failed: url_refused (a typed URL resolves to a loopback, private or link-local host), spawn_failed (the command or working directory does not exist), exited (the process exited; see exit_code), timeout (the time limit), initialize_failed (MCP initialize or tools/list failed), connect_failed (the URL could not be reached), auth_rejected (the HTTP server answered 401 or 403), stored_secret_not_released (the config cites a stored secret, released only to a registered server), unsupported_transport.'
           title: Error Code
         error_message:
           anyOf:

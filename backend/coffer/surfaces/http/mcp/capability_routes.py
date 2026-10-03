@@ -219,7 +219,14 @@ async def get_server_status(
         health_status, checked_at = health
         if health_status == "failing" and failure is None:
             detail["failing_since"] = checked_at
-        out = McpServerStatusOut(status=health_status, last_checked_at=checked_at, **detail)
+        out = McpServerStatusOut(
+            status=health_status,
+            last_checked_at=checked_at,
+            failure_reason=await health_repo.get_reason(resource.uid)
+            if health_status == "failing"
+            else None,
+            **detail,
+        )
         return await _with_handoff(out, resource)
 
     caps = await prefs.list_for(resource.uid)

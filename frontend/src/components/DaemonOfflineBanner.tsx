@@ -12,8 +12,10 @@
 //     web-ui "Show a self-clearing offline banner"): in the desktop shell a
 //     Start daemon control, because the shell can spawn one. Both hosts show
 //     the `coffer daemon start` command with a Copy button ("Or start it from
-//     a terminal"), and a footer line with the next check, the last reply and
-//     Open daemon log. It clears itself as soon as the daemon answers again.
+//     a terminal"), and a footer line with the next check and the last reply.
+//     The daemon log is read without the daemon: the desktop shell opens the
+//     file in the system viewer (Open daemon log, a shell command), a browser
+//     gets the `coffer log daemon` command to copy. It clears itself as soon as the daemon answers again.
 //   - Version skew (desktop only) — the daemon answers, but an earlier app
 //     version left it running: a warning bar with the shell's Restart.
 //
@@ -22,15 +24,13 @@
 import { useEffect, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { Clock, Play, Power, RotateCw } from "lucide-react";
-import { Link } from "react-router-dom";
 
-import { DAEMON_LOG_PATH } from "@/components/ListPaneStates";
 import { CopyableCommand } from "@/components/settings/CopyableCommand";
 import { Button } from "@/components/ui/button";
 import type { DaemonConnection } from "@/components/shell/daemonConnection";
 import { ApiError } from "@/lib/api/errors";
 import { useDaemonOutOfDate, useDaemonStatus, useRestartDaemon } from "@/lib/hooks/useDaemon";
-import { isTauri } from "@/lib/tauri";
+import { isTauri, shellInvoke } from "@/lib/tauri";
 
 /** A reply time as the clock reads it ("14:02"). */
 function clockTime(ms: number): string {
@@ -145,6 +145,7 @@ export function DaemonOfflineState({ connection, onRetry }: Props) {
   const { t } = useTranslation();
   const status = useDaemonStatus();
   const restart = useRestartDaemon();
+  const [logError, setLogError] = useState<string | null>(null);
   const seconds = useSecondsUntil(connection.nextRetryAt);
   const inShell = isTauri();
 
@@ -159,6 +160,11 @@ export function DaemonOfflineState({ connection, onRetry }: Props) {
   ]
     .filter(Boolean)
     .join(" · ");
+
+  const openLog = () => {
+    setLogError(null);
+    shellInvoke<void>("show_daemon_log").catch((e: unknown) => setLogError(restartMessage(e)));
+  };
 
   return (
     <div
@@ -213,13 +219,31 @@ export function DaemonOfflineState({ connection, onRetry }: Props) {
           <span className="text-xs text-text-muted">{t("daemon.offline.webRestartHint")}</span>
           <CopyableCommand command="coffer daemon start" />
         </div>
+        {/* The Activity page's Daemon log tab needs the daemon, so the log is
+            read around it: the shell opens the file, a browser reads it from a terminal. */}
+        {inShell ? null : (
+          <div className="flex w-full flex-col gap-2 text-left">
+            <span className="text-xs text-text-muted">{t("daemon.offlineState.logHint")}</span>
+            <CopyableCommand command="coffer log daemon" />
+          </div>
+        )}
         <p className="inline-flex flex-wrap items-center justify-center gap-x-2 text-xs text-text-muted">
           <Clock className="size-[13px] shrink-0" strokeWidth={1.75} aria-hidden />
-          {timing ? `${timing} ·` : null}
-          <Link to={DAEMON_LOG_PATH} className="font-label text-accent-text hover:underline">
-            {t("daemon.offlineState.openLog")}
-          </Link>
+          {timing}
+          {inShell ? (
+            <>
+              {timing ? " ·" : null}
+              <button
+                type="button"
+                onClick={openLog}
+                className="font-label text-accent-text hover:underline"
+              >
+                {t("daemon.offlineState.openLog")}
+              </button>
+            </>
+          ) : null}
         </p>
+        {logError ? <p className="text-xs text-danger">{logError}</p> : null}
       </div>
     </div>
   );

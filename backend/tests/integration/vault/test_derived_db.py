@@ -28,6 +28,19 @@ async def test_a_file_at_another_schema_version_is_recreated() -> None:
         await engine.dispose()
 
 
+async def test_a_failing_row_keeps_why_it_failed() -> None:
+    engine, sm = await open_derived_db()
+    try:
+        repo = MCPServerHealthRepo(sm)
+        await repo.upsert("u1", "failing", datetime.now(tz=UTC), "auth_rejected")
+        assert await repo.get_reason("u1") == "auth_rejected"
+        await repo.upsert("u1", "healthy", datetime.now(tz=UTC))
+        assert await repo.get_reason("u1") is None
+        assert await repo.get_reason("absent") is None
+    finally:
+        await engine.dispose()
+
+
 async def test_the_same_version_keeps_its_rows() -> None:
     engine, sm = await open_derived_db()
     await MCPServerHealthRepo(sm).upsert("u1", "failing", datetime.now(tz=UTC))

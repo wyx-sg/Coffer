@@ -1,9 +1,12 @@
 """What about the registered MCP servers needs a person (the Overview list).
 
-Three signals, each one the backend already records or can check cheaply:
+Four signals, each one the backend already records or can check cheaply:
 
 - ``mcp_failing`` — the persisted health row the per-server test wrote says
   ``failing``;
+- ``mcp_key_rejected`` — the failing check was refused with 401/403 (the
+  reason the test stored with the failing state): the key needs replacing, on
+  the server's page;
 - ``mcp_missing_launcher`` — a stdio server's launcher does not resolve on this
   machine (a server synced from another machine, its runner not installed
   here). The failing state it causes is then not reported beside it: both
@@ -46,6 +49,10 @@ class McpHealthPort(Protocol):
     """The persisted per-server health row: ``(status, checked_at)``."""
 
     async def get(self, resource_uid: str) -> tuple[str, datetime] | None: ...
+
+    async def get_reason(self, resource_uid: str) -> str | None:
+        """Why the last check failed (``domain.mcp.probe.FailureReason``)."""
+        ...
 
 
 class SecretPresencePort(Protocol):
@@ -118,6 +125,8 @@ class McpAttentionSource:
         health = await self._health.get(server.uid)
         if health is None or health[0] != "failing":
             return []
+        if await self._health.get_reason(server.uid) == "auth_rejected":
+            return [await self._key_rejected_item(server, health[1])]
         return [
             AttentionItem(
                 kind=KIND,
@@ -135,6 +144,27 @@ class McpAttentionSource:
                 ),
             )
         ]
+
+    async def _key_rejected_item(self, server: Resource, since: datetime) -> AttentionItem:
+        """A server whose key the upstream refuses: the fix is a new key, on
+        the server's own page; the agent hand-off stays the diagnosis one."""
+        return AttentionItem(
+            kind=KIND,
+            uid=server.uid,
+            title=server.name,
+            reason_code="mcp_key_rejected",
+            reason="Every call is rejected with 401 Unauthorized. The API key looks revoked.",
+            severity=Severity.ERROR,
+            # The page where the key is replaced; the action has no route of
+            # its own to call, so it names the server's own resource.
+            action=AttentionAction(
+                verb="replace_key", method="GET", path=f"/api/v1/resources/mcp_server/{server.uid}"
+            ),
+            since=since,
+            handoff=(
+                await asyncio.to_thread(self._handoffs.diagnose, server) if self._handoffs else None
+            ),
+        )
 
     async def _secret_items(self, enabled: dict[str, Resource]) -> list[AttentionItem]:
         out: list[AttentionItem] = []

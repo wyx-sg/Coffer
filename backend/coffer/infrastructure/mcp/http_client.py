@@ -96,6 +96,10 @@ class HttpUpstreamConnection:
         # from a broken Coffer.
         self._server_name = server_name
 
+        #: The first HTTP error status the upstream answered with (>= 400). The
+        #: SDK folds every non-2xx answer into one generic JSON-RPC error, so
+        #: this is how a 401 from a revoked key stays distinguishable.
+        self.first_error_status: int | None = None
         self._session: ClientSession | None = None
         # The lifetime task and the two handles spawn/close talk to it with.
         self._runner: asyncio.Task[None] | None = None
@@ -151,6 +155,8 @@ class HttpUpstreamConnection:
             timeout=httpx2.Timeout(float(self._spawn_timeout), read=_STREAM_READ_SECONDS),
         )
 
+        http_client.event_hooks["response"].append(self._note_status)
+
         loop = asyncio.get_running_loop()
         ready: asyncio.Future[Any] = loop.create_future()
         close_event = asyncio.Event()
@@ -188,6 +194,10 @@ class HttpUpstreamConnection:
         except AttributeError:
             capabilities = {}
         return capabilities
+
+    async def _note_status(self, response: httpx2.Response) -> None:
+        if response.status_code >= 400 and self.first_error_status is None:
+            self.first_error_status = response.status_code
 
     def _init_error(self, exc: BaseException) -> UpstreamTimeout | UpstreamUnavailable:
         """Map a lifetime-task failure onto a domain error.

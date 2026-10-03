@@ -33,12 +33,30 @@ ProbeErrorCode = Literal[
     "initialize_failed",
     # The HTTP server could not be reached.
     "connect_failed",
+    # The HTTP server answered 401 or 403: the key or token it was given is refused.
+    "auth_rejected",
     # The config cites a stored secret, which is released only to a server
     # whose binding a person approved.
     "stored_secret_not_released",
     # A transport a probe does not open (a custom-tool group).
     "unsupported_transport",
 ]
+
+#: Why a failed health check failed, as the one word a page or the Overview
+#: acts on; stored with the failing state.
+FailureReason = Literal["auth_rejected", "unreachable", "command_not_found", "other"]
+
+
+def failure_reason(code: ProbeErrorCode | None) -> FailureReason:
+    """The :data:`FailureReason` a failed test's error code stands for."""
+    if code == "auth_rejected":
+        return "auth_rejected"
+    if code in ("connect_failed", "timeout"):
+        return "unreachable"
+    if code == "spawn_failed":
+        return "command_not_found"
+    return "other"
+
 
 #: The longest test there is, whatever the config's own timeouts say.
 PROBE_TOTAL_SECONDS = 30.0
@@ -135,9 +153,11 @@ __all__ = [
     "REDACTED",
     "STDERR_LINE_MAX",
     "STDERR_TAIL_LINES",
+    "FailureReason",
     "ProbeErrorCode",
     "ProbeResult",
     "ProbeTool",
+    "failure_reason",
     "redact",
     "secret_looking",
     "secret_values",

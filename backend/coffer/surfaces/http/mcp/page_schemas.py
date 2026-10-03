@@ -31,6 +31,12 @@ class McpServerStatusOut(BaseModel):
     failing_since: datetime | None = None
     #: When the health record (a test) was last written.
     last_checked_at: datetime | None = None
+    #: Why the last test failed — ``auth_rejected`` (the key is refused),
+    #: ``unreachable``, ``command_not_found`` or ``other``; null when the last
+    #: test passed or none ran.
+    failure_reason: Literal["auth_rejected", "unreachable", "command_not_found", "other"] | None = (
+        None
+    )
     last_ok_at: datetime | None = None
     #: The capability the last successful call reached (a tool name, a URI).
     last_ok_capability: str | None = None

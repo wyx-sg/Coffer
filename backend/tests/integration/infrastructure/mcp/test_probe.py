@@ -198,3 +198,23 @@ async def test_http_probe_lists_tools() -> None:
         proc.wait(timeout=5)
     assert result.ok, result
     assert {t.name for t in result.tools} == {"ping", "pong"}
+
+
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="a rejected key is recorded as auth_rejected")
+@pytest.mark.asyncio
+async def test_http_probe_a_401_is_auth_rejected() -> None:
+    async def refuse(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        await reader.readuntil(b"\r\n\r\n")
+        writer.write(b"HTTP/1.1 401 Unauthorized\r\ncontent-length: 0\r\nconnection: close\r\n\r\n")
+        await writer.drain()
+        writer.close()
+
+    server = await asyncio.start_server(refuse, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    try:
+        result = await _probe(HttpTransport(url=f"http://127.0.0.1:{port}/mcp"))
+    finally:
+        server.close()
+    assert not result.ok
+    assert result.error_code == "auth_rejected"
+    assert "401" in (result.error_message or "")

@@ -563,6 +563,9 @@
       "errors_other": "errors",
       "failingSince": "failing since {{at}}",
       "failingTitle": "It isn't answering",
+      "keyRejectedTitle": "The key was rejected",
+      "keyRejectedBody": "Every call is rejected with 401 Unauthorized. The API key looks revoked, so {{who}} can't call {{tools}} until it is replaced.",
+      "replaceKey": "Replace key",
       "filter": "Filter servers",
       "fromCache": "From the last successful connection. Your switches still apply when it comes back.",
       "group": {
@@ -1514,6 +1517,7 @@
       "retry": "Retry",
       "checkingIn": "Checking again in {{seconds}}s",
       "lastReply": "last reply {{time}}",
+      "logHint": "Read the daemon log from a terminal",
       "openLog": "Open daemon log"
     }
   },
@@ -4759,6 +4763,7 @@
       "connect": "Connect",
       "test": "Test again",
       "set_secret": "Add secret",
+      "replace_key": "Replace key",
       "check": "Check",
       "run": "Review",
       "review": "Review",

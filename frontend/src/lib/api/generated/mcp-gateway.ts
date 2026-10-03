@@ -1194,6 +1194,8 @@ export interface components {
         McpServerStatusOut: {
             /** Failing Since */
             failing_since: string | null;
+            /** Failure Reason */
+            failure_reason: ("auth_rejected" | "unreachable" | "command_not_found" | "other") | null;
             handoff: components["schemas"]["HandoffOut"] | null;
             /** Last Checked At */
             last_checked_at: string | null;
@@ -1251,9 +1253,9 @@ export interface components {
         McpTestResultOut: {
             /**
              * Error Code
-             * @description Why the test failed: url_refused (a typed URL resolves to a loopback, private or link-local host), spawn_failed (the command or working directory does not exist), exited (the process exited; see exit_code), timeout (the time limit), initialize_failed (MCP initialize or tools/list failed), connect_failed (the URL could not be reached), stored_secret_not_released (the config cites a stored secret, released only to a registered server), unsupported_transport.
+             * @description Why the test failed: url_refused (a typed URL resolves to a loopback, private or link-local host), spawn_failed (the command or working directory does not exist), exited (the process exited; see exit_code), timeout (the time limit), initialize_failed (MCP initialize or tools/list failed), connect_failed (the URL could not be reached), auth_rejected (the HTTP server answered 401 or 403), stored_secret_not_released (the config cites a stored secret, released only to a registered server), unsupported_transport.
              */
-            error_code: ("url_refused" | "spawn_failed" | "exited" | "timeout" | "initialize_failed" | "connect_failed" | "stored_secret_not_released" | "unsupported_transport") | null;
+            error_code: ("url_refused" | "spawn_failed" | "exited" | "timeout" | "initialize_failed" | "connect_failed" | "auth_rejected" | "stored_secret_not_released" | "unsupported_transport") | null;
             /**
              * Error Message
              * @description One readable sentence; typed secret values redacted.

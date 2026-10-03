@@ -54,7 +54,7 @@ export function PaletteList({ model, query, listboxId, baseId, ...props }: Props
         const variant: RowVariant =
           group.key === "best" ? "best" : group.key === "recent" ? "recent" : "list";
         return (
-          <div key={group.key} role="group" aria-labelledby={labelId} className="flex flex-col gap-2.5">
+          <div key={group.key} role="group" aria-labelledby={labelId} className="flex flex-col gap-0.5">
             <GroupLabel id={labelId}>{groupTitle(group.key)}</GroupLabel>
             {group.items.map((item, i) => {
               const at = group.key === "recent" ? group.recent[i]?.at : undefined;
@@ -81,7 +81,7 @@ export function PaletteList({ model, query, listboxId, baseId, ...props }: Props
       {model.failed.map((kind) => {
         const labelId = `${baseId}-failed-${kind}`;
         return (
-          <div key={kind} role="group" aria-labelledby={labelId} className="flex flex-col gap-2.5">
+          <div key={kind} role="group" aria-labelledby={labelId} className="flex flex-col gap-0.5">
             <GroupLabel id={labelId}>{kindTitle(kind)}</GroupLabel>
             <StatusLine tone="danger">
               {t("palette.failed", { kind: t(`palette.kind.${kind}`) })}

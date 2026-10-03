@@ -16,8 +16,16 @@ STDIO = {"transport": {"type": "stdio", "command": "uvx"}}
 
 
 class FakeHealth:
-    def __init__(self, rows: dict[str, tuple[str, datetime]] | None = None) -> None:
+    def __init__(
+        self,
+        rows: dict[str, tuple[str, datetime]] | None = None,
+        reasons: dict[str, str] | None = None,
+    ) -> None:
         self.rows = rows or {}
+        self.reasons = reasons or {}
+
+    async def get_reason(self, resource_uid: str) -> str | None:
+        return self.reasons.get(resource_uid)
 
     async def get(self, resource_uid: str) -> tuple[str, datetime] | None:
         return self.rows.get(resource_uid)
@@ -64,6 +72,30 @@ async def test_failing_health_row_is_an_error_with_the_test_action_and_its_time(
     assert item.action == AttentionAction(
         verb="test", method="POST", path="/api/v1/resources/mcp_server/u1/test"
     )
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="a rejected key is its own attention item"
+)
+async def test_a_rejected_key_asks_to_replace_it() -> None:
+    srv = resource("u1", "mcp_server", {"transport": {"type": "http", "url": "https://x.test/mcp"}})
+    health = FakeHealth({"u1": ("failing", T0)}, {"u1": "auth_rejected"})
+    items = await _source(FakeResources([srv]), health=health).items()
+    assert len(items) == 1
+    assert items[0].reason_code == "mcp_key_rejected"
+    assert items[0].reason == (
+        "Every call is rejected with 401 Unauthorized. The API key looks revoked."
+    )
+    assert items[0].action.verb == "replace_key"
+    assert items[0].severity is Severity.ERROR
+    assert items[0].since == T0
+
+
+async def test_an_unreachable_failure_stays_a_plain_failing_item() -> None:
+    srv = resource("u1", "mcp_server", STDIO)
+    health = FakeHealth({"u1": ("failing", T0)}, {"u1": "unreachable"})
+    items = await _source(FakeResources([srv]), health=health).items()
+    assert [i.reason_code for i in items] == ["mcp_failing"]
 
 
 async def test_healthy_or_untested_server_reports_nothing() -> None:

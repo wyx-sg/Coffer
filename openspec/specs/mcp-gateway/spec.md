@@ -713,7 +713,7 @@ approval, `healthy` after a successful last call, and `idle` with no call in
 - **THEN** the failing group comes first with health `failing`, then the healthy one, and the disabled one last with health `off`
 
 ### Requirement: Test an unsaved server config before adding it
-The daemon MUST test an MCP server config that is not registered, so the Add dialog can show what a server offers before Add server: a stdio server is started for the length of the test and an HTTP one is connected to, MCP `initialize` and `tools/list` run (and the resource and prompt counts are read when the server declares them), the newest stderr lines are kept, and everything is then discarded. The test MUST persist nothing — no resource, no health record, no invocation record, no audit event. A URL typed into the form MUST pass the SSRF guard before any request, and a redirect MUST NOT lead the test to another origin. A config citing a stored secret MUST NOT be started, because a stored secret is released only to a registered destination whose binding a person approved; values typed into the form's secret rows apply to this test only and MUST NOT be stored, logged, audited or echoed — every typed secret value is redacted from the stderr tail and the error message. The whole test MUST end within a hard time limit (30 seconds, the config's own timeouts capped by it), and a stdio server's whole process group MUST be stopped when the test ends, whether it passed, failed, ran out of time or its caller went away. A failed test names its cause with a stable code: `url_refused`, `spawn_failed`, `exited` (with the exit code), `timeout`, `initialize_failed`, `connect_failed` or `stored_secret_not_released`.
+The daemon MUST test an MCP server config that is not registered, so the Add dialog can show what a server offers before Add server: a stdio server is started for the length of the test and an HTTP one is connected to, MCP `initialize` and `tools/list` run (and the resource and prompt counts are read when the server declares them), the newest stderr lines are kept, and everything is then discarded. The test MUST persist nothing — no resource, no health record, no invocation record, no audit event. A URL typed into the form MUST pass the SSRF guard before any request, and a redirect MUST NOT lead the test to another origin. A config citing a stored secret MUST NOT be started, because a stored secret is released only to a registered destination whose binding a person approved; values typed into the form's secret rows apply to this test only and MUST NOT be stored, logged, audited or echoed — every typed secret value is redacted from the stderr tail and the error message. The whole test MUST end within a hard time limit (30 seconds, the config's own timeouts capped by it), and a stdio server's whole process group MUST be stopped when the test ends, whether it passed, failed, ran out of time or its caller went away. A failed test names its cause with a stable code: `url_refused`, `spawn_failed`, `exited` (with the exit code), `timeout`, `initialize_failed`, `connect_failed`, `auth_rejected` (an HTTP server answered 401 or 403) or `stored_secret_not_released`.
 
 #### Scenario: a stdio config is tested without saving anything
 - **GIVEN** the daemon is running and no MCP server is registered
@@ -849,6 +849,23 @@ value is never read for this; a server that cites none never asks the secret sto
 - **GIVEN** an HTTP server whose `Authorization` header cites a secret with no value in this machine's store
 - **WHEN** its status is read
 - **THEN** it names `Authorization` as the key and the secret's reference, and once the value is stored it names none
+
+### Requirement: Record why a registered server's test failed
+A test of a registered server that fails MUST store, with the failing health record, why it failed as one
+of four reasons: `auth_rejected` (an HTTP server answered 401 or 403, so its key is refused),
+`unreachable` (the connection was refused or timed out), `command_not_found` (a stdio launcher or working
+directory does not exist) or `other`. A passing test MUST store none. The status read MUST carry the
+stored reason as `failure_reason` while the server reads `failing`.
+
+#### Scenario: a rejected key is recorded as auth_rejected
+- **GIVEN** a registered HTTP server whose upstream answers 401
+- **WHEN** it is tested and its status is read
+- **THEN** the test's error code is `auth_rejected`, and the status reads failing with `failure_reason` `auth_rejected`
+
+#### Scenario: a failed test's error code maps to a reason
+- **GIVEN** the error codes a test can fail with
+- **WHEN** each is classified
+- **THEN** `auth_rejected` stays `auth_rejected`, `connect_failed` and `timeout` read `unreachable`, `spawn_failed` reads `command_not_found`, and every other code reads `other`
 
 ### Requirement: Read a server's own log from its page
 The daemon MUST serve the newest lines of a stdio server's own log file — what it printed on stderr and the

@@ -459,7 +459,11 @@ offline state in the workspace — the sidebar stays — naming the recovery the
 host can offer: in the desktop shell a Start daemon control, because only it can
 spawn a daemon; in both hosts Retry, the `coffer daemon start` command to copy
 ("Or start it from a terminal"), and a footer line with when the next check
-runs, when the daemon last answered and Open daemon log. The reconnecting bar
+runs and when the daemon last answered. The daemon log is read without the
+daemon, which the Activity page's Daemon log tab needs: in the desktop shell an
+Open daemon log control has the shell open `~/.coffer/logs/daemon.log` in the
+system's default viewer; in a browser the screen shows the `coffer log daemon`
+command to copy ("Read the daemon log from a terminal"). The reconnecting bar
 marks its state with a still partial ring, not a spinner.
 Both MUST clear themselves once the daemon is reachable again, with no manual
 page reload: every query is read again and a toast says the app reconnected.
@@ -472,10 +476,15 @@ sidebar's Settings row carries none of it.
 - **THEN** the reconnecting bar shows first, and after 10 seconds of failures the offline state renders in the workspace offering the recovery the host can actually give — the `coffer daemon start` command to copy in both hosts, and in the desktop shell also a Start daemon control, because only it can spawn a daemon
 - **AND** the offline state disappears automatically once the daemon becomes reachable again, without a manual page reload
 
-#### Scenario: the offline screen links to the daemon log
-- **GIVEN** the offline state is showing
-- **WHEN** the user reads its footer line
-- **THEN** it carries an Open daemon log link to Activity's Daemon log tab
+#### Scenario: the offline screen opens the daemon log without the daemon
+- **GIVEN** the offline state is showing in the desktop shell
+- **WHEN** the user clicks Open daemon log in its footer line
+- **THEN** the shell opens the daemon log file in the system's default viewer, without asking the daemon
+
+#### Scenario: the offline screen offers the daemon log command in a browser
+- **GIVEN** the offline state is showing in a browser
+- **WHEN** the user reads the screen
+- **THEN** it shows the `coffer log daemon` command with a Copy button instead of a link to Activity
 
 #### Scenario: a daemon that comes back within seconds leaves the page in place
 - **GIVEN** a page open with a running daemon
@@ -1450,6 +1459,11 @@ command, and the failing callout and a failed test's result offer the diagnosis 
 - **GIVEN** an MCP server whose status names a missing launcher and carries a `handoff`
 - **WHEN** its page opens
 - **THEN** the launcher callout names the launcher and offers Copy prompt, which copies the served prompt, and shows no `brew install` line
+
+#### Scenario: a rejected key reads Replace key
+- **GIVEN** an MCP server whose status reads failing with `failure_reason` `auth_rejected`, and an Overview item with the verb `replace_key`
+- **WHEN** the server's page opens and the Overview lists the item
+- **THEN** the failing callout says the key was rejected and offers Replace key, which opens the edit dialog on its secret, and the Overview row's action reads Replace key and opens the server's page
 
 #### Scenario: a failed test offers a diagnosis hand-off beside View log
 - **GIVEN** an MCP server whose test just failed with an error and a `handoff`

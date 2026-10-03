@@ -81,6 +81,11 @@ describe("pages", () => {
     expect(itemPage(secret)).toBe("/mcp-servers/github");
   });
 
+  test("a rejected key opens the server's page, where the key is replaced", () => {
+    const rejected = item({ reason_code: "mcp_key_rejected", uid: "m1" });
+    expect(actionPage(rejected)).toBe("/mcp-servers/github");
+  });
+
   test("a secret a skill requires is set on the Secrets page, the name opens the skill", () => {
     const secret = item({
       kind: "skill",
@@ -166,7 +171,15 @@ test("a channel's check and sync's review read by what they do", () => {
 });
 
 test("every verb that has an icon names one, the others none", () => {
-  for (const verb of ["set_secret", "review", "connect", "repair", "check", "test"]) {
+  for (const verb of [
+    "set_secret",
+    "replace_key",
+    "review",
+    "connect",
+    "repair",
+    "check",
+    "test",
+  ]) {
     expect(actionIcon(verb)).toBeDefined();
   }
   expect(actionIcon("open")).toBeUndefined();

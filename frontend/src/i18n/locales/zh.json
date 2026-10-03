@@ -563,6 +563,9 @@
       "errors_other": "个错误",
       "failingSince": "自 {{at}} 起失败",
       "failingTitle": "它没有响应",
+      "keyRejectedTitle": "密钥被拒绝",
+      "keyRejectedBody": "每次调用都被以 401 Unauthorized 拒绝。API 密钥可能已被撤销，更换之前，{{who}} 无法调用{{tools}}。",
+      "replaceKey": "更换密钥",
       "filter": "筛选服务器",
       "fromCache": "来自上次成功的连接。它恢复后，你的开关设置仍然生效。",
       "group": {
@@ -1514,6 +1517,7 @@
       "retry": "重试",
       "checkingIn": "{{seconds}} 秒后重新检查",
       "lastReply": "上次响应 {{time}}",
+      "logHint": "在终端里读取守护进程日志",
       "openLog": "打开守护进程日志"
     }
   },
@@ -4759,6 +4763,7 @@
       "connect": "连接",
       "test": "重新测试",
       "set_secret": "添加密钥",
+      "replace_key": "更换密钥",
       "check": "检查",
       "run": "查看",
       "review": "查看",

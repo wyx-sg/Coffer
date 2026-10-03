@@ -105,6 +105,7 @@ pub fn run() {
         .plugin(updater::plugin())
         .invoke_handler(tauri::generate_handler![
             daemon::restart_daemon,
+            logging::show_daemon_log,
             daemon::get_daemon_info,
             daemon::daemon_version_matches,
             tray::set_ui_language,
