@@ -78,9 +78,11 @@ class McpTestResultOut(BaseModel):
     handoff: HandoffOut | None = Field(
         default=None,
         description=(
-            "A failed test of a registered server: the prompt that hands the chore to an "
-            "agent — installing its missing launcher, or finding why it fails. Null when "
-            "the test passed, the fix is a stored secret, or the config is not saved."
+            "A failed test that depends on this machine (launcher missing, process "
+            "failed or exited, network refused or timed out): the prompt that hands the "
+            "chore to an agent — installing the launcher, or finding why it fails. For an "
+            "unsaved config too. Null when the test passed or the fix is a secret or a "
+            "rejected login."
         ),
     )
 

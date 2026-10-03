@@ -138,7 +138,7 @@ def print_group(group: dict[str, Any]) -> None:
             flags.append("off")
         if t["changes_data"]:
             flags.append("changes data")
-        if t.get("reach_override") is not None:
+        if t.get("reach_mode", "inherit") != "inherit":
             flags.append("reach override")
         extra = f"  [{', '.join(flags)}]" if flags else ""
         typer.echo(f"  {t['agent_name']:<40} {t['method']:<6} {t['path']}{extra}")

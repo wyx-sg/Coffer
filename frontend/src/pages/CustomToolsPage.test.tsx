@@ -185,7 +185,7 @@ describe("CustomToolsPage", () => {
     expect(screen.queryByRole("dialog", { name: "get_invoice" })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("radio", { name: /All agents/ }));
     await waitFor(() =>
-      expect(api.setToolReach).toHaveBeenCalledWith("billing", "get_invoice", ["ag-cc", "ag-cx"]),
+      expect(api.setToolReach).toHaveBeenCalledWith("billing", "get_invoice", { mode: "all" }),
     );
   });
 
@@ -196,7 +196,7 @@ describe("CustomToolsPage", () => {
     fireEvent.click(within(tools).getAllByRole("button", { name: /Available to: / })[1]);
     fireEvent.click(await screen.findByRole("radio", { name: /Same as the group/ }));
     await waitFor(() =>
-      expect(api.setToolReach).toHaveBeenCalledWith("billing", "create_invoice", null),
+      expect(api.setToolReach).toHaveBeenCalledWith("billing", "create_invoice", { mode: "inherit" }),
     );
   });
 

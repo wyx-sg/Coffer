@@ -5,6 +5,7 @@ import {
   formatClock,
   formatClockOrMoment,
   formatDay,
+  formatDayShort,
   formatExact,
   formatMoment,
   formatRelative,
@@ -19,6 +20,11 @@ describe("time formats", () => {
   test("a day prints day, short month, year", () => {
     expect(formatDay(new Date(2026, 8, 30), "en")).toBe("30 Sep 2026");
     expect(formatDay(new Date(2026, 8, 30), "zh")).toBe("2026年9月30日");
+  });
+
+  test("a short day leaves the year out", () => {
+    expect(formatDayShort(new Date(2026, 8, 27), "en")).toBe("27 Sep");
+    expect(formatDayShort(new Date(2026, 8, 27), "zh")).toBe("9月27日");
   });
 
   test("a clock time is 24-hour", () => {

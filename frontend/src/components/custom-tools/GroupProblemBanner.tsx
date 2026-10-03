@@ -7,7 +7,6 @@ import { CircleAlert, Power } from "lucide-react";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Button } from "@/components/ui/button";
 import type { CustomToolGroup } from "@/lib/api/customTools";
-import { failingGroupPrompt } from "@/lib/customTools/handoff";
 import { hostOf, toolsOn } from "@/lib/customTools/groups";
 import { useTurnOnCustomToolGroup } from "@/lib/hooks/useCustomTools";
 import { formatDateTime } from "@/lib/utils";
@@ -27,7 +26,7 @@ export function GroupFailingBanner({ group }: { group: CustomToolGroup }) {
           <Button asChild size="sm" variant="outline">
             <Link to="/activity?tab=mcp">{t("customTools.group.openActivity")}</Link>
           </Button>
-          <AgentHandoff prompt={failingGroupPrompt(group)} size="sm" />
+          {group.handoff ? <AgentHandoff prompt={group.handoff.prompt} size="sm" /> : null}
         </>
       }
     >

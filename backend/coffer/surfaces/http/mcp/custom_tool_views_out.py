@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from coffer.application.mcp.custom_tool_handoff import failing_group_handoff
 from coffer.application.mcp.custom_tool_views import GroupView, ToolView
 from coffer.application.mcp.custom_tools import secret_name_of
 from coffer.domain.mcp.namespace import prefix_tool
 from coffer.domain.mcp.openapi_import import DraftOperation
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.mcp.custom_tool_schemas import (
     CustomToolGroupOut,
     CustomToolHeaderOut,
@@ -15,6 +17,7 @@ from coffer.surfaces.http.mcp.custom_tool_schemas import (
     OpenApiSourceOut,
     OpenApiSourceTextOut,
 )
+from coffer.surfaces.http.mcp.handoff_views import host_machine
 
 
 def tool_out(group: str, view: ToolView) -> CustomToolOut:
@@ -32,7 +35,14 @@ def tool_out(group: str, view: ToolView) -> CustomToolOut:
         changes_data=t.effective_changes_data,
         changes_data_set=t.changes_data is not None,
         operation=t.operation,
-        reach_override=view.reach_override,
+        reach_mode=(
+            "inherit"
+            if view.reach_override is None
+            else "all"
+            if view.reach_override == "all"
+            else "chosen"
+        ),
+        reach_override=view.reach_override if isinstance(view.reach_override, list) else None,
         calls_24h=view.calls,
         failures_24h=view.failures,
     )
@@ -82,6 +92,19 @@ def group_out(view: GroupView) -> CustomToolGroupOut:
         calls_24h=view.calls,
         failures_24h=view.failures,
         last_call_at=view.last_call_at,
+        handoff=(
+            HandoffOut(
+                prompt=failing_group_handoff(
+                    group=r.name,
+                    base_url=str(t.base_url),
+                    status=view.last_call_status,
+                    error=view.last_call_error,
+                    machine=host_machine(),
+                )
+            )
+            if view.health == "failing"
+            else None
+        ),
         tools=[tool_out(r.name, tv) for tv in view.tools],
         created_at=r.created_at,
         updated_at=r.updated_at,

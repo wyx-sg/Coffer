@@ -40,6 +40,7 @@ function result(patch: Partial<CustomToolTestOut>): CustomToolTestOut {
     content_type: "application/json",
     error: null,
     failure: null,
+    handoff: null,
     ...patch,
   };
 }
@@ -105,7 +106,14 @@ describe("ToolTestResult", () => {
   test("a timeout offers Change timeout and a hand-off", () => {
     const onChange = vi.fn();
     show(
-      result({ ok: false, status: null, status_line: null, body: "", failure: "timeout" }),
+      result({
+        ok: false,
+        status: null,
+        status_line: null,
+        body: "",
+        failure: "timeout",
+        handoff: { prompt: "Find out why the request timed out" },
+      }),
       onChange,
     );
     expect(screen.getByText("No response — timed out after 30 s")).toBeInTheDocument();
@@ -125,6 +133,7 @@ describe("ToolTestResult", () => {
         body: "",
         failure: "connect",
         error: "connection refused",
+        handoff: { prompt: "Find out why it could not connect" },
       }),
     );
     expect(screen.getByText("Couldn't connect to deploy.internal.example")).toBeInTheDocument();

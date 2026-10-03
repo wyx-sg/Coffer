@@ -961,6 +961,95 @@ paths:
       summary: Adopt Orphan
       tags:
       - skills
+  /api/v1/skills/orphans/{name}/files:
+    get:
+      description: The orphan folder as a read-only file tree — the walk of a managed skill's.
+      operationId: list_orphan_files_api_v1_skills_orphans__name__files_get
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillFileTreeOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List Orphan Files
+      tags:
+      - skills
+  /api/v1/skills/orphans/{name}/files/content:
+    get:
+      description: Read one file of an orphan folder; a path outside it is refused with 400.
+      operationId: read_orphan_file_api_v1_skills_orphans__name__files_content_get
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: query
+        name: path
+        required: true
+        schema:
+          minLength: 1
+          title: Path
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillFileContentOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Read Orphan File
+      tags:
+      - skills
   /api/v1/skills/repair:
     post:
       operationId: repair_skills_api_v1_skills_repair_post
@@ -2868,6 +2957,10 @@ components:
         file_count:
           title: File Count
           type: integer
+        found_at:
+          format: date-time
+          title: Found At
+          type: string
         message:
           anyOf:
           - type: string
@@ -2889,6 +2982,7 @@ components:
       - file_count
       - description
       - message
+      - found_at
       title: SkillOrphanOut
       type: object
     SkillOut:

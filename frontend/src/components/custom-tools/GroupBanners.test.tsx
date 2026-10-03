@@ -45,7 +45,14 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("group banners", () => {
   test("failing calls say so, link to Activity and hand off to an agent", () => {
-    banners(makeGroup({ name: "status-page", health: "failing", health_reason: "last_call_failed" }));
+    banners(
+      makeGroup({
+        name: "status-page",
+        health: "failing",
+        health_reason: "last_call_failed",
+        handoff: { prompt: "Find out why the calls of status-page fail" },
+      }),
+    );
     expect(screen.getByText("Calls to status-page.internal.example are failing")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View in Activity" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Ask an agent|Copy prompt/ })).toBeInTheDocument();

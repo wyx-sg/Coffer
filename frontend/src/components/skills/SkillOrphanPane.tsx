@@ -6,7 +6,9 @@
 // says why no agent gets it and carries the two things to do — Add to library
 // (registers the folder in place, reach as for a fresh import) and Delete
 // folder… (moved to ~/.coffer/content/backup/, confirmed first). Adding or
-// deleting is the person's choice, so there is no hand-off.
+// deleting is the person's choice, so there is no hand-off. Below the banner
+// sits the folder's own files in the read-only tree + reader a skill outside
+// the library gets (SkillReadOnlyFiles), no section title.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -18,16 +20,20 @@ import { StatusPill } from "@/components/status/StatusPill";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
+import { SkillReadOnlyFiles } from "@/components/skills/SkillReadOnlyFiles";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import { useFsActions } from "@/lib/fsActions";
+import { formatDayShort } from "@/lib/time";
 import {
   useAdoptSkillOrphan,
   useRemoveSkillOrphan,
+  useSkillOrphanFileContent,
+  useSkillOrphanFiles,
   useSkillOrphans,
 } from "@/lib/hooks/useSkillCopies";
 
 export function SkillOrphanPane({ name }: { name: string }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const navigate = useNavigate();
   const fs = useFsActions();
@@ -36,6 +42,8 @@ export function SkillOrphanPane({ name }: { name: string }) {
   const remove = useRemoveSkillOrphan();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const orphan = orphans.data?.find((o) => o.name === name);
+  const tree = useSkillOrphanFiles(name);
+  const useContent = (path: string) => useSkillOrphanFileContent(name, path);
 
   if (!orphan) {
     return orphans.isPending ? null : (
@@ -45,6 +53,7 @@ export function SkillOrphanPane({ name }: { name: string }) {
   const facts = [
     orphan.valid ? t("skills.orphan.valid") : t("skills.orphan.invalid"),
     t("skills.orphan.files", { count: orphan.file_count }),
+    t("skills.orphan.found", { day: formatDayShort(new Date(orphan.found_at), i18n.language) }),
   ];
 
   return (
@@ -109,6 +118,12 @@ export function SkillOrphanPane({ name }: { name: string }) {
       >
         {t("skills.orphan.body")}
       </SkillBannerFrame>
+      <SkillReadOnlyFiles
+        name={orphan.name}
+        tree={tree}
+        useContent={useContent}
+        folderPath={orphan.path}
+      />
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}

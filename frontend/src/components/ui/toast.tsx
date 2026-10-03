@@ -14,7 +14,7 @@
 //     "N more" chip that unfolds them.
 //
 // `toast.x(message)` is the whole API for most call sites; the optional second
-// argument adds the one action a toast may carry. Each call returns the
+// argument adds the one action a toast may carry and an optional second line. Each call returns the
 // toast's id so a caller can `dismiss` it early.
 import {
   createContext,
@@ -45,6 +45,8 @@ export interface ToastOptions {
   undo?: () => void;
   /** Shorthand for a Retry action (meant for errors). */
   retry?: () => void;
+  /** A second line under the title (12px, muted) — what the title leaves out. */
+  description?: string;
   /** Longer text revealed by the card's Details toggle (the daemon's message,
    *  a log line). */
   details?: string;
@@ -54,6 +56,7 @@ export interface ToastItem {
   id: number;
   variant: ToastVariant;
   message: string;
+  description?: string;
   action?: ToastAction;
   details?: string;
   /** Milliseconds on screen; `null` stays until dismissed. */
@@ -96,7 +99,7 @@ function toItem(
     (o.undo ? { label: t("common.undo"), onClick: o.undo } : undefined) ??
     (o.retry ? { label: t("common.retry"), onClick: o.retry } : undefined);
   const duration = variant === "error" ? null : o.undo ? UNDO_TOAST_DURATION_MS : TOAST_DURATION_MS;
-  return { id, variant, message, action, details: o.details, duration };
+  return { id, variant, message, description: o.description, action, details: o.details, duration };
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {

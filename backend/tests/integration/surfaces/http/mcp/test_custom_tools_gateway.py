@@ -11,6 +11,7 @@ import json
 import pathlib
 import sys
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 
@@ -209,7 +210,8 @@ def test_a_reach_override_hides_one_tool_from_one_agent(daemon: BoundaryDaemon, 
         agents=[CLAUDE, CODEX],
     )
     r = daemon.client.put(
-        "/api/v1/custom-tools/billing/tools/refund/reach", json={"agents": [CLAUDE]}
+        "/api/v1/custom-tools/billing/tools/refund/reach",
+        json={"mode": "chosen", "agents": [CLAUDE]},
     )
     assert r.status_code == 200, r.text
     codex, claude = Agent(daemon, CODEX), Agent(daemon, CLAUDE)
@@ -225,6 +227,33 @@ def test_a_reach_override_hides_one_tool_from_one_agent(daemon: BoundaryDaemon, 
     assert json.loads(tool_reach_path(daemon.home).read_text()) == {
         group["uid"]: {"refund": [CLAUDE]}
     }
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a tool's own reach can be every agent, apart from the group's"
+)
+def test_a_tools_reach_can_be_every_agent_apart_from_following_the_group(
+    daemon: BoundaryDaemon, api: FakeHttpApi
+):
+    group = create_group(
+        daemon, "billing", api.base_url, [tool("refund", "POST", "/refunds")], agents=[CLAUDE]
+    )
+    url = "/api/v1/custom-tools/billing/tools/refund/reach"
+
+    def refund() -> dict[str, Any]:
+        return {t["name"]: t for t in get_group(daemon, "billing")["tools"]}["refund"]
+
+    assert refund()["reach_mode"] == "inherit" and refund()["reach_override"] is None
+    assert daemon.client.put(url, json={"mode": "all"}).status_code == 200
+    assert refund()["reach_mode"] == "all" and refund()["reach_override"] is None
+    # Stored as "all", not as a snapshot of today's agents, so later agents are included.
+    assert json.loads(tool_reach_path(daemon.home).read_text()) == {group["uid"]: {"refund": "all"}}
+    assert "billing__refund" in Agent(daemon, CLAUDE).tools()
+    assert daemon.client.put(url, json={"mode": "chosen", "agents": [CLAUDE]}).status_code == 200
+    assert refund()["reach_mode"] == "chosen" and refund()["reach_override"] == [CLAUDE]
+    assert daemon.client.put(url, json={"mode": "inherit"}).status_code == 200
+    assert refund()["reach_mode"] == "inherit"
+    assert json.loads(tool_reach_path(daemon.home).read_text()) == {}
 
 
 @pytest.mark.acceptance(

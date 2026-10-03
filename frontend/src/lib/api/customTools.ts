@@ -25,6 +25,7 @@ export type CustomToolUnsavedTestIn = Schemas["CustomToolUnsavedTestIn"];
 export type OpenApiReadIn = Schemas["OpenApiReadIn"];
 export type OpenApiReading = Schemas["OpenApiReadOut"];
 export type ReimportPreview = Schemas["CustomToolReimportPreviewOut"];
+export type ToolReach = Schemas["CustomToolReachIn"];
 export type HttpMethod = CustomTool["method"];
 export type GroupHealth = CustomToolGroup["health"];
 
@@ -98,15 +99,15 @@ export const customToolsApi = {
     if (error) throwApiError(error, "INTERNAL_ERROR", "delete tool failed");
     return must(data, "delete tool");
   },
-  /** Set (`agents` = uids) or clear (`null`) one tool's reach override. */
+  /** Set one tool's own reach: `inherit` (same as the group), `all` (every agent, later ones too) or `chosen` + uids. */
   setToolReach: async (
     name: string,
     toolName: string,
-    agents: string[] | null,
+    reach: ToolReach,
   ): Promise<CustomToolGroup> => {
     const { data, error } = await getApiClient().PUT("/custom-tools/{name}/tools/{tool}/reach", {
       ...tool(name, toolName),
-      body: { agents },
+      body: reach,
     });
     if (error) throwApiError(error, "INTERNAL_ERROR", "reach failed");
     return must(data, "reach");

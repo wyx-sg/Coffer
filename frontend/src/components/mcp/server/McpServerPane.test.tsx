@@ -123,8 +123,8 @@ vi.mock("@/lib/api/resources", async (orig) => ({
   },
 }));
 vi.mock("@/components/mcp/EditMcpServerDialog", () => ({
-  EditMcpServerDialog: ({ focus }: { focus?: string }) => (
-    <div role="dialog">{`edit dialog ${focus ?? ""}`}</div>
+  EditMcpServerDialog: () => (
+    <div role="dialog">edit dialog</div>
   ),
 }));
 vi.mock("@/components/ScopeControl", () => ({ ScopeControl: () => <button>Every agent</button> }));
@@ -246,7 +246,7 @@ describe("McpServerPane", () => {
     expect(callout).toHaveTextContent("The key was rejected");
     expect(callout).toHaveTextContent(/rejected with 401 Unauthorized/);
     fireEvent.click(within(callout).getByRole("button", { name: "Replace key" }));
-    expect(await screen.findByText("edit dialog secret")).toBeInTheDocument();
+    expect(await screen.findByText("edit dialog")).toBeInTheDocument();
     expect(actionLabelKey("replace_key")).toBe("overview.actions.replace_key");
   });
 
@@ -517,6 +517,7 @@ describe("McpServerPane", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Turn off" }));
     await waitFor(() => expect(resourcesApi.disable).toHaveBeenCalledWith("u-sentry"));
     expect(await screen.findByText("sentry turned off")).toBeInTheDocument();
+    expect(screen.getByText("Its settings and the agents you chose are kept.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(resourcesApi.enable).toHaveBeenCalledWith("u-sentry"));
   });
@@ -628,6 +629,7 @@ describe("McpServerPane", () => {
     renderPane();
     fireEvent.click(await screen.findByRole("button", { name: /^test$/i }));
     expect(await screen.findByText("Test passed · 26 tools")).toBeInTheDocument();
+    expect(screen.getByText("The same set agents see now.")).toBeInTheDocument();
     expect(screen.queryByTestId("mcp-test-result")).toBeNull();
   });
 

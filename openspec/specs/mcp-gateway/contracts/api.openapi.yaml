@@ -1736,6 +1736,10 @@ components:
         failures_24h:
           title: Failures 24H
           type: integer
+        handoff:
+          anyOf:
+          - $ref: '#/components/schemas/HandoffOut'
+          - type: 'null'
         headers:
           items:
             $ref: '#/components/schemas/CustomToolHeaderOut'
@@ -1826,6 +1830,7 @@ components:
       - calls_24h
       - failures_24h
       - last_call_at
+      - handoff
       - tools
       - created_at
       - updated_at
@@ -2030,6 +2035,13 @@ components:
         path:
           title: Path
           type: string
+        reach_mode:
+          enum:
+          - inherit
+          - all
+          - chosen
+          title: Reach Mode
+          type: string
         reach_override:
           anyOf:
           - items:
@@ -2050,6 +2062,7 @@ components:
       - changes_data
       - changes_data_set
       - operation
+      - reach_mode
       - reach_override
       - calls_24h
       - failures_24h
@@ -2115,14 +2128,25 @@ components:
       title: CustomToolPatch
       type: object
     CustomToolReachIn:
+      description: |-
+        One tool's own reach: ``inherit`` clears the override (same as the group),
+        ``all`` is every agent the group reaches (agents added later too), ``chosen``
+        narrows it to ``agents``.
       properties:
         agents:
-          anyOf:
-          - items:
-              type: string
-            type: array
-          - type: 'null'
+          items:
+            type: string
           title: Agents
+          type: array
+        mode:
+          enum:
+          - inherit
+          - all
+          - chosen
+          title: Mode
+          type: string
+      required:
+      - mode
       title: CustomToolReachIn
       type: object
     CustomToolReimportChangeOut:
@@ -2289,6 +2313,10 @@ components:
             type: string
           - type: 'null'
           title: Failure
+        handoff:
+          anyOf:
+          - $ref: '#/components/schemas/HandoffOut'
+          - type: 'null'
         ok:
           title: Ok
           type: boolean
@@ -2321,6 +2349,7 @@ components:
       - content_type
       - error
       - failure
+      - handoff
       title: CustomToolTestOut
       type: object
     CustomToolUnsavedTestIn:
@@ -2999,7 +3028,7 @@ components:
           anyOf:
           - $ref: '#/components/schemas/HandoffOut'
           - type: 'null'
-          description: 'A failed test of a registered server: the prompt that hands the chore to an agent — installing its missing launcher, or finding why it fails. Null when the test passed, the fix is a stored secret, or the config is not saved.'
+          description: 'A failed test that depends on this machine (launcher missing, process failed or exited, network refused or timed out): the prompt that hands the chore to an agent — installing the launcher, or finding why it fails. For an unsaved config too. Null when the test passed or the fix is a secret or a rejected login.'
         latency_ms:
           description: From the start of the test to its outcome.
           title: Latency Ms

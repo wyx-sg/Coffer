@@ -616,6 +616,7 @@ export interface components {
             enabled: boolean;
             /** Failures 24H */
             failures_24h: number;
+            handoff: components["schemas"]["HandoffOut"] | null;
             /** Headers */
             headers: components["schemas"]["CustomToolHeaderOut"][];
             /**
@@ -773,6 +774,11 @@ export interface components {
             operation: string | null;
             /** Path */
             path: string;
+            /**
+             * Reach Mode
+             * @enum {string}
+             */
+            reach_mode: "inherit" | "all" | "chosen";
             /** Reach Override */
             reach_override: string[] | null;
         };
@@ -804,10 +810,20 @@ export interface components {
             /** Path */
             path?: string | null;
         };
-        /** CustomToolReachIn */
+        /**
+         * CustomToolReachIn
+         * @description One tool's own reach: ``inherit`` clears the override (same as the group),
+         *     ``all`` is every agent the group reaches (agents added later too), ``chosen``
+         *     narrows it to ``agents``.
+         */
         CustomToolReachIn: {
             /** Agents */
-            agents?: string[] | null;
+            agents?: string[];
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "inherit" | "all" | "chosen";
         };
         /**
          * CustomToolReimportChangeOut
@@ -882,6 +898,7 @@ export interface components {
             error: string | null;
             /** Failure */
             failure: ("request" | "timeout" | "connect" | "blocked") | null;
+            handoff: components["schemas"]["HandoffOut"] | null;
             /** Ok */
             ok: boolean;
             /** Status */
@@ -1292,7 +1309,7 @@ export interface components {
              * @description Set when error_code is exited.
              */
             exit_code: number | null;
-            /** @description A failed test of a registered server: the prompt that hands the chore to an agent — installing its missing launcher, or finding why it fails. Null when the test passed, the fix is a stored secret, or the config is not saved. */
+            /** @description A failed test that depends on this machine (launcher missing, process failed or exited, network refused or timed out): the prompt that hands the chore to an agent — installing the launcher, or finding why it fails. For an unsaved config too. Null when the test passed or the fix is a secret or a rejected login. */
             handoff: components["schemas"]["HandoffOut"] | null;
             /**
              * Latency Ms

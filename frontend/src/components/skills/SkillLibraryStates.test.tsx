@@ -29,6 +29,8 @@ vi.mock("@/lib/api/skills", async (importOriginal) => ({
     orphans: vi.fn(async () => ({ items: [] })),
     adoptOrphan: vi.fn(),
     removeOrphan: vi.fn(async () => undefined),
+    orphanFiles: vi.fn(),
+    orphanFileContent: vi.fn(),
   },
 }));
 vi.mock("@/lib/api/clis", () => ({
@@ -203,8 +205,30 @@ acceptance("web-ui", "a folder no skill claims is added in place or moved out", 
         file_count: 3,
         description: "Team lint rules.",
         message: null,
+        found_at: "2026-09-27T10:00:00Z",
       },
     ],
+  });
+  const file = (name: string) => ({
+    name,
+    path: name,
+    abs_path: `/Users/me/.coffer/skills/lint-rules/${name}`,
+    folder_abs_path: "/Users/me/.coffer/skills/lint-rules",
+    type: "file" as const,
+    size: 9,
+    truncated: false,
+    children: [],
+  });
+  api.orphanFiles.mockResolvedValue({
+    root: { ...file(""), type: "dir", children: [file("SKILL.md"), file("rules.md")] },
+  });
+  api.orphanFileContent.mockResolvedValue({
+    ...file("SKILL.md"),
+    content: "# Lint rules",
+    truncated: false,
+    binary: false,
+    size: 12,
+    fingerprint: "fp",
   });
   api.adoptOrphan.mockResolvedValue(makeSkill({ uid: "sk-lr", name: "lint-rules" }));
   renderSkillsPage("/skills");
@@ -212,6 +236,13 @@ acceptance("web-ui", "a folder no skill claims is added in place or moved out", 
   fireEvent.click(within(section).getByRole("link", { name: /lint-rules/ }));
   await waitFor(() => expect(where.url).toBe("/skills?orphan=lint-rules"));
   expect(await screen.findByText(/Valid SKILL\.md/)).toBeInTheDocument();
+  // The meta line counts the files and says when it was found; the files show
+  // in the read-only tree and reader.
+  expect(screen.getByText("3 files")).toBeInTheDocument();
+  expect(screen.getByText(/Found \d+ Sep/)).toBeInTheDocument();
+  const tree = await screen.findByRole("navigation", { name: "Files" });
+  expect(within(tree).getByRole("button", { name: /rules\.md/ })).toBeInTheDocument();
+  await waitFor(() => expect(api.orphanFileContent).toHaveBeenCalledWith("lint-rules", "SKILL.md"));
 
   fireEvent.click(screen.getByRole("button", { name: "Delete folder…" }));
   const dialog = await screen.findByRole("dialog", { name: "Delete the folder lint-rules?" });

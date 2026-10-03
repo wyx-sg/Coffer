@@ -616,9 +616,10 @@ but GET, and a person MAY turn it off or on for any tool.
 A custom tool switched off, or whose **reach override** does not admit the
 session's agent, MUST be left out of `tools/list` and of
 `coffer__search_tools` results, and a call on it MUST be recorded as `denied`
-and answered with TOOL_DISABLED. A reach override is a list of agent uids that
-narrows the group's reach for that one tool — an agent the group does not
-reach is not reached by any of its tools — and, like every reach, it is kept on
+and answered with TOOL_DISABLED. A reach override is either a list of agent uids that
+narrows the group's reach for that one tool, or `all` — every agent the group
+reaches, agents added later included — and no override at all follows the
+group; an agent the group does not reach is not reached by any of its tools. Like every reach, an override is kept on
 this machine only, in `~/.coffer/local/tool-reach.json`, and never travels with sync. Removing a tool or its group
 MUST remove its override.
 
@@ -632,6 +633,12 @@ MUST remove its override.
 - **WHEN** each agent lists the tools
 - **THEN** Codex is offered every tool but that one, and Claude Code is offered all of them
 - **AND** the override is absent from what the vault syncs
+
+#### Scenario: a tool's own reach can be every agent, apart from the group's
+- **GIVEN** a group reaching Claude Code and a tool with no override
+- **WHEN** the tool's reach is set to every agent, then to Claude Code only, then cleared
+- **THEN** the tool reads `all`, then `chosen` with Claude Code, then follows the group
+- **AND** `all` is stored as `all`, not as a list of today's agents
 
 ### Requirement: Import custom tools from an OpenAPI document
 The system MUST read an OpenAPI 3.0 or 3.1 document, JSON or YAML, given as a
@@ -728,6 +735,11 @@ A group's health MUST be `off` while disabled, `failing` when its last call
 in 24 hours failed, `attention` while its secret is missing or waits for
 approval, `healthy` after a successful last call, and `idle` with no call in
 24 hours.
+A failing group, and a test of a request that could not connect or timed out
+(for a saved or an unsaved group), MUST carry a hand-off prompt that hands the
+network problem to an agent — the group, the method and URL with credentials
+and secret-looking query values redacted, the error and the machine; no header
+value — and no other result does.
 
 #### Scenario: the command line creates a group and adds a tool
 - **GIVEN** the daemon is running and a stored secret `deploy-token` whose binding is approved
@@ -744,9 +756,10 @@ approval, `healthy` after a successful last call, and `idle` with no call in
 - **GIVEN** one group whose last call failed, one whose last call succeeded and one disabled
 - **WHEN** the groups are listed
 - **THEN** the failing group comes first with health `failing`, then the healthy one, and the disabled one last with health `off`
+- **AND** only the failing group carries a hand-off prompt naming the group
 
 ### Requirement: Test an unsaved server config before adding it
-The daemon MUST test an MCP server config that is not registered, so the Add dialog can show what a server offers before Add server: a stdio server is started for the length of the test and an HTTP one is connected to, MCP `initialize` and `tools/list` run (and the resource and prompt counts are read when the server declares them), the newest stderr lines are kept, and everything is then discarded. The test MUST persist nothing — no resource, no health record, no invocation record, no audit event. A URL typed into the form MUST pass the SSRF guard before any request, and a redirect MUST NOT lead the test to another origin. A config citing a stored secret MUST NOT be started, because a stored secret is released only to a registered destination whose binding a person approved; values typed into the form's secret rows apply to this test only and MUST NOT be stored, logged, audited or echoed — every typed secret value is redacted from the stderr tail and the error message. The whole test MUST end within a hard time limit (30 seconds, the config's own timeouts capped by it), and a stdio server's whole process group MUST be stopped when the test ends, whether it passed, failed, ran out of time or its caller went away. A failed test names its cause with a stable code: `url_refused`, `spawn_failed`, `exited` (with the exit code), `timeout`, `initialize_failed`, `connect_failed`, `auth_rejected` (an HTTP server answered 401 or 403) or `stored_secret_not_released`.
+The daemon MUST test an MCP server config that is not registered, so the Add dialog can show what a server offers before Add server: a stdio server is started for the length of the test and an HTTP one is connected to, MCP `initialize` and `tools/list` run (and the resource and prompt counts are read when the server declares them), the newest stderr lines are kept, and everything is then discarded. The test MUST persist nothing — no resource, no health record, no invocation record, no audit event. A URL typed into the form MUST pass the SSRF guard before any request, and a redirect MUST NOT lead the test to another origin. A config citing a stored secret MUST NOT be started, because a stored secret is released only to a registered destination whose binding a person approved; values typed into the form's secret rows apply to this test only and MUST NOT be stored, logged, audited or echoed — every typed secret value is redacted from the stderr tail and the error message. The whole test MUST end within a hard time limit (30 seconds, the config's own timeouts capped by it), and a stdio server's whole process group MUST be stopped when the test ends, whether it passed, failed, ran out of time or its caller went away. A failed test names its cause with a stable code: `url_refused`, `spawn_failed`, `exited` (with the exit code), `timeout`, `initialize_failed`, `connect_failed`, `auth_rejected` (an HTTP server answered 401 or 403) or `stored_secret_not_released`. A failure that depends on this machine — `spawn_failed`, `exited`, `timeout` or `connect_failed` — MUST also carry a hand-off prompt (the missing launcher to install, else the cause to find) built from the config's names with no secret value; `url_refused`, `auth_rejected`, `stored_secret_not_released` and `initialize_failed` carry none.
 
 #### Scenario: a stdio config is tested without saving anything
 - **GIVEN** the daemon is running and no MCP server is registered
@@ -768,6 +781,12 @@ The daemon MUST test an MCP server config that is not registered, so the Add dia
 - **GIVEN** a stdio config whose command prints the secret typed into the form on stderr and exits with status 3
 - **WHEN** the Add dialog tests it with that secret typed in
 - **THEN** the result is a failure with code `exited` and exit code 3, and its stderr tail shows the line with the secret redacted
+
+#### Scenario: a failed unsaved test that depends on this machine carries a hand-off
+- **GIVEN** a stdio config whose command is not found, or whose process exits, and whose environment holds a plain value
+- **WHEN** the Add dialog tests it
+- **THEN** the result carries a hand-off prompt naming the command, the error and the variable's name, and no secret or plain value
+- **AND** a failure the person must fix themselves, such as a cited stored secret, carries no hand-off
 
 #### Scenario: a test past its time limit stops the server's whole process group
 - **GIVEN** a stdio server that forks a child and never completes `initialize`
@@ -816,6 +835,7 @@ The daemon MUST run a request of a custom-tool group that is not saved yet — i
 - **GIVEN** a draft request whose base URL has nothing listening, and one whose path names an argument it does not declare
 - **WHEN** each is tested
 - **THEN** the first reports it could not connect and the second that the request could not be built, while a request the API answers reports no failure
+- **AND** only the one that could not connect carries a hand-off prompt
 
 ### Requirement: List what a re-import changes in the tools it keeps
 A re-import's preview MUST name, besides the operations it would add and the tools it would remove, every kept tool whose operation the spec now describes differently — an argument it now requires, or a changed method, path or body template — with the operation's text as last imported and as it now reads (the old text is absent for a tool imported before Coffer kept it), and an OpenAPI reading MUST carry each operation's first tag, so the import form can group operations by it.

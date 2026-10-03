@@ -43,7 +43,7 @@ interface Props {
   state: ServerState;
   testing: boolean;
   onTest: () => void;
-  onEdit: (focus?: "secret") => void;
+  onEdit: () => void;
   onOpenLog: () => void;
   onCopyConfig: () => void;
   onTurnOff: () => void;
@@ -128,7 +128,7 @@ export function McpServerHeader({
         <Button size="sm" variant="outline" onClick={onTest} disabled={testing}>
           <Play aria-hidden /> {testing ? t("mcp.page.testing") : t("mcp.page.test")}
         </Button>
-        <Button size="sm" variant="outline" onClick={() => onEdit()}>
+        <Button size="sm" variant="outline" onClick={onEdit}>
           <Pencil aria-hidden /> {t("mcp.page.edit")}
         </Button>
         <ActionMenu label={t("mcp.page.menu.label", { name: resource.name })} actions={actions} />

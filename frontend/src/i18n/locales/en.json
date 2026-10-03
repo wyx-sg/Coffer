@@ -376,8 +376,9 @@
         "needs": "It needs {{key}}. Add it under Environment, then test again.",
         "addVariable": "Add the variable"
       },
-      "toastTested_one": "Added {{name}} · Test passed · {{count}} tool for {{reach}}",
-      "toastTested_other": "Added {{name}} · Test passed · {{count}} tools for {{reach}}",
+      "toastAdded": "Added {{name}}",
+      "toastTested_one": "Test passed · {{count}} tool for {{reach}}",
+      "toastTested_other": "Test passed · {{count}} tools for {{reach}}",
       "reachHelp": "Who can call its tools. You can change it later.",
       "reachHelpBatch": "For every server added here. You can change each one later.",
       "testingBackground": "testing in the background",
@@ -397,8 +398,8 @@
         "secret": "secret",
         "waiting": "Waiting for approval"
       },
-      "toastTestedOff_one": "Added {{name}} · Test passed · {{count}} tool",
-      "toastTestedOff_other": "Added {{name}} · Test passed · {{count}} tools"
+      "toastTestedOff_one": "Test passed · {{count}} tool",
+      "toastTestedOff_other": "Test passed · {{count}} tools"
     },
     "import": {
       "title": "Review import",
@@ -592,7 +593,8 @@
       "colCalls24h": "Calls 24 h",
       "colErrors": "Errors",
       "colLastCall": "Last call",
-      "configCopied": "Config copied — it carries secret names only, never their values.",
+      "configCopied": "Config copied",
+      "configCopiedBody": "{{name}} as JSON, ready to paste into another tool",
       "delete": {
         "title": "Delete {{name}}?",
         "description": "This can’t be undone. Agents lose access at their next tool call.",
@@ -736,6 +738,8 @@
       "selectedBody": "{{names}}. Set who can use them or delete them from the bar above the list; coffer can’t be selected.",
       "turnOffMany": "Turn off {{count}} servers",
       "turnedOff": "{{name}} turned off",
+      "turnedOffBody": "Its settings and the agents you chose are kept.",
+      "testPassedBody": "The same set agents see now.",
       "testPassedToast_one": "Test passed · {{count}} tool",
       "testPassedToast_other": "Test passed · {{count}} tools",
       "viewErrors": "View errors",
@@ -2966,12 +2970,6 @@
       "masterTitle": "The master folder is gone",
       "folderTitle": "Coffer left {{agent}}'s folder alone — it needs you",
       "folderBody": "Coffer found a folder at {{path}} where {{name}}'s link should be. Compare the two and choose which one to keep.",
-      "requiresMissing_one": "{{count}} command this skill needs is missing",
-      "requiresMissing_other": "{{count}} commands this skill needs are missing",
-      "requiresLogin_one": "{{count}} isn't logged in",
-      "requiresLogin_other": "{{count}} aren't logged in",
-      "requiresOld_one": "{{count}} is too old",
-      "requiresOld_other": "{{count}} are too old",
       "requiresMissingPart_one": "{{commands}} isn’t installed",
       "requiresMissingPart_other": "{{commands}} aren’t installed",
       "requiresLoginPart_one": "{{commands}} isn't logged in",
@@ -3041,6 +3039,7 @@
       "invalid": "No valid SKILL.md",
       "files_one": "{{count}} file",
       "files_other": "{{count}} files",
+      "found": "Found {{day}}",
       "body": "It is in Coffer’s skills store but not in your library — copied in by hand, or left by an interrupted import. Add it to give it reach and history, or delete it.",
       "add": "Add to library",
       "delete": "Delete folder…",

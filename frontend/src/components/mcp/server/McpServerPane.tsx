@@ -76,7 +76,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
   const enable = useEnableResource();
   const disable = useDisableResource();
   const secrets = useSecrets(state.kind === "secretMissing");
-  const [edit, setEdit] = useState<{ focus?: "secret" } | null>(null);
+  const [edit, setEdit] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const [addingSecret, setAddingSecret] = useState(false);
@@ -105,7 +105,9 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
     runTest.mutate(undefined, {
       onSuccess: (result) => {
         if (result.ok)
-          toast.success(t("mcp.page.testPassedToast", { count: result.tool_count ?? 0 }));
+          toast.success(t("mcp.page.testPassedToast", { count: result.tool_count ?? 0 }), {
+            description: t("mcp.page.testPassedBody"),
+          });
       },
       onSettled: refresh,
     });
@@ -115,7 +117,10 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
       { kind: "mcp_server", uid },
       {
         onSuccess: () =>
-          toast.success(t("mcp.page.turnedOff", { name: resource.name }), { undo: turnOn }),
+          toast.success(t("mcp.page.turnedOff", { name: resource.name }), {
+            description: t("mcp.page.turnedOffBody"),
+            undo: turnOn,
+          }),
       },
     );
   const copyConfig = async () => {
@@ -124,7 +129,9 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
       await navigator.clipboard.writeText(
         JSON.stringify({ [resource.name]: resource.config }, null, 2),
       );
-      toast.success(t("mcp.page.configCopied"));
+      toast.success(t("mcp.page.configCopied"), {
+        description: t("mcp.page.configCopiedBody", { name: resource.name }),
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
     }
@@ -150,7 +157,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
         state={state}
         testing={runTest.isPending}
         onTest={runTestNow}
-        onEdit={(focus) => setEdit({ focus })}
+        onEdit={() => setEdit(true)}
         onOpenLog={() => setLogOpen(true)}
         onCopyConfig={() => void copyConfig()}
         onTurnOff={turnOff}
@@ -180,7 +187,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
                 onViewErrors={viewErrors}
                 onTurnOn={turnOn}
                 onAddSecret={() => setAddingSecret(true)}
-                onReplaceKey={() => setEdit({ focus: "secret" })}
+                onReplaceKey={() => setEdit(true)}
               />
             }
             tools={
@@ -215,8 +222,7 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
         <EditMcpServerDialog
           resource={resource}
           open
-          focus={edit.focus}
-          onOpenChange={(open) => (open ? undefined : setEdit(null))}
+          onOpenChange={(open) => (open ? undefined : setEdit(false))}
         />
       ) : null}
       <ReplaceSecretDialog

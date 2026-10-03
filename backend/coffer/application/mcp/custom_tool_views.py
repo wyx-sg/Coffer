@@ -19,6 +19,7 @@ from coffer.application.mcp.custom_tool_ports import (
     BoundaryCheckPort,
     SecretPresencePort,
     ToolOutcomesPort,
+    ToolReach,
     ToolReachRepoPort,
 )
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
@@ -38,7 +39,8 @@ WINDOW = timedelta(hours=24)
 @dataclass(frozen=True)
 class ToolView:
     tool: HttpApiTool
-    reach_override: list[str] | None
+    #: ``None`` follows the group; ``"all"`` is every agent; a list is the chosen agents.
+    reach_override: ToolReach | None
     calls: int
     failures: int
 
@@ -60,6 +62,9 @@ class GroupView:
     calls: int
     failures: int
     last_call_at: datetime | None
+    #: The newest call's status and error text, for the failing group's hand-off.
+    last_call_status: str | None
+    last_call_error: str | None
     tools: list[ToolView]
 
 
@@ -147,6 +152,8 @@ class GroupViewer:
                     calls=sum(c for c, _ in per_tool.values()),
                     failures=sum(f for _, f in per_tool.values()),
                     last_call_at=last.timestamp if last else None,
+                    last_call_status=last.status if last else None,
+                    last_call_error=last.error_message if last else None,
                     tools=tools,
                 )
             )

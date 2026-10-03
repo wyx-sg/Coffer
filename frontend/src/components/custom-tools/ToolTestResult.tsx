@@ -12,7 +12,6 @@ import { useSecretChoices } from "@/components/secret/useSecretChoices";
 import { Button } from "@/components/ui/button";
 import type { CustomToolTestOut } from "@/lib/api/customTools";
 import { hostOf } from "@/lib/customTools/groups";
-import { testFailurePrompt } from "@/lib/customTools/handoff";
 import { cn, formatBytes } from "@/lib/utils";
 import { ResponseViewer } from "./ResponseViewer";
 
@@ -112,17 +111,8 @@ export function ToolTestResult({
       : !result.ok
         ? t("customTools.test.hint.httpError")
         : null;
-  const handoff =
-    result.failure === "connect" || result.failure === "timeout"
-      ? testFailurePrompt({
-          group,
-          method,
-          url: result.url,
-          failure: result.failure,
-          detail: result.error,
-          seconds: timeoutSeconds,
-        })
-      : null;
+  // The daemon sends the prompt for a failure that depends on this machine (no connection, timeout).
+  const handoff = result.handoff?.prompt ?? null;
   const actions =
     (result.failure === "timeout" && onChangeTimeout) || rejected || handoff ? (
       <div className="flex flex-wrap items-center gap-2">

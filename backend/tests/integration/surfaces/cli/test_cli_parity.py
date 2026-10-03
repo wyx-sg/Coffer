@@ -342,6 +342,10 @@ _FILE_BACKED_ROUTES: dict[str, str] = {
     "GET /skills/{uid}/files": "path skill <name>",
     "GET /skills/{uid}/files/content": "path skill <name>",
     "PUT /skills/{uid}/files/content": "path skill <name>",
+    # An orphan folder sits in the vault's skills store under its own name
+    # (spec skill-manager "Act on a folder in the skills store that no skill claims").
+    "GET /skills/orphans/{name}/files": "path vault",
+    "GET /skills/orphans/{name}/files/content": "path vault",
     "GET /agents/{uid}/config-files": "path agent <name> config",
     "GET /agents/{uid}/config-files/{key}": "path agent <name> config",
     "GET /agents/{uid}/config-files/{key}/files/{relpath}": "path agent <name> config",

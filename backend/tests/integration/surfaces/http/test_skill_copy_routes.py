@@ -178,6 +178,35 @@ def test_orphans_list_adopt_and_remove(c: TestClient, tmp_path: pathlib.Path) ->
     assert r.json()["error"]["code"] == "SKILL_ORPHAN_NOT_FOUND"
 
 
+@pytest.mark.acceptance(spec="skill-manager", scenario="an orphan folder's files can be read")
+def test_orphan_files_are_readable_read_only(c: TestClient) -> None:
+    root = default_master_root()
+    _skill(root / "lint-rules", "lint-rules")
+    (root / "lint-rules" / "rules.md").write_text("no tabs")
+    (root / "lint-rules" / "blob.bin").write_bytes(b"\x00\x01\x02")
+
+    item = c.get("/api/v1/skills/orphans").json()["items"][0]
+    assert item["file_count"] == 3
+    assert item["found_at"]
+
+    tree = c.get("/api/v1/skills/orphans/lint-rules/files").json()["root"]
+    assert {n["name"] for n in tree["children"]} == {"SKILL.md", "rules.md", "blob.bin"}
+
+    r = c.get("/api/v1/skills/orphans/lint-rules/files/content", params={"path": "rules.md"})
+    assert r.status_code == 200
+    assert r.json()["content"] == "no tabs"
+    r = c.get("/api/v1/skills/orphans/lint-rules/files/content", params={"path": "blob.bin"})
+    assert r.json()["binary"] is True
+    r = c.get("/api/v1/skills/orphans/lint-rules/files/content", params={"path": "../x"})
+    assert r.status_code == 400
+    r = c.get("/api/v1/skills/orphans/lint-rules/files/content", params={"path": "nope.md"})
+    assert r.status_code == 404
+    # A folder that is not an orphan has no files to read.
+    r = c.get("/api/v1/skills/orphans/ghost/files")
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "SKILL_ORPHAN_NOT_FOUND"
+
+
 @pytest.mark.acceptance(spec="skill-manager", scenario="a skill whose master is gone says so")
 def test_master_missing_is_on_the_read_model(c: TestClient, tmp_path: pathlib.Path) -> None:
     skill = _import(c, _skill(tmp_path / "src" / "pdf", "pdf"))

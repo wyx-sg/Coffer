@@ -183,30 +183,42 @@ def scope_cmd(
     group: str = typer.Argument(..., help="Group name"),
     tool: str = typer.Argument(..., help="Tool name"),
     agents: str | None = typer.Option(None, "--agents", help="Narrow to these agents (a,b)"),
+    every: bool = typer.Option(False, "--all", help="Reach every agent, later ones too"),
     follow_group: bool = typer.Option(False, "--group", help="Clear the override"),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
     """Show or narrow which agents one tool reaches (this machine only)."""
     verbose = verbose_of(ctx)
-    if agents is not None and follow_group:
-        typer.echo("pick at most one of --agents / --group", err=True)
+    if sum([agents is not None, every, follow_group]) > 1:
+        typer.echo("pick at most one of --agents / --all / --group", err=True)
         raise typer.Exit(2)
     c, _info = _cli_client.client_or_exit()
     with c:
-        if agents is None and not follow_group:
+        if agents is None and not follow_group and not every:
             data = get_group(c, group, verbose=verbose)
         else:
             names = [n.strip() for n in (agents or "").split(",") if n.strip()]
-            payload = {"agents": None if follow_group else _agent_uids(c, names, verbose=verbose)}
+            payload: dict[str, Any] = (
+                {"mode": "inherit"}
+                if follow_group
+                else {"mode": "all"}
+                if every
+                else {"mode": "chosen", "agents": _agent_uids(c, names, verbose=verbose)}
+            )
             r = c.put(f"/custom-tools/{group}/tools/{tool}/reach", json=payload)
             _cli_client.check(r, verbose=verbose)
             data = r.json()
-        override = tool_of(data, tool).get("reach_override")
+        found = tool_of(data, tool)
+        mode = found.get("reach_mode", "inherit")
+        override = found.get("reach_override")
         shown = (
             agent_names(c, {"agents": override}, verbose=verbose) if override is not None else None
         )
     if output_json:
-        typer.echo(json.dumps({"reach_override": shown}, indent=2))
+        typer.echo(json.dumps({"reach_mode": mode, "reach_override": shown}, indent=2))
+        return
+    if mode == "all":
+        typer.echo("reach: every agent the group reaches, later ones too")
         return
     typer.echo(f"reach: {'follows the group' if shown is None else reach_line(shown)}")
 

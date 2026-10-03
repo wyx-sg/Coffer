@@ -14,7 +14,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from coffer.surfaces.http.handoff_schemas import HandoffOut
+
 HttpMethodName = Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
+ToolReachMode = Literal["inherit", "all", "chosen"]
 GroupHealthName = Literal["failing", "attention", "healthy", "idle", "off"]
 SecretStateName = Literal["none", "present", "missing", "pending_approval"]
 #: How a test run failed before the API answered: the request could not be
@@ -74,7 +77,10 @@ class CustomToolOut(BaseModel):
     #: Whether the flag was set by hand rather than following the method.
     changes_data_set: bool
     operation: str | None
-    #: Agent uids the tool is narrowed to; ``null`` follows the group.
+    #: How the tool's own reach stands: ``inherit`` follows the group, ``all`` is
+    #: every agent (later ones too), ``chosen`` is ``reach_override``.
+    reach_mode: ToolReachMode
+    #: Agent uids the tool is narrowed to; ``null`` unless ``reach_mode`` is ``chosen``.
     reach_override: list[str] | None
     calls_24h: int
     failures_24h: int
@@ -161,6 +167,9 @@ class CustomToolGroupOut(BaseModel):
     calls_24h: int
     failures_24h: int
     last_call_at: datetime | None
+    #: A failing group (its last call failed): the prompt that hands finding why to
+    #: an agent. ``null`` otherwise.
+    handoff: HandoffOut | None = None
     tools: list[CustomToolOut]
     created_at: datetime
     updated_at: datetime
@@ -171,8 +180,12 @@ class CustomToolGroupListOut(BaseModel):
 
 
 class CustomToolReachIn(BaseModel):
-    #: Agent uids the tool is narrowed to; ``null`` clears the override.
-    agents: list[str] | None = None
+    """One tool's own reach: ``inherit`` clears the override (same as the group),
+    ``all`` is every agent the group reaches (agents added later too), ``chosen``
+    narrows it to ``agents``."""
+
+    mode: ToolReachMode
+    agents: list[str] = Field(default_factory=list)
 
 
 class CustomToolTestIn(BaseModel):
@@ -206,6 +219,9 @@ class CustomToolTestOut(BaseModel):
     error: str | None
     #: Set when no answer came back; ``null`` when the API answered.
     failure: TestFailureName | None = None
+    #: A test that could not connect or timed out: the prompt that hands the
+    #: network problem to an agent. ``null`` for anything else.
+    handoff: HandoffOut | None = None
 
 
 class OpenApiReadIn(BaseModel):

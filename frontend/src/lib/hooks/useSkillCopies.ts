@@ -13,6 +13,8 @@ import {
   resourcesKey,
   scopeKey,
   skillCopyKey,
+  skillOrphanFileKey,
+  skillOrphanFilesKey,
   skillOrphansKey,
   skillsKey,
 } from "@/lib/api/queryKeys";
@@ -98,5 +100,23 @@ export function useChangeSkillSource() {
   return useMutation({
     mutationFn: (vars: { uid: string; url: string; ref: string | null; path: string | null }) =>
       skillsApi.changeSource(vars.uid, { url: vars.url, ref: vars.ref, path: vars.path }),
+  });
+}
+
+/** An orphan folder's file tree, read-only (same shape as a skill's Files tab). */
+export function useSkillOrphanFiles(name: string) {
+  return useQuery({
+    queryKey: skillOrphanFilesKey(name),
+    queryFn: async () => (await skillsApi.orphanFiles(name)).root,
+    enabled: !!name,
+  });
+}
+
+/** One file of an orphan folder. */
+export function useSkillOrphanFileContent(name: string, path: string | null) {
+  return useQuery({
+    queryKey: skillOrphanFileKey(name, path ?? ""),
+    queryFn: () => skillsApi.orphanFileContent(name, path as string),
+    enabled: !!name && !!path,
   });
 }

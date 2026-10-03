@@ -24,6 +24,7 @@ from pydantic import ValidationError
 from coffer.application.audit_service import AuditService
 from coffer.application.mcp.custom_tool_ports import (
     CustomToolRunnerPort,
+    ToolReach,
     ToolReachRepoPort,
     ToolTestOutcome,
 )
@@ -226,21 +227,25 @@ class CustomToolService:
         return await self.view(name)
 
     async def set_tool_reach(
-        self, name: str, tool_name: str, agents: list[str] | None, *, actor: str
+        self, name: str, tool_name: str, reach: ToolReach | None, *, actor: str
     ) -> GroupView:
-        """Set (a list of agent uids) or clear (``None``) one tool's override.
+        """Set one tool's override — a list of agent uids, or ``"all"`` (every
+        agent, later ones too) — or clear it (``None``: same as the group).
         Machine-local; audited as a scope change naming the tool."""
         resource, transport = await self.group(name)
         if transport.tool(tool_name) is None:
             raise CustomToolNotFound(name, tool_name)
-        if agents is not None and any(not isinstance(a, str) or not a for a in agents):
+        if isinstance(reach, list) and any(not isinstance(a, str) or not a for a in reach):
             raise ConfigValidationError("a reach override lists agent uids")
-        await self._reach.set_override(resource.uid, tool_name, agents)
+        await self._reach.set_override(resource.uid, tool_name, reach)
         await self._audit.record(
             AuditEventType.RESOURCE_SCOPE_UPDATED.value,
             resource=resource,
             actor=actor,
-            details={"tool": tool_name, "scope": None if agents is None else {"agents": agents}},
+            details={
+                "tool": tool_name,
+                "scope": None if reach is None else {"agents": None if reach == "all" else reach},
+            },
         )
         return await self.view(name)
 

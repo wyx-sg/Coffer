@@ -40,6 +40,7 @@ export const billing = makeGroup({
       method: "POST",
       path: "/invoices",
       changes_data: true,
+      reach_mode: "chosen",
       reach_override: ["ag-cc"],
     }),
   ],

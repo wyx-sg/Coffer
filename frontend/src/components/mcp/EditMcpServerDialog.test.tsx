@@ -69,18 +69,18 @@ function wrap(ui: React.ReactNode) {
 }
 
 /** The dialog is controlled; the harness plays the detail header's Edit button. */
-function Harness({ resource, focus }: { resource: ResourceOut; focus?: "secret" }) {
+function Harness({ resource }: { resource: ResourceOut }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button onClick={() => setOpen(true)}>edit</button>
-      <EditMcpServerDialog resource={resource} open={open} onOpenChange={setOpen} focus={focus} />
+      <EditMcpServerDialog resource={resource} open={open} onOpenChange={setOpen} />
     </>
   );
 }
 
-function openDialog(resource: ResourceOut = stdioResource, focus?: "secret") {
-  render(wrap(<Harness resource={resource} focus={focus} />));
+function openDialog(resource: ResourceOut = stdioResource) {
+  render(wrap(<Harness resource={resource} />));
   fireEvent.click(screen.getByRole("button", { name: "edit" }));
 }
 

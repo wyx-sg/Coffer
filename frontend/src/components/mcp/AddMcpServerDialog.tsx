@@ -102,15 +102,15 @@ export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }
     void testAdded([added.uid]).then(([r]) => {
       if (r.status === "fulfilled" && r.value.ok) {
         const tools = r.value.tool_count ?? 0;
-        toast.success(
-          reach.mode === "disabled"
-            ? t("mcp.add.toastTestedOff", { name: added.name, count: tools })
-            : t("mcp.add.toastTested", {
-                name: added.name,
-                count: tools,
-                reach: reachPhrase(t, reach, agents),
-              }),
-        );
+        toast.success(t("mcp.add.toastAdded", { name: added.name }), {
+          description:
+            reach.mode === "disabled"
+              ? t("mcp.add.toastTestedOff", { count: tools })
+              : t("mcp.add.toastTested", {
+                  count: tools,
+                  reach: reachPhrase(t, reach, agents),
+                }),
+        });
       } else {
         const error =
           r.status === "fulfilled"

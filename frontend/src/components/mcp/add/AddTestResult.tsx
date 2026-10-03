@@ -36,7 +36,7 @@ const REASONS = new Set([
 ]);
 
 /** Failures that depend on this machine (launcher, network, process). */
-const MACHINE = new Set(["spawn_failed", "exited", "timeout", "connect_failed", "initialize_failed"]);
+const MACHINE = new Set(["spawn_failed", "exited", "timeout", "connect_failed"]);
 
 const seconds = (ms: number) => (ms / 1000).toFixed(1);
 

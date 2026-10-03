@@ -171,6 +171,14 @@ export const skillsApi = {
 
   // ----- folders in the store no skill claims -----
   orphans: () => unwrap(getApiClient().GET("/skills/orphans")),
+  orphanFiles: (name: string) =>
+    unwrap(getApiClient().GET("/skills/orphans/{name}/files", { params: { path: { name } } })),
+  orphanFileContent: (name: string, path: string) =>
+    unwrap(
+      getApiClient().GET("/skills/orphans/{name}/files/content", {
+        params: { path: { name }, query: { path } },
+      }),
+    ),
   adoptOrphan: (name: string) =>
     unwrap(getApiClient().POST("/skills/orphans/{name}/adopt", { params: { path: { name } } })),
   removeOrphan: (name: string) =>

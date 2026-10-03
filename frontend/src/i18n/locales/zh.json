@@ -376,8 +376,9 @@
         "needs": "它需要 {{key}}。请在「环境变量」下添加，然后再次测试。",
         "addVariable": "添加该变量"
       },
-      "toastTested_one": "已添加 {{name}} · 测试通过 · 提供给 {{reach}} 的 {{count}} 个工具",
-      "toastTested_other": "已添加 {{name}} · 测试通过 · 提供给 {{reach}} 的 {{count}} 个工具",
+      "toastAdded": "已添加 {{name}}",
+      "toastTested_one": "测试通过 · 提供给 {{reach}} 的 {{count}} 个工具",
+      "toastTested_other": "测试通过 · 提供给 {{reach}} 的 {{count}} 个工具",
       "reachHelp": "谁可以调用它的工具。之后可以修改。",
       "reachHelpBatch": "适用于这里添加的每个服务器。之后可以逐个修改。",
       "testingBackground": "正在后台测试",
@@ -397,8 +398,8 @@
         "secret": "密钥",
         "waiting": "等待批准"
       },
-      "toastTestedOff_one": "已添加 {{name}} · 测试通过 · {{count}} 个工具",
-      "toastTestedOff_other": "已添加 {{name}} · 测试通过 · {{count}} 个工具"
+      "toastTestedOff_one": "测试通过 · {{count}} 个工具",
+      "toastTestedOff_other": "测试通过 · {{count}} 个工具"
     },
     "import": {
       "title": "检查导入",
@@ -592,7 +593,8 @@
       "colCalls24h": "24 小时调用",
       "colErrors": "错误",
       "colLastCall": "最近调用",
-      "configCopied": "配置已复制 — 其中只有密钥名称，从不包含密钥值。",
+      "configCopied": "配置已复制",
+      "configCopiedBody": "{{name}} 的 JSON 配置，可粘贴到其他工具",
       "delete": {
         "title": "删除 {{name}}？",
         "description": "此操作无法撤销。智能体在下次调用工具时将失去访问权限。",
@@ -736,6 +738,8 @@
       "selectedBody": "{{names}}。在列表上方的栏里设置谁能使用它们，或删除它们；coffer 不能被选中。",
       "turnOffMany": "关闭 {{count}} 个服务器",
       "turnedOff": "{{name}} 已关闭",
+      "turnedOffBody": "它的设置和你选的智能体都保留着。",
+      "testPassedBody": "与智能体现在看到的工具一致。",
       "testPassedToast_one": "测试通过 · {{count}} 个工具",
       "testPassedToast_other": "测试通过 · {{count}} 个工具",
       "viewErrors": "查看错误",
@@ -2966,12 +2970,6 @@
       "masterTitle": "主文件夹不见了",
       "folderTitle": "Coffer 没有动 {{agent}} 的文件夹，需要你来处理",
       "folderBody": "Coffer 在 {{path}} 发现了一个文件夹，那里本应是 {{name}} 的链接。比较两边，选择保留哪一个。",
-      "requiresMissing_one": "这个技能需要的 {{count}} 个命令缺失",
-      "requiresMissing_other": "这个技能需要的 {{count}} 个命令缺失",
-      "requiresLogin_one": "{{count}} 个未登录",
-      "requiresLogin_other": "{{count}} 个未登录",
-      "requiresOld_one": "{{count}} 个版本太旧",
-      "requiresOld_other": "{{count}} 个版本太旧",
       "requiresMissingPart_one": "{{commands}} 未安装",
       "requiresMissingPart_other": "{{commands}} 未安装",
       "requiresLoginPart_one": "{{commands}} 未登录",
@@ -3041,6 +3039,7 @@
       "invalid": "没有有效的 SKILL.md",
       "files_one": "{{count}} 个文件",
       "files_other": "{{count}} 个文件",
+      "found": "发现于 {{day}}",
       "body": "它在 Coffer 的技能目录里，但不在你的技能库中——是手动复制进来的，或是中断的导入留下的。添加它就有了范围和历史，也可以删除它。",
       "add": "添加到技能库",
       "delete": "删除文件夹…",

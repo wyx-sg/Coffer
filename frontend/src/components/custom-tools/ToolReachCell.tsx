@@ -1,6 +1,6 @@
 // src/components/custom-tools/ToolReachCell.tsx — one tool's reach cell in the table (4.2.20): the inherited reach
 // control — Same as the group (default) · All agents · Chosen agents — written to the tool's own reach endpoint on
-// every change. An override covering every registered agent reads as All agents.
+// every change. All agents is the tool's own "every agent" (later ones too), not a list of today's agents.
 import { useTranslation } from "react-i18next";
 
 import {
@@ -13,6 +13,12 @@ import { useToolReach } from "@/lib/hooks/useToolReach";
 import { pickableAgents } from "@/lib/reach/reachState";
 import { agentTypeLabel } from "@/lib/agents/display";
 
+const MODES: Record<CustomTool["reach_mode"], InheritedMode> = {
+  inherit: "inherited",
+  all: "everywhere",
+  chosen: "restricted",
+};
+
 interface Props {
   group: CustomToolGroup;
   tool: CustomTool;
@@ -24,10 +30,7 @@ export function ToolReachCell({ group, tool }: Props) {
   const registered = pickableAgents(data);
   const reach = useToolReach(group.name, tool.name);
   const override = tool.reach_override;
-  const coversAll =
-    override !== null && registered.length > 0 && registered.every((a) => override.includes(a.uid));
-  const mode: InheritedMode =
-    override === null ? "inherited" : coversAll ? "everywhere" : "restricted";
+  const mode = MODES[tool.reach_mode];
 
   const reached = registered.filter((a) => group.scope === null || group.scope.includes(a.uid));
   const names = reached.map((a) => (a.type ? agentTypeLabel(a.type) : a.name));
@@ -47,9 +50,11 @@ export function ToolReachCell({ group, tool }: Props) {
       resourceName={tool.name}
       inheritedSub={inheritedSub}
       footnote={t("customTools.tools.reachFootnote")}
-      onInherit={() => reach.save(null)}
-      onEverywhere={() => reach.save(registered.map((a) => a.uid))}
-      onRestricted={(scope, changed) => reach.save(scope.agents, changed ?? null)}
+      onInherit={() => reach.save({ mode: "inherit" })}
+      onEverywhere={() => reach.save({ mode: "all" })}
+      onRestricted={(scope, changed) =>
+        reach.save({ mode: "chosen", agents: scope.agents ?? [] }, changed ?? null)
+      }
       saveState={reach.state}
       failure={reach.failure}
       ariaLabel={t("customTools.tools.reachOf", { name: tool.name })}

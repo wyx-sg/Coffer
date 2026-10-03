@@ -209,6 +209,7 @@ acceptance(
           file_count: 1,
           description: null,
           message: null,
+          found_at: "2026-09-27T10:00:00Z",
         },
       ],
     });

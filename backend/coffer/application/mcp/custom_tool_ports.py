@@ -10,22 +10,27 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from coffer.domain.mcp.capability import MCPInvocation
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
 from coffer.domain.mcp.openapi_import import OperationSource
 from coffer.domain.secrets import SecretApproval, SecretDestination
 
+#: A tool's own reach: the agent uids it is narrowed to, or ``"all"`` — every
+#: agent the group reaches, including ones added later. No override at all
+#: (``None`` where one is read or set) is "same as the group".
+ToolReach = list[str] | Literal["all"]
+
 
 class ToolReachRepoPort(Protocol):
-    """Per-tool reach overrides: ``(group uid, tool) -> agent uids``."""
+    """Per-tool reach overrides: ``(group uid, tool) -> ToolReach``."""
 
-    async def overrides_for(self, resource_uids: Sequence[str]) -> dict[str, dict[str, list[str]]]:
-        """``{group uid: {tool: [agent uid, …]}}`` for the groups asked about."""
+    async def overrides_for(self, resource_uids: Sequence[str]) -> dict[str, dict[str, ToolReach]]:
+        """``{group uid: {tool: [agent uid, …] | "all"}}`` for the groups asked about."""
         ...
 
-    async def set_override(self, resource_uid: str, tool: str, agents: list[str] | None) -> None:
+    async def set_override(self, resource_uid: str, tool: str, reach: ToolReach | None) -> None:
         """Set a tool's override, or clear it with ``None``."""
         ...
 

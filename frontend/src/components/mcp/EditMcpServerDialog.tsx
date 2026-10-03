@@ -50,8 +50,6 @@ interface Props {
   resource: ResourceOut;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Open with the first stored secret's Replace already open and focused. */
-  focus?: "secret";
 }
 
 const quote = (a: string) =>
@@ -60,7 +58,7 @@ const quote = (a: string) =>
 const initialRows = (resource: ResourceOut): KeyValueSecretRow[] =>
   rowsOf(resource.config, transportFieldsOf(resource.config).plain);
 
-export function EditMcpServerDialog({ resource, open, onOpenChange, focus }: Props) {
+export function EditMcpServerDialog({ resource, open, onOpenChange }: Props) {
   const { t } = useTranslation();
   const http = transportFieldsOf(resource.config).type === "http";
   const [description, setDescription] = useState("");
@@ -87,7 +85,6 @@ export function EditMcpServerDialog({ resource, open, onOpenChange, focus }: Pro
     setCwd(f.cwd);
     const loaded = initialRows(resource);
     setRows(loaded);
-    setFocusRow(focus === "secret" ? loaded.findIndex((r) => r.value.kind !== "plain") : undefined);
     setTimeouts(timeoutsOf(resource.config));
     setTestedKey(null);
     setTestError(null);

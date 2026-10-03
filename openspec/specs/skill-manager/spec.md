@@ -811,7 +811,7 @@ The delete MUST also be possible while leaving such a folder alone: `DELETE /api
 - **THEN** the clean one is deleted, the other is not and carries `SKILL_COPY_NOT_OURS` with the folder's path, and a second call with `keep_foreign_copies` deletes it and names the folder it kept
 
 ### Requirement: Act on a folder in the skills store that no skill claims
-The system MUST list the folders in `~/.coffer/vault/skills/` that no skill record claims (`GET /skills/orphans`: each with its path, whether its SKILL.md is valid and names the folder, and its file count) and offer two actions on one: add it to the library in place (`POST /skills/orphans/{name}/adopt`, validated like an import, reach as for a fresh import) or move it out of the store (`DELETE /skills/orphans/{name}`, to `~/.coffer/content/backup/skills/orphans/`, never a hard delete). A folder a record claims is not an orphan, and both actions refuse it with `404 SKILL_ORPHAN_NOT_FOUND`. A folder whose name is not a safe skill name is not listed as one and is left alone, so one stray folder never stops delivery for every skill.
+The system MUST list the folders in `~/.coffer/vault/skills/` that no skill record claims (`GET /skills/orphans`: each with its path, whether its SKILL.md is valid and names the folder, its file count and when the folder last changed) and let the person read one's files without touching them (`GET /skills/orphans/{name}/files` for the tree and `GET /skills/orphans/{name}/files/content?path=` for one file — the shapes, containment and size limits of a managed skill's file reads; a path outside the folder is refused with 400, a name that is no orphan with `404 SKILL_ORPHAN_NOT_FOUND`) and offer two actions on one: add it to the library in place (`POST /skills/orphans/{name}/adopt`, validated like an import, reach as for a fresh import) or move it out of the store (`DELETE /skills/orphans/{name}`, to `~/.coffer/content/backup/skills/orphans/`, never a hard delete). A folder a record claims is not an orphan, and both actions refuse it with `404 SKILL_ORPHAN_NOT_FOUND`. A folder whose name is not a safe skill name is not listed as one and is left alone, so one stray folder never stops delivery for every skill.
 
 #### Scenario: a folder with an unsafe name does not stop delivery
 - **GIVEN** a skills store holding a valid skill and a folder named `my skill`
@@ -822,6 +822,11 @@ The system MUST list the folders in `~/.coffer/vault/skills/` that no skill reco
 - **GIVEN** two folders with valid SKILL.md files in the skills store that no skill claims
 - **WHEN** the user adds the first to the library and moves the second out
 - **THEN** the first is a skill in the library, the second is under the backup folder and no longer in the store, and neither is listed as an orphan
+
+#### Scenario: an orphan folder's files can be read
+- **GIVEN** an orphan folder holding SKILL.md, a text file and a binary file
+- **WHEN** the person reads its file tree and each file, and asks for a path outside the folder
+- **THEN** the tree and the text come back, the binary file is flagged binary with no text, the outside path is refused with 400, and a name that is no orphan is refused with `SKILL_ORPHAN_NOT_FOUND`
 
 ### Requirement: Say when a skill's master folder is gone
 Every read of a skill MUST carry `master_missing` — true when its master folder is no longer on disk — whether or not the skill is enabled, so a surface can say so even for a skill that is off and has no delivery the drift report would look at.

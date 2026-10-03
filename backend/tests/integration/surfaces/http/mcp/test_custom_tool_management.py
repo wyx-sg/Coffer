@@ -165,7 +165,8 @@ def test_reimport_applies_additions_and_removals_keeping_switches(daemon: Bounda
     agent_uid = "c" * 32
     assert (
         daemon.client.put(
-            "/api/v1/custom-tools/billing/tools/list_charges/reach", json={"agents": [agent_uid]}
+            "/api/v1/custom-tools/billing/tools/list_charges/reach",
+            json={"mode": "chosen", "agents": [agent_uid]},
         ).status_code
         == 200
     )
@@ -230,6 +231,9 @@ def test_the_group_list_puts_a_failing_group_first(daemon: BoundaryDaemon, api: 
         ("c-off", "off"),
     ]
     assert groups[0]["failures_24h"] == 1
+    # The failing group hands its diagnosis to an agent; a healthy or off one does not.
+    assert "b-bad" in groups[0]["handoff"]["prompt"]
+    assert groups[1]["handoff"] is None and groups[2]["handoff"] is None
 
 
 @pytest.mark.acceptance(
@@ -277,7 +281,9 @@ def test_deleting_a_group_keeps_its_secret_and_drops_its_overrides(
     daemon: BoundaryDaemon, api: FakeHttpApi
 ):
     create_group(daemon, "billing", api.base_url, [tool("a", "GET", "/a")])
-    daemon.client.put("/api/v1/custom-tools/billing/tools/a/reach", json={"agents": ["e" * 32]})
+    daemon.client.put(
+        "/api/v1/custom-tools/billing/tools/a/reach", json={"mode": "chosen", "agents": ["e" * 32]}
+    )
     assert daemon.client.delete("/api/v1/custom-tools/billing").status_code == 204
     assert daemon.value(f"secret/{SECRET_NAME}") == SECRET_VALUE
     assert json.loads(tool_reach_path(daemon.home).read_text()) == {}
