@@ -126,7 +126,7 @@ function renderAt(search = "", location = "skills", name = "loose") {
 }
 
 describe("UnmanagedSkillDetailPage", () => {
-  test("the header names the skill, badges it unmanaged and links back to the Skills tab", async () => {
+  test("the header names the skill, and badges it unmanaged", async () => {
     stub();
     renderAt();
 
@@ -137,11 +137,6 @@ describe("UnmanagedSkillDetailPage", () => {
     // The location reads in the header badge and again in the Overview.
     expect(screen.getAllByText(en.agents.skillsTab.locationSkills)).toHaveLength(2);
     expect(api.unmanagedSkill).toHaveBeenCalledWith("u-cc", "loose", "skills");
-
-    const back = await screen.findByRole("link", { name: /Back to Skills/ });
-    expect(back).toHaveAttribute("href", "/agents/claude_code/skills");
-    fireEvent.click(back);
-    expect(await screen.findByTestId("where")).toHaveTextContent("/agents/claude_code/skills");
   });
 
   test("the overview shows the SKILL.md description and the folder path", async () => {
@@ -246,7 +241,7 @@ describe("UnmanagedSkillDetailPage", () => {
     expect(
       await screen.findByText(en.agents.skillsTab.unmanagedDetail.notFound),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Back to/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Skills" })).toHaveAttribute(
       "href",
       "/agents/claude_code/skills",
     );

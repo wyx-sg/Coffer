@@ -293,11 +293,6 @@ describe("MemoryDetailPage", () => {
     await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(/^\/memory$/));
   });
 
-  test("offers the way back to the partitions list", async () => {
-    renderAt(`/memory/${COFFER.uid}`);
-    expect(await screen.findByRole("link", { name: /back to memory/i })).toBeInTheDocument();
-  });
-
   acceptance("web-ui", "a kind that cannot be disabled shows no status control", async () => {
     // The partition's page half: no reach or status button in the header.
     renderAt(`/memory/${COFFER.uid}`);

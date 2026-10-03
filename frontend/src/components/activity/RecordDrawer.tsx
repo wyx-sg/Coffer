@@ -21,7 +21,6 @@ import { useToast } from "@/components/ui/toast";
 import { describeActivity } from "@/lib/activity/activityText";
 import { recordLogger, type ActivityRecord } from "@/lib/activity/records";
 import { useKindPageOpen } from "@/lib/hooks/useFeatures";
-import { useHereOriginState } from "@/lib/origin";
 import { changeLink, nearby, offsetLabel, whenLabel } from "@/lib/activity/recordText";
 import { useServerFailures } from "@/lib/hooks/useServerFailures";
 import {
@@ -86,7 +85,6 @@ export function RecordDrawer({
   };
 
   const pageOpen = useKindPageOpen();
-  const origin = useHereOriginState();
   const link =
     record.source === "change"
       ? pageOpen(record.entry.resource_kind ?? "")
@@ -231,7 +229,7 @@ export function RecordDrawer({
       <footer className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
         {link ? (
           <Button asChild variant="outline" size="default">
-            <Link to={link.to} state={origin}>
+            <Link to={link.to}>
               <ExternalLink />
               {t("activity.drawer.open", { name: link.name })}
             </Link>

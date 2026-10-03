@@ -110,7 +110,6 @@ function renderAt(
       <MemoryRouter initialEntries={[`/agents/claude_code/memory/store${search}`]}>
         <Routes>
           <Route path="/agents/:type/memory/store" element={<AgentMemoryStorePage />} />
-          <Route path="/agents/:type/memory" element={<div>memory tab</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -189,17 +188,5 @@ describe("AgentMemoryStorePage", () => {
     stubContent();
     renderAt("");
     expect(screen.getByText(/no memory store was named/i)).toBeInTheDocument();
-  });
-
-  // The back affordance is the shared PageHeader's, so it is a real link with
-  // an href — middle-clickable, copyable — not a button that calls navigate().
-  test("back returns to the agent's Memory tab", () => {
-    stubTree();
-    stubContent();
-    renderAt();
-    const back = screen.getByRole("link", { name: /claude code · memory/i });
-    expect(back).toHaveAttribute("href", "/agents/claude_code/memory");
-    fireEvent.click(back);
-    expect(screen.getByText("memory tab")).toBeInTheDocument();
   });
 });

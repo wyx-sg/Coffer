@@ -2,9 +2,8 @@
 //
 // react-router's `setSearchParams` navigates without the current history
 // state, so picking a file or a tab on a page opened from another page (an
-// agent's Skills tab, ...) dropped its origin (lib/origin.ts) and the page
-// fell back to its own list. This setter carries the state along unless the
-// caller passes its own.
+// agent's Skills tab, ...) dropped that state. This setter carries it along unless the caller passes
+// its own.
 import { useCallback } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 

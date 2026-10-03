@@ -127,7 +127,6 @@
     },
     "copy": "Copy",
     "copied": "Copied",
-    "backTo": "Back to {{label}}",
     "emptyValue": "—",
     "search": "Search",
     "moreInfo": "More info",
@@ -171,6 +170,8 @@
     "settings": "Settings",
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
+    "back": "Back",
+    "forward": "Forward",
     "agents": "Agents",
     "channels": "Channels",
     "activity": "Activity",
@@ -1994,7 +1995,6 @@
       "binary": "Binary file ({{size}} bytes)",
       "truncated": "Content truncated — showing the start of the file.",
       "missingDir": "No memory store was named — open one from the agent's Memory tab.",
-      "back": "{{agent}} · Memory",
       "treeCount_one": "Files · {{count}}",
       "treeCount_other": "Files · {{count}}",
       "subtitle_one": "{{agent}} native memory store · {{count}} file",
@@ -4180,7 +4180,6 @@
       "files_other": "{{count}} files"
     },
     "resolve": {
-      "back": "Sync",
       "title": "Resolve conflicts",
       "pill": "Pushing blocked",
       "subline": "Round at {{time}} · pulled from {{machine}} · pick a version for every file, then continue the round.",

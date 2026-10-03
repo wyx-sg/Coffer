@@ -523,39 +523,10 @@ describe("ConversationsPage open conversation", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("the back link returns to the list with its filters in the URL", async () => {
-    chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv(), channelConv] });
-    chatApiMock.getConversation.mockResolvedValue(channelConv);
-    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
-    renderPage("/conversations/conv-st?source=seatalk");
-    // The open conversation has settled (the link is the one it stays mounted with).
-    await screen.findByRole("heading", { name: "Daily Sentry triage" });
-    fireEvent.click(screen.getByRole("link", { name: "Conversations" }));
-    // The list again, still narrowed to SeaTalk.
-    expect(await screen.findByRole("link", { name: /Daily Sentry triage/ })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Test Conv/ })).not.toBeInTheDocument();
-  });
-
-  test("a page opened from elsewhere goes back there", async () => {
-    chatApiMock.listConversations.mockResolvedValue({ conversations: [channelConv] });
-    chatApiMock.getConversation.mockResolvedValue(channelConv);
-    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
-    renderPage({
-      pathname: "/conversations/conv-st",
-      state: { from: { to: "/conversations?agent=codex", label: "Overview" } },
-    });
-    const back = await screen.findByRole("link", { name: "Back to Overview" });
-    expect(back).toHaveAttribute("href", "/conversations?agent=codex");
-  });
-
-  test("the draft is full width too, with the same back link", async () => {
+  test("the draft is full width too", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [makeConv()] });
     renderPage("/conversations/new?agent=codex");
     expect(await screen.findByText("New conversation with Claude Code")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Conversations" })).toHaveAttribute(
-      "href",
-      "/conversations?agent=codex",
-    );
     expect(screen.queryByRole("link", { name: /Test Conv/ })).not.toBeInTheDocument();
   });
 

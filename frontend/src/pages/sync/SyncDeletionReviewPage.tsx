@@ -33,7 +33,6 @@ export function SyncDeletionReviewPage() {
 
   const header = (
     <PageHeader
-      back={{ to: "/sync", label: t("sync.resolve.back") }}
       title={t("sync.deletions.title")}
       badges={hold ? <StatusPill tone="warn">{t("sync.deletions.pill")}</StatusPill> : null}
       subtitle={

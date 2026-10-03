@@ -19,7 +19,6 @@ import { AgentMemoryStoreTree } from "@/components/agents/AgentMemoryStoreTree";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
-import { agentTabPath } from "@/lib/agents/routes";
 import { translateApiError } from "@/lib/api/errors";
 import { countMemoryFiles, useNativeMemoryFiles } from "@/lib/hooks/useAgentNativeMemory";
 import { useAgentRoute } from "@/lib/hooks/useAgentRoute";
@@ -34,13 +33,9 @@ export function AgentMemoryStorePage() {
 
   const type = route.type ?? "";
   const agentName = agentTypeLabel(type);
-  const back = {
-    to: agentTabPath(type, "memory"),
-    label: t("agents.memoryStore.back", { agent: agentName }),
-  };
 
   if (route.isPending) {
-    return <PageHeader back={back} title={t("common.loading")} />;
+    return <PageHeader title={t("common.loading")} />;
   }
   if (!dir || route.notAdded || route.error) {
     const reason = !dir
@@ -50,7 +45,7 @@ export function AgentMemoryStorePage() {
         : t("agents.memoryStore.notAdded", { agent: agentName });
     return (
       <div className="space-y-6">
-        <PageHeader back={back} title={t("agents.memoryStore.unavailable")} />
+        <PageHeader title={t("agents.memoryStore.unavailable")} />
         <EmptyState tone="error" title={t("agents.memoryStore.unavailable")} description={reason} />
       </div>
     );
@@ -60,7 +55,6 @@ export function AgentMemoryStorePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        back={back}
         title={project ? abbreviateHomePath(project) : abbreviateHomePath(dir)}
         subtitle={
           root

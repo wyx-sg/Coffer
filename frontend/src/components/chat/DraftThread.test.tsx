@@ -76,7 +76,6 @@ function renderDraft(overrides: Partial<React.ComponentProps<typeof DraftThread>
       <MemoryRouter>
         <DraftThread
           agents={agents}
-          listPath="/conversations"
           agentKey="claude_code"
           onAgentChange={vi.fn()}
           onSend={onSend}

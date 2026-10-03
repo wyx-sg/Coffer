@@ -26,7 +26,6 @@ import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useChatTurn } from "@/lib/hooks/useChatTurn";
 import { useConversationFilters } from "@/lib/hooks/useConversationFilters";
 import { filterConversations } from "@/lib/conversations/filters";
-import { readOrigin } from "@/lib/origin";
 import { readHandoffState } from "@/lib/conversations/handoff";
 import {
   defaultDraftAgent,
@@ -186,10 +185,7 @@ export function useChatController() {
             rememberAgent(effectiveDraft.agentKey);
             setPendingFirst({ convId: created.id, text, attachments });
             setDraftConfig(null);
-            // The conversation inherits where the draft was opened from.
-            navigate(pathFor(created.id), {
-              state: readOrigin(location.state) ? location.state : null,
-            });
+            navigate(pathFor(created.id));
             resolve(true);
           },
           onError: () => resolve(false),

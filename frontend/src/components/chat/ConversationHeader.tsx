@@ -16,13 +16,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import type { Conversation } from "@/lib/api/chat";
-import { ConversationBackLink } from "./ConversationBackLink";
 import { SourceBadge } from "./SourceBadge";
 
 interface Props {
   conversation: Conversation;
-  /** The Conversations list the back link returns to, with its filters. */
-  listPath: string;
   archived: boolean;
   onRename: (title: string) => void;
   onArchive: () => void;
@@ -33,7 +30,6 @@ interface Props {
 
 export function ConversationHeader({
   conversation,
-  listPath,
   archived,
   onRename,
   onArchive,
@@ -82,7 +78,6 @@ export function ConversationHeader({
 
   return (
     <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border-subtle px-5">
-      <ConversationBackLink listPath={listPath} />
       <h1 className="min-w-0 truncate text-md font-semibold text-text">{conversation.title}</h1>
       <SourceBadge conversation={conversation} className="min-w-0 max-w-[16rem] shrink-0" />
       {archived ? (

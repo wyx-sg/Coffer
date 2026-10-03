@@ -171,13 +171,35 @@ headings, page titles, buttons, dialogs and prose — never "Agent" or 代理.
 
 ### Requirement: Collapse the sidebar to a remembered icon rail
 The sidebar MUST collapse to an icon-only rail and back, and that choice MUST
-persist across sessions (`localStorage`).
+persist across sessions (`localStorage`). The sidebar toggle's shortcut is ⌘\
+(Ctrl+\ off macOS), shown in its tooltip.
 
 #### Scenario: the collapsed sidebar stays collapsed after a reload
 - **GIVEN** the user collapses the sidebar to its icon rail
 - **WHEN** the shell is rendered again, as after a reload
 - **THEN** it opens as the icon rail
 - **AND** expanding it again is likewise remembered
+
+### Requirement: Go back and forward from the title bar
+The desktop shell on macOS MUST draw its own 44px title strip across the top of
+the window, in the sidebar's colour and with no rule beneath it. Besides the
+traffic lights the strip MUST hold only the sidebar toggle and back and forward
+arrows through the app's own history, to the right of the toggle. The controls
+start 16px right of the traffic lights, or at the left edge in full screen,
+where the lights are hidden. Where the strip is blank the window MUST remain
+draggable. While the sidebar is expanded its right edge MUST run up through the
+strip; collapsed, the strip MUST run across. An arrow MUST be greyed out and
+inert when the app's history has nowhere to go that way, and ⌘[ and ⌘] (Ctrl
+off macOS) MUST do what the arrows do, except while the user types in a text
+field. A browser tab has no strip and no arrows; its sidebar toggle sits beside
+the logo.
+
+#### Scenario: the arrows in the title bar go back and forward through the app's history
+- **GIVEN** the desktop shell with no history behind or ahead of the current page
+- **THEN** both arrows are greyed out
+- **WHEN** the user visits two pages and presses the back arrow
+- **THEN** the app shows the first page and the forward arrow is enabled
+- **AND** ⌘[ and ⌘] go back and forward the same way, except in a text field
 
 ### Requirement: Use one shared table for every list surface
 Every list surface that is a table — agents, memory partitions, the rounds

@@ -27,8 +27,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
 import { agentTabPath } from "@/lib/agents/routes";
-import { agentTypeLabel } from "@/lib/agents/display";
-import { useBackLink } from "@/lib/origin";
 import { useAgentRoute } from "@/lib/hooks/useAgentRoute";
 import { useUnmanagedSkill } from "@/lib/hooks/useUnmanagedSkill";
 
@@ -46,7 +44,6 @@ export function UnmanagedSkillDetailPage() {
     to: route.type ? agentTabPath(route.type, "skills") : "/agents",
     label: t("agents.workspace.skills"),
   };
-  const back = useBackLink(parent);
 
   const setTab = (next: string) =>
     setParams(
@@ -75,9 +72,9 @@ export function UnmanagedSkillDetailPage() {
         description={error || route.error ? translateApiError(t, error ?? route.error) : undefined}
         action={
           <Button variant="outline" asChild>
-            <Link to={back.to}>
+            <Link to={parent.to}>
               <ArrowLeft className="mr-1 size-4" />
-              {back.label}
+              {parent.label}
             </Link>
           </Button>
         }
@@ -88,18 +85,13 @@ export function UnmanagedSkillDetailPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        back={back}
         title={skill.name}
         badges={<UnmanagedSkillBadges skill={skill} />}
         actions={
           <UnmanagedSkillActions
             agentUid={uid}
             skill={skill}
-            backTo={back.to}
-            adoptedFrom={{
-              to: parent.to,
-              label: route.type ? agentTypeLabel(route.type) : t("agents.title"),
-            }}
+            backTo={parent.to}
           />
         }
       />
