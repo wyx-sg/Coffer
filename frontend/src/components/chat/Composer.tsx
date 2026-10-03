@@ -47,6 +47,8 @@ interface Props {
   cwd?: string | null;
   /** A control in the folder's place — the draft's folder picker. */
   workspace?: ReactNode;
+  /** A question waits: text answers it, so files cannot go with the message. */
+  attachmentsBlocked?: boolean;
   /** One muted line under the box ("Nothing is sent until you press Send."). */
   note?: string;
 }
@@ -72,6 +74,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     cwd,
     workspace,
     note,
+    attachmentsBlocked = false,
   },
   ref,
 ) {
@@ -107,7 +110,13 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   // A message needs words or a finished file, and never leaves while an upload
   // is in flight or a failed one is still attached — nothing is dropped silently.
   const hasContent = value.trim().length > 0 || files.ready.length > 0;
-  const canSend = hasContent && !files.uploading && !files.failed && !disabled && !sending;
+  const canSend =
+    hasContent &&
+    !files.uploading &&
+    !files.failed &&
+    !disabled &&
+    !sending &&
+    !(attachmentsBlocked && files.ready.length > 0);
 
   const handleSend = () => {
     if (!canSend) return;

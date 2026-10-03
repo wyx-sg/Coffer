@@ -12,13 +12,13 @@
 - [x] 2.6 Codex config entry for `coffer`: `env_vars`, `tool_timeout_sec = 86400`
 - [x] 2.7 Claude Code adapter: `can_use_tool` callback for `AskUserQuestion`
 - [x] 2.8 Turn events `question_asked` / `question_closed`; REST answer route; `ConversationOut.needs_you`; needs-you count route; `make contracts`
-- [ ] 2.9 Channels: question cards (single, multi-select + Submit), text-as-answer routing, rewrite on close, ping; delete `needs_you.py` and the sentinel prompt note; channel note mentions `coffer__ask`
+- [x] 2.9 Channels: question cards (single, multi-select + Submit), text-as-answer routing, rewrite on close, ping; delete `needs_you.py` and the sentinel prompt note; channel note mentions `coffer__ask`
 
 ## 3. Frontend
 
-- [ ] 3.1 Question card in the reply (single, multi-select, descriptions, context markdown) and its collapsed line
-- [ ] 3.2 Reply box answers a pending question; placeholder; "Waiting for you" header
-- [ ] 3.3 List "Needs you" status; sidebar Conversations count
+- [x] 3.1 Question card in the reply (single, multi-select, descriptions, context markdown) and its collapsed line
+- [x] 3.2 Reply box answers a pending question; placeholder; "Waiting for you" header
+- [x] 3.3 List "Needs you" status; sidebar Conversations count
 
 ## 4. Docs and tests
 

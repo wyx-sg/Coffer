@@ -59,13 +59,14 @@ def test_the_telegram_note_says_its_rich_markdown_renders() -> None:
 
 
 @pytest.mark.acceptance(spec="channels", scenario="the note asks for the answer's shape")
-def test_asks_for_outcome_first_details_png_and_the_needs_you_line() -> None:
+def test_asks_for_outcome_first_details_png_and_coffer_ask() -> None:
     text = channel_system_context(_SEATALK_GROUP_THREAD)
 
     assert "The first line is the outcome in one sentence" in text
     assert "`## Details`" in text
     assert "as a PNG file" in text
-    assert "`NEEDS YOU: <question> (option / option)`" in text
+    assert "call `coffer__ask`" in text
+    assert "NEEDS YOU" not in text
     assert "`MEDIA:/absolute/path`" in text
 
 
@@ -78,4 +79,4 @@ def test_an_unresolvable_channel_keeps_the_guidance() -> None:
 
     assert text.startswith("You are replying in a chat channel")
     assert "Short never means dropping evidence" in text
-    assert "NEEDS YOU:" in text
+    assert "`coffer__ask`" in text

@@ -14,6 +14,7 @@ vi.mock("@/lib/api/chat", () => ({
   chatApi: {
     listMessages: vi.fn(),
     getAgentConfig: vi.fn().mockResolvedValue({ cwd: null, model: null }),
+    answerQuestion: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -535,5 +536,72 @@ describe("MessageThread", () => {
     // The second message appears as a removable queued chip.
     expect(screen.getByText("my queued question")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /remove from queue/i })).toBeInTheDocument();
+  });
+
+  describe("a pending question", () => {
+    const pendingBlock = contentBlock({
+      type: "question",
+      question: {
+        question_id: "q1",
+        context: null,
+        questions: [
+          {
+            header: "Restart",
+            question: "Restart the channel?",
+            multi_select: false,
+            options: [
+              { label: "Yes", description: null },
+              { label: "No", description: null },
+            ],
+          },
+        ],
+        status: "pending",
+        answers: [],
+        answered_via: null,
+        answered_by: null,
+        answered_at: null,
+      },
+    });
+
+    acceptance("chat", "text typed while a question waits is the answer", async () => {
+      chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+      const onSend = vi.fn();
+      renderThread({
+        onSend,
+        isStreaming: true,
+        agentLabel: "Claude Code",
+        liveMessage: { blocks: [pendingBlock], streaming: true },
+      });
+      expect(await screen.findByText("Restart the channel?")).toBeInTheDocument();
+      expect(screen.getAllByText(/Waiting for you/).length).toBeGreaterThan(0);
+      const box = screen.getByPlaceholderText("Reply, or answer with the buttons above");
+      fireEvent.change(box, { target: { value: "only on staging" } });
+      fireEvent.keyDown(box, { key: "Enter" });
+      await waitFor(() => expect(chatApiMock.answerQuestion).toHaveBeenCalledTimes(1));
+      expect(chatApiMock.answerQuestion).toHaveBeenCalledWith(
+        "conv-1",
+        "q1",
+        [{ selected: [], text: "only on staging" }],
+        0,
+      );
+      expect(onSend).not.toHaveBeenCalled();
+    });
+
+    test("a tap on an option answers through the same route", async () => {
+      chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+      renderThread({
+        isStreaming: true,
+        liveMessage: { blocks: [pendingBlock], streaming: true },
+      });
+      fireEvent.click(await screen.findByRole("button", { name: "No" }));
+      await waitFor(() =>
+        expect(chatApiMock.answerQuestion).toHaveBeenCalledWith(
+          "conv-1",
+          "q1",
+          [{ selected: ["No"] }],
+          0,
+        ),
+      );
+    });
   });
 });

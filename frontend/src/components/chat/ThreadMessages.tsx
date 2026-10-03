@@ -23,6 +23,8 @@ interface Props {
   /** The banner for a failed turn or a lost stream, and which of the two it is. */
   banner?: ReactNode;
   bannerState?: "failed" | "lost";
+  /** A question waits on the owner: the live reply's header says so. */
+  waiting?: boolean;
   onOpenFile?: (path: string) => void;
   selectedPath?: string | null;
 }
@@ -37,6 +39,7 @@ export function ThreadMessages({
   notDeliveredTo,
   banner,
   bannerState,
+  waiting = false,
   onOpenFile,
   selectedPath,
 }: Props) {
@@ -58,6 +61,7 @@ export function ThreadMessages({
           undeliveredTo={notDeliveredTo(msg.id)}
           agentKey={agentKey}
           agentName={agentName}
+          waiting={waiting}
           onOpenFile={onOpenFile}
           selectedPath={selectedPath}
           {...(bannerOnLast && msg === last ? bannerProps : {})}
@@ -71,6 +75,7 @@ export function ThreadMessages({
           live={live}
           agentKey={agentKey}
           agentName={agentName}
+          waiting={waiting}
           onOpenFile={onOpenFile}
           selectedPath={selectedPath}
           {...bannerProps}

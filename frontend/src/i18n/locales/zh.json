@@ -3627,6 +3627,17 @@
     "files": {
       "title": "改动的文件"
     },
+    "question": {
+      "needsYou": "等你处理",
+      "progress": "第 {{current}} 个，共 {{total}} 个问题",
+      "submit": "提交",
+      "waitingFor": "{{agent}} 正在等你的回答。",
+      "alsoAsked": "也已在 {{platform}} 中询问。",
+      "placeholder": "直接回复，或点上面的按钮回答",
+      "answered": "已回答：",
+      "inPlatform": "在 {{platform}}",
+      "notAnswered": "未回答"
+    },
     "turn": {
       "working": "处理中 · {{duration}}",
       "workingNoTime": "处理中",

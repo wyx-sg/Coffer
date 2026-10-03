@@ -28,6 +28,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from coffer.application.channel.ports import ChannelAdapter
+from coffer.application.channel.question_card import question_ping
+from coffer.application.channel.question_flow import QuestionChat, forget_conversation
 from coffer.application.channel.stop_notice import take as take_stop_notice
 from coffer.application.channel.turn_finish import (
     Delivered,
@@ -38,11 +40,24 @@ from coffer.application.channel.turn_finish import (
     ping_line,
     stopped_line,
 )
-from coffer.application.channel.turn_status import LIVE_SEPARATOR, ReplyText, TurnStatus
+from coffer.application.channel.turn_status import (
+    LIVE_SEPARATOR,
+    ReplyText,
+    TurnStatus,
+    format_elapsed,
+)
 from coffer.application.channel.turn_surface import TurnSurface, typing_heartbeat
 from coffer.application.channel.turn_text import clip_stream_preview, with_mention
 from coffer.application.runtime.supervisor import spawn
-from coffer.domain.chat.events import TextDelta, ToolCall, ToolResult, TurnDone, TurnError
+from coffer.domain.chat.events import (
+    QuestionAsked,
+    QuestionClosed,
+    TextDelta,
+    ToolCall,
+    ToolResult,
+    TurnDone,
+    TurnError,
+)
 
 #: How long a text-only turn must run before it is worth opening a live surface
 #: on a transport whose surface is scaffolding (Telegram): a reply that lands
@@ -71,8 +86,9 @@ class TurnRenderer:
     chat_id: str
     conversation_id: str
     send: Callable[[str], Awaitable[None]]  # owner-bound safe send
-    # The same, for a message with buttons — the question a turn ends on (see
-    # "Turn a question for the owner into buttons"); None keeps it as text.
+    # The same, for a message with buttons — a question's card (see "Ask the
+    # owner in the chat and take the answer back to the agent"); None sends the
+    # question as text.
     send_card: SendCard | None = None
     now: Callable[[], float] = time.monotonic  # injectable clock (turn duration)
     # Where in the chat this turn's reply belongs: non-empty ``thread_id``
@@ -149,7 +165,12 @@ class TurnRenderer:
                         tokens = (event.prompt_tokens or 0) + (event.completion_tokens or 0)
                 elif isinstance(event, TurnError):
                     error = event
+                elif isinstance(event, QuestionAsked):
+                    await self._question_asked(event)
+                elif isinstance(event, QuestionClosed):
+                    await self._questions().closed(event.question)
         finally:
+            forget_conversation(self.conversation_id)
             ticker.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await ticker
@@ -171,9 +192,34 @@ class TurnRenderer:
         if self._ping_due(end, delivered):
             # One new message where the answer's own message was created when
             # the turn began — it replaces the summary of an abnormal ending.
-            line = ping_line(end, delivered.body, delivered.question)
+            line = ping_line(end, delivered.body)
             await self.send(self._with_mention(line))
-        return "waiting" if delivered.question is not None and end.clean else end.outcome
+        return end.outcome
+
+    def _questions(self) -> QuestionChat:
+        return QuestionChat(
+            adapter=self.adapter,
+            conversation_id=self.conversation_id,
+            chat_id=self.chat_id,
+            chat_kind=self.chat_kind,
+            send=self.send,
+            send_card=self.send_card,
+        )
+
+    async def _question_asked(self, event: QuestionAsked) -> None:
+        """The agent asked the owner and the turn waits: its card goes out, and
+        a long turn pings first where the live message notifies nobody."""
+        block = event.question
+        elapsed = self.now() - self._status.started
+        if (
+            not block.answers
+            and self.notify_after_seconds > 0
+            and elapsed >= self.notify_after_seconds
+            and self._surface.persisted
+        ):
+            line = question_ping(format_elapsed(elapsed), block.questions[0].question)
+            await self.send(self._with_mention(line))
+        await self._questions().asked(block)
 
     async def _rewrite_stop_notice(self, end: TurnEnd) -> bool:
         """Edit the "⏹ Stopping…" a ``/stop`` sent into "⏹ Stopped after 12s."
@@ -199,13 +245,12 @@ class TurnRenderer:
         turn's start (a SeaTalk stream): finishing it notifies nobody, so the
         end is said once more, in a new message. An answer that went out as a
         new message (Telegram, or a stream that died) already notified, and so
-        did a question sent with buttons."""
+        did a question's card."""
         return (
             self.notify_after_seconds > 0
             and end.duration >= self.notify_after_seconds
             and self._surface.persisted
             and delivered.in_place
-            and not delivered.question_sent
         )
 
     def _close_segment(self) -> None:

@@ -11,7 +11,8 @@ import pytest
 
 from coffer.application.channel.turn_finish import first_line
 from coffer.application.channel.turn_render import TurnRenderer
-from coffer.domain.chat.events import TextDelta, ToolCall, TurnDone, TurnError
+from coffer.domain.chat.events import QuestionAsked, TextDelta, ToolCall, TurnDone, TurnError
+from coffer.domain.chat.question import QuestionBlock, parse_ask_input
 
 from .conftest import FakeChannelAdapter
 
@@ -140,13 +141,26 @@ def test_the_first_line_is_read_as_plain_words() -> None:
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a long turn that waits on the owner pings")
-async def test_a_long_turn_ending_on_a_question_pings_needs_you() -> None:
-    adapter = _streaming()  # no buttons: the question stays in the streamed reply
+async def test_a_long_turn_that_raises_a_question_pings_needs_you_before_its_card() -> None:
+    adapter = _streaming()  # no buttons: the card goes out as text
+    _context, specs = parse_ask_input(
+        {
+            "questions": [
+                {
+                    "header": "Live",
+                    "question": "Apply to live?",
+                    "options": [{"label": "Yes"}, {"label": "No"}],
+                }
+            ]
+        }
+    )
 
     await _run(
         adapter,
-        [TextDelta(text="Ready to apply.\n\nNEEDS YOU: Apply to live? (yes / no)"), _DONE],
+        [QuestionAsked(question=QuestionBlock(question_id="q1", questions=specs)), _DONE],
         duration=200.0,
     )
 
-    assert adapter.texts()[1:] == ["❓ Needs you · 3m 20s — Apply to live?"]
+    ping, card = adapter.texts()[1:3]
+    assert ping == "❓ Needs you · 3m 20s — Apply to live?"
+    assert card.startswith("❓ Apply to live?")

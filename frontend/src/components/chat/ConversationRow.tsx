@@ -53,9 +53,8 @@ export function ConversationRow({
 }: Props) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  // `needs_you` is supplied by the add-coffer-ask change; until the API sends it
-  // the field is simply absent.
-  const needsYou = (c as { needs_you?: boolean }).needs_you === true;
+  // A pending question outranks "Running": the agent waits on the owner.
+  const needsYou = c.needs_you;
 
   const onKey = (event: KeyboardEvent<HTMLLIElement>) => {
     if (event.target !== event.currentTarget) return;

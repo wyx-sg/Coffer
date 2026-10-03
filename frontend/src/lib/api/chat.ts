@@ -66,6 +66,13 @@ export type ConversationPatch = Schemas["ConversationPatch"];
  */
 export type AgentConfigOut = Schemas["AgentConfigOut"];
 
+/** A question the agent asked the owner: the `question` block of a reply
+ *  (spec chat "Pause a turn on a question for the owner"). */
+export type Question = Schemas["QuestionOut"];
+
+/** The owner's answer to one question: option labels and/or free text. */
+export type QuestionAnswerIn = Schemas["QuestionAnswerIn"];
+
 /** The pending-message queue after a replace (spec chat "Queue messages sent during a turn"). */
 export type PendingQueue = Schemas["PendingQueueOut"];
 
@@ -144,6 +151,26 @@ export const chatApi = {
 
   deleteConversation: (id: string): Promise<void> =>
     unwrapVoid(getApiClient().DELETE("/chat/conversations/{id}", conv(id))),
+
+  // How many conversations wait on an answer (the sidebar's Conversations badge).
+  needsYouCount: (): Promise<{ count: number }> =>
+    unwrap(getApiClient().GET("/chat/conversations/needs-you-count")),
+
+  // Answer the question's next unanswered question. `index` names the one being
+  // answered, so a late answer is refused (409 QUESTION_CLOSED) instead of landing
+  // on the next one. Free text goes as `text` with no `selected`.
+  answerQuestion: (
+    conversationId: string,
+    questionId: string,
+    answers: QuestionAnswerIn[],
+    index?: number,
+  ): Promise<Question> =>
+    unwrap(
+      getApiClient().POST("/chat/conversations/{id}/questions/{question_id}/answer", {
+        params: { path: { id: conversationId, question_id: questionId } },
+        body: index === undefined ? { answers } : { answers, index },
+      }),
+    ),
 
   // Messages
   listMessages: (conversationId: string): Promise<MessageListOut> =>

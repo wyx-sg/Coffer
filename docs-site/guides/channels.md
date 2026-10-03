@@ -113,11 +113,15 @@ Coffer tells the agent which platform and kind of chat it is in and what renders
 
 ### Questions for you
 
-When the agent needs a yes or a choice before it goes on — a change it is about to make, say — it ends with a question, and Coffer sends it as its own message with a button per option: **Yes** / **No**, or up to four choices. Tapping one is the same as typing that answer: it goes into the conversation as your reply. In a group, only the channel's owner can answer; anyone else's tap is refused. After a tap the card shows your answer and offers nothing more. On a platform without buttons the question stays at the end of the reply.
+When the agent needs a yes or a choice before it goes on — a change it is about to make, say — it asks, and the turn waits for you. The question arrives as one card: what the agent wants you to see (a summary, a diff as a code block), then `❓` and the question, then up to four buttons, one to a line, with each option's description listed above them when it has one, and "Or reply with your answer." underneath. Tap an option, or just type your answer as the next message in that chat or thread: your text is the answer, it is not sent to the agent as a new message, and no turn starts. Nothing is ever posted in your name.
+
+A question that allows several options shows them as toggles: each tap puts a `✓` on that button, and **Submit** sends the ticked ones (Submit with nothing ticked does nothing). When one ask holds several questions, the next card goes out only after you answer the previous one. In a group, only the channel's owner can answer; anyone else's tap is refused and the question stays open. On a platform without buttons the options are listed in the message and you type the answer.
+
+Once the question is answered — here or on the Conversations page — or the turn is stopped, its card is rewritten in place to `✓ Answered: Yes · 11:42` (`✓ Answered in Coffer: …` when you answered on the Conversations page, `⏹ Stopped` after a stop) and its buttons go away; where the platform cannot rewrite the message, that line is sent as a reply instead.
 
 ### When a long turn finishes
 
-A turn that ran longer than the channel's threshold (90 seconds by default) ends with one short line where its answer would not notify you by itself: `✅ Done · 4m 12s — <the answer's first line>`, or `⚠️ Failed · …`, `⏹ Stopped · …`, `❓ Needs you · …`. On SeaTalk the answer is the message that opened when the turn began, so finishing it rings nobody — the done line does, in the same thread, @mentioning you in a group. On Telegram the answer is always a new message, so it needs no extra line.
+A turn that ran longer than the channel's threshold (90 seconds by default) ends with one short line where its answer would not notify you by itself: `✅ Done · 4m 12s — <the answer's first line>`, or `⚠️ Failed · …`, `⏹ Stopped · …`. A turn that is waiting on a question pings `❓ Needs you · 4m 05s — <the question>` before its card. On SeaTalk the answer is the message that opened when the turn began, so finishing it rings nobody — the done line does, in the same thread, @mentioning you in a group. On Telegram the answer is always a new message, so it needs no extra line.
 
 Two per-channel settings shape this, on the channel's **Settings** tab under **Replies** (**Long-task ping after**, default 90 seconds, and **Show step lines**), or from the CLI:
 

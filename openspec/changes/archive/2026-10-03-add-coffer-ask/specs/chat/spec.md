@@ -35,7 +35,7 @@ question card MUST sit at the end of the reply, above the reply box: the context
 (markdown, a diff as a code block), each question with its options as equal
 buttons — a single-choice tap answers, a multi-select question toggles its
 options and sends them with Submit — with each option's description under its
-label, and the line "Or reply with your answer.". Text sent from the reply box
+label, and the line "<agent> is waiting for your answer.". Text sent from the reply box
 while a question is pending MUST answer the first unanswered question instead of
 queueing a message; the box's placeholder says so ("Reply, or answer with the
 buttons above"). In a channel conversation the card notes it was also asked in

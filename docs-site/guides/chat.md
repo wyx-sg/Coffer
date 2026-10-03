@@ -79,6 +79,19 @@ A reply streams into the thread as the agent writes it, under the agent's mark, 
 
 The turn runs as a detached task in the daemon. Closing the tab, losing Wi-Fi or refreshing does not stop it: the reply finishes and is saved, and when you come back the page subscribes again and replays the turn in progress from its start. If the live stream drops mid-turn, the page reconnects on its own; after five failed attempts a warning inside the reply says **Lost the live stream from the daemon** with **Reload conversation**, which shows everything the turn has written so far. A tool call that had not returned reads **Unknown**, because the page cannot tell whether it finished.
 
+## Answer a question from the agent {#answer-a-question}
+
+When an agent needs a decision it asks through `coffer__ask` (or Claude Code's own `AskUserQuestion`), and its turn pauses until you answer. The reply's header reads **Waiting for you**, the conversation's row in the list shows **Needs you**, and the sidebar's **Conversations** entry carries a red count of the conversations waiting on you.
+
+A **Needs you** card sits at the end of the reply, above the reply box. It shows the agent's context (Markdown — a summary, a diff, a path), the question, and up to four options as equal buttons, each with its description under the label, and the line "Claude Code is waiting for your answer." In a channel conversation it adds that the question was also asked in that chat.
+
+- **Single choice**: tap an option; that is the answer.
+- **Several choices**: the options toggle (a check marks the ones picked), then press **Submit**.
+- **Your own words**: type in the reply box, whose placeholder reads **Reply, or answer with the buttons above**, and press Send. While a question waits, text sent there answers it instead of joining the queue; no message is added to the conversation. Files cannot be sent along with an answer.
+- **Several questions in one ask** appear one at a time, marked **Question 2 of 3**.
+
+Whoever answers first wins, here or in the channel's chat. Once answered the card shrinks to one line: **✓ Restart the channel now? · Answered: Yes · 10:16**, with **· in SeaTalk** when the answer came from the chat. If you stop the turn, or it ends without an answer, the line reads **Not answered**. An answer to a question that already closed is refused, and the page just shows the closed line.
+
 ## Send while a turn runs
 
 The composer never locks. While a reply streams, its placeholder reads **Reply — it queues until this turn finishes**.

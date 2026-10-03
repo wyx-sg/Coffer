@@ -24,6 +24,7 @@ import { ToolCallCard } from "./ToolCallCard";
 import { buildRows } from "@/lib/chat/replyRows";
 import { ToolCallGroup } from "./ToolCallGroup";
 import { MarkdownContent } from "./MarkdownContent";
+import { QuestionCard } from "./QuestionCard";
 
 interface Props {
   message?: Message;
@@ -157,6 +158,8 @@ function MessageBubbleImpl({
               trailing={working && i === rows.length - 1}
               unfinished={unfinished}
             />
+          ) : row.kind === "question" ? (
+            <QuestionCard key={row.key} question={row.question} />
           ) : row.kind === "tool" ? (
             <ToolCallCard
               key={row.key}

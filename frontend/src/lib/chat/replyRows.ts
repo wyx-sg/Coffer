@@ -1,7 +1,7 @@
 // src/lib/chat/replyRows.ts — an agent reply's blocks as the rows it renders:
 // text and tool-call segments in the order the turn emitted them, with each run
 // of three or more consecutive tool calls folded into one group row. Pure.
-import type { ContentBlock } from "@/lib/api/chat";
+import type { ContentBlock, Question } from "@/lib/api/chat";
 
 /** One tool call of a reply: its use block and, when it has arrived, its result. */
 export interface ToolCall {
@@ -12,7 +12,8 @@ export interface ToolCall {
 
 type Segment =
   | { kind: "text"; key: string; text: string }
-  | { kind: "tool"; key: string; use: ContentBlock; result?: ContentBlock };
+  | { kind: "tool"; key: string; use: ContentBlock; result?: ContentBlock }
+  | { kind: "question"; key: string; question: Question };
 
 /**
  * An assistant turn's blocks as render segments, in the order the turn emitted
@@ -26,6 +27,12 @@ function buildSegments(blocks: ContentBlock[]): Segment[] {
   blocks.forEach((b, i) => {
     if (b.type === "text" && b.text) {
       segments.push({ kind: "text", key: `text-${i}`, text: b.text });
+    } else if (b.type === "question" && b.question) {
+      segments.push({
+        kind: "question",
+        key: `question-${b.question.question_id}`,
+        question: b.question,
+      });
     } else if (b.type === "tool_use") {
       segments.push({
         kind: "tool",
@@ -44,6 +51,7 @@ const GROUP_MIN = 3;
 export type Row =
   | { kind: "text"; key: string; text: string }
   | { kind: "tool"; key: string; call: ToolCall }
+  | { kind: "question"; key: string; question: Question }
   | { kind: "group"; key: string; calls: ToolCall[] };
 
 /** Fold each run of GROUP_MIN or more consecutive tool segments into one group. */

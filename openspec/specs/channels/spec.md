@@ -645,7 +645,8 @@ first line is the outcome in one sentence, because it becomes the notification;
 at most about 15 lines, anything longer under a `## Details` heading; code blocks
 under 30 lines, longer logs attached as files; diagrams and charts as PNG files,
 never as source; and, when the agent needs a yes or a choice before it goes on,
-a final `NEEDS YOU:` line (see "Turn a question for the owner into buttons").
+to call `coffer__ask` (see "Ask the owner in the chat and take the answer back
+to the agent").
 Concise never drops evidence — an investigation's key log lines, error messages
 and IDs are quoted verbatim — and the agent is told it cannot click permission
 or confirmation dialogs on the user's computer. Web-UI turns are unaffected —
@@ -669,8 +670,8 @@ has been deleted, or is not running, still gets the note, saying less.
 #### Scenario: the note asks for the answer's shape
 - **WHEN** a channel turn's note is composed
 - **THEN** it asks for the outcome in one first sentence, long content under
-  `## Details`, diagrams as PNG files, and a final `NEEDS YOU:` line with at most
-  four options when the agent needs the owner's answer
+  `## Details`, diagrams as PNG files, and a `coffer__ask` call when the agent
+  needs the owner's answer
 
 ### Requirement: Hand inbound photos and files to the agent
 Inbound photos and files MUST drive a turn. The transport downloads each
@@ -2416,53 +2417,6 @@ driven by the transport's declared capabilities, never its type:
 - **THEN** no message holds half a fence, and an oversized fence is closed and
   reopened with its language
 
-### Requirement: Turn a question for the owner into buttons
-A reply whose last line is `NEEDS YOU: <question> (a / b)` — the sentinel the
-channel note offers the agent beside `MEDIA:` — MUST lose that line, and on a
-transport that `supports_buttons` the question MUST follow the answer as its own
-message, `❓ <question>`, with one button per option: the options in
-parentheses or brackets separated by `/` or `|`, Yes and No when none are
-given, and no buttons when more than four are. Each button's value is
-`reply:<option>`, clipped to the tightest callback budget any transport has. A
-transport without buttons keeps the question at the end of the reply,
-`❓ <question> (a / b)`. Only a clean turn is read for the sentinel. A turn that
-ends on a question counts as done for its reactions, and its ping reads `❓ Needs
-you · <elapsed> — <question>` — unless the question already went out as a
-message with buttons, which notifies by itself.
-
-A tap MUST be owner-gated exactly like any card tap (see "Offer choices and
-actions as owner-gated cards"): anyone else's tap in a group is refused in the
-group and changes nothing. The owner's tap is sent into the conversation as the
-owner's own message — the option's text, through the ordinary inbound path, so
-it is queued, gated and answered like a typed reply, and an agent's rule that a
-yes must come from the user in this conversation still holds. The card is
-rewritten to `Answered: <option>` with nothing left to tap, so a second tap
-cannot send the answer twice.
-
-#### Scenario: a question the agent ends on becomes buttons
-- **GIVEN** a transport with buttons and a reply ending `NEEDS YOU: Apply this
-  change? (yes / no)`
-- **WHEN** the turn ends
-- **THEN** the answer is delivered without that line, then `❓ Apply this change?`
-  with the buttons `yes` and `no` carrying `reply:yes` and `reply:no`
-
-#### Scenario: a tap is sent as the owner's own reply
-- **GIVEN** that question card in the owner's chat
-- **WHEN** the owner taps `yes`
-- **THEN** `yes` enters the conversation as the owner's next message, and the card
-  now reads `Answered: yes` with no option left to tap
-
-#### Scenario: a non-owner's tap is refused
-- **GIVEN** a question card in a paired group
-- **WHEN** a member who is not the owner taps an option
-- **THEN** the group is told only the bot’s owners can use it and nothing enters the
-  conversation
-
-#### Scenario: a long turn that waits on the owner pings
-- **GIVEN** a long turn on a persisting surface of a transport without buttons
-- **WHEN** it ends on a `NEEDS YOU:` line
-- **THEN** the ping reads `❓ Needs you · <elapsed> — <question>`
-
 ### Requirement: Offer a reply's details behind a summary card
 On a transport that has cards (`supports_buttons`) but does not collapse a
 `## Details` section itself (`collapses_details` false), a clean reply's details
@@ -2601,3 +2555,64 @@ opens the dialog at Connect.
 - **WHEN** the Channels page is opened
 - **THEN** it keeps its header and lists the platforms with what each needs
 - **AND** choosing one opens Add channel at its Connect step
+
+### Requirement: Ask the owner in the chat and take the answer back to the agent
+A question raised in a channel conversation (spec chat "Pause a turn on a question
+for the owner") MUST go out in that chat, one card per question in order: the
+context (a diff as a code block), "❓ <question>", the options — with their
+descriptions listed in the body when any has one — as up to four equal buttons,
+and "Or reply with your answer.". A multi-select question's buttons MUST toggle a
+✓ in place and a **Submit** button sends the choice. A tap MUST be owner-gated
+like every card tap. The owner's next text message in that chat or thread while
+the question is pending MUST be taken as the answer and not start or queue a
+turn. Nothing MUST be posted in the owner's name. Once the question is answered —
+in the chat or on the Conversations page — or cancelled, every card of it MUST be
+rewritten in place to "✓ Answered: <answer> · HH:MM" ("✓ Answered in Coffer:
+<answer> · HH:MM" for a web answer, "Stopped" when cancelled); where the platform
+cannot rewrite it, that line is sent as a reply. A long turn that is waiting on a
+question pings "❓ Needs you · <elapsed> — <question>" on a surface that pings.
+
+#### Scenario: a tap answers the agent without a message from the owner
+- **GIVEN** a SeaTalk card "❓ Apply this change to staging?" with Yes and No
+- **WHEN** the owner taps Yes
+- **THEN** the agent receives "Yes", the card reads "✓ Answered: Yes · 11:42", and no message is sent as the owner
+
+#### Scenario: a text reply answers the pending question
+- **GIVEN** a pending question in the owner's Telegram chat
+- **WHEN** the owner sends "only the read replica"
+- **THEN** the agent receives that text as the answer and no new turn starts
+
+#### Scenario: an answer given in Coffer rewrites the chat card
+- **GIVEN** a pending question shown in Telegram
+- **WHEN** the owner answers Yes on the Conversations page
+- **THEN** the Telegram message reads "✓ Answered in Coffer: Yes · 11:42" and its keyboard is gone
+
+#### Scenario: a multi-select question is answered with Submit in the chat
+- **GIVEN** a SeaTalk card for a multi-select question with three options
+- **WHEN** the owner taps two options and then Submit
+- **THEN** the two buttons showed a ✓ before Submit, and the agent receives both labels
+
+#### Scenario: a question with described options lists them in the card
+- **GIVEN** a question whose options "Yes, apply" and "No, keep" each have a description
+- **WHEN** its card goes out
+- **THEN** the body lists "• Yes, apply — <description>" and "• No, keep — <description>" under the question, with one button per option and "Or reply with your answer."
+
+#### Scenario: several questions go out one card at a time
+- **GIVEN** an ask of two questions in a SeaTalk chat
+- **WHEN** the owner answers the first
+- **THEN** its card reads "✓ Answered: <answer> · HH:MM" and only then does the second question's card go out
+
+#### Scenario: a non-owner's tap is refused
+- **GIVEN** a question card in a paired group
+- **WHEN** a member who is not the owner taps an option
+- **THEN** the group is told only the bot’s owners can use it and the question stays pending
+
+#### Scenario: stopping a turn rewrites the pending card
+- **GIVEN** a pending question card in a chat
+- **WHEN** the owner stops the turn
+- **THEN** the card reads "Stopped" with its buttons gone
+
+#### Scenario: a long turn that waits on the owner pings
+- **GIVEN** a long turn on a persisting surface
+- **WHEN** it raises a question
+- **THEN** a short message reads "❓ Needs you · <elapsed> — <question>" before the card

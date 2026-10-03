@@ -40,7 +40,7 @@ from coffer.application.channel.store_ports import (
 from coffer.application.channel.turn_finish import TurnOutcome, failure_line
 from coffer.application.channel.turn_render import TurnRenderer
 from coffer.application.runtime.supervisor import spawn
-from coffer.domain.channel.envelopes import ChoiceButton
+from coffer.domain.channel.envelopes import ChoiceButton, SentMessage
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.errors import CofferError
 
@@ -323,8 +323,8 @@ class TurnDriver:
 
         async def _send_card(
             text: str, buttons: Sequence[ChoiceButton], *, title: str = ""
-        ) -> None:
-            await self._safe_send(
+        ) -> SentMessage | None:
+            sent: SentMessage | None = await self._safe_send(
                 binding,
                 peer.chat_id,
                 text,
@@ -334,6 +334,7 @@ class TurnDriver:
                 chat_kind=item.chat_kind,
                 reply_to_message_id=item.reply_to_message_id,
             )
+            return sent
 
         renderer = TurnRenderer(
             channel=binding.resource.name,
@@ -364,8 +365,7 @@ class TurnDriver:
             if session.render_task is asyncio.current_task():
                 session.render_task = None
                 session.running_conversation_id = None
-        # Mark how it ended on the user's message: done (a question for the
-        # owner counts as done — the turn finished), failed or stopped.
+        # Mark how it ended on the user's message: done, failed or stopped.
         marks = adapter.capabilities.reactions
         mark = {"failed": marks.failed, "stopped": marks.stopped}.get(outcome, marks.done)
         await self._react(binding, peer, item, mark)

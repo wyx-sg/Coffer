@@ -11,6 +11,7 @@ import { ArrowDown } from "lucide-react";
 import { useMessageThread } from "@/lib/hooks/useMessageThread";
 import { useFollowScroll } from "@/lib/hooks/useFollowScroll";
 import { useAgentConfig, useChannelMirror } from "@/lib/hooks/useConversations";
+import { useThreadQuestion } from "@/lib/hooks/useThreadQuestion";
 import { describeTurnError } from "@/lib/chat/turnErrors";
 import { retryTargetFor } from "@/lib/chat/threadView";
 import type { PendingEcho } from "@/lib/hooks/useChatTurn";
@@ -20,6 +21,7 @@ import { ThreadMessages } from "./ThreadMessages";
 import { Composer, type ComposerHandle } from "./Composer";
 import type { MessageThreadProps } from "./messageThreadProps";
 import { PendingQueue } from "./PendingQueue";
+import { QuestionContext } from "./QuestionContext";
 import { AgentModelBar } from "./AgentModelBar";
 import { ArchivedNotice, StreamLostBanner } from "./ThreadNotices";
 import { FindWidget } from "@/components/preview/FindWidget";
@@ -84,6 +86,15 @@ export function MessageThread({
   // its attachments either way.
   const retry = retryable && !readOnly ? retryTargetFor(messages, pendingEchoes.at(-1)) : null;
 
+  // A question waiting on the owner; text sent from the box answers it.
+  const { waitingQuestion, questionActions, sendOrAnswer } = useThreadQuestion({
+    conversation,
+    liveMessage,
+    messages,
+    agentLabel,
+    onSend,
+  });
+
   const failedBanner = turnError ? (
     <ChatErrorBanner
       variant="reply"
@@ -144,19 +155,22 @@ export function MessageThread({
             </p>
           )}
 
-          <ThreadMessages
-            conversationId={conversation.id}
-            agentKey={conversation.agent_key}
-            agentName={agentLabel}
-            messages={messages}
-            pendingEchoes={pendingEchoes}
-            live={liveForRender}
-            notDeliveredTo={notDeliveredTo}
-            banner={failedBanner}
-            bannerState={turnError ? "failed" : streamLost ? "lost" : undefined}
-            onOpenFile={onOpenFile}
-            selectedPath={selectedPath}
-          />
+          <QuestionContext.Provider value={questionActions}>
+            <ThreadMessages
+              conversationId={conversation.id}
+              agentKey={conversation.agent_key}
+              agentName={agentLabel}
+              messages={messages}
+              pendingEchoes={pendingEchoes}
+              live={liveForRender}
+              notDeliveredTo={notDeliveredTo}
+              banner={failedBanner}
+              bannerState={turnError ? "failed" : streamLost ? "lost" : undefined}
+              waiting={waitingQuestion !== null}
+              onOpenFile={onOpenFile}
+              selectedPath={selectedPath}
+            />
+          </QuestionContext.Provider>
 
           <div ref={bottomRef} />
         </div>
@@ -202,15 +216,18 @@ export function MessageThread({
           <Composer
             ref={composerRef}
             placeholder={t(
-              isStreaming
-                ? "conversations.composer.queuePlaceholder"
-                : mirror
-                  ? "conversations.composer.replyPlaceholder"
-                  : "conversations.composer.placeholder",
+              waitingQuestion
+                ? "conversations.question.placeholder"
+                : isStreaming
+                  ? "conversations.composer.queuePlaceholder"
+                  : mirror
+                    ? "conversations.composer.replyPlaceholder"
+                    : "conversations.composer.placeholder",
               { agent: agentLabel ?? "" },
             )}
+            attachmentsBlocked={waitingQuestion !== null}
             cwd={agentConfig?.cwd ?? null}
-            onSend={onSend}
+            onSend={sendOrAnswer}
             streaming={isStreaming}
             onStop={onStop}
             restore={restore}

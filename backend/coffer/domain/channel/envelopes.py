@@ -200,6 +200,10 @@ class ChoiceButton:
     # Shown but inactive (a page turn that runs off the end). A transport whose
     # buttons have no disabled state shows it plain; the tap changes nothing.
     disabled: bool = False
+    # Full-width, one to a line (a question's options, whose labels read as
+    # sentences): a transport that packs short labels side by side leaves this
+    # one alone on its line.
+    own_row: bool = False
 
 
 @dataclass(frozen=True)

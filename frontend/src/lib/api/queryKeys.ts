@@ -228,6 +228,9 @@ export const conversationHeadKey = (archived: boolean, q: string) =>
 /** What the command palette lists: a small read, by the text typed. */
 export const paletteConversationsKey = (q: string) =>
   ["conversations", "lists", "palette", { q }] as const;
+/** How many conversations wait on an answer — under `conversationsKey`, so a
+ *  list refresh re-reads it too. */
+export const needsYouCountKey = ["conversations", "needs-you-count"] as const;
 export const conversationKey = (id: string) => ["conversations", id] as const;
 /** A conversation's managed-agent config (model, effort). A CHILD of the
  *  conversation, so removing `conversationKey(id)` drops it too. */

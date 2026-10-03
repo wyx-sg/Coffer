@@ -11,7 +11,8 @@ import { contentBlock } from "@/lib/chat/contentBlock";
 import type { PendingEcho } from "@/lib/chat/echoes";
 import type { ContentBlock, Message } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
-import { messagesKey } from "@/lib/api/queryKeys";
+import { conversationHeadsKey, messagesKey, needsYouCountKey } from "@/lib/api/queryKeys";
+import { upsertQuestion } from "@/lib/chat/questions";
 
 /** @ui-only live-turn view state; never crosses the wire. */
 export interface LiveMessage {
@@ -199,6 +200,23 @@ export async function handleEvent(event: AgentEvent, ctx: HandlerCtx): Promise<v
       if (isCancelled()) return;
       setEchoes([]);
       setLiveMessage(null);
+      break;
+    }
+
+    // A question the agent asked (sent again, same id, as each of several is
+    // answered) and its close: the card follows, and the list's "Needs you" and
+    // the sidebar count are re-read.
+    case "question_asked":
+    case "question_closed": {
+      const { question } = event.data;
+      // A close that arrives once the live bubble is gone has nothing to update.
+      setLiveMessage((prev) =>
+        event.event === "question_closed"
+          ? prev && { ...prev, blocks: upsertQuestion(prev.blocks, question) }
+          : withBlocks(prev, (blocks) => upsertQuestion(blocks, question)),
+      );
+      void qc.invalidateQueries({ queryKey: needsYouCountKey });
+      void qc.invalidateQueries({ queryKey: conversationHeadsKey });
       break;
     }
 

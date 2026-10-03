@@ -12,7 +12,7 @@ The table lists the nine words. How each reads, where it works and the cards it 
 | Command | What it does |
 | --- | --- |
 | `/new [agent]` | Start a fresh conversation with this chat's settings. With an agent name, switch to that agent. |
-| `/stop` | Interrupt the running turn and pause the queue. “⏹ Stopping…” is edited into “⏹ Stopped after 12s.” where the platform can edit a message, and followed by a second message where it cannot. |
+| `/stop` | Interrupt the running turn and pause the queue. “⏹ Stopping…” is edited into “⏹ Stopped after 12s.” where the platform can edit a message, and followed by a second message where it cannot. A question waiting on you is cancelled and its card reads “⏹ Stopped”. |
 | `/model [name] [level]` | Show or set the model and the reasoning effort. |
 | `/dir [path\|name]` | Show or switch the working directory, in a fresh conversation. |
 | `/status` | What this chat is running, as a card with quick actions. |

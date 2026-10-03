@@ -3627,6 +3627,17 @@
     "files": {
       "title": "Files changed"
     },
+    "question": {
+      "needsYou": "Needs you",
+      "progress": "Question {{current}} of {{total}}",
+      "submit": "Submit",
+      "waitingFor": "{{agent}} is waiting for your answer.",
+      "alsoAsked": "Also asked in {{platform}}.",
+      "placeholder": "Reply, or answer with the buttons above",
+      "answered": "Answered:",
+      "inPlatform": "in {{platform}}",
+      "notAnswered": "Not answered"
+    },
     "turn": {
       "working": "Working · {{duration}}",
       "workingNoTime": "Working",
