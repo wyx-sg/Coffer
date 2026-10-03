@@ -1,7 +1,7 @@
 // src/components/activity/ExportMenu.tsx — the header's ghost "Export ⌄": the filtered records as JSON or CSV.
 //
 // The export lives in the page header (spec web-ui "Export the filtered
-// Activity records"), and writes every record of the visible tab that matches
+// Activity records from the header"), and writes every record of the visible tab that matches
 // its filters — not just what is loaded.
 import { useState } from "react";
 import { ChevronDown, Download, FileJson, FileSpreadsheet } from "lucide-react";

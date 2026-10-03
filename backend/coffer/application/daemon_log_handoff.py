@@ -5,8 +5,8 @@ an external service that refused the connection, a name that would not resolve,
 a file the process may not read. Only the second kind is a chore for the
 person's agent (principle "Button, hand-off or sentence": the fix is outside
 Coffer, on this machine); a Coffer-internal error offers only "Copy record"
-(spec web-ui "Hand an environment error to an agent"). The prompt carries the
-logger, the message and the traceback, scrubbed of anything that looks like a
+(spec web-ui "Hand an environment failure on Activity to an agent"). The
+prompt carries the logger, the message and the traceback, scrubbed of anything that looks like a
 secret (``domain/mcp/config_summary.scrub``).
 """
 
