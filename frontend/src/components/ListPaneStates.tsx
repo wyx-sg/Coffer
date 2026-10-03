@@ -24,7 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { requestLine, translateApiError } from "@/lib/api/errors";
 
 /** Where "Open daemon log" leads: Activity's Daemon log tab. */
-export const DAEMON_LOG_PATH = "/activity?tab=daemon";
+const DAEMON_LOG_PATH = "/activity?tab=daemon";
 
 /** The kinds a list page names (keys of `listStates.kinds`). */
 export type ListKind =

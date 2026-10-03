@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
-import { Button } from "@/components/ui/button";
+import { Button, type ButtonProps } from "@/components/ui/button";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
 import type { ToolTiering } from "@/lib/hooks/useMcpServerPage";
 import { McpCallout as Callout } from "./McpCallout";
@@ -41,6 +41,11 @@ function withHandoff(action: ReactNode, prompt: string | undefined) {
       <AgentHandoff prompt={prompt} size="sm" />
     </div>
   );
+}
+
+/** A callout's action button: small, outline, on the raised surface. */
+function CalloutButton(props: ButtonProps) {
+  return <Button size="sm" variant="outline" className="bg-surface-raised" {...props} />;
 }
 
 interface Props {
@@ -68,9 +73,9 @@ export function McpStatusCallout({
   const { t } = useTranslation();
   const [stderr, setStderr] = useState(false);
   const viewLog = (
-    <Button size="sm" variant="outline" className="bg-surface-raised" onClick={onOpenLog}>
+    <CalloutButton onClick={onOpenLog}>
       <SquareTerminal aria-hidden /> {t("mcp.page.viewLog")}
-    </Button>
+    </CalloutButton>
   );
   const tools =
     toolCount > 0 ? t("mcp.page.itsTools", { count: toolCount }) : t("mcp.page.itsToolsAny");
@@ -80,16 +85,10 @@ export function McpStatusCallout({
     const lines = test.stderr_tail ?? [];
     const stderrButton =
       lines.length > 0 ? (
-        <Button
-          size="sm"
-          variant="outline"
-          className="bg-surface-raised"
-          aria-expanded={stderr}
-          onClick={() => setStderr((v) => !v)}
-        >
+        <CalloutButton aria-expanded={stderr} onClick={() => setStderr((v) => !v)}>
           <SquareTerminal aria-hidden />
           {stderr ? t("mcp.page.hideStderr") : t("mcp.page.showStderr")}
-        </Button>
+        </CalloutButton>
       ) : test.ok ? null : (
         viewLog
       );
@@ -169,14 +168,7 @@ export function McpStatusCallout({
         testId="mcp-callout-secret"
         title={t("mcp.page.secretTitle", { secret })}
         action={
-          <Button
-            size="sm"
-            variant="outline"
-            className="bg-surface-raised"
-            onClick={onReplaceSecret}
-          >
-            {t("mcp.page.replaceSecret")}
-          </Button>
+          <CalloutButton onClick={onReplaceSecret}>{t("mcp.page.replaceSecret")}</CalloutButton>
         }
       >
         {t("mcp.page.secretBody", { key: detail?.missing_secret ?? "" })}
@@ -191,14 +183,7 @@ export function McpStatusCallout({
         testId="mcp-callout-key-rejected"
         title={t("mcp.page.keyRejectedTitle")}
         action={withHandoff(
-          <Button
-            size="sm"
-            variant="outline"
-            className="bg-surface-raised"
-            onClick={onReplaceSecret}
-          >
-            {t("mcp.page.replaceKey")}
-          </Button>,
+          <CalloutButton onClick={onReplaceSecret}>{t("mcp.page.replaceKey")}</CalloutButton>,
           detail.handoff?.prompt,
         )}
       >

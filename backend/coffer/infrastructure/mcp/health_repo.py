@@ -77,7 +77,7 @@ class MCPServerHealthRepo:
         """Why the last check failed, or None (healthy, no record, or unknown)."""
         async with self._sm() as session:
             row = await session.get(MCPServerHealthModel, resource_uid)
-            return row.failure_reason if row is not None else None  # type: ignore[return-value]
+            return row.failure_reason if row is not None else None
 
     async def list_all(self) -> list[tuple[str, HealthStatus]]:
         """Return all (resource_uid, status) pairs currently persisted."""

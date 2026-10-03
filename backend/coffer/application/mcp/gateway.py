@@ -6,21 +6,17 @@ One instance per downstream MCP client connection. Owns:
 - A queue of upstream notifications to forward downstream
 
 Invocation handlers (tools/call, resources/read, prompts/get) live in
-`gateway_handlers` to keep this module under 400 LOC, and the tools/list
-composition — aggregate, plus built-ins, minus what tiering hides — lives in
-`gateway_tools_list`.
+`gateway_handlers`; the tools/list composition (aggregate, plus built-ins,
+minus what tiering hides) lives in `gateway_tools_list`.
 
 Server-initiated request plumbing (sampling and roots) lives in
-`gateway_server_requests` for the same reason. The pure envelope-parsing
-helpers (launch-cwd extraction, upstream-notification method/params parsing)
-live in `gateway_parsing`. The per-agent scope filter for the
-enabled-server list lives in `gateway_scope`.
+`gateway_server_requests`, the pure envelope parsing in `gateway_parsing`, and
+the per-agent scope filter for the enabled-server list in `gateway_scope`.
 
-For the spec's "upstream tool list changes mid-session" scenario, the
-session subscribes to each upstream's notification stream (via
-`UpstreamConnectionPort.on_notification`) and forwards the relevant
-list-changed messages downstream while invalidating the discovery
-cache.
+For the spec's "upstream tool list changes mid-session" scenario, the session
+subscribes to each upstream's notification stream
+(`UpstreamConnectionPort.on_notification`), forwards list-changed messages
+downstream and invalidates the discovery cache.
 """
 
 from __future__ import annotations
@@ -76,6 +72,7 @@ from coffer.application.mcp.saved_tools import saved_hidden_count
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.mcp.tiering_config import TieringConfig, load_tiering_config
 from coffer.application.mcp.tool_exposure import exposure_overrides
+from coffer.application.mcp.upstream_auth import UpstreamAuthMonitor
 from coffer.application.resource_service import ResourceService
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.errors import UpstreamUnavailable
@@ -106,8 +103,10 @@ class MCPGatewaySession:
         builtin_tools: BuiltinToolRegistry | None = None,
         tiering: TieringConfig | None = None,
         tool_reach: ToolReachRepoPort | None = None,
+        auth_monitor: UpstreamAuthMonitor | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
+        self._auth_monitor = auth_monitor
         self._tool_reach = tool_reach  # custom tools' reach overrides (gateway_tool_gate)
         self._resources = resource_service
         self._supervisor = supervisor
@@ -362,6 +361,7 @@ class MCPGatewaySession:
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
             tool_reach=self._tool_reach,
+            auth_monitor=self._auth_monitor,
             **self._log_ctx,
         )
 

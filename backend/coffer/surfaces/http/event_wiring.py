@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from coffer.application.attention import AttentionService
 from coffer.application.events.attention_watch import AttentionWatcher
 from coffer.application.events.broker import DEFAULT_BUFFER_SIZE, EventBroker
+from coffer.application.mcp.upstream_auth import UpstreamAuthMonitor
 from coffer.application.reconcile.hints import HintSink, fan_out
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.runtime.supervisor import spawn_restarting
@@ -47,10 +48,12 @@ def build_event_stream(reconciler: Reconciler) -> EventStream:
 
 
 async def start_attention_watch(
-    events: EventStream, attention: AttentionService
+    events: EventStream, attention: AttentionService, auth_monitor: UpstreamAuthMonitor
 ) -> asyncio.Task[None]:
     """Compute the attention baseline now, then watch it as a task the
     shutdown cancels."""
+    # A key rejected in a real call changes the list: recompute at once.
+    auth_monitor.on_change = events.watcher.nudge
     await events.watcher.prime(attention.report)
     return spawn_restarting(lambda: events.watcher.serve(attention.report), name="attention-watch")
 

@@ -22,6 +22,7 @@ from coffer.application.mcp.supervisor_failures import UpstreamFailureLedger
 from coffer.application.resource_service import ResourceService
 from coffer.application.secret.resolver import SecretResolver
 from coffer.domain.errors import (
+    UpstreamAuthRejected,
     UpstreamTimeout,
     UpstreamUnavailable,
 )
@@ -273,6 +274,9 @@ class SubprocessSupervisor:
                 TimeoutError,
             ) as e:
                 last_error = e
+                if isinstance(e, UpstreamAuthRejected):
+                    # Asking again with the same key cannot succeed.
+                    break
                 # Loud only for the first ladder of a streak; the circuit
                 # breaker's own "mcp.upstream.failing" line speaks for the
                 # rest, so a dead server does not fill the log.
@@ -293,7 +297,13 @@ class SubprocessSupervisor:
         self._failures.record_failure(server_name, str(last_error))
         entry.state = UpstreamHealth.COOLDOWN
         entry.connection = None
-        raise UpstreamUnavailable(
+        # A refused key keeps its own type, so the gateway can say so in health.
+        failure = (
+            UpstreamAuthRejected
+            if isinstance(last_error, UpstreamAuthRejected)
+            else UpstreamUnavailable
+        )
+        raise failure(
             f"{server_name!r} failed to spawn after "
             f"{len(self._retry_delays) + 1} attempts: {last_error}"
         )

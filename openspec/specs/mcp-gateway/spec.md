@@ -867,6 +867,37 @@ stored reason as `failure_reason` while the server reads `failing`.
 - **WHEN** each is classified
 - **THEN** `auth_rejected` stays `auth_rejected`, `connect_failed` and `timeout` read `unreachable`, `spawn_failed` reads `command_not_found`, and every other code reads `other`
 
+### Requirement: Notice a rejected key from real calls
+When a call an agent makes through the gateway is rejected by the upstream HTTP server's authentication
+(the endpoint answers 401 or 403 at the transport, whether while the connection is opened or on the
+request itself), the gateway MUST record the server as `failing` with reason `auth_rejected`, so the
+Overview shows the key-rejected item without anyone pressing Test, and MUST announce the change to the
+attention list. A later call that the upstream answers MUST record the server `healthy` again when the
+stored state was `auth_rejected`; a call to a server with no such record MUST NOT write health. A tool
+result carrying `isError` is a tool-level error over a healthy connection: it MUST NOT mark a server
+failing, and it counts as an answered call. Other runtime failures (unreachable, a missing launcher) MUST
+NOT be recorded by the gateway; they stay as the last test left them.
+
+#### Scenario: a rejected key from a real call reaches the Overview
+- **GIVEN** a registered HTTP server whose upstream answers 401 to a tool call
+- **WHEN** an agent calls one of its tools through the gateway
+- **THEN** the server's health reads failing with `failure_reason` `auth_rejected`, and the attention list carries `mcp_key_rejected` for it
+
+#### Scenario: an answered call clears a recorded rejection
+- **GIVEN** a server recorded as failing with `auth_rejected`
+- **WHEN** a later forwarded call is answered by the upstream
+- **THEN** the server's health reads healthy
+
+#### Scenario: a tool error result does not mark a server failing
+- **GIVEN** a healthy server whose tool returns a result with `isError`
+- **WHEN** an agent calls it
+- **THEN** no health is written and the server is not recorded as failing
+
+#### Scenario: answered calls to a healthy server write nothing
+- **GIVEN** a server with no recorded rejection
+- **WHEN** forwarded calls to it are answered
+- **THEN** its health is read at most once and never written
+
 ### Requirement: Read a server's own log from its page
 The daemon MUST serve the newest lines of a stdio server's own log file — what it printed on stderr and the
 lines Coffer writes there when it starts the server, when a start fails (a launcher not found on `PATH`,
