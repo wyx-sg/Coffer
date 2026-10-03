@@ -483,6 +483,7 @@ describe("ConversationsPage open conversation", () => {
       prompt_tokens: null,
       completion_tokens: null,
       model_id: null,
+      finished_at: null,
       created_at: "2026-01-01T00:00:00Z",
     });
     chatApiMock.listConversations.mockResolvedValue({ conversations: [channelConv] });

@@ -56,6 +56,8 @@ class ToolResult:
     tool_name: str
     output: dict[str, Any] | None
     error: str | None
+    #: How long the tool ran; stamped by the turn runner, null from an adapter.
+    duration_ms: int | None = None
     type: Literal["tool_result"] = "tool_result"
 
 

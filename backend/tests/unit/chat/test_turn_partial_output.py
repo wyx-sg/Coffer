@@ -254,7 +254,7 @@ async def test_a_delete_still_discards_the_partial() -> None:
     assert not [m for m in msg_repo.all_messages() if m.role is Role.ASSISTANT]
 
 
-async def test_a_user_interrupt_is_unchanged_complete_with_partial() -> None:
+async def test_a_user_interrupt_keeps_the_partial_as_stopped() -> None:
     adapter = _StreamThenBlock(["kept"])
     orchestrator, _conv, msg_repo, _prov = make_orchestrator(adapter=adapter)
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
@@ -268,7 +268,8 @@ async def test_a_user_interrupt_is_unchanged_complete_with_partial() -> None:
         prompt_tokens=None, completion_tokens=None, stop_reason="interrupted"
     )
     assistant = _assistant(msg_repo)
-    assert (assistant.status, _text(assistant)) == ("complete", "kept")
+    assert (assistant.status, _text(assistant)) == ("stopped", "kept")
+    assert assistant.finished_at is not None
 
 
 @pytest.mark.acceptance(
@@ -302,3 +303,43 @@ async def test_stopping_every_turn_at_shutdown_awaits_them_and_keeps_partials() 
 
 async def test_stopping_turns_with_none_running_is_a_no_op() -> None:
     assert await stop_all_turns(timeout=1.0) == 0
+
+
+async def test_stamp_times_a_tool_between_its_call_and_its_result(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from coffer.domain.chat.events import ToolCall, ToolResult
+
+    ticks = iter([10.0, 10.25])
+    monkeypatch.setattr(turn_persistence, "_clock", lambda: next(ticks))
+    content = turn_persistence.TurnContent()
+    call = ToolCall(tool_use_id="t1", tool_name="Read", tool_input={})
+    result = ToolResult(tool_use_id="t1", tool_name="Read", output=None, error=None)
+    assert content.stamp(call) is call
+    stamped = content.stamp(result)
+    assert isinstance(stamped, ToolResult) and stamped.duration_ms == 250
+    # A result with no call seen stays unknown.
+    orphan = ToolResult(tool_use_id="x", tool_name="Read", output=None, error=None)
+    assert content.stamp(orphan) is orphan
+
+
+async def test_a_streamed_and_persisted_tool_result_carries_its_duration() -> None:
+    from coffer.domain.chat.events import ToolCall, ToolResult
+    from coffer.domain.chat.message import ToolResultBlock
+
+    done = TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn")
+    adapter = FakeAgentAdapter(
+        [
+            TurnStarted(),
+            ToolCall(tool_use_id="t1", tool_name="Read", tool_input={}),
+            ToolResult(tool_use_id="t1", tool_name="Read", output={"ok": 1}, error=None),
+            done,
+        ]
+    )
+    orchestrator, _conv, msg_repo, _prov = make_orchestrator(adapter=adapter)
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
+
+    events = await drain_queue(await start_turn(orchestrator, conv.id, "hi"))
+
+    streamed = next(e for e in events if isinstance(e, ToolResult))
+    assert streamed.duration_ms is not None and streamed.duration_ms >= 0
+    block = next(b for b in _assistant(msg_repo).content if isinstance(b, ToolResultBlock))
+    assert block.duration_ms == streamed.duration_ms

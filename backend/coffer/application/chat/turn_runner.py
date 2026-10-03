@@ -6,7 +6,7 @@ subscribers observe it) and, when the turn was started with a dedicated queue
 (a channel renderer's), to that queue too — ending it with
 a ``None`` sentinel. Every way a turn ends short keeps what it streamed (spec
 chat "Keep partial output when a turn is interrupted or fails"): a user
-interrupt finalises the partial as complete; an adapter stream that stops
+interrupt finalises the partial as stopped; an adapter stream that stops
 without a terminal event is reported as ``stream_ended`` and the partial marked
 failed; a daemon shutdown cancelling the task marks it failed too. Only a
 delete (``ActiveTurn.discarded``) throws the turn away. A turn ends exactly
@@ -198,6 +198,7 @@ async def run_turn_task(
                 )
                 emit(error_event)
                 break
+            event = content.stamp(event)
             emit(event)
             content.add(event)
             await flusher.after(event, placeholder_id)
@@ -245,7 +246,7 @@ async def run_turn_task(
         # whole (same content, same status).
         if final_done is None and error_event is None:
             if active.interrupted:
-                # User interrupt: keep whatever the agent produced, complete.
+                # User interrupt: keep whatever the agent produced, as stopped.
                 final_done = TurnDone(
                     prompt_tokens=None, completion_tokens=None, stop_reason="interrupted"
                 )

@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from dataclasses import replace
 
 from coffer.application.chat.service import ChatService
 from coffer.application.runtime.supervisor import spawn
@@ -57,6 +58,18 @@ class TurnContent:
     def __init__(self) -> None:
         self._blocks: list[ContentBlock] = []
         self._text: list[str] = []
+        self._tool_started: dict[str, float] = {}
+
+    def stamp(self, event: AgentEvent) -> AgentEvent:
+        """Time the tools: note when a call arrives and return its result with
+        ``duration_ms`` filled in (an adapter's own value, if any, wins)."""
+        if isinstance(event, ToolCall):
+            self._tool_started[event.tool_use_id] = _clock()
+        elif isinstance(event, ToolResult) and event.duration_ms is None:
+            started = self._tool_started.pop(event.tool_use_id, None)
+            if started is not None:
+                return replace(event, duration_ms=round((_clock() - started) * 1000))
+        return event
 
     def add(self, event: AgentEvent) -> None:
         if isinstance(event, TextDelta):
@@ -78,6 +91,7 @@ class TurnContent:
                     tool_name=event.tool_name,
                     output=event.output,
                     error=event.error,
+                    duration_ms=event.duration_ms,
                 )
             )
 
@@ -187,6 +201,15 @@ class PartialFlusher:
             log.warning("Partial flush failed for message %s", message_id, exc_info=True)
 
 
+def _final_status(final_done: TurnDone | None, error_event: TurnError | None) -> str:
+    """``failed`` on an error, ``stopped`` when the user interrupted, else ``complete``."""
+    if error_event is not None:
+        return "failed"
+    if final_done is not None and final_done.stop_reason == "interrupted":
+        return "stopped"
+    return "complete"
+
+
 async def finalize_assistant_message(
     *,
     chat: ChatService,
@@ -206,7 +229,7 @@ async def finalize_assistant_message(
     so the turn still leaves a persisted record.
     """
     blocks = content.blocks()
-    status = "failed" if error_event is not None else "complete"
+    status = _final_status(final_done, error_event)
     prompt_tokens = final_done.prompt_tokens if final_done is not None else None
     completion_tokens = final_done.completion_tokens if final_done is not None else None
 

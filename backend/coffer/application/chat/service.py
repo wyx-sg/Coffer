@@ -127,6 +127,12 @@ class ChatService:
             self._conversations, archived=archived, limit=limit, cursor=cursor, q=q
         )
 
+    async def count_conversations(self, *, archived: bool = False, q: str | None = None) -> int:
+        """How many conversations match the listing (``archived``, ``q``), whatever
+        the paging; ``q`` is trimmed like :meth:`page_conversations` does."""
+        q = (q or "").strip() or None
+        return await self._conversations.count(archived=archived, contains=q)
+
     async def get_conversation(self, conversation_id: str) -> Conversation:
         """Return a conversation by id; raises ``ConversationNotFound`` if absent."""
         row = await self._conversations.get(conversation_id)
@@ -245,6 +251,7 @@ class ChatService:
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             created_at=now,
+            finished_at=now if role == Role.ASSISTANT and status != "streaming" else None,
         )
         saved = await self._messages.append(msg)
         await self._conversations.touch(conversation_id, now)
@@ -274,8 +281,10 @@ class ChatService:
         """Finalize a streaming placeholder message with its final content.
 
         Also bumps the conversation's ``updated_at`` so the recency-ordered
-        conversation list reflects turn completion, not just turn start.
+        conversation list reflects turn completion, not just turn start, and
+        stamps the reply's ``finished_at``.
         """
+        now = datetime.now(tz=UTC)
         await self._messages.finalize(
             message_id,
             content=content,
@@ -283,8 +292,9 @@ class ChatService:
             model_id=model_id,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
+            finished_at=now,
         )
-        await self._conversations.touch(conversation_id, datetime.now(tz=UTC))
+        await self._conversations.touch(conversation_id, now)
 
     async def save_partial_message(self, message_id: str, content: list[ContentBlock]) -> None:
         """Persist a streaming turn's content so far (spec chat "Keep partial output

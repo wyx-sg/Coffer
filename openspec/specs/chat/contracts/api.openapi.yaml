@@ -91,7 +91,7 @@ paths:
     get:
       description: |-
         Conversations newest activity first (id breaks ties), paged by cursor;
-        ``archived=true`` lists the archived ones, ``q`` filters by title.
+        ``archived=true`` lists the archived ones, ``q`` filters by title or message text.
       operationId: list_conversations_api_v1_chat_conversations_get
       parameters:
       - in: query
@@ -120,7 +120,7 @@ paths:
           - type: 'null'
           description: The previous page's next_cursor. Bound to the listing (active or archived) it was issued for; any other value is 400 CURSOR_INVALID.
           title: Cursor
-      - description: Title contains this text (case-insensitive); a cursor is bound to it.
+      - description: Title or any message's text contains this text (case-insensitive); a cursor is bound to it.
         in: query
         name: q
         required: false
@@ -129,7 +129,7 @@ paths:
           - maxLength: 200
             type: string
           - type: 'null'
-          description: Title contains this text (case-insensitive); a cursor is bound to it.
+          description: Title or any message's text contains this text (case-insensitive); a cursor is bound to it.
           title: Q
       - in: header
         name: x-coffer-token
@@ -1127,6 +1127,11 @@ components:
         local ``path`` is deliberately NOT surfaced (leak/security — spec chat
         "Re-materialise attachments from persisted history").
       properties:
+        duration_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Duration Ms
         error:
           anyOf:
           - type: string
@@ -1185,6 +1190,7 @@ components:
       - tool_input
       - output
       - error
+      - duration_ms
       - filename
       - mime
       title: ContentBlockOut
@@ -1283,9 +1289,13 @@ components:
           - type: string
           - type: 'null'
           title: Next Cursor
+        total:
+          title: Total
+          type: integer
       required:
       - conversations
       - next_cursor
+      - total
       title: ConversationListOut
       type: object
     ConversationOut:
@@ -1411,6 +1421,12 @@ components:
           format: date-time
           title: Created At
           type: string
+        finished_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Finished At
         id:
           title: Id
           type: string
@@ -1437,6 +1453,7 @@ components:
           enum:
           - complete
           - streaming
+          - stopped
           - failed
           title: Status
           type: string
@@ -1451,6 +1468,7 @@ components:
       - prompt_tokens
       - completion_tokens
       - created_at
+      - finished_at
       title: MessageOut
       type: object
     PendingQueueIn:
@@ -1590,6 +1608,12 @@ components:
     ToolResultEventOut:
       description: 'The data of a `tool_result` event: the result or error of a prior `tool_call`.'
       properties:
+        duration_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: How long the tool ran, in milliseconds; null when unknown.
+          title: Duration Ms
         error:
           anyOf:
           - type: string
@@ -1617,6 +1641,7 @@ components:
       - tool_name
       - output
       - error
+      - duration_ms
       title: ToolResultEventOut
       type: object
     TurnDoneEventOut:

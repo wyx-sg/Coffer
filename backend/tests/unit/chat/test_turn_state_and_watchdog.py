@@ -151,7 +151,7 @@ async def test_an_interrupt_during_the_window_is_still_an_interrupt() -> None:
     )
     assert not any(isinstance(e, TurnError) for e in events)
     assistant = [m for m in msg_repo.all_messages() if m.role is Role.ASSISTANT]
-    assert assistant[0].status == "complete"
+    assert assistant[0].status == "stopped"
 
 
 # ---------------------------------------------------------------------------

@@ -48,6 +48,9 @@ class ToolResultEventOut(BaseModel):
     tool_name: str
     output: dict[str, Any] | None
     error: str | None
+    duration_ms: int | None = Field(
+        default=None, description="How long the tool ran, in milliseconds; null when unknown."
+    )
 
 
 class TurnDoneEventOut(BaseModel):

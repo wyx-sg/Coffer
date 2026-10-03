@@ -16,6 +16,7 @@ const makeAssistant = (overrides: Partial<Message>): Message => ({
   prompt_tokens: null,
   completion_tokens: null,
   model_id: null,
+  finished_at: null,
   created_at: "2026-01-01T00:00:00Z",
   ...overrides,
 });
@@ -30,6 +31,7 @@ const makeUser = (overrides: Partial<Message>): Message => ({
   prompt_tokens: null,
   completion_tokens: null,
   model_id: null,
+  finished_at: null,
   created_at: "2026-01-01T00:00:00Z",
   ...overrides,
 });

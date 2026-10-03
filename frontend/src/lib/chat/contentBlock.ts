@@ -18,6 +18,7 @@ export function contentBlock(
     error: null,
     filename: null,
     mime: null,
+    duration_ms: null,
     ...fields,
   };
 }

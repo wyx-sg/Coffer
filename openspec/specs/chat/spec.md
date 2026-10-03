@@ -290,6 +290,7 @@ bumped while a reader pages moves to the head rather than appearing twice.
 - **GIVEN** three active conversations
 - **WHEN** the active listing is read with `limit=2` and then with the answer's `next_cursor`
 - **THEN** the first page holds the two with the latest activity and the second the third, with a `null` `next_cursor`
+- **AND** both pages report a `total` of 3
 
 ### Requirement: Require every writer to name the agent
 `agent_key` MUST have no storage-level default. Every writer names the agent
@@ -396,8 +397,9 @@ resumes the held queue.
 An interrupted or failed turn — user interrupt, adapter failure, a stream that
 ends without a terminal event, timeout, daemon shutdown, or a daemon that dies
 outright — MUST leave its partial assistant message persisted rather than
-discarded: marked `complete` when the owner interrupted it, and `failed` in every
-other case. Only deleting the conversation discards a turn: the running turn is
+discarded: marked `stopped` when the owner interrupted it, and `failed` in every
+other case. A reply that ran to its end is `complete`; every assistant reply
+that is no longer streaming carries the time it ended (`finished_at`). Only deleting the conversation discards a turn: the running turn is
 cancelled and its placeholder row removed with the conversation. Stopping a turn
 is distinct from discarding the conversation.
 
@@ -430,7 +432,8 @@ and delivered ahead of the notice.
 - **GIVEN** a turn that has streamed partial text and is still running,
 - **WHEN** it is interrupted,
 - **THEN** the stream ends with a terminal turn-done carrying stop reason
-  `interrupted`, and the partial assistant message is persisted as complete.
+  `interrupted`, and the partial assistant message is persisted as `stopped`
+  with its `finished_at` set.
 
 #### Scenario: a silent turn is cancelled by the idle watchdog
 - **GIVEN** an agent that streams part of a reply and then produces nothing,
@@ -1000,21 +1003,24 @@ through its own hook instead, never both.
 - **THEN** the channel note, the memory digest and the model note are appended in
   that order; a conversation with no channel receives the model note only.
 
-### Requirement: Search the conversation list by title
-The Conversations page's conversation list MUST offer a search box that filters the
-listed conversations by title as the owner types: a conversation stays listed
-when its title contains the query, compared case-insensitively with the query
-trimmed, and clearing the query lists every conversation again. The filter runs
-over the list already loaded for the current view (active or archived). A query
-that matches nothing MUST show a no-match state that is distinct from the
-empty-list state, and the search box MUST stay so the query can be changed; a
-list with no conversations at all shows its empty state and offers no search.
+### Requirement: Search the conversation list by title and message text
+The conversation list endpoint MUST accept a query `q` that keeps the
+conversations whose title, or the text of any of their messages, contains it,
+compared case-insensitively with the query trimmed; a blank query lists every
+conversation. Only message text counts — tool names, tool input and output do
+not. The listing's `total` is how many conversations match the archived flag and
+`q`, whatever the paging, and a cursor is bound to the `q` it was issued for.
+The Conversations page's search box sends the owner's query as `q` and lists what
+comes back (active or archived view). A query that matches nothing MUST show a
+no-match state that is distinct from the empty-list state, and the search box
+MUST stay so the query can be changed; a view with no conversations at all shows
+its empty state and offers no search.
 
-#### Scenario: search narrows the conversation list by title
-- **GIVEN** active conversations titled "Alpha rollout", "beta notes" and "Gamma"
-- **WHEN** the owner types " ALP " into the list's search box
-- **THEN** only "Alpha rollout" is listed
-- **AND** clearing the search lists all three again
+#### Scenario: search matches titles and message text
+- **GIVEN** active conversations titled "Alpha rollout" and "Gamma", the second having a message saying "roll back ALPHA"
+- **WHEN** the list is read with `q` " alpha "
+- **THEN** both are listed and `total` is 2
+- **AND** a `q` that appears only in a tool call's name or input lists neither
 
 #### Scenario: a search that matches nothing is not an empty list
 - **GIVEN** a conversation list holding one conversation
@@ -1268,7 +1274,7 @@ A message the owner sends from the Conversations page into a conversation an IM 
 opened MUST also reach that channel, so the phone sees the whole conversation
 and not only its own half. The message goes to the chat and thread the
 conversation belongs to — never anywhere else, and never a group's main chat —
-marked as coming from Coffer (`(from Coffer) <text>`), and the agent's answer to
+marked as coming from Coffer (a first line `<owner name> · from Coffer`, then the text), and the agent's answer to
 it is delivered to the channel exactly as the answer to a message typed there
 would be. Only the send route mirrors; a Retry resends on the web alone.
 
@@ -1290,7 +1296,7 @@ the channel kind.
 #### Scenario: a web reply reaches the channel chat marked as from Coffer
 - **GIVEN** a conversation a paired channel opened in a direct chat
 - **WHEN** the owner sends a message to it from the Conversations page
-- **THEN** the channel chat receives the message prefixed `(from Coffer) `, and
+- **THEN** the channel chat receives the message prefixed with the line `<owner name> · from Coffer`, and
   the send answers `sent`
 
 #### Scenario: the agent's answer to a web reply is delivered to the channel

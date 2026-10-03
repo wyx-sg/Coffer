@@ -32,6 +32,8 @@ class ContentBlockOut(BaseModel):
     tool_input: dict[str, Any] | None = None
     output: dict[str, Any] | None = None
     error: str | None = None
+    #: A ``tool_result``'s run time in milliseconds; null when unknown.
+    duration_ms: int | None = None
     filename: str | None = None
     mime: str | None = None
 
@@ -180,6 +182,9 @@ class ConversationListOut(BaseModel):
     conversations: list[ConversationOut]
     #: Continues the listing after ``conversations``; null on the last page.
     next_cursor: str | None
+    #: How many conversations match the listing (archived flag and ``q``),
+    #: whatever the paging.
+    total: int
 
 
 # ---------------------------------------------------------------------------
@@ -195,11 +200,14 @@ class MessageOut(BaseModel):
     seq: int
     role: Literal["user", "assistant"]
     content: list[ContentBlockOut]
-    status: Literal["complete", "streaming", "failed"]
+    status: Literal["complete", "streaming", "stopped", "failed"]
     model_id: str | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     created_at: datetime
+    #: When an assistant reply ended (complete, stopped or failed); null while it
+    #: streams and on messages that never streamed.
+    finished_at: datetime | None = None
 
 
 class MessageListOut(BaseModel):

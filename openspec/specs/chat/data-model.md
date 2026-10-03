@@ -67,11 +67,12 @@ internal, so tightening it is not a wire change.
 | `seq` | INTEGER, NOT NULL | Position in the thread, from 0. |
 | `role` | TEXT | `user` \| `assistant`. |
 | `content` | TEXT | JSON list of content blocks (below). |
-| `status` | TEXT | `complete` \| `streaming` \| `failed`. A row is written `streaming` before the turn's first event and finalised in place (see "Sweep streaming rows left by a crashed daemon"). |
+| `status` | TEXT | `complete` \| `streaming` \| `stopped` \| `failed`. `stopped` is a reply the user interrupted (partial output kept); `failed` an errored or swept turn. A row is written `streaming` before the turn's first event and finalised in place (see "Sweep streaming rows left by a crashed daemon"). |
 | `model_id` | TEXT, NULL | The model the turn ran on, when the adapter named one. Never read back as configuration. |
 | `prompt_tokens` | INTEGER, NULL | |
 | `completion_tokens` | INTEGER, NULL | |
 | `created_at` | TIMESTAMP | |
+| `finished_at` | TIMESTAMP, NULL | When an assistant reply ended (complete, stopped or failed). Null while it streams, on user messages, on rows from before the column existed, and on rows the startup sweep failed. |
 
 Constraints: `uq_chat_messages_conv_seq (conversation_id, seq)` — one message
 per position, which is what makes the sequence a sequence — and
@@ -87,7 +88,7 @@ and discriminated by `type`:
 | --- | --- | --- |
 | `text` | `text` | |
 | `tool_use` | `tool_use_id`, `tool_name`, `tool_input` | Rendered as its own card. |
-| `tool_result` | `tool_use_id`, `tool_name`, `output`, `error` | Pairs with its `tool_use` by id. |
+| `tool_result` | `tool_use_id`, `tool_name`, `output`, `error`, `duration_ms` | Pairs with its `tool_use` by id. `duration_ms` is how long the tool ran, stamped by the turn runner between the call and its result; absent when unknown. |
 | `attachment` | `path`, `mime`, `filename` | A **reference**: bytes stay on disk — under `~/.coffer/content/channel-media` for a channel's download, `~/.coffer/content/chat-media` for a Conversations page upload. `path` is never emitted to the wire — the API exposes `filename` and `mime` only. |
 
 ### The attachment value object

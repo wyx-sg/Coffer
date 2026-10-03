@@ -23,8 +23,10 @@ class MessageRepo(Protocol):
         model_id: str | None,
         prompt_tokens: int | None,
         completion_tokens: int | None,
+        finished_at: datetime | None = None,
     ) -> None:
-        """Update an existing (streaming) message with its final content/status."""
+        """Update an existing (streaming) message with its final content/status
+        and the time the reply ended."""
         ...
 
     async def save_partial(self, message_id: str, *, content: list[ContentBlock]) -> None:

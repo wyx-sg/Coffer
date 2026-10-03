@@ -57,6 +57,9 @@ class ToolResultBlock:
     tool_name: str
     output: dict[str, Any] | None  # structurally mutable despite frozen=True — acceptable for v1
     error: str | None
+    #: How long the tool ran (the runner stamps it between the call and its
+    #: result); null when unknown.
+    duration_ms: int | None = None
     type: Literal["tool_result"] = "tool_result"
 
 
@@ -100,6 +103,7 @@ def block_to_dict(block: ContentBlock) -> dict[str, Any]:
             "tool_name": block.tool_name,
             "output": block.output,
             "error": block.error,
+            "duration_ms": block.duration_ms,
         }
     if isinstance(block, AttachmentBlock):
         return {
@@ -134,6 +138,7 @@ def block_from_dict(data: dict[str, Any]) -> ContentBlock:
                 tool_name=data["tool_name"],
                 output=data.get("output"),
                 error=data.get("error"),
+                duration_ms=data.get("duration_ms"),
             )
         if block_type == "attachment":
             return AttachmentBlock(
@@ -158,8 +163,13 @@ class Message:
     """One entry in a conversation.
 
     ``status`` is ``"complete"`` for user messages and finished assistant
-    messages, ``"streaming"`` for an in-flight assistant turn, and ``"failed"``
-    for a turn that was interrupted or errored.
+    messages, ``"streaming"`` for an in-flight assistant turn, ``"stopped"`` for
+    a reply the user interrupted (its partial output kept), and ``"failed"`` for
+    a turn that errored.
+
+    ``finished_at`` is when an assistant reply ended (complete, stopped or
+    failed); ``None`` while it streams, on user messages, and on rows written
+    before the column existed.
 
     ``model_id``, ``prompt_tokens``, and ``completion_tokens`` are only set
     on assistant messages.
@@ -170,8 +180,9 @@ class Message:
     seq: int
     role: Role
     content: list[ContentBlock]  # structurally mutable despite frozen=True — acceptable for v1
-    status: Literal["complete", "streaming", "failed"]
+    status: Literal["complete", "streaming", "stopped", "failed"]
     model_id: str | None
     prompt_tokens: int | None
     completion_tokens: int | None
     created_at: datetime
+    finished_at: datetime | None = None
