@@ -117,6 +117,7 @@
     {
       "text": { "en": "Reference", "zh": "参考" },
       "items": [
+        { "text": { "en": "Overview", "zh": "总览" }, "link": "/reference/" },
         { "text": { "en": "CLI", "zh": "CLI" }, "link": "/reference/cli" },
         { "text": { "en": "MCP tools", "zh": "MCP 工具" }, "link": "/reference/mcp-tools" },
         { "text": { "en": "Configuration", "zh": "配置" }, "link": "/reference/configuration" },

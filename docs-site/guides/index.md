@@ -5,44 +5,56 @@ description: Every task-oriented guide to Coffer in one place, grouped by what y
 
 # Guides
 
-Each guide walks you through one task end to end: what to run or click, what Coffer does in response, and how to check it worked. They assume Coffer is installed and the daemon is running. If it is not, start with [Install](/start/install) and the [Quickstart](/start/quickstart); for the vocabulary the guides use, read [Core concepts](/start/concepts).
+One page per task. Each guide shows the CLI command and the place in the app. They assume Coffer is installed and the daemon is running. If it is not, start with [Install](/start/install) and the [Quickstart](/start/quickstart); for the vocabulary the guides use, read [Core concepts](/start/concepts).
 
 ## Agents and tools
 
-- [Agents](/guides/agents): register Claude Code and Codex, connect them to Coffer, and manage their config files, MCP entries, plugins, hooks, models, memory and transcripts.
-- [Connect a client](/guides/connect-a-client): point Claude Code, Codex or any other MCP client at Coffer's gateway, and verify the connection.
-- [MCP servers](/guides/mcp-servers): register upstream MCP servers once, curate their tools, choose which agents reach them, and read the invocation log.
-- [Custom tools](/guides/custom-tools): turn an HTTP API into tools your agents call, from an OpenAPI spec or one request defined by hand.
-- [Model providers](/guides/providers): store a model endpoint and its key once, switch agents onto it, and choose the model Coffer's own engine runs on.
-- [Usage and quota](/guides/usage): what your agents spent on API-key and local providers, and how much of a subscription's allowance is left.
-- [Secret store](/guides/secret-store): how Coffer encrypts every secret, where the master key lives, and how to back it up or carry it to another machine.
-- [Secrets](/guides/secrets): the Secrets page, standalone secrets, `coffer run`, approvals, and moving plaintext files into the store.
+<LinkList :items="[
+{ title: 'Agents', desc: 'Register Claude Code and Codex and look after their config.', link: '/guides/agents' },
+{ title: 'Connect a client', desc: 'Wire an agent to Coffer through one entry.', link: '/guides/connect-a-client' },
+{ title: 'MCP servers', desc: 'Register upstream servers once for every agent.', link: '/guides/mcp-servers' },
+{ title: 'Custom tools', desc: 'Turn an HTTP API into tools.', link: '/guides/custom-tools' },
+{ title: 'Model providers', desc: 'Store a provider and switch agents to it.', link: '/guides/providers' },
+{ title: 'Usage and quota', desc: 'See what agents spent and what quota is left.', link: '/guides/usage' },
+{ title: 'Secret store', desc: 'How secrets are encrypted and where the key lives.', link: '/guides/secret-store' },
+{ title: 'Secrets', desc: 'Keep keys encrypted and out of agent config.', link: '/guides/secrets' }
+]" />
 
 ## What agents share
 
-- [Skills](/guides/skills): keep one library of AgentSkills folders and deliver each one into the agents you choose.
-- [CLIs](/guides/clis): see which command-line tools your skills and MCP servers need are missing, too old or not logged in, and hand the fix to your agent.
-- [Writing skill libraries](/guides/writing-skill-libraries): structure a library so one skill body serves every organisation.
-- [Knowledge](/guides/knowledge): keep what you and your agents know as folders of Markdown that every agent reads with its own file tools.
-- [Memory](/guides/memory): let Coffer distil what each agent has learned into one set of notes per repository and hand them back at the right moments.
+<LinkList :items="[
+{ title: 'Skills', desc: 'Import a skill library and deliver it.', link: '/guides/skills' },
+{ title: 'CLIs', desc: 'Find missing command-line tools and hand the fix to your agent.', link: '/guides/clis' },
+{ title: 'Writing skill libraries', desc: 'Structure skills that travel between agents.', link: '/guides/writing-skill-libraries' },
+{ title: 'Knowledge', desc: 'Markdown every agent reads and adds to.', link: '/guides/knowledge' },
+{ title: 'Memory', desc: 'Share what each agent learns.', link: '/guides/memory' }
+]" />
 
 ## Talking to agents
 
-- [Conversations](/guides/chat): talk to Claude Code or Codex from the web Conversations page, and watch or continue conversations started from a channel.
-- [Channels](/guides/channels): connect a Telegram bot or SeaTalk app, pair it to your account, and drive your agents from the IM app you already use.
-- [Telegram](/guides/channels-telegram) and [SeaTalk](/guides/channels-seatalk): the setup steps for each channel.
+<LinkList :items="[
+{ title: 'Conversations', desc: 'Drive an agent from the browser.', link: '/guides/chat' },
+{ title: 'Channels', desc: 'Chat with your agents from Telegram or SeaTalk.', link: '/guides/channels' },
+{ title: 'Telegram', desc: 'Pair a Telegram bot.', link: '/guides/channels-telegram' },
+{ title: 'SeaTalk', desc: 'Pair a SeaTalk bot.', link: '/guides/channels-seatalk' }
+]" />
 
 ## Apps
 
-- [Web UI](/guides/web-ui): how the web UI is served and signed in, and how its sidebar, command palette and Settings window are laid out.
-- [Desktop app](/guides/desktop-app): the macOS app, the only place a secret is revealed, the master key is backed up or an approval is given.
+<LinkList :items="[
+{ title: 'Web UI', desc: 'Open the UI in a browser.', link: '/guides/web-ui' },
+{ title: 'Desktop app', desc: 'The menu bar, updates and restarts.', link: '/guides/desktop-app' }
+]" />
 
 ## Operating Coffer
 
-- [Running the daemon](/guides/daemon): start, stop and supervise the daemon, pin its port, run it at login, and back up a vault.
-- [Editing the vault by hand](/guides/vault-files): edit the vault's plain files in any editor, and read, compare and restore any version.
-- [Vault sync](/guides/vault-sync): keep one vault across several machines through a private git remote you own.
-- [Upgrading an existing Coffer](/guides/upgrading): move an older Coffer home into the vault layout with `coffer migrate`.
-- [Activity and audit](/guides/activity): read what changed, what agents called and what the daemon logged, and control how long each record is kept.
-- [Experimental features](/guides/experimental-features): how a capability that is not ready yet ships, and how to switch it per machine.
-- [Troubleshooting](/guides/troubleshooting) and [FAQ](/guides/faq): symptoms and fixes for common problems, and short answers to common questions.
+<LinkList :items="[
+{ title: 'Running the daemon', desc: 'Start, stop and check the daemon.', link: '/guides/daemon' },
+{ title: 'Editing the vault by hand', desc: 'Edit the vault\'s plain files and restore any version.', link: '/guides/vault-files' },
+{ title: 'Vault sync', desc: 'Keep the vault on every Mac through git.', link: '/guides/vault-sync' },
+{ title: 'Upgrading an existing Coffer', desc: 'Move an older Coffer home into the vault layout.', link: '/guides/upgrading' },
+{ title: 'Activity and audit', desc: 'See what changed and every tool call.', link: '/guides/activity' },
+{ title: 'Experimental features', desc: 'Switch capabilities that are not ready yet.', link: '/guides/experimental-features' },
+{ title: 'Troubleshooting', desc: 'Fix the common failures.', link: '/guides/troubleshooting' },
+{ title: 'FAQ', desc: 'Short answers to common questions.', link: '/guides/faq' }
+]" />
