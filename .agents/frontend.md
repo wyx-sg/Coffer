@@ -81,8 +81,8 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
   in `src/lib/`. Three already exist — reuse them, do not re-derive:
   - `lib/reachFilter.ts` — the one "Reach" filter every scoped list offers
     (MCP servers, skills, custom-tool groups): `matchesReach` is the rule and
-    `components/reach/ReachFilter.tsx` the control (All, then Disabled / Every
-    agent / Only selected agents). Knowledge, memory and providers are not
+    `components/reach/ReachFilter.tsx` the control (All, then Off / All agents /
+    Chosen agents). Knowledge, memory and providers are not
     scoped lists.
   - `lib/agents/display.ts` — the human-readable forms of agent wire values
     (product name for a registry key, home-relative path), shared by the

@@ -1,4 +1,4 @@
-// src/components/mcp/server/McpToolsTab.test.tsx — the Tools tab loads every tool and sets how each is exposed to agents (spec mcp-gateway "Choose how each tool is exposed").
+// src/components/mcp/server/McpToolsTab.test.tsx — the Tools tab loads every tool and sets how each is exposed to agents (spec mcp-gateway "Forward tools, resources and prompts").
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -94,7 +94,7 @@ const rowCount = () => within(screen.getByRole("table")).getAllByRole("row").len
 describe("McpToolsTab", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  acceptance("mcp-gateway", "a server's Tools tab lists every tool", () => {
+  acceptance("mcp-gateway", "a server's page reads its tiering split", () => {
     renderTab();
     expect(rowCount()).toBe(50);
     expect(screen.getByTestId("mcp-tools-shown")).toHaveTextContent("Showing 50 of 78");
@@ -114,7 +114,7 @@ describe("McpToolsTab", () => {
     expect(screen.getByTestId("mcp-tools-shown")).toHaveTextContent("Showing 1 of 1");
   });
 
-  acceptance("mcp-gateway", "a tool's exposure is chosen by the person", () => {
+  acceptance("mcp-gateway", "a server's page reads its tiering split", () => {
     renderTab();
     expect(screen.getByRole("combobox", { name: "Exposure of tool_00" })).toHaveTextContent(
       "Auto · Listed",

@@ -308,7 +308,7 @@ describe("ResourcesPage", () => {
       fireEvent.keyDown(screen.getByRole("combobox", { name: "Reach" }), { key: "ArrowDown" });
       fireEvent.click(await screen.findByRole("option", { name }));
     };
-    await choose("Only selected agents");
+    await choose("Chosen agents");
     await waitFor(() => expect(screen.queryByText("github")).toBeNull());
     expect(screen.getByText("linear")).toBeInTheDocument();
     expect(screen.queryByText("sentry")).toBeNull();

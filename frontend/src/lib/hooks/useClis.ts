@@ -42,7 +42,7 @@ export function useCliPreview(command: string) {
 
 /** The interface kept for the tool as it is now. A GET never runs the tool:
  *  `not_read` until {@link useReadCliInterface} has run its help. */
-export function useCliInterface(command: string, enabled = true) {
+function useCliInterface(command: string, enabled = true) {
   return useQuery({
     queryKey: cliInterfaceKey(command),
     queryFn: () => clisApi.interface(command),
@@ -93,7 +93,7 @@ export function useCheckClis() {
 
 /** Run the tool's help and keep the tree: the answer replaces the cached one.
  *  A failure is shown by the Commands tab itself, so it carries no toast. */
-export function useReadCliInterface(command: string) {
+function useReadCliInterface(command: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => clisApi.readInterface(command),

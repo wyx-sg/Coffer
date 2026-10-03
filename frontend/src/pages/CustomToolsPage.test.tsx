@@ -117,7 +117,7 @@ describe("CustomToolsPage", () => {
     expect(within(definition).getByText("billing__<tool>")).toBeInTheDocument();
     expect(within(definition).getByText("Authorization: Bearer")).toBeInTheDocument();
     expect(within(definition).getByText("billing-token")).toBeInTheDocument();
-    expect(within(definition).getByTestId("scope-control")).toHaveTextContent("Every agent");
+    expect(within(definition).getByTestId("scope-control")).toHaveTextContent("All agents");
     expect(within(definition).getByRole("button", { name: "Re-import" })).toBeInTheDocument();
     // The header's ⋯ menu holds only Delete: Edit, Re-import and on/off are visible controls.
     fireEvent.click(screen.getByRole("button", { name: /more actions for billing/i }));

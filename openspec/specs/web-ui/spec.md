@@ -271,8 +271,8 @@ unmanaged skill) nests under that tab's path.
 ### Requirement: Show reach as a labelled button on every list and detail page
 Every list surface of a scoped kind that is a table MUST carry a **reach** column — named for what
 it holds, not for the on/off flag it replaced: one button labelled with the answer it already
-holds — "Every agent", "2 agents", "Disabled", or "No agent selected" for a
-scope narrowed to nobody — so the reader learns the reach by reading it rather
+holds — "All agents", the badges of the chosen agents (no count), "Off", or
+"No agent" for a list of chosen agents that names nobody — so the reader learns the reach by reading it rather
 than by comparing which of three side-by-side segments looks pressed. A list
 beside a reading pane shows no reach button in its rows: the MCP servers and
 Skills lists show each row's reach as a mark instead — Off, All agents, or the
@@ -284,9 +284,9 @@ scope — an agent, a knowledge collection, a memory partition — MUST carry ne
 the column, the button, nor a bulk reach action; see "Offer reach as one choice in a panel".
 
 #### Scenario: the reach button states the reach it holds
-- **GIVEN** resources that reach every agent, two agents, nobody selected, and one that is disabled
+- **GIVEN** resources that reach all agents, two chosen agents, nobody chosen, and one that is off
 - **WHEN** each one's reach button renders
-- **THEN** they read "Every agent", "2 agents", "No agent selected" and "Disabled"
+- **THEN** they read "All agents", the two agents' badges, "No agent" and "Off"
 - **AND** each is one button rather than a row of segments
 
 #### Scenario: a kind that cannot be disabled shows no status control
@@ -296,26 +296,29 @@ the column, the button, nor a bulk reach action; see "Offer reach as one choice 
 
 ### Requirement: Offer reach as one choice in a panel
 The button MUST open a panel where "who does this reach?" is a single choice
-between Disabled, Every agent and Only selected agents, the last over the
-scope's list of agents.
+between Off, All agents and Chosen agents, the last over a "Filter agents" box
+and the list of agents to tick; while the mode is not Chosen agents the list is
+dimmed and inert and its ticks are kept. The footer says the reach in a few
+words (Off, All agents, "1 of 2 agents") and, on the right, whether the last
+change saved.
 
 #### Scenario: the reach panel offers the reach states as one choice
 - **GIVEN** a resource of a scoped kind
 - **WHEN** its reach panel is opened
-- **THEN** it offers Disabled, Every agent and Only selected agents with its current state chosen
-- **AND** choosing Only selected agents shows the list of agents to pick from
+- **THEN** it offers Off, All agents and Chosen agents with its current state chosen
+- **AND** choosing Chosen agents makes the list of agents ticks live
 
-### Requirement: Write the reach once, when the panel closes
-The panel MUST stage its agent list and write exactly once, when it closes — the
-two whole-value choices close it themselves — so a panel that is opened and
-dismissed writes nothing, and no write can refetch the list and move the row the
-panel is anchored to.
+### Requirement: Save every reach change as it is made
+Every mode switch and every tick in the panel MUST be written at once, and the
+footer MUST show Saving…, then Saved, or Couldn't save. A write that fails MUST
+be shown in the panel — beside the agent whose tick failed, or under the
+modes — with its reason and a Retry, and MUST NOT raise a toast.
 
-#### Scenario: a dismissed reach panel writes nothing
+#### Scenario: a reach change saves at once and a failure is shown in the panel
 - **GIVEN** a reach panel opened on a resource
-- **WHEN** the user dismisses it without choosing, and then opens it again and ticks two agents before closing it
-- **THEN** the dismissal writes nothing
-- **AND** the two ticks are written once, when the panel closes
+- **WHEN** the user ticks two agents, and the second write is refused
+- **THEN** each tick is written as it is made, with no write when the panel is dismissed
+- **AND** the second agent's row shows Failed with the reason and a Retry, and no toast appears
 
 ### Requirement: Mount one reach control in three places
 The reach control MUST be one component mounted in every place a reach is
@@ -332,15 +335,18 @@ selection bar carry the control.
 ### Requirement: Apply reach to a whole selection
 A multi-select MUST apply that same choice to the whole selection. A bulk write
 is a new intent, so its button reads "Set reach…" and its panel opens with
-nothing chosen rather than on any one row's value, and a row that fails MUST be
-reported in the batch's one summary rather than silently skipped. Delete stays
+no mode chosen rather than on any one row's value — agents reached by every
+selected row are ticked and those reached by only some are dashed — and is
+written once, on Apply; and a row that fails MUST be
+reported in the panel, which stays open with a Retry, rather than silently
+skipped or raised as a toast. Delete stays
 its own button beside it.
 
-#### Scenario: a bulk reach write starts blank and reports failures in one summary
+#### Scenario: a bulk reach write starts blank and reports a failure in the panel
 - **GIVEN** several selected rows, one of which will fail to update
-- **WHEN** the user opens the selection bar's reach control and chooses a reach
-- **THEN** the button reads "Set reach…" and its panel opened with nothing chosen
-- **AND** every other row is still written, and the one failure is reported in a single summary for the batch
+- **WHEN** the user opens the selection bar's reach control, chooses a reach and applies it
+- **THEN** the button reads "Set reach…", its panel opened with nothing chosen, and nothing is written until Apply
+- **AND** every other row is still written, and the one failure is reported in the panel with a Retry and no toast
 
 ### Requirement: Filter lists by the same reach states
 For a scoped kind, the list's reach filter MUST offer the same states the panel
@@ -352,7 +358,7 @@ each carry this filter.
 #### Scenario: the reach filter offers the panel's states under the reach name
 - **GIVEN** a list surface of a scoped kind
 - **WHEN** its reach filter is built
-- **THEN** it offers All, then Disabled, Every agent and Only selected agents, the last three labelled as the reach button labels them
+- **THEN** it offers All, then Off, All agents and Chosen agents, the last three labelled as the reach button labels them
 - **AND** the filter is headed Reach, the word the column and the button use
 
 ### Requirement: Make empty, loading and error states first-class

@@ -1,10 +1,9 @@
 // src/components/custom-tools/DraftReachField.tsx — a reach chosen inside a form and written with it.
 //
-// The page's ScopeControl writes as soon as its panel closes; a form's reach
-// is part of the draft it saves. So this is the same button and panel
-// vocabulary (ReachButton over "every agent" / "only selected agents" and the
-// agent checklist) without a write of its own: `null` is every agent, a list
-// of agent uids the narrowed reach. `pickOnly` drops the two choices and
+// The page's ScopeControl writes at once; a form's reach is part of the draft
+// it saves. So this is the same button and panel vocabulary (ReachButton over
+// "All agents" / "Chosen agents" and the agent checklist) without a write of
+// its own: `null` is all agents, a list of agent uids the chosen agents. `pickOnly` drops the two choices and
 // leaves the checklist — a tool's own reach, where "the group's default" is
 // the segmented choice beside it (ToolReachField).
 import { useId, useState } from "react";
@@ -86,7 +85,7 @@ export function DraftReachField({ value, onChange, pickOnly = false, disabled, i
         <AgentPicker
           registered={registered}
           selected={selected}
-          dormant={restricted && selected.length === 0}
+          inactive={!restricted}
           busy={Boolean(disabled)}
           onToggle={(uid, checked) =>
             onChange(checked ? [...selected, uid] : selected.filter((entry) => entry !== uid))

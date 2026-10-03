@@ -18,12 +18,14 @@ describe("DraftReachField", () => {
   test("narrowing ticks agents into the draft", () => {
     const onChange = vi.fn();
     render(<DraftReachField value={null} onChange={onChange} />);
-    fireEvent.click(screen.getByRole("button", { name: "Every agent" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: "codex" }));
-    expect(onChange).toHaveBeenCalledWith(["ag-cx"]);
+    fireEvent.click(screen.getByRole("button", { name: "All agents" }));
+    // The list is inert until the mode is Chosen agents.
+    expect(screen.getByRole("checkbox", { name: "codex" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("radio", { name: "Chosen agents" }));
+    expect(onChange).toHaveBeenLastCalledWith([]);
   });
 
-  test("pick-only counts the chosen agents against every agent", () => {
+  test("pick-only counts the chosen agents against all agents", () => {
     const onChange = vi.fn();
     render(<DraftReachField value={["ag-cc"]} onChange={onChange} pickOnly />);
     fireEvent.click(screen.getByRole("button", { name: "1 of 2 agents" }));
