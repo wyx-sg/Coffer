@@ -5,8 +5,12 @@
 // status, "Unsaved changes"), and the page's actions pushed to the right — and
 // an optional subtitle line under the row. Pages carry no back button; the
 // sidebar and the browser's own history are the way out. Detail pages keep one
-// fixed action order: reach → test/refresh → edit → delete.
+// fixed action order: reach → test/refresh → edit → delete. An item ignored on
+// Overview that belongs to the page shows under the subtitle (IgnoredHere).
 import type { ReactNode } from "react";
+
+import { IgnoredHere } from "@/components/IgnoredHere";
+import { useCanReadIgnored } from "@/lib/overview/useIgnoredHere";
 
 interface Props {
   title: ReactNode;
@@ -18,6 +22,7 @@ interface Props {
 }
 
 export function PageHeader({ title, subtitle, actions, badges }: Props) {
+  const canReadIgnored = useCanReadIgnored();
   return (
     <header className="flex flex-col gap-1.5">
       <div className="flex min-h-control-md flex-wrap items-center gap-x-2.5 gap-y-2">
@@ -26,6 +31,7 @@ export function PageHeader({ title, subtitle, actions, badges }: Props) {
         {actions ? <div className="ml-auto flex items-center gap-2">{actions}</div> : null}
       </div>
       {subtitle ? <p className="truncate text-sm text-text-subtle">{subtitle}</p> : null}
+      {canReadIgnored ? <IgnoredHere /> : null}
     </header>
   );
 }

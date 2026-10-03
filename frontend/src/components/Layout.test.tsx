@@ -79,7 +79,7 @@ describe("Layout", () => {
       within(screen.getByTestId("sidebar")).getByRole("link", { name: /coffer/i }),
     ).toHaveAttribute("href", "/");
     expect(
-      within(screen.getByTestId("sidebar")).getByRole("button", { name: /collapse sidebar/i }),
+      within(screen.getByTestId("sidebar")).getByRole("button", { name: /hide sidebar/i }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId("window-drag-region")).toBeNull();
   });
@@ -99,13 +99,13 @@ describe("Layout", () => {
     expect(
       within(screen.getByTestId("sidebar")).queryByRole("button", { name: /sidebar/i }),
     ).toBeNull();
-    const toggle = within(strip).getByRole("button", { name: /collapse sidebar/i });
+    const toggle = within(strip).getByRole("button", { name: /hide sidebar/i });
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(toggle).toHaveAttribute("aria-controls", "sidebar");
     fireEvent.click(toggle);
     expect(localStorage.getItem("coffer.nav.collapsed")).toBe("1");
     const again = within(screen.getByTestId("window-drag-region")).getByRole("button", {
-      name: /expand sidebar/i,
+      name: /show sidebar/i,
     });
     expect(again).toHaveAttribute("aria-expanded", "false");
     expect(
@@ -159,7 +159,7 @@ describe("Layout", () => {
   test("collapsing hides labels, keeps the brand mark, and keeps expand at the top of the rail", () => {
     renderShell();
     expect(screen.getByText("Coffer")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
+    fireEvent.click(screen.getByRole("button", { name: /hide sidebar/i }));
     expect(localStorage.getItem("coffer.nav.collapsed")).toBe("1");
     expect(screen.queryByText("Coffer")).not.toBeInTheDocument();
     // Brand mark still links home.
@@ -170,11 +170,11 @@ describe("Layout", () => {
     // and the footer holds no second one.
     const rail = within(screen.getByTestId("sidebar"));
     const names = rail.getAllByRole("button").map((b) => b.getAttribute("aria-label"));
-    expect(names.filter((n) => n === "Expand sidebar")).toHaveLength(1);
-    expect(names.indexOf("Expand sidebar")).toBeLessThan(
+    expect(names.filter((n) => n === "Show sidebar")).toHaveLength(1);
+    expect(names.indexOf("Show sidebar")).toBeLessThan(
       names.findIndex((n) => n?.startsWith("Settings")),
     );
-    fireEvent.click(rail.getByRole("button", { name: "Expand sidebar" }));
+    fireEvent.click(rail.getByRole("button", { name: "Show sidebar" }));
     expect(localStorage.getItem("coffer.nav.collapsed")).toBe("0");
     // Theme and language live in the version menu, not in the sidebar.
     expect(screen.queryByRole("button", { name: /^language$/i })).not.toBeInTheDocument();
@@ -272,7 +272,7 @@ describe("Layout", () => {
 
   test("collapsing keeps the rail at its own width and drops the divider", () => {
     renderShell();
-    fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
+    fireEvent.click(screen.getByRole("button", { name: /hide sidebar/i }));
     expect(screen.queryByRole("separator", { name: "Resize the sidebar" })).not.toBeInTheDocument();
     // The collapsed rail keeps Settings as a gear with an accessible name.
     expect(screen.getByRole("button", { name: /^Settings/ })).toBeInTheDocument();
@@ -282,14 +282,14 @@ describe("Layout", () => {
 acceptance("web-ui", "the collapsed sidebar stays collapsed after a reload", () => {
   const first = renderShell();
   expect(screen.getByText("Coffer")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
+  fireEvent.click(screen.getByRole("button", { name: /hide sidebar/i }));
   first.unmount();
 
   // A fresh mount reads the remembered choice: it opens as the icon rail.
   const second = renderShell();
   expect(screen.queryByText("Coffer")).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Agents" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: /expand sidebar/i }));
+  fireEvent.click(screen.getByRole("button", { name: /show sidebar/i }));
   second.unmount();
 
   // Expanding is remembered the same way.
@@ -304,7 +304,7 @@ acceptance("web-ui", "the sidebar carries the Coffer mark", () => {
   expect(home).toHaveAttribute("href", "/");
   expect(home?.querySelector("[data-coffer-mark]")).not.toBeNull();
   expect(home).toHaveAccessibleName("Coffer");
-  fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
+  fireEvent.click(screen.getByRole("button", { name: /hide sidebar/i }));
   expanded.unmount();
 
   // Collapsed: the mark alone, still labelled "Coffer".

@@ -29,6 +29,8 @@ export const clisApi = {
   list: () => unwrap(getApiClient().GET("/clis")),
   /** Probe every command again. */
   checkAll: () => unwrap(getApiClient().POST("/clis/check")),
+  /** Probe one command again. */
+  check: (command: string) => unwrap(getApiClient().POST("/clis/{command}/check", one(command))),
   get: (command: string) => unwrap(getApiClient().GET("/clis/{command}", one(command))),
   /** Add a tool by hand, with no skill. */
   add: (body: CliAddInput) => unwrap(getApiClient().POST("/clis", { body })),

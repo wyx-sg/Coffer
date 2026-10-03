@@ -1302,7 +1302,10 @@ Every row of Needs you — whatever its severity — MUST carry a ⋯ menu whose
 (its kind, resource and reason), and audit each ignore and each stop: `GET /api/v1/attention` then
 lists it under `ignored`, out of `items` and `counts_by_kind`, so Needs you, the Agents health tile,
 the sidebar's badges and the menu bar's count all leave it out alike. Overview MUST NOT list ignored
-items or count them. Ignoring changes nothing about the resource itself. Asking to ignore a key that
+items or count them. The page an ignored item belongs to (the page its name opens on Overview)
+MUST show one muted line under its header — the item's reason, "ignored on Overview", and a
+**Show it again** button that stops the ignore (`DELETE /api/v1/attention/ignored/{key}`) and
+confirms with "Back on Overview". Ignoring changes nothing about the resource itself. Asking to ignore a key that
 names no item in the list is refused with `ATTENTION_NOT_IGNORABLE`.
 
 #### Scenario: an ignored item leaves needs you whatever its severity
@@ -1310,6 +1313,12 @@ names no item in the list is refused with `ATTENTION_NOT_IGNORABLE`.
 - **WHEN** the user chooses Ignore in Codex's menu, then Ignore in the failing server's menu
 - **THEN** each leaves Needs you in turn, and Overview shows no "ignored" line and no list of ignored items
 - **AND** the daemon's attention list carries them only under `ignored`, its counts leave them out, and both changes are audited
+
+#### Scenario: an ignored item can be shown again from its own page
+- **GIVEN** an MCP server that fails and was ignored on Overview
+- **WHEN** the user opens that server's page
+- **THEN** under the header a muted line gives the reason and says it was ignored on Overview, with **Show it again**
+- **AND** choosing it stops the ignore, the line goes, and the item is back on Overview
 
 ### Requirement: Hand installing an agent to the person when none is found
 While no supported agent is installed on this machine, `GET /api/v1/agents/types` MUST carry
@@ -2292,7 +2301,16 @@ first: one row per item of the attention list ([resource-framework](../resource-
 "Report what needs a person across every kind"), most severe first and then
 oldest, each with its resource and kind, the reason in a sentence, since when
 where that is known, and exactly one action that opens the page — or the tab —
-where the item is dealt with. Every row MUST also
+where the item is dealt with. An action that is a non-GET call into Coffer's
+own state needing no preview — testing an MCP server again, probing a command
+again — MUST run in place instead: the button turns into a disabled
+"Retrying…" or "Checking…", the reason gains an accent line ("Starting
+postgres… it leaves this list once it answers."), and that lasts until the
+attention list has been read again after the call; a row still listed then
+returns to its button, and a failed call returns it at once with the error as
+a toast. Every other action — connecting an agent or repairing its config
+(writes into the agent's own files, previewed on their page), adding a secret,
+turning approval on, and every read-only review — keeps opening its page. Every row MUST also
 carry a ⋯ menu — Copy prompt, Ask an agent while a managed agent is available,
 then Ignore — with the daemon's prompt as given (every item carries one, the
 kind's own where it has one); the list scrolls inside a frame of about six
@@ -2323,6 +2341,12 @@ for what agents share follows.
 - **GIVEN** two failing MCP servers, one failing for five hours and one for two, a skill whose link drifted an hour ago, and an agent the user has not connected
 - **WHEN** the user opens Overview
 - **THEN** Needs you lists the older failing server first, then the other, then the skill, then the agent, each with its reason, since when where that is known, and one action opening the page or tab where it is dealt with
+
+#### Scenario: a row's action that runs in place shows it is in progress
+- **GIVEN** a failing MCP server in Needs you whose action is to test it again, and an agent row whose action is to connect it
+- **WHEN** the user clicks the server's action
+- **THEN** the server's button reads "Retrying…" and is disabled, its reason carries "Starting <name>… it leaves this list once it answers.", and the test is called once
+- **AND** once the list is read again with the server still listed, its button returns to normal, while the agent row's action stayed a link to its page throughout
 
 #### Scenario: a needs-you row offers the item's hand-off in its menu
 - **GIVEN** an attention item carrying a hand-off prompt, and a managed agent available

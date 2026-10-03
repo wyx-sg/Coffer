@@ -87,6 +87,7 @@
     "summaryWithCoffer": "{{agents}}和 Coffer 中的{{changes}}"
   },
   "common": {
+    "moreActions": "更多操作",
     "enabled": "已启用",
     "close": "关闭",
     "save": "保存",
@@ -168,8 +169,8 @@
     "knowledge": "知识",
     "memory": "记忆",
     "settings": "设置",
-    "collapse": "折叠侧边栏",
-    "expand": "展开侧边栏",
+    "collapse": "隐藏侧边栏",
+    "expand": "显示侧边栏",
     "back": "后退",
     "forward": "前进",
     "agents": "智能体",
@@ -4667,8 +4668,19 @@
         "body": "需要你处理的事会显示在这里。",
         "checked": "检查于"
       },
+      "pending": {
+        "test": "重试中…",
+        "check": "检查中…"
+      },
+      "doing": {
+        "test": "正在启动 {{name}}… 它回应后会自动离开这个列表。",
+        "check": "正在检查 {{name}}… 它通过后会自动离开这个列表。"
+      },
       "moreFor": "{{name}} 的更多操作",
-      "ignore": "忽略"
+      "ignore": "忽略",
+      "ignoredHere": "{{reason}} — 已在总览中忽略。",
+      "showAgain": "重新显示",
+      "backOnOverview": "已回到总览"
     },
     "actions": {
       "connect": "连接",

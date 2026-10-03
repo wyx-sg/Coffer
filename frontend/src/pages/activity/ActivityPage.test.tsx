@@ -501,9 +501,16 @@ acceptance("web-ui", "each activity tab reads its owner's route", async () => {
     daemon: [DAEMON_RECORD],
   });
   // The three owners' routes, plus the MCP server list the server filter
-  // offers (the resource framework's). Anything else would be a route of the
-  // Activity page's own.
-  const ALLOWED = new Set(["/audit", "/mcp/invocations", "/daemon/logs", "/resources"]);
+  // offers (the resource framework's) and the attention list every page
+  // header reads for the items ignored on it. Anything else would be a route
+  // of the Activity page's own.
+  const ALLOWED = new Set([
+    "/audit",
+    "/mcp/invocations",
+    "/daemon/logs",
+    "/resources",
+    "/attention",
+  ]);
   const requested = () => get.mock.calls.map((c: unknown[]) => c[0] as string);
 
   render(wrap(<ActivityPage />, ["/activity?tab=changes"]));

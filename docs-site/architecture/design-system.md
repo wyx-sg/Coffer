@@ -53,7 +53,7 @@ Motion confirms cause and effect and never decorates. There are three durations 
 
 Keyboard focus is always visible and only appears for keyboard focus, never on a mouse click: a two-pixel accent ring with a gap, following the control's shape; text fields show an accent border with a soft halo instead.
 
-Waiting is shown where it happens and only when it lasts. A button that started an action keeps its width and label, swaps its icon for a small spinner and reads busy rather than disabled; a list that is loading keeps its header and fills with skeleton rows shaped like the real ones. Both appear only after a short delay, so an answer that comes back quickly never flashes a spinner. Tooltips name things and never hold actions: one opens after a moment of hover, at once on keyboard focus, and the next one opens without the wait while the pointer moves along a toolbar.
+Waiting is shown where it happens and only when it lasts. A button that started an action keeps its width and label, swaps its icon for a small spinner and reads busy rather than disabled; a list that is loading keeps its header and fills with skeleton rows shaped like the real ones. Both appear only after a short delay, so an answer that comes back quickly never flashes a spinner. A tooltip only names an icon-only control (its name, and its shortcut when it has one) or shows the full text of something truncated. A button or menu item that carries words gets no tooltip, and a tooltip never explains what will happen: that belongs in a menu item's second line or behind a "?" hint. Tooltips never hold actions: one opens after a moment of hover, at once on keyboard focus, and the next one opens without the wait while the pointer moves along a toolbar.
 
 ## Shared components
 

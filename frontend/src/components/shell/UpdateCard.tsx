@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowUpCircle, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useShellUpdates } from "@/lib/hooks/useShellUpdates";
 import { useOpenSettings } from "@/lib/settingsModal";
 
@@ -41,17 +42,22 @@ export function UpdateCard({ collapsed }: { collapsed: boolean }) {
       <div className="flex items-center gap-2">
         <ArrowUpCircle className="size-[15px] text-accent-text" strokeWidth={1.75} aria-hidden />
         <span className="text-sm font-semibold text-text">{t("nav.update.title")}</span>
-        <button
-          type="button"
-          aria-label={t("nav.update.dismiss")}
-          onClick={() => {
-            dismissedVersion = offer.version;
-            rerender((n) => n + 1);
-          }}
-          className="ml-auto inline-flex rounded-xs text-text-subtle hover:text-text"
-        >
-          <X className="size-3.5" aria-hidden />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label={t("nav.update.dismiss")}
+              onClick={() => {
+                dismissedVersion = offer.version;
+                rerender((n) => n + 1);
+              }}
+              className="ml-auto inline-flex rounded-xs text-text-subtle hover:text-text"
+            >
+              <X className="size-3.5" aria-hidden />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{t("nav.update.dismiss")}</TooltipContent>
+        </Tooltip>
       </div>
       <p className="text-xs leading-normal text-text-muted">
         <span className="font-mono text-2xs text-text">{`v${offer.version}`}</span>{" "}

@@ -87,6 +87,7 @@
     "summaryWithCoffer": "{{changes}} in {{agents}} and Coffer"
   },
   "common": {
+    "moreActions": "More actions",
     "enabled": "Enabled",
     "close": "Close",
     "save": "Save",
@@ -168,8 +169,8 @@
     "knowledge": "Knowledge",
     "memory": "Memory",
     "settings": "Settings",
-    "collapse": "Collapse sidebar",
-    "expand": "Expand sidebar",
+    "collapse": "Hide sidebar",
+    "expand": "Show sidebar",
     "back": "Back",
     "forward": "Forward",
     "agents": "Agents",
@@ -4667,8 +4668,19 @@
         "body": "Anything that needs you shows up here.",
         "checked": "Checked"
       },
+      "pending": {
+        "test": "Retrying…",
+        "check": "Checking…"
+      },
+      "doing": {
+        "test": "Starting {{name}}… it leaves this list once it answers.",
+        "check": "Checking {{name}}… it leaves this list once it answers."
+      },
       "moreFor": "More for {{name}}",
-      "ignore": "Ignore"
+      "ignore": "Ignore",
+      "ignoredHere": "{{reason}} — ignored on Overview.",
+      "showAgain": "Show it again",
+      "backOnOverview": "Back on Overview"
     },
     "actions": {
       "connect": "Connect",

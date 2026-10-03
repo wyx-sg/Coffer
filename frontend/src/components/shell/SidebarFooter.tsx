@@ -25,6 +25,30 @@ export function SidebarFooter({ collapsed }: Props) {
   const settingsOpen = useSettingsOpen();
   const settingsLabel = t("nav.settings");
 
+  const button = (
+    <button
+      type="button"
+      onClick={() => openSettings("general")}
+      aria-label={settingsLabel}
+      aria-pressed={settingsOpen}
+      data-testid="sidebar-settings"
+      className={cn(
+        "flex h-7 items-center rounded-item text-sm transition-colors duration-fast",
+        collapsed ? "w-8 justify-center" : "w-full gap-[9px] px-2.5 text-left",
+        settingsOpen
+          ? "bg-surface-selected font-label text-text"
+          : "font-book text-text-muted hover:bg-surface-hover hover:text-text",
+      )}
+    >
+      <SettingsIcon
+        className={cn("size-[15px] shrink-0", settingsOpen ? "text-accent" : "text-text-subtle")}
+        strokeWidth={1.75}
+        aria-hidden
+      />
+      {collapsed ? null : <span className="flex-1 truncate">{settingsLabel}</span>}
+    </button>
+  );
+
   return (
     <div
       className={cn(
@@ -33,37 +57,14 @@ export function SidebarFooter({ collapsed }: Props) {
       )}
     >
       <UpdateCard collapsed={collapsed} />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={() => openSettings("general")}
-            aria-label={settingsLabel}
-            aria-pressed={settingsOpen}
-            data-testid="sidebar-settings"
-            className={cn(
-              "flex h-7 items-center rounded-item text-sm transition-colors duration-fast",
-              collapsed ? "w-8 justify-center" : "w-full gap-[9px] px-2.5 text-left",
-              settingsOpen
-                ? "bg-surface-selected font-label text-text"
-                : "font-book text-text-muted hover:bg-surface-hover hover:text-text",
-            )}
-          >
-            <SettingsIcon
-              className={cn(
-                "size-[15px] shrink-0",
-                settingsOpen ? "text-accent" : "text-text-subtle",
-              )}
-              strokeWidth={1.75}
-              aria-hidden
-            />
-            {collapsed ? null : <span className="flex-1 truncate">{settingsLabel}</span>}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side={collapsed ? "right" : "top"}>
-          {`${settingsLabel}  ${shortcutLabel(",")}`}
-        </TooltipContent>
-      </Tooltip>
+      {collapsed ? (
+        <Tooltip>
+          <TooltipTrigger asChild>{button}</TooltipTrigger>
+          <TooltipContent side="right">{`${settingsLabel}  ${shortcutLabel(",")}`}</TooltipContent>
+        </Tooltip>
+      ) : (
+        button
+      )}
     </div>
   );
 }

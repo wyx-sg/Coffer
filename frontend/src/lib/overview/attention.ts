@@ -140,3 +140,20 @@ export function itemActionLabelKey(item: AttentionItem): string {
   if (isHookItem(item) && item.action.verb === "repair") return "overview.actions.repairHook";
   return actionLabelKey(item.action.verb);
 }
+
+/** The actions that run where the row is. An action runs in place only when
+ *  it is a non-GET call into Coffer's own state that needs no preview: testing
+ *  an MCP server again (`test`, POST) and probing a command again (`check`,
+ *  POST on a CLI). Every other verb opens its page — `connect` and `repair`
+ *  write into an agent's own files, whose preview lives there; `set_secret`
+ *  needs the value typed; `turn_on` changes a security setting the person
+ *  should see; `review`, `run` and a GET `check` only read. Keyed by kind and
+ *  verb, so the call itself goes through the typed client (useInPlaceAction). */
+const IN_PLACE = new Set(["mcp_server:test", "cli:check"]);
+
+/** The item's in-place verb (`test` or `check`), or null when its action opens a page. */
+export function inPlaceVerb(item: AttentionItem): "test" | "check" | null {
+  if (item.action.method.toUpperCase() === "GET") return null;
+  const verb = item.action.verb;
+  return IN_PLACE.has(`${item.kind}:${verb}`) ? (verb as "test" | "check") : null;
+}
