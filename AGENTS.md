@@ -73,7 +73,7 @@ Four things describe the product, and **changing one means changing the others i
 
 | # | Canvas | Covers | Link |
 | --- | --- | --- | --- |
-| 0 | Foundations | principles, brand, colour, type, spacing, shared component sheets | <https://claude.ai/artifact/NicV38VfXwViA294jgRfBV> |
+| 0 | Foundations | principles, tokens and every shared component, in seven pages (below) | <https://claude.ai/artifact/NicV38VfXwViA294jgRfBV> |
 | 1 | Shell | app shell and global states, Overview, menu bar, Settings modal | <https://claude.ai/artifact/Jz7f6MqShmdWx4N7YTRm49> |
 | 2 | Agents | Agents, Model providers | <https://claude.ai/artifact/NdBb9YeJXQSLq3ynUDC2Yr> |
 | 3 | Run | Conversations, Channels, channel messages in SeaTalk / Telegram | <https://claude.ai/artifact/UXVgGBZBtrDx3Uqnc3ke82> |
@@ -82,6 +82,8 @@ Four things describe the product, and **changing one means changing the others i
 | 6 | System | Secrets, Activity, Usage, Sync | <https://claude.ai/artifact/GgTRNb7Ydtk3ZaTyK3vufH> |
 | 7 | Docs site | docs-site pages | <https://claude.ai/artifact/LycoMx54recg7ACG1x212D> |
 | — | Design System | tokens and shared components | <https://claude.ai/artifact/78ViLn9YyUszUNWhC8fyJh> |
+
+**Foundations pages** — the Foundations canvas groups shared components by what they do, one canvas page each: 0.1 Basics (global rules and tokens: principles, brand, colour and themes, type, space, motion, focus), 0.2 Inputs & actions, 0.3 Status & feedback, 0.4 Overlays, 0.5 Layout & navigation, 0.6 Data display, 0.7 Coffer patterns (pieces that only make sense with Coffer's agents, built from the others). Place a new component by taking the first rule that fits: a global rule or token → 0.1; meaningless without Coffer's agents → 0.7; floats above the page → 0.4; lays out the page or moves between pages → 0.5; the user enters a value or triggers something → 0.2; the system reports a state → 0.3; anything else that shows data → 0.6. A new board goes at the end of its page; a board number is never changed or reused.
 
 ## 4. Decide vs Ask
 
