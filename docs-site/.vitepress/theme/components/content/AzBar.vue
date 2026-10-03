@@ -43,6 +43,7 @@ onMounted(() => {
 .az span {
   min-width: 18px;
   text-align: center;
+  font-weight: 600;
   text-decoration: none;
 }
 .az a {
@@ -50,5 +51,6 @@ onMounted(() => {
 }
 .az span {
   color: var(--vp-c-text-3);
+  opacity: 0.6;
 }
 </style>

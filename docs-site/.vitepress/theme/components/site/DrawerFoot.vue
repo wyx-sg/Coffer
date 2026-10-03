@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useData, withBase } from "vitepress";
+import { useData, useRouter, withBase } from "vitepress";
 
 // Phone drawer, bottom row: language, theme, GitHub.
 const { isDark, site, page } = useData();
 const route = { get path() { return '/' + page.value.relativePath.replace(/(index)?\.md$/, ''); } };
 const zh = computed(() => route.path.startsWith("/zh/") || route.path === "/zh");
-const other = computed(() =>
-  withBase(zh.value ? route.path.replace(/^\/zh/, "") || "/" : "/zh" + route.path),
-);
+// The same page in each language; the select shows the current one.
+const router = useRouter();
+const english = computed(() => route.path.replace(/^\/zh(?=\/|$)/, "") || "/");
+const chinese = computed(() => (zh.value ? route.path : "/zh" + route.path));
+function switchLang(e: Event) {
+  const lang = (e.target as HTMLSelectElement).value;
+  router.go(withBase(lang === "zh" ? chinese.value : english.value));
+}
 const gh = computed(
   () => (site.value.themeConfig.socialLinks?.[0]?.link as string | undefined) ?? "https://github.com/wyx-sg/Coffer",
 );
@@ -16,10 +21,14 @@ const gh = computed(
 
 <template>
   <div class="coffer-drawer-foot">
-    <a :href="other" class="lang">
+    <label class="lang">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" /></svg>
-      {{ zh ? "English" : "简体中文" }}
-    </a>
+      <!-- :selected on each option: server-rendered HTML only carries that -->
+      <select :aria-label="zh ? '切换语言' : 'Change language'" @change="switchLang">
+        <option value="en" :selected="!zh">English</option>
+        <option value="zh" :selected="zh">简体中文</option>
+      </select>
+    </label>
     <span class="icons">
       <button type="button" :aria-label="zh ? '切换主题' : 'Toggle theme'" @click="isDark = !isDark">
         <svg v-if="!isDark" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z" /></svg>
@@ -51,6 +60,17 @@ const gh = computed(
   align-items: center;
   gap: 8px;
   color: var(--vp-c-text-1);
+}
+.lang select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 44px;
+  padding: 0 22px 0 0;
+  border: 0;
+  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b717d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 2px center / 14px;
+  font: inherit;
+  font-size: 14px;
+  color: inherit;
 }
 .lang svg,
 .icons svg {

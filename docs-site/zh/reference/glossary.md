@@ -2,6 +2,7 @@
 title: 术语表
 description: Coffer 所用术语的定义，从生效范围、类型到同步轮次和一轮整理，每条都链接到详细讲解它的页面。
 outline: 2
+pageClass: glossary
 ---
 
 # 术语表 {#glossary}

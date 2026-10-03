@@ -28,7 +28,7 @@ withDefaults(defineProps<{ variant?: "list" | "cards" }>(), { variant: "list" })
 .ll :deep(li) {
   position: relative;
   margin: 0;
-  padding: 14px 48px 14px 262px;
+  padding: 14px 48px 14px 252px;
   border-top: 1px solid var(--vp-c-divider);
   font-size: 14px;
   line-height: 22px;
@@ -42,8 +42,8 @@ withDefaults(defineProps<{ variant?: "list" | "cards" }>(), { variant: "list" })
 }
 .ll :deep(li > a:first-child) {
   float: left;
-  width: 230px;
-  margin-left: -246px;
+  width: 220px;
+  margin-left: -236px;
   font-size: 15px;
   font-weight: 600;
   color: var(--vp-c-text-1);

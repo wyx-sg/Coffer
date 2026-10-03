@@ -2,6 +2,7 @@
 title: Glossary
 description: Definitions of the terms Coffer uses, from reach and kind to sync round and curation pass, each linked to the page that explains it.
 outline: 2
+pageClass: glossary
 ---
 
 # Glossary

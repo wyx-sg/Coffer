@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, watch } from "vue";
 import { useData } from "vitepress";
 
 // "Section › Sidebar group" above the page title, derived from the nav and the
@@ -15,6 +15,8 @@ const crumbs = computed(() => {
   const nav = (theme.value.nav ?? []) as { text: string; activeMatch?: string; link?: string }[];
   const section = nav.find((n) => n.activeMatch && new RegExp(n.activeMatch).test(route.path));
   if (section) out.push(section.text);
+  // a section's own index page is the section itself: no group after it
+  if (section && page.value.relativePath.replace(/^zh\//, "").match(/^[^/]+\/index\.md$/)) return out;
   const sidebar = theme.value.sidebar as Record<string, any[]> | undefined;
   if (sidebar) {
     const key = Object.keys(sidebar)
@@ -35,6 +37,16 @@ const crumbs = computed(() => {
   }
   return out;
 });
+
+// Phones show the same trail in the bar under the top bar; VitePress has no
+// slot there, so the trail goes to CSS as a string (styles/widgets.css).
+onMounted(() =>
+  watch(
+    crumbs,
+    (c) => document.documentElement.style.setProperty("--coffer-crumb", JSON.stringify(c.join("  ›  "))),
+    { immediate: true },
+  ),
+);
 </script>
 
 <template>

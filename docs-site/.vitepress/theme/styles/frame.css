@@ -19,7 +19,7 @@
   font-weight: 600;
 }
 .VPNavBarTitle .title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
 }
 .VPNavBarSearch .DocSearch-Button,
@@ -28,10 +28,17 @@
   border: 1px solid var(--vp-c-border);
   border-radius: 8px;
 }
-.VPNavBarSearchButton {
-  height: 40px;
-  width: 260px;
-  max-width: 100%;
+/* a 260px box from 768 up; phones keep VitePress's icon-only button */
+@media (min-width: 768px) {
+  .VPNavBarSearch .DocSearch-Button {
+    height: 40px;
+    width: 260px;
+    max-width: 100%;
+    padding: 0 10px 0 12px;
+  }
+  .VPNavBarSearch .DocSearch-Button .DocSearch-Button-Container {
+    flex-grow: 1;
+  }
 }
 .VPNavBarSearchButton .vp-icon {
   color: var(--vp-c-text-3);
@@ -52,6 +59,11 @@
 .VPNavBarAppearance .VPSwitchAppearance,
 .VPNavBarTranslations .VPFlyout .button {
   color: var(--vp-c-text-2);
+}
+/* one divider, between the menu and the language switch */
+.VPNavBarTranslations + .VPNavBarAppearance::before,
+.VPNavBarAppearance + .VPNavBarSocialLinks::before {
+  display: none !important;
 }
 .VPNavBarExtra,
 .VPNavBarTranslations,
@@ -92,8 +104,14 @@
     width: var(--vp-sidebar-width) !important;
     padding-left: 32px !important;
     padding-right: 16px !important;
-    background: transparent;
-    border-bottom: 0 !important;
+    /* the bar runs the full width over the sidebar, as one white strip */
+    background: var(--vp-c-bg) !important;
+    border-bottom: 1px solid var(--vp-c-border) !important;
+  }
+  /* the wrapper above already holds the 32px inset */
+  .VPNavBar.has-sidebar .VPNavBarTitle .title {
+    width: auto !important;
+    padding: 0 !important;
   }
   .VPNavBar.has-sidebar .content {
     padding-left: var(--vp-sidebar-width) !important;
@@ -101,8 +119,9 @@
   }
 }
 .VPSidebar .group {
+  width: auto !important;
   padding: 0;
-  margin-top: 16px;
+  margin-top: 20px;
   border: 0;
 }
 .VPSidebar .group:first-child {
@@ -110,6 +129,9 @@
 }
 .VPSidebarItem.level-0 {
   padding-bottom: 8px;
+}
+.VPSidebarItem.level-0 > .item {
+  padding: 0 12px;
 }
 .VPSidebarItem.level-0 > .item > .text,
 .VPSidebarItem.level-0 > .item > .link > .text {
@@ -125,13 +147,14 @@
 .VPSidebarItem.level-0 .items .link {
   padding: 0 12px;
   border-radius: 6px;
-  min-height: 34px;
+  min-height: 32px;
+  margin-top: 2px;
 }
-.VPSidebarItem.level-1 .text,
-.VPSidebarItem.level-2 .text,
-.VPSidebarItem.level-3 .text {
+.VPSidebar .VPSidebarItem.level-1 .text,
+.VPSidebar .VPSidebarItem.level-2 .text,
+.VPSidebar .VPSidebarItem.level-3 .text {
   font-size: 14px;
-  line-height: 34px;
+  line-height: 32px;
   font-weight: 400;
   color: var(--vp-c-text-2);
 }
@@ -145,8 +168,8 @@
 .VPSidebarItem.is-active > .item > .link {
   background: var(--coffer-selected);
 }
-.VPSidebarItem.is-active > .item > .link > .text,
-.VPSidebarItem.is-active > .item .text {
+.VPSidebar .VPSidebarItem.is-active > .item > .link > .text,
+.VPSidebar .VPSidebarItem.is-active > .item .text {
   color: var(--vp-c-brand-1);
   font-weight: 600;
 }
@@ -164,8 +187,10 @@
 
 /* ---- article frame: 688 column, 224 outline ---- */
 @media (min-width: 960px) {
-  .VPDoc {
-    padding: 48px 32px 0;
+  .VPDoc,
+  .VPDoc.has-sidebar {
+    padding-top: 40px !important;
+    padding-right: 32px;
   }
   .VPDoc.has-sidebar {
     padding-left: 0;
@@ -206,7 +231,7 @@
 }
 .VPDocAsideOutline .outline-marker {
   left: -1px;
-  width: 2px;
+  width: 1px;
   height: 22px;
   border-radius: 0;
   background: var(--vp-c-brand-1);
@@ -222,17 +247,15 @@
 .VPDocOutlineItem .outline-link {
   font-size: 13px;
   line-height: 20px;
-  padding: 4px 0;
+  padding: 4px 0 4px 12px;
   font-weight: 400;
   color: var(--vp-c-text-2);
 }
 .VPDocOutlineItem .outline-link.active {
   color: var(--vp-c-brand-1);
+  font-weight: 600;
 }
-.VPDocOutlineItem .root {
-  padding-left: 13px;
-}
-.VPDocOutlineItem .nested {
+.VPDocOutlineItem.nested {
   padding-left: 12px;
 }
 /* local nav (phones) */
@@ -243,7 +266,7 @@
 
 /* ---- page footer ---- */
 .VPDocFooter {
-  margin-top: 64px;
+  margin-top: 56px;
   border-top: 1px solid var(--vp-c-divider);
   padding-top: 24px;
 }
@@ -255,7 +278,7 @@
   padding-bottom: 0;
 }
 .VPDocFooter .edit-link-button,
-.VPDocFooter .last-updated-text {
+.VPDocFooter .VPLastUpdated {
   font-size: 13px;
   line-height: 20px;
 }
@@ -266,7 +289,7 @@
 .VPDocFooter .last-updated {
   padding-top: 0;
 }
-.VPDocFooter .last-updated-text {
+.VPDocFooter .VPLastUpdated {
   color: var(--vp-c-text-2);
 }
 .VPDocFooter .prev-next {
@@ -319,7 +342,7 @@
 }
 @media (min-width: 960px) {
   .VPSidebar {
-    padding-top: calc(var(--vp-nav-height) + 24px) !important;
+    padding-top: calc(var(--vp-nav-height) + 28px) !important;
   }
 }
 .VPSidebar .group + .group,
@@ -328,7 +351,7 @@
 }
 .VPSidebar .group + .group {
   padding-top: 0;
-  margin-top: 16px;
+  margin-top: 20px;
 }
 .VPSidebarItem.level-0 {
   padding-bottom: 0;
@@ -396,7 +419,107 @@
 }
 
 @media (min-width: 960px) {
+  /* the search box starts 272 from the left on every page */
   .VPNavBar:not(.has-sidebar) .VPNavBarSearch {
-    margin-left: 144px;
+    margin-left: 160px;
   }
+}
+
+/* the outline starts level with the breadcrumb, 40 below the bar */
+@media (min-width: 960px) {
+  .VPDoc .aside-container {
+    padding-top: calc(var(--vp-nav-height) + 40px) !important;
+  }
+}
+
+/* sidebar groups: the first sits right under the top padding (the phone
+   drawer's header comes before it in the DOM), and groups are 20 apart */
+.VPSidebar .coffer-drawer-head + .group {
+  margin-top: 0;
+}
+.VPSidebar .VPSidebarItem.level-0 {
+  padding-bottom: 0;
+}
+
+/* search: ⌘ and K as two keycaps */
+.VPNavBarSearch .DocSearch-Button-Keys {
+  display: inline-flex;
+  gap: 4px;
+  min-width: 0;
+}
+.VPNavBarSearch .DocSearch-Button .DocSearch-Button-Key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0 5px;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 4px;
+  background: var(--vp-c-bg);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vp-c-text-3);
+}
+
+/* right of the menu: one divider 24 either side, then language, theme and
+   GitHub as 40px buttons 4 apart, ending at the 32px page inset */
+@media (min-width: 768px) {
+  .VPNavBarMenu + .VPNavBarTranslations::before {
+    margin: 0 24px !important;
+  }
+  .VPNavBarTranslations .button {
+    height: 40px;
+    padding: 0 8px !important;
+    gap: 2px;
+  }
+  .VPNavBarAppearance {
+    margin-left: 4px;
+  }
+  .VPNavBarSocialLinks {
+    margin: 0 0 0 4px !important;
+  }
+  .VPNavBarSocialLinks .VPSocialLink {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* the outline's rule starts at the first entry, not beside its title */
+.VPDocAsideOutline .outline-title {
+  position: relative;
+  margin: 0 0 0 -1px;
+  padding: 0 0 8px 1px;
+  background: var(--vp-c-bg);
+}
+
+/* a collapsible entry's pages (the CLI commands) list flat under it, no
+   indent rule, the same as a group's own pages */
+.VPSidebar .VPSidebarItem.level-1 > .items {
+  padding-left: 0 !important;
+  border-left: 0 !important;
+}
+.VPSidebar .VPSidebarItem.level-2 .link {
+  padding-left: 12px;
+}
+.VPSidebar .VPSidebarItem.level-1.collapsible > .item .caret {
+  color: var(--vp-c-text-3);
+}
+
+/* "Last updated 29 September 2026": VitePress puts a colon after the label,
+   so the label is drawn here instead */
+.VPDocFooter .VPLastUpdated {
+  font-size: 0 !important;
+  line-height: 20px !important;
+}
+.VPDocFooter .VPLastUpdated time {
+  font-size: 13px;
+}
+.VPDocFooter .VPLastUpdated::before {
+  content: "Last updated ";
+  font-size: 13px;
+}
+:lang(zh-CN) .VPDocFooter .VPLastUpdated::before {
+  content: "最后更新于 ";
 }
