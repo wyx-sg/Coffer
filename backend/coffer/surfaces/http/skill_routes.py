@@ -6,7 +6,7 @@ import pathlib
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Header, Response, status
+from fastapi import APIRouter, Depends, Header, status
 from pydantic import BaseModel, Field
 
 from coffer.application.reconcile.reconciler import Reconciler
@@ -18,7 +18,6 @@ from coffer.domain.resource import Resource
 from coffer.domain.skill.binding import BindingState, LinkMode
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.drift import DriftEntry, DriftKind
-from coffer.domain.skill.requirements import requirements_from_skill_md
 from coffer.domain.skill.source import (
     ArchiveImportSource,
     BuiltinSource,
@@ -32,18 +31,19 @@ from coffer.surfaces.http.reconcile_dependencies import get_reconciler
 from coffer.surfaces.http.schemas import ScopeOut
 from coffer.surfaces.http.skill_dependencies import (
     get_optional_skill_source_service,
-    get_skill_secret_presence,
     get_skill_service,
 )
+from coffer.surfaces.http.skill_requires_view import requires_view
 from coffer.surfaces.http.skill_source_schemas import (
     ArchiveImportSourceOut,
     GitImportSourceOut,
     SkillRequirementOut,
     SkillSecretRequirementOut,
+    SkillSkillRequirementOut,
     SkillSourceStatusOut,
+    SkillToolRequirementOut,
     archive_source_out,
     git_source_out,
-    requirement_out,
     status_out,
 )
 
@@ -154,6 +154,13 @@ class SkillOut(BaseModel):
     #: each with whether the secret store holds it (spec skill-manager "Declare
     #: the secrets a skill requires").
     requires_secrets: list[SkillSecretRequirementOut]
+    #: The MCP servers and custom-tool groups it calls (``requires: {tools:
+    #: [...]}``), each with its state now (spec skill-manager "Declare the
+    #: tools a skill requires").
+    requires_tools: list[SkillToolRequirementOut]
+    #: The skills it loads (``metadata.requires``), each with whether it is
+    #: delivered to the same agents.
+    requires_skills: list[SkillSkillRequirementOut]
     #: A Git-imported skill's last update check on this machine; null for
     #: every other source.
     source_status: SkillSourceStatusOut | None
@@ -237,21 +244,6 @@ def _drift_out(e: DriftEntry) -> DriftEntryOut:
     )
 
 
-def _requires(
-    svc: SkillService, name: str
-) -> tuple[list[SkillRequirementOut], list[SkillSecretRequirementOut]]:
-    try:
-        text = (pathlib.Path(svc.master_path(name)) / "SKILL.md").read_text("utf-8")
-    except (OSError, UnicodeDecodeError, ValueError):
-        return [], []
-    parsed = requirements_from_skill_md(text)
-    is_set = get_skill_secret_presence()
-    secrets = [
-        SkillSecretRequirementOut(name=n, is_set=bool(is_set and is_set(n))) for n in parsed.secrets
-    ]
-    return [requirement_out(q) for q in parsed.requirements], secrets
-
-
 async def _to_skill_out(
     svc: SkillService,
     r: Resource,
@@ -276,7 +268,7 @@ async def _to_skill_out(
         bindings = bindings_by_skill.get(r.uid, [])
     else:
         bindings = await svc.bindings_for(r.uid)
-    requires, requires_secrets = _requires(svc, r.name)
+    needs = await requires_view(svc, r, agents_by_uid, bindings, bindings_by_skill)
     return SkillOut(
         uid=r.uid,
         name=r.name,
@@ -294,8 +286,10 @@ async def _to_skill_out(
         # Only live deliveries: a spent binding row (reclaimed copy) is
         # bookkeeping, not something the agent holds.
         bindings=[_binding_out(b, agents_by_uid) for b in bindings if b.enabled],
-        requires=requires,
-        requires_secrets=requires_secrets,
+        requires=needs.commands,
+        requires_secrets=needs.secrets,
+        requires_tools=needs.tools,
+        requires_skills=needs.skills,
         source_status=source_status,
     )
 
@@ -360,16 +354,6 @@ async def get_skill(
 ) -> SkillOut:
     r = await svc.get_skill(uid)
     return await _to_skill_out(svc, r, await _agents_by_uid(svc), sources=sources)
-
-
-@router.delete("/{uid}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
-async def delete_skill(
-    uid: str,
-    svc: SkillService = Depends(get_skill_service),  # noqa: B008
-    actor: str = Depends(_actor),
-) -> Response:
-    await svc.remove(uid=uid, actor=actor)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/verify", response_model=DriftReportOut)

@@ -121,11 +121,11 @@ acceptance(
     // Keeping master shows what happens to the agent's folder.
     expect(await within(dialog).findByText("master text")).toBeInTheDocument();
     expect(
-      within(dialog).getByRole("radio", { name: /Replace it with Coffer's link/ }),
+      within(dialog).getByRole("radio", { name: /Replace it with Coffer’s link/ }),
     ).toHaveAttribute("aria-checked", "true");
     fireEvent.click(within(dialog).getByRole("radio", { name: /Adopt this folder/ }));
     expect(within(dialog).getByText(/so Claude Code gets them too/)).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Update hello in Coffer" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Adopt this folder" }));
     await waitFor(() =>
       expect(api.resolveCopy).toHaveBeenCalledWith("sk-11aa", CODEX.uid, "agent"),
     );
@@ -134,22 +134,40 @@ acceptance(
 
 acceptance(
   "web-ui",
-  "a delete refused because a copy is not Coffer's stays open and says why",
+  "a delete refused because a copy is not Coffer's stays open and offers to keep that folder",
   async () => {
-    api.remove.mockRejectedValue(
+    api.remove.mockRejectedValueOnce(
       new ApiError("SKILL_COPY_NOT_OURS", "not ours", { path: LINK, agent_name: "codex" }),
     );
+    api.remove.mockResolvedValueOnce({ kept_copies: [{ agent_name: "codex", path: LINK }] });
     renderSkillsPage("/skills/hello");
     fireEvent.click(await screen.findByRole("button", { name: "More actions for hello" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
     const dialog = await screen.findByRole("dialog", { name: "Delete hello?" });
     expect(dialog).toHaveTextContent("from the 2 agents that have it: Claude Code and Codex");
+    expect(dialog).toHaveTextContent("History keeps the files");
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete skill" }));
-    expect(await within(dialog).findByText("Couldn't delete hello")).toBeInTheDocument();
-    expect(dialog).toHaveTextContent("is no longer a Coffer link, so Coffer won't remove it");
-    expect(within(dialog).getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    // The error stays in the dialog; nothing else changed.
+    expect(await within(dialog).findByText("Nothing was deleted")).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("is a regular folder now, not Coffer’s link");
+    expect(dialog).toHaveTextContent("Coffer only removes what it made");
+    expect(within(dialog).queryByRole("button", { name: "Retry" })).toBeNull();
+    // The primary button now deletes the skill and leaves that folder to the agent.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete, keep Codex’s folder" }));
+    await waitFor(() => expect(api.remove).toHaveBeenLastCalledWith("sk-11aa", true));
   },
 );
+
+test("a delete that fails for another reason is the usual error with Retry", async () => {
+  api.remove.mockRejectedValue(new ApiError("INTERNAL_ERROR", "boom"));
+  renderSkillsPage("/skills/hello");
+  fireEvent.click(await screen.findByRole("button", { name: "More actions for hello" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Delete…" }));
+  const dialog = await screen.findByRole("dialog", { name: "Delete hello?" });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete skill" }));
+  expect(await within(dialog).findByText("Couldn’t delete hello")).toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "Retry" })).toBeInTheDocument();
+});
 
 test("the skill menu carries the page note's actions, not the reach button's or the Delivery tab's", async () => {
   renderSkillsPage("/skills/hello");
@@ -166,11 +184,16 @@ test("the skill menu carries the page note's actions, not the reach button's or 
 acceptance("web-ui", "a skill whose master folder is gone offers the ways forward", async () => {
   h.skills = [makeSkill({ enabled: false, master_missing: true, bindings: [] })];
   renderSkillsPage("/skills/hello");
-  expect(await screen.findByTestId("skill-banner-master")).toHaveTextContent(
-    "The master folder is gone",
-  );
-  expect(screen.getByRole("radio", { name: /Restore it from History/ })).toBeDisabled();
-  fireEvent.click(screen.getByRole("radio", { name: /Delete the skill/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Delete hello…" }));
+  const banner = await screen.findByTestId("skill-banner-master");
+  expect(banner).toHaveTextContent("The master folder is gone");
+  const header = screen
+    .getByRole("heading", { name: "hello", level: 2 })
+    .closest("header") as HTMLElement;
+  expect(within(header).getByText("Master missing")).toBeInTheDocument();
+  // Both ways forward are in the banner; no earlier version exists here to put back.
+  expect(within(banner).getByRole("button", { name: "Restore from History" })).toBeDisabled();
+  // The Files tab is an empty state pointing at History.
+  expect(await screen.findByText("No files to show")).toBeInTheDocument();
+  fireEvent.click(within(banner).getByRole("button", { name: "Delete skill…" }));
   expect(await screen.findByRole("dialog", { name: "Delete hello?" })).toBeInTheDocument();
 });

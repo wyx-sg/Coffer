@@ -5,9 +5,9 @@
 // each state goes by.
 //
 // It lives here, beside ReachControl, because the control's button text IS the
-// answer to "which state is this in" — but the list filters ask the same
-// question of a whole table (`lib/reachFilter.ts`) and the detail header's
-// ScopeControl asks it of one resource, and a second copy of the rule is how
+// answer to "which state is this in" — but the bulk reach bar asks the same
+// question of a whole selection and the detail header's ScopeControl asks it
+// of one resource, and a second copy of the rule is how
 // a table's "Reach" column comes to disagree with the button in the row next
 // to it. Nothing needs React, so nothing here imports it.
 import type { TFunction } from "i18next";
@@ -41,7 +41,7 @@ export function reachModeOf({ enabled, scope }: ReachFields): ReachMode {
 
 /** What a state is called, with no row in hand — a filter option, a legend. */
 export function reachModeName(t: TFunction, mode: ReachMode): string {
-  if (mode === "disabled") return t("common.disabled");
+  if (mode === "disabled") return t("scope.off");
   return mode === "everywhere" ? t("scope.everywhere") : t("scope.restricted");
 }
 
@@ -56,26 +56,21 @@ export function liveMode(mode: ReachMode | null, scope: Scope | null): ReachMode
 }
 
 /**
- * The button's text: the state, said plainly — "Off", "All agents", and for a
- * chosen list the empty case only ("No agent"; a non-empty list is drawn as
- * agent badges, with no count in words).
+ * The button's text: the state, said plainly — and nothing for a chosen list.
  *
- * `null` names no state — the bulk bar, where a mixed selection has no single
- * reach — so it names the action instead: "Set reach…". The states go through
- * `reachModeName`, so the button and the filter option for one state can never
- * read differently.
+ * Off and All agents are words; Chosen agents is the agent badges alone, so a
+ * count never appears on a button or a row ("1 of 2 agents" lives in the
+ * popover footer only). `null` names no state — the bulk bar — so it names the
+ * action instead: "Reach".
  *
- * An empty agent list is reported as its own thing, never as "Off": the user
+ * An empty chosen list is reported as its own thing, never as "Off": the user
  * did not switch that resource off, its list currently names nobody, and those
  * are different states with different ways back.
  */
 export function reachLabel(t: TFunction, live: ReachMode | null, scope: Scope | null): string {
   if (live === null) return t("scope.setReach");
   if (live !== "restricted") return reachModeName(t, live);
-  const agents = scope?.agents ?? [];
-  return agents.length === 0
-    ? t("scope.noneSelected")
-    : t("scope.agentCount", { count: agents.length });
+  return (scope?.agents ?? []).length === 0 ? t("scope.noneSelected") : "";
 }
 
 /** One agent the pick-list can offer: what a tick WRITES (the uid), what it
@@ -106,4 +101,12 @@ export function chosenAgents(scope: Scope | null, registered: PickableAgent[]): 
   return (scope?.agents ?? []).map(
     (uid) => registered.find((a) => a.uid === uid) ?? { uid, name: uid, type: "", installed: true },
   );
+}
+
+/** A write the popover could not land. `uid` names the agent row it belongs to
+ *  (the one just ticked); `null` is a failure with no single agent behind it. */
+export interface ReachFailure {
+  uid: string | null;
+  message: string;
+  retry: () => void;
 }

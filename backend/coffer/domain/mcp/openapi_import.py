@@ -31,12 +31,23 @@ class OpenApiError(ValueError):
 
 
 @dataclass(frozen=True)
+class OperationSource:
+    """Where one operation sits in the document text: 1-based, inclusive lines."""
+
+    start_line: int
+    end_line: int
+    text: str
+
+
+@dataclass(frozen=True)
 class DraftOperation:
     key: str  # "<METHOD> <path>"
     tool: HttpApiTool
     summary: str | None = None
     #: The operation's first tag, which the import form groups operations by.
     tag: str | None = None
+    #: The operation's text in the document; ``None`` when it could not be located.
+    source: OperationSource | None = None
 
 
 @dataclass(frozen=True)
@@ -44,8 +55,8 @@ class OpenApiReading:
     title: str | None
     version: str | None
     base_url: str | None
+    #: The header the spec's security scheme puts a credential in, if any.
     auth_header: str | None
-    auth_prefix: str
     operations: list[DraftOperation]
     warnings: list[str] = field(default_factory=list)
 
@@ -118,10 +129,10 @@ def _base_url(doc: Mapping[str, Any], source_url: str | None) -> str | None:
     return url.rstrip("/") or None
 
 
-def _auth(doc: Mapping[str, Any]) -> tuple[str | None, str]:
+def _auth(doc: Mapping[str, Any]) -> str | None:
     schemes = (doc.get("components") or {}).get("securitySchemes") or {}
     if not isinstance(schemes, dict):
-        return None, ""
+        return None
     order: list[str] = []
     for requirement in doc.get("security") or []:
         if isinstance(requirement, dict):
@@ -134,19 +145,17 @@ def _auth(doc: Mapping[str, Any]) -> tuple[str | None, str]:
         kind = scheme.get("type")
         if kind == "http":
             which = str(scheme.get("scheme", "")).lower()
-            if which == "bearer":
-                return "Authorization", "Bearer "
-            if which == "basic":
-                return "Authorization", "Basic "
+            if which in ("bearer", "basic"):
+                return "Authorization"
         if (
             kind == "apiKey"
             and scheme.get("in") == "header"
             and isinstance(scheme.get("name"), str)
         ):
-            return str(scheme["name"]), ""
+            return str(scheme["name"])
         if kind in ("oauth2", "openIdConnect"):
-            return "Authorization", "Bearer "
-    return None, ""
+            return "Authorization"
+    return None
 
 
 def _json_body_schema(body: Any) -> tuple[dict[str, Any] | None, bool]:
@@ -252,13 +261,12 @@ def read_openapi(
                 draft = _operation(method, path, item, op, taken, warnings)
                 if draft is not None:
                     operations.append(draft)
-    header, prefix = _auth(resolved)
+
     return OpenApiReading(
         title=info.get("title") if isinstance(info.get("title"), str) else None,
         version=str(info["version"]) if info.get("version") is not None else None,
         base_url=_base_url(resolved, source_url),
-        auth_header=header,
-        auth_prefix=prefix,
+        auth_header=_auth(resolved),
         operations=operations,
         warnings=warnings,
     )
@@ -344,6 +352,7 @@ __all__ = [
     "DraftOperation",
     "OpenApiError",
     "OpenApiReading",
+    "OperationSource",
     "ReimportPlan",
     "apply_reimport",
     "plan_reimport",

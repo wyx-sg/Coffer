@@ -37,11 +37,14 @@ async def test_a_missing_git_refuses_with_the_install_handoff(
     assert "brew" not in prompt and "xcode-select" not in prompt
 
 
-async def test_a_git_failure_carries_no_handoff(tmp_path: pathlib.Path) -> None:
+async def test_a_failed_clone_carries_a_clone_handoff(tmp_path: pathlib.Path) -> None:
     fake = tmp_path / "git"
     fake.write_text("#!/bin/sh\necho 'fatal: repository not found' >&2\nexit 128\n")
     fake.chmod(0o755)
     with pytest.raises(SkillSourceUnreachable) as refused:
         await GitSource(git=str(fake)).clone("https://example.com/x.git", tmp_path / "d")
     assert "repository not found" in str(refused.value)
-    assert not hasattr(refused.value, "error_details")
+    details = refused.value.error_details
+    assert "reason" not in details
+    prompt = details["handoff"]["prompt"]
+    assert "https://example.com/x.git" in prompt and "repository not found" in prompt

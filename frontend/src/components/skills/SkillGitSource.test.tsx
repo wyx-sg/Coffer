@@ -1,7 +1,8 @@
 // src/components/skills/SkillGitSource.test.tsx
-// The Source block of a Git-imported skill: repository, folder, pinned commit,
-// status, Check now and Change source…; the update and unreachable banners
-// above the tabs are SkillBanners' (SkillBanners.test.tsx).
+// The Source bar of a Git-imported skill (canvas 4.3.17, 4.3.21): one line —
+// the pinned commit on its branch and the day, when it was last checked, Check
+// again and Change source…; the update and unreachable banners above the tabs
+// are SkillBanners'.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -41,38 +42,38 @@ describe("SkillGitSourcePanel", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  test("shows the repository, folder, pinned commit and ref, and up to date", () => {
+  test("is one line: the pinned commit on its branch, when it was checked, and two actions", () => {
     renderPanel(gitSkill());
-    expect(screen.getByText("https://github.com/acme/agent-skills")).toBeInTheDocument();
-    expect(screen.getByText("terraform-plan/")).toBeInTheDocument();
-    expect(screen.getByText("a1b2c3d")).toBeInTheDocument();
-    expect(screen.getByText("main")).toBeInTheDocument();
-    expect(screen.getByText("Up to date")).toBeInTheDocument();
+    const bar = screen.getByTestId("skill-source-bar");
+    expect(bar).toHaveTextContent(/Pinned a1b2c3d on main/);
+    expect(screen.getByText("a1b2c3d")).toHaveClass("font-mono");
+    expect(screen.getByText("main")).toHaveClass("font-mono");
+    expect(bar).toHaveTextContent(/Checked at \d\d:\d\d/);
+    expect(screen.getByRole("button", { name: "Check again" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change source…" })).toBeInTheDocument();
+    // The old four-row block is gone.
+    expect(screen.queryByText("Repository")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check now" })).not.toBeInTheDocument();
   });
 
-  test("an update shows its commit, commits and files in the status row", () => {
-    renderPanel(
-      gitSkill({
-        update_available: true,
-        latest_commit: "f9e8d7c6b5a4",
-        commits_ahead: 3,
-        files_changed: 2,
-      }),
-    );
-    expect(screen.getByText("Update available")).toBeInTheDocument();
-    expect(screen.getByText("f9e8d7c")).toBeInTheDocument();
-  });
-
-  test("says when the source was never checked", () => {
+  test("a skill never checked shows no 'Checked at'", () => {
     renderPanel(gitSkill(null));
-    expect(screen.getByText("Not checked yet")).toBeInTheDocument();
+    expect(screen.queryByText(/Checked at/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check again" })).toBeInTheDocument();
   });
 
-  test("Check now checks the source", async () => {
+  test("Check again checks the source", async () => {
     api.checkSource.mockResolvedValue(gitSkill().source_status!);
     renderPanel(gitSkill());
-    fireEvent.click(screen.getByRole("button", { name: "Check now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
     await waitFor(() => expect(api.checkSource).toHaveBeenCalledWith("sk-1"));
+  });
+
+  test("an unreachable source hides Check again and 'Checked at' — the banner carries them", () => {
+    renderPanel(gitSkill({ error: "repository not found" }));
+    expect(screen.queryByRole("button", { name: "Check again" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Checked at/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change source…" })).toBeInTheDocument();
   });
 
   acceptance(
@@ -86,6 +87,9 @@ describe("SkillGitSourcePanel", () => {
         name: "Change source of terraform-plan",
       });
       expect(dialog).toHaveTextContent("Nothing is replaced yet");
+      // The branch and folder fields say what an empty value means.
+      expect(dialog).toHaveTextContent("Leave empty for the default branch.");
+      expect(dialog).toHaveTextContent("Leave empty when it is at the top.");
       const url = screen.getByLabelText(/Repository URL/);
       expect(url).toHaveValue("https://github.com/acme/agent-skills");
       fireEvent.change(url, { target: { value: "https://github.com/platform-team/skills" } });
@@ -97,7 +101,9 @@ describe("SkillGitSourcePanel", () => {
           path: "terraform-plan",
         }),
       );
+      // The review is the 1060 change preview with the primary naming the write.
       expect(await screen.findByRole("button", { name: /^Change to / })).toBeInTheDocument();
+      expect(screen.getByText("What will happen")).toBeInTheDocument();
       expect(api.applyUpdate).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
       await waitFor(() => expect(api.cancelStage).toHaveBeenCalled());

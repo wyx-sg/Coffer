@@ -34,7 +34,11 @@ from coffer.infrastructure.chat.persistence_codec import (
     _encode_content,
     _listing_filter,
 )
-from coffer.infrastructure.chat.persistence_models import ConversationModel, MessageModel
+from coffer.infrastructure.chat.persistence_models import (
+    ConversationModel,
+    MessageModel,
+)
+from coffer.infrastructure.chat.reply_file_store import ReplyFileStore
 from coffer.infrastructure.persistence.keyset import newest_first_after
 
 
@@ -203,7 +207,7 @@ class ConversationRepo:
 # ---------------------------------------------------------------------------
 
 
-class MessageRepo:
+class MessageRepo(ReplyFileStore):
     """SQLAlchemy implementation of the ``MessageRepo`` Protocol."""
 
     def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]

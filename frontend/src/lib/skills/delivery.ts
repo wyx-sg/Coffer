@@ -4,7 +4,7 @@
 // skill's own bindings, the agents list with each agent's switch, and, once
 // the user has asked for it, the drift report of "Report skill drift on
 // request". There is no read route for this; everything it needs is already
-// on the wire.
+// on the wire. The tab only reads: who gets the skill is the Reach button's.
 //
 // Precedence per agent: a drift finding (only after Check again) beats the
 // binding, because it is the fresher, on-disk answer; a binding says the copy
@@ -72,42 +72,4 @@ function deliveryFor(
   }
   if (!agentEnabled(agent.uid)) return { state: "notDelivered", reason: "agentOff" };
   return { state: "notDelivered", reason: "pending" };
-}
-
-/** Whether the skill's reach grants this agent a copy — what the row's switch
- *  shows. A grant not yet on disk ("pending") still counts as on. */
-export function isGranted(d: AgentDelivery): boolean {
-  return d.state !== "notDelivered" || d.reason === "pending";
-}
-
-/** What flipping one agent's switch writes: whether to enable the skill first
- *  and the scope to put (`undefined` = leave it). */
-export interface DeliveryWrite {
-  enable: boolean;
-  scope?: { agents: string[] };
-}
-
-/**
- * The write behind one switch. On a disabled skill, turning an agent on enables
- * the skill for that agent alone. Otherwise the scope is edited as a list:
- * turning on adds the agent (nothing to write when the scope is already
- * "every agent"), turning off removes it from the current list or, for "every
- * agent", from the list of all `agentUids`.
- */
-export function deliveryWrite(
-  skill: SkillOut,
-  agentUid: string,
-  on: boolean,
-  agentUids: readonly string[],
-): DeliveryWrite | null {
-  if (!skill.enabled) return on ? { enable: true, scope: { agents: [agentUid] } } : null;
-  const current = skill.scope?.agents ?? null;
-  if (on) {
-    if (current === null) return null;
-    return current.includes(agentUid)
-      ? null
-      : { enable: false, scope: { agents: [...current, agentUid] } };
-  }
-  const base = current ?? [...agentUids];
-  return { enable: false, scope: { agents: base.filter((uid) => uid !== agentUid) } };
 }

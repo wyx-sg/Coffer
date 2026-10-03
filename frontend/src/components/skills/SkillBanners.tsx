@@ -1,15 +1,17 @@
 // frontend/src/components/skills/SkillBanners.tsx
-// The banners above the open skill's tabs, one per attention item
-// (lib/skills/attention.ts), most urgent first: the master folder is gone, a
-// folder is in the way of an agent's link (Review…), a command it needs is
-// missing or not logged in, a secret it needs is not set (Open Secrets), its
-// Git source cannot be reached (Check again), an
-// update is waiting (Review update…). Each banner carries at most one action.
+// The Git source's and the copies' banners under the open skill's tab strip, one
+// per attention item (lib/skills/attention.ts): a folder is in the way of an
+// agent's link (Review…), the Git source cannot be reached (Check again, then Ask
+// an agent ▾ and its "?" — a network, VPN or credential problem on this
+// machine), an update is waiting (Review update…, an outline button). The master
+// folder's and the dependencies' banners are drawn by the detail pane itself
+// (SkillMasterBanner, SkillDependencyBanners). A fix button lives in the banner
+// that states the problem.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
-import { AlertCircle, AlertTriangle, Info, RefreshCw } from "lucide-react";
+import { AlertTriangle, Info, RefreshCw } from "lucide-react";
 
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { abbreviateHomePath } from "@/lib/agents/display";
@@ -19,7 +21,6 @@ import { useCheckSkillSource } from "@/lib/hooks/useSkills";
 import type { SkillAttention } from "@/lib/skills/attention";
 import { repoLabel } from "@/components/skills/skillSourceHelpers";
 import { clockTime, folderLabel } from "@/lib/skills/format";
-import { joinNames } from "@/lib/skills/names";
 
 interface Props {
   skill: SkillOut;
@@ -37,13 +38,13 @@ function Banner({
   action,
   testId,
 }: {
-  tone: "info" | "warning" | "error";
+  tone: "info" | "warning";
   title: string;
   children: ReactNode;
   action?: ReactNode;
   testId: string;
 }) {
-  const Icon = tone === "error" ? AlertCircle : tone === "warning" ? AlertTriangle : Info;
+  const Icon = tone === "warning" ? AlertTriangle : Info;
   return (
     <Alert variant={tone} data-testid={testId}>
       <Icon aria-hidden />
@@ -52,7 +53,7 @@ function Banner({
           <AlertTitle>{title}</AlertTitle>
           <AlertDescription>{children}</AlertDescription>
         </div>
-        {action ? <div className="shrink-0">{action}</div> : null}
+        {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
       </div>
     </Alert>
   );
@@ -71,19 +72,6 @@ export function SkillBanners({ skill, items, onReviewCopy, onReviewUpdate }: Pro
     <>
       {items.map((item) => {
         switch (item.kind) {
-          case "masterMissing":
-            return (
-              <Banner
-                key="master"
-                tone="error"
-                testId="skill-banner-master"
-                title={t("skills.banner.masterTitle")}
-              >
-                {t(skill.enabled ? "skills.banner.masterBodyOn" : "skills.banner.masterBodyOff", {
-                  path: abbreviateHomePath(skill.master_path),
-                })}
-              </Banner>
-            );
           case "folderInWay":
             return (
               <Banner
@@ -103,67 +91,6 @@ export function SkillBanners({ skill, items, onReviewCopy, onReviewUpdate }: Pro
                 })}
               </Banner>
             );
-          case "requires": {
-            const parts = [
-              item.missing.length > 0
-                ? t("skills.banner.requiresMissingPart", {
-                    count: item.missing.length,
-                    commands: joinNames(item.missing, lang),
-                  })
-                : null,
-              item.loggedOut.length > 0
-                ? t("skills.banner.requiresLoginPart", {
-                    count: item.loggedOut.length,
-                    commands: joinNames(item.loggedOut, lang),
-                  })
-                : null,
-              item.outdated.length > 0
-                ? t("skills.banner.requiresOldPart", {
-                    count: item.outdated.length,
-                    commands: joinNames(item.outdated, lang),
-                  })
-                : null,
-            ].filter(Boolean);
-            const heads = [
-              item.missing.length > 0
-                ? t("skills.banner.requiresMissing", { count: item.missing.length })
-                : null,
-              item.loggedOut.length > 0
-                ? t("skills.banner.requiresLogin", { count: item.loggedOut.length })
-                : null,
-              item.outdated.length > 0
-                ? t("skills.banner.requiresOld", { count: item.outdated.length })
-                : null,
-            ].filter(Boolean);
-            return (
-              <Banner
-                key="requires"
-                tone="warning"
-                testId="skill-banner-requires"
-                title={heads.join(", ")}
-              >
-                {`${parts.join("; ")}.`}
-              </Banner>
-            );
-          }
-          case "secrets":
-            // Setting a secret is the person's own task on the Secrets page —
-            // no hand-off, and never a value here.
-            return (
-              <Banner
-                key="secrets"
-                tone="warning"
-                testId="skill-banner-secrets"
-                title={t("skills.banner.secretsTitle", { count: item.missing.length })}
-                action={
-                  <Button asChild variant="outline" size="sm">
-                    <Link to="/secrets">{t("skills.requires.openSecrets")}</Link>
-                  </Button>
-                }
-              >
-                {`${item.missing.map((name) => t("skills.requires.secretMissing", { name })).join("; ")}.`}
-              </Banner>
-            );
           case "sourceUnreachable":
             return (
               <Banner
@@ -172,18 +99,29 @@ export function SkillBanners({ skill, items, onReviewCopy, onReviewUpdate }: Pro
                 testId="skill-banner-unreachable"
                 title={t("skills.banner.unreachableTitle", { repo: src ? repoLabel(src.url) : "" })}
                 action={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={check.isPending}
-                    onClick={() => check.mutate(skill.uid)}
-                  >
-                    <RefreshCw
-                      aria-hidden
-                      className={check.isPending ? "animate-spin" : undefined}
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={check.isPending}
+                      onClick={() => check.mutate(skill.uid)}
+                    >
+                      <RefreshCw
+                        aria-hidden
+                        className={check.isPending ? "animate-spin" : undefined}
+                      />
+                      {t("skills.delivery.checkAgain")}
+                    </Button>
+                    {/* A network, VPN or credential problem on this machine: an agent can look. */}
+                    <AgentHandoff
+                      size="sm"
+                      prompt={t("skills.banner.unreachablePrompt", {
+                        name: skill.name,
+                        url: src?.url ?? "",
+                        error: status?.error ?? "",
+                      })}
                     />
-                    {t("skills.delivery.checkAgain")}
-                  </Button>
+                  </>
                 }
               >
                 {t("skills.banner.unreachableBody", {

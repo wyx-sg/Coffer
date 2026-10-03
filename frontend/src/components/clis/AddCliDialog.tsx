@@ -6,7 +6,9 @@
 // person sees what Coffer found before saving. A tool that is not on this
 // machine can still be added (it shows as not found). Title, description,
 // minimum version and a login check (a command line starting with the tool)
-// are optional. Editing keeps the command fixed. Failures render inline.
+// are optional. Editing shows the command locked. A failed save stays in the
+// dialog and the primary button becomes Retry.
+import { CircleAlert, Lock } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -19,14 +21,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import type { Cli } from "@/lib/api/clis";
 import { translateApiError } from "@/lib/api/errors";
-import { useAddCli, useCliPreview, useEditCli } from "@/lib/hooks/useClis";
+import { useAddCli, useEditCli } from "@/lib/hooks/useClis";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
+import { CliFound } from "./CliFound";
 
 interface Props {
   open: boolean;
@@ -35,36 +37,6 @@ interface Props {
   existing?: Cli;
   /** Called with the command once it is saved. */
   onSaved?: (command: string) => void;
-}
-
-/** What the lookup of the typed command found, in a line. */
-function Found({ command }: { command: string }) {
-  const { t } = useTranslation();
-  const { data, isPending } = useCliPreview(command);
-  if (isPending) return <p className="text-xs text-text-muted">{t("clis.add.looking")}</p>;
-  if (!data) return null;
-  if (data.added)
-    return (
-      <p className="text-xs text-danger">{t("clis.add.alreadyAdded", { command: data.command })}</p>
-    );
-  return (
-    <div className="space-y-0.5 text-xs" data-testid="cli-found">
-      {data.path ? (
-        <p className="text-text-muted">
-          {t("clis.add.foundAt")} <span className="font-mono text-text">{data.path}</span>
-          {data.version ? (
-            <>
-              {" "}
-              · <span className="font-mono text-text">{data.version}</span>
-            </>
-          ) : null}
-        </p>
-      ) : (
-        <p className="text-warning">{t("clis.add.notFound", { command: data.command })}</p>
-      )}
-      {data.required ? <p className="text-text-muted">{t("clis.add.alsoRequired")}</p> : null}
-    </div>
-  );
 }
 
 function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
@@ -97,6 +69,7 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
     else add.mutate({ command: command.trim(), ...fields }, { onSuccess: done });
   };
 
+  const command_ = existing?.command ?? command.trim();
   return (
     <form
       className="space-y-4"
@@ -106,28 +79,54 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
       }}
     >
       <DialogHeader>
-        <DialogTitle>{t(editing ? "clis.add.editTitle" : "clis.add.title")}</DialogTitle>
+        <DialogTitle>
+          {editing ? t("clis.add.editTitle", { command: existing.command }) : t("clis.add.title")}
+        </DialogTitle>
         <DialogDescription>{t(editing ? "clis.add.editBody" : "clis.add.body")}</DialogDescription>
       </DialogHeader>
       <div className="space-y-1.5">
-        <Label htmlFor="cli-command" required>
+        <Label htmlFor="cli-command" required={!editing}>
           {t("clis.add.command")}
         </Label>
-        <Input
-          id="cli-command"
-          value={command}
-          disabled={editing}
-          autoFocus={!editing}
-          placeholder={t("clis.add.commandPlaceholder")}
-          className="font-mono"
-          onChange={(e) => setCommand(e.target.value)}
-        />
-        {!editing && looked !== "" ? <Found command={looked} /> : null}
+        {editing ? (
+          <>
+            <div className="relative">
+              <Input
+                id="cli-command"
+                value={existing.command}
+                disabled
+                className="bg-surface-sunken pr-8 font-mono"
+              />
+              <Lock
+                className="absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-text-subtle"
+                aria-hidden
+              />
+            </div>
+            <p className="text-xs text-text-muted">{t("clis.add.fixed")}</p>
+          </>
+        ) : (
+          <>
+            <Input
+              id="cli-command"
+              value={command}
+              autoFocus
+              placeholder={t("clis.add.commandPlaceholder")}
+              className="font-mono"
+              onChange={(e) => setCommand(e.target.value)}
+            />
+            {looked !== "" ? <CliFound command={looked} /> : null}
+          </>
+        )}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_140px] gap-2.5">
         <div className="space-y-1.5">
           <Label htmlFor="cli-title">{t("clis.add.titleField")}</Label>
-          <Input id="cli-title" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <Input
+            id="cli-title"
+            value={title}
+            placeholder={t("clis.add.titlePlaceholder")}
+            onChange={(e) => setTitle(e.target.value)}
+          />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="cli-min">{t("clis.add.minVersion")}</Label>
@@ -142,10 +141,10 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="cli-description">{t("clis.add.description")}</Label>
-        <Textarea
+        <Input
           id="cli-description"
-          rows={2}
           value={description}
+          placeholder={t("clis.add.descriptionPlaceholder")}
           onChange={(e) => setDescription(e.target.value)}
         />
       </div>
@@ -158,10 +157,14 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
           className="font-mono"
           onChange={(e) => setLoginCheck(e.target.value)}
         />
-        <p className="text-2xs text-text-muted">{t("clis.add.loginCheckHint")}</p>
+        <p className="text-xs text-text-muted">{t("clis.add.loginCheckHint")}</p>
       </div>
       {save.error ? (
         <Alert variant="error">
+          <CircleAlert aria-hidden />
+          <AlertTitle>
+            {t(editing ? "clis.add.editFailed" : "clis.add.addFailed", { command: command_ })}
+          </AlertTitle>
           <AlertDescription>{translateApiError(t, save.error)}</AlertDescription>
         </Alert>
       ) : null}
@@ -170,7 +173,7 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
           {t("common.cancel")}
         </Button>
         <Button type="submit" disabled={!valid || save.isPending}>
-          {t(editing ? "common.save" : "clis.add.submit")}
+          {save.error ? t("common.retry") : t(editing ? "common.save" : "clis.add.submit")}
         </Button>
       </DialogFooter>
     </form>
@@ -180,7 +183,7 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
 export function AddCliDialog({ open, onOpenChange, existing, onSaved }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[520px]">
+      <DialogContent className="max-w-[480px]">
         {open ? <Form onOpenChange={onOpenChange} existing={existing} onSaved={onSaved} /> : null}
       </DialogContent>
     </Dialog>

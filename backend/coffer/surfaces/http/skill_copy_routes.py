@@ -10,16 +10,22 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 
-from coffer.application.skill import copy_ops, orphan_ops
+from coffer.application.skill import copy_ops, file_ops, orphan_ops
 from coffer.application.skill.service import SkillService
 from coffer.application.skill.source_service import SkillSourceService
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.skill_dependencies import (
     get_optional_skill_source_service,
     get_skill_service,
+)
+from coffer.surfaces.http.skill_file_routes import (
+    SkillFileContentOut,
+    SkillFileTreeOut,
+    _content_out,
+    _node_to_out,
 )
 from coffer.surfaces.http.skill_routes import SkillOut, _actor, _agents_by_uid, _to_skill_out
 from coffer.surfaces.http.skill_source_schemas import SkillFileChangeOut, change_out
@@ -60,6 +66,8 @@ class SkillOrphanOut(BaseModel):
     file_count: int
     description: str | None
     message: str | None
+    #: When the folder last changed.
+    found_at: datetime
 
 
 class SkillOrphanListOut(BaseModel):
@@ -79,10 +87,44 @@ async def list_orphans(
                 file_count=o.file_count,
                 description=o.description,
                 message=o.message,
+                found_at=o.found_at,
             )
             for o in await orphan_ops.list_orphans(svc)
         ]
     )
+
+
+@router.get("/orphans/{name}/files", response_model=SkillFileTreeOut)
+async def list_orphan_files(
+    name: str,
+    svc: SkillService = Depends(get_skill_service),  # noqa: B008
+) -> SkillFileTreeOut:
+    """The orphan folder as a read-only file tree — the walk of a managed skill's."""
+    folder = await orphan_ops.orphan_folder(svc, name)
+    return SkillFileTreeOut(root=_node_to_out(file_ops.build_file_tree(folder), folder))
+
+
+@router.get("/orphans/{name}/files/content", response_model=SkillFileContentOut)
+async def read_orphan_file(
+    name: str,
+    path: str = Query(min_length=1),
+    svc: SkillService = Depends(get_skill_service),  # noqa: B008
+) -> SkillFileContentOut:
+    """Read one file of an orphan folder; a path outside it is refused with 400."""
+    folder = await orphan_ops.orphan_folder(svc, name)
+    try:
+        result = file_ops.read_skill_file(folder, path)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="requested path is outside the skill folder",
+        ) from exc
+    except (FileNotFoundError, IsADirectoryError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"no such file in skill: {path}",
+        ) from exc
+    return _content_out(result, folder)
 
 
 @router.post("/orphans/{name}/adopt", response_model=SkillOut, status_code=status.HTTP_201_CREATED)

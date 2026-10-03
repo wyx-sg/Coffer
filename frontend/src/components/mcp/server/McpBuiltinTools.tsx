@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import { Section } from "@/components/Section";
 import type { McpBuiltinServer } from "@/lib/api/mcpBuiltin";
+import { joinNames } from "@/lib/mcp/serverState";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -18,7 +19,7 @@ interface Props {
 }
 
 export function McpBuiltinTools({ tools, summary, top = false }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const usage = new Map(summary.by_tool.map((row) => [row.tool, row]));
   const calls = (name: string) => usage.get(name)?.calls ?? 0;
   const rows = top ? [...tools].sort((a, b) => calls(b.name) - calls(a.name)) : tools;
@@ -26,13 +27,16 @@ export function McpBuiltinTools({ tools, summary, top = false }: Props) {
   return (
     <Section
       title={top ? t("mcp.builtin.mostCalled") : t("mcp.builtin.allTools")}
-      help={t("mcp.builtin.alwaysOnHelp")}
       gap="snug"
       labelled
+      compact
     >
+      <p className="-mt-1 text-xs text-text-muted">
+        {t("mcp.builtin.alwaysOnSee", { names: joinNames(seen, i18n.language) })}
+      </p>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border-subtle text-left text-2xs font-semibold text-text-muted">
+          <tr className="border-b border-border-subtle text-left text-2xs font-semibold text-text-subtle">
             <th className="py-1.5 font-semibold">{t("mcp.builtin.colTool")}</th>
             <th className="w-24 py-1.5 text-right font-semibold">{t("mcp.builtin.colCalls")}</th>
             <th className="w-20 py-1.5 text-right font-semibold">{t("mcp.page.colErrors")}</th>
@@ -57,13 +61,6 @@ export function McpBuiltinTools({ tools, summary, top = false }: Props) {
           })}
         </tbody>
       </table>
-      <p className="text-xs text-text-muted">
-        {t("mcp.builtin.seenAs", {
-          names: seen.slice(0, -1).join(", "),
-          last: seen[seen.length - 1] ?? "",
-          count: seen.length,
-        })}
-      </p>
     </Section>
   );
 }

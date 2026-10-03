@@ -127,7 +127,7 @@ export function AddChooseStep({ groups, target, way, ...props }: Props) {
         ) : null}
       </div>
       <DialogFooter>
-        <Button variant="outline" onClick={props.onCancel}>
+        <Button variant="ghost" onClick={props.onCancel}>
           {t("common.cancel")}
         </Button>
         <Button disabled={target === ""} onClick={props.onContinue}>

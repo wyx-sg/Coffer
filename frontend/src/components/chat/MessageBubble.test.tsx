@@ -1,10 +1,23 @@
 // components/chat/MessageBubble.test.tsx
 import { describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render as rtlRender, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import { MessageBubble } from "./MessageBubble";
 import { acceptance } from "@/test/acceptance";
 import type { ContentBlock, Message } from "@/lib/api/chat";
 import { contentBlock } from "@/lib/chat/contentBlock";
+
+// A reply's recorded files and the working folder are read through the API; none here.
+vi.mock("@/lib/api/chat", () => ({
+  chatApi: {
+    listReplyFiles: vi.fn().mockResolvedValue([]),
+    getAgentConfig: vi.fn().mockResolvedValue({ model: null, effort: null, cwd: null }),
+  },
+}));
+
+const render = (ui: ReactElement) =>
+  rtlRender(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
 
 const makeAssistant = (overrides: Partial<Message>): Message => ({
   id: "m-1",
@@ -135,7 +148,7 @@ describe("MessageBubble", () => {
       expect(screen.queryByRole("button", { name: "Copy reply" })).not.toBeInTheDocument();
     });
 
-    test("files changed sit after the text and before the token line, rows open the file", () => {
+    test("files changed sit after the text and before the token line; an estimated row opens nothing", () => {
       const onOpenFile = vi.fn();
       render(
         <MessageBubble
@@ -154,15 +167,14 @@ describe("MessageBubble", () => {
             completion_tokens: 10,
           })}
           onOpenFile={onOpenFile}
-          selectedPath="src/a.py"
         />,
       );
       const title = screen.getByText("Files changed");
       expect(title.textContent).toBe("Files changed");
-      const row = screen.getByRole("button", { name: /src\/a\.py/ });
-      expect(row).toHaveAttribute("aria-current", "true");
-      fireEvent.click(row);
-      expect(onOpenFile).toHaveBeenCalledWith("src/a.py");
+      const card = screen.getByRole("region", { name: "Files changed" });
+      expect(within(card).getByText("src/a.py")).toBeInTheDocument();
+      expect(within(card).queryByRole("button")).not.toBeInTheDocument();
+      expect(onOpenFile).not.toHaveBeenCalled();
       const tokens = screen.getByText("100 in · 10 out");
       expect(screen.getByText("Done.").compareDocumentPosition(title)).toBe(
         Node.DOCUMENT_POSITION_FOLLOWING,

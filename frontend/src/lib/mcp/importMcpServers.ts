@@ -1,24 +1,30 @@
 // frontend/src/lib/mcp/importMcpServers.ts
-// The plumbing behind "Add MCP server": turn each parsed server into a Coffer
-// config plus secret writes, store its secrets first (registration probes the
-// refs it cites, and a secret supplied for a destination is approved with the
-// registration), register it (removing the just-written secrets when that
-// fails), then give it its reach.
+// The plumbing behind "Add MCP server": turn each server into a Coffer config,
+// store its new secrets first (registration probes the refs it cites, and a
+// secret supplied for a destination is approved with the registration),
+// register it (removing the just-written secrets when that fails), then give it
+// its reach. A chosen secret is cited as `secret_refs[KEY] = secret/<name>`.
 // Pure functions + one async batch, so the dialog stays a view and the
 // mutation hook (useMcpServerMutations.ts) stays one line.
 import type { TFunction } from "i18next";
 
+import {
+  persistNewSecrets,
+  secretRef,
+  type KeyValueSecretRow,
+} from "@/lib/secretValue";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import { resourcesApi } from "@/lib/api/resources";
 import { secretsApi } from "@/lib/api/secret";
 import { scopeApi } from "@/lib/api/scope";
-import { writeSecret } from "@/lib/secretWrite";
-import { mintSecretRef } from "@/lib/secretRef";
 import type { ParsedServer } from "@/lib/mcp/pasteParse";
+import { missingSecretKeys, plainMapOfRows, secretRefsOfRows } from "@/lib/mcp/serverRows";
 
-/** One server as the dialog confirmed it: the parsed shape plus the note
- *  and working directory the form may carry (`""` = none). */
-export interface NewServer extends ParsedServer {
+/** One server as the dialog confirmed it: the parsed shape with its rows as the
+ *  form holds them, plus the note and working directory the form may carry
+ *  (`""` = none). */
+export interface NewServer extends Omit<ParsedServer, "env"> {
+  env: KeyValueSecretRow[];
   description?: string;
   /** stdio only: the folder the command starts in. */
   cwd?: string;
@@ -31,43 +37,21 @@ export type ReachIntent =
   | { mode: "restricted"; agents: string[] }
   | { mode: "disabled" };
 
-interface ServerPlan {
-  config: Record<string, unknown>;
-  secrets: { ref: string; value: string }[];
-}
-
-/** The secret keys of `srv` still without a value — a `bearer_token_env_var`
- *  header arrives that way. The dialog asks for them; nothing is sent while
- *  any is empty, so an empty secret never reaches the secret store. */
-export function missingSecretValues(srv: ParsedServer): string[] {
-  return srv.env.filter((e) => e.isSecret && e.value === "" && !e.ref).map((e) => e.key);
-}
+/** The keys of `srv` whose new secret is still without a value — a
+ *  `bearer_token_env_var` header arrives that way. The dialog asks for them;
+ *  nothing is sent while any is empty, so an empty secret never reaches the
+ *  secret store. */
+export const missingSecretValues = (srv: Pick<NewServer, "env">): string[] =>
+  missingSecretKeys(srv.env);
 
 /**
- * A parsed server as a Coffer config plus the secret writes to perform.
- * Pure — the config is fully built before any side effect runs. A secret value
- * becomes a `secret_refs` entry under an opaque minted ref
- * (`mcp_server/<uuid4 hex>/<key>`, never derived from the name); a plain value
- * stays inline — in `env` for stdio, in `headers` for http (HttpTransport has
- * no `env` field; the parser already gathered an http server's env into
- * `srv.env`).
+ * A server as a Coffer config. Pure — built before any side effect runs. A
+ * plain value stays inline — in `env` for stdio, in `headers` for http
+ * (HttpTransport has no `env` field); a secret becomes a `secret_refs` entry.
  */
-function planServer(srv: NewServer): ServerPlan {
-  const secretRefs: Record<string, string> = {};
-  const plain: Record<string, string> = {};
-  const secrets: { ref: string; value: string }[] = [];
-  for (const e of srv.env) {
-    if (e.isSecret && e.ref) {
-      // A stored secret picked for this row: cite it, write nothing.
-      secretRefs[e.key] = e.ref;
-    } else if (e.isSecret) {
-      const ref = mintSecretRef("mcp_server", e.key);
-      secretRefs[e.key] = ref;
-      secrets.push({ ref, value: e.value });
-    } else {
-      plain[e.key] = e.value;
-    }
-  }
+function configOf(srv: NewServer): Record<string, unknown> {
+  const plain = plainMapOfRows(srv.env);
+  const secretRefs = secretRefsOfRows(srv.env);
   const transport =
     srv.transportType === "stdio"
       ? {
@@ -79,7 +63,7 @@ function planServer(srv: NewServer): ServerPlan {
           ...(srv.cwd?.trim() ? { cwd: srv.cwd.trim() } : {}),
         }
       : { type: "http", url: srv.url, headers: plain, secret_refs: secretRefs };
-  return { config: { transport }, secrets };
+  return { transport };
 }
 
 /** Registers the server (with its note, which the create body accepts) and
@@ -108,15 +92,16 @@ async function rollbackSecrets(refs: string[], name: string): Promise<void> {
   }
 }
 
-/** Whether the daemon holds a binding for `uid`'s secrets until a person
- *  approves it. A registration that cites an existing secret, or one that is
+/** The refs the daemon holds for `uid` until a person approves them, or null
+ *  when none. A registration that cites an existing secret, or one that is
  *  already in use elsewhere, records the approval with the registration. */
-async function hasPendingApproval(uid: string): Promise<boolean> {
+async function pendingRefsFor(uid: string): Promise<string[] | null> {
   try {
     const { approvals } = await secretsApi.pendingApprovals();
-    return approvals.some((a) => a.destination_uid === uid);
+    const mine = approvals.filter((a) => a.destination_uid === uid);
+    return mine.length > 0 ? mine.map((a) => a.ref ?? "") : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -145,8 +130,9 @@ export interface FailedServer {
 export interface ImportReport {
   created: ImportedServer[];
   failed: FailedServer[];
-  /** Created servers one of whose secrets waits for approval. */
-  awaitingApproval: string[];
+  /** Created servers one of whose secrets waits for approval, with the
+   *  environment variable / header each waiting secret is for. */
+  awaitingApproval: { name: string; secrets: string[] }[];
   /** Created servers whose reach could not be written (they reach every agent). */
   reachFailed: string[];
 }
@@ -186,14 +172,15 @@ export async function importMcpServers({
       report.created.push({ name: srv.name, uid: already });
       continue;
     }
-    const { config, secrets } = planServer(srv);
+    const config = configOf(srv);
     let uid: string;
-    let waiting = false;
+    const waitingKeys: string[] = [];
     const written: string[] = [];
     try {
-      for (const sec of secrets) {
-        if (await writeSecret(sec.ref, sec.value)) waiting = true;
-        written.push(sec.ref);
+      for (const row of srv.env) {
+        if (row.value.kind !== "new" || row.key.trim() === "") continue;
+        written.push(secretRef(row.value.name));
+        if ((await persistNewSecrets([row.value])).waiting) waitingKeys.push(row.key.trim());
       }
       uid = await registerResource(srv, config);
     } catch (e) {
@@ -205,10 +192,21 @@ export async function importMcpServers({
       });
       continue;
     }
-    if (!waiting) waiting = await hasPendingApproval(uid);
+    let waiting = waitingKeys.length > 0;
+    if (!waiting) {
+      const refs = await pendingRefsFor(uid);
+      if (refs) {
+        waiting = true;
+        const keyed = srv.env.filter(
+          (r) => r.value.kind !== "plain" && refs.includes(secretRef(r.value.name)),
+        );
+        const every = srv.env.filter((r) => r.value.kind !== "plain");
+        waitingKeys.push(...(keyed.length > 0 ? keyed : every).map((r) => r.key.trim()));
+      }
+    }
     created.set(srv.name, uid);
     report.created.push({ name: srv.name, uid });
-    if (waiting) report.awaitingApproval.push(srv.name);
+    if (waiting) report.awaitingApproval.push({ name: srv.name, secrets: waitingKeys });
     try {
       await applyReach(uid, reach);
     } catch {

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), [An Unattended Rewriter of Synced Content Runs on One Named Owner Machine](single-owner-machine-for-unattended-rewrites.md), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), spec vault-storage "Carry a format version on every vault document", spec vault-storage "Keep every vault document a JSON object that preserves what it does not know", spec vault-storage "Move an existing home into the vault layout once, on request, reversibly", spec vault-sync "Refuse a remote at another layout", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", spec vault-sync "Run an unattended rewriter on one owner machine", spec vault-sync "Hold a round that would lose too much", PR #452
+**Related**: [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), [An Unattended Rewriter of Synced Content Runs on One Named Owner Machine](single-owner-machine-for-unattended-rewrites.md), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), spec vault-storage "Carry a format version on every vault document", spec vault-storage "Keep every vault document a JSON object that preserves what it does not know", spec vault-storage "Move an existing home into the vault layout once, on request, reversibly", spec vault-sync "Refuse a newer-layout remote and replace an older one", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", spec vault-sync "Run an unattended rewriter on one owner machine", spec vault-sync "Hold a round that would lose too much", PR #452
 
 ## Context
 
@@ -120,9 +120,11 @@ data migration can be rolled back, with the old data kept untouched.
      re-apply; it leaves a hold marker that `coffer migrate --resume` lifts.
      `coffer migrate --rehearse` runs the migration against a copy in an
      isolated `HOME` and reports the difference. A remote at the old layout is
-     never converted: a build at the new layout refuses it (`remote_too_old`)
-     and it is rebuilt from an upgraded machine, and an older build refuses a
-     remote at a newer layout (`remote_too_new`).
+     never converted: a build at the new layout replaces it with its own vault
+     (a fast-forward push whose parents are this machine's commit and the old
+     tip, so the old history stays in git), and a build refuses a remote at a
+     newer layout (`remote_too_new`). The upgraded vault is the source of
+     truth; converting a remote would invent a second migration path.
 
 Pros: an upgrade on one machine no longer stops convergence on the others; a
 field added by one build survives a round trip through another; the rewrite
@@ -218,8 +220,8 @@ aside, never a downgrade.
 ## Consequences
 
 - `manifest.json`'s `schema_version` is the vault's **layout** number, not a
-  per-file gate. A remote at a different layout is refused in both directions
-  (`remote_too_new`, `remote_too_old`); a per-file version never stops a round.
+  per-file gate. A remote at a newer layout is refused (`remote_too_new`); one at an older
+  layout is replaced by this vault; a per-file version never stops a round.
 - Kind configs keep `extra="forbid"`. Only a document's top-level fields are
   preserved; a key a kind's config does not declare is refused with a finding,
   and an additive config field is a format step that older builds flag as

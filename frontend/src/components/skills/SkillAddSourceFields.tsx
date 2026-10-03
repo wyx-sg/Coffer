@@ -5,15 +5,15 @@
 // owns the stage (spec skill-manager "Add skills from an archive": nothing is
 // written until the user confirms, and a stage is cancelled whenever the source
 // changes).
-import { useRef } from "react";
-import { FileArchive } from "lucide-react";
+import { useRef, type ReactNode } from "react";
+import { FileArchive, Folder } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { FolderPickerField } from "@/components/FolderPickerField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatBytes } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 import { ARCHIVE_ACCEPT, cleanPath, isJump } from "./skillSourceHelpers";
 
 interface FolderProps {
@@ -21,9 +21,11 @@ interface FolderProps {
   onChange: (value: string) => void;
   /** Look at the folder now (after a paste, a pick, or leaving the field). */
   onLook: (path: string) => void;
+  /** The refusal, in red under the field; it takes the help's place. */
+  error?: ReactNode;
 }
 
-export function SkillAddFolderField({ value, onChange, onLook }: FolderProps) {
+export function SkillAddFolderField({ value, onChange, onLook, error }: FolderProps) {
   const { t } = useTranslation();
   return (
     <div
@@ -50,8 +52,10 @@ export function SkillAddFolderField({ value, onChange, onLook }: FolderProps) {
         }}
         placeholder={t("skillSources.folder.placeholder")}
         typeable
+        icon={<Folder aria-hidden className="size-3.5" />}
+        invalid={!!error}
       />
-      <p className="text-xs text-text-muted">{t("skillSources.folder.help")}</p>
+      {error ?? <p className="text-xs text-text-muted">{t("skillSources.folder.help")}</p>}
     </div>
   );
 }
@@ -59,9 +63,11 @@ export function SkillAddFolderField({ value, onChange, onLook }: FolderProps) {
 interface ArchiveProps {
   file: File | null;
   onPick: (file: File) => void;
+  /** The refusal, in red under the drop zone, which then has a red border. */
+  error?: ReactNode;
 }
 
-export function SkillAddArchiveField({ file, onPick }: ArchiveProps) {
+export function SkillAddArchiveField({ file, onPick, error }: ArchiveProps) {
   const { t } = useTranslation();
   const input = useRef<HTMLInputElement>(null);
   const ext = file ? (/\.[^.]+$/.exec(file.name)?.[0] ?? "") : "";
@@ -83,13 +89,18 @@ export function SkillAddArchiveField({ file, onPick }: ArchiveProps) {
           if (picked) onPick(picked);
         }}
       />
-      <div className="flex min-h-[58px] items-center gap-2.5 rounded-lg border border-dashed border-border bg-surface-sunken px-3 py-2 text-text-muted">
+      <div
+        className={cn(
+          "flex min-h-[56px] items-center gap-2.5 rounded-lg border border-dashed bg-surface-sunken py-2 pl-3 pr-2.5 text-text-muted",
+          error ? "border-danger" : "border-border",
+        )}
+      >
         <FileArchive aria-hidden className="size-[15px] shrink-0" />
         <span className="flex min-w-0 flex-col gap-px">
           {file ? (
             <>
               <span className="truncate font-mono text-xs text-text">{file.name}</span>
-              <span className="text-2xs text-text-muted">
+              <span className="text-xs text-text-muted">
                 {t("skillSources.archive.meta", { ext, size: formatBytes(file.size) })}
               </span>
             </>
@@ -100,13 +111,13 @@ export function SkillAddArchiveField({ file, onPick }: ArchiveProps) {
         <Button
           type="button"
           variant="outline"
-          size="sm"
           className="ml-auto"
           onClick={() => input.current?.click()}
         >
           {t("skillSources.archive.choose")}
         </Button>
       </div>
+      {error}
     </div>
   );
 }
@@ -193,23 +204,29 @@ export function SkillAddGitFields({
         disabled={disabled}
         onChange={(url) => onChange({ ...value, url })}
       />
-      <GitInput
-        id="skill-add-git-ref"
-        label={t("skillSources.git.ref")}
-        placeholder={t("skillSources.git.refPlaceholder")}
-        value={value.ref}
-        disabled={disabled}
-        onChange={(ref) => onChange({ ...value, ref })}
-      />
-      <GitInput
-        id="skill-add-git-path"
-        label={t("skillSources.git.path")}
-        placeholder={t("skillSources.git.pathPlaceholder")}
-        help={t("skillSources.git.pathHelp")}
-        value={value.path}
-        disabled={disabled}
-        onChange={(path) => onChange({ ...value, path })}
-      />
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <GitInput
+            id="skill-add-git-ref"
+            label={t("skillSources.git.ref")}
+            placeholder={t("skillSources.git.refPlaceholder")}
+            value={value.ref}
+            disabled={disabled}
+            onChange={(ref) => onChange({ ...value, ref })}
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <GitInput
+            id="skill-add-git-path"
+            label={t("skillSources.git.path")}
+            placeholder={t("skillSources.git.pathPlaceholder")}
+            help={t("skillSources.git.pathHelp")}
+            value={value.path}
+            disabled={disabled}
+            onChange={(path) => onChange({ ...value, path })}
+          />
+        </div>
+      </div>
     </>
   );
 }

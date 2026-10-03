@@ -1,4 +1,4 @@
-// src/components/mcp/server/McpToolExposure.tsx — one tool's exposure control: Auto · Listed, Always listed or Search only (spec mcp-gateway "Forward tools, resources and prompts").
+// src/components/mcp/server/McpToolExposure.tsx — one tool's exposure control: Auto · Listed, Always listed or Search only (spec mcp-gateway "Choose how each tool is exposed").
 //
 // The trigger reads the setting, and for Auto what the usage ranking gave the
 // tool right now ("Auto · Listed"); the reason is on the row's detail.

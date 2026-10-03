@@ -36,6 +36,8 @@ class OrphanView:
     file_count: int
     description: str | None
     message: str | None
+    #: When the folder last changed — the nearest thing to when it turned up.
+    found_at: datetime
 
 
 async def _orphan_names(service: SkillService) -> list[str]:
@@ -47,6 +49,11 @@ async def _folder(service: SkillService, name: str) -> pathlib.Path:
     if name not in await _orphan_names(service):
         raise SkillOrphanNotFound(name)
     return pathlib.Path(service._store.paths_for(name).folder)
+
+
+async def orphan_folder(service: SkillService, name: str) -> pathlib.Path:
+    """The resolved folder of an orphan, for the read-only file viewer."""
+    return (await _folder(service, name)).resolve()
 
 
 async def list_orphans(service: SkillService) -> list[OrphanView]:
@@ -68,6 +75,7 @@ async def list_orphans(service: SkillService) -> list[OrphanView]:
                 file_count=len(iter_content_files(folder)),
                 description=description,
                 message=message,
+                found_at=datetime.fromtimestamp(folder.stat().st_mtime, tz=UTC),
             )
         )
     return out
@@ -113,4 +121,4 @@ async def remove_orphan(service: SkillService, *, name: str, actor: str) -> path
     return dest
 
 
-__all__ = ["OrphanView", "adopt_orphan", "list_orphans", "remove_orphan"]
+__all__ = ["OrphanView", "adopt_orphan", "list_orphans", "orphan_folder", "remove_orphan"]

@@ -3,9 +3,8 @@
 // Finder · Copy master path · Delete…. Turning it on or off is the reach
 // button's and Check copies is the Delivery tab's and the library's, so the
 // menu does not repeat them. The name is fixed and is the heading, so there is
-// no rename. Coffer's built-in skill keeps the menu but
-// Delete is disabled — Coffer writes it itself; the built-in banner says to
-// turn it off instead.
+// no rename. Coffer's built-in skill keeps the menu but Delete is disabled —
+// Coffer writes it itself; turn it off with Reach instead.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 

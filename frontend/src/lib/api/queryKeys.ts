@@ -236,6 +236,12 @@ export const conversationKey = (id: string) => ["conversations", id] as const;
  *  conversation, so removing `conversationKey(id)` drops it too. */
 export const agentConfigKey = (conversationId: string) =>
   ["conversations", conversationId, "agentConfig"] as const;
+/** The files one assistant reply changed (list), and one file's diff. Recorded
+ *  once the reply ends and never edited, so they are cached for the session. */
+export const replyFilesKey = (conversationId: string, messageId: string) =>
+  ["conversations", conversationId, "replyFiles", messageId] as const;
+export const replyFileDiffKey = (conversationId: string, messageId: string, path: string) =>
+  ["conversations", conversationId, "replyFiles", messageId, path] as const;
 /** A conversation's messages. A SIBLING of `conversationKey`, not a child:
  *  every rename/archive/create invalidates `conversationsKey`, and a child
  *  key would make each of those refetch an open thread — mid-stream, that

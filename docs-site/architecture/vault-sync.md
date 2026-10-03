@@ -65,7 +65,7 @@ sequenceDiagram
     S->>V: check: a repository, not inside a cloud-synced folder
     S->>V: settle your valid edits; L := HEAD
     S->>O: fetch; R := origin/branch
-    S->>S: refuse a remote at another layout
+    S->>S: refuse a newer layout, replace an older one
     S->>V: git merge-tree L R, giving tree T (outside the working tree)
     S->>S: any conflict, identity clash or invalid file? stop
     S->>S: deletion breaker, incoming (L to T) and outgoing (base to L)
@@ -77,7 +77,7 @@ sequenceDiagram
 
 1. **Check.** The vault is a repository, and not inside a folder another tool synchronises (a Syncthing folder, Dropbox, iCloud Drive or a File Provider root). Two tools syncing one git repository corrupt it, so such a vault pauses with `paused_cloud_folder`.
 2. **Local.** Your valid hand edits are committed first, so `L`, this machine's `HEAD`, holds everything accepted here. There is no separate export step: every accepted write is already a commit.
-3. **Fetch.** `origin/<branch>` becomes `R`. A remote whose `manifest.json` names another layout is refused before anything is merged: newer is `remote_too_new` (upgrade this machine), older is `remote_too_old` (the remote must be rebuilt, see [Remote layout](#remote-layout)).
+3. **Fetch.** `origin/<branch>` becomes `R`. A remote whose `manifest.json` names a newer layout is refused before anything is merged (`remote_too_new`: upgrade this machine). One at an older layout is replaced by this vault instead (see [Remote layout](#remote-layout)).
 4. **Merge.** `git merge-tree --write-tree L R` computes the merged tree `T` in the object store. Nothing in the vault changes.
 5. **Stop?** A content conflict, the same resource name with two different uids, or a merged file that fails validation stops the round, whole. Nothing is checked out and nothing is pushed.
 6. **Guard.** The [deletion breaker](#the-deletion-breaker) runs over what the round would remove here and what this machine's own commits would remove from the shared history.
@@ -102,7 +102,7 @@ Every round is recorded in the round history in `runs.db` and audited, whatever 
 | `join_required`, `joined` | This machine has not joined the remote yet; it has now. |
 | `unreachable`, `auth_failed` | The remote could not be reached, or refused to sign in. |
 | `paused_cloud_folder` | The vault is inside a folder another tool synchronises. |
-| `remote_too_new`, `remote_too_old` | The remote is at another vault layout. |
+| `remote_too_new` | The remote is at a newer vault layout. |
 | `rolled_back` | A round was rolled back. |
 | `failed` | Anything else, with git's message. |
 
@@ -180,13 +180,13 @@ Each machine writes exactly one file, `machines/<machine id>.json`, and never an
 | Push rejected | `push_failed` | Applied here; the remote refused the push. | Check the branch's protection and the token's rights. |
 | Plaintext secret | `plaintext_found` | A file the push would publish holds a plaintext secret; the file, line and key are named, never the value. | Move the value into a secret (the agent hand-off) and retry, or Push anyway, which is audited. |
 | Cloud folder | `paused_cloud_folder` | The vault is inside a folder another tool synchronises. | Move the vault out of that folder: **Move the vault…** (`POST /api/v1/sync/vault/move`) pauses rounds and agent writes, moves the folder (or copies it when the target is on another filesystem), checks the repository at the new place and leaves `~/.coffer/vault` leading to it. A target that is relative, overlapping, inside another synchronised folder or not empty is refused (`SYNC_VAULT_TARGET_INVALID`, `_IN_CLOUD`, `_NOT_EMPTY`), and a failed move puts the vault back (`SYNC_VAULT_MOVE_FAILED`). |
-| Layout | `remote_too_new`, `remote_too_old` | The remote was written with another vault layout. | Newer: upgrade this machine. Older: rebuild the remote. |
+| Layout | `remote_too_new` | The remote was written with a newer vault layout. | Upgrade this machine. |
 
 Each problem is shown as a banner on the **Sync** page (with an **×** that ignores it, shared with Overview, which brings it back when the situation changes), marks the **Sync** entry in the sidebar.
 
 ### Remote layout
 
-The vault's `manifest.json` carries one number, `schema_version`, currently `3`. A remote at the same number is converged with. A remote at a newer number was written by a newer Coffer and is refused until this machine is upgraded. A remote at an older number, such as one written by a Coffer from before the vault layout, is refused and never converted in place: converting a shared remote from one machine while others still push the old layout is how data gets lost. It is rebuilt instead. The first upgraded machine is pointed at an empty branch or an empty repository and publishes its vault there; the other machines upgrade and then join it as new machines. See [Upgrading an existing Coffer](/guides/upgrading).
+The vault's `manifest.json` carries one number, `schema_version`, currently `3`. A remote at the same number is converged with. A remote at a newer number was written by a newer Coffer and is refused until this machine is upgraded. A remote at an older number, such as one written by a Coffer from before the vault layout, is never converted in place: the upgraded vault is the source of truth, so it replaces the remote. The push is a fast-forward of one commit whose tree is exactly this machine's content, with this machine's commit and the old tip as parents, so the old history stays reachable in git. Files only the old remote had go away on purpose (the deletion breaker does not apply; the plaintext check still does). A person previews it first, and the round records `join: "replace"`. The other machines upgrade and then join the replaced remote as new machines. See [Upgrading an existing Coffer](/guides/upgrading).
 
 ## Sharing the lock with curation
 

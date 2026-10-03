@@ -95,6 +95,11 @@ The system MUST support importing a skill from a local filesystem path; the orig
 - **WHEN** the user stages it in the Add skill dialog
 - **THEN** the dialog shows `release-notes` with its description and file count, and nothing is under `~/.coffer/vault/skills/` for it and no skill resource exists until the user confirms
 
+#### Scenario: a folder whose skill is one folder down names that folder when it cannot be added
+- **GIVEN** a folder with no `SKILL.md` at its top whose only `SKILL.md` is in the sub-folder `skill/`, and that skill cannot be added (a link inside it leaves the folder)
+- **WHEN** the user stages the folder
+- **THEN** the stage is refused with the sub-folder skill's own reason and `details.candidate_folder` `skill` (with its absolute path as `details.candidate_path`), so the dialog can offer that folder as the one to add
+
 ### Requirement: Track delivered copies as internal bookkeeping
 The system MUST track each `(skill, agent)` binding as internal delivery bookkeeping in a `skill_agent_bindings` table of this machine's derived database, `~/.coffer/derived/derived.db`, keyed by the skill's and the agent's uids — a fact about this machine's disks that never enters the vault or travels with sync: a row records that this agent currently holds a delivered copy, plus the last successful link path, the link mode, and when it was last linked. It is not a user-facing axis and MUST NOT be exposed as a toggle on any surface. Symlink existence on disk is the live representation; the row is the persistent record of what was delivered.
 
@@ -427,7 +432,7 @@ The Skills page is the library of managed skills beside the open skill: a list w
 
 A skill added from a Git repository also shows its source — the repository, the folder, the pinned commit and the update status — with **Check now** and **Change source…** ("Change a Git-imported skill's source").
 
-The list's reach mark and the detail carry one reach button labelled with the answer ("All agents", the chosen agents' badges, "Off") that opens a panel whose choices are Off, All agents and Chosen agents — the last over the scope's list of agents, each switch and tick written at once — and the list's filter offers those same states.
+The list's reach mark and the detail carry one reach button labelled with the answer ("All agents", the chosen agents' badges, "Off") that opens a panel whose choices are Off, All agents and Chosen agents — the last over the scope's list of agents, each switch and tick written at once. The list has no reach filter: each row shows its reach, and the list groups by state.
 
 #### Scenario: the web UI and REST cover every operation
 - **GIVEN** the daemon is running,
@@ -745,6 +750,50 @@ command's page and offering the hand-off for a command that needs the user.
 - **WHEN** the user reads `GET /api/v1/clis/uv`
 - **THEN** it is `missing`, `needed_by` names `data-profiling`, `needed_by_servers` names `duckdb` with launcher `uvx`, and its hand-off prompt names both
 
+### Requirement: Declare a command-line tool without a skill
+The system MUST let a person add a command-line tool by hand, with no skill and
+no MCP server behind it: `POST /api/v1/clis` takes a bare command name or the
+absolute path of an executable, and optionally a `title`, a `description`, a
+`min_version` and a `login_check` (a command line whose first word is the
+command itself, run without a shell exactly as a skill's login check is). The
+tool is kept as one entry in the vault's `cli-tools` state document — the
+declaration only; where the command is found on one machine is machine-local and
+never written there — and is then listed, checked and read like every required
+command, with `added` true. When a skill or an MCP server also requires the
+command the two are one entry, the hand-added title, description and minimum
+taking precedence. `POST /api/v1/clis/preview` MUST report what Coffer finds for
+a name or path before anything is saved — where, which version, whether it was
+already added and whether a skill or server already requires it — and a tool that
+is not on this machine MUST still be addable, then reading `missing`. A tool
+added by hand and missing raises no attention item, because nobody asked for it
+to work. `PATCH /api/v1/clis/{command}` changes the fields it carries (`null`
+clears one; the command itself is fixed) and `DELETE /api/v1/clis/{command}`
+drops the declaration only — a skill or server that requires the command keeps
+it listed — and both refuse a command nobody added by hand with 404
+`CLI_TOOL_NOT_DECLARED`. A name added twice is refused with 409
+`CLI_TOOL_EXISTS`, and a bad name, path, minimum version or login check with 400
+`CLI_TOOL_INVALID`. Each add, edit and removal MUST be audited. Coffer MUST NOT
+read a command's `--help`, build a tree of its subcommands or keep one: what it
+knows of a tool is its path, its version and its login state.
+
+#### Scenario: a command-line tool is added with no skill
+- **GIVEN** no skill and no MCP server requiring `jq`, and `jq 1.7.1` on the path
+- **WHEN** the user adds `jq` with a title, a description and the minimum `1.6`
+- **THEN** `GET /api/v1/clis` lists `jq` as `ready`, added by hand, needed by nobody, and the vault's `cli-tools` document holds the declaration and no path
+- **AND** adding it again is refused with `CLI_TOOL_EXISTS`, and a minimum of `latest` with `CLI_TOOL_INVALID`
+
+#### Scenario: a hand-added tool and a skill are one entry
+- **GIVEN** a skill requiring `jq` with minimum `1.5`, and `jq` added by hand with the title `Mine` and minimum `1.7`
+- **WHEN** the commands are listed, and then the hand-added declaration is removed
+- **THEN** one entry `jq` is listed, titled `Mine` with minimum `1.7` and needed by the skill
+- **AND** after the removal it is still listed, no longer added by hand, with the skill's title and minimum `1.5`
+
+#### Scenario: add, edit and remove a tool over REST
+- **GIVEN** `jq` on the path and no declaration
+- **WHEN** the user adds `jq` with the title `JSON`, then sends `PATCH /api/v1/clis/jq` with the title `null`, then `DELETE /api/v1/clis/jq`
+- **THEN** the tool is listed as added by hand after the first, its title is cleared by the second, and it is gone after the third
+- **AND** repeating the delete is refused with 404 `CLI_TOOL_NOT_DECLARED`
+
 ### Requirement: Hand a required command to an agent with a prompt
 The system MUST NOT install, update or log in to a required command itself.
 For a command that is `missing` or `outdated` it MUST offer a prompt, built by
@@ -795,13 +844,25 @@ When an agent's link path for a skill holds a real folder that is not Coffer's l
 ### Requirement: Refuse deleting a skill whose copy Coffer did not make
 Deleting a skill MUST be refused with `409 SKILL_COPY_NOT_OURS` — naming the path and the agent — when any agent's delivery path for it holds a real folder that is not Coffer's link and not a copy Coffer made; nothing is removed then (not the master, not the record, not any other agent's link). The Skills page's delete confirmation stays open on the refusal and says which folder and what to do.
 
+The delete MUST also be possible while leaving such a folder alone: `DELETE /api/v1/skills/{uid}?keep_foreign_copies=true` removes the master, the record and every link Coffer made, leaves each folder Coffer did not make exactly where it is, and answers `kept_copies` — the agent name and path of each folder left. Without the option the answer is `kept_copies: []`. `POST /api/v1/skills/bulk-delete` takes `uids` and the same `keep_foreign_copies` flag and deletes each skill on its own: one refused never stops the others, and every skill gets a result — `uid`, `name`, `deleted`, `kept_copies` and, when it was not deleted, the error's `error_code`, `error_message` and `error_details`. The Skills page's delete confirmation offers "Delete, keep <agent>'s folder" on the refusal.
+
 #### Scenario: a folder Coffer did not make stops the delete
 - **GIVEN** a skill whose link in one agent was replaced by a real folder
 - **WHEN** the user deletes the skill
 - **THEN** the delete is refused with the folder's path, and the master folder, the skill record and the agent's folder are all still there
 
+#### Scenario: a skill is deleted and the agent's own folder kept
+- **GIVEN** a skill delivered to two agents, one of whose links was replaced by a real folder
+- **WHEN** the user deletes it with `keep_foreign_copies`
+- **THEN** the master folder, the record and the other agent's link are gone, the real folder is untouched, and `kept_copies` names that agent and path
+
+#### Scenario: a bulk delete reports each skill
+- **GIVEN** two skills, one of which has a real folder in an agent in place of its link
+- **WHEN** both are deleted through `POST /api/v1/skills/bulk-delete` without `keep_foreign_copies`
+- **THEN** the clean one is deleted, the other is not and carries `SKILL_COPY_NOT_OURS` with the folder's path, and a second call with `keep_foreign_copies` deletes it and names the folder it kept
+
 ### Requirement: Act on a folder in the skills store that no skill claims
-The system MUST list the folders in `~/.coffer/vault/skills/` that no skill record claims (`GET /skills/orphans`: each with its path, whether its SKILL.md is valid and names the folder, and its file count) and offer two actions on one: add it to the library in place (`POST /skills/orphans/{name}/adopt`, validated like an import, reach as for a fresh import) or move it out of the store (`DELETE /skills/orphans/{name}`, to `~/.coffer/content/backup/skills/orphans/`, never a hard delete). A folder a record claims is not an orphan, and both actions refuse it with `404 SKILL_ORPHAN_NOT_FOUND`. A folder whose name is not a safe skill name is not listed as one and is left alone, so one stray folder never stops delivery for every skill.
+The system MUST list the folders in `~/.coffer/vault/skills/` that no skill record claims (`GET /skills/orphans`: each with its path, whether its SKILL.md is valid and names the folder, its file count and when the folder last changed) and let the person read one's files without touching them (`GET /skills/orphans/{name}/files` for the tree and `GET /skills/orphans/{name}/files/content?path=` for one file — the shapes, containment and size limits of a managed skill's file reads; a path outside the folder is refused with 400, a name that is no orphan with `404 SKILL_ORPHAN_NOT_FOUND`) and offer two actions on one: add it to the library in place (`POST /skills/orphans/{name}/adopt`, validated like an import, reach as for a fresh import) or move it out of the store (`DELETE /skills/orphans/{name}`, to `~/.coffer/content/backup/skills/orphans/`, never a hard delete). A folder a record claims is not an orphan, and both actions refuse it with `404 SKILL_ORPHAN_NOT_FOUND`. A folder whose name is not a safe skill name is not listed as one and is left alone, so one stray folder never stops delivery for every skill.
 
 #### Scenario: a folder with an unsafe name does not stop delivery
 - **GIVEN** a skills store holding a valid skill and a folder named `my skill`
@@ -812,6 +873,11 @@ The system MUST list the folders in `~/.coffer/vault/skills/` that no skill reco
 - **GIVEN** two folders with valid SKILL.md files in the skills store that no skill claims
 - **WHEN** the user adds the first to the library and moves the second out
 - **THEN** the first is a skill in the library, the second is under the backup folder and no longer in the store, and neither is listed as an orphan
+
+#### Scenario: an orphan folder's files can be read
+- **GIVEN** an orphan folder holding SKILL.md, a text file and a binary file
+- **WHEN** the person reads its file tree and each file, and asks for a path outside the folder
+- **THEN** the tree and the text come back, the binary file is flagged binary with no text, the outside path is refused with 400, and a name that is no orphan is refused with `SKILL_ORPHAN_NOT_FOUND`
 
 ### Requirement: Say when a skill's master folder is gone
 Every read of a skill MUST carry `master_missing` — true when its master folder is no longer on disk — whether or not the skill is enabled, so a surface can say so even for a skill that is off and has no delivery the drift report would look at.
@@ -864,8 +930,8 @@ secrets the skill needs under `secrets:` — `requires: {commands: [...],
 secrets: [...]}` — each entry a secret name as the secret store accepts it.
 The list form of `requires:` MUST stay commands only. An entry that is not a
 valid secret name, and a name given twice, MUST be skipped with a warning
-without failing the skill. A key of the mapping other than `commands` and
-`secrets` MUST be refused: it is reported as a warning and nothing under it
+without failing the skill. A key of the mapping other than `commands`,
+`secrets` and `tools` MUST be refused: it is reported as a warning and nothing under it
 is read. The declaration MUST be read from the skill's master folder each time
 it is read. The skill's read model MUST carry the declared secrets as
 `requires_secrets`, in the order declared, each with its `name` and whether the
@@ -882,16 +948,40 @@ skill is delivered whether or not the secret is set.
 - **AND** `bad name` and the second `GITHUB_TOKEN` are skipped, each with a warning naming why
 
 #### Scenario: an unknown key under requires is refused
-- **GIVEN** a SKILL.md declaring `requires: {commands: [jq], tools: [rg], env: {A: b}}`
+- **GIVEN** a SKILL.md declaring `requires: {commands: [jq], flags: [rg], env: {A: b}}`
 - **WHEN** its requirements are read
-- **THEN** `jq` is the one requirement and nothing under `tools` or `env` is read
-- **AND** one warning names `env` and `tools` as refused
+- **THEN** `jq` is the one requirement and nothing under `flags` or `env` is read
+- **AND** one warning names `env` and `flags` as refused
 
 #### Scenario: the read model says whether each declared secret is set
 - **GIVEN** an imported skill declaring the secrets `GH_TOKEN` and `NPM_TOKEN`, with only `NPM_TOKEN` in the secret store
 - **WHEN** the skill is read through `GET /api/v1/skills/{uid}`
 - **THEN** `requires_secrets` is `GH_TOKEN` not set and `NPM_TOKEN` set, and no secret value appears in the response
 - **AND** once `GH_TOKEN` is stored the skill list reports both set
+
+### Requirement: Report per agent whether a reach change was delivered
+`PUT /api/v1/resources/{uid}/scope` for a skill MUST answer, beside the resource, `delivery`: one row per enabled agent the new reach grants (and per agent a failed or blocked write names), each with `agent_uid`, `agent_name`, `ok` and, when it is not ok, the `reason` the link was not made. The reach is saved whether or not every delivery succeeded, so the page can say which agent was saved and which could not be linked. Kinds that deliver nothing answer `delivery: null`.
+
+#### Scenario: a reach change reports delivery per agent
+- **GIVEN** a skill and two agents, one of which already holds a real folder where the skill's link would go
+- **WHEN** the skill's reach is set to every agent
+- **THEN** the response's `delivery` lists the first agent ok and the second not ok with a reason, and a scope write on an agent answers `delivery: null`
+
+### Requirement: Declare the tools a skill requires
+The mapping form of a skill's `requires:` frontmatter MAY name the MCP servers and custom-tool groups the skill calls under `tools:` — `requires: {commands: [...], tools: [github, billing-api]}` — each entry the name the server or group has in Coffer, or a mapping with that `name` and a `why` line. The list form of `requires:` MUST stay commands only. An entry that is not a name, and a name given twice, MUST be skipped with a warning without failing the skill; so MUST a name that no MCP server and no custom-tool group has, the warning counted with the other skipped `requires:` entries in the CLIs list's `warnings`. The declaration MUST be read from the skill's master folder each time it is read. The skill's read model MUST carry the known tools as `requires_tools`, in the order declared, each with its `name`, its `uid`, its `kind` (`mcp_server` or `custom_tools`), its `status` — `off` when it is switched off, `failing` when its last connection test failed, `healthy` otherwise — and its `why`; and the skills it loads (`metadata.requires`, a list of skill names) as `requires_skills`, each with its `name`, whether it was `found` in the library, its `uid`, whether it is `delivered_to_same_agents` — every agent that gets this skill also gets that one — and the `missing_agent_names` that do not. Declaring a tool changes nothing about delivery: the skill is delivered whether or not the tool is on. The skill's Requires tab lists commands, secrets, tools and skills in that order, each tool and skill linking to its page; a skill whose required tool is `off` or `failing` is in the Skills list's "Needs attention" group, reading "Needs <tool> · off", and its header shows the pill "Tool off".
+
+#### Scenario: a skill's tools are read from the mapping form
+- **GIVEN** a SKILL.md declaring `requires: {commands: [gh], tools: [github, {name: billing-api, why: Reads invoices.}, "bad name", github]}`
+- **WHEN** its requirements are read
+- **THEN** `gh` is the one command and `github` and `billing-api` are the tools, in that order, `billing-api` with its why
+- **AND** `bad name` and the second `github` are skipped, each with a warning naming why
+
+#### Scenario: the read model says what state each declared tool is in
+- **GIVEN** a skill declaring the tools `github` (an MCP server that is switched off), `billing-api` (a custom-tool group that is on) and `ghost` (nothing by that name), and `metadata.requires: [coffer-evidence]` for a skill delivered to fewer agents than this one
+- **WHEN** the skill is read through `GET /api/v1/skills/{uid}`
+- **THEN** `requires_tools` is `github` as `mcp_server` `off` and `billing-api` as `custom_tools` `healthy`, and `ghost` is not listed
+- **AND** `requires_skills` is `coffer-evidence`, found, not delivered to the same agents, naming the agents it misses
+- **AND** `GET /api/v1/clis` carries a warning for the skill naming `ghost` as skipped
 
 ### Requirement: Report a secret a skill requires that is not set
 A managed skill that declares a secret the secret store does not hold MUST

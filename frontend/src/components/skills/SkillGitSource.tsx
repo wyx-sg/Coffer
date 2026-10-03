@@ -1,24 +1,24 @@
 // src/components/skills/SkillGitSource.tsx
-// A Git-imported skill's Source block (canvas 4.3.17): repository, folder,
-// pinned commit and status, with Check now and Change source…. The banners
-// that say an update is waiting or the source can't be reached sit above the
-// tabs (SkillBanners); this block is the reference under them.
+// A Git-imported skill's Source bar (canvas 4.3.17, 4.3.21): one line above the
+// files — "Pinned a1b2c3d on main · Sep 18", and at the right when it was last
+// checked, Check again and Change source…. The banners that say an update is
+// waiting or the source can't be reached sit above the tabs (SkillBanners);
+// when the source is unreachable the banner carries Check again, so this bar
+// drops it and the "Checked at" beside it.
 //
 // Spec skill-manager "Update a Git-imported skill from its source": a check
 // writes nothing; an update shows as available with its commit range; an
 // unreachable source is reported and the skill keeps working from its pinned
 // copy. Change source… checks the new source and shows the change before
 // anything is replaced (SkillChangeSourceDialog).
-import { useState, type ReactNode } from "react";
-import { Pencil, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { GitBranch, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { Section } from "@/components/Section";
-import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
-import type { GitImportSource, SkillOut, SkillSourceStatus } from "@/lib/api/skills";
+import type { GitImportSource, SkillOut } from "@/lib/api/skills";
 import { useCheckSkillSource } from "@/lib/hooks/useSkills";
-import { clockTime, folderLabel } from "@/lib/skills/format";
+import { clockTime } from "@/lib/skills/format";
 import { SkillChangeSourceDialog } from "./SkillChangeSourceDialog";
 import { shortCommit } from "./skillSourceHelpers";
 
@@ -26,119 +26,69 @@ interface Props {
   skill: SkillOut;
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="grid min-h-11 grid-cols-[120px_minmax(0,1fr)] items-center gap-3 border-t border-border-subtle py-1.5">
-      <span className="text-xs text-text-muted">{label}</span>
-      <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-text">
-        {children}
-      </span>
-    </div>
-  );
+/** "Sep 18": the day the skill was pinned or last moved to its commit. */
+function dayLabel(iso: string, locale: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(locale, { day: "numeric", month: "short" });
 }
 
-function StatusValue({ status }: { status: SkillSourceStatus | null }) {
+function GitSourceBar({ skill, source }: { skill: SkillOut; source: GitImportSource }) {
   const { t, i18n } = useTranslation();
-  if (!status || !status.checked_at) {
-    return <StatusWord tone="off">{t("skillSources.source.notChecked")}</StatusWord>;
-  }
-  if (status.error) {
-    return (
-      <>
-        <StatusWord tone="warn">{t("skills.sourceUnreachable")}</StatusWord>
-        <span className="text-xs text-text-muted">
-          {t("skills.source.since", { time: clockTime(status.checked_at, i18n.language) })}
-        </span>
-      </>
-    );
-  }
-  if (status.update_available) {
-    return (
-      <>
-        <span className="inline-flex items-center gap-1.5 text-xs font-label text-accent-text">
-          <span aria-hidden className="size-1.5 rounded-full bg-accent" />
-          {t("skillSources.source.updateAvailable")}
-        </span>
-        <span className="text-xs text-text-muted">
-          <span className="font-mono">{shortCommit(status.latest_commit)}</span>
-          {" · "}
-          {t("skillSources.source.commits", { count: status.commits_ahead })}
-          {" · "}
-          {t("skillSources.source.files", { count: status.files_changed })}
-        </span>
-      </>
-    );
-  }
-  return (
-    <>
-      <StatusWord tone="ok">{t("skillSources.source.upToDate")}</StatusWord>
-      <span className="text-xs text-text-muted">
-        {t("skillSources.source.checkedAt", { time: clockTime(status.checked_at, i18n.language) })}
-      </span>
-    </>
-  );
-}
-
-function GitSourceBlock({ skill, source }: { skill: SkillOut; source: GitImportSource }) {
-  const { t } = useTranslation();
   const check = useCheckSkillSource();
   const [changing, setChanging] = useState(false);
   const checking = check.isPending;
-  const folder = folderLabel(source.subpath);
+  const status = skill.source_status;
+  const unreachable = Boolean(status?.error);
+  const pinnedOn = dayLabel(skill.last_synced_from_source_at ?? skill.created_at, i18n.language);
 
   return (
-    <Section
-      title={t("skillSources.source.title")}
-      gap="snug"
-      labelled
-      className="min-w-0"
-      actions={
-        <>
+    <div className="flex min-h-8 items-center gap-2" data-testid="skill-source-bar">
+      <GitBranch className="size-3.5 shrink-0 text-text-subtle" aria-hidden />
+      <span className="min-w-0 truncate text-xs text-text-muted">
+        {t("skillSources.source.pinned")}{" "}
+        <span className="font-mono">{shortCommit(source.commit)}</span>{" "}
+        {t("skillSources.source.on")}{" "}
+        <span className="font-mono">{source.ref ?? t("skillSources.source.defaultBranch")}</span>
+        {pinnedOn ? ` · ${pinnedOn}` : ""}
+      </span>
+      <span className="ml-auto flex shrink-0 items-center gap-1">
+        {!unreachable && status?.checked_at ? (
+          <span className="text-xs text-text-subtle">
+            {t("skillSources.source.checkedAt", {
+              time: clockTime(status.checked_at, i18n.language),
+            })}
+          </span>
+        ) : null}
+        {unreachable ? null : (
           <Button
             type="button"
             variant="ghost"
             size="sm"
+            className="text-text-muted"
             disabled={checking}
             onClick={() => check.mutate(skill.uid)}
           >
             <RefreshCw aria-hidden className={checking ? "animate-spin" : undefined} />
-            {checking ? t("skillSources.source.checking") : t("skillSources.source.checkNow")}
+            {checking ? t("skillSources.source.checking") : t("skillSources.source.checkAgain")}
           </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={() => setChanging(true)}>
-            <Pencil aria-hidden />
-            {t("skills.source.change")}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col border-b border-border-subtle">
-        <Row label={t("skillSources.source.repository")}>
-          <span className="min-w-0 break-all font-mono text-xs">{source.url}</span>
-        </Row>
-        <Row label={t("skillSources.source.folder")}>
-          {folder ? (
-            <span className="font-mono text-xs">{folder}</span>
-          ) : (
-            <span className="text-text-muted">{t("skillSources.source.folderTop")}</span>
-          )}
-        </Row>
-        <Row label={t("skillSources.source.pinned")}>
-          <span className="font-mono text-xs">{shortCommit(source.commit)}</span>
-          <span className="text-xs text-text-muted">
-            {source.ref ?? t("skillSources.source.defaultBranch")}
-          </span>
-        </Row>
-        <Row label={t("skillSources.source.status")}>
-          <StatusValue status={skill.source_status} />
-        </Row>
-      </div>
-
+        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-text-muted"
+          onClick={() => setChanging(true)}
+        >
+          {t("skills.source.change")}
+        </Button>
+      </span>
       <SkillChangeSourceDialog skill={skill} open={changing} onOpenChange={setChanging} />
-    </Section>
+    </div>
   );
 }
 
 export function SkillGitSourcePanel({ skill }: Props) {
   if (skill.source.type !== "git_import") return null;
-  return <GitSourceBlock skill={skill} source={skill.source} />;
+  return <GitSourceBar skill={skill} source={skill.source} />;
 }

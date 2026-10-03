@@ -32,6 +32,7 @@ from coffer.domain.chat.events import (
     TurnStarted,
 )
 from coffer.domain.chat.message import Message
+from coffer.domain.chat.reply_file import ReplyFile
 from coffer.infrastructure.chat.adapter_support import SessionSink, last_user_text
 from coffer.infrastructure.chat.codex_app_server import (
     AppServerSessionFactory,
@@ -42,6 +43,7 @@ from coffer.infrastructure.chat.codex_mapping import (
     CodexParseState,
     map_codex_notification,
 )
+from coffer.infrastructure.chat.codex_reply_files import CodexReplyFiles
 from coffer.infrastructure.chat.codex_stream import attachment_note, notifications_until_eof
 from coffer.infrastructure.chat.document_extract import (
     DocumentExtractor,
@@ -111,6 +113,13 @@ class CodexAppServerAdapter:
         #: The model the thread ran on, as the app-server reported it; filled in
         #: while the turn streams. The turn runner reads it when it finalises the reply.
         self.model_id: str | None = None
+        self._reply_files = CodexReplyFiles()
+
+    @property
+    def reply_files(self) -> list[ReplyFile]:
+        """What the reply changed in each file, from its file-change items; the
+        turn runner stores it when it finalises the reply."""
+        return self._reply_files.files()
 
     async def run_turn(
         self,
@@ -262,7 +271,7 @@ class CodexAppServerAdapter:
             yield TurnError(code="empty_prompt", message="no user message to send")
             return
 
-        state = CodexParseState(session_id=self._resume)
+        state = CodexParseState(session_id=self._resume, reply_files=self._reply_files)
         queue: asyncio.Queue[Any] = asyncio.Queue()
         yield TurnStarted()
 

@@ -1,32 +1,22 @@
-// src/components/mcp/server/McpStatusCallout.tsx — the "why, and what next" at the top of the open server's Overview (design 4.1.01–4.1.06).
+// src/components/mcp/server/McpStatusCallout.tsx — the "why, and what next" at the top of the open server's Overview (design 4.1.04–4.1.07).
 //
-// A test the user just ran speaks first (passed: what it listed; failed: why,
-// with its stderr one click away and the diagnosis hand-off beside it).
-// Otherwise the state's own callout: a failing server's last error, since
-// when, who can't call it and its last successful call, with View log and the
-// diagnosis hand-off; a rejected key, with Replace key (the edit dialog on its secret); a missing launcher, with the install hand-off (the
-// backend's prompt — which installer fits is the agent's call, so no install
-// command is named here); a secret this Mac does not hold, with Replace
-// secret; an Off server's explanation; many tools behind search. Nothing for
-// a healthy server with nothing to say.
+// The fix for a problem lives here, never in the header: an Off server's
+// Turn on; a secret this Mac does not hold, Add secret (the Secrets page's own
+// dialog for that name); a missing launcher, the install hand-off; a failing
+// server's last error, since when, who can't call it and its last successful
+// call, with View log (stdio) or View errors (HTTP: the Invocations tab on its
+// errors) and the diagnosis hand-off; a rejected key, with Replace key (the
+// edit dialog on its secret). A test the user just ran speaks here only when
+// it failed (a pass is a toast). Nothing for a healthy server.
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Check,
-  CircleAlert,
-  KeyRound,
-  Layers,
-  Power,
-  SquareTerminal,
-  TriangleAlert,
-} from "lucide-react";
+import { CircleAlert, KeyRound, Power, SquareTerminal, TriangleAlert } from "lucide-react";
 
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
-import type { ToolTiering } from "@/lib/hooks/useMcpServerPage";
 import { McpCallout as Callout } from "./McpCallout";
-import { seconds, shortTime, type ServerState, secretLabel } from "@/lib/mcp/serverState";
+import { seconds, shortDate, shortTime, type ServerState } from "@/lib/mcp/serverState";
 import type { TestResult } from "./testResult";
 
 /** A clause that opens the sentence starts with a capital. */
@@ -49,39 +39,49 @@ function CalloutButton(props: ButtonProps) {
 }
 
 interface Props {
+  name: string;
   state: ServerState;
   detail: McpStatusDetail | null | undefined;
-  tiering: ToolTiering | null | undefined;
+  /** Streamable HTTP: no log of its own, so a failure offers View errors. */
+  isHttp: boolean;
   toolCount: number;
   /** The agents that reach it, already worded ("Claude Code and Codex"); "" when none. */
   agentNames: string;
+  /** A failed test the user just ran; a passed one is a toast, not shown here. */
   test: TestResult | null;
   onOpenLog: () => void;
-  onReplaceSecret: () => void;
+  onViewErrors: () => void;
+  onTurnOn: () => void;
+  onAddSecret: () => void;
+  onReplaceKey: () => void;
 }
 
 export function McpStatusCallout({
+  name,
   state,
   detail,
-  tiering,
+  isHttp,
   toolCount,
   agentNames,
   test,
   onOpenLog,
-  onReplaceSecret,
+  onViewErrors,
+  onTurnOn,
+  onAddSecret,
+  onReplaceKey,
 }: Props) {
   const { t } = useTranslation();
   const [stderr, setStderr] = useState(false);
   const viewLog = (
-    <CalloutButton onClick={onOpenLog}>
-      <SquareTerminal aria-hidden /> {t("mcp.page.viewLog")}
+    <CalloutButton onClick={isHttp ? onViewErrors : onOpenLog}>
+      <SquareTerminal aria-hidden /> {t(isHttp ? "mcp.page.viewErrors" : "mcp.page.viewLog")}
     </CalloutButton>
   );
   const tools =
     toolCount > 0 ? t("mcp.page.itsTools", { count: toolCount }) : t("mcp.page.itsToolsAny");
   const who = agentNames || t("mcp.page.agentsSubject");
 
-  if (test) {
+  if (test && !test.ok) {
     const lines = test.stderr_tail ?? [];
     const stderrButton =
       lines.length > 0 ? (
@@ -89,56 +89,42 @@ export function McpStatusCallout({
           <SquareTerminal aria-hidden />
           {stderr ? t("mcp.page.hideStderr") : t("mcp.page.showStderr")}
         </CalloutButton>
-      ) : test.ok ? null : (
+      ) : (
         viewLog
       );
-    const tail =
-      stderr && lines.length > 0 ? (
-        <pre
-          className="mt-2 max-h-40 overflow-auto rounded-md bg-surface-raised p-2 font-mono text-2xs"
-          data-testid="mcp-test-stderr"
-        >
-          {lines.join("\n")}
-        </pre>
-      ) : null;
-    const took = seconds(test.latency_ms);
-    if (test.ok) {
-      const exit = test.exit_code != null ? t("mcp.page.testExit", { code: test.exit_code }) : "";
-      return (
-        <Callout
-          tint="ok"
-          icon={Check}
-          testId="mcp-test-result"
-          title={`${t("mcp.page.testPassed", { took })}${exit}`}
-          action={stderrButton}
-        >
-          {test.tool_count !== undefined
-            ? t("mcp.page.testListed", {
-                tools: test.tool_count,
-                resources: test.resource_count ?? 0,
-                prompts: test.prompt_count ?? 0,
-              })
-            : t("mcp.page.testPassedBody")}
-          {tail}
-        </Callout>
-      );
-    }
     return (
       <Callout
         tint="err"
         icon={CircleAlert}
         testId="mcp-test-result"
-        title={t("mcp.page.testFailed", { took })}
+        title={t("mcp.page.testFailed", { took: seconds(test.latency_ms) })}
         action={withHandoff(stderrButton, test.handoff?.prompt)}
       >
         {test.error_message}
-        {tail}
+        {stderr && lines.length > 0 ? (
+          <pre
+            className="mt-2 max-h-40 overflow-auto rounded-md bg-surface-raised p-2 font-mono text-2xs"
+            data-testid="mcp-test-stderr"
+          >
+            {lines.join("\n")}
+          </pre>
+        ) : null}
       </Callout>
     );
   }
   if (state.kind === "off") {
     return (
-      <Callout tint="off" icon={Power} testId="mcp-callout-off" title={t("mcp.page.offTitle")}>
+      <Callout
+        tint="off"
+        icon={Power}
+        testId="mcp-callout-off"
+        title={t("mcp.page.offTitle")}
+        action={
+          <CalloutButton onClick={onTurnOn}>
+            <Power aria-hidden /> {t("mcp.page.turnOn")}
+          </CalloutButton>
+        }
+      >
         {agentNames ? t("mcp.page.offBodyAgents", { agents: agentNames }) : t("mcp.page.offBody")}
       </Callout>
     );
@@ -153,25 +139,27 @@ export function McpStatusCallout({
         title={t("mcp.page.launcherTitle", { runner })}
         action={withHandoff(null, detail.handoff?.prompt)}
       >
-        {t("mcp.page.launcherBodyWho", { runner, who, tools })}
+        {t("mcp.page.launcherBodyWho", { name, runner, who, tools })}
       </Callout>
     );
   }
   if (state.kind === "secretMissing") {
-    const secret = detail?.missing_secret_ref
-      ? secretLabel(detail.missing_secret_ref)
-      : (detail?.missing_secret ?? "");
+    const key = detail?.missing_secret ?? "";
     return (
       <Callout
         tint="warn"
         icon={KeyRound}
         testId="mcp-callout-secret"
-        title={t("mcp.page.secretTitle", { secret })}
+        title={t("mcp.page.secretTitle", { key })}
         action={
-          <CalloutButton onClick={onReplaceSecret}>{t("mcp.page.replaceSecret")}</CalloutButton>
+          <CalloutButton onClick={onAddSecret}>
+            <KeyRound aria-hidden /> {t("mcp.page.addSecret")}
+          </CalloutButton>
         }
       >
-        {t("mcp.page.secretBody", { key: detail?.missing_secret ?? "" })}
+        {detail?.last_ok_at
+          ? t("mcp.page.secretBodyWorked", { at: shortDate(detail.last_ok_at) })
+          : t("mcp.page.secretBody")}
       </Callout>
     );
   }
@@ -183,7 +171,7 @@ export function McpStatusCallout({
         testId="mcp-callout-key-rejected"
         title={t("mcp.page.keyRejectedTitle")}
         action={withHandoff(
-          <CalloutButton onClick={onReplaceSecret}>{t("mcp.page.replaceKey")}</CalloutButton>,
+          <CalloutButton onClick={onReplaceKey}>{t("mcp.page.replaceKey")}</CalloutButton>,
           detail.handoff?.prompt,
         )}
       >
@@ -217,26 +205,6 @@ export function McpStatusCallout({
                 : t("mcp.page.lastSuccessAt", { at: shortTime(detail.last_ok_at) })
             }`
           : ""}
-      </Callout>
-    );
-  }
-  if (tiering?.enabled && tiering.behind_search.length > 0) {
-    const own = tiering.listed.length + tiering.behind_search.length;
-    return (
-      <Callout
-        tint="info"
-        icon={Layers}
-        testId="mcp-callout-tiering"
-        title={t("mcp.page.tieringTitle", {
-          listed: tiering.listed.length,
-          total: own,
-          behind: tiering.behind_search.length,
-        })}
-      >
-        {t("mcp.page.tieringBody", {
-          catalogue: tiering.catalogue_size,
-          budget: tiering.listed_count,
-        })}
       </Callout>
     );
   }

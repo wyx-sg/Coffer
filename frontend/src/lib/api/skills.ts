@@ -39,17 +39,35 @@ export type SkillStagingConfirm = Schemas["SkillStagingConfirmRequest"];
 export type SkillStageGit = Schemas["SkillStageGitRequest"];
 export type SkillUpdatePreview = Schemas["SkillUpdatePreviewOut"];
 export type SkillFileChange = Schemas["SkillFileChangeOut"];
-export type SkillUpdateCompare = Schemas["SkillUpdateCompareOut"];
 export type SkillUpdateApply = Schemas["SkillUpdateApplyRequest"];
 export type SkillDriftEntry = Schemas["DriftEntryOut"];
+export type SkillBulkDeleteResult = Schemas["SkillBulkDeleteResult"];
 export type SkillRepairReport = Schemas["RepairReportOut"];
 
 const skillPath = (uid: string) => ({ uid });
 
 export const skillsApi = {
   list: () => unwrap(getApiClient().GET("/skills")),
-  remove: (uid: string) =>
-    unwrapVoid(getApiClient().DELETE("/skills/{uid}", { params: { path: skillPath(uid) } })),
+  /** Delete one skill. Without `keepForeignCopies` an agent's folder that is no
+   *  longer Coffer's link refuses the delete (409 SKILL_COPY_NOT_OURS); with it
+   *  the skill goes and that folder is left alone (reported in `kept_copies`). */
+  remove: (uid: string, keepForeignCopies = false) =>
+    unwrap(
+      getApiClient().DELETE("/skills/{uid}", {
+        params: {
+          path: skillPath(uid),
+          ...(keepForeignCopies ? { query: { keep_foreign_copies: true } } : {}),
+        },
+      }),
+    ),
+  /** Delete several skills in one call: one result per skill, a refused one
+   *  never stops the others. */
+  bulkDelete: (uids: string[], keepForeignCopies = false) =>
+    unwrap(
+      getApiClient().POST("/skills/bulk-delete", {
+        body: { uids, keep_foreign_copies: keepForeignCopies },
+      }),
+    ),
   filesTree: (uid: string) =>
     unwrap(getApiClient().GET("/skills/{uid}/files", { params: { path: skillPath(uid) } })),
   fileContent: (uid: string, path: string) =>
@@ -123,14 +141,6 @@ export const skillsApi = {
         body: { commit },
       }),
     ),
-  /** "I merged it": pin to `commit`, leaving the master's files as they are. */
-  markMerged: (uid: string, commit: string) =>
-    unwrap(
-      getApiClient().POST("/skills/{uid}/source/merged", {
-        params: { path: skillPath(uid) },
-        body: { commit },
-      }),
-    ),
 
   changeSource: (uid: string, body: SkillStageGit) =>
     unwrap(
@@ -161,6 +171,14 @@ export const skillsApi = {
 
   // ----- folders in the store no skill claims -----
   orphans: () => unwrap(getApiClient().GET("/skills/orphans")),
+  orphanFiles: (name: string) =>
+    unwrap(getApiClient().GET("/skills/orphans/{name}/files", { params: { path: { name } } })),
+  orphanFileContent: (name: string, path: string) =>
+    unwrap(
+      getApiClient().GET("/skills/orphans/{name}/files/content", {
+        params: { path: { name }, query: { path } },
+      }),
+    ),
   adoptOrphan: (name: string) =>
     unwrap(getApiClient().POST("/skills/orphans/{name}/adopt", { params: { path: { name } } })),
   removeOrphan: (name: string) =>

@@ -1,5 +1,6 @@
 """Replacing a remote that holds an older layout
-(spec vault-sync "Refuse a remote at another layout").
+(spec vault-sync
+"Refuse a newer-layout remote and replace an older one").
 
 The upgraded vault is the source of truth. The push is a fast-forward: one
 commit whose tree is exactly this machine's content, with this machine's

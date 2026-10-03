@@ -8,7 +8,9 @@ import pytest
 
 from coffer.domain.skill.requirements import (
     CommandRequirement,
+    ToolRequirement,
     parse_requires,
+    required_skills_from_skill_md,
     requirements_from_skill_md,
 )
 
@@ -125,6 +127,39 @@ def test_the_mapping_form_names_secrets_and_skips_what_is_not_a_name() -> None:
     )
 
 
+_TOOLS_DOC = """---
+name: triage
+description: Triage.
+requires:
+  commands: [gh]
+  tools: [github, {name: billing-api, why: Reads invoices.}, "bad name", github]
+metadata:
+  requires: [coffer-evidence, coffer-evidence, "", 7]
+---
+"""
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="a skill's tools are read from the mapping form"
+)
+def test_the_mapping_form_names_tools_and_skips_what_is_not_a_name() -> None:
+    parsed = requirements_from_skill_md(_TOOLS_DOC)
+    assert parsed.requirements == (CommandRequirement(command="gh"),)
+    assert parsed.tools == (
+        ToolRequirement("github"),
+        ToolRequirement("billing-api", "Reads invoices."),
+    )
+    assert parsed.warnings == (
+        "requires tool 3: 'bad name' is not a tool name; skipped",
+        "requires tool github: declared twice; later entry skipped",
+    )
+
+
+def test_metadata_requires_names_the_skills_a_skill_loads() -> None:
+    assert required_skills_from_skill_md(_TOOLS_DOC) == ("coffer-evidence",)
+    assert required_skills_from_skill_md("---\nname: a\ndescription: b\n---\n") == ()
+
+
 def test_the_list_form_carries_commands_only() -> None:
     parsed = parse_requires(["gh", {"secrets": ["GITHUB_TOKEN"]}])
     assert parsed.requirements == (CommandRequirement(command="gh"),)
@@ -145,11 +180,11 @@ def test_a_single_secret_name_is_one_secret() -> None:
 
 @pytest.mark.acceptance(spec="skill-manager", scenario="an unknown key under requires is refused")
 def test_an_unknown_key_under_the_mapping_is_refused_with_a_warning() -> None:
-    parsed = parse_requires({"commands": ["jq"], "tools": ["rg"], "env": {"A": "b"}})
+    parsed = parse_requires({"commands": ["jq"], "flags": ["rg"], "env": {"A": "b"}})
     assert parsed.requirements == (CommandRequirement(command="jq"),)
     assert parsed.secrets == ()
     assert parsed.warnings == (
-        "requires: unknown key(s) env, tools refused; only commands and secrets are read",
+        "requires: unknown key(s) env, flags refused; only commands, secrets and tools are read",
     )
 
 
@@ -180,7 +215,7 @@ def test_a_mapping_reads_its_commands_key() -> None:
 
 
 def test_a_mapping_without_commands_declares_nothing() -> None:
-    assert _commands({"tools": ["rg"]}) == []
+    assert _commands({"flags": ["rg"]}) == []
 
 
 @pytest.mark.parametrize(

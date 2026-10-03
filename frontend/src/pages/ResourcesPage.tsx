@@ -18,6 +18,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { AddMcpServerDialog } from "@/components/mcp/AddMcpServerDialog";
 import { McpFirstRun } from "@/components/mcp/server/McpFirstRun";
+import { McpSelectionPane } from "@/components/mcp/server/McpSelectionPane";
 import { BUILTIN_NAME, McpServerList } from "@/components/mcp/server/McpServerList";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -50,6 +51,8 @@ export function ResourcesPage() {
   const navigate = useNavigate();
   const list = useResources("mcp_server");
   const [add, setAdd] = useState<"paste" | "importAgents" | null>(null);
+  // The servers ticked in the list; while any is, the right pane summarises them (board 4.1.28).
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   useDaemonEvents();
 
   // Custom-tool groups are `mcp_server`s too, but they live on the Custom
@@ -72,9 +75,12 @@ export function ResourcesPage() {
   // Nothing registered: the welcome takes the page's whole width, no list (board 4.1.20).
   const firstRun = !list.error && !list.isPending && servers.length === 0 && !nameParam;
   // While the list loads or failed (its pane shows why), the right pane stays empty.
+  const selected = servers.filter((r) => picked.has(r.uid));
   let pane: JSX.Element | null;
   if (list.error || list.isPending) {
     pane = null;
+  } else if (selected.length > 1) {
+    pane = <McpSelectionPane servers={selected} onDone={() => setPicked(new Set())} />;
   } else if (match) {
     pane = (
       <Suspense fallback={<PaneSkeleton />}>
@@ -96,15 +102,9 @@ export function ResourcesPage() {
   } else if (nameParam) {
     pane = <DetailNotFound kind="mcp" id={nameParam} backTo="/mcp-servers" icon={Server} />;
   } else if (servers.length === 0) {
-    pane = <McpFirstRun onAdd={() => setAdd("paste")} onImport={() => setAdd("importAgents")} />;
+    pane = <McpFirstRun onImport={() => setAdd("importAgents")} />;
   } else {
-    pane = (
-      <NothingSelected
-        icon={Server}
-        addLabel={t("resources.addServer")}
-        onAdd={() => setAdd("paste")}
-      />
-    );
+    pane = <NothingSelected icon={Server} />;
   }
 
   return (
@@ -136,9 +136,11 @@ export function ResourcesPage() {
               isLoading={list.isPending}
               error={list.error}
               onRetry={() => void list.refetch()}
-              selectedName={match?.name ?? null}
+              selectedName={selected.length > 1 ? null : (match?.name ?? null)}
               hrefFor={hrefFor}
-              builtinSelected={!match && nameParam === BUILTIN_NAME}
+              builtinSelected={selected.length < 2 && !match && nameParam === BUILTIN_NAME}
+              picked={picked}
+              onPickedChange={setPicked}
             />
           }
           detail={<div className="px-7 pb-5 pt-5">{pane}</div>}

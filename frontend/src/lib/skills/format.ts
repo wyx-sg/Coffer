@@ -1,7 +1,6 @@
 // frontend/src/lib/skills/format.ts
 // The short forms the Skills page prints: a day ("Sep 24"), a day with its
-// time ("Sep 26 at 16:40", "today at 09:02"), a file count and the tree's
-// file total. The canvas reads dates this way on the skill header, the
+// time ("Sep 26 at 16:40", "today at 09:02") and a folder inside a repository. The canvas reads dates this way on the skill header, the
 // Delivery rows and the drift findings; the full timestamp stays one hover
 // away wherever it matters (formatDateTime).
 

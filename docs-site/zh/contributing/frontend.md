@@ -42,7 +42,7 @@ src/i18n/locales/{en,zh}.json     copy under the top-level "x" key
 - 组件从不直接调用 `useQuery` 或 `useMutation`，而是调用 `src/lib/hooks/` 里的某个 hook。[`useSkills.ts`](https://github.com/wyx-sg/Coffer/blob/main/frontend/src/lib/hooks/useSkills.ts) 是一个紧凑的例子。
 - 各资源类型遵循同样的布局。没有按类型划分的注册表。
 - 导入只向下指：`pages` 到 `components` 再到 `lib`。`src/lib/**` 不得导入 `src/components/**` 或 `src/pages/**`，`src/components/**` 不得导入 `src/pages/**`，由 ESLint 强制。两层都要用的类型或纯函数（状态色调、触达模式、保存编排）放在 `lib/`。唯一的例外是 `useToast`，它是变更 hook 要调用的界面原语 hook。多个测试套件共用的测试工具放在 `src/test/`。
-- 共享原语放在 `src/components/ui/`，共享的界面组件（`PageHeader`、`DataTable`、`EmptyState`）放在 `src/components/`。复用已有的跨功能工具：`lib/reachFilter.ts`、`lib/agents/display.ts` 和 `lib/chat/turnErrors.ts`。
+- 共享原语放在 `src/components/ui/`，共享的界面组件（`PageHeader`、`DataTable`、`EmptyState`）放在 `src/components/`。复用已有的跨功能工具：`lib/agents/display.ts` 和 `lib/chat/turnErrors.ts`。
 - 路由在 `router.tsx` 里用 `lazyPage()` 做代码分割。列表页立即加载。详情页，以及任何引入编辑器或 markdown 处理流水线的页面，在第一次访问时加载。
 - 出于历史原因保留了一个命名例外：MCP 服务器列表是 `pages/ResourcesPage.tsx`，路由为 `mcp-servers`。
 - 实验功能的页面包在 `FeatureGate` 里。当该功能在本机被关闭时，它渲染“未找到”页面，因为关闭的功能看起来就像不存在：它的侧边栏和命令面板入口通过同一份注册表被略去，没有提示，也没有“开启”按钮。见[实验功能](/zh/guides/experimental-features)。
@@ -131,6 +131,11 @@ token 来自 [`frontend/tailwind.config.js`](https://github.com/wyx-sg/Coffer/bl
 | --- | --- |
 | `PageHeader` | 列表页和详情页共用的唯一页头：标题旁放 `badges`，右侧放 `actions`，标题下一行 `subtitle`。它没有返回按钮：页面从不带「← 列表」链接，标题栏的后退和前进箭头是唯一的历史控件。详情页操作保持固定顺序：生效范围、测试或刷新、编辑、删除 |
 | `DataTable` | 唯一的列表表格。传入 `isLoading`，让表头在骨架行上方保持挂载；传入 `emptyAction` 作为行动号召。每张表格上生效范围列的表头都是 `resources.cols.reach` |
+| 生效范围 | 处处是三种模式：**关闭**、**所有智能体**、**指定智能体**。控件在你修改时就保存，触发按钮显示徽标，从不显示“N / M 个智能体”。分组里的自定义工具有继承式的变体，第一种模式是**与分组一致**。列表上没有生效范围筛选：行上显示徽标，列表按状态分组 |
+| 密钥 | 只来自 Coffer。`SecretField` 选一个已存的密钥，或接受一个粘贴的值并随表单存到密钥页面；请求头或环境变量的行（`KeyValueSecretRows`）是明文，字段末尾有 🔑 选择器。没有密钥/明文切换、没有替换按钮、没有“已存储”徽标 |
+| 交接 | 一个拆分按钮，**交给智能体 ▾**（`AgentHandoff`）：按钮打开一个草稿对话，▾ 菜单里是**复制提示词**。提示词始终来自守护进程。Coffer 自己能做的事（重试、测试、重新检查）从不使用它 |
+| 抽屉 | 640 宽，从标题栏下方开始 |
+| 提示（toast） | 一个标题，可选再带第二行（`description`），说明保留了什么或添加了什么 |
 | `EmptyState` | 每一个空列表、未找到页面和零结果搜索：图标、标题、描述、操作 |
 | `Skeleton` | 加载状态保持界面的真实形状。永远不要显示空白屏幕或 "Loading…" 卡片 |
 | `ConfirmDialog` | 每一次不可逆操作的确认，永远不要用 `window.confirm`；可以恢复的删除（知识文档或知识集）不弹它，而是弹一条带**撤销**的提示。mutation 运行期间它接收 `pending`，只在 `onSuccess` 中关闭，所以删除失败时对话框会带着错误保持打开，错误标题由 `errorTitle` 给出（「无法删除 sentry」）；`confirmLabel` 始终是静止时的文案，进行中的文案是 `pendingLabel` |

@@ -93,7 +93,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `NOT_A_CUSTOM_TOOL_GROUP` | 404 | 该名字属于其他传输方式的 MCP 服务器，而不是自定义工具组。 | 在 **MCP 服务器**页面管理它，或在**自定义工具**里列出工具组。 |
 | `CUSTOM_TOOL_NOT_FOUND` | 404 | 该工具组中没有这个名字的工具。 | 在**自定义工具**里打开该工具组，列出它的工具。 |
 | `CUSTOM_TOOL_EXISTS` | 409 | 该工具组中已有同名工具。 | 换个名字，或编辑已有的工具。 |
-| `OPENAPI_UNREADABLE` | 422 | OpenAPI 文档无法获取、解析或读取：不是 JSON 或 YAML、不是 OpenAPI 3.x、大于 5 MiB，或者 URL 位于回环、私有或链路本地主机上。 | 修正文档，或把私有主机上的规范作为文件导入。 |
+| `OPENAPI_UNREADABLE` | 422 | OpenAPI 文档无法获取、解析或读取：不是 JSON 或 YAML（`details.line` 和 `details.column` 指出出错位置）、不是 OpenAPI 3.x、大于 5 MiB，或者 URL 位于回环、私有或链路本地主机上。 | 修正文档，或把私有主机上的规范作为文件导入。 |
+| `OPENAPI_UNREACHABLE` | 502 | OpenAPI URL 没有响应：主机名无法解析、连接被拒绝或超时。`details.reason` 为 `dns`、`refused`、`timeout` 或 `unreachable`，`details.handoff.prompt` 是交给 agent 的提示词。 | 检查 URL、网络、VPN 或代理，或把规范作为文件导入。 |
 | `NOT_IMPORTED_FROM_OPENAPI` | 409 | 对一个工具全部是手动添加的工具组请求了重新导入。 | 没有可重新导入的内容；请手动添加工具。 |
 | `OPENAPI_FILE_NEEDED` | 422 | 该工具组是从文件导入的，重新导入需要再次提供那个文件。 | 在该工具组的页面重新导入，并提供文件。 |
 
@@ -191,7 +192,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `CONVERSATION_NOT_FOUND` | 404 | 没有这个 id 的对话。 | 刷新对话列表。 |
 | `UNKNOWN_AGENT` | 400 | 对话所用的智能体没有注册智能体提供方。 | 从 `GET /api/v1/agent-providers` 中选择一个智能体。 |
 | `AGENT_CONFIG_REJECTED` | 400 | 智能体拒绝了对话的配置，例如未知的模型，或者该类型没有 Coffer 管理的已启用智能体。`details.reason` 是一个简短的标记，如 `model_not_found` 或 `agent_not_managed`。 | 选择该智能体提供的模型，或在「智能体」页面添加或启用该智能体。 |
-| `MESSAGE_NOT_FOUND` | 404 | 重发时指定的用户消息不属于该对话。 | 刷新对话；重试那里显示的消息。 |
+| `MESSAGE_NOT_FOUND` | 404 | 重发时指定的用户消息不属于该对话，或查询某条回复改动的文件时指定的助手回复不属于该对话。 | 刷新对话；重试那里显示的消息。 |
+| `REPLY_FILE_NOT_FOUND` | 404 | 请求某个改动文件的 diff 时，该回复没有记录这个路径。 | 重新打开该回复的改动文件，从列表里选一个。 |
 | `QUESTION_CLOSED` | 409 | 对智能体所提问题的回答来晚了：该问题已被回答（先到的回答生效）、已取消，或其任务已结束。没有任何改动。 | 刷新对话；卡片会显示已采用的回答。 |
 | `ATTACHMENT_UNAVAILABLE` | 404 | 消息里的附件已不可用：该对话的消息没有引用这个 id，或文件已按保留策略清理。 | 无需处理；对话里照常显示该附件，只是没有预览。 |
 | `QUESTION_ANSWER_INVALID` | 422 | 回答与问题不符：选了问题没有的选项、单选问题选了多个选项，或根本没有回答。 | 从选项中选择，或输入回答。 |

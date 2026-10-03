@@ -100,7 +100,8 @@ give the status each code is actually sent with.
 | `NOT_A_CUSTOM_TOOL_GROUP` | 404 | The name belongs to an MCP server of another transport, not a custom-tool group. | Manage it on the **MCP servers** page, or list groups on **Custom tools**. |
 | `CUSTOM_TOOL_NOT_FOUND` | 404 | The group has no tool of that name. | Open the group on **Custom tools** to list its tools. |
 | `CUSTOM_TOOL_EXISTS` | 409 | The group already has a tool of that name. | Pick another name, or edit the existing tool. |
-| `OPENAPI_UNREADABLE` | 422 | The OpenAPI document could not be fetched, parsed or read: not JSON or YAML, not OpenAPI 3.x, larger than 5 MiB, or a URL on a loopback, private or link-local host. | Fix the document, or import a spec on a private host as a file. |
+| `OPENAPI_UNREADABLE` | 422 | The OpenAPI document could not be fetched, parsed or read: not JSON or YAML (`details.line` and `details.column` say where it broke), not OpenAPI 3.x, larger than 5 MiB, or a URL on a loopback, private or link-local host. | Fix the document, or import a spec on a private host as a file. |
+| `OPENAPI_UNREACHABLE` | 502 | The OpenAPI URL did not answer: its host name does not resolve, the connection was refused, or it timed out. `details.reason` is `dns`, `refused`, `timeout` or `unreachable`, and `details.handoff.prompt` is a prompt for your agent. | Check the URL, your network, VPN or proxy, or import the spec as a file. |
 | `NOT_IMPORTED_FROM_OPENAPI` | 409 | Re-import was asked of a group whose tools were all added by hand. | Nothing to re-import; add tools by hand. |
 | `OPENAPI_FILE_NEEDED` | 422 | The group was imported from a file, and re-import needs that file again. | Re-import from the group's page and give the file. |
 
@@ -198,7 +199,8 @@ give the status each code is actually sent with.
 | `CONVERSATION_NOT_FOUND` | 404 | No conversation with that id. | Refresh the conversation list. |
 | `UNKNOWN_AGENT` | 400 | No agent provider is registered for the conversation's agent. | Choose an agent from `GET /api/v1/agent-providers`. |
 | `AGENT_CONFIG_REJECTED` | 400 | The agent rejected the conversation's config, for example an unknown model, or no enabled agent of that type is managed by Coffer. `details.reason` is a short token such as `model_not_found` or `agent_not_managed`. | Pick a model the agent offers, or add or enable the agent on the Agents page. |
-| `MESSAGE_NOT_FOUND` | 404 | A resend named no user message of that conversation. | Refresh the conversation; retry the message shown there. |
+| `MESSAGE_NOT_FOUND` | 404 | A resend named no user message of that conversation, or a request for the files a reply changed named no assistant reply of it. | Refresh the conversation; retry the message shown there. |
+| `REPLY_FILE_NOT_FOUND` | 404 | The diff of a changed file was asked for under a path the reply did not record. | Reopen the reply's changed files and pick one from the list. |
 | `QUESTION_CLOSED` | 409 | An answer to a question the agent asked that is no longer waiting: it was already answered (the first answer wins), cancelled, or its turn ended. Nothing changed. | Refresh the conversation; the card shows the answer that was taken. |
 | `ATTACHMENT_UNAVAILABLE` | 404 | The file attached to a message is not available: the id is not referenced by a message of that conversation, or the file was pruned by retention. | Nothing to do; the thread shows the attachment without its preview. |
 | `QUESTION_ANSWER_INVALID` | 422 | An answer that does not fit its question: an option the question does not offer, several options on a single-choice question, or no answer at all. | Choose from the options, or type an answer. |

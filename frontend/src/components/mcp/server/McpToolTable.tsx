@@ -1,4 +1,4 @@
-// src/components/mcp/server/McpToolTable.tsx — the tool table the Overview and the Tools tab share (design 4.1.02, 4.1.06, 4.1.25).
+// src/components/mcp/server/McpToolTable.tsx — the Tools tab's table (design 4.1.10).
 //
 // Header Tool · Exposure (?) · Calls 24 h · Errors; each row its switch,
 // name and one-line description, its exposure control (Auto · Listed, Always
@@ -130,7 +130,9 @@ export function McpToolTable({ serverUid, rows, showListing, fromCache, label }:
                 <Count value={row.errors} danger />
               </span>
             </div>
-            {expanded ? <McpToolDetail row={row} fromCache={fromCache} /> : null}
+            {expanded ? (
+              <McpToolDetail serverUid={serverUid} row={row} fromCache={fromCache} />
+            ) : null}
           </div>
         );
       })}

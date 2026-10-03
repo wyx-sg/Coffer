@@ -81,13 +81,42 @@ describe("importMcpServers", () => {
     });
     vi.mocked(getApiClient).mockReturnValue(api as never);
     const report = await importMcpServers({
-      servers: [server("a", { env: [{ key: "TOKEN", value: "x", isSecret: true }] })],
+      servers: [server("a", { env: [{ key: "TOKEN", value: { kind: "new", name: "token", value: "x" } }] })],
       created: new Map(),
       t,
     });
     expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/secrets"]);
     expect(report.created).toEqual([]);
     expect(report.failed[0]).toMatchObject({ name: "a", nameTaken: false });
+  });
+
+  test("a chosen secret is cited as secret/<name>, a new one is stored first under that name", async () => {
+    const api = mockApiClient({
+      POST: vi.fn().mockResolvedValue({ data: { uid: "u-a" }, error: undefined }),
+    });
+    vi.mocked(getApiClient).mockReturnValue(api as never);
+    await importMcpServers({
+      servers: [
+        server("a", {
+          env: [
+            { key: "TOKEN", value: { kind: "new", name: "a-token", value: "ghp_x" } },
+            { key: "OTHER", value: { kind: "stored", name: "shared" } },
+            { key: "LOG", value: { kind: "plain", value: "debug" } },
+          ],
+        }),
+      ],
+      created: new Map(),
+      t,
+    });
+    expect(api.POST.mock.calls[0]).toEqual([
+      "/secrets",
+      { body: { ref: "secret/a-token", value: "ghp_x" } },
+    ]);
+    const body = (api.POST.mock.calls[1][1] as { body: { config: { transport: unknown } } }).body;
+    expect(body.config.transport).toMatchObject({
+      env: { LOG: "debug" },
+      secret_refs: { TOKEN: "secret/a-token", OTHER: "secret/shared" },
+    });
   });
 
   test("a registration that fails removes the secrets it stored first", async () => {
@@ -106,11 +135,12 @@ describe("importMcpServers", () => {
     });
     vi.mocked(getApiClient).mockReturnValue(api as never);
     const report = await importMcpServers({
-      servers: [server("a", { env: [{ key: "TOKEN", value: "x", isSecret: true }] })],
+      servers: [server("a", { env: [{ key: "TOKEN", value: { kind: "new", name: "token", value: "x" } }] })],
       created: new Map(),
       t,
     });
     const stored = (api.POST.mock.calls[0][1] as { body: { ref: string } }).body.ref;
+    expect(stored).toBe("secret/token");
     expect(api.DELETE).toHaveBeenCalledWith("/secrets/{ref}", { params: { path: { ref: stored } } });
     expect(report.failed[0]).toMatchObject({ name: "a", nameTaken: true });
   });
@@ -139,7 +169,7 @@ describe("importMcpServers", () => {
     });
     vi.mocked(getApiClient).mockReturnValue(api as never);
     const report = await importMcpServers({
-      servers: [server("a", { env: [{ key: "TOKEN", value: "x", isSecret: true }] }), server("b")],
+      servers: [server("a", { env: [{ key: "TOKEN", value: { kind: "new", name: "token", value: "x" } }] }), server("b")],
       created: new Map(),
       t,
     });
@@ -156,17 +186,17 @@ describe("importMcpServers", () => {
     const api = mockApiClient({
       POST: vi.fn().mockResolvedValue({ data: { uid: "u-a" }, error: undefined }),
       GET: vi.fn().mockResolvedValue({
-        data: { approvals: [{ id: "ap", destination_uid: "u-a" }] },
+        data: { approvals: [{ id: "ap", destination_uid: "u-a", ref: "secret/gh-token" }] },
         error: undefined,
       }),
     });
     vi.mocked(getApiClient).mockReturnValue(api as never);
     const report = await importMcpServers({
-      servers: [server("a", { env: [{ key: "TOKEN", value: "", isSecret: true, ref: "gh/token" }] })],
+      servers: [server("a", { env: [{ key: "TOKEN", value: { kind: "stored", name: "gh-token" } }] })],
       created: new Map(),
       t,
     });
-    expect(report.awaitingApproval).toEqual(["a"]);
+    expect(report.awaitingApproval).toEqual([{ name: "a", secrets: ["TOKEN"] }]);
   });
 
   test("a 202 from the secret store marks the server as waiting for approval", async () => {
@@ -181,11 +211,11 @@ describe("importMcpServers", () => {
     });
     vi.mocked(getApiClient).mockReturnValue(api as never);
     const report = await importMcpServers({
-      servers: [server("a", { env: [{ key: "TOKEN", value: "x", isSecret: true }] })],
+      servers: [server("a", { env: [{ key: "TOKEN", value: { kind: "new", name: "token", value: "x" } }] })],
       created: new Map(),
       t,
     });
-    expect(report.awaitingApproval).toEqual(["a"]);
+    expect(report.awaitingApproval).toEqual([{ name: "a", secrets: ["TOKEN"] }]);
   });
 
   test("missingSecretValues names the secrets still without a value", () => {
@@ -193,8 +223,8 @@ describe("importMcpServers", () => {
       missingSecretValues(
         server("a", {
           env: [
-            { key: "Authorization", value: "", isSecret: true },
-            { key: "X", value: "", isSecret: false },
+            { key: "Authorization", value: { kind: "new", name: "authorization", value: "" } },
+            { key: "X", value: { kind: "plain", value: "" } },
           ],
         }),
       ),

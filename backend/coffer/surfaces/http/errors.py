@@ -33,6 +33,7 @@ _STATUS: dict[str, int] = {
     "NOT_A_CUSTOM_TOOL_GROUP": 404,
     "CUSTOM_TOOL_EXISTS": 409,
     "OPENAPI_UNREADABLE": 422,
+    "OPENAPI_UNREACHABLE": 502,
     "NOT_IMPORTED_FROM_OPENAPI": 409,
     "OPENAPI_FILE_NEEDED": 422,
     "RESOURCE_ALREADY_EXISTS": 409,
@@ -175,6 +176,8 @@ _STATUS: dict[str, int] = {
     "ATTACHMENT_EXPIRED": 410,
     # the thread's thumbnail of a file that is not this conversation's, or was pruned
     "ATTACHMENT_UNAVAILABLE": 404,
+    # a changed file's diff under a path the reply did not record
+    "REPLY_FILE_NOT_FOUND": 404,
     # a question the agent asked the owner (spec chat "Pause a turn on a question
     # for the owner"): a second answer to a closed question conflicts with the
     # first; an answer that does not fit its question is a bad body.
@@ -289,7 +292,7 @@ def _status_for(exc: errors.CofferError) -> int:
     return _STATUS.get(exc.code, 500)
 
 
-def _details_for(exc: errors.CofferError) -> dict[str, Any]:
+def details_of(exc: errors.CofferError) -> dict[str, Any]:
     """Surface the machine-readable `reason`/`feature` of an error, if any."""
     out: dict[str, Any] = {}
     reason = getattr(exc, "reason", None)
@@ -328,7 +331,7 @@ def register(app: FastAPI) -> None:
 
     @app.exception_handler(errors.CofferError)
     async def _handle_coffer(request: Request, exc: errors.CofferError) -> JSONResponse:
-        body = _envelope(exc.code, str(exc), _details_for(exc))
+        body = _envelope(exc.code, str(exc), details_of(exc))
         resp = JSONResponse(status_code=_status_for(exc), content=body)
         resp.headers["X-Coffer-Trace"] = get_trace_id()
         return resp

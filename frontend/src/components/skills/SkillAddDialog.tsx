@@ -18,22 +18,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ApiError, translateApiError } from "@/lib/api/errors";
+import { translateApiError } from "@/lib/api/errors";
 import { useApplySkillReach } from "@/lib/hooks/useSkillCopies";
 import { EVERY_AGENT, type SkillReachDraft } from "@/lib/skills/reach";
 import { SkillAddReach } from "./SkillAddReach";
-import { SkillAddRefusal } from "./SkillAddRefusal";
-import { errorHandoff } from "@/lib/api/errorHandoff";
-import {
-  SkillAddArchiveField,
-  SkillAddFolderField,
-  SkillAddGitFields,
-  type GitLocation,
-} from "./SkillAddSourceFields";
+import { SkillAddSourceBody } from "./SkillAddSourceBody";
+import { type GitLocation } from "./SkillAddSourceFields";
 import { SkillAddSourceSwitch, type SkillAddSource } from "./SkillAddSourceSwitch";
 import { useSkillAddStage } from "./SkillAddStage";
-import { SkillFoundList } from "./SkillFoundList";
-import { cleanPath, gitHost, isArchiveFile } from "./skillSourceHelpers";
+import { cleanPath, isArchiveFile } from "./skillSourceHelpers";
 
 export type { SkillAddSource } from "./SkillAddSourceSwitch";
 
@@ -88,6 +81,13 @@ export function SkillAddDialog({ open, onOpenChange, initialSource }: Props) {
     void s.look({ kind: "folder", path });
   };
 
+  // "Use that folder": the folder one level down is the one to look at.
+  const useFolder = (path: string) => {
+    setFolder(path);
+    lookedFolder.current = path;
+    void s.look({ kind: "folder", path });
+  };
+
   const changeFolder = (text: string) => {
     // A stage answers for the folder it looked at, not the one now typed.
     if (shown && cleanPath(text) !== lookedFolder.current) discard();
@@ -138,23 +138,20 @@ export function SkillAddDialog({ open, onOpenChange, initialSource }: Props) {
   const single = s.stage?.skills.length === 1 ? s.chosen[0] : undefined;
   const primaryLabel = s.confirming
     ? t("skillSources.add.adding")
-    : single?.taken
-      ? t("skillSources.add.replaceOne", { name: single.name })
-      : s.chosen.length > 1
-        ? t("skillSources.add.addMany", { count: s.chosen.length })
-        : t("skillSources.add.addOne");
+    : s.confirmError
+      ? t("skillSources.git.retry")
+      : single?.taken
+        ? t("skillSources.add.replaceOne", { name: single.name })
+        : s.chosen.length > 1
+          ? t("skillSources.add.addMany", { count: s.chosen.length })
+          : t("skillSources.add.addOne");
   const gitNeedsClone = source === "git" && !s.stage;
-  const unreachable =
-    source === "git" &&
-    s.stageError instanceof ApiError &&
-    s.stageError.code === "SKILL_SOURCE_UNREACHABLE" &&
-    !errorHandoff(s.stageError);
   const cloning = source === "git" && s.looking;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-h-[calc(100vh-4rem)] max-w-[520px] overflow-y-auto"
+        className="max-h-[calc(100vh-4rem)] max-w-[640px] overflow-y-auto"
         onDragOver={(e) => {
           if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
         }}
@@ -177,60 +174,36 @@ export function SkillAddDialog({ open, onOpenChange, initialSource }: Props) {
           }}
         >
           <SkillAddSourceSwitch value={source} onChange={switchSource} />
-          {source === "folder" ? (
-            <SkillAddFolderField value={folder} onChange={changeFolder} onLook={lookAtFolder} />
-          ) : source === "archive" ? (
-            <SkillAddArchiveField file={archive} onPick={pickArchive} />
-          ) : (
-            <SkillAddGitFields
-              value={git}
-              onChange={changeGit}
-              disabled={cloning}
-              urlError={
-                unreachable ? t("skillSources.git.unreachable", { host: gitHost(git.url) }) : null
-              }
-            />
-          )}
-          {s.looking ? (
-            <p role="status" className="flex items-center gap-2 text-xs text-text-muted">
-              <Loader2 aria-hidden className="size-3.5 animate-spin" />
-              {source === "git"
-                ? t("skillSources.git.cloningLine", { url: git.url.trim() })
-                : t("skillSources.add.looking")}
-            </p>
-          ) : null}
-          {s.stageError && !unreachable ? (
-            <SkillAddRefusal
-              error={s.stageError}
-              action={
-                source === "archive" ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => document.getElementById("skill-add-archive")?.click()}
-                  >
-                    {t("skillSources.archive.chooseAnother")}
-                  </Button>
-                ) : undefined
-              }
-            />
-          ) : null}
-          {s.stage ? (
-            <SkillFoundList stage={s.stage} selected={s.selected} onToggle={s.toggle} />
-          ) : null}
-          <SkillAddReach value={reach} onChange={setReach} />
+          <SkillAddSourceBody
+            source={source}
+            stage={s}
+            folder={folder}
+            onFolder={changeFolder}
+            onLookFolder={lookAtFolder}
+            onUseFolder={useFolder}
+            archive={archive}
+            onArchive={pickArchive}
+            git={git}
+            onGit={changeGit}
+          />
+          <SkillAddReach value={reach} onChange={setReach} busy={s.confirming} />
           {s.confirmError ? (
             <p role="alert" className="text-xs text-danger">
               {translateApiError(t, s.confirmError)}
             </p>
           ) : null}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={s.confirming}
+              onClick={() => handleOpenChange(false)}
+            >
               {t("common.cancel")}
             </Button>
             {gitNeedsClone ? (
               <Button type="submit" disabled={cloning || !git.url.trim()}>
+                {cloning ? <Loader2 aria-hidden className="animate-spin" /> : null}
                 {cloning
                   ? t("skillSources.git.cloning")
                   : s.stageError
@@ -239,6 +212,7 @@ export function SkillAddDialog({ open, onOpenChange, initialSource }: Props) {
               </Button>
             ) : (
               <Button type="submit" disabled={s.chosen.length === 0 || s.confirming}>
+                {s.confirming ? <Loader2 aria-hidden className="animate-spin" /> : null}
                 {primaryLabel}
               </Button>
             )}

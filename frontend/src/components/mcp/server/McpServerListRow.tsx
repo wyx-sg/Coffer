@@ -3,7 +3,8 @@
 // A state dot, the server's fixed name in mono, a second line — the reason when it needs the user ("Connection
 // refused · since 14:02", "Secret missing · LINEAR_API_KEY", "uvx is not
 // installed"), else its transport and tool count — and its reach on the
-// right: Off, All agents, or the badges of the agents it is limited to. The
+// right: All agents, or the badges of the agents it is limited to; an Off
+// server leaves it empty (its group already says it is off). The
 // checkbox feeds the selection bar; like the Skills library's it shows on
 // hover or focus, and on every row while any is ticked.
 import { Link } from "react-router-dom";
@@ -11,7 +12,6 @@ import { useTranslation } from "react-i18next";
 
 import { AgentBadgeGroup } from "@/components/agent/AgentBadgeGroup";
 import { StatusDot } from "@/components/status/StatusDot";
-import { StatusWord } from "@/components/status/StatusWord";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { AgentOut } from "@/lib/api/agents";
 import type { ResourceOut } from "@/lib/api/resources";
@@ -84,17 +84,14 @@ function Subline({
   }
   const transport = transportOf(resource.config);
   const parts = [t(`mcp.page.transport.${transport.type}`)];
-  if (tiering && tiering.tool_count > 0) {
+  if (tiering && tiering.tool_count > 0)
     parts.push(t("mcp.page.toolCount", { count: tiering.tool_count }));
-    if (tiering.behind_search.length > tiering.listed.length)
-      parts.push(t("mcp.page.mostBehindSearch"));
-  }
   return <span className="truncate text-xs text-text-muted">{parts.join(" · ")}</span>;
 }
 
 function ReachMark({ resource, agents }: { resource: ResourceOut; agents: readonly AgentOut[] }) {
   const { t } = useTranslation();
-  if (!resource.enabled) return <StatusWord tone="off">{t("skills.offMark")}</StatusWord>;
+  if (!resource.enabled) return null;
   const scoped = resource.scope?.agents ?? null;
   if (scoped === null)
     return <span className="text-xs text-text-muted">{t("agentBadge.allAgents")}</span>;

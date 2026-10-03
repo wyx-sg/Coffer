@@ -65,8 +65,15 @@ from coffer.surfaces.http.agent_dependencies import (
 )
 from coffer.surfaces.http.agent_mcp_import_routes import set_mcp_import_service
 from coffer.surfaces.http.cli_wiring import wire_cli_requirements
-from coffer.surfaces.http.skill_dependencies import set_skill_secret_presence, set_skill_service
+from coffer.surfaces.http.delivery_reports import register_delivery_reporter
+from coffer.surfaces.http.schemas import DeliveryResultOut
+from coffer.surfaces.http.skill_dependencies import (
+    set_skill_secret_presence,
+    set_skill_service,
+    set_skill_tool_states,
+)
 from coffer.surfaces.http.skill_source_wiring import SkillSources, wire_skill_sources
+from coffer.surfaces.http.skill_tool_states import McpToolStates
 from coffer.surfaces.http.vault_composition import VaultStores
 from coffer.surfaces.http.workspace_dependencies import (
     set_agent_hooks_service,
@@ -190,7 +197,8 @@ def wire_agent_and_skill_kinds(
         await _deliver_skills()
 
     async def _skill_delivery_changed(_resource: Resource) -> None:
-        await _deliver_skills()
+        # Kept on the service: the scope route reads what the pass did per agent.
+        await skill_svc.reconcile_delivery()
 
     # Config-file view/edit + one-click Coffer-MCP install (spec agent-registry).
     config_file_store = ConfigFileStore()
@@ -327,16 +335,29 @@ def wire_agent_and_skill_kinds(
     set_agent_transcript_service(agent_transcript_svc)
     set_skill_service(skill_svc)
 
+    async def _skill_delivery_report(skill: Resource) -> list[DeliveryResultOut]:
+        return [
+            DeliveryResultOut(
+                agent_uid=d.agent_uid, agent_name=d.agent_name, ok=d.ok, reason=d.reason
+            )
+            for d in await skill_svc.delivery_of(skill)
+        ]
+
+    register_delivery_reporter("skill", _skill_delivery_report)
+
     def _secret_set(name: str) -> bool:
         # A presence probe: it stats the ciphertext file, never decrypts.
         return secret_store.exists(secret_ref(name))
 
     set_skill_secret_presence(_secret_set)
+    tool_states = McpToolStates(resource_svc)
+    set_skill_tool_states(tool_states)
     wire_cli_requirements(
         skill_svc,
         audit,
         servers=_CliServerLaunchers(McpStdioLaunchers(resource_svc)),
         secret_set=_secret_set,
+        tools=tool_states,
     )
 
     return AgentSkillWiring(

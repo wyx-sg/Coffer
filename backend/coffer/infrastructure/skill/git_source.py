@@ -30,7 +30,7 @@ import pathlib
 import tempfile
 from dataclasses import dataclass
 
-from coffer.domain.git_handoff import git_missing_details
+from coffer.domain.git_handoff import clone_failure_details, git_missing_details
 from coffer.domain.skill.git_url import ALLOWED_SCHEMES, display_url
 from coffer.domain.skill_source_errors import SkillSourceUnreachable
 from coffer.infrastructure.platform.host import machine_label
@@ -138,16 +138,28 @@ class GitSource:
         """A bare-enough clone of ``url`` at ``dest``: history and trees, no
         checkout, blobs fetched when a checkout needs them (servers that do not
         support the filter send everything)."""
-        await self._run(
-            "clone",
-            "--quiet",
-            "--no-checkout",
-            "--filter=blob:none",
-            "--",
-            url,
-            str(dest),
-            redact=url,
-        )
+        try:
+            await self._run(
+                "clone",
+                "--quiet",
+                "--no-checkout",
+                "--filter=blob:none",
+                "--",
+                url,
+                str(dest),
+                redact=url,
+            )
+        except SkillSourceUnreachable as exc:
+            # A missing git already carries its own hand-off; any other failed
+            # clone depends on this machine's network, so it gets one too.
+            if getattr(exc, "error_details", None):
+                raise
+            raise SkillSourceUnreachable(
+                exc.git_message,
+                clone_failure_details(
+                    machine_label(), url=display_url(url), message=exc.git_message
+                ),
+            ) from exc
 
     async def resolve(self, repo: pathlib.Path, ref: str | None, *, url: str) -> str:
         """The full commit id ``ref`` names — a branch, then a tag, then a

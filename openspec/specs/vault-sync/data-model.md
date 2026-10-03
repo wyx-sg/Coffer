@@ -215,12 +215,15 @@ and is what a row is read back from, so no column can disagree with it:
 | `unreachable` / `auth_failed` | the remote could not be reached / sign-in failed (or the token waits for approval) |
 | `paused_cloud_folder` | the vault is inside a folder another tool synchronises (Dropbox, iCloud, Syncthing, `~/Library/CloudStorage`) |
 | `remote_too_new` | the remote was written by a newer layout; refused |
-| `remote_too_old` | the remote is in the pre-vault layout; refused until it is rebuilt from an upgraded machine (point it at an empty branch or remote) |
 | `rolled_back` | a rollback round |
 | `failed` | anything else, with `detail` |
 
+A remote at an older layout has no status: the round replaces it with this
+vault (a fast-forward whose parents are this machine's commit and the old tip)
+and ends `pushed` with `join: "replace"`.
+
 `stopped`, `held`, `waiting_on_edit`, `join_required`, `auth_failed`,
-`paused_cloud_folder`, `remote_too_new`, `remote_too_old` and `plaintext_found` leave the vault in
+`paused_cloud_folder`, `remote_too_new` and `plaintext_found` leave the vault in
 a state a person must look at, and each raises an attention item. Swept by the
 retention worker as `sync_runs` (default 90 days).
 

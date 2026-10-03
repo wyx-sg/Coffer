@@ -11,6 +11,7 @@ import json
 import pathlib
 import sys
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 
@@ -87,7 +88,7 @@ def test_a_call_sends_the_rendered_request_with_the_secret(
     assert text_of(result).startswith("HTTP 200 OK")
     seen = api.seen[-1]
     assert (seen.method, seen.path) == ("GET", "/v2/invoices/a%2Fb")
-    assert seen.headers["authorization"] == f"Bearer {SECRET_VALUE}"
+    assert seen.headers["authorization"] == SECRET_VALUE
     rows = invocations(daemon, group["uid"], expect=1)
     assert [(r["capability_key"], r["status"]) for r in rows] == [("get_invoice", "ok")]
     assert "a/b" not in json.dumps(rows) and SECRET_VALUE not in json.dumps(rows)
@@ -209,7 +210,8 @@ def test_a_reach_override_hides_one_tool_from_one_agent(daemon: BoundaryDaemon, 
         agents=[CLAUDE, CODEX],
     )
     r = daemon.client.put(
-        "/api/v1/custom-tools/billing/tools/refund/reach", json={"agents": [CLAUDE]}
+        "/api/v1/custom-tools/billing/tools/refund/reach",
+        json={"mode": "chosen", "agents": [CLAUDE]},
     )
     assert r.status_code == 200, r.text
     codex, claude = Agent(daemon, CODEX), Agent(daemon, CLAUDE)
@@ -225,6 +227,33 @@ def test_a_reach_override_hides_one_tool_from_one_agent(daemon: BoundaryDaemon, 
     assert json.loads(tool_reach_path(daemon.home).read_text()) == {
         group["uid"]: {"refund": [CLAUDE]}
     }
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a tool's own reach can be every agent, apart from the group's"
+)
+def test_a_tools_reach_can_be_every_agent_apart_from_following_the_group(
+    daemon: BoundaryDaemon, api: FakeHttpApi
+):
+    group = create_group(
+        daemon, "billing", api.base_url, [tool("refund", "POST", "/refunds")], agents=[CLAUDE]
+    )
+    url = "/api/v1/custom-tools/billing/tools/refund/reach"
+
+    def refund() -> dict[str, Any]:
+        return {t["name"]: t for t in get_group(daemon, "billing")["tools"]}["refund"]
+
+    assert refund()["reach_mode"] == "inherit" and refund()["reach_override"] is None
+    assert daemon.client.put(url, json={"mode": "all"}).status_code == 200
+    assert refund()["reach_mode"] == "all" and refund()["reach_override"] is None
+    # Stored as "all", not as a snapshot of today's agents, so later agents are included.
+    assert json.loads(tool_reach_path(daemon.home).read_text()) == {group["uid"]: {"refund": "all"}}
+    assert "billing__refund" in Agent(daemon, CLAUDE).tools()
+    assert daemon.client.put(url, json={"mode": "chosen", "agents": [CLAUDE]}).status_code == 200
+    assert refund()["reach_mode"] == "chosen" and refund()["reach_override"] == [CLAUDE]
+    assert daemon.client.put(url, json={"mode": "inherit"}).status_code == 200
+    assert refund()["reach_mode"] == "inherit"
+    assert json.loads(tool_reach_path(daemon.home).read_text()) == {}
 
 
 @pytest.mark.acceptance(
@@ -244,7 +273,7 @@ def test_binding_a_stored_secret_waits_for_approval(daemon: BoundaryDaemon, api:
     daemon.approve(group["pending_approvals"][0])
     assert get_group(daemon, "billing")["secret_state"] == "present"
     Agent(daemon, CLAUDE).call("billing__list_invoices")
-    assert api.seen[-1].headers["authorization"] == f"Bearer {SECRET_VALUE}"
+    assert api.seen[-1].headers["authorization"] == SECRET_VALUE
 
 
 @pytest.mark.acceptance(spec="mcp-gateway", scenario="moving a group's base URL asks again")

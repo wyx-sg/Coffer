@@ -15,7 +15,7 @@ import { DeleteGroupDialog } from "./DeleteGroupDialog";
 import { EditGroupDialog } from "./EditGroupDialog";
 import { GroupDefinition } from "./GroupDefinition";
 import { GroupHeader } from "./GroupHeader";
-import { GroupSecretAlert } from "./GroupSecretAlert";
+import { GroupBanners } from "./GroupBanners";
 import { ReimportDialog } from "./ReimportDialog";
 import { ToolEditorDrawer } from "./ToolEditorDrawer";
 import { ToolsTable } from "./ToolsTable";
@@ -65,7 +65,7 @@ export function GroupPane({ name, onAddRequest }: Props) {
         onEdit={() => setEditOpen(true)}
         onDelete={() => setDeleteOpen(true)}
       />
-      <GroupSecretAlert group={group} onChooseAnother={() => setEditOpen(true)} />
+      <GroupBanners group={group} onChooseAnother={() => setEditOpen(true)} />
       <SectionStack>
         <GroupDefinition group={group} onReimport={() => setReimportOpen(true)} />
         <ToolsTable group={group} onOpenTool={setTool} onAddRequest={onAddRequest} />
@@ -75,6 +75,7 @@ export function GroupPane({ name, onAddRequest }: Props) {
         toolName={tool}
         open={tool !== null}
         onClose={() => setTool(null)}
+        onEditGroup={() => setEditOpen(true)}
       />
       <EditGroupDialog group={group} open={editOpen} onOpenChange={setEditOpen} />
       {group.source ? (

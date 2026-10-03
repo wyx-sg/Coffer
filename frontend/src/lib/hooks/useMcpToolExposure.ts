@@ -1,4 +1,4 @@
-// src/lib/hooks/useMcpToolExposure.ts — set how one or many of a server's tools are exposed to agents (spec mcp-gateway "Forward tools, resources and prompts").
+// src/lib/hooks/useMcpToolExposure.ts — set how one or many of a server's tools are exposed to agents (spec mcp-gateway "Choose how each tool is exposed").
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 

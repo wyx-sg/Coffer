@@ -3,9 +3,9 @@
 // Not a registered resource: everything comes from `GET /mcp/builtin`, which
 // the daemon builds from the gateway's built-in tool list. The header has no
 // Test, Edit or ⋯ menu and its reach is a fixed chip — every connected agent
-// gets it. The Overview says why it cannot be changed, then the same two
-// columns as a registered server and its tools, which are always on.
-import { Layers, Server } from "lucide-react";
+// gets it. The Overview is the last 24 hours and its tools, which are always
+// on; there is no banner and no box explaining what cannot be changed.
+import { Server } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { StatusPill } from "@/components/status/StatusPill";
@@ -14,10 +14,9 @@ import { useAgents } from "@/lib/hooks/useAgents";
 import { useBuiltinMcpServer } from "@/lib/hooks/useMcpAddFlow";
 import { McpServerDetailTabs } from "../McpServerDetailTabs";
 import { McpBuiltinTools } from "./McpBuiltinTools";
-import { McpCallout } from "./McpCallout";
 import { McpCallsLog } from "./McpCallsLog";
-import { Fact, McpOverviewTab } from "./McpOverviewTab";
-import { relativeTime, type ServerState } from "@/lib/mcp/serverState";
+import { McpOverviewTab } from "./McpOverviewTab";
+import type { ServerState } from "@/lib/mcp/serverState";
 
 const HEALTHY: ServerState = { kind: "healthy", group: "healthy", tone: "ok" };
 
@@ -67,36 +66,28 @@ export function McpBuiltinPane({ basePath }: { basePath: string }) {
         basePath={basePath}
         overview={
           <McpOverviewTab
+            name={server.name}
             enabled
+            builtin
             state={HEALTHY}
             agents={agents}
-            tiering={undefined}
             summary={server.summary}
             summaryPending={false}
-            callout={
-              <McpCallout
-                tint="info"
-                icon={Layers}
-                title={t("mcp.builtin.fixedTitle")}
-                testId="mcp-callout-builtin"
-              >
-                {t("mcp.builtin.fixedBody")}
-              </McpCallout>
-            }
-            agentFacts={
-              <Fact label={t("mcp.builtin.status")}>
-                <span className="text-xs">
-                  {t("mcp.builtin.statusValue", { at: relativeTime(server.checked_at) })}
-                </span>
-              </Fact>
-            }
             tools={<McpBuiltinTools tools={server.tools} summary={server.summary} top />}
           />
         }
         tools={<McpBuiltinTools tools={server.tools} summary={server.summary} />}
         resources={<NothingHere text={t("mcp.builtin.noResources")} />}
         prompts={<NothingHere text={t("mcp.builtin.noPrompts")} />}
-        invocations={<McpCallsLog serverUid={server.invocation_uid} agents={agents} builtin />}
+        invocations={
+          <McpCallsLog
+            serverUid={server.invocation_uid}
+            serverName={server.name}
+            transport="http"
+            agents={agents}
+            builtin
+          />
+        }
       />
     </div>
   );

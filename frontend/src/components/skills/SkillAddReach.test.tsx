@@ -41,7 +41,10 @@ afterEach(() => vi.clearAllMocks());
 test("choosing Off reports the draft", () => {
   const onChange = vi.fn();
   render(<SkillAddReach value={EVERY_AGENT} onChange={onChange} />, { wrapper });
-  expect(screen.getByText("0 of 0 agents · you can change it any time")).toBeInTheDocument();
+  expect(
+    screen.getByText("Agents that get this skill. You can change it later."),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/\d+ of \d+ agents/)).not.toBeInTheDocument();
   fireEvent.click(within(screen.getByTestId("skill-add-reach")).getByRole("button"));
   fireEvent.click(screen.getByRole("radio", { name: /Off/ }));
   expect(onChange).toHaveBeenCalledWith({ mode: "disabled", scope: null });

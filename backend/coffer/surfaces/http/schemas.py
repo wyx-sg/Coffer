@@ -67,6 +67,15 @@ class ScopeOut(BaseModel):
         return None if scope is None else cls(agents=scope.agents)
 
 
+class DeliveryResultOut(BaseModel):
+    """What delivering a reach change did for one agent."""
+
+    agent_uid: str
+    agent_name: str
+    ok: bool
+    reason: str | None = None  # why nothing was linked there; null when ok
+
+
 class ResourceOut(BaseModel):
     #: The identity. Immutable, opaque, and the same value on every machine
     #: holding this resource — every route that addresses one takes this.
@@ -84,6 +93,8 @@ class ResourceOut(BaseModel):
     # is True may set it. See GET/PUT .../scope below.
     scope: ScopeOut | None = None
     enabled: bool
+    #: Per agent, whether a reach change was delivered: only skills' PUT .../scope fills it.
+    delivery: list[DeliveryResultOut] | None = None
     #: ``Kind.toggleable``: False (knowledge, memory) means enable/disable is
     #: refused with RESOURCE_NOT_TOGGLEABLE, so a surface leaves the switch out.
     toggleable: bool

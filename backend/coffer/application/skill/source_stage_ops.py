@@ -59,7 +59,13 @@ async def _taken(svc: SkillSourceService) -> tuple[set[str], set[str]]:
     return taken, protected
 
 
-async def _found(svc: SkillSourceService, root: pathlib.Path, label: str) -> list[StagedSkill]:
+async def _found(
+    svc: SkillSourceService, root: pathlib.Path, label: str, *, name_the_candidate: bool = False
+) -> list[StagedSkill]:
+    """Every skill at or one level under ``root``. With ``name_the_candidate``
+    (a folder the person picked), a root with no SKILL.md whose one sub-folder
+    holds a skill that cannot be added is refused with that reason and the
+    sub-folder in the details, so the dialog can offer it as the folder."""
     discovery = find_skill_folders(root)
     if not discovery.folders:
         raise SkillSourceRejected(
@@ -75,6 +81,12 @@ async def _found(svc: SkillSourceService, root: pathlib.Path, label: str) -> lis
         result = validate_skill_folder(path, size_limit_bytes=svc.size_limit)
         if isinstance(result, ValidationFailure):
             err = SkillValidationError(result.reason, result.details)
+            if name_the_candidate and discovery.folders == (rel,) and rel != ".":
+                raise SkillSourceRejected(
+                    result.reason,
+                    str(err),
+                    {"candidate_folder": rel, "candidate_path": str(path)},
+                )
             out.append(
                 StagedSkill(rel, path, None, None, count, size, False, result.reason, str(err))
             )
@@ -101,7 +113,7 @@ async def stage_folder(svc: SkillSourceService, path: str) -> ImportStage:
     folder = pathlib.Path(path.strip().strip("\"'")).expanduser().resolve()
     if not folder.is_dir():
         raise SkillValidationError("folder_missing", {"path": str(folder)})
-    skills = await _found(svc, folder, folder.name)
+    skills = await _found(svc, folder, folder.name, name_the_candidate=True)
 
     def source(s: StagedSkill) -> ImportedSource:
         return LocalImportSource(original_path=str(s.path))

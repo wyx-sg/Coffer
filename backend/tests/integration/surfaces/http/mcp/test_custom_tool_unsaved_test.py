@@ -62,7 +62,14 @@ def test_a_request_of_an_unsaved_group_is_tested_without_its_secret(
     daemon: BoundaryDaemon, api: FakeHttpApi, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _allow_loopback(monkeypatch)
-    out = _unsaved(daemon, api.base_url, headers={"Accept": "application/json"})
+    out = _unsaved(
+        daemon,
+        api.base_url,
+        headers=[
+            {"name": "Accept", "value": "application/json"},
+            {"name": "Authorization", "secret": "billing-token"},
+        ],
+    )
     assert out["ok"] is True and out["status"] == 200 and out["failure"] is None
     seen = api.seen[-1]
     assert seen.path == "/services/web/health"
@@ -91,16 +98,20 @@ def test_a_failed_test_says_how_it_failed(
     closed = _unsaved(daemon, f"http://127.0.0.1:{_free_port()}")
     assert closed["ok"] is False and closed["failure"] == "connect"
     assert closed["status"] is None
+    # No connection depends on this machine: the daemon hands it to an agent.
+    assert "could not connect" in closed["handoff"]["prompt"]
+    assert "127.0.0.1" in closed["handoff"]["prompt"]
     broken = daemon.client.post(
         "/api/v1/custom-tools/test",
         json={"base_url": api.base_url, "tool": tool("t", "GET", "/{missing}"), "arguments": {}},
     ).json()
-    assert broken["failure"] == "request"
+    assert broken["failure"] == "request" and broken["handoff"] is None
     create_group(daemon, "billing", api.base_url, [tool("keep", "GET", "/keep")])
     answered = daemon.client.post(
         "/api/v1/custom-tools/billing/test", json={"tool": tool("k", "GET", "/keep")}
     ).json()
     assert answered["failure"] is None and answered["status"] == 200
+    assert answered["handoff"] is None
     assert SECRET_VALUE not in json.dumps(answered)
 
 

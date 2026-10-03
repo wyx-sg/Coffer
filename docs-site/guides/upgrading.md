@@ -1,6 +1,6 @@
 ---
 title: Upgrading an existing Coffer
-description: Move a Coffer home from the single coffer.db database into the vault layout with coffer migrate — rehearse it, run it, roll it back, and rebuild your sync remote.
+description: Move a Coffer home from the single coffer.db database into the vault layout with coffer migrate — rehearse it, run it, roll it back, and replace your sync remote.
 ---
 
 # Upgrading an existing Coffer
@@ -65,7 +65,7 @@ Every move is recorded in `local/migration.json` as it happens, so a rollback ca
 
 - **Links into moved trees.** Links in `~/.claude` and `~/.codex` that point into the old locations. The skill links Coffer delivered are repaired when the daemon next starts and reconciles; a link you made yourself, you re-point.
 - **Nested git repositories** inside moved trees.
-- **Your sync remote must be rebuilt**, if you had one (below).
+- **Your sync remote is replaced** by the first upgraded machine, if you had one (below).
 - **Secrets waiting for approval.** When the home holds secrets, the report counts them and says that each one's first use at each destination waits once for your approval in the Coffer app.
 
 Then start Coffer as usual. **Settings → Data** shows the new roots.
@@ -89,17 +89,17 @@ coffer migrate
 
 If an upgrade stops half-way, `coffer migrate` refuses to run again and names `--rollback`: roll back first, then run it again.
 
-## Rebuild your sync remote
+## Replace your sync remote
 
-A remote written by an earlier Coffer is in the old layout, and the new build refuses it: rounds end as `remote too old`. It is never converted in place, because other machines may still be pushing the old layout into it. Rebuild it instead, one machine at a time:
+A remote written by an earlier Coffer is in the old layout. It is never converted in place; the upgraded vault is the source of truth and replaces it. Nothing is refused: the first upgraded machine's next round, or its join, replaces the old remote.
 
-1. **Upgrade the first machine** and point it at an **empty** branch or an empty repository, then join it: on the **Sync** page's **Remote** tab enter the **Repository URL** and **Branch**, press **Check repository**, then **Join and pull**. Joining an empty remote pushes this machine's whole vault.
+1. **Upgrade the first machine.** On the **Sync** page press **Join and pull**: the preview says what goes up by area, which files only the old remote had and will go away (the first 100 are listed, with the exact total), who pushed the old tip and when, and that machines still on the older layout must upgrade. Confirm to replace the remote. The push is a fast-forward, so the old history stays in the remote's git log.
 
-   Your old remote setting was carried into `local/sync/remote.json`, so only the **Repository URL** or **Branch** needs changing. Keep **Secret** as it was.
+   Your old remote setting was carried into `local/sync/remote.json`, so nothing needs re-entering. A plaintext secret in the vault still stops the push, and the remote keeps its old tip.
 
-2. **Upgrade each other machine**, point it at the same branch or repository, and join it. It joins as a new machine: it takes the union, deletes nothing, and leaves any file that differs for you to choose (**Choose versions** on the **Status** tab of the **Sync** page).
+2. **Upgrade each other machine**, then join the replaced remote. It joins as a new machine: it takes the union, deletes nothing, and leaves any file that differs for you to choose (**Choose versions** on the **Status** tab of the **Sync** page). A machine still on the earlier Coffer reads only the layout number and refuses the replaced remote until it is upgraded.
 
-Secret ciphertext is committed to the new remote only if your old remote carried secrets; otherwise switch on **Include encrypted secrets** when you want it. The old branch or repository is left untouched; delete it when every machine has moved.
+Secret ciphertext is committed to the remote only if your old remote carried secrets; otherwise switch on **Include encrypted secrets** when you want it.
 
 ## Related
 

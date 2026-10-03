@@ -1,11 +1,14 @@
 // src/components/skills/SkillUpdateDialog.test.tsx
-// Reviewing an update: the preview, applying it, the conflict's three choices, and cancelling the stage on every other way out.
+// Reviewing an update (canvas 4.3.18, 4.3.22): the 1060 change preview — what will happen, the
+// changed files and their diffs, "Update to <commit>" — applying it, the conflict's two-way
+// choice (Keep my edits / Take the update, with the diff of the side you are not keeping), and
+// cancelling the stage on every other way out.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
-import { acceptance } from "@/test/acceptance";
+import { ApiError } from "@/lib/api/errors";
 import { SkillUpdateDialog } from "./SkillUpdateDialog";
 import { gitSkill, updatePreview } from "./skillSourceTestData";
 
@@ -15,7 +18,6 @@ vi.mock("@/lib/api/skills", () => ({
     cancelStage: vi.fn(),
     applyUpdate: vi.fn(),
     keepMine: vi.fn(),
-    markMerged: vi.fn(),
     compareUpdate: vi.fn(),
   },
 }));
@@ -40,12 +42,9 @@ function renderDialog() {
   return { onOpenChange };
 }
 
-const MERGE_PROMPT = "Skill terraform-plan has local edits, and its source has an update.";
-
 const conflicted = () =>
   updatePreview({
     conflict: true,
-    handoff: { prompt: MERGE_PROMPT },
     local_changes: [
       {
         path: "SKILL.md",
@@ -59,24 +58,39 @@ const conflicted = () =>
     ],
   });
 
+const COMPARE = {
+  path: "SKILL.md",
+  local: { text: "# Steps\n- my edit\n", binary: false, truncated: false },
+  pinned: { text: "# Steps\n- base\n", binary: false, truncated: false },
+  incoming: { text: "# Steps\n- their update\n", binary: false, truncated: false },
+};
+
 describe("SkillUpdateDialog", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  test("previews the range, the commits, the changed files and the selected diff", async () => {
+  test("previews what will happen, the changed files and their diffs", async () => {
     api.previewUpdate.mockResolvedValue(updatePreview());
     renderDialog();
-    expect(await screen.findByText(/“Ask before backend changes”/)).toBeInTheDocument();
+    expect(await screen.findByTestId("changes-heading")).toHaveTextContent("Changes · 2");
+    expect(screen.getByRole("dialog", { name: "Update terraform-plan" })).toHaveTextContent(
+      "github.com/acme/agent-skills · terraform-plan/ · a1b2c3d → f9e8d7c",
+    );
     expect(screen.getByText("What will happen")).toBeInTheDocument();
-    expect(screen.getByText(/Moves terraform-plan from a1b2c3d to f9e8d7c/)).toBeInTheDocument();
-    expect(screen.getByText("Changes · 2", { selector: "span" })).toBeInTheDocument();
+    // The commit count rides in Coffer's sentence; the subjects are not listed.
+    expect(
+      screen.getByText(/Moves terraform-plan from a1b2c3d to f9e8d7c \(2 commits\)/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Changes · 2")).toBeInTheDocument();
     const diff = screen.getByRole("region", { name: "Changes to SKILL.md" });
     expect(within(diff).getByText("- List replace, destroy or move.")).toBeInTheDocument();
     expect(diff.querySelector('[data-line="add"]')).not.toBeNull();
     expect(diff.querySelector('[data-line="remove"]')).not.toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: /scripts\/plan\.sh/ }));
     expect(screen.getByRole("region", { name: "Changes to scripts/plan.sh" })).toBeInTheDocument();
-    expect(screen.getByText("Only terraform-plan changes.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Only terraform-plan changes. You can restore the pinned version from History.",
+      ),
+    ).toBeInTheDocument();
   });
 
   test("Update to applies the staged update and closes", async () => {
@@ -94,10 +108,22 @@ describe("SkillUpdateDialog", () => {
     expect(api.cancelStage).not.toHaveBeenCalled();
   });
 
-  test("Not now cancels the stage and applies nothing", async () => {
+  test("a refused apply stays in the dialog and the primary becomes Retry", async () => {
+    api.previewUpdate.mockResolvedValue(updatePreview());
+    api.applyUpdate.mockRejectedValue(new ApiError("SKILL_SOURCE_UNREACHABLE", "git said no"));
+    const { onOpenChange } = renderDialog();
+    fireEvent.click(await screen.findByRole("button", { name: "Update to f9e8d7c" }));
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  test("Cancel (a ghost button) cancels the stage and applies nothing", async () => {
     api.previewUpdate.mockResolvedValue(updatePreview());
     const { onOpenChange } = renderDialog();
-    fireEvent.click(await screen.findByRole("button", { name: "Not now" }));
+    const cancel = await screen.findByRole("button", { name: "Cancel" });
+    expect(screen.queryByRole("button", { name: "Not now" })).not.toBeInTheDocument();
+    fireEvent.click(cancel);
     await waitFor(() => expect(api.cancelStage).toHaveBeenCalledWith("upd-1"));
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(api.applyUpdate).not.toHaveBeenCalled();
@@ -109,22 +135,43 @@ describe("SkillUpdateDialog", () => {
     expect(await screen.findByText("Already up to date")).toBeInTheDocument();
   });
 
-  test("a conflict offers Keep my edits, Take the update and Compare", async () => {
+  test("a conflict is the two-way choice: Keep my edits or Take the update, nothing else", async () => {
     api.previewUpdate.mockResolvedValue(conflicted());
+    api.compareUpdate.mockResolvedValue(COMPARE);
     renderDialog();
-    expect(
-      await screen.findByRole("dialog", { name: "terraform-plan changed on both sides" }),
-    ).toBeInTheDocument();
-    const edits = screen.getByLabelText("Files you edited");
-    expect(within(edits).getByText("SKILL.md")).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /Keep my edits/ })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /Take the update/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Compare" })).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", {
+      name: "terraform-plan changed on both sides",
+    });
+    expect(within(dialog).getAllByRole("radio")).toHaveLength(2);
+    expect(within(dialog).getByRole("radio", { name: /Keep my edits/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole("radio", { name: /Take the update/ })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(screen.queryByRole("radio", { name: /Merge with an agent/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Compare" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Update to f9e8d7c" })).not.toBeInTheDocument();
+    expect(within(dialog).getByText("Nothing is written until you choose.")).toBeInTheDocument();
+    // The diff is your version → the update.
+    const diff = await screen.findByRole("region", { name: "Changes to SKILL.md" });
+    expect(within(diff).getByText("- their update")).toBeInTheDocument();
+    expect(within(dialog).getByText(/your version → the update/)).toBeInTheDocument();
+  });
+
+  test("choosing Keep my edits flips the diff and the primary", async () => {
+    api.previewUpdate.mockResolvedValue(conflicted());
+    api.compareUpdate.mockResolvedValue(COMPARE);
+    renderDialog();
+    fireEvent.click(await screen.findByRole("radio", { name: /Keep my edits/ }));
+    expect(screen.getByText(/the update → your version/)).toBeInTheDocument();
+    const diff = await screen.findByRole("region", { name: "Changes to SKILL.md" });
+    expect(within(diff).getByText("- my edit")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Keep my edits" })).toBeInTheDocument();
   });
 
   test("Keep my edits keeps the new commit off and cancels the stage", async () => {
     api.previewUpdate.mockResolvedValue(conflicted());
+    api.compareUpdate.mockResolvedValue(COMPARE);
     api.keepMine.mockResolvedValue(skill.source_status!);
     const { onOpenChange } = renderDialog();
     fireEvent.click(await screen.findByRole("radio", { name: /Keep my edits/ }));
@@ -135,83 +182,20 @@ describe("SkillUpdateDialog", () => {
     expect(api.applyUpdate).not.toHaveBeenCalled();
   });
 
-  test("Take the update asks first, then applies discarding the local edits", async () => {
+  test("Take the update applies it discarding the local edits — the dialog is the confirmation", async () => {
     api.previewUpdate.mockResolvedValue(conflicted());
+    api.compareUpdate.mockResolvedValue(COMPARE);
     api.applyUpdate.mockResolvedValue(skill);
     const { onOpenChange } = renderDialog();
-    fireEvent.click(await screen.findByRole("radio", { name: /Take the update/ }));
+    await screen.findByRole("radio", { name: /Take the update/ });
     fireEvent.click(screen.getByRole("button", { name: "Take the update" }));
-    const confirm = await screen.findByRole("dialog", { name: "Discard your edits?" });
-    expect(api.applyUpdate).not.toHaveBeenCalled();
-    fireEvent.click(within(confirm).getByRole("button", { name: "Take the update" }));
     await waitFor(() =>
       expect(api.applyUpdate).toHaveBeenCalledWith("sk-1", {
         staging_id: "upd-1",
         discard_local_edits: true,
       }),
     );
+    expect(screen.queryByRole("dialog", { name: "Discard your edits?" })).not.toBeInTheDocument();
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
-  });
-
-  acceptance("skill-manager", "a conflict hands merging the update to an agent", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
-    api.previewUpdate.mockResolvedValue(conflicted());
-    renderDialog();
-    fireEvent.click(await screen.findByRole("radio", { name: /Merge with an agent/ }));
-    const box = screen.getByTestId("skill-update-merge-handoff");
-    fireEvent.click(within(box).getByRole("button", { name: "Copy prompt" }));
-    expect(writeText).toHaveBeenCalledWith(MERGE_PROMPT);
-    // The two manual choices stay.
-    expect(screen.getByRole("radio", { name: /Keep my edits/ })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /Take the update/ })).toBeInTheDocument();
-  });
-
-  acceptance(
-    "skill-manager",
-    "recording a merge moves the pin and keeps the merged files",
-    async () => {
-      api.previewUpdate.mockResolvedValue(conflicted());
-      api.markMerged.mockResolvedValue(skill);
-      const { onOpenChange } = renderDialog();
-      fireEvent.click(await screen.findByRole("radio", { name: /Merge with an agent/ }));
-      fireEvent.click(screen.getByRole("button", { name: "I merged it" }));
-      const confirm = await screen.findByRole("dialog", { name: "Record the merge?" });
-      expect(api.markMerged).not.toHaveBeenCalled();
-      fireEvent.click(within(confirm).getByRole("button", { name: "I merged it" }));
-      await waitFor(() => expect(api.markMerged).toHaveBeenCalledWith("sk-1", "f9e8d7c6b5a4"));
-      await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
-      expect(api.cancelStage).toHaveBeenCalledWith("upd-1");
-      expect(api.applyUpdate).not.toHaveBeenCalled();
-    },
-  );
-
-  test("without a hand-off there is no merge choice", async () => {
-    api.previewUpdate.mockResolvedValue({ ...conflicted(), handoff: null });
-    renderDialog();
-    expect(await screen.findByRole("radio", { name: /Keep my edits/ })).toBeInTheDocument();
-    expect(screen.queryByRole("radio", { name: /Merge with an agent/ })).not.toBeInTheDocument();
-  });
-
-  test("Compare shows the local, pinned and new versions of a file", async () => {
-    api.previewUpdate.mockResolvedValue(conflicted());
-    api.compareUpdate.mockResolvedValue({
-      path: "SKILL.md",
-      local: { text: "mine", binary: false, truncated: false },
-      pinned: { text: "base", binary: false, truncated: false },
-      incoming: { text: "theirs", binary: false, truncated: false },
-    });
-    renderDialog();
-    fireEvent.click(await screen.findByRole("button", { name: "Compare" }));
-    await waitFor(() =>
-      expect(api.compareUpdate).toHaveBeenCalledWith("sk-1", "upd-1", "SKILL.md"),
-    );
-    expect(await screen.findByText("mine")).toBeInTheDocument();
-    expect(
-      within(screen.getByRole("region", { name: "Pinned" })).getByText("base"),
-    ).toBeInTheDocument();
-    expect(
-      within(screen.getByRole("region", { name: "New" })).getByText("theirs"),
-    ).toBeInTheDocument();
   });
 });

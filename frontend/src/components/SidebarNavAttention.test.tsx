@@ -33,6 +33,13 @@ vi.mock("@/lib/hooks/useNeedsYouCount", () => ({ useNeedsYouCount: () => needsYo
 vi.mock("@/lib/api/clis", () => ({ clisApi: { list: vi.fn() } }));
 const { clisApi } = await import("@/lib/api/clis");
 
+// The Skills badge counts the skills list itself; unreadable unless a test sets it.
+vi.mock("@/lib/api/skills", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/skills")>()),
+  skillsApi: { list: vi.fn(), orphans: vi.fn(), verify: vi.fn() },
+}));
+const { skillsApi } = await import("@/lib/api/skills");
+
 vi.mock("@/lib/hooks/useFeatures", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/hooks/useFeatures")>()),
   useFeatureMap: () => ({ knowledge: true, memory: true, sync: true, models: true }),
@@ -54,6 +61,8 @@ const item = (kind: string, severity: string) => ({ kind, severity });
 
 beforeEach(() => {
   vi.mocked(clisApi.list).mockResolvedValue({ items: [], warnings: [] });
+  vi.mocked(skillsApi.list).mockRejectedValue(new Error("offline"));
+  vi.mocked(skillsApi.orphans).mockResolvedValue({ items: [] });
 });
 afterEach(() => {
   vi.clearAllMocks();
@@ -161,6 +170,59 @@ acceptance("web-ui", "an entry without a signal never carries a badge", async ()
   // The informational agent item is not counted beside the warning one.
   expect(screen.getByTestId("nav-dot-agents")).toHaveTextContent("1");
 });
+
+acceptance(
+  "web-ui",
+  "the Skills badge counts skills needing attention plus folders no skill claims",
+  async () => {
+    // Two skills with a problem (a master gone; a tool off), one that is fine and
+    // one with only an update waiting, and one folder in the store no skill claims.
+    const skill = (name: string, over: Record<string, unknown>) =>
+      ({
+        uid: name,
+        name,
+        builtin: false,
+        enabled: true,
+        scope: null,
+        master_missing: false,
+        requires: [],
+        requires_secrets: [],
+        requires_tools: [],
+        requires_skills: [],
+        bindings: [],
+        source_status: null,
+        ...over,
+      }) as never;
+    vi.mocked(skillsApi.list).mockResolvedValue({
+      items: [
+        skill("gone", { master_missing: true }),
+        skill("tool-off", {
+          requires_tools: [
+            { name: "github", uid: "t", kind: "mcp_server", status: "off", why: null },
+          ],
+        }),
+        skill("fine", {}),
+        skill("updating", { source_status: { error: null, update_available: true } }),
+      ],
+    });
+    vi.mocked(skillsApi.orphans).mockResolvedValue({
+      items: [
+        {
+          name: "lint-rules",
+          path: "/p",
+          valid: true,
+          file_count: 1,
+          description: null,
+          message: null,
+          found_at: "2026-09-27T10:00:00Z",
+        },
+      ],
+    });
+    renderNav("/");
+    const dot = await screen.findByTestId("nav-dot-skills");
+    expect(dot).toHaveTextContent("3");
+  },
+);
 
 acceptance("web-ui", "an unreadable signal leaves no badge", async () => {
   // Nothing answered yet, a failing sync read and a failing CLIs read.

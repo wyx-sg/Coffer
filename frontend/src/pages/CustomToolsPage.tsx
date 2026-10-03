@@ -28,7 +28,7 @@ export function CustomToolsPage() {
 
   return (
     <div className="relative -mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10">
-      <div className="shrink-0 border-b border-border-subtle px-6 py-3">
+      <div className="flex shrink-0 flex-col gap-1.5 px-6 py-5 md:px-8">
         <PageHeader
           title={t("customTools.title")}
           subtitle={t("customTools.subtitle")}
@@ -69,11 +69,7 @@ export function CustomToolsPage() {
                 onAddRequest={() => setAdding({ target: selected, step: "request" })}
               />
             ) : (
-              <NothingSelected
-                icon={Wrench}
-                addLabel={t("customTools.add.action")}
-                onAdd={() => setAdding({})}
-              />
+              <NothingSelected icon={Wrench} />
             )
           }
         />

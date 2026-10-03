@@ -56,6 +56,10 @@ describe("listMaxWidth", () => {
     expect(listMaxWidth(1400)).toBe(700);
     expect(listMaxWidth(800)).toBe(800 - DETAIL_MIN_WIDTH);
   });
+
+  test("a split with its own detail minimum leaves the detail that much", () => {
+    expect(listMaxWidth(560, 320)).toBe(240);
+  });
 });
 
 describe("SplitView", () => {
@@ -114,6 +118,28 @@ describe("SplitView", () => {
       window.dispatchEvent(new Event("resize"));
     });
     expect(listPane()).toHaveStyle({ width: "650px" });
+  });
+
+  test("a card-sized split lets the list shrink to its own minimum and keeps the detail's", () => {
+    containerWidth = 520;
+    render(
+      <SplitView
+        storageKey="test.card"
+        defaultListWidth={220}
+        listMinWidth={160}
+        detailMinWidth={320}
+        label="Resize the list"
+        list={<nav>list</nav>}
+        detail={<section>detail</section>}
+      />,
+    );
+    // Half of 520 is 260 but the file keeps 320: 200px, below the 240 default minimum.
+    expect(listPane()).toHaveStyle({ width: "200px" });
+    containerWidth = 400;
+    act(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    expect(listPane()).toHaveStyle({ width: "160px" });
   });
 
   acceptance("web-ui", "double-clicking a divider restores the default", () => {

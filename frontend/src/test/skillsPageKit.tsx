@@ -31,6 +31,8 @@ export function makeSkill(over: Partial<SkillOut> = {}): SkillOut {
     bindings: [],
     requires: [],
     requires_secrets: [],
+    requires_tools: [],
+    requires_skills: [],
     source_status: null,
     ...over,
   };

@@ -7,7 +7,7 @@ import { RotateCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { translateApiError } from "@/lib/api/errors";
-import type { CustomToolIn } from "@/lib/api/customTools";
+import type { CustomToolHeaderIn, CustomToolIn } from "@/lib/api/customTools";
 import { testArguments, type ArgRow } from "@/lib/customTools/schemaArgs";
 import { useTestCustomTool, useTestUnsavedCustomTool } from "@/lib/hooks/useCustomTools";
 import { ToolTestResult } from "./ToolTestResult";
@@ -15,7 +15,7 @@ import { ToolTestResult } from "./ToolTestResult";
 /** Where the request runs: a saved group by name, or an unsaved group's settings. */
 export type TestTarget =
   | { group: string }
-  | { unsaved: { name: string; base_url: string; headers: Record<string, string> } };
+  | { unsaved: { name: string; base_url: string; headers: CustomToolHeaderIn[] } };
 
 interface Props {
   target: TestTarget;
@@ -27,6 +27,8 @@ interface Props {
   ready: boolean;
   /** What the form's save button says: "save" (Save) or "add" (Add to …). */
   saveWord: "save" | "add";
+  /** A timed-out run offers Change timeout, which opens Edit group (a saved group only). */
+  onChangeTimeout?: () => void;
 }
 
 export function ToolTestSection(props: Props) {
@@ -103,6 +105,7 @@ export function ToolTestSection(props: Props) {
           group={groupName}
           secret={"group" in target ? secret : null}
           timeoutSeconds={props.timeoutSeconds}
+          onChangeTimeout={"group" in target ? props.onChangeTimeout : undefined}
         />
       ) : (
         <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-text-muted">

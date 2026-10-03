@@ -324,6 +324,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/conversations/{id}/messages/{message_id}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Reply Files
+         * @description The files an assistant reply of the conversation changed, with added and
+         *     removed line counts. An id that is not an assistant message of the
+         *     conversation is ``MessageNotFound`` (404); a reply with no records lists
+         *     none.
+         */
+        get: operations["list_reply_files_api_v1_chat_conversations__id__messages__message_id__changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/conversations/{id}/messages/{message_id}/changes/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Reply File Diff
+         * @description One changed file's unified diff for that reply. ``MessageNotFound`` (404)
+         *     for a message that is not an assistant reply of the conversation,
+         *     ``ReplyFileNotFound`` (404) for a path the reply did not record.
+         */
+        get: operations["get_reply_file_diff_api_v1_chat_conversations__id__messages__message_id__changes_diff_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/conversations/{id}/messages/{message_id}/resend": {
         parameters: {
             query?: never;
@@ -921,6 +966,48 @@ export interface components {
              * @constant
              */
             type: "queue_changed";
+        };
+        /**
+         * ReplyFileDiffOut
+         * @description One changed file's unified diff. ``diff`` is ``null`` when it is left out,
+         *     and ``diff_omitted`` then says why: ``binary`` (not text) or ``too_large``
+         *     (over 1 MB).
+         */
+        ReplyFileDiffOut: {
+            /** Added */
+            added: number;
+            /** Diff */
+            diff: string | null;
+            /** Diff Omitted */
+            diff_omitted: ("binary" | "too_large") | null;
+            /** Path */
+            path: string;
+            /** Removed */
+            removed: number;
+        };
+        /**
+         * ReplyFileListOut
+         * @description The files a reply changed, first-touched first; empty for a reply that
+         *     changed none and for one recorded before files were.
+         */
+        ReplyFileListOut: {
+            /** Files */
+            files: components["schemas"]["ReplyFileOut"][];
+        };
+        /**
+         * ReplyFileOut
+         * @description One file a reply changed: its added and removed line counts, and whether
+         *     a diff can be opened (false for a file too large or not text).
+         */
+        ReplyFileOut: {
+            /** Added */
+            added: number;
+            /** Has Diff */
+            has_diff: boolean;
+            /** Path */
+            path: string;
+            /** Removed */
+            removed: number;
         };
         /**
          * SendMessageAck
@@ -1805,6 +1892,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SendMessageAck"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_reply_files_api_v1_chat_conversations__id__messages__message_id__changes_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyFileListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_reply_file_diff_api_v1_chat_conversations__id__messages__message_id__changes_diff_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyFileDiffOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

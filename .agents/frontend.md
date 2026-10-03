@@ -78,12 +78,9 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
   A new heavy page goes through `lazyPage()`; the vendor graphs it pulls in are
   named in `vite.config.ts` `manualChunks`.
 - UI primitives live in `src/components/ui/` (shadcn). Cross-feature helpers go
-  in `src/lib/`. Three already exist — reuse them, do not re-derive:
-  - `lib/reachFilter.ts` — the one "Reach" filter every scoped list offers
-    (MCP servers, skills, custom-tool groups): `matchesReach` is the rule and
-    `components/reach/ReachFilter.tsx` the control (All, then Off / All agents /
-    Chosen agents). Knowledge, memory and providers are not
-    scoped lists.
+  in `src/lib/`. Two already exist — reuse them, do not re-derive (there is no
+  list-level Reach filter any more: a scoped list shows each row's reach as a
+  badge and groups by state instead):
   - `lib/agents/display.ts` — the human-readable forms of agent wire values
     (product name for a registry key, home-relative path), shared by the
     table, the add form and the detail header.
@@ -286,6 +283,30 @@ return useMutation({
     mounted over skeleton rows (never a "Loading…" card in the table's place)
     and `emptyAction` for the call-to-action under the empty message. The reach
     column's header key is `resources.cols.reach` on every table.
+  - **Reach** (`components/reach/`) is three modes everywhere: **Off**,
+    **All agents**, **Chosen agents**. `ReachControl` saves on every change
+    ("Applying…" → "✓ Saved") — no Save button — and its trigger shows only a
+    badge (the agents' marks, "All agents" or "Off"), never "N of M agents".
+    "All agents" is stored as such, so it covers agents added later. An item
+    inside a group (a custom tool in its group) uses `InheritedReachControl`,
+    whose first mode is **Same as the group** (the default). A table row of
+    an object that is off leaves its Reach cell empty. Bulk reach on selected
+    rows is `BulkReachActions` (a 340-wide popover, old → new counts, a partial
+    failure kept inside it).
+  - **Secrets come only from Coffer** (`components/secret/`; principle 22).
+    `SecretField` is a field whose whole value is a secret (a provider key, a
+    channel or sync token, a custom-tool group's auth): it picks a stored
+    secret or takes a pasted value that is saved to Secrets with the form;
+    the value never shows. `KeyValueSecretRows` is the one header / env row
+    list (key · value · delete): the value is plain text and a 🔑 button at the
+    end of the field picks a stored secret; a value that looks like a secret
+    offers to be stored. There is no Secret|Plain toggle, Replace button or
+    Stored badge. A custom-tool group's auth is such a header row whose secret
+    holds the whole header value (`Bearer <token>`), so nothing prefixes it.
+  - **A drawer** (`ui/sheet.tsx`) is 640 wide and starts below the title bar
+    (`--titlebar-inset`), scrim included.
+  - **A toast can carry a second line**: `toast.success(title, { description })`
+    for what was kept or added ("Added 2 servers" / "Kept the folder").
   - **A list or table that can hold more than ~100 rows pages by cursor and
     loads on scroll — never everything at once.** It opens on one small page
     (`FIRST_PAGE` 30), reads the next `MORE_PAGE` 50 when its end scrolls into
@@ -522,6 +543,8 @@ A menu item ends in `…` only when a dialog follows. Progress in zh is
 | Run a check again | Check again | 重新检查 | 再检查一次, 再次检查 |
 | Test again | Test again | 重新测试 | 再测一次, 再次测试 |
 | Swap a value for another | Replace | 替换 | 更换, 换成 |
+| Who gets a resource (three modes) | Reach: Off / All agents / Chosen agents; inside a group also Same as the group | 生效范围：关闭 / 所有智能体 / 指定智能体；分组内还有 与分组一致 | Disabled, Every agent, Only selected agents, 已停用, 只限选中的 |
+| Hand a machine-bound chore to an agent | Ask an agent ▾ (menu: Copy prompt, toast "Prompt copied") | 交给智能体 ▾（菜单：复制提示词，提示“已复制提示词”） | Two separate buttons, 询问智能体 |
 | Pick another source/machine/directory | Change | 更改 | 更换 |
 | A change (noun) | change | 改动 | 变更, 更改 |
 | Drop unsaved edits | Discard | 放弃 | 丢弃 |

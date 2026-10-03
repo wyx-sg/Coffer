@@ -321,6 +321,28 @@ def test_a_value_supplied_for_a_new_server_needs_no_approval(daemon: BoundaryDae
     assert d.resolve_for(server) == {"TOKEN": "fresh-value-123"}
 
 
+def test_a_server_may_cite_a_secret_still_waiting_for_approval(daemon: BoundaryDaemon) -> None:
+    d = daemon
+    r = d.client.post("/api/v1/secrets", json={"ref": "secret/late-key", "value": "late-value-123"})
+    assert r.status_code == 202 and r.json()["approval"]["op"] == "add_secret"
+    # The value is held sealed; the registration still goes through.
+    server = d.register_stdio("late", "server", {"TOKEN": "secret/late-key"})
+    assert d.value("secret/late-key") is None
+    # A ref nobody wrote, or waits for, is still refused.
+    nobody = d.client.post(
+        "/api/v1/resources",
+        json={
+            "kind": "mcp_server",
+            "name": "nobody",
+            "config": {
+                "transport": {"type": "stdio", "command": "s", "secret_refs": {"T": "secret/none"}}
+            },
+        },
+    )
+    assert nobody.status_code == 400
+    assert server["name"] == "late"
+
+
 @pytest.mark.acceptance(
     spec="mcp-gateway",
     scenario="a stdio server with a secret is marked readable by local processes",

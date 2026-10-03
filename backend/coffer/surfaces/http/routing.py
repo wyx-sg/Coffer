@@ -43,6 +43,7 @@ from coffer.surfaces.http.chat.attachment_routes import router as chat_attachmen
 from coffer.surfaces.http.chat.conversation_batch_routes import router as chat_batch_router
 from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
 from coffer.surfaces.http.chat.question_routes import router as chat_question_router
+from coffer.surfaces.http.chat.reply_file_routes import router as chat_reply_file_router
 from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
 from coffer.surfaces.http.cli_routes import router as cli_router
 from coffer.surfaces.http.daemon_port_routes import router as daemon_port_router
@@ -80,6 +81,7 @@ from coffer.surfaces.http.secret_boundary_routes import router as secret_boundar
 from coffer.surfaces.http.secret_routes import router as secret_router
 from coffer.surfaces.http.settings_routes import router as settings_router
 from coffer.surfaces.http.skill_copy_routes import router as skill_copy_router
+from coffer.surfaces.http.skill_delete_routes import router as skill_delete_router
 from coffer.surfaces.http.skill_file_routes import router as skill_file_router
 from coffer.surfaces.http.skill_routes import router as skill_router
 from coffer.surfaces.http.skill_source_routes import router as skill_source_router
@@ -128,6 +130,7 @@ def include_all_routers(app: FastAPI) -> None:
         agent_unmanaged_skill_router,
         fs_router,
         skill_copy_router,  # before skill_router: /skills/orphans is not a uid
+        skill_delete_router,  # DELETE /skills/{uid} and the bulk delete
         skill_router,
         skill_source_router,
         skill_file_router,
@@ -154,6 +157,7 @@ def include_all_routers(app: FastAPI) -> None:
         chat_turn_router,  # … and its turn/SSE half
         chat_attachment_router,  # … and the composer's file uploads
         chat_attachment_bytes_router,  # … and a thread thumbnail's bytes
+        chat_reply_file_router,  # … and what a reply changed in each file
         channel_router,  # spec channels
         price_list_router,  # spec provider-switching (before /providers/{uid})
         model_switch_router,  # spec provider-switching: review + apply a model change

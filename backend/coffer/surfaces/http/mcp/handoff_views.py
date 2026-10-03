@@ -21,6 +21,7 @@ from coffer.application.mcp.handoff import (
     diagnose_handoff,
     launcher_handoff,
 )
+from coffer.application.mcp.runner_detect import missing_runner_of
 from coffer.domain.resource import Resource
 from coffer.infrastructure.logging.upstream_tail import read_upstream_tail
 from coffer.infrastructure.platform.host import machine_label
@@ -98,6 +99,37 @@ def call_failure_prompt(
     )
 
 
+def unsaved_test_prompt(
+    *, name: str, config: dict[str, Any], error: str | None, stderr: Sequence[str]
+) -> str:
+    """The prompt for a failed test of a config that is not saved (Add / Edit
+    dialogs): the launcher to install when it is not found here, else the cause
+    to find from the error and stderr. ``config`` carries no secret value."""
+    runner = missing_runner_of(config)
+    if runner is not None:
+        return launcher_handoff(
+            name=name,
+            config=config,
+            runner=runner,
+            machine=_machine(),
+            path=_launch_path(config),
+            saved=False,
+        )
+    return diagnose_handoff(
+        name=name,
+        config=config,
+        error=error,
+        stderr=list(stderr),
+        machine=_machine(),
+        saved=False,
+    )
+
+
+def host_machine() -> str:
+    """The machine label every hand-off prompt carries."""
+    return _machine()
+
+
 class McpHandoffs:
     """:class:`~coffer.application.mcp.attention.McpHandoffPort` over this module."""
 
@@ -108,4 +140,10 @@ class McpHandoffs:
         return diagnose_prompt(server, error=None)
 
 
-__all__ = ["McpHandoffs", "diagnose_prompt", "launcher_prompt"]
+__all__ = [
+    "McpHandoffs",
+    "diagnose_prompt",
+    "host_machine",
+    "launcher_prompt",
+    "unsaved_test_prompt",
+]

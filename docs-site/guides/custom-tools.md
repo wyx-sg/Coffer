@@ -7,7 +7,7 @@ description: Turn an HTTP API into tools your agents call — import an OpenAPI 
 
 A **custom tool** is one HTTP request that Coffer makes for your agents. There is no MCP server to write or run: you describe the request — method, path, headers, body and arguments — and Coffer's gateway makes it whenever an agent calls the tool, adding your API key on the way out. Agents see custom tools exactly like the tools of any MCP server.
 
-Custom tools live in **groups**. A group is one API: it has a name that agents see as a prefix, one base URL, one secret for authentication and a default reach. Each tool in it adds its own path to the base URL.
+Custom tools live in **groups**. A group is one API: it has a name that agents see as a prefix, one base URL, a list of headers (some of which may hold a stored secret) and a default reach. Each tool in it adds its own path to the base URL.
 
 ```mermaid
 flowchart LR
@@ -19,18 +19,18 @@ flowchart LR
 ## Prerequisites
 
 - The daemon is running and at least one agent is connected to Coffer (see [Agents](/guides/agents#connect-an-agent-to-coffer)).
-- If the API needs a key, store it on the [Secrets page](/guides/secrets) first. A group names its secret by that name; the value never leaves the secret store except inside the request Coffer sends.
+- If the API needs a key, have it ready. Secrets live only in Coffer: the group form picks a stored secret from the [Secrets page](/guides/secrets) or takes a pasted value and saves it there. The value never leaves the secret store except inside the request Coffer sends.
 
 ## Add a group from an OpenAPI spec
 
 On **Custom tools**, choose **Add custom tool**. The group comes first: pick **New group**, then **Import an OpenAPI spec** and **Continue**. (An OpenAPI import always makes a new group; an existing group only takes requests added by hand.)
 
 1. Name the group — agents see its tools as `<group>__<tool>`, and the name is fixed once the group exists.
-2. Give the spec as a **URL** or a **File** (JSON or YAML, OpenAPI 3.0 or 3.1, up to 5 MB) and press **Load**. Coffer lists every operation it found, grouped by the spec's tags.
+2. Give the spec as a **URL** or a **File** (JSON or YAML, OpenAPI 3.0 or 3.1, up to 5 MB) and press **Load**. Coffer lists every operation it found, grouped by the spec's tags. A spec it cannot read is reported with the line where it breaks; a URL it cannot reach is reported with the host and why (the name did not resolve, the connection was refused, the request timed out), so you can check the URL, your network, VPN or proxy, or switch to **File** and choose a local copy.
 3. Tick the **operations** that become tools. Reads start ticked; operations that change data start unticked. **Reads only** goes back to that choice; the filter narrows a long list.
-4. Check the **Auth** (taken from the spec's security scheme, e.g. Bearer token) and pick the **Secret** that goes in it, then **Available to**: the agents the group reaches by default. The base URL comes from the spec's `servers`; if the spec names none, the form asks for it.
+4. Check the **Headers** the spec's security scheme fills in (an `Authorization` header for a Bearer scheme): the value is a stored secret that holds the whole header value, or you paste one and Coffer saves it to Secrets with the group. Then set **Available to**: the agents the group reaches by default. The base URL comes from the spec's `servers`; if the spec names none, the form asks for it.
 5. Optionally **Try an operation**: run one ticked operation once against the spec's base URL, before anything exists (see [Test before you save](#test-before-you-save)).
-6. **Review N tools** shows the group as it will be made, the ticked operations as its tools and the rest as **Skipped**. Nothing is saved until **Create group with N tools**.
+6. **Review N tools** shows the group as it will be made, the ticked operations as its tools, each with the piece of the spec it comes from, and the rest as **Skipped**. Nothing is saved until **Create group with N tools**.
 
 Each operation becomes a tool named from its `operationId` — `listInvoices` becomes `billing__list_invoices`. Path and query parameters become arguments; a JSON request body becomes one `body` argument.
 
@@ -38,14 +38,14 @@ A spec URL is fetched only from a public address: Coffer refuses to fetch from l
 
 ### Re-import when the spec changes
 
-A group made by an import shows its spec and when it was fetched, with **Re-import** (also in the group's **⋯** menu). Re-import reads the spec again and lists every change first: operations to **add** — a read becomes a tool, switched on; an operation that changes data is listed but not added — tools the spec **changed** (a new required argument, a moved path), and tools it would **remove** because their operation is gone. Nothing changes until **Apply N changes**. Unchanged tools keep their on/off switch, their changes-data flag and their reach override; tools you added by hand are never removed. A group imported from a file asks for the file again.
+A group made by an import shows its spec and when it was fetched, with **Re-import** (also in the group's **⋯** menu). Re-import reads the spec again and shows every change as a preview, with the spec text before and after where Coffer kept it: operations to **add** — a read becomes a tool, switched on; an operation that changes data is listed but not added — tools the spec **changed** (a new required argument, a moved path), and tools it would **remove** because their operation is gone. Nothing changes until **Apply N changes**. Unchanged tools keep their on/off switch, their changes-data flag and their reach override; tools you added by hand are never removed. A group imported from a file asks for the file again.
 
 ## Add a request by hand
 
 Choose **Add custom tool** and pick the group it goes in:
 
 - **An existing group** — **Continue** opens **Add a request**, which uses that group's base URL and secret. A group's own **Add request** button opens the same form.
-- **New group** — pick **Add one request by hand**, then fill in the group: name, base URL, auth header, secret and default reach. **Create group** moves on to its first request; the group is saved together with that request.
+- **New group** — pick **Add one request by hand**, then fill in the group: name, base URL, headers (the auth header is a row whose value is a stored secret), and default reach. **Create group** moves on to its first request; the group is saved together with that request.
 
 The request form asks for:
 
@@ -67,9 +67,13 @@ A request of a group that is **not saved yet** is tested without its secret: a s
 
 ## Secrets and approval
 
-The auth header's value is the secret you chose; Coffer adds it to every request after the tool's own headers, so no tool can replace it. The secret is never in a tool's description or arguments, never in what an agent receives — an echo of it in a response is shown as `***` — and never in any log.
+A group header is a name and a value. The auth header is a header row like any other: its value is a stored secret that holds the **whole** header value — store `Bearer <token>`, not the token alone, because Coffer puts nothing in front of it. Pick the secret with the row's 🔑 button, or paste a new value and it is saved to Secrets with the group. Coffer adds each secret header to every request after the tool's own headers, so no tool can replace it. The secret is never in a tool's description or arguments, never in what an agent receives — an echo of it in a response is shown as `***` — and never in any log.
 
-Sending a stored secret to a group is sending it somewhere new, so the first time a group uses it, the secret **waits for your approval in the Coffer desktop app** (see [Secrets → Approvals](/guides/secrets#approvals)). Until you approve, the group shows *waiting for approval* and its calls send nothing. Changing the group's base URL or its auth header asks again.
+::: warning A group made before this change needs its secret replaced
+Coffer no longer puts `Bearer ` in front of a secret. A group whose secret held only the token must have that secret's value replaced with the full header value, for example `Bearer <token>`, on the [Secrets page](/guides/secrets); until then the API is likely to reject the call, typically with a 401.
+:::
+
+Sending a stored secret to a group is sending it somewhere new, so the first time a group uses it, the secret **waits for your approval in the Coffer desktop app** (see [Secrets → Approvals](/guides/secrets#approvals)). Until you approve, the group shows *waiting for approval* and its calls send nothing. Changing the group's base URL or a secret header asks again.
 
 ## Tools that change data
 
@@ -77,18 +81,18 @@ Every tool carries a **changes data** flag, on by default for every method but G
 
 ## Choose which agents reach each tool
 
-A group has a reach, like any MCP server: **Available to** on its page. Each tool follows it unless you **override** it in the tool's editor. An override narrows the group's reach for that one tool — useful for the one dangerous operation among many harmless ones — and, like every reach, stays on this machine.
+A group has a reach, like any MCP server: the **Reach** button in its header (**Off**, **All agents** or **Chosen agents**, saved as you change it). Each tool has its own reach in the **Reach** column of the tools table, with the inherited modes: **Same as the group** (the default), **All agents** or **Chosen agents**. Narrowing one tool is useful for the one dangerous operation among many harmless ones. **All agents** on a tool covers agents you add later, and, like every reach, stays on this machine.
 
 Each tool also has an on/off switch (**All on · All off** switches every tool of the group). A tool that is off, or outside an agent's reach, is not listed to that agent and a call to it is refused.
 
 ## The Custom tools page
 
-With no group yet, the page shows only how custom tools work and the two ways in, with **Add custom tool** in the header and the page. Once there are groups, the list puts groups that **need attention** first — a group whose last call failed, whose secret is missing or waits for approval — then healthy ones, then the ones switched off. A **Reach** filter under the search box narrows the list to Disabled, Every agent or Only selected agents. A group's page shows, on one page:
+With no group yet, the page shows only how custom tools work and the two ways in, with **Add custom tool** in the header and the page. Once there are groups, the list puts groups that **need attention** first — a group whose last call failed, whose secret is missing or waits for approval — then healthy ones, then the ones switched off. A group's page shows, on one page:
 
-- a header with **Edit group** and a **⋯** menu: Edit group, Re-import (for an imported group), Turn off and Delete group;
+- a header with three fixed buttons, **Reach**, **Edit group** and **⋯** (Re-import for an imported group, Turn off and Delete group), and, when the group's calls fail or a test fails because of this machine, a banner with the daemon's hand-off, **Ask an agent ▾**;
 - its **definition** — what agents see (`billing__<tool>`), the reach, the base URL, the auth header with the secret's name, and the spec it came from;
 - a one-line summary of the last 24 hours: calls, errors and a link to Activity;
-- the **tools table** — each tool's switch, method and path, changes-data flag, reach (group default or override), and its calls and errors in 24 hours. Choosing a tool opens its editor in a drawer.
+- the **tools table** — each tool's switch, method and path, changes-data flag, reach (group default or override), and its calls and errors in 24 hours. Choosing a tool opens its editor in a 640-wide drawer, with the test result under the fields.
 
 ## How a call is made
 

@@ -2,17 +2,19 @@
 //
 // The 40px toolbar over every file viewer (Foundations 0.6.03): the file's path
 // in the mono face, shortened in the middle, and at the right — Preview /
-// Source for a Markdown file (Preview first), "Open in editor", a Reveal icon,
-// and whatever the viewer adds (Edit, or the unsaved state with Revert and
-// Save). Only viewers that actually show a file's content carry it.
+// Source for a Markdown file (Preview first), a wrap toggle for code, "Open in
+// editor", a Reveal icon, and whatever the viewer adds (Edit, or the unsaved
+// state with Revert and Save). Only viewers that actually show a file's content
+// carry it.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderOpen } from "lucide-react";
+import { FolderOpen, WrapText } from "lucide-react";
 
 import { middlePath } from "@/components/files/middlePath";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { useFileActionItems } from "@/lib/fileActionItems";
+import { formatBytes } from "@/lib/utils";
 
 export type FileView = "preview" | "source";
 
@@ -23,8 +25,12 @@ interface Props {
   fullPath?: string;
   /** The absolute path the editor / Finder open. Without it the two buttons are left out. */
   absPath?: string;
+  /** The file's size, beside its path. */
+  size?: number;
   /** Markdown files: the Preview / Source toggle. */
   view?: { value: FileView; onChange: (view: FileView) => void };
+  /** Code files: the wrap-lines toggle. */
+  wrap?: { on: boolean; onChange: (on: boolean) => void };
   /** Leave out "Open in editor" (a list view, not a file). */
   noEditor?: boolean;
   /** Show the Reveal icon (the viewer is the only place the folder is offered). */
@@ -78,7 +84,9 @@ export function ViewerToolbar({
   path,
   fullPath,
   absPath,
+  size,
   view,
+  wrap,
   noEditor,
   reveal,
   status,
@@ -87,13 +95,13 @@ export function ViewerToolbar({
   const { t } = useTranslation();
   return (
     <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border-subtle bg-surface-raised px-3">
-      <span
-        title={fullPath ?? path}
-        className="min-w-0 flex-1 truncate font-mono text-xs text-text-muted"
-      >
+      <span title={fullPath ?? path} className="min-w-0 truncate font-mono text-xs text-text-muted">
         {middlePath(path)}
       </span>
-      <span className="inline-flex shrink-0 items-center gap-2">
+      {size === undefined ? null : (
+        <span className="shrink-0 text-xs text-text-subtle">{formatBytes(size)}</span>
+      )}
+      <span className="ml-auto inline-flex shrink-0 items-center gap-2">
         {status}
         {view ? (
           <Segmented
@@ -105,6 +113,20 @@ export function ViewerToolbar({
               { value: "source", label: t("files.source") },
             ]}
           />
+        ) : null}
+        {wrap ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-pressed={wrap.on}
+            aria-label={t("files.wrap")}
+            title={t("files.wrap")}
+            className={wrap.on ? "bg-surface-selected text-text" : "text-text-muted"}
+            onClick={() => wrap.onChange(!wrap.on)}
+          >
+            <WrapText aria-hidden />
+          </Button>
         ) : null}
         {absPath ? <FileButtons absPath={absPath} noEditor={noEditor} reveal={reveal} /> : null}
         {children}

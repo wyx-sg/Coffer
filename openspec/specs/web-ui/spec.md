@@ -292,25 +292,27 @@ unmanaged skill) nests under that tab's path.
 - **WHEN** the user follows an address to it saved before the rename
 - **THEN** the address still opens that provider, because it carries the uid and not the name
 
-### Requirement: Show reach as a labelled button on every list and detail page
-Every list surface of a scoped kind that is a table MUST carry a **reach** column — named for what
-it holds, not for the on/off flag it replaced: one button labelled with the answer it already
-holds — "All agents", the badges of the chosen agents (no count), "Off", or
-"No agent" for a list of chosen agents that names nobody — so the reader learns the reach by reading it rather
-than by comparing which of three side-by-side segments looks pressed. A list
-beside a reading pane shows no reach button in its rows: the MCP servers and
-Skills lists show each row's reach as a mark instead — Off, All agents, or the
-badges of the agents it reaches — and the Model providers and Channels lists
-show none. Every detail page of a scoped kind MUST carry the same button in its
-header — a channel's sits in its Overview tab's agents section instead, beside
-the agent the channel answers with. A kind that declares no
-scope — an agent, a knowledge collection, a memory partition — MUST carry neither
-the column, the button, nor a bulk reach action; see "Offer reach as one choice in a panel".
+### Requirement: Show reach as one button that names it
+Every list surface of a scoped kind that is a table MUST carry a **reach**
+column — named for what it holds, not for the on/off flag it replaced: one
+button that names the answer it already holds and nothing else — **All agents**,
+**Off**, the badges of the chosen agents alone, or **No agent selected** for a
+scope narrowed to nobody. The button never reads "N of M agents": a count lives
+only in the panel's footer. A list beside a reading pane shows no reach button in
+its rows: the MCP servers and Skills lists show each row's reach as a mark
+instead — Off, All agents, or the badges of the agents it reaches — and the Model
+providers and Channels lists show none. A row of an object that is off leaves its
+Reach cell empty. Every detail page of a scoped kind MUST carry the same button
+in its header — a channel's sits in its Overview tab's agents section instead,
+beside the agent the channel answers with. A kind that declares no scope — an
+agent, a knowledge collection, a memory partition — MUST carry neither the
+column, the button, nor a bulk reach action; see "Offer reach as one choice in a
+panel". No list offers a filter by reach.
 
 #### Scenario: the reach button states the reach it holds
-- **GIVEN** resources that reach all agents, two chosen agents, nobody chosen, and one that is off
+- **GIVEN** resources that reach every agent, two chosen agents, nobody selected, and one that is off
 - **WHEN** each one's reach button renders
-- **THEN** they read "All agents", the two agents' badges, "No agent" and "Off"
+- **THEN** they read "All agents", the two agents' badges alone, "No agent selected" and "Off"
 - **AND** each is one button rather than a row of segments
 
 #### Scenario: a kind that cannot be disabled shows no status control
@@ -319,30 +321,47 @@ the column, the button, nor a bulk reach action; see "Offer reach as one choice 
 - **THEN** no list has a Status or Reach column and no header carries a reach or status button
 
 ### Requirement: Offer reach as one choice in a panel
-The button MUST open a panel where "who does this reach?" is a single choice
-between Off, All agents and Chosen agents, the last over a "Filter agents" box
-and the list of agents to tick; while the mode is not Chosen agents the list is
-dimmed and inert and its ticks are kept. The footer says the reach in a few
-words (Off, All agents, "1 of 2 agents") and, on the right, whether the last
-change saved.
+The button MUST open a popover where "who does this reach?" is a single choice
+between **Off**, **All agents** (which includes agents added later) and **Chosen
+agents**, the last over the scope's list of agents with a **Filter agents** box
+that narrows it. The list stays visible but dimmed and frozen under Off and All
+agents, with its ticks kept, so switching back restores them. Off is a choice and
+never an inference: choosing Chosen agents with nothing ticked reaches nobody and
+reads "No agent selected", not Off. The footer carries the one summary of the
+reach — the only place a count appears.
 
 #### Scenario: the reach panel offers the reach states as one choice
 - **GIVEN** a resource of a scoped kind
 - **WHEN** its reach panel is opened
-- **THEN** it offers Off, All agents and Chosen agents with its current state chosen
-- **AND** choosing Chosen agents makes the list of agents ticks live
+- **THEN** it offers Off, All agents and Chosen agents as radio choices with its current state chosen
+- **AND** choosing Chosen agents shows the list of agents to pick from
 
-### Requirement: Save every reach change as it is made
-Every mode switch and every tick in the panel MUST be written at once, and the
-footer MUST show Saving…, then Saved, or Couldn't save. A write that fails MUST
-be shown in the panel — beside the agent whose tick failed, or under the
-modes — with its reason and a Retry, and MUST NOT raise a toast.
+### Requirement: Save the reach on every change
+The panel MUST write every change at once — each switch of mode and each tick,
+with no Done button — and say how the write is going in its footer ("Applying…",
+then "✓ Saved"), so a panel that is opened and dismissed writes nothing. The
+panel keeps its own choice while it is open, so the refetch that follows a write
+cannot move the row it is anchored to; the lists refresh once when it closes. A
+write that fails MUST stay in the panel, on the row of the agent just ticked,
+with **Retry** and **Untick**, and MUST NOT be a toast. For a skill the write
+reports delivery per agent: an agent the reach was saved for but the skill could
+not be delivered to is a failed row with the daemon's reason.
 
-#### Scenario: a reach change saves at once and a failure is shown in the panel
+#### Scenario: a dismissed reach panel writes nothing
 - **GIVEN** a reach panel opened on a resource
-- **WHEN** the user ticks two agents, and the second write is refused
-- **THEN** each tick is written as it is made, with no write when the panel is dismissed
-- **AND** the second agent's row shows Failed with the reason and a Retry, and no toast appears
+- **WHEN** the user dismisses it without choosing
+- **THEN** nothing is written
+
+#### Scenario: each reach change is saved at once
+- **GIVEN** a reach panel open on a resource reaching nobody
+- **WHEN** the user ticks Claude Code, then Codex, then unticks Claude Code
+- **THEN** each tick writes the whole list at that moment, naming the agent just ticked, and the footer says the write is applying and then saved
+- **AND** there is no Done button
+
+#### Scenario: a failed reach write stays on the agent's row
+- **GIVEN** a reach panel on which the write for Codex fails
+- **WHEN** the failure comes back
+- **THEN** Codex's row reads Failed with the reason, Retry resends exactly that write, and Untick drops the tick, with no toast
 
 ### Requirement: Mount one reach control in three places
 The reach control MUST be one component mounted in every place a reach is
@@ -357,33 +376,35 @@ selection bar carry the control.
 - **THEN** the row reads its reach and the header and the selection bar each carry the same reach button, which opens the same reach panel
 
 ### Requirement: Apply reach to a whole selection
-A multi-select MUST apply that same choice to the whole selection. A bulk write
-is a new intent, so its button reads "Set reach…" and its panel opens with
-no mode chosen rather than on any one row's value — agents reached by every
-selected row are ticked and those reached by only some are dashed — and is
-written once, on Apply; and a row that fails MUST be
-reported in the panel, which stays open with a Retry, rather than silently
-skipped or raised as a toast. Delete stays
-its own button beside it.
+A multi-select MUST apply the same choice to the whole selection from the
+selection bar's **Reach** button. A bulk write is a new intent, so its popover
+(340 wide) opens with no mode picked rather than on any one row's value; it shows
+for each agent how many of the selected items it reaches (a dash where only some
+do) and, once the person changes one, the old → new counts, and nothing is
+written until **Apply**. A row that fails MUST be reported inside the popover —
+"Applied to 2 of 3", the failing names, a **Retry** that resends only those —
+never as a toast, and the selection is cleared only when every row succeeded.
+Delete stays its own button beside it.
 
-#### Scenario: a bulk reach write starts blank and reports a failure in the panel
+#### Scenario: a bulk reach write starts blank and reports failures in one summary
 - **GIVEN** several selected rows, one of which will fail to update
-- **WHEN** the user opens the selection bar's reach control, chooses a reach and applies it
-- **THEN** the button reads "Set reach…", its panel opened with nothing chosen, and nothing is written until Apply
-- **AND** every other row is still written, and the one failure is reported in the panel with a Retry and no toast
+- **WHEN** the user opens the selection bar's reach control, chooses Off and presses Apply
+- **THEN** the popover opened with no mode picked, every other row is written, and the one failure is reported in the popover as "Applied to 2 of 3" naming the item, with no toast
+- **AND** Retry resends only the failed item, and success closes the popover and clears the selection
 
-### Requirement: Filter lists by the same reach states
-For a scoped kind, the list's reach filter MUST offer the same states the panel
-does, rather than a bare enabled / disabled pair, and the column, the filter and
-the button MUST all use the word *reach*, because they are all asking the one
-question. The Skills library, the MCP servers list and the custom-tool groups list
-each carry this filter.
+### Requirement: Reach an item inside a group through the group's reach
+An item that lives inside a parent — a custom tool in its group — MUST carry an
+**inherited** reach control in its own table cell, with the same button and popover
+and no Off: **Same as the group** (the default, which follows the group's agents
+and says which), **All agents**, or **Chosen agents**. Each change saves at once.
+A tool never reaches an agent its group does not reach, and an item that is off
+leaves its Reach cell empty.
 
-#### Scenario: the reach filter offers the panel's states under the reach name
-- **GIVEN** a list surface of a scoped kind
-- **WHEN** its reach filter is built
-- **THEN** it offers All, then Off, All agents and Chosen agents, the last three labelled as the reach button labels them
-- **AND** the filter is headed Reach, the word the column and the button use
+#### Scenario: an item's reach offers the group's reach first
+- **GIVEN** a tool in the `deploy-api` group, which reaches Claude Code and Codex
+- **WHEN** the tool's reach is opened
+- **THEN** the trigger reads "Same as the group" and the popover offers Same as the group, All agents and Chosen agents, with no Off, saying "deploy-api gives it to Claude Code and Codex"
+- **AND** each choice is written as soon as it is made, and the list is frozen unless Chosen agents is picked
 
 ### Requirement: Make empty, loading and error states first-class
 No surface may render a blank page, or a generic error, where a next action
@@ -535,7 +556,18 @@ than restated per screen.
 
 ### Requirement: Open an MCP server on its Overview
 An MCP server's detail page MUST open on a primary "what is this server doing?"
-Overview, before the per-capability toggles.
+Overview, before the per-capability tabs, and its tabs — Overview, Tools,
+Resources, Prompts, Invocations — MUST carry no counts. Under the banner the
+Overview stacks **Last 24 hours** (the server's calls and errors, with a table of
+the agents that made them and a line for a session that named no agent; for a
+server that is off, only its last call and who made it), **Requires** — what the
+server's command and settings need from this machine (see mcp-gateway "Show what
+an MCP server requires"): the launcher as a row reading "Found · <version>" or
+"Not found" with a View in CLIs link to `/clis/<launcher>`, and each secret as
+Set, Missing or Waiting for approval with a View in Secrets link to `/secrets` —
+and **Most-called tools**: the busiest four, read-only with no switches, each
+marked when it sits behind search, with the rest one link away ("Show all N in
+Tools").
 
 #### Scenario: a server's detail page opens on its Overview
 - **GIVEN** a registered MCP server
@@ -543,8 +575,106 @@ Overview, before the per-capability toggles.
 - **THEN** the Overview tab is the selected tab and its content is shown
 - **AND** the Tools, Resources and Prompts tabs follow it
 
+#### Scenario: the Overview stacks the last 24 hours by agent, what it requires and the busiest tools
+- **GIVEN** a server with 312 calls in 24 hours, a launcher that is found, one secret that is missing and five tools
+- **WHEN** its Overview opens
+- **THEN** it shows the totals and the table of the agents that called it, then Requires with the launcher found and linked to its CLI page and the secret Missing and linked to Secrets, then the four busiest tools without switches and a link to all five
+- **AND** no Agents section and no reach note sit on it
+
+### Requirement: Keep an MCP server's header fixed and answer each state in a banner
+An MCP server's header MUST carry the same actions whatever the server's state —
+**Reach**, **Test** and **Edit** and a **⋯** menu — and Test MUST never become
+"Test again". What is wrong MUST be said in a banner under the tabs that holds the
+fix: a failing server says its last error, since when and its last success, and
+offers **View errors** for an HTTP server — which Coffer does not start, so it has
+no log — opening the Invocations tab on its errors, or **View log** for a stdio
+server, opening the Server log; a rejected key says so and offers **Replace key**;
+a server that is off says no agent can use it and offers **Turn on**; a secret
+missing on this machine is named with **Add secret**. The ⋯ menu of a stdio server
+holds Server log, Copy config as JSON, Turn off and Delete…; an HTTP server's has
+no Server log, and a server that is already off has no Turn off. The Server log is
+a drawer with no tabs, each line saying who wrote it (Coffer or the server's own
+stderr). Turning a server off answers with a toast offering Undo, saying its
+settings and the agents chosen are kept.
+
+#### Scenario: a failing HTTP server says why and offers View errors, not a log
+- **GIVEN** an HTTP server that is failing with a last error, a time it started failing and a last success
+- **WHEN** its page opens
+- **THEN** the banner shows the error, since when and the last successful call, the header still offers Test, and the banner offers View errors and no View log
+- **AND** View errors opens the Invocations tab filtered to errors
+
+#### Scenario: a failing stdio server opens its Server log
+- **GIVEN** a stdio server that is failing
+- **WHEN** the user chooses View log in its banner
+- **THEN** the Server log drawer opens
+
+#### Scenario: an Off server explains itself and offers Turn on
+- **GIVEN** an MCP server that is off
+- **WHEN** its page opens
+- **THEN** a banner says no agent can use it, and Turn on enables it
+
+#### Scenario: an HTTP server's menu has no Server log
+- **GIVEN** an HTTP server and a stdio server
+- **WHEN** each one's ⋯ menu opens
+- **THEN** the HTTP server's offers Copy config as JSON, Turn off and Delete… and the stdio server's also offers Server log first
+
+### Requirement: Open one call in a drawer
+A row of a server's Invocations tab MUST open the call in a 640-wide drawer
+below the title bar with its attributes — the outcome and error, the server and
+its transport, the tool, the agent that called, the session and the time — and a
+note that the arguments and the result are never stored. For a call the server
+never answered the drawer offers the daemon's hand-off. It MUST NOT offer a
+server log for an HTTP server.
+
+#### Scenario: a call opens in a drawer with its attributes
+- **GIVEN** an HTTP server with one errored call
+- **WHEN** the user opens that call from the Invocations tab
+- **THEN** the drawer shows the error, "sentry · Streamable HTTP" and who called, says the arguments and the result are never stored, and offers no server log
+
+### Requirement: Select several MCP servers from the list
+A MCP server's row MUST show its checkbox on hover or focus, and on every row
+once any is ticked. Ticking a row puts the selection bar at the top of the list:
+"N of M selected", **Reach** (the bulk control of "Apply reach to a whole
+selection"), **Delete** and a clear (×); a select-all row appears and ticks every
+listed server. The built-in server has no checkbox and is not counted, and Esc
+clears the selection. The list's search is its only filter.
+
+#### Scenario: ticking a server puts the selection bar at the top
+- **GIVEN** the MCP servers list
+- **WHEN** the user ticks one row
+- **THEN** the bar at the top reads "1 of N selected" with Reach, Delete and a clear control
+- **AND** the list offers no reach filter
+
+### Requirement: Keep a failed save and a partial batch in the MCP dialogs
+The Add server and Edit dialogs MUST test the form as typed before it is saved
+(Test), showing the answer in the form: a failure says why and that nothing was
+saved, and offers the daemon's hand-off when the failure depends on this machine
+(a command not found, a process that exits, no connection, a timeout) — never when
+the person must act, such as a secret that is not stored. A failed save MUST stay
+in the dialog with every edit intact and the primary button reading **Retry**. A
+batch that only partly went in MUST stay on the review, say which servers were
+added and which were refused with the reason, and let Add retry only the refused
+ones. A secret held for a person's approval (202) MUST be said before the dialog
+lets go, naming the secret. A success is a toast that says what was kept or
+added.
+
+#### Scenario: a failed save stays in the Edit dialog and Save becomes Retry
+- **GIVEN** the Edit dialog with changes and a daemon that refuses the save
+- **WHEN** the user saves
+- **THEN** the dialog stays open, the changes are intact and the primary button reads Retry
+
+#### Scenario: a batch that only partly went in stays on the review
+- **GIVEN** a review of three servers of which the daemon refuses one
+- **WHEN** the user presses Add
+- **THEN** the review stays open saying two were added and naming the refused one with its reason, and Add retries only the refused server
+
+#### Scenario: a secret held for approval is said before the dialog lets go
+- **GIVEN** a form whose pasted secret the daemon holds for approval
+- **WHEN** the server is added
+- **THEN** the dialog says the secret waits for approval before it closes
+
 ### Requirement: Keep the capability tabs uniform
-The Tools, Resources and Prompts tabs MUST be uniform — each carrying its count of how many are on, a filter box, All on · All off and a per-row enable toggle, with each row's use in the last 24 hours — and MUST keep that chrome even when the upstream exposes none of that kind, saying so inside the tab rather than as a bare card. A tool row opens to its full description, its input parameters and the name agents see it by. The server list likewise carries a search box, a reach filter and a client-side pager so a large vault stays navigable; the skills list works the same way.
+The Tools, Resources and Prompts tabs MUST be uniform — each carrying its count of how many are on, a filter box, All on · All off and a per-row enable toggle, with each row's use in the last 24 hours — and MUST keep that chrome even when the upstream exposes none of that kind, saying so inside the tab rather than as a bare card. A tool row opens to its full description, its input parameters and the name agents see it by. The server list likewise carries a search box — its only filter — and a client-side pager so a large vault stays navigable; the skills list works the same way, and no list offers a filter by reach.
 
 #### Scenario: capability toggle uses the redesigned tab layout
 - **GIVEN** a registered MCP server with at least one tool and one resource
@@ -1158,14 +1288,14 @@ name the reason each failed one failed, and offer to retry only the failed ones.
 
 ### Requirement: Show a chosen reach by its agents' badges
 A reach control whose resource reaches only chosen agents MUST show each chosen
-agent's badge beside its label, in the order of the Agents page, so the reader
-sees who has it without opening the panel; the label and the panel's choices are
-unchanged. The panel MUST show each agent of the pick-list by its badge and name.
+agent's badge as the whole of its label — no word and no count — in the order of
+the Agents page, so the reader sees who has it without opening the panel. The
+panel MUST show each agent of the pick-list by its badge and name.
 
 #### Scenario: a reach narrowed to chosen agents shows their badges
 - **GIVEN** a resource whose reach names one Claude Code agent
 - **WHEN** its reach button renders
-- **THEN** it reads the chosen reach's label with the Claude Code badge beside it
+- **THEN** it shows the Claude Code badge alone, with no text
 - **AND** its panel lists each agent by its badge and name
 
 ### Requirement: Mark the app with the Coffer logo
@@ -1239,7 +1369,7 @@ form before Add server: the time it took, how many tools, resources and prompts
 the server listed, the first tool names, a warning for a tool whose name agents
 would see as longer than model APIs accept, and the stderr lines behind Show;
 or, when it failed, why — the exit code of a process that stopped — and the
-last lines it printed on stderr. Values typed into Secret rows are sent for
+last lines it printed on stderr. A new secret pasted or typed into a row is sent for
 the test only and nothing is written to the keychain. An edit to the form
 after a test retires its result. A stored secret picked for a row is not
 released to the test, which says the server is tested once it is added.
@@ -1283,42 +1413,104 @@ them by. It is described by the daemon ([mcp-gateway](../mcp-gateway/spec.md)
 - **THEN** the row sits under Built-in after the registered servers and its detail shows its tools with no Test, Edit or ⋯ menu
 
 ### Requirement: Show the Skills page as the final canvas draws it
-The Skills page MUST follow canvas 4.3: a compact header (title, count, help) over the library beside a reading pane. A library row MUST show, in place of its description, the one thing that needs the reader; rows ticked for bulk actions MUST show the selection both as a bar under the filter and in the reading pane (which skills, Set reach…, Delete N skills…). The open skill's Files tab MUST be one card — the folder's files with SKILL.md first beside the open file's header bar and body — whose edit mode refuses a stale save while keeping the text. The Requires tab MUST link each command to the CLIs page, and offer the same hand-off to an agent its CLI page does for a command that needs the user. Below the commands it MUST list each secret the skill declares (spec skill-manager "Declare the secrets a skill requires") with whether it is set; a secret that is not set MUST read "secret <name> is not set" and open the Secrets page, with no hand-off to an agent and no command of its own, because setting a secret is the person's task. A library row whose most urgent item is such a secret MUST read "Needs secret <name> · not set", and the open skill MUST carry a banner naming each secret that is not set with Open Secrets. A folder in the way of an agent's link, a delete Coffer refuses, a master folder that is gone and a Git source to change MUST each be answered where they are shown, with the choice confirmed before anything is written. The Add skill dialog MUST carry the Available to reach control.
+The Skills page MUST follow canvas 4.3: a compact header (title, help) over the
+library beside a reading pane. The library MUST group skills under **Needs
+attention**, **In use**, **Off** and **Built-in**, without counts in the group
+titles; a row MUST show, in place of its description, the one thing that needs the
+reader, and an Off row carries no reach word. The library offers a search, which
+applies to the built-in skills too, and no filter by reach or by kind. Rows ticked
+for bulk actions MUST show the selection as a bar above the list ("N of M
+selected", Reach, Delete, ×) and in the reading pane, which names the selected
+skills, says the built-in skill can't be selected and offers only what the bar does
+not — **Check copies of N skills**.
+
+The open skill's header MUST name it with a state pill, its source, its master
+path and when it changed, and carry **Reach** and a **⋯** menu (Open in editor,
+Reveal in Finder, Copy master path, Delete…) whatever the state; each problem is
+answered in a banner under the tabs, never in the header. Its tabs — Files,
+Delivery, Requires, History — carry no counts. The Files tab MUST be one card: the
+folder's files with SKILL.md first beside the open file's header bar and body,
+whose edit mode refuses a stale save while keeping the text. A folder the skills
+store holds that no skill claims, listed under Not in your library, MUST show its
+files in the same locked tree and viewer, with its meta line saying how many files
+it holds and when it was found.
+
+The Requires tab MUST list what the skill declares in four groups: **Commands**,
+each with its state and a link to the CLIs page, **Secrets** (spec skill-manager
+"Declare the secrets a skill requires"), **Tools** — the MCP servers and
+custom-tool groups it names under `requires: tools:` (spec skill-manager "Declare
+the tools a skill requires"), each with its state and a link to its page — and
+**Skills** it needs. **Check again** re-checks the commands. The rows carry no
+install, copy-command or login step and no hand-off of their own: one banner
+carries a single hand-off to an agent for every command that needs the person. A
+secret that is not set MUST read "secret <name> is not set" and open the Secrets
+page, with no hand-off to an agent, because setting a secret is the person's task.
+A library row whose most urgent item is such a secret MUST read "Needs secret
+<name> · not set", and the open skill MUST carry a banner naming each secret that
+is not set with Open Secrets. A required tool that is off or failing puts the skill
+under Needs attention with "Needs <tool> · off", a **Tool off** pill, and a banner
+("<tool> is off, so <skill> can't call it", or why a failing group fails) with Open
+<tool>, which opens the tool's own page; turning a tool on is the person's choice,
+so the banner offers no hand-off.
+
+A folder in the way of an agent's link, a delete Coffer refuses, a master folder
+that is gone and a Git source to change MUST each be answered where they are
+shown, with the choice confirmed before anything is written. When a delete is
+refused because an agent's copy is a real folder Coffer did not make, the
+confirmation MUST stay open, say "Nothing was deleted", name the folder and say
+Coffer removes only what it made; its primary button then becomes **Delete, keep
+<agent>'s folder**, which deletes the skill and leaves that folder where it is
+(there is no Retry). A bulk delete MUST report each skill: the clean ones are
+deleted, a refused one stays listed with the folder in the way, and the same
+choice to keep that agent's folder is offered. The Add skill dialog is 640 wide,
+validates its source inline and MUST carry the Available to reach control.
 
 #### Scenario: a library row says what needs attention in place of its description
 - **GIVEN** a skill whose declared command is missing and a Git skill with an update waiting
 - **WHEN** the user opens the Skills page
 - **THEN** the first row reads "Needs <command> · not installed" and the second "Update available" where their descriptions would be
 
-#### Scenario: selected skills are set or deleted together from the reading pane
+#### Scenario: selected skills are set or deleted together from the bar above the list
 - **GIVEN** the built-in skill and two of the user's skills
 - **WHEN** the user ticks the two skills
-- **THEN** the reading pane names both, says the built-in skill can't be selected, and Delete 2 skills… deletes both after one confirmation
+- **THEN** the bar above the list reads "2 skills selected", the reading pane names both, says the built-in skill can't be selected and offers Check copies of 2 skills, and the one Delete button deletes both after one confirmation
+
+#### Scenario: the library has no reach filter and groups skills by what they need
+- **GIVEN** a skill that is on, one that is off and one needing attention
+- **WHEN** the user opens the Skills page
+- **THEN** they sit under Needs attention, In use and Off, and the list offers a search and no reach or kind filter
 
 #### Scenario: a skill file changed on disk refuses the save and keeps the text
 - **GIVEN** a skill file open for editing
 - **WHEN** the save is refused because the file changed on disk
 - **THEN** the header says Not saved, the edited text is still there, Reload, Compare and Copy my text are offered, and Save stays off
 
-#### Scenario: the requires tab links to the CLIs page and hands a command to an agent
+#### Scenario: the requires tab checks the commands again and keeps the hand-off out of its rows
 - **GIVEN** a skill whose declared commands are missing or not logged in
-- **WHEN** the user opens its Requires tab
-- **THEN** each command shows its state, Open in CLIs, and Copy prompt / Ask an agent, and the tab offers no install, copy-command or login step of its own
+- **WHEN** the user opens its Requires tab and chooses Check again
+- **THEN** each command shows its state with a link to its CLI page, no install, Copy prompt or login step appears in a row, and every command is probed again
 
 #### Scenario: a folder in the way of a skill's link is resolved by a confirmed choice
 - **GIVEN** a skill whose link in one agent is a real folder Coffer did not make
 - **WHEN** the user opens Review… from the skill's banner and chooses Adopt this folder
 - **THEN** the dialog shows the difference first, and only the confirm button resolves that agent's copy by keeping its version
 
-#### Scenario: a delete refused because a copy is not Coffer's stays open and says why
+#### Scenario: a delete refused because a copy is not Coffer's stays open and offers to keep that folder
 - **GIVEN** a skill whose delete the daemon refuses because an agent's copy is not Coffer's link
 - **WHEN** the user confirms the delete
-- **THEN** the dialog stays open, names the folder, says Coffer won't remove it, and offers Try again
+- **THEN** the dialog stays open, says "Nothing was deleted", names the folder and says Coffer only removes what it made
+- **AND** its primary button becomes "Delete, keep Codex's folder", which deletes the skill and leaves that folder
+
+#### Scenario: a bulk delete offers to keep the folder that stopped one skill
+- **GIVEN** two selected skills of which one has a real folder in an agent where its link should be
+- **WHEN** the user confirms the bulk delete
+- **THEN** the dialog stays open listing the refused skill with the folder, and offers to delete it keeping that agent's folder
 
 #### Scenario: a skill whose master folder is gone offers the ways forward
 - **GIVEN** a skill whose master folder was removed outside Coffer
 - **WHEN** the user opens it
-- **THEN** a banner says the master folder is gone, and the Files tab offers Restore it from History (not available while a skill's versions are not recorded) and Remove the skill, which opens the delete confirmation
+- **THEN** its header pill says Master missing and a banner says the master folder is gone and offers Restore from History (not available while a skill's versions are not recorded) and Delete skill…, which opens the delete confirmation
+- **AND** the Files tab says there are no files to show
 
 #### Scenario: a folder no skill claims is added in place or moved out
 - **GIVEN** a folder in the skills store that no skill claims
@@ -1346,6 +1538,12 @@ The Skills page MUST follow canvas 4.3: a compact header (title, count, help) ov
 - **WHEN** the user opens the Skills page and the skill
 - **THEN** its library row reads "Needs secret GITHUB_TOKEN · not set"
 - **AND** a banner above its tabs says "secret GITHUB_TOKEN is not set." with Open Secrets linking to `/secrets`, and does not name `NPM_TOKEN`
+
+#### Scenario: a skill whose tool is off says so in the list, the pill and a banner that opens the tool
+- **GIVEN** a skill declaring the tool `github`, an MCP server that is off
+- **WHEN** the user opens the Skills page and the skill
+- **THEN** the row reads "Needs github · off" under Needs attention, the header pill reads Tool off, and a banner says github is off so the skill can't call it, with Open github linking to `/mcp-servers/github`
+- **AND** the banner offers no Copy prompt or Ask an agent
 
 ### Requirement: Offer a found update in a card above the sidebar footer
 In the desktop shell, when the shell's update check has found a newer version,
@@ -1507,7 +1705,7 @@ is available) wherever the server's state is a chore for an agent, passing the p
 never assembling it: the missing-launcher callout offers the status read's `handoff` in place of any install
 command, and the failing callout and a failed test's result offer the diagnosis `handoff` beside View log
 (or Show stderr) while Test stays in the header. The page MUST NOT show a package-manager command or an
-"install it, then refresh" instruction.
+"install it, then refresh" instruction. A failed test of an unsaved config in the Add and Edit dialogs offers the daemon's hand-off in the result when the failure depends on this machine, and the page never writes a prompt of its own.
 
 #### Scenario: a missing launcher offers the hand-off, not an install command
 - **GIVEN** an MCP server whose status names a missing launcher and carries a `handoff`
@@ -1894,16 +2092,17 @@ other way out of the dialog works. The dialog MUST close only when the action
 succeeded; a failure stays in it under a title naming the verb and the object
 ("Couldn’t delete sentry") with the reason, and the button becomes Retry.
 
-Deleting an MCP server MUST list the tools that disappear and the agents they
-disappear from, and one row per secret the server cites saying it stays in
-Secrets: a server's delete never deletes a secret. A footnote says past calls stay
-in Activity.
+Deleting an MCP server MUST say which agents lose how many tools on their next
+call and that its call history stays in Activity. A secret only this server cites
+MUST be offered as an unticked **Also delete the secret** with its name and
+"No other server uses it."; a secret anything else uses is never offered, so a
+delete never takes a credential by surprise.
 
-#### Scenario: Delete server lists what it costs and keeps its secrets
-- **GIVEN** an MCP server that two agents reach and that cites two secrets
+#### Scenario: Delete server says what it costs and offers its own secret
+- **GIVEN** an MCP server that two agents reach and that cites one secret no other server uses and one that another does
 - **WHEN** the user opens its Delete dialog
-- **THEN** a Tools row says how many tools disappear from which agents, and one Secret row per secret says it stays in Secrets
-- **AND** the dialog offers no control to delete a secret, and confirming deletes the server only
+- **THEN** it says which agents lose how many tools and that the history stays in Activity, and offers an unticked Also delete the secret for the first secret only
+- **AND** confirming without ticking it deletes the server and no secret
 
 #### Scenario: a refused delete stays open under its error title
 - **GIVEN** the daemon refuses to delete the server
@@ -2108,7 +2307,8 @@ count the non-informational items the cross-kind attention list reports for thei
 person across every kind"); Sync keeps its own signal, one situation cleared by
 visiting the page (spec [vault-sync](../vault-sync/spec.md) "Say a vault needs a
 human where the user already is"); CLIs counts the required commands that need
-the user. Knowledge and Memory carry no badge. An entry whose kind declares no
+the user; Skills counts the skills on its Needs attention list plus the folders
+in the skills store that no skill claims. Knowledge and Memory carry no badge. An entry whose kind declares no
 signal MUST NOT carry a badge, and a signal that has not loaded, or whose read
 failed, MUST leave no badge rather than an error in the sidebar.
 
@@ -2117,6 +2317,11 @@ failed, MUST leave no badge rather than an error in the sidebar.
 - **WHEN** the user is on any page other than Sync
 - **THEN** the Sync entry carries a badge of 1 and the MCP servers entry a badge of 2, both in the danger-strong tone, each with an accessible name saying it needs attention
 - **AND** no other entry carries one
+
+#### Scenario: the Skills badge counts skills needing attention plus folders no skill claims
+- **GIVEN** a skill whose master folder is gone, one whose required tool is off, one that is fine, one with only a Git update waiting and a folder in the skills store that no skill claims
+- **WHEN** the sidebar renders
+- **THEN** the Skills entry carries a badge of 3, and none while the skills list has not answered
 
 #### Scenario: the badge count caps at 9+
 - **GIVEN** an entry whose kind reports twelve things that need the user
@@ -2199,6 +2404,38 @@ close it and return to the page underneath.
 - **WHEN** they open the palette, type "data" and press Enter
 - **THEN** the Settings modal opens on its Data tab at `/settings/data`, with the Agents page underneath
 
+### Requirement: Choose secrets in one field and one set of rows
+Secrets live only in Coffer, so wherever a form takes a secret it MUST use the
+one **secret field**: a single picker, "🔑 name ▾", that never shows the value
+and offers no plain-text password input. The menu lists the stored secrets with
+how many things use each and a **New secret…** item; pasting into the empty field
+makes a new secret named after the thing being configured (with a suffix when the
+name is taken) that is written to Secrets only when the form is saved; a chosen
+name this Mac holds no value for reads **Missing**. Header and environment rows —
+an MCP server's variables and headers, a custom-tool group's headers — MUST be
+one component of key · value · delete rows: the value is plain text by default,
+with a key button at the end of the field that picks a stored secret instead
+(**Type a plain value** goes back), a plain value that looks like a secret offers
+**Store it in Coffer?**, and a row that cites a secret nothing holds shows the
+Missing warning. A secret bound to a header is the whole header value: the form
+has no prefix field and no Secret | Plain toggle, so a bearer token is stored as
+`Bearer <token>`.
+
+#### Scenario: a pasted value becomes a new secret written when the form is saved
+- **GIVEN** a secret field named for the thing being configured, whose default name is already taken
+- **WHEN** the user pastes a value into it
+- **THEN** it reads a new secret under the default name with a suffix, saved on Add, the value is not shown and nothing is written to Secrets until the form submits
+
+#### Scenario: a header row's value is plain until a secret is picked
+- **GIVEN** a header row `Authorization` with an empty value
+- **WHEN** the user chooses the key button and picks `deploy-token`, then chooses Type a plain value
+- **THEN** the row holds the stored secret `deploy-token`, and then a plain empty value again
+
+#### Scenario: a secret-looking plain value offers to be stored in Coffer
+- **GIVEN** a header row `X-Api-Token` with a plain value that looks like a secret
+- **WHEN** the user chooses Store it in Coffer?
+- **THEN** the row holds a new secret named from the key, saved with the form
+
 ### Requirement: Manage custom tools on their own page
 The Custom tools page (`/custom-tools`, under Capabilities) MUST manage custom
 tools, which have one type in 1.0 — **HTTP API**: a tool is one HTTP request
@@ -2210,22 +2447,26 @@ gateway as every other MCP server, and carries:
   a tool reaches agents as `<group>__<tool>`, under the same name rules as any
   MCP server ([mcp-gateway](../mcp-gateway/spec.md) "Manage MCP servers as resources");
 - a shared **base URL** its tools' paths are relative to;
-- an optional **auth header** whose value is bound to a stored secret, chosen by
-  its name on the Secrets page (see "Manage stored secrets on the Secrets
-  page"): Coffer's gateway adds the header
-  when it calls the API, once a person has approved the secret for the group's
-  host ([mcp-gateway](../mcp-gateway/spec.md) "Wait for approval before a custom
-  tool sends its secret"), and neither the header's value nor the secret's
+- **header rows** — each a name and a value that is plain text or one stored
+  secret holding the WHOLE header value (nothing is put around it, so a bearer
+  token is stored as `Bearer <token>`), chosen by its name on the Secrets page
+  or pasted to be saved there with the group (see "Choose secrets in one field
+  and one set of rows"): Coffer's gateway adds each header when it calls the API,
+  once a person has approved a secret for the group's host
+  ([mcp-gateway](../mcp-gateway/spec.md) "Wait for approval before a custom tool
+  sends its secret"), and neither a secret header's value nor the secret's
   reference is ever part of what an agent sees or sends;
-- a default **reach**, which each tool follows unless it overrides it.
+- a **reach** (Off, All agents or Chosen agents), which each tool follows unless it has its own.
 
-Each tool in a group MUST carry its own **on/off** switch, an optional **reach
-override**, and a **changes data** flag — on by default for every method but
+Each tool in a group MUST carry its own **on/off** switch, an optional **reach of
+its own** (see "Reach an item inside a group through the group's reach"), and a
+**changes data** flag — on by default for every method but
 GET, and editable — which the gateway passes to agents as the tool's MCP
 annotations (`readOnlyHint` false and `destructiveHint` true when it changes
 data, `readOnlyHint` true otherwise), so each agent's own approval prompts apply
-to it. The page MUST list the groups grouped by health, the failing ones first,
-each showing its tools. Its header MUST carry one action, **Add custom tool**,
+to it. The page MUST list the groups under Needs attention, Healthy and Off, the failing
+ones first, each showing what is wrong in place of its tools, and an Off group
+leaves its reach column empty. Its header MUST carry one action, **Add custom tool**,
 whose flow asks first for the group. An existing group MUST only take a request
 added by hand, which uses that group's base URL and secret; only a **new** group
 offers the two ways in:
@@ -2233,34 +2474,47 @@ offers the two ways in:
 - **Import an OpenAPI spec** — from a URL or a file, into the new group; the user
   ticks which operations become tools, reads ticked and operations that change
   data unticked, and a review lists the ticked ones as the tools to create and the
-  rest as **Skipped** before **Create group with N tools**. A group made by
+  rest as **Skipped** before **Create group with N tools**. A spec that cannot
+  be read says where: an unparseable file shows the lines around the failure, and a
+  URL that does not answer names the reason (not found, refused, timed out), keeps
+  **Review tools** off and offers Retry and the daemon's hand-off. A group made by
   an import MUST offer **Re-import**, which reads the spec again and lists the
   change first — operations it would add (reads become tools, switched on;
   operations that change data are listed but not ticked), tools whose request
-  the spec changed, and tools it would remove — before anything changes;
+  the spec changed (each with the operation's old and new text), and tools it
+  would remove — before anything changes;
   applying keeps every unchanged tool's switch and reach override as they were.
-- **Add one request by hand** — the new group's name, base URL, auth and
-  default reach, then its first request: method, path, headers, body template
+- **Add one request by hand** — the new group's name, base URL, header rows and
+  reach, then its first request: method, path, headers, body template
   and arguments.
 
 Every request form MUST end with a **Test** section, whose Run runs the request as the form
-holds it once and shows the answer, the API's error body, a timeout, a failed
-connection or a response cut short; nothing — neither a new group nor a tool — is
+holds it once and shows the answer — the status and time in a block, the response
+in a viewer under it — the API's error body, a timeout, a failed
+connection (each of these two with the daemon's hand-off and, for a timeout,
+**Change timeout**) or a response cut short; nothing — neither a new group nor a tool — is
 saved until the form's **Add** or **Save**. A request of a group that is not saved
 yet is tested without its secret (see [mcp-gateway](../mcp-gateway/spec.md) "Test
 a custom tool request before its group is saved"). With no group yet the page
 MUST show only a first-run panel, with Add custom tool in the header and in the
-panel. A group's **⋯** menu MUST offer Edit group, Re-import (for an imported
-group), Turn off and Delete group.
+panel. A group's header MUST carry the same actions whatever its state — **Reach** (whose
+Off turns the group off), **Edit group** and a **⋯** menu that holds only Delete
+group… — and each problem is answered in a banner under it, never in the header:
+failing calls (with a link to Activity and the daemon's hand-off), a group that is
+off (Turn on), a secret missing (Add secret, Choose another, no hand-off) and a
+secret waiting for approval (Open approvals, the only button). Re-import is a
+button in the definition of an imported group.
 
 A group's detail page (`/custom-tools/<group>`, and no other route) MUST be one
 page with no tabs: the group's **definition** (base URL, and the auth header with
 the name of the secret it is bound to), its **reach**, a one-line summary of the
 last 24 hours (calls and failures), and the **tools table** — each tool's
-method and path, its switch, its changes-data flag and its reach override. Choosing
-a tool opens its editor in a **drawer** over the page, where the request is
-edited and its **Test** section runs the tool with sample arguments and shows the
-response. Script tools are not offered: they are deferred past 1.0.
+method and path, its switch, its changes-data flag and its reach in its own cell. Choosing
+a tool opens its editor in a 640-wide **drawer** below the title bar, where the
+request is edited — the headers the group already adds shown as "from the group",
+no switch and no reach, which live in the table — with **Delete tool** and Cancel
+beside it, and its **Test** section under the fields runs the tool with sample
+arguments and shows the response. Script tools are not offered: they are deferred past 1.0.
 How the gateway runs an HTTP API tool is mcp-gateway's ([mcp-gateway](../mcp-gateway/spec.md)
 "Serve an HTTP API as a group of custom tools", "Make a custom tool's request in
 the gateway").
@@ -2295,6 +2549,16 @@ the gateway").
 - **WHEN** the user opens `/custom-tools`
 - **THEN** the page shows no group list, only a first-run panel with Import an OpenAPI spec and Add one request by hand, and Add custom tool in the header and the panel
 
+#### Scenario: a tool's reach is set from its row in the table
+- **GIVEN** the `billing` group with two tools, one following the group and one narrowed to Claude Code
+- **WHEN** the user opens the first tool's reach in the table and chooses All agents
+- **THEN** the reach saves at once without opening the tool's drawer, the first reads Same as the group before and the narrowed one shows the Claude Code badge alone
+
+#### Scenario: a narrowed tool goes back to Same as the group
+- **GIVEN** a tool narrowed to Claude Code
+- **WHEN** the user opens its reach and chooses Same as the group
+- **THEN** the tool's own reach is cleared and it follows the group again
+
 #### Scenario: a tool's reach override narrows one tool
 - **GIVEN** the `billing` group reaching Claude Code and Codex
 - **WHEN** the user overrides one tool's reach to Claude Code only
@@ -2323,6 +2587,21 @@ the gateway").
 - **THEN** the page shows the definition with the bound secret's name, the reach, a one-line 24-hour summary and the tools table, with no tabs
 - **AND** the tool opens in a drawer with its request and Test, and the address stays `/custom-tools/billing`
 
+#### Scenario: a tool's drawer has no switch or reach, and Delete tool is outlined
+- **GIVEN** the `billing` group with a tool
+- **WHEN** the user opens the tool
+- **THEN** the drawer shows no On switch and no reach, shows the group's header as from the group, and offers Delete tool and Cancel
+
+#### Scenario: a spec that does not parse shows the lines around the failure
+- **GIVEN** the import step with a file whose YAML breaks on line 3
+- **WHEN** the file is read
+- **THEN** the step says it couldn't read the spec and why, and shows the file with line 3 marked
+
+#### Scenario: an unreachable spec URL names the reason and keeps Review tools off
+- **GIVEN** the import step with a URL the daemon cannot reach
+- **WHEN** the user chooses Load
+- **THEN** the step names the host and the reason, marks the URL invalid, offers Retry and a hand-off, and Review tools stays off
+
 #### Scenario: a tool that changes data is annotated for the agent
 - **GIVEN** a group with a `GET /invoices` tool and a `POST /refunds` tool, and the user turning the changes-data flag off on a third, `POST /search`
 - **WHEN** an agent lists the group's tools
@@ -2348,8 +2627,18 @@ command to an agent with a prompt") through **Copy prompt** and **Ask an agent**
 — the latter opens a new conversation with a Coffer-managed agent chosen in the
 New conversation dialog, with the prompt in the composer and nothing sent until
 the user presses Send; with no managed agent available only Copy prompt is
-offered. The detail page also offers **Check again**, which probes the command
-afresh. A skill's detail page MUST link each requirement it declares to
+offered. The page's **Check again** probes every command afresh, and the banner that
+states a problem re-checks that one tool. A CLI a person added keeps **Edit** and a
+**⋯** menu with **Remove** (a 420-wide confirmation saying the tool stays
+installed on this machine); a CLI a skill or MCP server requires has neither, so
+its header's right side is empty. **Add CLI** opens a 480-wide form for a command
+name or path, which says what Coffer found — where, which version, and whether it
+is already added or required — before anything is saved, and keeps a refused
+save in the dialog with Retry (see skill-manager "Declare a command-line tool
+without a skill"). With nothing required and nothing added the page shows one
+empty state with Add CLI and a link to how `requires:` works; `requires:` entries
+Coffer skipped are one muted line under the subtitle with a link to Skills. Coffer
+reads no command's `--help` and shows no tree of subcommands. A skill's detail page MUST link each requirement it declares to
 that CLI's page, and Overview MUST show an attention item while any required CLI
 is missing, outdated or not logged in. What a skill declares and how a command
 is probed are specified by skill-manager; this page shows what they report.
@@ -2375,6 +2664,22 @@ is probed are specified by skill-manager; this page shows what they report.
 - **WHEN** the user opens `/clis/uv`
 - **THEN** the list row reads "Not found · duckdb needs it" with "1 server · 1 skill", the header reads "needed by 1 MCP server and 1 skill", and the banner says duckdb can't start and data-profiling fails at the step that calls uv
 - **AND** Needed by lists `duckdb` (MCP server, "starts with uvx") opening `/mcp-servers/duckdb` and `data-profiling` (Skill) opening its Requires tab
+
+#### Scenario: a CLI added by hand has Edit and Remove, a required one has neither
+- **GIVEN** `demo` added by hand and `uv` required by a skill
+- **WHEN** the user opens each one's page
+- **THEN** `demo` shows Edit and a ⋯ menu whose Remove asks "Remove demo?" and says the tool stays installed, and `uv` shows neither
+
+#### Scenario: Add CLI shows what Coffer found before anything is saved
+- **GIVEN** the Add CLI dialog
+- **WHEN** the user types a command name
+- **THEN** it says where Coffer found the command and which version, or that it is not on this machine and can still be added, and says when a skill or MCP server already requires it
+- **AND** a refused declaration stays in the dialog with its reason
+
+#### Scenario: the empty CLIs page offers Add CLI and the docs
+- **GIVEN** no required command and no tool added by hand
+- **WHEN** the user opens `/clis`
+- **THEN** the page shows "No command-line tools yet" with one Add CLI button, a link to how `requires:` works and no header buttons
 
 #### Scenario: a skill's requirement links to its CLI
 - **GIVEN** a skill that requires `gh`

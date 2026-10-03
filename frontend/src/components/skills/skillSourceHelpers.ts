@@ -1,5 +1,6 @@
 // src/components/skills/skillSourceHelpers.ts
 // Pure helpers for the skill source surfaces: path cleaning, archive names, the found step's choice rules, commit and repository labels, unified-diff rows.
+import { ApiError } from "@/lib/api/errors";
 import type { ChangeOp, DiffLine } from "@/lib/changePreview/changeCounts";
 import type { SkillFileChange, SkillStaging, StagedSkill } from "@/lib/api/skills";
 
@@ -47,10 +48,21 @@ export function repoLabel(url: string): string {
     .replace(/\/$/, "");
 }
 
+/** `owner/repo` of a repository URL, as the clone line and its failure name it. */
+export function repoName(url: string): string {
+  const label = repoLabel(url.trim());
+  return /^[^/:]+[/:](.+)$/.exec(label)?.[1] ?? label;
+}
+
 /** The host a repository URL names, for "Couldn't reach github.com". */
-export function gitHost(url: string): string {
-  const m = /^(?:[a-z+]+:\/\/)?(?:[^@/]+@)?([^/:]+)/i.exec(url.trim());
-  return m?.[1] ?? url.trim();
+/** The refusals that get a problem block: they depend on this machine, so an agent can help. */
+export function isMachineProblem(error: unknown): boolean {
+  return error instanceof ApiError && error.code === "SKILL_SOURCE_UNREACHABLE";
+}
+
+/** What git itself said, without Coffer's "git clone failed:" lead-in or git's "fatal:" tag. */
+export function gitSays(message: string): string {
+  return message.replace(/^git \S+ failed:\s*/i, "").replace(/^(fatal|error):\s*/i, "");
 }
 
 export const CHANGE_OP: Record<SkillFileChange["status"], ChangeOp> = {
