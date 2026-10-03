@@ -1,20 +1,19 @@
 // frontend/src/components/agents/AgentMemoryTab.test.tsx
 //
-// The Memory tab lists only the agent's own native memory stores, read-only:
-// a heading with the count, a line saying Coffer only reads them, and a table
-// of project, path and item count whose row opens the store's page (addressed
-// by the agent's type and the store's directory). There is no Coffer-memory
-// pointer, no delivery-hook action and no per-row action. The hook is mocked
-// at the network boundary.
+// The Memory tab (boards 2.1.49–50): Coffer's memory first (Experimental; only
+// with the memory feature on) with the hook, when it last fired and what it
+// delivers, then the agent's own native stores as one bordered list whose row
+// opens the store's page. No counts in headings, no row actions, a search only
+// for a long list. Hooks are mocked at the hook boundary.
 import type { PropsWithChildren } from "react";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
+import { acceptance } from "@/test/acceptance";
 import { AgentMemoryTab } from "./AgentMemoryTab";
-import { pathText } from "@/test/truncatedPath";
-import type { AgentOut } from "@/lib/api/agents";
+import type { AgentOut, CofferHook } from "@/lib/api/agents";
 import type { NativeMemoryStore } from "@/lib/api/agentNativeMemory";
 
 const navigateMock = vi.fn();
@@ -24,6 +23,10 @@ vi.mock("react-router-dom", async (importOriginal) => ({
 }));
 vi.mock("@/lib/hooks/useAgentNativeMemory", () => ({ useAgentNativeMemory: vi.fn() }));
 const nativeHooks = await import("@/lib/hooks/useAgentNativeMemory");
+vi.mock("@/lib/hooks/useAgents", () => ({ useAgentHooks: vi.fn() }));
+const agentHooks = await import("@/lib/hooks/useAgents");
+vi.mock("@/lib/hooks/useFeatures", () => ({ useFeatureEnabled: vi.fn() }));
+const features = await import("@/lib/hooks/useFeatures");
 
 function wrap({ children }: PropsWithChildren) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -63,6 +66,16 @@ const COFFER_STORE: NativeMemoryStore = {
   item_count: 49,
 };
 
+const COFFER_HOOK: CofferHook = {
+  event: "PostToolUse,PreToolUse,SessionStart,UserPromptSubmit",
+  path: "/Users/xing/.claude/settings.json",
+  health: "current",
+  trust: "not_required",
+  installed_command: "c",
+  expected_command: "c",
+  last_fired_at: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+};
+
 function stubNative(items: NativeMemoryStore[] = [COFFER_STORE], extra: object = {}) {
   vi.mocked(nativeHooks.useAgentNativeMemory).mockReturnValue({
     data: { items },
@@ -73,46 +86,111 @@ function stubNative(items: NativeMemoryStore[] = [COFFER_STORE], extra: object =
   } as unknown as ReturnType<typeof nativeHooks.useAgentNativeMemory>);
 }
 
+function stubHook(hook: Partial<CofferHook> | null = {}) {
+  vi.mocked(agentHooks.useAgentHooks).mockReturnValue({
+    data: { items: [], parse_errors: [], coffer_hook: hook ? { ...COFFER_HOOK, ...hook } : null },
+    isPending: false,
+  } as unknown as ReturnType<typeof agentHooks.useAgentHooks>);
+}
+
+beforeEach(() => {
+  vi.mocked(features.useFeatureEnabled).mockReturnValue(true);
+  stubHook();
+});
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentMemoryTab", () => {
-  test("a store with no memory is not listed, and the rest are searched by project name", () => {
-    const empty: NativeMemoryStore = {
-      project: "scratch",
-      path: "/tmp/work/hello",
-      memory_dir: "/Users/xing/.claude/projects/-tmp-work-hello/memory",
-      item_count: 0,
-    };
-    const other: NativeMemoryStore = {
-      project: "Other",
-      path: "/Users/xing/Other",
-      memory_dir: "/Users/xing/.claude/projects/-Users-xing-Other/memory",
-      item_count: 3,
-    };
-    stubNative([empty, COFFER_STORE, other]);
+  test("Coffer's memory comes first: hook, last fired, delivers, and a link to the Memory page", () => {
+    stubNative();
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
-    expect(screen.queryByText(/work\/hello/)).not.toBeInTheDocument();
-    expect(screen.getAllByRole("row")).toHaveLength(3); // header + two stores
-    fireEvent.change(screen.getByRole("textbox", { name: "Search projects" }), {
-      target: { value: "other" },
-    });
-    expect(screen.getAllByRole("row")).toHaveLength(2);
-    expect(screen.getByText("~/Other")).toBeInTheDocument();
+    const section = within(screen.getByTestId("coffer-memory-section"));
+    expect(section.getByRole("heading", { name: "Coffer’s memory" })).toBeInTheDocument();
+    expect(section.getByText("Experimental")).toBeInTheDocument();
+    expect(section.getByText("4 events in")).toBeInTheDocument();
+    expect(section.getByText("~/.claude/settings.json")).toBeInTheDocument();
+    expect(section.getByText("Current")).toBeInTheDocument();
+    expect(section.getByText("2 hours ago")).toBeInTheDocument();
+    expect(
+      section.getByText(
+        "The shared memory index, so Claude Code can look up what your agents learned",
+      ),
+    ).toBeInTheDocument();
+    expect(section.getByRole("link", { name: "Open Memory" })).toHaveAttribute("href", "/memory");
+    expect(section.queryByRole("button", { name: "Repair" })).not.toBeInTheDocument();
+    // Coffer's section is above the agent's own.
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(["Coffer’s memory", "Claude Code’s own memory"]);
   });
 
-  test("lists the native stores with project, path and item count", () => {
+  acceptance("web-ui", "hook state appears only on the agent page", () => {
+    stubNative();
+    stubHook({ health: "stale" });
+    render(<AgentMemoryTab agent={AGENT} onRepair={vi.fn()} />, { wrapper: wrap });
+    const section = within(screen.getByTestId("coffer-memory-section"));
+    expect(section.getByText("Out of date")).toBeInTheDocument();
+    expect(section.getByRole("button", { name: "Repair" })).toBeInTheDocument();
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(["Coffer’s memory", "Claude Code’s own memory"]);
+  });
+
+  test("a single-event hook names the event; an unhealthy one offers Repair", () => {
+    stubNative();
+    stubHook({ event: "SessionStart", health: "stale" });
+    const onRepair = vi.fn();
+    render(<AgentMemoryTab agent={CODEX} onRepair={onRepair} />, { wrapper: wrap });
+    const section = within(screen.getByTestId("coffer-memory-section"));
+    expect(section.getByText("SessionStart in")).toBeInTheDocument();
+    expect(section.getByText("Out of date")).toBeInTheDocument();
+    fireEvent.click(section.getByRole("button", { name: "Repair" }));
+    expect(onRepair).toHaveBeenCalledTimes(1);
+  });
+
+  test("with the memory feature off, only the agent's own memory shows", () => {
+    vi.mocked(features.useFeatureEnabled).mockReturnValue(false);
+    stubNative();
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
+    expect(screen.queryByTestId("coffer-memory-section")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Claude Code’s own memory" })).toBeInTheDocument();
+  });
+
+  test("lists the native stores in one bordered list: project, path, file count", () => {
     stubNative();
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     expect(vi.mocked(nativeHooks.useAgentNativeMemory)).toHaveBeenCalledWith("agt_01cc");
-    expect(screen.getByRole("heading", { name: "Native memory stores" })).toBeInTheDocument();
-    // The explanation rides in the help tip, not under the title.
-    expect(screen.getByRole("button", { name: "More info" })).toBeInTheDocument();
-    expect(screen.queryByText(/coffer reads them to build shared memory/i)).not.toBeInTheDocument();
-    expect(screen.getByText("~/Coffer")).toBeInTheDocument();
+    const own = within(screen.getByTestId("own-memory-section"));
     expect(
-      screen.getByText(pathText("~/.claude/projects/-Users-xing-Coffer/memory")),
+      own.getByText(
+        "One store per project, written by Claude Code. Read-only: Coffer reads them and never writes them.",
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByText("49")).toBeInTheDocument();
+    expect(own.getAllByRole("listitem")).toHaveLength(1);
+    expect(own.getByText("~/Coffer")).toBeInTheDocument();
+    expect(own.getByText("~/.claude/projects/-Users-xing-Coffer/memory")).toBeInTheDocument();
+    expect(own.getByText("49 files")).toBeInTheDocument();
+    // No counts in the heading, no project search for a short list.
+    expect(screen.queryByRole("textbox", { name: "Search projects" })).not.toBeInTheDocument();
+  });
+
+  test("a store with no memory is not listed; a long list gets a project search", () => {
+    const stores: NativeMemoryStore[] = [
+      { project: "scratch", path: "/tmp/work/hello", memory_dir: "/m/scratch", item_count: 0 },
+      ...Array.from({ length: 9 }, (_, i) => ({
+        project: `P${i}`,
+        path: `/Users/xing/P${i}`,
+        memory_dir: `/Users/xing/.claude/projects/p${i}/memory`,
+        item_count: i + 1,
+      })),
+    ];
+    stubNative(stores);
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
+    const own = within(screen.getByTestId("own-memory-section"));
+    expect(own.queryByText(/work\/hello/)).not.toBeInTheDocument();
+    expect(own.getAllByRole("listitem")).toHaveLength(9);
+    fireEvent.change(own.getByRole("textbox", { name: "Search projects" }), {
+      target: { value: "p3" },
+    });
+    expect(own.getAllByRole("listitem")).toHaveLength(1);
+    expect(own.getByText("~/P3")).toBeInTheDocument();
   });
 
   test("falls back to the project label when the project path could not be resolved", () => {
@@ -132,22 +210,13 @@ describe("AgentMemoryTab", () => {
     expect(params.get("project")).toBe(COFFER_STORE.path);
   });
 
-  test("the tab carries no delivery action, no Coffer-memory pointer and no row actions", () => {
-    stubNative();
-    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
-    const row = screen.getByText("~/Coffer").closest("tr") as HTMLElement;
-    expect(within(row).queryByRole("button")).toBeNull();
-    expect(screen.queryByRole("checkbox")).toBeNull();
-    expect(screen.queryByText(/hook/i)).toBeNull();
-    expect(screen.queryByText(/memory page/i)).toBeNull();
-  });
-
-  test("no stores yet says where the agent will write them", () => {
+  test("no stores yet says where the agent will write them, inside its section", () => {
     stubNative([]);
     render(<AgentMemoryTab agent={CODEX} />, { wrapper: wrap });
-    expect(screen.getByText("No memory files from Codex yet")).toBeInTheDocument();
+    const own = within(screen.getByTestId("own-memory-section"));
+    expect(own.getByText("No memory files from Codex yet")).toBeInTheDocument();
     expect(
-      screen.getByText(/codex writes ~\/\.codex\/memories\/MEMORY\.md as it learns/i),
+      own.getByText(/codex writes ~\/\.codex\/memories\/MEMORY\.md as it learns/i),
     ).toBeInTheDocument();
   });
 
@@ -155,7 +224,6 @@ describe("AgentMemoryTab", () => {
     const refetch = vi.fn();
     stubNative([], { data: undefined, error: new Error("boom"), refetch });
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
-    expect(screen.getByText(/couldn’t read the memory stores/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /retry/i }));
     expect(refetch).toHaveBeenCalled();
   });

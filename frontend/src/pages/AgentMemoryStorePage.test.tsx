@@ -1,8 +1,9 @@
 // frontend/src/pages/AgentMemoryStorePage.test.tsx
 //
-// One native-memory store's page: the tree of the store directory, a read-only
-// preview of the selected file, and the open / reveal actions that used to sit
-// in the Memory table's "⋯" menu. The store is read from `?dir=` — the
+// One native-memory store's page (boards 2.1.51, 2.1.61): the standard detail
+// header with Reveal in Finder, the tree of the store directory (read-only: a
+// lock in its header and a row menu with Copy path and Reveal in Finder), and
+// the viewer of the selected file (path, Preview / Source, Open in editor). The store is read from `?dir=` — the
 // directory IS its identity — with `?project=` supplying only a readable
 // heading.
 //
@@ -15,7 +16,7 @@
 // back link the type.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AgentMemoryStorePage } from "./AgentMemoryStorePage";
@@ -124,9 +125,12 @@ describe("AgentMemoryStorePage", () => {
     stubContent();
     renderAt();
     expect(vi.mocked(hooks.useNativeMemoryFiles)).toHaveBeenCalledWith("agt_01cc", DIR);
-    expect(screen.getByRole("heading", { name: "~/Coffer" })).toBeInTheDocument();
-    expect(screen.getByText("Claude Code native memory store · 2 files")).toBeInTheDocument();
-    expect(screen.getByText("Files · 2")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /~\/Coffer/ })).toBeInTheDocument();
+    expect(screen.getByText("Claude Code memory · 2 files · read-only")).toBeInTheDocument();
+    // The tree's header strip says "Files" with a lock, and no count.
+    expect(screen.getByText("Files")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Read-only" })).toBeInTheDocument();
+    expect(screen.queryByText("Files · 2")).not.toBeInTheDocument();
   });
 
   test("shows the store's files and previews the one you select", () => {
@@ -140,7 +144,9 @@ describe("AgentMemoryStorePage", () => {
       DIR,
       "MEMORY.md",
     ]);
-    expect(screen.getByText(/index claude code loads at session start/i)).toBeInTheDocument();
+    // No hint line about the index, no ownership footer.
+    expect(screen.queryByText(/index claude code loads/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/owns these files/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText("port-drift.md"));
     expect(vi.mocked(hooks.useNativeMemoryFileContent).mock.calls.at(-1)).toEqual([
@@ -149,10 +155,13 @@ describe("AgentMemoryStorePage", () => {
       "port-drift.md",
     ]);
     expect(screen.getByText(/the daemon moves ports on restart/i)).toBeInTheDocument();
+    // The toolbar names the file by its path, home-abbreviated.
+    expect(
+      screen.getByText("~/.claude/projects/-Users-xing-Coffer/memory/port-drift.md"),
+    ).toBeInTheDocument();
   });
 
-  test("offers open-in-editor and reveal on the previewed file", () => {
-    // The affordances that left the Memory table's ⋯ menu land here.
+  test("the viewer offers Open in editor; the header reveals the store's folder", () => {
     stubTree();
     stubContent();
     renderAt();
@@ -160,8 +169,36 @@ describe("AgentMemoryStorePage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /open in editor/i }));
     expect(openMock).toHaveBeenCalledWith(CONTENT.abs_path, expect.anything());
+    // One Reveal on the page: the header's, for the folder.
     fireEvent.click(screen.getByRole("button", { name: /reveal in finder/i }));
-    expect(revealMock).toHaveBeenCalledWith(CONTENT.abs_path);
+    expect(revealMock).toHaveBeenCalledWith(DIR);
+  });
+
+  test("a row's menu copies its path or reveals it", async () => {
+    stubTree();
+    stubContent();
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.assign(navigator, { clipboard: { writeText } });
+    renderAt();
+    fireEvent.click(screen.getByRole("button", { name: "More for port-drift.md" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Copy path" }));
+    expect(writeText).toHaveBeenCalledWith(`${DIR}/port-drift.md`);
+    fireEvent.click(screen.getByRole("button", { name: "More for port-drift.md" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Reveal in Finder" }));
+    expect(revealMock).toHaveBeenCalledWith(`${DIR}/port-drift.md`);
+  });
+
+  test("Markdown front matter reads as a key / value grid above the body", () => {
+    stubTree();
+    stubContent({
+      content: "---\nname: port-drift\ntype: feedback\n---\n# Port drift\n\nBody.",
+    });
+    renderAt();
+    fireEvent.click(screen.getByText("port-drift.md"));
+    const grid = within(screen.getByTestId("front-matter"));
+    expect(grid.getByText("name")).toBeInTheDocument();
+    expect(grid.getByText("feedback")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Port drift" })).toBeInTheDocument();
   });
 
   test("the preview never offers a save — the agent owns these files", () => {
@@ -171,8 +208,6 @@ describe("AgentMemoryStorePage", () => {
     fireEvent.click(screen.getByText("port-drift.md"));
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
-    expect(screen.getByText("Read-only")).toBeInTheDocument();
-    expect(screen.getByText(/claude code owns these files and rewrites them/i)).toBeInTheDocument();
   });
 
   test("a truncated file says the preview is only its start", () => {

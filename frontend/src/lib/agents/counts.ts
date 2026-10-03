@@ -85,7 +85,12 @@ function cofferHookSummaryState(
   return null;
 }
 
-export function hookCounts(hooks: AgentHooksOut | undefined): AgentCounts["hooks"] {
+/** `memoryOn` false: Coffer installs no memory hook while the memory feature is off, so a
+ *  missing or unapproved one is not something to review. */
+export function hookCounts(
+  hooks: AgentHooksOut | undefined,
+  memoryOn = true,
+): AgentCounts["hooks"] {
   if (hooks === undefined) return undefined;
   // Coffer's memory hook sits on several events with one command: it is one
   // hook per file that declares it, however many events it covers.
@@ -95,6 +100,6 @@ export function hookCounts(hooks: AgentHooksOut | undefined): AgentCounts["hooks
     total: own + coffer,
     coffer,
     files: new Set(hooks.items.map((h) => h.path)).size,
-    cofferState: cofferHookSummaryState(hooks.coffer_hook),
+    cofferState: memoryOn ? cofferHookSummaryState(hooks.coffer_hook) : null,
   };
 }

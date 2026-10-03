@@ -475,14 +475,10 @@ independent speech-to-text default"), not through a `provider` subcommand.
 The web surfaces:
 
 - **Model providers** (route `/model-providers`, in the sidebar's Agents group, beside the agents whose models it serves) is
-  the connection library: a list of connections beside the open one, and no tabs — no view of which
-  agent runs on what and no Coffer's model tab, because an agent's connection is shown and switched on
-  that agent's Model tab and Coffer's own is chosen in Settings › General. The page header carries
-  Add; the page opens on the first connection, and with none it is a welcome panel. Each row shows
+  one page under one header — the title, an Experimental tag, a one-line description and the page's one primary button, **Add provider** — over two tabs, **Providers** and **Usage** ("Show metered usage on a Usage tab of Model providers"). Providers is the connection library: a list of connections beside the open one. It has no view of which agent runs on what and no Coffer's model tab, because an agent's connection is shown and changed in that agent's Overview › Model and Coffer's own is chosen in Settings › General. The page opens on the first connection, and with none it is a welcome panel. Each row shows
   the connection's vendor mark, its name, its protocol and what it offers (its curated model count,
   or all models), and the marks of the agents running on it, read from the agents' `connection_uid`; a filter narrows the list over name,
-  title, endpoint and description, and the list's order is the fallback order (see "Order providers,
-  and fail over in that order"). It has no per-row switch, because activation is per agent, and no
+  title, endpoint and description, and the list's order is the fallback order, labelled "Fallback order" with a help tip (see "Order providers, and fail over in that order"). It has no per-row switch, because activation is per agent, and no
   per-row reach or delete: both are on the open connection's header. A row MUST say what Coffer
   ITSELF uses the connection for: the `internal_default` connection carries a "Coffer · background
   model" badge and the `transcribe_default` connection a "Coffer · speech to text" badge, each with
@@ -492,37 +488,23 @@ The web surfaces:
   agent is switched to the connection. The vendor mark is derived from `base_url` by matching the
   preset list (an unmatched endpoint gets Coffer's neutral provider glyph); the name is the user's
   own, and the row links to the detail page by `uid`.
-- The add-connection dialog asks for the protocol rather than detecting it: it offers provider
-  presets (OpenAI / Anthropic / Google Gemini / DeepSeek / OpenRouter / Ollama) that fill in the
-  endpoint and protocol, plus Custom, which reveals a manual protocol selector; the CLI takes
-  `--protocol`. The dialog surfaces test-connection and list-models with an inline, not-yet-saved
+- The add-connection dialog asks for the vendor from a grid of eight equal buttons — Anthropic, OpenAI, Google Gemini, DeepSeek, OpenRouter, Ollama, LM Studio and Custom — which fill in the
+  endpoint and protocol (Custom reveals a manual protocol selector; the CLI takes
+  `--protocol`), in two steps, Endpoint and then Models. A local runtime (Ollama, LM Studio) asks for no key and,
+  until a runtime is chosen or an address is filled in, does not let the user go on to Models; the connection's Name
+  appears once a runtime is chosen. The dialog surfaces test-connection and list-models with an inline, not-yet-saved
   secret.
-- The connection detail page (`/model-providers/<uid>`, addressed by `uid` because a connection can be renamed) has no tabs: it is one column — Used by, Endpoint, Models. Its header carries the shared
+- The connection detail (`/model-providers/<uid>`, addressed by `uid` because a connection can be renamed) is one column opened beside the list — Used by, Endpoint, Models — and has no tabs. Its header carries a health pill (Reachable, Key rejected or Unreachable, read from a probe that runs when it opens), the protocol, the host and, when the endpoint answered, how long it took, and the shared
   scope control — the single place the connection's reach and its enabled state are both shown and
-  changed — with Test, Edit and a menu holding Delete. **Used by** is read-only: each agent whose `connection_uid` names the connection (and that the connection still serves),
-  with the model it runs, opening that agent's Model tab (`/agents/<type>/model`); and Coffer's engine and Speech to text
-  when the connection is flagged for them, each opening `/settings/general`. Used by carries no
-  switch, activate or revert control: an agent's connection is switched only on its Model tab.
-- Per-agent connection and model selection lives on the agent detail page's Model tab, filtered to
-  the connections that reach that agent and narrowed by `enabled`. The tab carries **Provider**
-  (the built-in login or a connection), **Model** and **Effort** — for Claude Code, plus a **Model per
-  tier** section (Opus, Sonnet, Haiku, and Fable only when the connection lists a Fable model) while
-  the agent is not on its built-in login (see "Suggest a model for each Claude Code tier"). Effort
-  offers the chosen model's own levels and is hidden when it has none; on the built-in login the
-  Model is the agent's own default, shown rather than offered. It carries no
-  other model setting — no context-window, output-limit, subagent, fallback, thinking or fast-mode
-  control — because what else a model needs Coffer derives and writes itself. While the agent is on
-  a connection, the tab also shows, read-only, which provider is tried next if that connection
-  fails (see "Order providers, and fail over in that order") and the last four characters of the
-  agent's own proxy token with **Rotate**; the built-in login bypasses the proxy and shows neither. Picking a connection
-  or a model there is a DRAFT: it activates nothing and PATCHes nothing. Picking a non-built-in
+  changed — with Test, Edit and a menu holding Delete provider ("Review what deleting a connection changes"). **Used by** is read-only: each agent whose `connection_uid` names the connection (and that the connection still serves),
+  with the model it runs, as a link reading "<Agent> › Change model" that opens that agent's page with its Change model dialog already open (`/agents/<type>?change-model=1`); and Coffer's engine and Speech to text
+  when the connection is flagged for them, each reading "Settings › General" and opening it. Used by carries no
+  switch, activate or revert control, and no row repeats a fault: a connection's fault shows in its header pill and in the section it belongs to (Endpoint for Unreachable or Key rejected, Models for a failed listing).
+- Per-agent connection and model selection lives on the agent detail page's **Overview › Model** section and its **Change model** dialog; the agent page has no Model tab. The section reads **Provider**, **Model**, **Effort** and **Route** and, with the `models` feature on, carries **Change…**. The dialog is one 480-wide form for both agents ("Review a model change before writing it"), filtered to the connections that reach that agent and narrowed by `enabled`: **Provider** (the agent's built-in login or a connection), then, for a connection, **Model**, **Effort** — offering the chosen model's own levels and hidden when it has none — and, for Claude Code, **Model per tier** (Opus, Sonnet, Haiku, and Fable only when the connection lists a Fable model; see "Suggest a model for each Claude Code tier"). A local model whose runtime reports no context window adds a **Context window** field. It carries no
+  other model setting — no output-limit, subagent, fallback, thinking or fast-mode
+  control — because what else a model needs Coffer derives and writes itself. Picking a non-built-in
   connection introspects its endpoint and stages a default model — the first model returned — and
-  the tier suggestions for it. A custom connection MUST pass
-  `POST /api/v1/models/test-connection` with the staged model before it can be confirmed; confirm
-  stays disabled until the test for the CURRENT draft passes, and changing the connection or the
-  model resets the result. Confirming PATCHes the per-agent binding and then switches the agent onto the
-  connection (`POST /api/v1/providers/{uid}/activate {agent_type}`) — the only step that writes native config. The tab reads the connection the agent is on from the agent record's `connection_uid`, not from any flag on a connection. Switching back to the built-in login needs
-  no test.
+  the tier suggestions for it. Picking things in the form is a DRAFT: it writes nothing, and **Review changes** is enabled only once the draft differs from what is applied and names a model. The built-in login needs no model. The agent's Overview reads the connection the agent is on from the agent record's `connection_uid`, not from any flag on a connection.
 
 #### Scenario: update a provider profile
 - **GIVEN** a connection exists,
@@ -536,7 +518,7 @@ The web surfaces:
 #### Scenario: the connections page lists profiles and their compatible agents
 - **GIVEN** the connections page is rendered with two mock connections whose reach differs,
 - **WHEN** the page renders,
-- **THEN** it lists both connections, marks the one an agent runs on with that agent's mark, and shows the open connection's endpoint and its reach in the header's shared control — not as a second column repeating it in words — with NO per-row "Switch" action, because activation is per-agent on the agent's Model tab (TypeScript acceptance test).
+- **THEN** it lists both connections, marks the one an agent runs on with that agent's mark, and shows the open connection's endpoint and its reach in the header's shared control — not as a second column repeating it in words — with NO per-row "Switch" action, because activation is per agent in its Change model dialog (TypeScript acceptance test).
 
 #### Scenario: the library names the connections Coffer itself uses
 - **GIVEN** connection A is the internal-engine default, connection B is the speech-to-text default, and connection C carries neither flag
@@ -551,14 +533,57 @@ The web surfaces:
 #### Scenario: a provider's used-by list is read-only
 - **GIVEN** a connection that Claude Code runs on (its `connection_uid`) with a chosen model, and that is flagged `internal_default`
 - **WHEN** its detail page renders
-- **THEN** Used by lists Claude Code with its model, opening Claude Code's Model tab, and Coffer's engine, opening `/settings/general`
+- **THEN** Used by lists Claude Code with its model, as a link "Claude Code › Change model" to `/agents/claude_code?change-model=1`, and Coffer's engine, opening `/settings/general`
 - **AND** Used by carries no switch, activate or revert control (TypeScript acceptance test)
 
-#### Scenario: the model tab shows only provider, model, effort and the tiers
+#### Scenario: the Change model dialog shows only provider, model, effort, tiers and a context window
 - **GIVEN** a Claude Code agent on a non-Claude connection, and a Codex agent on a connection whose chosen model has no effort levels
-- **WHEN** each agent's Model tab renders
+- **WHEN** each agent's Change model dialog renders
 - **THEN** Claude Code's shows Provider, Model, Effort and Model per tier, and Codex's shows Provider and Model with no Effort
-- **AND** neither shows a context-window, output-limit, subagent, fallback, thinking or fast-mode control
+- **AND** neither shows an output-limit, subagent, fallback, thinking or fast-mode control
+
+### Requirement: Review a model change before writing it
+An agent's model MUST be changed in two calls, so the person sees the lines before they are written. `POST /api/v1/providers/model-switch/preview` takes `{agent_type, connection_uid, model, effort, tier_models, context_window}` — `connection_uid` null is the agent's built-in login, which carries no model, effort or tiers — and answers, per file the change would write, the file's path, whether it would be added, modified or removed, the line counts and diff, and a **fingerprint** of what the file held when it was read, plus the agent and the connection it would run on; it writes nothing, not even a `.bak`. It refuses, as "Switch one agent at a time" does, with 409 when the connection or the agent is switched off or the connection does not reach the agent. `POST /api/v1/providers/model-switch/apply` takes the same body with `seen`, each previewed file's path and fingerprint, and does what the switch of "Switch one agent at a time" and "Revert an agent type to its built-in login" does — records the model binding (`model`, `effort`, `tier_models`) on the agent, then projects it and sets the connection, putting the binding back if the projection fails — so the preview and the write cannot disagree about the lines. When a file named in `seen` was edited on disk after the preview, nothing is written and the answer is 409 `CONFIG_FILE_STALE`.
+
+The files are the agent's own: for Claude Code, `settings.json` — the top-level `model` and `effortLevel` and the `env.ANTHROPIC_DEFAULT_<TIER>_MODEL` pins; for Codex, `config.toml` — `model`, `model_reasoning_effort` and `[model_providers.coffer]` — together with Coffer's own model-list file `coffer-model-catalog.json` beside it, so a Codex change reads as two changes. A model or effort the user has since changed with `/model` or `/effort` no longer equals the agent's binding and is theirs. For a local model whose runtime reports no context window, `context_window` carries the one the user typed, which the apply records on the connection's curated entry for that model before projecting; a model that reports levels is the only one for which an effort is offered.
+
+The web UI's **Change model** dialog (Overview › Model › Change…, or `?change-model=1`) is the one form for both agents: Provider, Model, Effort and, for Claude Code, Model per tier — Codex has one model per session and no tiers — and a Context window for a local model that reports none. **Review changes** opens the 1060-wide review of the files from the preview, with a note that only the lines shown change, a `.bak` is kept, and, for Codex, that the model list file is Coffer's own; **Apply** writes them and closes both dialogs. With a provider chosen, Coffer tests the connection with the chosen model while the preview is computed; a failed test is shown as a warning and does not stop the apply. When Apply is refused as stale, the review says which file changed and offers **Reload preview**, and writes nothing. With the built-in login chosen the dialog offers Provider only, with a line saying the agent picks its model and effort itself (`/model`, `/effort`) and that Coffer sets them only for a provider the user adds.
+
+#### Scenario: previewing a model change writes nothing
+- **GIVEN** a Claude Code agent on its built-in login and a connection that reaches it
+- **WHEN** the user previews switching it onto the connection with a model, an effort and tier pins
+- **THEN** the answer lists `settings.json` with the diff of the keys it would write and a fingerprint, and no file, `.bak` or agent record has changed
+- **AND** previewing onto a connection that does not reach the agent is refused with 409
+
+#### Scenario: a Codex change previews two files
+- **GIVEN** a Codex agent and a connection whose chosen model has a context window
+- **WHEN** the user previews the change
+- **THEN** the answer lists `config.toml` and `coffer-model-catalog.json`, and applying writes both and records the model binding and the connection on the agent
+
+#### Scenario: applying refuses a file that changed after the preview
+- **GIVEN** a previewed change to a Codex agent's `config.toml`
+- **WHEN** the user edits that file and then applies with the fingerprints the preview gave
+- **THEN** the apply is refused with 409 `CONFIG_FILE_STALE`, the user's edit survives and the agent's record is unchanged
+- **AND** the review says which file changed and offers Reload preview
+
+#### Scenario: the built-in login asks for a provider only
+- **GIVEN** the Change model dialog for a Claude Code agent on a connection
+- **WHEN** the user picks the built-in login
+- **THEN** no Model, Effort or tier field is shown, Review changes lists only the removal of the keys Coffer wrote, and applying leaves the agent's `connection_uid` empty
+
+### Requirement: Review what deleting a connection changes
+Deleting a connection that agents run on MUST put each of those agents back on its built-in login first — the same de-projection "Revert an agent type to its built-in login" performs, audited the same way — and only then delete the connection, its owned secret and the engine settings that named it; a de-projection refused because a file was edited on disk aborts the delete and keeps the connection. `GET /api/v1/providers/{uid}/delete-preview` MUST answer, per agent running on the connection, which of its files the delete would change and exactly the lines it would remove or the file it would remove, and write nothing; it is a 404 for a connection that does not exist. On the web, deleting a connection nothing uses asks once and returns to the list; deleting one in use is not blocked but opens a review — what will happen to each user of the connection (an agent goes back to its own login, Coffer's engine pauses, speech to text turns off, the key is deleted) beside the daemon's own lines for each agent file — and **Delete** applies it. The lines shown are the daemon's dry run, never drawn by the page.
+
+#### Scenario: deleting a provider an agent runs on is a review of its config diff, and Delete applies it
+- **GIVEN** a connection a Codex agent runs on, with Coffer's model, provider table and catalogue pointer in its `config.toml`
+- **WHEN** the user chooses Delete provider
+- **THEN** a review lists what will happen and the lines the delete removes from `config.toml`, and nothing has been removed yet
+- **AND** choosing Delete puts the agent back on its built-in login, removes the connection and its owned secret, and leaves the user's own lines in the file
+
+#### Scenario: the delete preview writes nothing
+- **GIVEN** a connection two agents run on
+- **WHEN** a client reads `GET /api/v1/providers/{uid}/delete-preview`
+- **THEN** it lists each agent with its files and the lines the delete would remove, and every file, record and the connection are unchanged afterwards
 
 ### Requirement: Keep ollama connections internal-only
 The `ollama` protocol is internal-only: such a connection MUST reach no agent whatever its scope
@@ -690,27 +715,26 @@ is the uid.
 - **AND** the second exits non-zero with the `RESOURCE_ALREADY_EXISTS` error the route gives, and the connection is still `acme-eu`.
 
 ### Requirement: Introspect the endpoint when the Models tab opens
-The Models tab MUST introspect the endpoint when it opens, once per visit, without a user action, and
+A connection's Models section MUST introspect the endpoint when the connection opens, once per visit, without a user action, and
 MUST show that it is doing so; there is no "Fetch models" button, because making the user press one
 made "the endpoint offers nothing" and "nothing asked it" indistinguishable. A probe that FAILS MUST
-say so on the surface and offer a retry — it MUST NOT fail silently. A failed or empty probe MUST
+say so on the surface — in the section's title ("Listing failed · last listed <date>") and in a box naming what failed — and leave **Refresh**, which sits in the section's title, as the one way to try again; the box carries no Retry of its own, and the failure shows only in the Models section, not on the Used by rows. It MUST NOT fail silently. A failed or empty probe MUST
 leave the curated `models` selection unchanged, and the empty-means-unrestricted semantics (see
 "Curate the models a connection offers") MUST be unaffected.
 
-The tab is a table with one row per model id — id, type and offered — with search, a Type filter and
-an Offered filter. The type is a five-value select pre-filled from what introspection guessed and
+The section lists one row per model id — its switch (offered or not), id, what uses it, its price and its type — with a search and a Type filter. The one sentence under the section title says where prices come from once ("bundled with Coffer, updated <date>", or from the provider), so a row marks only the exception: **You set**, **Set price…** or **Local · no cost**. The type is a five-value select, shown as plain text with a chevron that opens its menu, pre-filled from what introspection guessed and
 correctable in place; a correction on an already-offered row patches the curated set immediately,
 while one made on a row not offered yet is held on the surface and travels into the entry when its
 switch is turned on.
 
 #### Scenario: the models table lists the endpoint's models when it opens
 - **GIVEN** a connection whose endpoint serves a model list,
-- **WHEN** the Models tab of its detail page is opened,
+- **WHEN** the connection's detail is opened,
 - **THEN** the endpoint is introspected without any user action and its model ids fill the table, each with its own offered/not-offered switch — there is no "Fetch models" button.
-#### Scenario: a failed model introspection says so and offers a retry
+#### Scenario: a failed model introspection says so, with Refresh in the title
 - **GIVEN** a connection whose endpoint refuses the model-list probe,
-- **WHEN** the Models tab is opened,
-- **THEN** the failure is stated on the surface with a retry control, and the connection's existing curated selection is left exactly as it was.
+- **WHEN** the connection is opened,
+- **THEN** the Models section's title reads "Listing failed" with Refresh beside it and a box says the endpoint's models could not be listed, with no Retry in the box, and the connection's existing curated selection is left exactly as it was.
 
 ### Requirement: Store a modality with each curated model
 `ProviderConfig.models` MUST be a list of OBJECTS, not of strings: each entry is a `CuratedModel` of
@@ -810,9 +834,9 @@ Coffer's own: the CLI owns that namespace, so a renamed or added level works the
 level an account cannot run fails where every other unusable choice fails. A model name is still raw
 passthrough everywhere the CLI accepts one.
 
-On the built-in login the Agent page offers no model control — those slots bind a connection's
-model — and shows only a line saying where the model is chosen instead (per conversation in the Chat
-page's picker, or with `/model` in a channel). The reasoning effort is stored per conversation next
+On the built-in login the Change model dialog offers no model control — those slots bind a connection's
+model — and says where the model is chosen instead (the agent's own `/model` and `/effort`, per conversation in the Chat
+page's picker, or with `/model` in a channel); the agent's Overview › Model still shows the model and effort its own configuration names, read-only. The reasoning effort is stored per conversation next
 to the model in the provider-owned `AgentConfig` blob: `PATCH
 /api/v1/chat/conversations/{id}/agent-config` takes `effort` alongside `model`, a body that mentions
 one leaves the other alone, and an empty or null value clears the field so the agent runs at its own
@@ -915,10 +939,9 @@ own `tier_models`, when it stores any, are projected instead of the suggestion. 
 projected as `env.ANTHROPIC_DEFAULT_<TIER>_MODEL` (see "Project into Claude Code settings without
 clobbering them"); on the built-in login no pin is written.
 
-On the agent's Model tab the tiers are a **Model per tier** section — Fable only when the connection
-lists a Fable model — prefilled with the suggestion, each editable from the connection's models, with
-**Reset to suggested** putting every tier back to the prefill; confirming stores them as the agent's
-`tier_models`. On the built-in login the section is hidden.
+In the Change model dialog the tiers are a **Model per tier** section — Fable only when the connection
+lists a Fable model — prefilled with the suggestion and each editable from the connection's models; applying the change stores them as the agent's
+`tier_models` and writes the pins ("Review a model change before writing it"). Codex has no tiers. On the built-in login the section is hidden.
 
 #### Scenario: a non-Claude connection pins every tier to the model
 - **GIVEN** a Claude Code agent bound to `kimi-k3` and a connection whose curated models are `kimi-k3` and `kimi-k3-mini`
@@ -930,15 +953,15 @@ lists a Fable model — prefilled with the suggestion, each editable from the co
 - **WHEN** Coffer suggests the tiers for a Claude Code agent on it
 - **THEN** Opus, Sonnet, Haiku and Fable are the model whose name carries that tier
 
-#### Scenario: an edited tier resets to the suggestion
-- **GIVEN** the Model per tier section with Haiku changed by the user
-- **WHEN** the user chooses Reset to suggested
-- **THEN** every tier returns to Coffer's prefill, and confirming writes those pins
+#### Scenario: an edited tier is written as the user chose it
+- **GIVEN** the Model per tier section prefilled by Coffer, with Haiku changed by the user
+- **WHEN** the user reviews and applies the change
+- **THEN** the preview shows the Haiku pin the user chose beside the other prefilled tiers, and the agent's `tier_models` records them
 
 #### Scenario: the built-in login shows no tiers
 - **GIVEN** a Claude Code agent on its built-in login
-- **WHEN** its Model tab renders
-- **THEN** it shows Provider, Model and Effort and no Model per tier section, and no tier pin is in `settings.json`
+- **WHEN** its Change model dialog is open
+- **THEN** it shows Provider only and no Model per tier section, and no tier pin is in `settings.json`
 
 ### Requirement: Record a context window and effort levels with each curated model
 Each curated model of a connection (see "Store a modality with each curated model") MUST be able to
@@ -1255,13 +1278,14 @@ Coffer and are not metered.
 #### Scenario: each price names where it came from
 - **GIVEN** a provider whose models are priced from different sources, and one model nothing prices
 - **WHEN** its Models section renders
-- **THEN** each priced model shows its input and output price per 1M tokens with You set, From <provider> or Bundled · updated <the date of the list in use>, and the unpriced one shows `—` with Set price…
+- **THEN** the section says once where its prices come from — bundled with Coffer, updated <the date of the list in use>, or from the provider — and each priced model shows its input and output price per 1M tokens, marked only when it is the exception: You set
+- **AND** the model nothing prices shows `—` with Set price…, and a local runtime's model reads Local · no cost
 
 #### Scenario: a model with no price reads as a dash, never zero
 - **GIVEN** usage of a model through a connection that records no price for it, whose API reported none, and that the bundled list does not know
-- **WHEN** the Usage tab of Model providers and `coffer usage` show that model's row
+- **WHEN** the Usage tab and `coffer usage` show that model's row
 - **THEN** its cost reads `—`, not `$0.00`, with the unpriced request count
-- **AND** on the Usage tab the dash's tooltip says no price is known for it and that one is set on its provider
+- **AND** on the Usage tab the dash's tooltip says no price is known for it and that a price is set on its provider, and the Cost tile says "1 model unpriced" once, as a link to that provider's Models section; no other place repeats the count
 
 ### Requirement: Report usage by model, agent or day over a range
 `GET /api/v1/usage/summary` and `coffer usage [--range today|24h|7d|30d|month|custom] [--from <day> --to <day>] [--by model|agent|day] [--agent <agent type>] [--provider <name>] [--json]`
@@ -1273,7 +1297,7 @@ the row's requests, most requests first. The summary MUST be narrowable to one a
 (`agent_type`) and to one connection (`connection_uid`); a filtered summary's rows and totals count
 only the requests that match every filter. `GET /api/v1/usage/requests` and `coffer usage requests`
 page through the per-request detail, newest first. `GET /api/v1/usage/export.csv` and
-`coffer usage --csv` return the same summary, with the same filters, as CSV.
+`coffer usage --csv` return the same summary, with the same filters, as CSV. The web UI shows the summary as the Usage tab of Model providers ("Show metered usage on a Usage tab of Model providers").
 
 #### Scenario: usage by model names the connection
 - **GIVEN** usage of two models over two connections
@@ -1331,10 +1355,9 @@ handle on each row, moves with the keyboard, and explains in its help that order
 priority. Each connection MUST carry **Use as fallback for other providers** (`fallback`, on by
 default; `PATCH /api/v1/providers/{uid}`, `coffer provider edit --fallback|--no-fallback`): switched
 off, it is never tried for another connection's request, though its own agents still fail over from
-it. A local runtime is never a fallback and its detail says so. The agent's Model tab MUST show,
-read-only, where its requests go next — "If <provider> fails: <fallbacks>" or "No fallback" — from
-`GET /api/v1/proxy/routes/{agent_uid}?model=<model>`, and the last four characters of the agent's
-own proxy token (`GET /api/v1/proxy/tokens/{agent_uid}/hint`) with Rotate. Usage is metered on the
+it. A local runtime is never a fallback and its detail says so. Where an agent's requests go is read from
+`GET /api/v1/proxy/routes/{agent_uid}?model=<model>`, and the agent's Overview › Model shows only that its route is through Coffer's proxy, with **Test**; the agent's own proxy token is replaced
+from **Rotate proxy token** in the agent page's ⋯ menu, offered only while the agent routes through the proxy. Usage is metered on the
 connection that actually answered.
 
 #### Scenario: fallbacks are tried in the Model providers list order
@@ -1347,10 +1370,10 @@ connection that actually answered.
 - **WHEN** the proxy's route for the agent is built
 - **THEN** it holds A only
 
-#### Scenario: the Model tab says which provider is tried next
-- **GIVEN** an agent on a connection whose model a second connection also offers
-- **WHEN** the agent's Model tab renders
-- **THEN** it reads "If <its provider> fails: <the second>" and shows the agent's proxy token by its last four characters with Rotate
+#### Scenario: Rotate proxy token is offered only while the agent routes through the proxy
+- **GIVEN** an agent on a connection and an agent on its built-in login
+- **WHEN** each agent's page menu is opened
+- **THEN** the first offers Rotate proxy token and the second does not, and choosing it replaces the first agent's token
 
 ### Requirement: Log every failover in Activity
 Every attempt the proxy moves off a connection before the first byte MUST be recorded in the audit
@@ -1386,7 +1409,7 @@ failures, not on every attempt. The refresh is on by default and is switched per
 **Refresh model prices** in Settings › General under Coffer's model, `coffer config set
 prices.refresh on|off`, `PUT /api/v1/providers/price-list` — and `COFFER_PRICE_REFRESH=off` pins it
 off. `GET /api/v1/providers/price-list` says which list is in use, the day its data is from, and
-the refresh's state; a bundled price reads "Bundled · updated <that day>".
+the refresh's state; the Models section's price-source line reads "bundled with Coffer, updated <that day>" for a bundled price.
 
 #### Scenario: a refreshed list is cached and used
 - **GIVEN** the published list prices a model differently from the bundled snapshot
@@ -1467,10 +1490,12 @@ The Usage tab shows only what Coffer's proxy metered for API-key requests: a fil
 date-only time range (Today, Last 7 days, Last 30 days, This month, or a custom range of days, up to
 90 days back), an **Agent** pill, a **Provider** pill, **Clear filters** while one is set and a ghost
 **Export CSV** button at the right; five tiles in one row — Cost (estimated), whose "?" holds the
-note on which prices costed the range, Input, Output, Cache read and Cache write; a Cost per day
-chart in the data colour with today lighter; a segmented By model · By agent · By day over a bordered
-table with a Total row, a footer "Cost of priced models only." with **Edit prices**, which switches
-to the Providers tab, and, by day, the latest seven days then "Showing 7 of N · Show all". The range,
+note on which prices costed the range, with the request count under it and, when a model in the
+range has no known price, "N model(s) unpriced" as a link to that model on its provider
+(`/model-providers?provider=<uid>&model=<id>`) — the one place the count appears — then Input,
+Output, Cache read and Cache write; a Cost per day chart in the data colour with today lighter; a
+segmented By model · By agent · By day over a bordered table whose second column is headed Agent,
+with a Total row and, by day, the latest seven days then "Showing 7 of N · Show all". The range,
 the filters and the breakdown are in the address. A cost no price covers reads `—`, with the reason
 on hover. Before any API-key request has ever been metered the tab is one whole-page empty state —
 "No API-key usage yet" and **Open Providers**, which switches to the Providers tab — with no filter

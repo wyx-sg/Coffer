@@ -20,6 +20,9 @@ const { followDaemonEvents } = await import("@/lib/events/eventStream");
 const ALL_ON = { knowledge: true, memory: true, sync: true, models: true };
 const ALL_OFF = { knowledge: false, memory: false, sync: false, models: false };
 
+// Midday, so "since HH:MM" never crosses midnight into a dated label.
+vi.useFakeTimers({ toFake: ["Date"] });
+vi.setSystemTime(new Date(2026, 9, 3, 12, 0, 0));
 const now = Date.now();
 const ago = (ms: number) => new Date(now - ms).toISOString();
 const HOUR = 3_600_000;

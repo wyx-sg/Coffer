@@ -694,6 +694,24 @@ export interface components {
              * @enum {string}
              */
             location: "skills" | "agents_dir";
+            /** Name */
+            name?: string | null;
+            reach?: components["schemas"]["AdoptReach"] | null;
+        };
+        /**
+         * AdoptReach
+         * @description Who gets the adopted skill: every agent, only the listed agents, or
+         *     nobody (the skill is adopted switched off).
+         */
+        AdoptReach: {
+            /** Agents */
+            agents?: string[];
+            /**
+             * Mode
+             * @default everywhere
+             * @enum {string}
+             */
+            mode?: "everywhere" | "restricted" | "disabled";
         };
         /**
          * ArchiveImportSourceOut

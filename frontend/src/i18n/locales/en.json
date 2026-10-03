@@ -35,18 +35,13 @@
     }
   },
   "changePreview": {
-    "summary": "{{changes}} in {{agents}}",
-    "changes_one": "{{count}} change",
-    "changes_other": "{{count}} changes",
-    "agents_one": "{{count}} agent",
-    "agents_other": "{{count}} agents",
     "op": {
       "add": "Add",
       "modify": "Modify",
       "remove": "Remove"
     },
     "whatWillHappen": "What will happen",
-    "changesHeading": "Changes",
+    "changesHeading": "Changes · {{count}}",
     "reassurance": "Only the lines shown change. Everything else in each file is left as it is.",
     "diffLabel": "Changes to {{path}}",
     "computing": "Comparing with each agent’s files…",
@@ -83,8 +78,7 @@
       "applied": "Applied",
       "applying": "Applying",
       "pending": "Waiting"
-    },
-    "summaryWithCoffer": "{{changes}} in {{agents}} and Coffer"
+    }
   },
   "common": {
     "experimental": "Experimental",
@@ -99,7 +93,6 @@
       "dayAt": "{{day}} at {{time}}"
     },
     "moreActions": "More actions",
-    "enabled": "Enabled",
     "close": "Close",
     "save": "Save",
     "cancel": "Cancel",
@@ -136,7 +129,6 @@
       "saveFailed": "Couldn’t save {{file}}"
     },
     "couldntDelete": "Couldn’t delete {{name}}",
-    "couldntRemove": "Couldn’t remove {{name}}",
     "couldntDeleteSelected": "Couldn’t delete the selection",
     "couldntDeleteConversation": "Couldn’t delete the conversation",
     "bulk": {
@@ -179,7 +171,17 @@
     "emptyDir": "No subfolders here."
   },
   "files": {
-    "discardAndReload": "Discard my edits and reload"
+    "readOnly": "Read-only",
+    "unsaved": "Unsaved changes",
+    "unsavedChanges": "Unsaved changes",
+    "notSaved": "Not saved",
+    "viewLabel": "Show as",
+    "preview": "Preview",
+    "source": "Source",
+    "truncated": "Content truncated — showing the start of the file.",
+    "loadFailed": "Couldn’t read this file",
+    "binaryTitle": "Binary file · {{size}}",
+    "binaryBody": "Coffer shows text files only. Open it in its own app."
   },
   "nav": {
     "skipToContent": "Skip to content",
@@ -1747,129 +1749,143 @@
     "loadMoreShort": "Load more"
   },
   "agents": {
-    "hooksTab": {
-      "cofferHook": "Coffer's memory hook",
+    "hooks": {
       "parseError": "Couldn’t read {{file}}: {{error}}",
-      "emptyTitle": "{{agent}} has no hooks",
-      "emptyBody": "Hooks in {{agent}}’s own config show up here, read-only.",
-      "summary": {
-        "hooks_one": "{{count}} hook",
-        "hooks_other": "{{count}} hooks",
-        "files_one": "in {{count}} file",
-        "files_other": "in {{count}} files",
-        "coffer_one": "{{count}} is Coffer’s",
-        "coffer_other": "{{count}} are Coffer’s",
-        "cofferMissing": "Coffer’s hook missing",
-        "own_one": "{{count}} the agent’s own",
-        "own_other": "{{count}} the agent’s own"
-      },
-      "matcher": "matcher {{matcher}}",
-      "matcherAny": "Any",
+      "openInConfig": "Open in Config files",
       "state": {
-        "active": "Active",
         "current": "Current",
         "stale": "Out of date",
         "missing": "Missing",
         "neverFired": "Never fired",
-        "untrusted": "Untrusted",
+        "untrusted": "Not approved",
         "modified": "Changed since trusted",
         "disabled": "Turned off in Codex"
       },
-      "fired": "fired {{time}}",
-      "missing": {
-        "title": "Memory hook is missing",
-        "body": "Taken out of {{file}}, so {{agent}} starts sessions without memory."
-      },
-      "trustNote": "Codex runs a new or changed hook only after you trust it with /hooks in Codex. Coffer never trusts it for you.",
-      "neverFired": {
-        "title": "Installed but never fired",
-        "body": "The hook is in {{file}}, but no session has fired it yet, so {{agent}} has had no memory at session start.",
-        "causeLabel": "Likely cause:",
-        "cause": {
-          "codex": "this Codex build doesn’t load {{file}}, so the hook is never run.",
-          "claude_code": "{{agent}} hasn’t started a session since the hook was installed."
-        },
+      "coffer": {
+        "title": "Coffer’s memory hook",
+        "state": "State",
+        "command": "Command",
+        "events": "Events",
+        "file": "File",
+        "fired": "Fired {{time}}",
+        "lastFired": "Last fired {{time}}",
+        "neverFiredSub": "Never fired",
+        "repair": "Repair",
         "checkAgain": "Check again",
-        "openActivity": "Open Activity"
+        "viewActivity": "View in Activity",
+        "reason": {
+          "current_one": "Gives every session Coffer’s memory. One hook on {{count}} event.",
+          "current_other": "Gives every session Coffer’s memory. One hook on {{count}} events.",
+          "stale": "Written by an older Coffer, so its command no longer works and sessions start without memory.",
+          "missing": "It was taken out of {{file}}, so {{agent}} starts sessions without memory.",
+          "untrusted": "{{agent}} skips hooks you haven’t approved. Approve it in {{agent}}’s /hooks, then check again.",
+          "modified": "The command changed after you approved it, so {{agent}} skips it. Approve it again in {{agent}}’s /hooks, then check again.",
+          "disabled": "The hook is turned off in {{agent}}, so it never runs. Turn it on in {{agent}}’s /hooks, then check again.",
+          "neverFired": {
+            "codex": "Likely cause: this {{agent}} build doesn’t load {{file}}, so no session has run it yet.",
+            "claude_code": "Likely cause: {{agent}} hasn’t started a session since the hook was installed."
+          }
+        }
       },
-      "repair": "Repair Coffer’s memory hook",
-      "search": "Search hooks",
-      "footnote": "Every hook in {{agent}}’s own config, read-only. Change one in its file; only Coffer’s own hook is looked after here.",
-      "noMatches": "No hooks match",
-      "untrustedSub": "not approved in Codex",
-      "untrusted": {
-        "title": "{{agent}} hasn’t approved this hook",
-        "body": "{{agent}} only runs hooks you approve. Until you approve Coffer’s, {{agent}} skips it and starts every session without memory. Run /hooks in {{agent}} and approve coffer memory index, then check again."
+      "own": {
+        "title": "{{agent}}’s own hooks",
+        "help": "Read-only here. Change a hook in its file; Coffer looks after only its memory hook.",
+        "hooks_one": "{{count}} hook",
+        "hooks_other": "{{count}} hooks",
+        "files_one": "{{count}} file",
+        "files_other": "{{count}} files",
+        "summary": "{{hooks}} in {{files}}, from {{agent}}’s own config. Click one for its details.",
+        "search": "Search command or file",
+        "event": "Event",
+        "eventFilter": "Filter by event",
+        "allEvents": "All events",
+        "showing": "Showing {{shown}} of {{total}}",
+        "colEvent": "Event",
+        "colCommand": "Command",
+        "colMatcher": "Matcher",
+        "colFile": "File",
+        "matcherAny": "Any",
+        "noMatches": "No hooks match.",
+        "emptyTitle": "{{agent}} has no hooks of its own",
+        "emptyBody": "Hooks in {{agent}}’s own config show up here, read-only."
+      },
+      "details": {
+        "title": "{{event}} hook",
+        "description": "From {{agent}}’s own config. Read-only here: change it in its file.",
+        "command": "Command",
+        "event": "Event",
+        "matcher": "Matcher",
+        "anyTool": "Any tool",
+        "type": "Type",
+        "shellCommand": "Shell command",
+        "timeout": "Timeout",
+        "seconds": "{{count}} s",
+        "timeoutDefault": "Default",
+        "file": "File",
+        "entry": "Entry",
+        "copy": "Copy command"
+      },
+      "eventHelp": {
+        "SessionStart": "When a session starts or resumes.",
+        "UserPromptSubmit": "When you send a prompt, before it is processed.",
+        "PreToolUse": "Before a tool call. It can block the call.",
+        "PostToolUse": "After a tool call finishes.",
+        "Stop": "When the agent finishes a reply.",
+        "Notification": "When the agent sends a notification.",
+        "SubagentStop": "When a subagent finishes.",
+        "PreCompact": "Before the conversation is compacted.",
+        "SessionEnd": "When a session ends."
       }
     },
     "pluginsTab": {
-      "summary": {
-        "plugins_one": "{{count}} plugin",
-        "plugins_other": "{{count}} plugins",
-        "allOwn": "all the agent’s own",
-        "enabled_one": "{{count}} enabled",
-        "enabled_other": "{{count}} enabled"
-      },
-      "cols": {
-        "plugin": "Plugin",
-        "version": "Version",
-        "marketplace": "Marketplace",
-        "state": "State"
+      "search": "Search plugins",
+      "aboutAria": "About plugins",
+      "help": {
+        "claude": "Coffer lists Claude Code’s plugins read-only. The switch turns a plugin on or off; Uninstall runs Claude Code’s own plugin command.",
+        "codex": "Coffer lists Codex’s plugins read-only. The switch turns a plugin on or off; Uninstall removes the plugin’s entry from config.toml and deletes its cache."
       },
       "cacheMissing": "Cache missing",
       "enabledAria": "Enabled: {{name}}",
       "uninstall": "Uninstall",
-      "uninstallAria": "Uninstall {{name}}",
+      "menu": {
+        "uninstall": "Uninstall…"
+      },
+      "uninstallDisabled": "{{agent}} isn’t on this Mac",
       "uninstallTitle": "Uninstall {{name}}?",
       "uninstallBody": {
-        "claudeLead": "Claude Code runs",
-        "claudeTail": ". Its entry and its cache are removed.",
-        "codex": "Coffer removes the",
-        "codexTail": " entry from config.toml (keeping a .bak) and deletes its cache directory.",
-        "skills_one": "Its {{count}} bundled skill goes with it.",
-        "skills_other": "Its {{count}} bundled skills go with it."
+        "claude": "Claude Code runs its own <code>plugin uninstall</code> command. The plugin’s entry and its cache are removed.",
+        "codex": "Coffer removes the plugin’s entry from <code>config.toml</code> (a .bak is kept) and deletes its cache.",
+        "skills_one": "Its {{count}} skill goes with it.",
+        "skills_other": "Its {{count}} skills go with it."
       },
-      "programMissing": "{{agent}}’s program isn’t found on this machine, so Uninstall can’t run. An agent can reinstall it.",
-      "footnote": {
-        "claude": "Coffer shows plugins read-only; Uninstall runs Claude Code’s own plugin command.",
-        "claudeNoCli": "Uninstall runs Claude Code’s own claude plugin command, which isn’t on PATH here.",
-        "codex": "Coffer shows plugins read-only; Uninstall removes the plugin’s entry from config.toml and deletes its cache."
-      },
+      "programMissing": "{{agent}} isn’t on this Mac, so its plugins can’t be uninstalled here.",
       "parseError": "Couldn’t read {{file}}: {{error}}",
-      "search": "Search plugins",
       "emptyTitle": "{{agent}} has no plugins",
-      "emptyBody": "Plugins {{agent}} installs show up here, read-only.",
+      "emptyBody": "Plugins you install in {{agent}} show up here.",
       "noMatches": "No plugins match"
     },
     "pluginDetail": {
       "loadFailed": "Couldn't load this plugin",
-      "homepage": "Homepage",
-      "installPath": "Installed at",
-      "notOnDisk": "Not on disk — the plugin's cache directory is missing",
-      "contents": "Contents",
+      "notOnDisk": "Not on disk",
       "skills": "Skills",
       "commands": "Commands",
       "agents": "Subagents",
-      "hooks": "Hooks",
+      "hooks": "Hook events",
       "mcpServers": "MCP servers",
-      "noContents": "This plugin contributes no skills, commands, subagents, hooks or MCP servers.",
-      "author": "Author"
+      "noContents": "This plugin contributes no skills, commands, subagents, hooks or MCP servers."
     },
     "title": "Agents",
     "loadFailed": "Failed to load agents.",
-    "type": "Type",
     "configDir": "Config directory",
     "detail": {
       "back": "Back to agents",
       "notFound": "No such agent",
       "newConversation": "New conversation",
       "connect": "Connect",
-      "enable": "Turn on",
-      "add": "Add",
       "moreActions": "More actions for {{name}}",
       "notAdded": {
-        "title": "{{name}} isn’t added yet",
-        "body": "Coffer found {{name}} at {{dir}}. Add it and it gets your MCP servers, skills and memory through one entry and one hook — you review the exact lines first."
+        "title": "{{name}} isn’t connected",
+        "body": "Coffer found {{name}} at {{dir}}. Connect it and it gets your MCP servers, skills and memory through one entry and one hook — you review the exact lines first."
       },
       "notInstalled": {
         "title": "{{name}} isn’t installed",
@@ -1879,17 +1895,15 @@
         "title": "{{name}}’s config is left behind",
         "body": "{{dir}} is still here but the program isn’t on PATH. Hand reinstalling it to an agent with the prompt, and it comes back on its own."
       },
-      "checkAgain": "Check again",
-      "repair": "Repair",
-      "repairHook": "Repair Coffer’s memory hook"
+      "rotateToken": {
+        "label": "Rotate proxy token",
+        "done": "Token rotated. The agent fetches the new one on its next request."
+      }
     },
     "workspace": {
       "skills": "Skills",
       "mcp": {
         "detail": {
-          "hint": "Configured directly in this agent's own config file, not managed by Coffer. Shown read-only — Coffer does not start it or list its tools.",
-          "origin": "From {{file}} · {{source}}",
-          "copy": "Copy JSON",
           "loadFailed": "Couldn't load this MCP server"
         }
       }
@@ -1897,15 +1911,29 @@
     "memoryTab": {
       "search": "Search projects",
       "noMatch": "No project matches.",
-      "colProject": "Project",
-      "colPath": "Path",
-      "colItems": "Items",
-      "title": "Native memory stores",
-      "subtitle": "The agent’s own memory files, read-only. Coffer reads them to build shared memory and never writes them.",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files",
       "emptyTitle": "No memory files from {{agent}} yet",
-      "emptyBody": "{{agent}} writes {{path}} as it learns. It shows here, read-only, once it exists.",
-      "loadFailed": "Couldn’t read the memory stores",
-      "open": "Open"
+      "emptyBody": "{{agent}} writes {{path}} as it learns. It shows here once it exists.",
+      "coffer": {
+        "title": "Coffer’s memory",
+        "open": "Open Memory",
+        "repair": "Repair",
+        "description": "Coffer hands {{agent}} your agents’ shared memory at the start of every session.",
+        "hook": "Memory hook",
+        "eventsIn_one": "{{count}} event in",
+        "eventsIn_other": "{{count}} events in",
+        "oneEventIn": "{{event}} in",
+        "lastFired": "Last fired",
+        "never": "Never",
+        "delivers": "Delivers",
+        "deliversBody": "The shared memory index, so {{agent}} can look up what your agents learned"
+      },
+      "own": {
+        "title": "{{agent}}’s own memory",
+        "descriptionClaude": "One store per project, written by {{agent}}. Read-only: Coffer reads them and never writes them.",
+        "descriptionCodex": "Written by {{agent}}. Read-only: Coffer reads it and never writes it."
+      }
     },
     "config": {
       "none": "No config files found.",
@@ -1915,121 +1943,130 @@
       "emptyDir": "No files yet.",
       "desc": {
         "settings": "{{agent}} settings: permissions, model and hooks.",
-        "settings_local": "Personal overrides layered on top of the shared settings; not committed.",
+        "settings_local": "Personal overrides layered on settings.json, kept out of git.",
         "global": "Claude Code's global state and user-scope MCP servers (.claude.json — beside ~/.claude, or inside a custom config directory).",
         "instructions": "Instructions {{agent}} reads at the start of every session.",
-        "subagents": "Custom subagent definitions, one Markdown file per subagent.",
+        "subagents": "Custom subagents, one Markdown file each.",
         "config": "Codex CLI configuration: model, providers, and tool settings.",
         "hooks": "Lifecycle hooks that run commands around Codex events."
       }
     },
     "skillsTab": {
       "unmanagedBadge": "Unmanaged",
-      "unmanagedDetail": {
-        "invalidTitle": "Not a valid skill — Coffer can't adopt this folder as it is",
-        "path": "Path",
-        "location": "Location",
-        "readOnlyHint": "Coffer doesn't manage this folder, so this preview is read-only. Adopt it to manage it in Coffer, or open the folder to change it yourself.",
-        "notFound": "This unmanaged skill is no longer in the agent's skill locations."
-      },
       "adopt": "Adopt",
-      "adoptDisabledInvalid": "SKILL.md is invalid — cannot adopt",
-      "adoptDisabledForeign": "Foreign symlink — cannot adopt",
-      "deleteConfirm": "Delete this unmanaged skill? This cannot be undone.",
-      "foreignLink": "Foreign link",
-      "locationSkills": "skills directory",
-      "locationAgentsDir": "~/.agents/skills",
       "adoptSuccess": "Adopted {{name}}",
-      "openFolder": "Open folder",
-      "openFolderFailed": "Couldn't open that folder.",
-      "summary_one": "{{count}} skill · {{coffer}} delivered by Coffer · {{own}} the agent’s own",
-      "summary_other": "{{count}} skills · {{coffer}} delivered by Coffer · {{own}} the agent’s own",
       "search": "Search skills",
-      "footnoteBefore": "Choose which agents get a Coffer skill on the",
-      "footnoteLink": "Skills",
-      "footnoteAfter": "page.",
-      "cols": {
-        "skill": "Skill",
-        "path": "Path",
-        "state": "State",
-        "owner": "Owner",
-        "actions": "Actions"
+      "fromCoffer": {
+        "description": "Coffer installs these into {{agent}} and keeps them in step. Manage them on the Skills page.",
+        "title_one": "{{count}} skill from Coffer",
+        "title_other": "{{count}} skills from Coffer",
+        "open": "Open Skills"
       },
-      "builtIn": "Built in",
+      "own": {
+        "title": "{{agent}}’s own skills",
+        "description": "Skills in {{agent}}’s folders that Coffer doesn’t manage. Adopt one to manage it in Coffer.",
+        "help": "Coffer reads these from the agent’s skill folders. Fix or adopt them here; nothing changes until you confirm."
+      },
       "state": {
-        "linked": "Linked",
-        "notManaged": "Not managed",
         "invalid": "Invalid SKILL.md",
+        "foreign": "Foreign link",
         "duplicate": "Duplicate",
-        "adoptFailed": "Adopt failed"
+        "unmanaged": "Unmanaged"
       },
       "foreignDescription": "Links outside Coffer’s library",
-      "duplicateOf": "Duplicate of {{name}} in Coffer",
-      "openFile": "Open file",
-      "openFileFailed": "Couldn’t open that file.",
+      "duplicateOf": "Same name as Coffer’s {{name}}, which this agent already gets",
       "removeDuplicate": "Delete duplicate",
       "removeDuplicateTitle": "Delete the agent’s copy of {{name}}?",
       "removeDuplicateBody": "This deletes {{path}} from disk. Coffer keeps delivering its own {{name}}, so {{agent}} still has the skill.",
-      "adoptFailedBanner": "Couldn’t adopt {{name}}: {{reason}}",
-      "adoptFailedOpen": "Open it",
-      "emptyTitle": "{{agent}} has no skills",
-      "emptyDescription": "Skills {{agent}} installs show up here, read-only.",
+      "emptyTitle": "{{agent}} has no skills of its own",
+      "emptyDescription": "Skills in {{agent}}’s folders that Coffer doesn’t manage show up here.",
       "noMatch": "No skills match.",
       "menu": {
         "delete": "Delete…"
       },
       "deleteTitle": "Delete {{name}}?",
-      "deleteBody_one": "This deletes {{path}} and its {{count}} file from disk. It isn’t in Coffer, so there is no copy to restore from.",
-      "deleteBody_other": "This deletes {{path}} and its {{count}} files from disk. It isn’t in Coffer, so there is no copy to restore from.",
-      "deleteBodyNoCount": "This deletes {{path}} from disk. It isn’t in Coffer, so there is no copy to restore from."
+      "deleteBody_one": "This deletes {{path}} and its {{count}} file. Coffer has no copy, so it can’t be restored.",
+      "deleteBody_other": "This deletes {{path}} and its {{count}} files. Coffer has no copy, so it can’t be restored.",
+      "deleteBodyNoCount": "This deletes {{path}}. Coffer has no copy, so it can’t be restored.",
+      "adoptDialog": {
+        "title": "Adopt {{name}}",
+        "description": "Coffer copies this folder into its library and links it back here. A .bak is kept.",
+        "name": "Name in Coffer",
+        "nameHint": "The folder name in every agent. It can’t change after adopting.",
+        "nameTaken": "Coffer already has a skill named {{name}}. Choose another name.",
+        "openTaken": "Open Coffer’s {{name}}",
+        "from": "From",
+        "copyPath": "Copy path",
+        "files_one": "{{count}} file: {{names}}",
+        "files_other": "{{count}} files: {{names}}",
+        "reach": "Reach",
+        "reachHint": "Who gets it. Change it later on the Skills page.",
+        "failedTitle": "Couldn’t adopt {{name}}"
+      },
+      "unmanagedDetail": {
+        "invalidTitle": "Not a valid skill — Coffer can't adopt this folder as it is",
+        "notFound": "This unmanaged skill is no longer in the agent's skill locations.",
+        "readOnlyHint": "Coffer reads this folder but doesn’t manage it. Adopt it to share it with your other agents.",
+        "ownSkill": "{{agent}}’s own skill",
+        "files_one": "{{count}} file",
+        "files_other": "{{count}} files",
+        "description": "Description",
+        "folder": "Folder",
+        "foundIn": "Found in",
+        "foundInSkills": "{{agent}}’s skills directory",
+        "foundInAgentsDir": "The shared ~/.agents/skills directory",
+        "filesLabel": "Files"
+      }
     },
     "mcpTab": {
-      "summary_one": "{{count}} server · {{coffer}} through the Coffer gateway · {{own}} directly in {{file}}",
-      "summary_other": "{{count}} servers · {{coffer}} through the Coffer gateway · {{own}} directly in {{file}}",
-      "ownConfig": "the agent’s config",
-      "search": "Search servers",
-      "footnote": "Adopting moves an entry into Coffer, serves it to every agent you choose and takes it out of this file; a .bak is written first.",
-      "cols": {
-        "server": "Server",
-        "command": "Command or gateway",
-        "where": "Where",
-        "state": "State",
-        "owner": "Owner",
-        "actions": "Actions"
+      "fromCoffer": {
+        "description": "{{agent}} reaches these through Coffer’s one MCP entry. Manage them on the MCP servers page.",
+        "title_one": "{{count}} server through Coffer",
+        "title_other": "{{count}} servers through Coffer",
+        "open": "Open MCP servers"
       },
-      "gateway": "coffer gateway",
-      "cofferEntry": "coffer entry",
+      "own": {
+        "title": "{{agent}}’s own MCP servers",
+        "description": "Entries in {{agent}}’s own config that bypass Coffer. Adopt one to route it through Coffer.",
+        "help": "Coffer reads these from the agent’s config. Adopt or remove them here; nothing changes until you review the change."
+      },
+      "search": "Search servers",
       "state": {
-        "connected": "Connected",
-        "notConnected": "Not connected",
         "bypasses": "Bypasses Coffer",
         "duplicate": "Duplicate",
         "readOnly": "Read-only"
       },
-      "readOnlyReason": "file can’t be parsed",
       "secretsInEnv_one": "{{count}} secret in env",
       "secretsInEnv_other": "{{count}} secrets in env",
-      "duplicateOf": "Duplicate of {{name}} in Coffer",
-      "manage": "Manage",
+      "duplicateOfLead": "Duplicate of",
+      "duplicateOfTail": "in Coffer",
       "adopt": "Adopt",
       "remove": "Remove",
       "removeDuplicate": "Remove duplicate",
+      "menu": {
+        "remove": "Remove…"
+      },
       "removeTitle": "Remove {{name}} from {{file}}?",
-      "removeBody": "{{agent}} loses this server in its next session. A .bak backup is written first, and nothing in Coffer changes.",
-      "removeDuplicateBody": "{{agent}} keeps getting {{name}} through the Coffer gateway. A .bak backup is written first, and nothing in Coffer changes.",
-      "parseErrorTitle": "Couldn’t parse {{file}} — shown read-only",
-      "parseErrorBody": "{{error}}. Coffer won’t adopt or remove entries until the file can be read again.",
+      "removeBody": "{{agent}} loses this server in its next session. A .bak is kept, and nothing in Coffer changes.",
+      "removeDuplicateBody": "{{agent}} keeps getting {{name}} through Coffer. A .bak is kept, and nothing in Coffer changes.",
+      "parseError": "Can’t read {{file}}: {{error}}. Its entries are read-only until the file is valid again.",
       "openConfigFiles": "Open in Config files",
-      "emptyTitle": "{{agent}} has no MCP servers",
-      "emptyDescription": "MCP servers {{agent}} installs show up here, read-only.",
-      "directOf": "Direct server of {{agent}}",
+      "emptyTitle": "{{agent}} has no MCP servers of its own",
+      "emptyDescription": "Servers in {{agent}}’s own config that bypass Coffer show up here.",
+      "entry": {
+        "description": "{{agent}}’s own server, configured in its config file. Coffer doesn’t start it or list its tools.",
+        "from": "From",
+        "copy": "Copy JSON"
+      },
       "adoptDialog": {
         "title": "Adopt {{name}}",
-        "description": "Coffer serves it to every agent, then takes the entry out of {{file}}. A .bak is kept.",
+        "description": "Coffer serves it through its gateway and takes the entry out of <file>{{file}}</file>, so {{agent}} never gets it twice. A .bak is kept.",
         "name": "Name in Coffer",
-        "nameConflict": "A server named {{name}} is already in Coffer — rename this one and retry.",
+        "nameHint": "The name every agent sees it by.",
+        "nameConflict": "A server named {{name}} is already in Coffer. Choose another name.",
         "command": "Command",
         "url": "URL",
+        "copy": "Copy",
         "env": "Environment",
         "headers": "Headers",
         "key": "Key",
@@ -2038,39 +2075,35 @@
         "secret": "Secret",
         "plain": "Plain value",
         "unchanged": "kept as it is",
-        "secretNote_one": "{{keys}} looks like a secret — its value moves into Coffer’s encrypted vault and the config keeps a reference.",
-        "secretNote_other": "{{keys}} look like secrets — their values move into Coffer’s encrypted vault and the config keeps references.",
-        "leaves": "The entry leaves {{file}} once Coffer serves it, so {{agent}} never gets the server twice.",
+        "secretNote_one": "{{keys}} looks like a secret, so its value moves into Coffer’s encrypted vault and the config keeps a reference.",
+        "secretNote_other": "{{keys}} look like secrets, so their values move into Coffer’s encrypted vault and the config keeps references.",
         "pending": "Adopting…",
         "success": "Adopted {{name}} — Coffer now serves it through the gateway"
       },
       "noMatch": "No servers match."
     },
-    "removeConfirmTitle": "Remove {{name}}?",
     "memoryStore": {
       "tree": "Files",
       "selectFile": "Select a file to view.",
-      "binary": "Binary file ({{size}} bytes)",
-      "truncated": "Content truncated — showing the start of the file.",
       "missingDir": "No memory store was named — open one from the agent's Memory tab.",
-      "treeCount_one": "Files · {{count}}",
-      "treeCount_other": "Files · {{count}}",
-      "subtitle_one": "{{agent}} native memory store · {{count}} file",
-      "subtitle_other": "{{agent}} native memory store · {{count}} files",
-      "subtitleNoCount": "{{agent}} native memory store",
-      "readOnly": "Read-only",
-      "indexHint": "Index {{agent}} loads at session start",
-      "ownedBy": "{{agent}} owns these files and rewrites them; open one in your editor to change it.",
+      "subtitle_one": "{{agent}} memory · {{count}} file · read-only",
+      "subtitle_other": "{{agent}} memory · {{count}} files · read-only",
+      "subtitleNoCount": "{{agent}} memory · read-only",
       "unavailable": "This memory store can’t be shown",
-      "notAdded": "{{agent}} isn’t added to Coffer."
+      "notAdded": "{{agent}} isn’t added to Coffer.",
+      "moreFor": "More for {{name}}",
+      "copyPath": "Copy path",
+      "copyFailed": "Couldn’t copy the path."
+    },
+    "fromCoffer": {
+      "title": "From Coffer",
+      "more": "+{{count}} more"
+    },
+    "filterPill": {
+      "agent": "Agent",
+      "remove": "Remove the {{name}} filter"
     },
     "kindTab": {
-      "owner": {
-        "label": "Owner",
-        "all": "All",
-        "coffer": "Coffer’s",
-        "own": "The agent’s own"
-      },
       "loadFailed": "Couldn’t read this list",
       "moreFor": "More for {{name}}"
     },
@@ -2078,8 +2111,6 @@
       "not_installed": "Not installed",
       "config_left_behind": "Config left behind",
       "not_found": "Not found",
-      "never_run": "Installed, never run",
-      "not_added": "Detected, not added",
       "disabled": "Off",
       "connected": "Connected",
       "needs_repair": "Needs repair",
@@ -2087,14 +2118,13 @@
       "checking": "Checking…"
     },
     "stateHeader": {
-      "connected": "Connected to Coffer",
       "hook_untrusted": "Hook not approved"
     },
     "tabs": {
+      "more": "More",
       "hooks": "Hooks",
       "plugins": "Plugins",
       "overview": "Overview",
-      "model": "Model",
       "skills": "Skills",
       "mcpServers": "MCP servers",
       "config": "Config files",
@@ -2104,44 +2134,43 @@
     "overviewTab": {
       "connection": {
         "heading": "Connection",
+        "help": "Coffer adds exactly one MCP entry and one memory hook, both marked as Coffer’s; nothing else in the agent’s config is touched.",
         "loadFailed": "Couldn’t read the Coffer connection. Reload the page to try again.",
-        "title": {
-          "connected": "Connected to Coffer",
-          "not_connected": "Not connected",
-          "needs_repair": "Needs repair",
-          "disabled": "Off"
-        },
         "body": {
-          "connected": "{{name}} reaches Coffer through one MCP entry and gets memory through one hook. Both are marked as Coffer’s; nothing else in its config is touched.",
-          "connectedMcpOnly": "{{name}} reaches Coffer through one MCP entry, marked as Coffer’s; nothing else in its config is touched.",
-          "notConnected": "Connecting adds one <code>coffer</code> entry to <code>{{mcpFile}}</code> and one memory hook to <code>{{hookFile}}</code>. You review the exact lines before anything is written.",
-          "notConnectedMcpOnly": "Connecting adds one <code>coffer</code> entry to <code>{{mcpFile}}</code>. You review the exact lines before anything is written.",
+          "connected": "{{name}} reaches Coffer through one MCP entry and gets memory through one hook.",
+          "connectedMcpOnly": "{{name}} reaches Coffer through one MCP entry.",
+          "notConnected": "Connect adds one entry and one hook to its config. You review the lines first.",
+          "notConnectedMcpOnly": "Connect adds one entry to its config. You review the line first.",
           "mcpMissing": "The <code>coffer</code> entry is missing from <code>{{mcpFile}}</code>, so {{name}} can’t reach Coffer’s tools.",
-          "hookStale": "The MCP entry is current, but the memory hook in <code>{{hookFile}}</code> runs a command this Coffer no longer accepts, so {{name}} starts sessions without memory.",
-          "hookMissing": "The MCP entry is current, but the memory hook is missing from <code>{{hookFile}}</code>, so {{name}} starts sessions without memory.",
-          "disabled": "Coffer serves {{name}} nothing while it is off: the gateway answers it with no tools and no skills are linked. Its entry and hook stay in place, so turning it on needs no new writes."
+          "hookStale": "The memory hook runs a command this Coffer no longer accepts, so sessions start without memory.",
+          "hookMissing": "The memory hook is missing from <code>{{hookFile}}</code>, so sessions start without memory.",
+          "hookUntrusted": "{{name}} runs only hooks you approve. Approve Coffer’s hook in {{name}}’s /hooks, then check again.",
+          "disabled": "Coffer serves {{name}} nothing while it’s off. Its entry and hook stay in place."
         },
         "action": {
-          "disconnect": "Disconnect",
           "connect": "Connect",
           "repair": "Repair",
-          "enable": "Turn on"
+          "enable": "Turn on",
+          "checkAgain": "Check again"
         },
         "part": {
           "mcp": "MCP entry",
           "memoryHook": "Memory hook",
           "mcpIn": "<code>coffer</code> in <path>{{file}}</path>",
           "notIn": "Not in <path>{{file}}</path>",
-          "hookIn": "{{event}} in <path>{{file}}</path>",
-          "lastFired": " · last fired {{age}} ago",
-          "lastFiredNow": " · last fired just now",
+          "hookIn_one": "{{count}} event in <path>{{file}}</path>",
+          "hookIn_other": "{{count}} events in <path>{{file}}</path>",
+          "lastFired": " · fired {{age}} ago",
+          "lastFiredNow": " · fired just now",
           "neverFired": " · never fired"
         },
         "health": {
           "current": "Current",
           "stale": "Out of date",
           "missing": "Missing",
-          "idle": "Idle"
+          "notSet": "Not set",
+          "idle": "Idle",
+          "untrusted": "Not approved"
         }
       },
       "age": {
@@ -2154,6 +2183,7 @@
       },
       "summary": {
         "heading": "What this agent can use",
+        "description": "Everything that reaches it, through Coffer or on its own.",
         "title": {
           "mcp-servers": "MCP servers",
           "skills": "Skills",
@@ -2165,31 +2195,33 @@
         "disabledLine": "None while off · {{count}} would reach it",
         "toReview": "{{count}} to review",
         "mcp": {
-          "line": "{{coffer}} through Coffer · {{own}} directly in {{file}}",
-          "lineCofferOnly": "{{coffer}} through Coffer"
+          "line": "{{coffer}} through Coffer · {{own}} in {{file}}",
+          "lineCofferOnly": "{{coffer}} through Coffer",
+          "untilConnected": "None until connected · {{count}} would reach it",
+          "direct": "{{own}} in {{file}}"
         },
         "skills": {
-          "line": "{{coffer}} delivered by Coffer · {{own}} on disk that Coffer doesn’t manage",
-          "lineCofferOnly": "{{coffer}} delivered by Coffer to {{dir}}"
+          "line": "{{coffer}} from Coffer · {{own}} not managed by Coffer",
+          "lineCofferOnly": "From Coffer, in {{dir}}"
         },
         "plugins": {
           "none": "None installed",
-          "line_one": "{{total}} installed from {{count}} marketplace, {{enabled}} on",
-          "line_other": "{{total}} installed from {{count}} marketplaces, {{enabled}} on"
+          "line_one": "From {{count}} marketplace · {{enabled}} on",
+          "line_other": "From {{count}} marketplaces · {{enabled}} on"
         },
         "hooks": {
           "none": "No hooks",
-          "inFile_one": "{{count}} hook in {{file}}",
-          "inFile_other": "{{count}} hooks in {{file}}",
-          "inPlaces_one": "{{count}} hook in {{places}} places",
-          "inPlaces_other": "{{count}} hooks in {{places}} places",
+          "inFile": "In {{file}}",
+          "inPlaces": "In {{places}} places",
           "coffer_one": "{{count}} is Coffer’s",
-          "coffer_other": "{{count}} are Coffer’s"
+          "coffer_other": "{{count}} are Coffer’s",
+          "cofferMissing": "Coffer’s hook is missing",
+          "cofferUntrusted": "Coffer’s hook isn’t approved"
         },
         "memory": {
           "none": "No native stores",
-          "line_one": "{{count}} native store (read-only)",
-          "line_other": "{{count}} native stores (read-only)"
+          "line_one": "Native store · read-only",
+          "line_other": "Native stores · read-only"
         },
         "config": {
           "none": "No config files yet"
@@ -2197,38 +2229,39 @@
       },
       "model": {
         "heading": "Model",
-        "change": "Change",
+        "change": "Change…",
         "provider": "Provider",
-        "model": "Default model",
-        "effort": "Default effort",
+        "model": "Model",
+        "effort": "Effort",
+        "route": "Route",
+        "test": "Test",
         "auto": "Chosen by the agent",
+        "routeProxy": "Through Coffer’s proxy",
+        "reachable": "reachable",
+        "routeDirect": {
+          "claude_code": "Straight to Anthropic, not through Coffer",
+          "codex": "Straight to OpenAI, not through Coffer"
+        },
         "builtin": {
           "claude_code": "Built-in login (Anthropic account)",
-          "codex": "Built-in login (ChatGPT sign-in)"
+          "codex": "Built-in login (ChatGPT account)"
         }
       },
       "details": {
         "heading": "Details",
         "version": "Version",
         "uid": "UID",
-        "registered": "Added"
-      },
-      "sessions": {
-        "heading": "Recent sessions",
-        "all": "All",
-        "untitled": "Untitled session"
+        "registered": "Registered"
       },
       "problem": {
         "checkAgain": "Check again",
         "waysToFix": "Ways to fix it",
         "leftBehind": {
-          "title": "{{name}}’s config is left behind — the program isn’t installed",
-          "body": "Checked at {{time}}: <code>{{dir}}</code> is still here with <code>{{files}}</code>, but there is no <code>{{program}}</code> on PATH. Coffer can’t connect an agent that isn’t installed, and leaves the folder as it is.",
-          "bodyNoFiles": "Checked at {{time}}: <code>{{dir}}</code> is still here, but there is no <code>{{program}}</code> on PATH. Coffer can’t connect an agent that isn’t installed, and leaves the folder as it is."
+          "line": "{{dir}} is still here but there is no {{program}} on PATH. Install it and Coffer picks up your existing config."
         },
         "install": {
           "title": "Install {{name}}",
-          "body": "Then check again. Coffer finds the program and your existing config; Connect turns back on."
+          "help": "Coffer doesn’t run this itself: hand it to your agent, which picks the right way for this machine."
         },
         "leftIn": "Left in {{dir}}",
         "files": "Files",
@@ -2253,48 +2286,24 @@
           "body": "Point this agent at the config directory {{name}} uses now.",
           "action": "Change config directory"
         },
-        "notUsing": {
-          "title": "Not using {{name}} any more",
-          "body": "Removes it from Coffer only. If it comes back, it shows as Detected, not added.",
-          "action": "Remove from Coffer"
-        },
         "lastKnown": "Last known configuration"
       }
     },
     "configTab": {
-      "home": "~ (home)",
-      "role": {
-        "settings": "Settings",
-        "settings_local": "Settings",
-        "global": "Global",
-        "instructions": "Instructions",
-        "subagents": "Subagents",
-        "config": "Settings",
-        "hooks": "Hooks"
-      },
-      "markerReadOnly": "Read-only",
-      "markerDirty": "Unsaved change",
-      "markerEditing": "Editing",
-      "markerMissing": "Not created",
       "revert": "Revert",
       "validJson": "Valid JSON",
-      "invalidJson": "Line {{line}}, column {{column}}: not valid JSON",
-      "noteViewing": "Edit to change it. Saving keeps a .bak and refuses if the file changed on disk",
-      "noteEditing": "Saving keeps a .bak and refuses if the file changed on disk",
-      "noteMissing": "Read-only until created",
-      "staleTitle": "Save refused — {{name}} changed on disk since you opened it",
-      "staleBody": "Your edits are still here. Copy them somewhere safe, then reload to get the current file.",
+      "invalidJson": "Not valid JSON · Save is off until it is",
+      "staleTitle": "{{name}} changed on disk since you opened it",
+      "staleBody": "Your edits aren’t saved. Copy them somewhere safe, then reload the current file.",
       "copyEdits": "Copy my edits",
       "copyFailed": "Couldn’t copy — select the text and copy it by hand.",
-      "missingTitle": "This file doesn’t exist yet",
-      "missingBody": "{{agent}} reads it if it’s there. Create it to add to {{agent}}’s configuration.",
+      "missingTitle": "{{name}} doesn’t exist yet",
+      "missingBody": "{{agent}} reads it if it’s there. Create it when you want to set something in it.",
       "create": "Create {{name}}",
-      "directoryCount_one": "Directory · {{count}} file",
-      "directoryCount_other": "Directory · {{count}} files",
       "directoryHint": "Select a file to open it.",
       "deleteTitle": "Delete {{name}}?",
       "deleteBody": "This deletes {{path}} from disk, so {{agent}} loses it. There is no copy to restore from.",
-      "deleteFile": "Delete {{name}}",
+      "deleteFile": "Delete…",
       "newFile": "New file",
       "newFileTitle": "New file in {{dir}}",
       "newFileBody": "One Markdown file per subagent. Coffer starts it from a short template you can edit.",
@@ -2302,13 +2311,18 @@
       "newFileSavedAs": "Saved as {{path}}",
       "newFileInvalid": "Use a plain file name ending in .md, without slashes.",
       "newFileExists": "A file with this name is already there.",
-      "newFileCreate": "Create"
+      "newFileCreate": "Create",
+      "title": "Config files · {{agent}}",
+      "treeLabel": "Config files",
+      "invalidAt": "Line {{line}}, column {{column}}: not valid JSON",
+      "discardAndReload": "Discard and reload",
+      "folder": "Folder",
+      "openFile": "Open file",
+      "moreFor": "More for {{name}}"
     },
     "sessionsTab": {
-      "count_one": "{{count}} session",
-      "count_other": "{{count}} sessions",
-      "rowMeta_one": "{{project}} · {{count}} msg",
-      "rowMeta_other": "{{project}} · {{count}} msgs",
+      "rowMeta_one": "{{project}} · {{count}} message",
+      "rowMeta_other": "{{project}} · {{count}} messages",
       "untitled": "Untitled session",
       "noMatch": "No sessions match.",
       "loadMore": "Load more",
@@ -2325,63 +2339,72 @@
       "turnRange": "Turns {{from}}–{{to}} of {{total}}",
       "earlier": "Earlier turns",
       "later": "Later turns",
-      "readOnly": "Read-only — Coffer never writes transcripts",
-      "outline": "Your prompts",
-      "outlineEmpty": "No prompts in this window.",
+      "readOnly": "Read-only",
       "roleUser": "You",
       "noTurns": "This session has no conversational turns.",
-      "turnTruncated": "This turn was too long to show in full — open the file to read the rest.",
+      "turnTruncated": "This turn is too long to show in full. Open the file to read the rest.",
       "harnessPrefix": "Harness context",
       "loadFailed": "Couldn’t load this session",
-      "loadFailedBody": "{{file}} was moved or deleted after the list was read.",
-      "tryAgain": "Retry",
+      "loadFailedBody": "The file was moved or deleted after the list was read.",
       "refreshList": "Refresh list",
       "listFailed": "Couldn’t read the sessions",
       "emptyTitle": "No sessions yet",
-      "emptyBody": "{{agent}} keeps its sessions in {{dir}}. Run {{program}} in a project and its session appears here.",
-      "refresh": "Refresh"
+      "emptyBody": "{{agent}} keeps its sessions in {{dir}}. Run {{program}} in a project and it shows up here.",
+      "search": "Search sessions",
+      "project": "Project",
+      "projectChosen": "Project: {{project}}",
+      "allProjects": "All projects"
     },
-    "modelTab": {
+    "changeModel": {
+      "title": "Change {{name}}’s model",
+      "description": "Nothing is written until you review the change. New sessions pick it up.",
+      "reviewButton": "Review changes",
+      "review": {
+        "title": "Review changes",
+        "subtitle": {
+          "provider": "Switch {{agent}} to {{provider}}",
+          "builtin": "Switch {{agent}} to its built-in login"
+        },
+        "summary": {
+          "provider": "Sends its requests to {{provider}} through Coffer’s proxy and answers with {{model}}{{effort}}. No provider key is written.",
+          "atEffort": " at {{effort}} effort",
+          "catalog": "Coffer also rewrites its model list so {{agent}} knows this model’s context window and levels.",
+          "builtin": "Goes back to {{agent}}’s own login. Coffer removes only the keys it wrote; a model or effort you set yourself stays."
+        },
+        "staleTitle": "{{file}} changed on disk",
+        "staleBody": "It was saved after this preview was made, so nothing was written. Reload to preview against the current file.",
+        "reload": "Reload preview",
+        "note": "Only the lines shown change. Everything else in the file is left as it is, and a .bak copy is kept.",
+        "noteCatalog": "Only the lines shown change. The model list file is Coffer’s own; a .bak copy of config.toml is kept.",
+        "testFailed": "The connection test failed: {{message}} You can still apply."
+      },
       "provider": {
-        "title": "Provider",
-        "builtin": "Built-in login",
-        "builtinDetail": {
-          "claude_code": "Claude Code’s own Anthropic account",
-          "codex": "Codex’s own ChatGPT sign-in"
-        },
-        "current": "Current",
-        "keyInVault": "key in Coffer’s vault",
-        "modelCount_one": "{{count}} model",
-        "modelCount_other": "{{count}} models",
-        "noneTitle": "No other compatible provider yet",
-        "noneBody": {
-          "claude_code": "Add an Anthropic-compatible provider to run Claude Code off its own login.",
-          "codex": "Add an OpenAI-compatible provider to run Codex off its own sign-in."
-        },
-        "addConnection": "Add provider",
-        "livesOn": "Providers live on the Model providers page.",
-        "manage": "Manage providers",
-        "custom": "Custom provider",
-        "customDetail": "One of your own providers, picked from a list",
-        "customNone": "No compatible provider yet — add one on the Model providers page.",
-        "customPick": "Choose a provider",
-        "customSearchEmpty": "No provider matches.",
-        "helpByType": {
-          "claude_code": "Changes apply to new sessions. /effort in Claude Code overrides Effort. Coffer sets everything else for this provider; edit the file on Config files if you need more.",
-          "codex": "Changes apply to new sessions. A trusted project’s config can override Model and Effort. Coffer sets everything else for this provider; edit the file on Config files if you need more."
+        "label": "Provider",
+        "none": "No other compatible provider yet. <link>Add one in Model providers</link>",
+        "hint": {
+          "claude_code": "Built-in login, or a provider from Model providers.",
+          "codex": "Built-in login (ChatGPT account), or a provider from Model providers."
         }
       },
+      "builtinNote": {
+        "claude_code": "With its own login, {{agent}} picks its model and effort itself (<code>/model</code>, <code>/effort</code>). Coffer sets them only for a provider you add.",
+        "codex": "With its own login, {{agent}} picks its model and effort itself (<code>/model</code>). Coffer sets them only for a provider you add."
+      },
       "model": {
-        "title": "Model",
-        "label": "Default model",
-        "placeholder": "Select a default model",
-        "hint": "The model the agent answers with. Comes from the provider’s models.",
-        "builtinDefault": "{{model}} · {{agent}}’s default",
-        "builtinHint": "Set in {{agent}} itself — use /model in a session."
+        "label": "Model",
+        "placeholder": "Select a model"
+      },
+      "window": {
+        "label": "Context window",
+        "tokens": "tokens",
+        "hint": "{{runtime}} doesn’t report it. Coffer writes it so the agent compacts at the right point.",
+        "small": "{{runtime}} doesn’t report it. Below 64k tokens the agent compacts often."
       },
       "effort": {
         "label": "Effort",
-        "modelDefault": "Model default",
+        "default": "Default",
+        "none": "This model reports no levels.",
+        "choose": "Choose a model to see its levels.",
         "levels": {
           "minimal": "Minimal",
           "low": "Low",
@@ -2390,107 +2413,52 @@
           "xhigh": "Extra high",
           "max": "Max"
         },
-        "hint": "Levels this model reports. Chat can still set its own per conversation.",
-        "builtinHint": "Set in {{agent}} itself — use /effort in a session.",
-        "choose": "Choose a default model to see its reasoning levels.",
-        "hidden": "Effort is hidden: this model reports no levels."
+        "hint": {
+          "claude_code": "Levels this model reports.",
+          "codex": "Levels this model reports. Codex has one model per session, no tiers."
+        }
       },
       "tiers": {
-        "title": "Advanced: tier mapping",
-        "helpLabel": "About tier mapping",
-        "help": "Claude Code asks for Opus, Sonnet or Haiku. Here each tier is translated to a real model of this provider; these override the default model per tier.",
-        "reset": "Reset to suggested",
-        "suggested": "Suggested by Coffer",
+        "label": "Model per tier",
+        "hint": "Claude Code picks a tier per task; Coffer prefilled these from the provider.",
         "names": {
           "opus": "Opus",
           "sonnet": "Sonnet",
           "haiku": "Haiku",
           "fable": "Fable"
-        },
-        "hint": "Prefilled from the provider’s models; a row appears for Fable only when the provider lists one."
-      },
-      "test": "Test connection",
-      "testing": "Testing…",
-      "review": {
-        "title": "Review the switch",
-        "fileCount_one": "{{count}} file",
-        "fileCount_other": "{{count}} files",
-        "route": "Coffer’s route to {{host}}",
-        "keyHelper": "Coffer’s key helper (never the key itself)",
-        "modelList_one": "the provider’s {{count}} model",
-        "modelList_other": "the provider’s {{count}} models",
-        "footnote": {
-          "claude_code": "Only these lines change; the rest of the file stays as it is. Coffer writes the top-level model and the tier variables — nothing else. No provider key is written: Claude Code reaches the provider through Coffer’s local proxy with its own token. A .bak is kept.",
-          "codex": "Only these lines change; the rest of the file stays as it is. The raw API key is never written. A .bak is kept."
-        },
-        "footnoteBuiltin": "Coffer removes the keys it wrote and nothing else; a model or effort you set yourself with /model or /effort is kept. A .bak is kept.",
-        "effortLeftOut": "Effort is left out because this model reports no levels.",
-        "nothingTitle": "Nothing to apply",
-        "nothingBuiltin": "On the built-in login there is no Model per tier. Pick another provider to preview exactly what Coffer will write to {{path}} before anything changes.",
-        "nothingConnection": "The choices on the left match what is applied. Change one to preview what Coffer will write to {{path}} before anything changes.",
-        "staleTitle": "Switch refused — {{file}} changed on disk",
-        "staleBody": "Someone (or the agent itself) saved the file after this preview was made. Nothing was written. Reload to preview again against the current file.",
-        "reload": "Reload preview",
-        "testFirst": "Test the provider before confirming.",
-        "discard": "Discard",
-        "confirm": "Confirm switch"
-      },
-      "builtinTarget": "its built-in login",
-      "switchedToast": "Switched {{agent}} to {{target}}",
-      "proxy": {
-        "fallbackLabel": "Fallback",
-        "fallback": "If {{provider}} fails: {{fallbacks}} — it also offers {{model}}",
-        "noFallback": "If {{provider}} fails: No fallback",
-        "noFallbackLocal": "If {{provider}} fails: No fallback — local providers never fail over",
-        "tokenLabel": "Proxy token",
-        "token": "{{agent}}’s own token for Coffer’s proxy ({{address}})",
-        "rotate": "Rotate",
-        "rotated": "Token rotated. The agent fetches the new one on its next request."
+        }
       }
     },
     "list": {
-      "subtitle": "Claude Code and Codex on this Mac, found automatically.",
-      "addBoth": "Add both",
-      "firstRunNote": "Add writes one MCP entry and one memory hook into each agent’s config; you review the exact lines before anything is written. Coffer looks for agents when this page opens, when the window comes back into focus, and every few minutes.",
-      "footnote": "Counts are what reaches each agent. Choose who gets a resource on its own page:",
-      "footnoteMcp": "MCP servers",
-      "footnoteSkills": "Skills",
+      "subtitle": "Claude Code and Codex on this Mac, and what reaches each through Coffer.",
+      "connectBoth": "Connect both",
+      "countsLabel": "What the counts mean",
+      "countsHelp": "Counts are what reaches each agent through Coffer. Choose who gets a resource on its own page (MCP servers, Skills).",
       "empty": "No agents to show.",
       "col": {
         "plugins": "Plugins",
         "agent": "Agent",
         "configDir": "Config directory",
-        "model": "Default model",
+        "model": "Model",
         "skills": "Skills",
         "mcp": "MCP",
         "coffer": "Coffer",
         "actions": "Actions"
       },
       "sub": {
-        "installed": "Installed",
-        "installedVersion": "Installed · v{{version}}",
-        "leftBehind": "Config left behind — program not found"
+        "version": "v{{version}}"
       },
       "autoModel": "Chosen by the agent",
-      "notCreated": "not created",
       "detail": {
-        "lastDelivery": "Last memory delivery {{when}}",
-        "noDelivery": "No memory delivered yet",
+        "lastDelivery": "Last delivery {{when}}",
+        "noDelivery": "No delivery yet",
         "mcpMissing": "MCP entry missing",
         "hookStale": "Memory hook is out of date",
         "hookMissing": "Memory hook not written",
-        "notConnected": "No Coffer entry in its config",
-        "found": "{{dir}} found · not connected",
-        "notCreatedYet": "{{dir}} not created yet",
         "gone": "{{dir}} and its program are gone",
         "disabled": "Off in Coffer",
-        "installByAgent": "An agent can install it — copy the prompt",
-        "reinstallByAgent": "{{dir}} is kept · an agent can reinstall it"
-      },
-      "leftBehind": {
-        "body": "<code>{{dir}}</code> is still here but there is no <code>{{program}}</code> on PATH, so Coffer can’t connect it. Reinstall it and it comes back on its own.",
-        "reveal": "Reveal folder",
-        "remove": "Remove from list"
+        "notOnThisMac": "Not on this Mac",
+        "keptNotOnPath": "{{dir}} kept · {{program}} not on PATH"
       }
     },
     "pending": {
@@ -2506,13 +2474,11 @@
       "reveal": "Reveal config directory",
       "revealFailed": "Couldn’t reveal the folder.",
       "copyUid": "Copy uid",
-      "add": "Add",
       "connect": "Connect",
       "repair": "Repair",
-      "disconnect": "Disconnect",
+      "disconnect": "Disconnect…",
       "enable": "Turn on",
-      "disable": "Turn off",
-      "remove": "Remove from Coffer"
+      "disable": "Turn off"
     },
     "change": {
       "title": "Review changes",
@@ -2549,7 +2515,10 @@
       "title": "Use a different config directory",
       "subtitle": "{{name}} · Coffer looks in {{standard}} unless you choose another folder.",
       "field": "Config directory",
-      "hint": "Coffer re-reads every file from here. The agent’s name stays “{{name}}”.",
+      "hint": "Coffer re-reads every file from here.",
+      "review": "Review changes",
+      "reviewSubtitle": "Move {{name}}’s Coffer connection to {{dir}}",
+      "reviewSummary": "Coffer’s entry and memory hook come out of the old directory and go into the new one. Everything else in both stays as it is.",
       "foundThere": "Found there",
       "found": "Found",
       "notHere": "Not here",
@@ -2566,14 +2535,6 @@
         "codexConfig": "Model, provider and MCP entries",
         "hooks": "Hooks"
       }
-    },
-    "removeDialog": {
-      "title": "Remove {{name}} from Coffer?",
-      "body": "Coffer takes its entry and hook out of {{dir}} and stops serving it. {{name}} stays installed with the rest of its config, its sessions and its own memory. It stays in the list as Detected, not added; Add brings it back.",
-      "confirm": "Remove"
-    },
-    "hookApproval": {
-      "copy": "Copy /hooks"
     }
   },
   "skills": {
@@ -2617,7 +2578,6 @@
       "preview": "Preview",
       "source": "Source",
       "openDefault": "Open in default app",
-      "moreFor": "More for {{path}}",
       "binaryTitle": "Binary file · {{size}}",
       "binaryBody": "Coffer shows text files only. Open it in its own app.",
       "truncatedTitle": "Showing the first {{size}}",
@@ -5786,7 +5746,6 @@
   "usage": {
     "exportCsv": "Export CSV",
     "noPrice": "—",
-    "editPrices": "Edit prices",
     "error": "Couldn't load API-key usage.",
     "presets": {
       "today": "Today",
@@ -5804,7 +5763,8 @@
       "cost": "Cost (estimated)",
       "requests_one": "{{n}} request",
       "requests_other": "{{n}} requests",
-      "unpriced": "{{n}} unpriced",
+      "unpriced_one": "{{count}} model unpriced",
+      "unpriced_other": "{{count}} models unpriced",
       "unknown": "{{n}} with unknown usage",
       "input": "Input",
       "inputNote": "excludes cache",
@@ -5841,7 +5801,7 @@
         "cacheWrite": "Cache write",
         "cost": "Cost",
         "second": {
-          "model": "By",
+          "model": "Agent",
           "day": "Top agent"
         }
       },
@@ -5853,8 +5813,7 @@
       "unknownTip_one": "{{n}} request ended before reporting its usage; its tokens are not counted.",
       "unknownTip_other": "{{n}} requests ended before reporting their usage; their tokens are not counted.",
       "total": "Total · {{range}}",
-      "today": "{{day}} · today",
-      "footer": "Cost of priced models only."
+      "today": "{{day}} · today"
     },
     "empty": {
       "firstTitle": "No API-key usage yet",
@@ -5955,16 +5914,17 @@
       "unreachable": "Unreachable"
     },
     "list": {
-      "filter": "Filter",
-      "heading": "Providers",
+      "filter": "Filter providers",
+      "heading": "Fallback order",
       "engineOnly": "Coffer's engine only",
-      "allModels": "All models",
+      "allModels": "all models",
       "models_one": "{{count}} model",
       "models_other": "{{count}} models",
       "dragToReorder": "Drag to reorder",
       "reorderAria": "Move {{name}} (↑ / ↓)",
       "orderHelpLabel": "About the providers list",
-      "orderHelp": "Order = fallback priority. If an agent’s model is offered by more than one provider, Coffer’s proxy fails over in this order before the first byte. Drag to reorder."
+      "orderHelp": "Order = fallback priority. If an agent’s model is offered by more than one provider, Coffer’s proxy fails over in this order before the first byte. Drag to reorder.",
+      "localRuntime": "Local runtime"
     },
     "detail": {
       "notFound": "Model provider not found",
@@ -5973,7 +5933,8 @@
     "actions": {
       "test": "Test",
       "delete": "Delete provider",
-      "more": "More actions for {{name}}"
+      "more": "More actions for {{name}}",
+      "deleteShort": "Delete"
     },
     "fields": {
       "name": "Name",
@@ -5990,19 +5951,17 @@
     "rejected": {
       "title": "The endpoint rejects the stored key ({{status}})",
       "titleNoStatus": "The endpoint rejects the stored key",
-      "bodyUsed": "{{users}} fail on every request until the key is replaced.",
-      "bodyUnused": "Requests to this provider fail until the key is replaced."
+      "body": "Everything that uses it fails until you replace the key."
     },
     "usedBy": {
       "title": "Used by",
       "engine": "Coffer's engine",
       "transcribe": "Speech to text",
-      "runs": "Runs on this provider",
-      "failing": "Requests fail · key rejected",
-      "changeInAgent": "Change it in {{agent}} › Model",
-      "changeInSettings": "Change it in Settings › General",
-      "none": "Nothing runs on this provider yet.",
-      "readOnly": "Read-only. An agent’s provider and model are switched on its own Model tab; Coffer’s engine and speech to text in Settings › General."
+      "none": "Nothing runs on it yet. Pick it with Change model on an agent’s page.",
+      "lead": "Change an agent’s provider with Change model on its page; Coffer’s engine and speech to text in Settings › General.",
+      "changeIt": "Change it in",
+      "changeModel": "{{agent}} › Change model",
+      "settingsGeneral": "Settings › General"
     },
     "endpoint": {
       "title": "Endpoint",
@@ -6010,23 +5969,31 @@
       "runtime": "Runtime",
       "wires": "serves {{wires}}",
       "route": "Route",
-      "routeValue": "Agents reach it through Coffer’s proxy · {{address}}",
       "fallback": "Fallback",
-      "fallbackSwitch": "Use as fallback for other providers",
-      "fallbackLocal": "Local providers are never used as a fallback"
+      "fallbackSwitch": "Use as a fallback",
+      "fallbackLocal": "Local providers are never used as a fallback",
+      "lead": "Where requests go and how they are signed.",
+      "unreachableTitle": "Can’t reach {{host}}",
+      "unreachableBody": "{{reason}} Everything that uses it fails until it answers.",
+      "unreachablePrompt": "Coffer can’t reach the model provider “{{name}}” at {{url}}. The last answer was: {{reason}}. Find out why — network, VPN, the gateway being down, a wrong address — and fix it or tell me what to change. Don’t change Coffer’s settings without asking.",
+      "routeThrough": "Through Coffer’s proxy at",
+      "fallbackDescription": "Takes requests another provider failed, in the fallback order.",
+      "never": "Never"
     },
     "key": {
       "secretPrefix": "secret:",
       "secretLabel": "API key secret",
-      "stored": "Stored in this Mac's keychain-encrypted store. Write-only.",
+      "stored": "Write-only, kept in this Mac’s keychain-encrypted store.",
       "storedChip": "Stored",
-      "manage": "Manage in Secrets",
+      "manage": "Open Secrets",
       "replace": "Replace key",
       "rejected": "Rejected",
-      "rejectedWith": "Rejected ({{status}})",
       "none": "No key needed — this provider takes none.",
       "pending": "Waiting for approval in the Coffer app",
-      "review": "Review"
+      "review": "Review",
+      "noneValue": "None",
+      "noneLocal": "A local runtime takes no key.",
+      "replaceOpen": "Replace key…"
     },
     "overview": {
       "models": "Models"
@@ -6040,15 +6007,21 @@
       "listing": "Listing this endpoint's models…",
       "listedAgo": "Listed {{ago}}",
       "refresh": "Refresh",
-      "hint": "Only models that are on appear in agent, chat and channel pickers. Prices are per 1M tokens (input · output); Usage shows “—” for a model without one.",
       "failedTitle": "Couldn't list this endpoint's models",
-      "failedBody": "{{reason}} Your selection below is unchanged and still offered.",
+      "failedBody": "{{reason}} Your choices below still apply.",
       "noneTitle": "This endpoint listed no models",
-      "noneBody": "Leave it like this and every model the endpoint accepts stays available — agents pass the name you type. Or refresh after the gateway admin adds models.",
+      "noneBody": "Every model it accepts stays available: agents pass the name you type. Refresh after the gateway admin adds models.",
       "noMatch": "No models match.",
       "showMore_one": "Show {{count}} more",
       "showMore_other": "Show {{count}} more",
-      "agentDefault": "{{agent}} default"
+      "agentDefault": "{{agent}} default",
+      "help": "Only models that are on appear in agent, chat and channel pickers. Click a price to set your own.",
+      "priceBundled": "Prices per 1M tokens (input · output) bundled with Coffer, updated {{date}}, unless marked.",
+      "priceFromProvider": "Prices per 1M tokens (input · output) from {{name}}, updated {{when}}, unless marked.",
+      "priceLocal": "Local models cost nothing.",
+      "listingFailed": "Listing failed",
+      "lastListed": "last listed {{date}}",
+      "showing": "Showing {{shown}} of {{total}}"
     },
     "test": {
       "running": "Testing the endpoint…",
@@ -6081,7 +6054,7 @@
       "custom": "Custom",
       "keyHint": "Saved as a new secret in this Mac's keychain-encrypted store. Write-only — never shown again.",
       "localUrlPlaceholder": "Leave blank to look on the default ports",
-      "next": "Next: models",
+      "next": "Next: Models",
       "back": "Back",
       "submit": "Add provider",
       "protocols": {
@@ -6103,20 +6076,25 @@
         }
       },
       "local": {
-        "title": "Runtime on this Mac",
-        "detect": "Detect",
+        "title": "Found on this Mac",
         "looking": "Looking for model runtimes on this Mac…",
-        "none": "Nothing answered on the default ports (Ollama 11434, LM Studio 1234, llama-server 8080). Have your agent set one up and detect again, or type the address of a runtime that is already running.",
+        "none": "Ollama 11434 · LM Studio 1234 · llama-server 8080. Start one and detect again, or type its address below.",
         "noWires": "no agent wire",
-        "keyless": "No key needed. Detection only reads — nothing is pulled or loaded."
+        "running": "Running",
+        "notRunning": "Not running",
+        "notRunningBody": "Nothing answers on localhost:{{port}}.",
+        "noneTitle": "Nothing answered on the default ports",
+        "urlHint": "Must be on this Mac: localhost or 127.0.0.1.",
+        "detectAgain": "Detect again",
+        "defaultName": "{{runtime}} · this Mac"
       },
       "models": {
-        "count_one": "{{n}} selected · nothing selected means all {{count}} are offered",
-        "count_other": "{{n}} selected · nothing selected means all {{count}} are offered",
         "empty": "The endpoint listed no models. Add the provider as it is and every model it accepts stays available.",
-        "window": "{{tokens}} tokens",
-        "noTools": "no tools"
-      }
+        "noTools": "no tools",
+        "selected": "{{n}} of {{count}} selected",
+        "hint": "Leave all unticked to offer every model the endpoint accepts. You can change this later."
+      },
+      "vendorHintLocal": "A runtime on this Mac needs no key; Coffer lists every model it serves."
     },
     "edit": {
       "title": "Edit {{name}}",
@@ -6135,48 +6113,49 @@
       "title": "Delete {{name}}?",
       "confirm": "Delete {{name}}? This can't be undone.",
       "confirmWithSecret": "Delete {{name}}? Its secret {{ref}} is deleted from this Mac too. This can't be undone.",
-      "blocked": "{{name}} is in use, so it can't be deleted yet. Move each of these off it first:"
+      "agentTitle": "{{agent}} goes back to its own login",
+      "agentBody": "Coffer removes its model, effort and provider lines from {{path}}",
+      "agentBodyNoFile": "Coffer clears its connection to this provider",
+      "engineTitle": "Coffer’s engine pauses",
+      "engineBody": "Until you pick another model in Settings › General",
+      "transcribeTitle": "Speech to text turns off",
+      "transcribeBody": "Voice messages arrive without a transcript",
+      "keyTitle": "Its key is deleted from this Mac",
+      "reviewSubtitle_one": "Review changes · {{count}} file",
+      "reviewSubtitle_other": "Review changes · {{count}} files",
+      "note": "Only Coffer’s own lines are removed. The key is deleted too, so this can’t be undone."
     },
     "welcome": {
-      "title": "Bring your own model endpoint",
-      "body": "Store an endpoint and its API key once. Coffer points your agents at it and lets you choose which models they may use.",
+      "title": "No model providers yet",
+      "body": "Store an endpoint and its key once; your agents and Coffer’s engine can then run on it. Start from one of these.",
       "anthropic": {
         "title": "Anthropic or compatible",
-        "body": "Claude Code, chat and Coffer's engine. Anthropic API, Bedrock-style gateways."
+        "body": "Claude Code, chat and Coffer’s engine can use it."
       },
       "openai": {
         "title": "OpenAI or compatible",
-        "body": "Codex, chat and Coffer's engine. OpenAI, Gemini, DeepSeek, OpenRouter, company gateways."
+        "body": "Codex, chat and Coffer’s engine. Gemini, DeepSeek, OpenRouter, gateways."
       },
       "local": {
-        "title": "A local runtime on this Mac",
-        "body": "Ollama, LM Studio, vLLM or llama.cpp. No key needed."
-      },
-      "rightNow": "Right now",
-      "ownLogin": {
-        "claude_code": "Own login (Anthropic)",
-        "codex": "Own login (ChatGPT)"
-      },
-      "engineUnset": "Coffer's model isn't set, so distil and curation are paused.",
-      "engineLink": "Coffer's model"
+        "title": "A runtime on this Mac",
+        "body": "Ollama or LM Studio. No key needed."
+      }
     },
     "prices": {
-      "help": "A model’s price comes from the first of: the price you set (You set), what the provider’s own API reports when its models are listed (From <provider>), or Coffer’s price list (Bundled) — shipped with each release and refreshed from genai-prices once a day unless that is turned off in Settings › General. A model with no known price shows “—”; set one so Usage can show its cost.",
       "rates": "{{input}} · {{output}} / 1M",
       "source": {
         "user": "You set",
         "provider": "From {{name}}",
-        "bundled": "Bundled",
-        "bundledOn": "Bundled · updated {{date}}"
+        "bundled": "Bundled"
       },
       "tiered": "Base tier: long requests cost more past a threshold of input tokens",
       "local": "Local · no cost",
       "set": "Set price…",
-      "reset": "Reset",
+      "reset": "Reset to default",
       "noneAria": "No price known for {{id}}",
       "editAria": "{{id}}: {{rates}}, change the price",
       "dialogTitle": "Price of {{id}}",
-      "dialogBody": "What this provider charges you. It wins over the provider’s API and the bundled list.",
+      "dialogBody": "What this provider charges you. It wins over the provider’s list and Coffer’s bundled prices.",
       "fields": {
         "input": "Input",
         "output": "Output",
@@ -6189,7 +6168,8 @@
     "tabs": {
       "providers": "Providers",
       "usage": "Usage"
-    }
+    },
+    "latency": "{{ms}} ms"
   },
   "skillSources": {
     "add": {

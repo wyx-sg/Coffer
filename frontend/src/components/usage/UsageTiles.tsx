@@ -2,9 +2,12 @@
 //
 // Five tiles in one row, no frame. Cost is always labelled estimated, its "?"
 // carries the daemon's note on which prices costed the range, and a range whose
-// every request is unpriced reads "—" — never $0.00.
+// every request is unpriced reads "—" — never $0.00. The "N model(s) unpriced"
+// fact lives only here, as a link to the model on its provider, where its price
+// is set.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 
 import { HelpTip } from "@/components/HelpTip";
 import type { UsageTotals } from "@/lib/api/usage";
@@ -13,7 +16,7 @@ import { allUnpriced, formatCost, formatCount, formatTokens } from "@/lib/usage/
 interface TileProps {
   label: ReactNode;
   value: string;
-  note?: string;
+  note?: ReactNode;
 }
 
 function Tile({ label, value, note }: TileProps) {
@@ -30,20 +33,43 @@ function Tile({ label, value, note }: TileProps) {
   );
 }
 
-export function UsageTiles({ totals, priceNote }: { totals: UsageTotals; priceNote: string }) {
+interface Props {
+  totals: UsageTotals;
+  /** The daemon's note on which prices costed the range. */
+  priceNote: string;
+  /** The models in the range with no known price; `to` opens the first one on its provider. */
+  unpriced: { count: number; to: string } | null;
+}
+
+export function UsageTiles({ totals, priceNote, unpriced }: Props) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
-  const costNote = [
-    t("usage.tiles.requests", { count: totals.requests, n: formatCount(totals.requests, lang) }),
-    totals.unpriced_requests
-      ? t("usage.tiles.unpriced", { n: formatCount(totals.unpriced_requests, lang) })
-      : null,
-    totals.unknown_usage_requests
-      ? t("usage.tiles.unknown", { n: formatCount(totals.unknown_usage_requests, lang) })
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const costNote = (
+    <>
+      {[
+        t("usage.tiles.requests", {
+          count: totals.requests,
+          n: formatCount(totals.requests, lang),
+        }),
+        totals.unknown_usage_requests
+          ? t("usage.tiles.unknown", { n: formatCount(totals.unknown_usage_requests, lang) })
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")}
+      {unpriced ? (
+        <>
+          {" · "}
+          <Link
+            to={unpriced.to}
+            className="whitespace-nowrap font-label text-accent-text hover:underline"
+          >
+            {t("usage.tiles.unpriced", { count: unpriced.count })}
+          </Link>
+        </>
+      ) : null}
+    </>
+  );
   const cacheWrite = totals.cache_write_5m_tokens + totals.cache_write_1h_tokens;
   return (
     <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-5">

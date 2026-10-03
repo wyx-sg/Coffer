@@ -73,12 +73,8 @@ function rowOf(path: string): HTMLElement {
 describe("ChangePreview", () => {
   acceptance("web-ui", "the change preview groups a write by agent and file", () => {
     const { onApply } = renderPreview("ready");
-    // Summarised by operation.
-    const summary = screen.getByTestId("change-summary");
-    expect(summary).toHaveTextContent("4 changes in 2 agents");
-    expect(within(summary).getByText("Modify").closest("[data-op-count]")).toHaveTextContent("2");
-    expect(within(summary).getByText("Add").closest("[data-op-count]")).toHaveTextContent("1");
-    expect(within(summary).getByText("Remove").closest("[data-op-count]")).toHaveTextContent("1");
+    expect(screen.getByTestId("changes-heading")).toHaveTextContent("Changes · 4");
+    expect(screen.queryByTestId("change-summary")).not.toBeInTheDocument();
 
     // Each file under its agent, with its operation and line counts.
     const claude = screen.getByRole("region", { name: "Claude Code" });
@@ -202,7 +198,7 @@ describe("ChangePreview", () => {
         { id: "c5", agentType: "codex", agentName: "Codex (work)", path: "~/w.toml", op: "add" },
       ],
     });
-    expect(screen.getByTestId("change-summary")).toHaveTextContent("5 changes in 3 agents");
+    expect(screen.getByTestId("changes-heading")).toHaveTextContent("Changes · 5");
     expect(screen.getByRole("region", { name: "Codex (work)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply 5 changes" })).toBeInTheDocument();
   });

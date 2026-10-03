@@ -4,7 +4,6 @@ import { describe, expect, test } from "vitest";
 import type { AgentHooksOut } from "@/lib/api/agents";
 import type { McpEntryOut, PluginOut } from "@/lib/api/agents-workspace";
 import { hookCounts, mcpCounts, pluginCounts, reachesAgent, skillCounts } from "./counts";
-import { countByOwner, filterByOwner, parseOwnerFilter } from "./owner";
 
 describe("reachesAgent", () => {
   test("a switched-off resource reaches nobody; an unscoped one every agent; a scoped one its list", () => {
@@ -76,16 +75,17 @@ describe("counts", () => {
     } as unknown as AgentHooksOut;
     expect(hookCounts(missing)?.cofferState).toBe("missing");
   });
-});
 
-describe("owner filter", () => {
-  const rows = [{ owner: "coffer" as const }, { owner: "own" as const }, { owner: "own" as const }];
-  test("parses, filters and counts by owner", () => {
-    expect(parseOwnerFilter("own")).toBe("own");
-    expect(parseOwnerFilter("nonsense")).toBe("all");
-    expect(parseOwnerFilter(null)).toBe("all");
-    expect(filterByOwner(rows, "all")).toHaveLength(3);
-    expect(filterByOwner(rows, "own")).toHaveLength(2);
-    expect(countByOwner(rows)).toEqual({ coffer: 1, own: 2 });
+  test("with memory off a missing or unapproved Coffer hook is nothing to review", () => {
+    const missing = {
+      items: [],
+      coffer_hook: { health: "missing", trust: "not_required" },
+    } as unknown as AgentHooksOut;
+    const untrusted = {
+      items: [],
+      coffer_hook: { health: "current", trust: "untrusted" },
+    } as unknown as AgentHooksOut;
+    expect(hookCounts(missing, false)?.cofferState).toBeNull();
+    expect(hookCounts(untrusted, false)?.cofferState).toBeNull();
   });
 });

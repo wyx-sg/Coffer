@@ -9,6 +9,8 @@ import type { AgentCounts } from "@/lib/agents/counts";
 const K = "agents.overviewTab.summary";
 
 export interface SummaryLine {
+  /** The tile's big number. */
+  count: number;
   line: string;
   /** How many of the agent's own entries wait for a look, when there are any. */
   toReview?: number;
@@ -26,8 +28,9 @@ interface Context {
   hookFile?: string;
 }
 
-function owned(own: number, disabled: boolean): number | undefined {
-  return !disabled && own > 0 ? own : undefined;
+/** How many direct entries wait for a look: duplicates of a server Coffer has. */
+function duplicated(c: NonNullable<AgentCounts["mcp"]>, disabled: boolean): number | undefined {
+  return !disabled && c.duplicates > 0 ? c.duplicates : undefined;
 }
 
 export function mcpLine(
@@ -36,18 +39,19 @@ export function mcpLine(
   ctx: Context,
 ): SummaryLine | undefined {
   if (!c) return undefined;
-  if (ctx.disabled) return { line: t(`${K}.disabledLine`, { count: c.coffer }) };
+  if (ctx.disabled)
+    return { count: c.coffer + c.own, line: t(`${K}.disabledLine`, { count: c.coffer }) };
   if (ctx.notConnected) {
     const until = t(`${K}.mcp.untilConnected`, { count: c.coffer });
     const line =
       c.own > 0 ? `${until} · ${t(`${K}.mcp.direct`, { own: c.own, file: ctx.mcpFile })}` : until;
-    return { line, toReview: owned(c.own, ctx.disabled) };
+    return { count: c.own, line, toReview: duplicated(c, ctx.disabled) };
   }
   const line =
     c.own > 0
       ? t(`${K}.mcp.line`, { coffer: c.coffer, own: c.own, file: ctx.mcpFile })
       : t(`${K}.mcp.lineCofferOnly`, { coffer: c.coffer });
-  return { line, toReview: owned(c.own, ctx.disabled) };
+  return { count: c.coffer + c.own, line, toReview: duplicated(c, ctx.disabled) };
 }
 
 export function skillsLine(
@@ -56,18 +60,20 @@ export function skillsLine(
   ctx: Context,
 ): SummaryLine | undefined {
   if (!c) return undefined;
-  if (ctx.disabled) return { line: t(`${K}.disabledLine`, { count: c.coffer }) };
+  if (ctx.disabled)
+    return { count: c.coffer + c.own, line: t(`${K}.disabledLine`, { count: c.coffer }) };
   const line =
     c.own > 0
       ? t(`${K}.skills.line`, { coffer: c.coffer, own: c.own })
       : t(`${K}.skills.lineCofferOnly`, { coffer: c.coffer, dir: ctx.skillDir });
-  return { line, toReview: owned(c.own, ctx.disabled) };
+  return { count: c.coffer + c.own, line };
 }
 
 export function pluginsLine(t: TFunction, c: AgentCounts["plugins"]): SummaryLine | undefined {
   if (!c) return undefined;
-  if (c.total === 0) return { line: t(`${K}.plugins.none`) };
+  if (c.total === 0) return { count: 0, line: t(`${K}.plugins.none`) };
   return {
+    count: c.total,
     line: t(`${K}.plugins.line`, { count: c.marketplaces, total: c.total, enabled: c.enabled }),
   };
 }
@@ -87,20 +93,34 @@ export function hooksLine(
           ? t(`${K}.hooks.coffer`, { count: c.coffer })
           : null;
   if (c.total === 0) {
-    return { line: cofferNote ? `${t(`${K}.hooks.none`)} · ${cofferNote}` : t(`${K}.hooks.none`) };
+    return {
+      count: 0,
+      line: cofferNote ? `${t(`${K}.hooks.none`)} · ${cofferNote}` : t(`${K}.hooks.none`),
+      toReview: c.cofferState ? 1 : undefined,
+    };
   }
   const where = ctx.hookFile
     ? t(`${K}.hooks.inFile`, { count: c.total, file: ctx.hookFile })
     : t(`${K}.hooks.inPlaces`, { count: c.total, places: c.files });
-  return { line: cofferNote ? `${where} · ${cofferNote}` : where };
+  return {
+    count: c.total,
+    line: cofferNote ? `${where} · ${cofferNote}` : where,
+    toReview: c.cofferState ? 1 : undefined,
+  };
 }
 
 export function memoryLine(t: TFunction, stores: number | undefined): SummaryLine | undefined {
   if (stores === undefined) return undefined;
-  return { line: stores === 0 ? t(`${K}.memory.none`) : t(`${K}.memory.line`, { count: stores }) };
+  return {
+    count: stores,
+    line: t(`${K}.memory.${stores === 0 ? "none" : "line"}`, { count: stores }),
+  };
 }
 
 export function configLine(t: TFunction, names: string[] | undefined): SummaryLine | undefined {
   if (names === undefined) return undefined;
-  return { line: names.length === 0 ? t(`${K}.config.none`) : names.join(", ") };
+  return {
+    count: names.length,
+    line: names.length === 0 ? t(`${K}.config.none`) : names.join(", "),
+  };
 }

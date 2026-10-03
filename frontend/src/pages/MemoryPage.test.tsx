@@ -15,8 +15,6 @@ import { COFFER, DELIVERIES, GLOBAL, GONE } from "@/components/memory/memoryTest
 import type { DeliveryOverviewOut, PartitionOut } from "@/lib/api/memoryTypes";
 import { acceptance } from "@/test/acceptance";
 import { pathText } from "@/test/truncatedPath";
-import { AgentMemoryTab } from "@/components/agents/AgentMemoryTab";
-import type { AgentOut } from "@/lib/api/agents";
 import { MemoryPage } from "./MemoryPage";
 
 vi.mock("@/lib/api/memory", () => ({
@@ -156,32 +154,15 @@ describe("MemoryPage", () => {
   });
 
   acceptance("web-ui", "hook state appears only on the agent page", async () => {
-    // Whatever state Claude Code's hook is in, the Memory page and the
-    // agent's Memory tab carry none of it: the deliveries read has no hook
-    // field, and the stale hook with Repair is the Hooks tab's (spec
-    // agent-registry "Show the Coffer connection on the agent pages").
+    // The Memory page carries no hook state or Repair: the deliveries read has no
+    // hook field. The agent's Memory tab shows the hook's state with Repair under
+    // "Coffer's memory" (asserted in AgentMemoryTab.test.tsx under this scenario).
     stub([COFFER]);
-    const page = renderPage();
+    renderPage();
     const block = await screen.findByTestId("memory-deliveries");
     await within(block).findByTestId("memory-delivery-claude_code");
     expect(document.body).not.toHaveTextContent(/hook|repair|stale/i);
     expect(screen.queryByRole("button", { name: /repair|install/i })).toBeNull();
-    page.unmount();
-
-    vi.mocked(agentNativeMemoryApi.list).mockResolvedValue({
-      items: [{ project: "Coffer", path: "/Users/dev/Coffer", memory_dir: "/m", item_count: 49 }],
-    } as unknown as Awaited<ReturnType<typeof agentNativeMemoryApi.list>>);
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={qc}>
-        <MemoryRouter>
-          <AgentMemoryTab agent={{ uid: "ag-cc", type: "claude_code" } as AgentOut} />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-    expect(await screen.findByText("49")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Native memory stores" })).toBeInTheDocument();
-    expect(document.body).not.toHaveTextContent(/hook|repair|stale/i);
   });
 
   test("the header says when memory was last read, beside Automatic and Update memory", async () => {

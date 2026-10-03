@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
 import { agentsApi, type AgentCreate, type AgentPatch } from "@/lib/api/agents";
-import type { AdoptMcpEntryBody } from "@/lib/api/agents-workspace";
+import type { AdoptMcpEntryBody, AdoptSkillVars } from "@/lib/api/agents-workspace";
 import { translateApiError } from "@/lib/api/errors";
 import {
   agentTypesKey,
@@ -73,19 +73,6 @@ export function usePatchAgent() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: agentsKey });
     },
-  });
-}
-
-export function useRemoveAgent() {
-  const qc = useQueryClient();
-  const onError = useAgentToastError();
-  return useMutation({
-    mutationFn: (uid: string) => agentsApi.remove(uid),
-    onSuccess: (_data, uid) => {
-      qc.removeQueries({ queryKey: agentKey(uid) });
-      qc.invalidateQueries({ queryKey: agentsKey });
-    },
-    onError,
   });
 }
 
@@ -277,14 +264,15 @@ function invalidateUnmanagedSkills(qc: ReturnType<typeof useQueryClient>, agentU
   qc.invalidateQueries({ queryKey: agentKey(agentUid) });
 }
 
-export function useAdoptUnmanagedSkill(agentUid: string) {
+export function useAdoptUnmanagedSkill(agentUid: string, { toastErrors = true } = {}) {
   const qc = useQueryClient();
-  const onError = useAgentToastError();
+  const toastError = useAgentToastError();
   return useMutation({
-    mutationFn: ({ skill, location }: { skill: string; location: string }) =>
-      agentsApi.adoptUnmanagedSkill(agentUid, skill, location),
+    mutationFn: ({ skill, location, ...options }: AdoptSkillVars) =>
+      agentsApi.adoptUnmanagedSkill(agentUid, skill, location, options),
     onSuccess: () => invalidateUnmanagedSkills(qc, agentUid),
-    onError,
+    // A dialog that shows the failure itself turns the toast off.
+    onError: toastErrors ? toastError : undefined,
   });
 }
 

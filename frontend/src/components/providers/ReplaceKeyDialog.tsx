@@ -1,17 +1,17 @@
 // src/components/providers/ReplaceKeyDialog.tsx — replace the value behind a provider's secret, tested first.
 //
-// Test lists the endpoint's models with the NEW key inline, before anything
-// is written. Replace PATCHes `secret_value`: the daemon overwrites the value
+// The pasted key is checked as it arrives (no Test button): the endpoint's
+// models are listed with the NEW key inline, before anything is written. Replace PATCHes `secret_value`: the daemon overwrites the value
 // behind the same ref (the agents' config files only name the ref, so they do
 // not change). A key already in use does not change at once — the new value
 // waits behind a pending `replace_value` approval in the Coffer app (spec
 // secret "Hold a replaced value in use until a person approves it") — so
 // after the write the pending list is read again, and while an approval for
 // this ref waits the dialog says so and offers Review instead of closing.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { KeyRound, Plug } from "lucide-react";
+import { KeyRound } from "lucide-react";
 
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,21 @@ export function ReplaceKeyDialog({ open, provider, use, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Check the key once the paste settles: nothing is written by a check.
+  const runTest = useRef(test.run);
+  runTest.current = test.run;
+  useEffect(() => {
+    if (!open || !secret) return;
+    const timer = setTimeout(() => {
+      void runTest.current({
+        provider: provider.protocol,
+        base_url: provider.base_url,
+        secret_value: secret,
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [open, secret, provider.protocol, provider.base_url]);
+
   const pending = pendingReplaceFor(approvals.data?.approvals, provider.secret_ref);
   const waiting = written && pending !== null;
 
@@ -76,7 +91,7 @@ export function ReplaceKeyDialog({ open, provider, use, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent aria-describedby={undefined} className="max-w-[520px]">
+      <DialogContent aria-describedby={undefined} className="max-w-[480px]">
         <DialogHeader>
           <DialogTitle>{t("providers.replace.title")}</DialogTitle>
         </DialogHeader>
@@ -151,21 +166,6 @@ export function ReplaceKeyDialog({ open, provider, use, onClose }: Props) {
             </>
           ) : (
             <>
-              <Button
-                variant="outline"
-                className="sm:mr-auto"
-                disabled={!secret || test.isPending}
-                onClick={() =>
-                  void test.run({
-                    provider: provider.protocol,
-                    base_url: provider.base_url,
-                    secret_value: secret,
-                  })
-                }
-              >
-                <Plug aria-hidden />{" "}
-                {test.result ? t("providers.test.again") : t("providers.actions.test")}
-              </Button>
               <Button variant="ghost" onClick={onClose}>
                 {t("common.cancel")}
               </Button>

@@ -1,18 +1,18 @@
-// src/components/agents/list/useAgentRowActions.tsx — an agent's one action for its state, its ⋯ menu, and the dialogs they open.
+// src/components/agents/list/useAgentRowActions.tsx — an agent's one visible action for its state, its ⋯ menu, and the dialogs they open.
 //
 // Shared by the Agents list row and the agent detail page (header menu and
 // the Overview's own buttons, through `open`), so a state offers the same
-// action wherever the agent is shown. Nothing here assumes the list: the row
-// is the agent's type row, and `inList` says the menu sits on a list row (whose
-// click already opens the agent) rather than on the agent's own page, where an
-// agent not found shows Change config directory and Remove as buttons. The
-// menu never repeats a visible control: Disconnect and Enable are the row's
-// button, the header's or the Overview tab's. An agent whose program is not found
-// offers the daemon's install prompt: Copy prompt as its action, and Ask an
-// agent in the menu while another managed agent is available.
+// action wherever the agent is shown. The visible button is only ever a fix
+// Coffer can make: Connect (not connected, or a newly found agent), Repair, or
+// Turn on. A healthy row has none, and an agent whose program is not on this
+// Mac has none either: its install prompt (Copy prompt, Ask an agent) heads the
+// ⋯ menu. The menu never repeats the visible button. Connect, Repair and
+// Disconnect all open the Review changes dialog; a connected agent's config
+// directory moves through its own review. There is no Remove: the list always
+// holds both supported agents.
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Plug, Plus, Power, Unplug, Wrench, type LucideIcon } from "lucide-react";
+import { Plug, Power, Wrench, type LucideIcon } from "lucide-react";
 
 import {
   AgentConnectionChangeDialog,
@@ -27,14 +27,12 @@ import { useFsActions } from "@/lib/fsActions";
 import { useAgentPending, type AgentPending } from "@/lib/hooks/useAgentPending";
 import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
 import { AgentConfigDirDialog } from "./AgentConfigDirDialog";
-import { AgentRemoveDialog } from "./AgentRemoveDialog";
 import { useAgentRowState } from "./useAgentRowState";
 
 interface AgentPrimaryAction {
   label: string;
   icon: LucideIcon;
   run: () => void;
-  destructive?: boolean;
 }
 
 export interface AgentRowActions {
@@ -47,7 +45,6 @@ export interface AgentRowActions {
   open: {
     change: (kind: "add" | "connect" | "disconnect") => void;
     configDir: () => void;
-    remove: () => void;
     enable: () => void;
   };
 }
@@ -61,12 +58,11 @@ export function useAgentRowActions(
   const fs = useFsActions();
   const enableMutation = useEnableResource();
   const disableMutation = useDisableResource();
-  const { state = "checking", enabled } = useAgentRowState(row);
+  const { state = "checking", enabled, connection } = useAgentRowState(row);
   const pending = useAgentPending(row);
   const busy = pending !== null;
   const [change, setChange] = useState<ConnectionChangeRequest | null>(null);
   const [configDirOpen, setConfigDirOpen] = useState(false);
-  const [removeOpen, setRemoveOpen] = useState(false);
   const uid = row.uid ?? null;
   const installPrompt = row.install_handoff?.prompt ?? null;
   const handoff = useAgentHandoff(installPrompt ?? "");
@@ -80,19 +76,11 @@ export function useAgentRowActions(
   const open: AgentRowActions["open"] = {
     change: (kind) => setChange(kind === "add" ? { kind, rows: [row] } : { kind, row }),
     configDir: () => setConfigDirOpen(true),
-    remove: () => setRemoveOpen(true),
     enable: () => uid && !busy && enableMutation.mutate({ uid, kind: "agent" }),
   };
 
   let primary: AgentPrimaryAction | null = null;
   switch (state) {
-    case "connected":
-      primary = {
-        label: t("agents.rowMenu.disconnect"),
-        icon: Unplug,
-        run: () => open.change("disconnect"),
-      };
-      break;
     case "needs_repair":
       primary = {
         label: t("agents.rowMenu.repair"),
@@ -107,20 +95,11 @@ export function useAgentRowActions(
         run: () => open.change("connect"),
       };
       break;
+    // A newly found agent is the same off state: Connect registers it, then connects it.
     case "not_added":
     case "never_run":
       primary = row.addable
-        ? { label: t("agents.rowMenu.add"), icon: Plus, run: () => open.change("add") }
-        : null;
-      break;
-    case "not_installed":
-    case "config_left_behind":
-      primary = installPrompt
-        ? {
-            label: t("handoff.copyPrompt"),
-            icon: Copy,
-            run: () => copy(installPrompt),
-          }
+        ? { label: t("agents.rowMenu.connect"), icon: Plug, run: () => open.change("add") }
         : null;
       break;
     case "disabled":
@@ -130,17 +109,29 @@ export function useAgentRowActions(
 
   const dirExists = row.state === "installed_active" || row.state === "config_only";
   const actions: MenuAction[] = [];
-  if (installPrompt && handoff.canAsk) {
-    actions.push({ key: "ask-agent", label: t("handoff.askAgent"), onSelect: handoff.ask });
+  // An agent whose program is not on this Mac: the install prompt heads the
+  // menu, a separator keeps it apart from the rest.
+  const installRow = state === "not_installed" || state === "config_left_behind";
+  if (installRow && installPrompt) {
+    actions.push({
+      key: "copy-prompt",
+      label: t("handoff.copyPrompt"),
+      onSelect: () => copy(installPrompt),
+    });
+    if (handoff.canAsk) {
+      actions.push({ key: "ask-agent", label: t("handoff.askAgent"), onSelect: handoff.ask });
+    }
   }
-  // On the page of an agent not found, the card offers these two as buttons.
-  const cardHasThem = state === "not_found" && !opts.inList;
-  if (!cardHasThem) {
+  const lead = actions.length > 0;
+  // On the page of an agent not found, the card offers the directory change as a button.
+  const cardHasIt = state === "not_found" && !opts.inList;
+  if (!cardHasIt) {
     actions.push({
       key: "config-dir",
       label: t("agents.rowMenu.configDir"),
       onSelect: open.configDir,
       disabled: busy,
+      separated: lead,
     });
   }
   if (dirExists) {
@@ -158,8 +149,9 @@ export function useAgentRowActions(
       onSelect: () => copy(uid),
     });
   }
-  // A connected agent's Disconnect is already a button (the row's, or the Overview's).
-  if (state === "needs_repair") {
+  // Disconnect is never a visible button: the entry and hook come out through Review changes.
+  const hasParts = !!connection?.parts.some((p) => p.installed);
+  if (uid && hasParts) {
     actions.push({
       key: "disconnect",
       label: t("agents.rowMenu.disconnect"),
@@ -168,8 +160,8 @@ export function useAgentRowActions(
     });
   }
   if (uid) {
-    // A disabled agent's Enable is the row's / header's button; Turn off only
-    // while it is on.
+    // A disabled agent's Turn on is the row's button (or the Overview's); Turn
+    // off only while it is on.
     if (enabled) {
       actions.push({
         key: "disable",
@@ -185,23 +177,12 @@ export function useAgentRowActions(
         disabled: busy,
       });
     }
-    if (!cardHasThem) {
-      actions.push({
-        key: "remove",
-        label: t("agents.rowMenu.remove"),
-        destructive: true,
-        separated: true,
-        onSelect: open.remove,
-        disabled: busy,
-      });
-    }
   }
 
   const dialogs = (
     <>
       <AgentConnectionChangeDialog request={change} onClose={() => setChange(null)} />
       <AgentConfigDirDialog row={row} open={configDirOpen} onOpenChange={setConfigDirOpen} />
-      {uid ? <AgentRemoveDialog row={row} open={removeOpen} onOpenChange={setRemoveOpen} /> : null}
     </>
   );
 

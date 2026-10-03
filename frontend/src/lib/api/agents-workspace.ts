@@ -50,6 +50,15 @@ export type PluginDetailOut = Schemas["PluginDetailOut"];
  * location. Taken from the contract, so it is the two names and not `string`. */
 export type UnmanagedSkillOut = SkillManager["schemas"]["UnmanagedSkillOut"];
 
+/** Who gets an adopted skill: everywhere, only `agents` (uids), or nobody. */
+export type AdoptSkillReach = SkillManager["schemas"]["AdoptReach"];
+
+/** The adopt request body, from the contract. */
+type AdoptSkillBody = SkillManager["schemas"]["AdoptBody"];
+
+/** @ui-only What adopting an unmanaged folder takes: the folder (a path parameter, not part of the body) plus the body. */
+export type AdoptSkillVars = AdoptSkillBody & { skill: string };
+
 /** One unmanaged skill for its read-only detail page: the list entry plus the
  *  SKILL.md `description` (null when the folder does not validate). */
 export type UnmanagedSkillDetailOut = SkillManager["schemas"]["UnmanagedSkillDetailOut"];

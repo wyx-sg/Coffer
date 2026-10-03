@@ -1,10 +1,17 @@
 // src/components/RelativeTime.test.tsx — relative text in the page, exact time on hover.
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import { RelativeTime } from "./RelativeTime";
 
 describe("RelativeTime", () => {
+  // Midday, so "5 min ago" never crosses midnight into a dated label.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 3, 12, 0, 0));
+  });
+  afterEach(() => vi.useRealTimers());
+
   test("a recent time reads relative and carries the exact time as dateTime", () => {
     const iso = new Date(Date.now() - 5 * 60_000).toISOString();
     render(<RelativeTime iso={iso} />);

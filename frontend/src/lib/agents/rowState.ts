@@ -53,7 +53,9 @@ const TONE: Record<AgentRowState, StatusTone> = {
   disabled: "off",
   connected: "ok",
   needs_repair: "warn",
-  not_connected: "warn",
+  // One off state, gray: a newly found agent and a disconnected one both read
+  // Not connected, and neither is broken.
+  not_connected: "off",
   checking: "off",
 };
 
@@ -61,9 +63,14 @@ export function agentRowTone(state: AgentRowState): StatusTone {
   return TONE[state];
 }
 
-/** The i18n key of the state's word on a list row (`agents.state.<state>`). */
+/**
+ * The i18n key of the state's word (`agents.state.<state>`). A newly found
+ * agent (never run, not added) and a disconnected one are the same off state,
+ * so they read the same word.
+ */
 export function agentRowStateKey(state: AgentRowState): string {
-  return `agents.state.${state}`;
+  const word = state === "not_added" || state === "never_run" ? "not_connected" : state;
+  return `agents.state.${word}`;
 }
 
 /** Whether the state can be added from its row (the daemon's `addable` also has to agree). */

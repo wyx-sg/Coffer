@@ -21,7 +21,7 @@ const DESTRUCTIVE_ACTION_CLASS =
   "text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive";
 
 interface Props extends Omit<ButtonProps, "variant" | "size" | "children"> {
-  icon: LucideIcon;
+  icon?: LucideIcon;
   label: string;
   destructive?: boolean;
 }
@@ -40,7 +40,7 @@ export const TableActionButton = forwardRef<HTMLButtonElement, Props>(
       }}
       {...props}
     >
-      <Icon aria-hidden />
+      {Icon ? <Icon aria-hidden /> : null}
       {label}
     </Button>
   ),

@@ -1,4 +1,4 @@
-// src/components/agents/list/useAgentRowActions.test.tsx — the action a state calls for, and the remove and enable flows.
+// src/components/agents/list/useAgentRowActions.test.tsx — the visible fix a state calls for, the ⋯ menu order, and the enable flow.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
@@ -36,9 +36,47 @@ const writes = (d: FakeDaemon) =>
 afterEach(() => vi.clearAllMocks());
 
 describe("useAgentRowActions", () => {
-  test("Remove from Coffer takes Coffer's parts out before removing the agent", async () => {
-    const row = typeRow({ type: "codex", uid: "agt_c" });
+  test("a connected agent has no visible button; ⋯ lists Disconnect… and Turn off, never Remove", async () => {
+    const row = typeRow({ type: "claude_code", uid: "agt_a" });
     const d = use(
+      fakeDaemon({
+        types: [row],
+        connections: {
+          agt_a: {
+            state: "connected",
+            parts: [{ key: "mcp", installed: true, detail: "/bin/coffer" }],
+          },
+        },
+      }),
+    );
+    renderWithDaemon(<Harness row={row} />);
+    await waitFor(() => expect(screen.getByTestId("state")).toHaveTextContent("connected"));
+    expect(screen.queryByRole("button", { name: /disconnect|repair|connect/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "menu" }));
+    const menu = await screen.findByRole("menu");
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((i) => i.textContent),
+    ).toEqual([
+      "Use a different config directory…",
+      "Reveal config directory",
+      "Copy uid",
+      "Disconnect…",
+      "Turn off",
+    ]);
+    // Disconnect… goes through Review changes; nothing is written before Apply.
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Disconnect…" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Disconnect Claude Code from Coffer?")).toBeInTheDocument();
+    expect(writes(d)).toEqual([]);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Disconnect" }));
+    await waitFor(() => expect(writes(d)).toEqual(["DELETE /agents/agt_a/coffer-connection"]));
+  });
+
+  test("a partial connection offers Repair as its one button, and Disconnect… stays in ⋯", async () => {
+    const row = typeRow({ type: "codex", uid: "agt_c" });
+    use(
       fakeDaemon({
         types: [row],
         connections: {
@@ -53,46 +91,32 @@ describe("useAgentRowActions", () => {
     await waitFor(() => expect(screen.getByTestId("state")).toHaveTextContent("needs_repair"));
     expect(screen.getByRole("button", { name: "Repair" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "menu" }));
-    const menu = await screen.findByRole("menu");
-    // No Open item without includeOpen — the detail header already is the agent.
-    expect(within(menu).queryByText("Open")).not.toBeInTheDocument();
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "Remove from Coffer" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("Remove Codex from Coffer?")).toBeInTheDocument();
-    expect(dialog).toHaveTextContent("Coffer takes its entry and hook out of ~/.codex");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
-    await waitFor(() =>
-      expect(writes(d)).toEqual(["DELETE /agents/agt_c/coffer-connection", "DELETE /agents/agt_c"]),
-    );
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+    expect(items.map((i) => i.textContent)).toContain("Disconnect…");
+    expect(items.map((i) => i.textContent)).not.toContain("Remove from Coffer");
   });
 
-  test("the menu does not repeat the primary button: no Turn on on a disabled agent, no Disconnect on a connected one", async () => {
+  test("a disconnected or newly found agent reads one off state with Connect", async () => {
+    const added = typeRow({ type: "claude_code", uid: "agt_a" });
+    use(fakeDaemon({ types: [added] }));
+    const first = renderWithDaemon(<Harness row={added} />);
+    expect(await screen.findByRole("button", { name: "Connect" })).toBeInTheDocument();
+    first.unmount();
+
+    const found = typeRow({ type: "codex" });
+    use(fakeDaemon({ types: [found] }));
+    renderWithDaemon(<Harness row={found} />);
+    expect(await screen.findByRole("button", { name: "Connect" })).toBeInTheDocument();
+  });
+
+  test("the menu does not repeat the visible button: no Turn on on a disabled agent", async () => {
     const row = typeRow({ type: "claude_code", uid: "agt_a" });
     use(fakeDaemon({ types: [row], disabled: ["agt_a"] }));
-    const first = renderWithDaemon(<Harness row={row} />);
+    renderWithDaemon(<Harness row={row} />);
     await screen.findByRole("button", { name: "Turn on" });
     fireEvent.click(screen.getByRole("button", { name: "menu" }));
     const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
     expect(items.map((i) => i.textContent)).not.toContain("Turn on");
-    first.unmount();
-
-    use(
-      fakeDaemon({
-        types: [row],
-        connections: {
-          agt_a: {
-            state: "connected",
-            parts: [{ key: "mcp", installed: true, detail: "/bin/coffer" }],
-          },
-        },
-      }),
-    );
-    renderWithDaemon(<Harness row={row} />);
-    await screen.findByRole("button", { name: "Disconnect" });
-    fireEvent.click(screen.getByRole("button", { name: "menu" }));
-    const connected = within(await screen.findByRole("menu")).getAllByRole("menuitem");
-    expect(connected.map((i) => i.textContent)).not.toContain("Disconnect");
   });
 
   test("a disabled agent offers Turn on, which switches it back on", async () => {
@@ -120,14 +144,21 @@ describe("useAgentRowActions", () => {
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.assign(navigator, { clipboard: { writeText } });
       renderWithDaemon(<Harness row={row} />);
+      // No visible button: Copy prompt heads the ⋯ menu, apart from the rest.
+      expect(screen.queryByRole("button", { name: "Copy prompt" })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "menu" }));
+      const menu = await screen.findByRole("menu");
+      // No managed agent is available, so the menu has no Ask an agent.
+      expect(
+        within(menu)
+          .getAllByRole("menuitem")
+          .map((i) => i.textContent),
+      ).toEqual(["Copy prompt", "Use a different config directory…"]);
+      expect(within(menu).getByRole("separator")).toBeInTheDocument();
       // The daemon's prompt, copied as given; no install command anywhere.
-      fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
+      fireEvent.click(within(menu).getByRole("menuitem", { name: "Copy prompt" }));
       expect(writeText).toHaveBeenCalledWith("Please install OpenAI Codex on this machine.");
       expect(document.body).not.toHaveTextContent(/npm|install -g/);
-      // No managed agent is available, so the menu has no Ask an agent.
-      fireEvent.click(screen.getByRole("button", { name: "menu" }));
-      const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
-      expect(items.map((i) => i.textContent)).toEqual(["Use a different config directory…"]);
     },
   );
 
@@ -179,9 +210,9 @@ describe("useAgentRowActions", () => {
       }),
     );
     renderWithDaemon(<Harness row={row} />);
-    expect(await screen.findByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "menu" }));
+    fireEvent.click(await screen.findByRole("button", { name: "menu" }));
     const menu = await screen.findByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: "Copy prompt" })).toBeInTheDocument();
     expect(within(menu).queryByRole("menuitem", { name: "Ask an agent" })).toBeNull();
   });
 });

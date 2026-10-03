@@ -34,6 +34,7 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import SkillValidationError
 from coffer.domain.reconcile import PassReport
 from coffer.domain.resource import Resource
+from coffer.domain.scope import Scope
 from coffer.domain.skill.binding import BindingState
 from coffer.domain.skill.source import LocalImportSource
 from coffer.domain.skill.validator import (
@@ -194,7 +195,15 @@ class SkillService:
         )
 
     async def adopt_unmanaged(
-        self, *, agent_uid: str, skill_name: str, location: str, actor: str = "api"
+        self,
+        *,
+        agent_uid: str,
+        skill_name: str,
+        location: str,
+        actor: str = "api",
+        name: str | None = None,
+        enabled: bool = True,
+        scope: Scope | None = None,
     ) -> Resource:
         from coffer.application.skill.unmanaged_ops import adopt_unmanaged
 
@@ -204,6 +213,9 @@ class SkillService:
             skill_name=skill_name,
             location=location,
             actor=actor,
+            name=name,
+            enabled=enabled,
+            scope=scope,
         )
 
     async def delete_unmanaged(

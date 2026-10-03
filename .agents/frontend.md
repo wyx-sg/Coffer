@@ -386,6 +386,33 @@ return useMutation({
   (`src/components/**`) ≤ 250, a hook or utility (`src/lib/**`) ≤ 300. One
   component per file, test colocated (§8).
 
+- **An agent's state is one word, one pill.** Connected · Not connected · Needs
+  repair · Hook not approved · Off · Config left behind (and Not installed / Not
+  found on the list). The list row and the detail header read the same word
+  (`lib/agents/rowState.ts`); a newly found agent and a disconnected one are the
+  same off state, Not connected. The visible button is only ever the fix Coffer
+  can make — Connect, Repair or Turn on — and a healthy row has none; Disconnect
+  and Turn off live in ⋯. The detail header never turns into a fix button: its
+  fix sits in the Overview's Connection section. The sidebar's Agents badge
+  counts only agents that need you (repair, config left behind, Coffer hook not
+  approved or never fired), never Not connected.
+- **A write to an agent's own files goes through Review changes → Apply**
+  (`components/change-preview/ChangePreview`, 1060 wide): Connect, Repair,
+  Disconnect, moving a connected agent's config directory, and Change model. The
+  preview shows the daemon's own lines; Apply sends the fingerprints the preview
+  read and a file edited since is refused (`CONFIG_FILE_STALE`) with Reload
+  preview. Deleting a provider something runs on is the same shape.
+- **Detail pages with many tabs: six, then More ⌄.** `components/DetailTabsMore`
+  keeps the six most used in the strip and puts the rest in a More menu; while a
+  tab inside More is open the trigger wears its name and the underline, and a
+  warning dot says a tab inside needs you. An agent has no Model tab — the model
+  is a section of its Overview.
+- **Coffer's part first, then the item's own** on the agent's Skills, MCP
+  servers, Hooks and Memory tabs: Coffer-managed items are never listed one by
+  one there, only as one *From Coffer* row linking to the global list narrowed to
+  the agent (`useAgentFilter`, `AgentFilterPill`); the agent's own items follow
+  in a section with a search. No owner column or filter.
+
 ### Saving, counts, dialogs and shortcuts
 
 - **Save on change everywhere** — settings, reach, providers, channel options,
@@ -436,7 +463,9 @@ merge and repair flows.
 - **A surface with room for one button** (an Overview Needs you row, whose
   attention item carries `handoff`) uses `useAgentHandoff` and puts Copy
   prompt / Ask an agent in its ⋯ menu instead (every Needs-you row gets one
-  primary button plus a ⋯ menu: Copy prompt · Ask an agent · Ignore).
+  primary button plus a ⋯ menu: Copy prompt · Ask an agent · Ignore). An
+  Agents-list row whose program is not on this Mac does the same: no button,
+  the install prompt heads its ⋯ menu above a separator.
 
 ## 7. TypeScript & i18n
 
@@ -466,7 +495,7 @@ One name per surface everywhere (spec web-ui "Call a surface by one name everywh
 | Channels | 消息渠道 | Memory | 记忆 |
 | Capabilities (group) | 能力 | System (group) | 系统 |
 | MCP servers | MCP 服务器 | Secrets | 密钥 |
-| Activity | 活动 | Usage | 用量 |
+| Activity | 活动 | Usage (a tab of Model providers, not an entry) | 用量 |
 | Sync | 同步 | Settings | 设置 |
 
 In zh an agent is always **智能体** — never "Agent" or 代理.
@@ -482,12 +511,12 @@ A menu item ends in `…` only when a dialog follows. Progress in zh is
 | --- | --- | --- | --- |
 | Take an agent's own skill/MCP entry under Coffer | Adopt / Adopted | 纳入托管 / 已纳入托管 | 收编, 纳管, 接管 |
 | Under Coffer's care / not | Managed / Unmanaged | 托管 / 未托管 | 受管, 非托管 |
-| Link an agent to Coffer | Connect / Disconnect | 连接 / 断开连接 | 接入 (an agent), 连到 |
+| Link an agent to Coffer | Connect / Disconnect — a newly found agent is Not connected with **Connect**, never "Not added / Add" | 连接 / 断开连接 | 接入 (an agent), 连到, 添加 (an agent) |
 | Re-establish a lost link | Reconnect | 重新连接 | 重连 |
 | Switch a resource or agent on / off | Turn on / Turn off; state On / Off | 开启 / 关闭; 已开启 / 已关闭 | Enable/Disable, 启用/停用/禁用, 打开 (as on) |
 | Destroy a thing | Delete | 删除 | |
 | Take a thing out of a list/agent/Coffer, keeping the thing | Remove | 移除 | |
-| Put something in the list | Add | 添加 (diff tag `+ 添加`) | 注册, 登记, 新增 |
+| Put something in the list (never an agent: the Agents list always holds both rows) | Add | 添加 (diff tag `+ 添加`) | 注册, 登记, 新增 |
 | Make a new object from nothing | Create / New | 创建 / 新建 | |
 | Redo a failed operation | Retry | 重试 | Try again, 再试一次 |
 | Run a check again | Check again | 重新检查 | 再检查一次, 再次检查 |
@@ -497,6 +526,10 @@ A menu item ends in `…` only when a dialog follows. Progress in zh is
 | A change (noun) | change | 改动 | 变更, 更改 |
 | Drop unsaved edits | Discard | 放弃 | 丢弃 |
 | Look over before applying | Review | 查看 | 审阅, 检查 (that is Check) |
+| The preview of what a write to an agent's config will change, then **Apply** (Connect, Repair, Disconnect, moving the config directory, Change model) | Review changes | 审阅改动 (the one place Review reads 审阅) | |
+| Pick another provider/model for an agent (Overview › Model › Change…) | Change model (dialog title "Change <Agent>’s model") | 更改模型 | Switch provider, Model tab |
+| Coffer's own items on an agent's Skills / MCP servers tab | From Coffer (one row, linking to `/skills?agent=` or `/mcp-servers?agent=`) | 来自 Coffer | Owner filter, All / Coffer’s / The agent’s own |
+| An agent's own items there | <Agent>’s own skills / MCP servers / hooks | <智能体> 自己的技能 / MCP 服务器 / 钩子 | |
 | Rename | Rename | 重命名 | 改名 |
 | Held deletions (sync) | held | 暂扣 | 暂停, 拦下 |
 | Jump to the audit log | View in Activity | 在活动中查看 | 在活动中打开 |

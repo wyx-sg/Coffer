@@ -1,107 +1,80 @@
-// src/components/agents/PluginInfoDialog.tsx — what one installed plugin is and what it provides, in a dialog.
+// src/components/agents/PluginInfoDialog.tsx — what one installed plugin is and what it provides, in a dialog (board 2.1.60, 640).
 //
 // Spec agent-registry "Read one installed plugin's detail read-only". Opened
-// from the plugin's name on the agent's Plugins tab. It says who made it,
-// where it came from and is installed, and WHICH skills, commands, subagents,
-// hook events and MCP servers it bundles — names only: the items themselves are
-// not opened from here. The tab's own switch and Uninstall carry the writes.
+// from the plugin's name on the agent's Plugins tab. It says what the plugin is
+// (description, then version · marketplace · where it is installed) and WHICH
+// skills, commands, subagents, hook events and MCP servers it bundles, each
+// section a title with its count over hairline rows (name, then what it does).
+// The items themselves are not opened from here; the tab's own switch and ⋯
+// carry the writes.
 import { useTranslation } from "react-i18next";
 
-import { FileActions } from "@/components/FileActions";
-import { Section } from "@/components/Section";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { abbreviateHomePath } from "@/lib/agents/display";
 import { translateApiError } from "@/lib/api/errors";
 import type { PluginDetailOut } from "@/lib/api/agents-workspace";
 import { useAgentPlugin } from "@/lib/hooks/useAgents";
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-[96px_minmax(0,1fr)] items-baseline gap-3 py-1.5">
-      <dt className="text-xs text-text-subtle">{label}</dt>
-      <dd className="min-w-0 break-words text-sm text-text">{children}</dd>
-    </div>
-  );
+interface Item {
+  name: string;
+  description?: string | null;
 }
 
-function Names({ title, names }: { title: string; names: string[] }) {
-  if (names.length === 0) return null;
+function Group({ title, items }: { title: string; items: Item[] }) {
+  if (items.length === 0) return null;
   return (
-    <Section title={title} gap="snug">
-      <div className="flex flex-wrap gap-1.5">
-        {names.map((n) => (
-          <Badge key={n} variant="secondary" className="font-mono">
-            {n}
-          </Badge>
+    <section className="flex flex-col">
+      <h3 className="flex items-baseline gap-1.5 pb-1.5 text-sm font-semibold text-text">
+        {title}
+        <span className="text-xs font-normal text-text-subtle">{items.length}</span>
+      </h3>
+      <ul className="border-t border-border-subtle">
+        {items.map((item) => (
+          <li
+            key={item.name}
+            className="grid grid-cols-[minmax(0,200px)_minmax(0,1fr)] items-baseline gap-4 border-b border-border-subtle py-2"
+          >
+            <span className="break-all font-mono text-xs text-text">{item.name}</span>
+            <span className="text-xs text-text-muted">{item.description}</span>
+          </li>
         ))}
-      </div>
-    </Section>
+      </ul>
+    </section>
   );
 }
 
 function Body({ detail }: { detail: PluginDetailOut }) {
   const { t } = useTranslation();
-  const p = detail.plugin;
-  const names = (items: { name: string }[]) => items.map((i) => i.name);
+  const named = (names: string[]): Item[] => names.map((name) => ({ name }));
   const provides = [
-    detail.skills.length,
-    detail.commands.length,
-    detail.agents.length,
-    detail.hooks.length,
-    detail.mcp_servers.length,
-  ].some((n) => n > 0);
+    detail.skills,
+    detail.commands,
+    detail.agents,
+    detail.hooks,
+    detail.mcp_servers,
+  ].some((list) => list.length > 0);
   return (
-    <div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto">
-      {p.description ? <p className="text-sm text-text">{p.description}</p> : null}
-      <dl className="flex flex-col divide-y divide-border-subtle border-y border-border-subtle">
-        <Row label={t("agents.pluginsTab.cols.version")}>
-          <span className="font-mono text-xs">{p.version ?? "—"}</span>
-        </Row>
-        <Row label={t("agents.pluginDetail.author")}>{p.author ?? "—"}</Row>
-        {p.homepage ? (
-          <Row label={t("agents.pluginDetail.homepage")}>
-            <a
-              href={p.homepage}
-              target="_blank"
-              rel="noreferrer"
-              className="break-all text-accent-text underline-offset-2 hover:underline"
-            >
-              {p.homepage}
-            </a>
-          </Row>
-        ) : null}
-        <Row label={t("agents.pluginsTab.cols.marketplace")}>{p.marketplace}</Row>
-        <Row label={t("agents.pluginDetail.installPath")}>
-          {detail.install_path ? (
-            <span className="flex flex-col gap-2">
-              <span className="break-all font-mono text-xs">{detail.install_path}</span>
-              <FileActions filePath={detail.install_path} />
-            </span>
-          ) : (
-            <span className="text-text-muted">{t("agents.pluginDetail.notOnDisk")}</span>
-          )}
-        </Row>
-      </dl>
-      <Section title={t("agents.pluginDetail.contents")}>
-        {provides ? (
-          <div className="flex flex-col gap-3">
-            <Names title={t("agents.pluginDetail.skills")} names={names(detail.skills)} />
-            <Names title={t("agents.pluginDetail.commands")} names={names(detail.commands)} />
-            <Names title={t("agents.pluginDetail.agents")} names={names(detail.agents)} />
-            <Names title={t("agents.pluginDetail.hooks")} names={detail.hooks} />
-            <Names title={t("agents.pluginDetail.mcpServers")} names={detail.mcp_servers} />
-          </div>
-        ) : (
-          <p className="text-sm text-text-muted">{t("agents.pluginDetail.noContents")}</p>
-        )}
-      </Section>
+    <div className="flex max-h-[60vh] flex-col gap-5 overflow-y-auto pr-1">
+      {provides ? (
+        <>
+          <Group title={t("agents.pluginDetail.skills")} items={detail.skills} />
+          <Group title={t("agents.pluginDetail.commands")} items={detail.commands} />
+          <Group title={t("agents.pluginDetail.agents")} items={detail.agents} />
+          <Group title={t("agents.pluginDetail.hooks")} items={named(detail.hooks)} />
+          <Group title={t("agents.pluginDetail.mcpServers")} items={named(detail.mcp_servers)} />
+        </>
+      ) : (
+        <p className="text-sm text-text-muted">{t("agents.pluginDetail.noContents")}</p>
+      )}
     </div>
   );
 }
@@ -116,12 +89,39 @@ interface Props {
 export function PluginInfoDialog({ agentUid, pluginId, onClose }: Props) {
   const { t } = useTranslation();
   const { data, isPending, error } = useAgentPlugin(agentUid, pluginId ?? "");
+  const p = data?.plugin;
   return (
     <Dialog open={pluginId !== null} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="max-w-[560px]">
+      <DialogContent className="max-w-[640px]">
         <DialogHeader>
-          <DialogTitle>{data?.plugin.name ?? pluginId?.split("@")[0]}</DialogTitle>
-          <DialogDescription className="font-mono text-xs">{pluginId}</DialogDescription>
+          <DialogTitle className="font-mono">{p?.name ?? pluginId?.split("@")[0]}</DialogTitle>
+          {p?.description ? <DialogDescription>{p.description}</DialogDescription> : null}
+          {p ? (
+            <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-text-muted">
+              <span className="font-mono">{p.version ?? t("common.emptyValue")}</span>
+              <span aria-hidden className="text-text-subtle">
+                ·
+              </span>
+              <span>{p.marketplace}</span>
+              {data?.install_path ? (
+                <>
+                  <span aria-hidden className="text-text-subtle">
+                    ·
+                  </span>
+                  <span className="break-all font-mono">
+                    {abbreviateHomePath(data.install_path)}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span aria-hidden className="text-text-subtle">
+                    ·
+                  </span>
+                  <span>{t("agents.pluginDetail.notOnDisk")}</span>
+                </>
+              )}
+            </p>
+          ) : null}
         </DialogHeader>
         {isPending ? (
           <Skeleton className="h-40 w-full" aria-busy="true" />
@@ -132,6 +132,11 @@ export function PluginInfoDialog({ agentUid, pluginId, onClose }: Props) {
         ) : (
           <Body detail={data} />
         )}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            {t("common.close")}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

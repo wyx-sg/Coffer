@@ -22,7 +22,7 @@ in this order:
 | `knowledge` | Knowledge | `/api/v1/knowledge` | `knowledge` |
 | `memory` | Memory | `/api/v1/memory` | `memory` |
 | `sync` | Vault sync | `/api/v1/sync` | none |
-| `models` | Model providers, the local model proxy and Usage | `/api/v1/providers`, `/api/v1/models`, `/api/v1/proxy`, `/api/v1/usage` | `provider` |
+| `models` | Model providers (with its Usage tab) and the local model proxy | `/api/v1/providers`, `/api/v1/models`, `/api/v1/proxy`, `/api/v1/usage` | `provider` |
 
 Everything else is always on: the shell, the Overview, Agents, the MCP gateway
 and its custom tools, Skills, Secrets, Activity, Settings, Conversations and
@@ -143,8 +143,9 @@ objects in the command palette, its Overview tiles and first-run cards, its
 kind in object-kind lists, and every section of another page that exists only
 for it. A link to one of its pages MUST show the standard not-found page. The UI
 MUST NOT show a notice that a feature is switched off or needs another, and MUST
-NOT offer a switch-on button outside Settings → Features. The Agents page's
-Model tab and Settings → Coffer's model MUST omit what depends on `models`.
+NOT offer a switch-on button outside Settings → Features. An agent's
+Overview › Model section and Settings → Coffer's model MUST omit what depends on `models`:
+the section is read-only, with no Provider row and no Change….
 
 #### Scenario: a switched-off feature's page is not found
 - **GIVEN** a registered feature `f` whose sidebar entry opens a page, and `f` off
@@ -158,8 +159,9 @@ Model tab and Settings → Coffer's model MUST omit what depends on `models`.
 
 #### Scenario: a page omits the section that belongs to a switched-off feature
 - **GIVEN** `models` off
-- **WHEN** the user opens an agent's Model tab and Settings → Coffer's model
-- **THEN** neither shows what depends on `models`, and neither shows a notice about it
+- **WHEN** the user opens an agent's Overview and Settings → Coffer's model
+- **THEN** the Model section shows the agent's own model and effort read-only, with no Provider row and no Change…, and Coffer's model shows nothing that depends on `models`
+- **AND** neither shows a notice about it, and `?change-model=1` opens no dialog
 
 ### Requirement: Keep what a switched-off feature holds
 Switching a feature off MUST NOT delete, move or rewrite anything it holds —

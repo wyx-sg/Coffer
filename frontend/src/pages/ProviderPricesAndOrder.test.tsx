@@ -5,8 +5,8 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import type { ModelPrice, Provider, ProviderModel } from "@/lib/api/providers";
+import { ModelProvidersPage } from "./ModelProvidersPage";
 import { acceptance } from "@/test/acceptance";
-import { ProviderDetailPage } from "./ProviderDetailPage";
 
 vi.mock("@/lib/api/providers", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/providers")>()),
@@ -96,7 +96,7 @@ function renderAt(uid: string) {
     <MemoryRouter initialEntries={[`/model-providers/${uid}`]}>
       <QueryClientProvider client={qc}>
         <Routes>
-          <Route path="/model-providers/:uid" element={<ProviderDetailPage />} />
+          <Route path="/model-providers/:uid" element={<ModelProvidersPage />} />
           <Route path="*" element={null} />
         </Routes>
       </QueryClientProvider>
@@ -137,8 +137,13 @@ describe("prices, fallback and order", () => {
     renderAt("router");
     await waitFor(() => expect(within(rowOf("mine")).getByText("You set")).toBeInTheDocument());
     expect(within(rowOf("mine")).getByText("$1.50 · $12.00 / 1M")).toBeInTheDocument();
-    expect(within(rowOf("reported")).getByText("From OpenRouter")).toBeInTheDocument();
-    expect(within(rowOf("listed")).getByText(/^Bundled · updated .*2026/)).toBeInTheDocument();
+    // The Models line says once where prices usually come from (here the provider's
+    // own API); a row is marked only when it differs.
+    expect(
+      screen.getByText(/^Prices per 1M tokens \(input · output\) from OpenRouter/),
+    ).toBeInTheDocument();
+    expect(within(rowOf("reported")).queryByText(/^From /)).toBeNull();
+    expect(within(rowOf("listed")).getByText("Bundled")).toBeInTheDocument();
     expect(within(rowOf("unknown")).getByLabelText("No price known for unknown")).toHaveTextContent(
       "—",
     );
@@ -167,7 +172,11 @@ describe("prices, fallback and order", () => {
       }),
     ]);
     renderAt("router");
-    fireEvent.click(await within(await waitFor(() => rowOf("mine"))).findByText("Reset"));
+    // No Reset link in the cell: the price opens its dialog, which holds Reset to default.
+    const row = await waitFor(() => rowOf("mine"));
+    expect(within(row).queryByText("Reset")).toBeNull();
+    fireEvent.click(await within(row).findByRole("button", { name: /change the price/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Reset to default" }));
     await waitFor(() => expect(api.update).toHaveBeenCalled());
     expect(api.update.mock.calls[0][1].models[0]).toMatchObject({ id: "mine", price: null });
   });
@@ -176,7 +185,7 @@ describe("prices, fallback and order", () => {
     serve([provider("router")]);
     const view = renderAt("router");
     const toggle = await screen.findByRole("switch", {
-      name: "Use as fallback for other providers",
+      name: "Use as a fallback",
     });
     expect(toggle).toBeChecked();
     fireEvent.click(toggle);

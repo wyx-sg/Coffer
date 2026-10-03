@@ -62,6 +62,9 @@ class NativeHook:
     command: str
     type: str
     timeout: int | None
+    #: Position in the file: ``hooks.<event>[group_index].hooks[hook_index]``.
+    group_index: int
+    hook_index: int
     source: HookSource
     #: The file the hook is declared in.
     path: str
@@ -143,6 +146,14 @@ class AgentHooksService:
         coffer = await self._coffer_hook(agent, cfg, hook) if hook is not None else None
         return AgentHooks(items=tuple(items), coffer_hook=coffer, parse_errors=tuple(errors))
 
+    async def coffer_hook(self, uid: str) -> CofferHook | None:
+        """Only Coffer's own delivery hook (health, trust, last fire), without
+        reading every hook file or plugin: what the attention list asks."""
+        agent = await self._agents.get(uid)
+        cfg = AgentConfig.model_validate(agent.config)
+        hook = self._catalog.delivery_hook(cfg.type)
+        return await self._coffer_hook(agent, cfg, hook) if hook is not None else None
+
     # --- internals -----------------------------------------------------------
 
     @staticmethod
@@ -160,6 +171,8 @@ class AgentHooksService:
             command=row.command,
             type=row.type,
             timeout=row.timeout,
+            group_index=row.group_index,
+            hook_index=row.hook_index,
             source=source,
             path=str(path),
             plugin=plugin,

@@ -4,7 +4,7 @@
 // list row's. One that cannot be added says why, and hands installing (or
 // reinstalling) its program to an agent with the daemon's prompt.
 import { useTranslation } from "react-i18next";
-import { Bot, Plus } from "lucide-react";
+import { Bot, Plug } from "lucide-react";
 
 import type { useAgentRowActions } from "@/components/agents/list/useAgentRowActions";
 import { EmptyState } from "@/components/EmptyState";
@@ -34,8 +34,8 @@ export function AgentNotAdded({ typeRow, rowActions }: Props) {
         })}
         action={
           <Button size="sm" onClick={() => rowActions.open.change("add")}>
-            <Plus aria-hidden className="size-3.5" />
-            {t("agents.detail.add")}
+            <Plug aria-hidden className="size-3.5" />
+            {t("agents.detail.connect")}
           </Button>
         }
       />

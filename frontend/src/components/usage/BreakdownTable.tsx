@@ -1,15 +1,13 @@
 // src/components/usage/BreakdownTable.tsx — the range broken down by model, agent or day, in a bordered table with a Total row.
 //
 // By model names the connection that served each model (by name, as the
-// summary reports it) and, in "By", the agents that used it; by agent lists
+// summary reports it) and, in "Agent", who used it; by agent lists
 // the agents; by day lists the local days newest first with each day's top
-// agent, the latest week first and the rest behind "Show all". The footer
-// says what the cost leaves out and sends "Edit prices" to the Providers tab.
+// agent, the latest week first and the rest behind "Show all".
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ShowAllRow } from "@/components/LongList";
-import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -30,14 +28,13 @@ interface Props {
   summary: UsageSummary;
   /** "7 days" — the range as the Total row names it. */
   totalLabel: string;
-  onEditPrices: () => void;
 }
 
 const NUM = "text-right whitespace-nowrap";
 /** Days shown before "Show all". */
 const DAYS_SHOWN = 7;
 
-export function BreakdownTable({ summary, totalLabel, onEditPrices }: Props) {
+export function BreakdownTable({ summary, totalLabel }: Props) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const tokens = (n: number) => (n ? formatTokens(n, lang) : "—");
@@ -141,12 +138,6 @@ export function BreakdownTable({ summary, totalLabel, onEditPrices }: Props) {
           </TableRow>
         </TableFooter>
       </Table>
-      <div className="flex items-center gap-1.5 border-t border-border-subtle bg-surface-footer px-3 py-2 text-xs text-text-muted">
-        <span>{t("usage.table.footer")}</span>
-        <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={onEditPrices}>
-          {t("usage.editPrices")}
-        </Button>
-      </div>
     </div>
   );
 }

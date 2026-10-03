@@ -1,10 +1,12 @@
 // frontend/src/components/agents/ConfigFileTree.test.tsx
-// The config tree names each file by its own name and what it is for, groups
-// by the directory it lives in, marks a missing file, and folds a directory.
+// The config tree is one tree: the config directory as a folder of its files
+// (a file beside it at the top level), a directory entry as a folder of its
+// own files, a missing file italic with "not created", the open file dotted
+// while it has unsaved edits.
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
-import { ConfigFileTree } from "./ConfigFileTree";
+import { ConfigFileTree, type ConfigFileTreeProps } from "./ConfigFileTree";
 import type { ConfigFileInfo } from "@/lib/api/agents";
 import "@/i18n";
 
@@ -22,7 +24,7 @@ const entry = (over: Partial<ConfigFileInfo>): ConfigFileInfo => ({
   ...over,
 });
 
-function renderTree(files: ConfigFileInfo[], collapsed: Record<string, boolean> = {}) {
+function renderTree(files: ConfigFileInfo[], over: Partial<ConfigFileTreeProps> = {}) {
   const handlers = {
     onSelectFile: vi.fn(),
     onSelectDirectory: vi.fn(),
@@ -33,30 +35,35 @@ function renderTree(files: ConfigFileInfo[], collapsed: Record<string, boolean> 
       files={files}
       selectedKey={null}
       selectedChild={null}
-      collapsed={collapsed}
+      collapsed={{}}
       {...handlers}
+      {...over}
     />,
   );
   return handlers;
 }
 
 describe("ConfigFileTree", () => {
-  test("rows are the file's name and role; unknown keys fall back to the listing's name", () => {
+  test("rows are the file's own name under its folder, with no role labels", () => {
     const h = renderTree([
       entry({}),
       entry({ key: "hooks", path: "/home/u/.codex/hooks.json", exists: false }),
-      entry({ key: "future", display_name: "Something new", path: "/home/u/.codex/new.md" }),
     ]);
     expect(screen.getByText("config.toml")).toBeInTheDocument();
-    expect(screen.getByText("Settings")).toBeInTheDocument();
+    expect(screen.queryByText("Settings")).not.toBeInTheDocument();
     expect(screen.getByText("not created")).toBeInTheDocument();
-    expect(screen.getByText("Something new")).toBeInTheDocument();
     expect(screen.getByText("~/.codex")).toBeInTheDocument();
+    expect(screen.queryByText("~ (home)")).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("config.toml"));
     expect(h.onSelectFile).toHaveBeenCalledWith("config");
   });
 
-  test("a folded directory hides its files; an open one lists them", () => {
+  test("a file kept beside the config directory sits at the top level as ~/name", () => {
+    renderTree([entry({ key: "global", path: "/home/u/.claude.json", folder_path: "/home/u" })]);
+    expect(screen.getByText("~/.claude.json")).toBeInTheDocument();
+  });
+
+  test("a directory entry is a folder of its files; a folded one hides them", () => {
     const dir = entry({
       key: "subagents",
       path: "/home/u/.claude/agents",
@@ -67,24 +74,20 @@ describe("ConfigFileTree", () => {
     const h = renderTree([dir]);
     fireEvent.click(screen.getByText("a.md"));
     expect(h.onSelectChild).toHaveBeenCalledWith("subagents", "a.md");
-    expect(screen.getByRole("button", { name: /agents\// })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    const row = screen.getByRole("treeitem", { name: "agents" });
+    expect(row).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(row);
+    expect(h.onSelectDirectory).toHaveBeenCalledWith("subagents");
   });
 
-  test("a folded directory shows no children", () => {
-    renderTree(
-      [
-        entry({
-          key: "subagents",
-          path: "/home/u/.claude/agents",
-          kind: "directory",
-          files: [{ relpath: "a.md", size: 1, modified_at: "2026-09-01T00:00:00Z" }],
-        }),
-      ],
-      { subagents: true },
-    );
-    expect(screen.queryByText("a.md")).not.toBeInTheDocument();
+  test("the config directory folds on its own row", () => {
+    renderTree([entry({})]);
+    fireEvent.click(screen.getByRole("treeitem", { name: "~/.codex" }));
+    expect(screen.queryByText("config.toml")).not.toBeInTheDocument();
+  });
+
+  test("an open file with unsaved edits wears the dot", () => {
+    renderTree([entry({})], { selectedKey: "config", dirty: true });
+    expect(screen.getByRole("img", { name: "Unsaved changes" })).toBeInTheDocument();
   });
 });

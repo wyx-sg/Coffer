@@ -11,10 +11,12 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { AgentFilterPill } from "@/components/agents/tabs/AgentFilterPill";
 import { ReachFilter } from "@/components/reach/ReachFilter";
 import { SearchInput } from "@/components/SearchInput";
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import type { ResourceOut } from "@/lib/api/resources";
+import { useAgentFilter } from "@/lib/agents/agentFilter";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useBuiltinMcpServer } from "@/lib/hooks/useMcpAddFlow";
 import { useMcpServerListReads } from "@/lib/hooks/useMcpServerPage";
@@ -53,6 +55,7 @@ export function McpServerList({
   const { data: agents = [] } = useAgents();
   const [query, setQuery] = useState("");
   const [reach, setReach] = useState<ReachFilterValue>("all");
+  const agentFilter = useAgentFilter();
   const { data: builtin } = useBuiltinMcpServer();
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
 
@@ -66,12 +69,13 @@ export function McpServerList({
       const haystack = `${s.name} ${s.title ?? ""} ${transportOf(s.config).target}`.toLowerCase();
       if (q && !haystack.includes(q)) return;
       if (!matchesReach(reach, s)) return;
+      if (agentFilter && !agentFilter.matches(s)) return;
       out.get(serverState(s, detailOf(i)).group)?.push(i);
     });
     return out;
     // detailOf reads `details`, whose answers are what change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [servers, query, reach, details]);
+  }, [servers, query, reach, details, agentFilter]);
 
   // Coffer's own server: always on, for every agent, so Reach "On everywhere" matches it.
   const showBuiltin =
@@ -111,6 +115,7 @@ export function McpServerList({
               ariaLabel={t("mcp.page.filter")}
             />
             <div className="flex items-center gap-2">
+              <AgentFilterPill filter={agentFilter} />
               <ReachFilter value={reach} onChange={setReach} />
             </div>
           </>
@@ -126,7 +131,9 @@ export function McpServerList({
           <ListLoadError kind="mcp" error={error} onRetry={() => onRetry?.()} />
         ) : isLoading ? (
           <ListLoadingRows />
-        ) : shown === 0 && servers.length > 0 && (query.trim() !== "" || reach !== "all") ? (
+        ) : shown === 0 &&
+          servers.length > 0 &&
+          (query.trim() !== "" || reach !== "all" || agentFilter) ? (
           <ListNoMatch
             kind="mcp"
             query={query}

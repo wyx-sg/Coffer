@@ -1,96 +1,70 @@
-// src/components/agents/tabs/AgentKindTab.test.tsx — the shared list-tab layout: owner filter in the URL, search, empty and error states.
-import { describe, expect, test } from "vitest";
+// src/components/agents/tabs/AgentKindTab.test.tsx — the shared search-and-list region: search, bordered list, empty box, load error.
+import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter, useLocation } from "react-router-dom";
-import { Puzzle } from "lucide-react";
 
 import "@/i18n";
-import type { Owner } from "@/lib/agents/owner";
 import { AgentKindTab } from "./AgentKindTab";
 
 interface Row {
   name: string;
-  owner: Owner;
 }
 
-const ROWS: Row[] = [
-  { name: "coffer-guide", owner: "coffer" },
-  { name: "release-notes", owner: "own" },
-  { name: "lint-fix", owner: "own" },
-];
+const ROWS: Row[] = [{ name: "coffer-guide" }, { name: "release-notes" }, { name: "lint-fix" }];
 
-function Where() {
-  const { search } = useLocation();
-  return <output data-testid="search">{search}</output>;
-}
-
-function renderTab(rows: Row[] = ROWS, path = "/agents/codex/skills", extra = {}) {
+function renderTab(rows: Row[] = ROWS, extra = {}) {
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <AgentKindTab
-        rows={rows}
-        summary="3 skills"
-        searchPlaceholder="Search skills"
-        searchText={(r) => r.name}
-        empty={{ icon: Puzzle, title: "Codex has no skills", description: "Skills show up here." }}
-        {...extra}
-      >
-        {(visible) => (
-          <ul>
-            {visible.map((r) => (
-              <li key={r.name}>{r.name}</li>
-            ))}
-          </ul>
-        )}
-      </AgentKindTab>
-      <Where />
-    </MemoryRouter>,
+    <AgentKindTab
+      rows={rows}
+      searchPlaceholder="Search skills"
+      searchText={(r) => r.name}
+      empty={{ title: "Codex has no skills", description: "Skills Codex installs show up here." }}
+      noMatch="No skills match."
+      {...extra}
+    >
+      {(visible) =>
+        visible.map((r) => (
+          <li key={r.name} data-testid="row">
+            {r.name}
+          </li>
+        ))
+      }
+    </AgentKindTab>,
   );
 }
 
-const names = () => screen.queryAllByRole("listitem").map((li) => li.textContent);
-
 describe("AgentKindTab", () => {
-  // Spec agent-registry "Filter an agent's installed kinds by owner" (the scenario itself is on the Skills tab).
-  test("the owner filter narrows the rows and is kept in the URL", () => {
+  test("lists the rows in one bordered list under the search", () => {
     renderTab();
-    expect(names()).toEqual(["coffer-guide", "release-notes", "lint-fix"]);
-    fireEvent.click(screen.getByRole("radio", { name: "The agent’s own" }));
-    expect(names()).toEqual(["release-notes", "lint-fix"]);
-    expect(screen.getByTestId("search")).toHaveTextContent("?owner=own");
-    fireEvent.click(screen.getByRole("radio", { name: "All" }));
-    expect(names()).toHaveLength(3);
-    expect(screen.getByTestId("search")).toHaveTextContent("");
+    expect(screen.getAllByTestId("row")).toHaveLength(3);
+    expect(screen.getAllByTestId("row")[0].parentElement?.tagName).toBe("UL");
   });
 
-  test("a filter in the address is applied on load", () => {
-    renderTab(ROWS, "/agents/codex/skills?owner=coffer");
-    expect(names()).toEqual(["coffer-guide"]);
-    expect(screen.getByRole("radio", { name: "Coffer’s" })).toHaveAttribute("aria-checked", "true");
-  });
-
-  test("search narrows within the owner filter", () => {
+  test("search narrows the rows; a query that matches none says so", () => {
     renderTab();
-    fireEvent.change(screen.getByRole("textbox", { name: "Search skills" }), {
-      target: { value: "LINT" },
-    });
-    expect(names()).toEqual(["lint-fix"]);
+    fireEvent.change(screen.getByLabelText("Search skills"), { target: { value: "lint" } });
+    expect(screen.getAllByTestId("row").map((r) => r.textContent)).toEqual(["lint-fix"]);
+    fireEvent.change(screen.getByLabelText("Search skills"), { target: { value: "zzz" } });
+    expect(screen.getByText("No skills match.")).toBeInTheDocument();
   });
 
-  test("an agent with none of the kind gets the shared empty state", () => {
+  test("nothing at all is a bordered box with a title and one line, and keeps the search", () => {
     renderTab([]);
     expect(screen.getByText("Codex has no skills")).toBeInTheDocument();
-    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    expect(screen.getByText("Skills Codex installs show up here.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Search skills")).toBeInTheDocument();
   });
 
-  test("a list that failed to load says so with a retry", () => {
-    let retried = 0;
-    renderTab([], "/agents/codex/skills", {
-      error: new Error("boom"),
-      onRetry: () => (retried += 1),
-    });
+  test("a list that failed to load is the shared load-error row with Retry", () => {
+    const onRetry = vi.fn();
+    renderTab([], { error: new Error("boom"), onRetry });
     expect(screen.getByText("Couldn’t read this list")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(retried).toBe(1);
+    expect(onRetry).toHaveBeenCalled();
+  });
+
+  test("the notice and the search aside sit around the list", () => {
+    renderTab(ROWS, { notice: <p>Heads up</p>, searchAside: <span>?</span> });
+    expect(screen.getByText("Heads up")).toBeInTheDocument();
+    expect(screen.getByText("?")).toBeInTheDocument();
   });
 });
