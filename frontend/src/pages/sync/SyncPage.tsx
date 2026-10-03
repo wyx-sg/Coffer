@@ -7,7 +7,7 @@
 //
 // It answers "is this Mac in sync?" in one state (`syncPageState.ts`), which
 // the header's pill and button and the Status tab's banner all read. Three
-// tabs: **Status** (the landing tab — the state, the area counts, anything a
+// tabs: **Status** (the landing tab — the state, the areas line, anything a
 // stopped round or a join is waiting on, and every round), **Machines** (the
 // registry) and **Remote** (the repository, its secret and the vault). A Mac
 // with no remote, or one that has not joined it yet, has no tabs: the header
@@ -45,7 +45,7 @@ function isSyncTab(value: string | null): value is SyncTab {
 export function SyncPage() {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
-  const { data: status, error, isPending, refetch } = useSyncStatus();
+  const { data: status, error, isPending, isFetching, refetch } = useSyncStatus();
   const run = useRunSync();
   // When this page asked for a round, until the status says one is running.
   const [startedAt, setStartedAt] = useState<string | null>(null);
@@ -66,7 +66,7 @@ export function SyncPage() {
   if (!status) {
     return (
       <div className="space-y-6">
-        <PageHeader title={t("sync.title")} />
+        <PageHeader title={t("sync.title")} experimental />
         {isPending ? (
           <Skeleton className="h-40 w-full" />
         ) : (
@@ -112,7 +112,13 @@ export function SyncPage() {
           ))}
         </TabsList>
         <TabsContent value="status" className="pt-5">
-          <SyncStatusTab status={status} state={state} startedAt={startedAt} onRun={runNow} />
+          <SyncStatusTab
+            status={status}
+            state={state}
+            startedAt={startedAt}
+            onRecheck={() => void refetch()}
+            rechecking={isFetching}
+          />
         </TabsContent>
         <TabsContent value="machines" className="pt-5">
           <SyncMachinesTab />

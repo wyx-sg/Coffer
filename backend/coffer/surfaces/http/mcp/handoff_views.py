@@ -15,7 +15,12 @@ from collections.abc import Sequence
 from functools import cache
 from typing import Any
 
-from coffer.application.mcp.handoff import STDERR_LINES, diagnose_handoff, launcher_handoff
+from coffer.application.mcp.handoff import (
+    STDERR_LINES,
+    call_failure_handoff,
+    diagnose_handoff,
+    launcher_handoff,
+)
 from coffer.domain.resource import Resource
 from coffer.infrastructure.logging.upstream_tail import read_upstream_tail
 from coffer.infrastructure.platform.host import machine_label
@@ -67,6 +72,29 @@ def diagnose_prompt(
         stderr=list(stderr) if stderr else lines,
         machine=_machine(),
         log_path=log_path,
+    )
+
+
+def call_failure_prompt(
+    *,
+    server: str,
+    tool: str,
+    error: str | None,
+    status: str,
+    failures_24h: int,
+    session_id: str | None,
+    call_id: int,
+) -> str:
+    """The prompt for one call its server never answered (the Activity drawer)."""
+    return call_failure_handoff(
+        server=server,
+        tool=tool,
+        error=error,
+        status=status,
+        failures_24h=failures_24h,
+        session_id=session_id,
+        call_id=call_id,
+        machine=_machine(),
     )
 
 

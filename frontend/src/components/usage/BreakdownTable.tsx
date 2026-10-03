@@ -1,14 +1,15 @@
-// src/components/usage/BreakdownTable.tsx — the range broken down by model, agent or day, with a Total row.
+// src/components/usage/BreakdownTable.tsx — the range broken down by model, agent or day, in a bordered table with a Total row.
 //
 // By model names the connection that served each model (by name, as the
-// summary reports it) and, in "By", the marks of the agents that used it; by
-// agent names the agent and tags a subscription agent's rows "via API key";
-// by day lists the local days newest first with each day's top agent, the
-// latest week first and the rest behind "Show all".
-import { useState, type ReactNode } from "react";
+// summary reports it) and, in "By", the agents that used it; by agent lists
+// the agents; by day lists the local days newest first with each day's top
+// agent, the latest week first and the rest behind "Show all". The footer
+// says what the cost leaves out and sends "Edit prices" to the Providers tab.
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import { AgentBadge } from "@/components/agent/AgentBadge";
+import { ShowAllRow } from "@/components/LongList";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -18,42 +19,45 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useLongList } from "@/components/useLongList";
 import { agentTypeLabel } from "@/lib/agents/display";
 import type { UsageSummary, UsageSummaryRow, UsageTotals } from "@/lib/api/usage";
 import { formatDay, formatTokens } from "@/lib/usage/format";
 import { localDay, parseDay } from "@/lib/usage/range";
 import { CostCell, RequestsCell } from "./UsageCells";
-import { ViaApiKeyTag } from "./ViaApiKeyTag";
 
 interface Props {
   summary: UsageSummary;
-  /** "Total · 7 days" — the range as the period control names it. */
+  /** "7 days" — the range as the Total row names it. */
   totalLabel: string;
-  /** Agent types on a subscription login: their rows carry "via API key". */
-  subscriptionAgents: ReadonlySet<string>;
+  onEditPrices: () => void;
 }
 
 const NUM = "text-right whitespace-nowrap";
 /** Days shown before "Show all". */
 const DAYS_SHOWN = 7;
 
-export function BreakdownTable({ summary, totalLabel, subscriptionAgents }: Props) {
+export function BreakdownTable({ summary, totalLabel, onEditPrices }: Props) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
-  const [allDays, setAllDays] = useState(false);
   const tokens = (n: number) => (n ? formatTokens(n, lang) : "—");
-  const byDay = summary.group_by === "day";
+  const group = summary.group_by;
   const today = localDay(new Date());
-  const ordered = byDay ? [...summary.rows].reverse() : summary.rows;
-  const hidden = byDay && !allDays ? Math.max(0, ordered.length - DAYS_SHOWN) : 0;
-  const rows = hidden ? ordered.slice(0, DAYS_SHOWN) : ordered;
+  const ordered = group === "day" ? [...summary.rows].reverse() : summary.rows;
+  const { visible, shown, total, collapsed, expand, listClassName } = useLongList(ordered, {
+    limit: DAYS_SHOWN,
+    scrollInside: false,
+  });
+  const rows = group === "day" ? visible : ordered;
+  const hasSecond = group !== "agent";
+  const columns = (hasSecond ? 2 : 1) + 6;
 
   const first = (row: UsageSummaryRow): ReactNode => {
-    if (summary.group_by === "agent") {
+    if (group === "agent") {
       if (!row.agent_type) return t("usage.table.unknownAgent");
       return <span className="text-sm">{agentTypeLabel(row.agent_type)}</span>;
     }
-    if (byDay) {
+    if (group === "day") {
       if (!row.day) return row.key;
       const day = formatDay(parseDay(row.day), lang, "long");
       return row.day === today ? t("usage.table.today", { day }) : day;
@@ -64,29 +68,19 @@ export function BreakdownTable({ summary, totalLabel, subscriptionAgents }: Prop
           {row.model ?? t("usage.table.unknownModel")}
         </span>
         {row.connection_name ? (
-          <span className="truncate text-2xs text-text-muted">{row.connection_name}</span>
+          <span className="truncate text-xs text-text-subtle">{row.connection_name}</span>
         ) : null}
       </span>
     );
   };
 
   const second = (row: UsageSummaryRow): ReactNode => {
-    if (summary.group_by === "agent") {
-      return row.agent_type && subscriptionAgents.has(row.agent_type) ? <ViaApiKeyTag /> : null;
-    }
-    if (byDay) {
-      const top = row.agent_types[0];
-      return top ? (
-        <span className="whitespace-nowrap text-sm text-text-muted">{agentTypeLabel(top)}</span>
-      ) : null;
-    }
-    return (
-      <span className="flex items-center gap-1">
-        {row.agent_types.map((a) => (
-          <AgentBadge key={a} type={a} size="sm" />
-        ))}
+    const names = group === "day" ? row.agent_types.slice(0, 1) : row.agent_types;
+    return names.length ? (
+      <span className="whitespace-nowrap text-sm text-text-muted">
+        {names.map(agentTypeLabel).join(", ")}
       </span>
-    );
+    ) : null;
   };
 
   const numbers = (totals: UsageTotals) => (
@@ -107,49 +101,52 @@ export function BreakdownTable({ summary, totalLabel, subscriptionAgents }: Prop
   );
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>{t(`usage.table.cols.${summary.group_by}`)}</TableHead>
-          <TableHead>{t(`usage.table.cols.second.${summary.group_by}`)}</TableHead>
-          {(["requests", "input", "output", "cacheRead", "cacheWrite", "cost"] as const).map(
-            (c) => (
-              <TableHead key={c} className="text-right">
-                {t(`usage.table.cols.${c}`)}
-              </TableHead>
-            ),
-          )}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.key}>
-            <TableCell className="max-w-0 w-full">{first(row)}</TableCell>
-            <TableCell>{second(row)}</TableCell>
-            {numbers(row.totals)}
+    <div className="overflow-hidden rounded-xl border border-border bg-surface-raised">
+      <Table containerClassName={listClassName}>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t(`usage.table.cols.${group}`)}</TableHead>
+            {hasSecond ? <TableHead>{t(`usage.table.cols.second.${group}`)}</TableHead> : null}
+            {(["requests", "input", "output", "cacheRead", "cacheWrite", "cost"] as const).map(
+              (c) => (
+                <TableHead key={c} className="text-right">
+                  {t(`usage.table.cols.${c}`)}
+                </TableHead>
+              ),
+            )}
           </TableRow>
-        ))}
-        {hidden ? (
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow key={row.key}>
+              <TableCell className="w-full max-w-0">{first(row)}</TableCell>
+              {hasSecond ? <TableCell>{second(row)}</TableCell> : null}
+              {numbers(row.totals)}
+            </TableRow>
+          ))}
+          {group === "day" && collapsed ? (
+            <TableRow className="h-auto hover:bg-transparent">
+              <TableCell colSpan={columns} className="p-0">
+                <ShowAllRow shown={shown} total={total} onShowAll={expand} className="border-t-0" />
+              </TableCell>
+            </TableRow>
+          ) : null}
+        </TableBody>
+        <TableFooter>
           <TableRow className="hover:bg-transparent">
-            <TableCell colSpan={8} className="text-xs text-text-muted">
-              {t("usage.table.earlierDays", { count: hidden })}{" "}
-              <button
-                type="button"
-                className="font-label text-accent-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-                onClick={() => setAllDays(true)}
-              >
-                {t("usage.table.showAllDays", { count: ordered.length })}
-              </button>
+            <TableCell colSpan={hasSecond ? 2 : 1}>
+              {t("usage.table.total", { range: totalLabel })}
             </TableCell>
+            {numbers(summary.totals)}
           </TableRow>
-        ) : null}
-      </TableBody>
-      <TableFooter>
-        <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={2}>{t("usage.table.total", { range: totalLabel })}</TableCell>
-          {numbers(summary.totals)}
-        </TableRow>
-      </TableFooter>
-    </Table>
+        </TableFooter>
+      </Table>
+      <div className="flex items-center gap-1.5 border-t border-border-subtle bg-surface-footer px-3 py-2 text-xs text-text-muted">
+        <span>{t("usage.table.footer")}</span>
+        <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={onEditPrices}>
+          {t("usage.editPrices")}
+        </Button>
+      </div>
+    </div>
   );
 }

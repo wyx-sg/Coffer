@@ -1,11 +1,12 @@
 // frontend/src/pages/sync/SyncMachinesTab.test.tsx
 //
-// The registry table (6.5.20). Its cells carry claims that would be wrong if
+// The registry table (6.4.24). Its cells carry claims that would be wrong if
 // rendered naively, so each has a test: two machines of one name are both
 // listed and keyed by id; "last seen" comes from the machine's own last
 // round; the curation owner is tagged read-only; a different master key is
 // flagged (and "no fingerprint yet" is not); Rename is only on this Mac's
-// row and Retire only on the others, each behind its dialog.
+// row, behind its dialog, and Retire only on the others — at once, with an
+// Undo toast.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
@@ -18,15 +19,20 @@ vi.mock("@/lib/hooks/useMachines", () => ({
   useMachines: vi.fn(),
   useRenameSelf: vi.fn(),
   useRetireMachine: vi.fn(),
+  useRestoreMachine: vi.fn(),
 }));
+const toast = { info: vi.fn(), error: vi.fn(), success: vi.fn() };
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ toast }) }));
 vi.mock("@/lib/hooks/useInternalEngine", () => ({ useInternalEngineConfig: vi.fn() }));
 
-const { useMachines, useRenameSelf, useRetireMachine } = await import("@/lib/hooks/useMachines");
+const { useMachines, useRenameSelf, useRetireMachine, useRestoreMachine } =
+  await import("@/lib/hooks/useMachines");
 const { useInternalEngineConfig } = await import("@/lib/hooks/useInternalEngine");
 const mocked = (fn: unknown) => fn as unknown as ReturnType<typeof vi.fn>;
 
 const renameMutate = vi.fn();
-const retireMutate = vi.fn();
+const retireMutate = vi.fn((_: string, opts?: { onSuccess?: () => void }) => opts?.onSuccess?.());
+const restoreMutate = vi.fn();
 
 const LOCAL = "a3f21c9e4b7d2610";
 const OTHER = "bb11cc22dd33ee44";
@@ -41,6 +47,7 @@ function seed(machines: Machine[], curator: string | null = null) {
   mocked(useInternalEngineConfig).mockReturnValue({ data: { curate_owner_machine_id: curator } });
   mocked(useRenameSelf).mockReturnValue(idleMutation({ mutate: renameMutate }));
   mocked(useRetireMachine).mockReturnValue(idleMutation({ mutate: retireMutate }));
+  mocked(useRestoreMachine).mockReturnValue(idleMutation({ mutate: restoreMutate }));
 }
 
 const rowFor = (id: string) => within(screen.getByTestId(`machine-${id}`));
@@ -133,7 +140,7 @@ describe("SyncMachinesTab", () => {
     expect(renameMutate).toHaveBeenCalledWith("Workhorse", expect.anything());
   });
 
-  test("retiring is offered for other machines only, and says nothing is deleted", () => {
+  test("retiring is offered for other machines only, runs at once and can be undone", () => {
     seed([machine(), other({ coffer_version: "1.0.0" })]);
     render(<SyncMachinesTab />);
     openMenu(LOCAL, "MacBook Pro");
@@ -141,11 +148,13 @@ describe("SyncMachinesTab", () => {
 
     openMenu(OTHER, "Mac mini");
     fireEvent.click(screen.getByRole("menuitem", { name: "Retire" }));
-    const dialog = within(screen.getByRole("dialog"));
-    expect(dialog.getByText(/on Coffer 1\.0\.0/)).toBeInTheDocument();
-    expect(dialog.getByText("Nothing is deleted")).toBeInTheDocument();
-    fireEvent.click(dialog.getByRole("button", { name: "Retire" }));
+    // No confirmation dialog: the registry entry is all it removes.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(retireMutate).toHaveBeenCalledWith(OTHER, expect.anything());
+    expect(toast.info).toHaveBeenCalledWith("Retired Mac mini", { undo: expect.any(Function) });
+
+    toast.info.mock.calls[0][1].undo();
+    expect(restoreMutate).toHaveBeenCalledWith(OTHER, expect.anything());
   });
 
   test("an empty registry explains itself rather than showing an empty table", () => {

@@ -1,4 +1,4 @@
-// src/pages/activity/ActivityPage.test.tsx — the Activity page: four tabs with counts, filters, the drawer, live insertion and holding, export.
+// src/pages/activity/ActivityPage.test.tsx — the Activity page: four tabs, the filter row, the drawer, live insertion and holding, export, hand-offs.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -64,10 +64,12 @@ const INVOCATION = {
   error_message: null,
   session_id: "s-1",
   agent_uid: "a-cc",
+  handoff: null,
 };
 
 const DAEMON_RECORD = {
   offset: 1000,
+  handoff: null,
   timestamp: ago(10_000),
   level: "warning",
   event: "auto_sync_failed",
@@ -105,7 +107,10 @@ function mockApi(initial: Partial<Data> = {}) {
       if (path === data.failing) return Promise.resolve(fail);
       // Each route searches the way the daemon does: the text, in any case, anywhere in the row.
       const matches = (row: unknown) =>
-        !query.q || JSON.stringify(row).toLowerCase().includes(String(query.q).toLowerCase());
+        (!query.q || JSON.stringify(row).toLowerCase().includes(String(query.q).toLowerCase())) &&
+        (!query.since ||
+          !(row as { timestamp?: string }).timestamp ||
+          (row as { timestamp: string }).timestamp >= String(query.since));
       if (path === "/audit") {
         const limit = Number(query.limit ?? 50);
         const rows = data.audit.filter(matches);
@@ -119,8 +124,8 @@ function mockApi(initial: Partial<Data> = {}) {
       }
       if (path === "/mcp/invocations") {
         let rows = (data.invocations as (typeof INVOCATION)[]).filter(matches);
-        if (query.uid) rows = rows.filter((r) => r.resource_uid === query.uid);
-        if (query.status) rows = rows.filter((r) => r.status === query.status);
+        if (query.status === "failed") rows = rows.filter((r) => r.status !== "ok");
+        else if (query.status) rows = rows.filter((r) => r.status === query.status);
         const limit = Number(query.limit ?? 50);
         return Promise.resolve({
           data: { invocations: rows.slice(0, limit), next_cursor: null, total: rows.length },
@@ -195,11 +200,15 @@ async function pollHeads() {
 const tab = (name: RegExp) => screen.getByRole("tab", { name });
 // Radix activates a tab on mousedown, not on click.
 const openTab = (name: RegExp) => fireEvent.mouseDown(tab(name));
+const drawer = () => screen.findByRole("dialog");
+/** The filter row's pill by its name ("By", "Kind: MCP calls"). */
+const pill = (name: string) => screen.getByRole("button", { name: new RegExp(`^${name}`) });
 const headers = () =>
   screen
     .getAllByRole("columnheader")
     .map((h) => h.textContent ?? "")
     .filter((h) => h !== "");
+const search = (placeholder: string) => screen.getByLabelText(placeholder);
 const list = () => document.querySelector("[data-activity-list]") as HTMLElement;
 /** A call's `server.tool`, however the row splits it into spans. */
 const target =
@@ -223,6 +232,9 @@ describe("ActivityPage", () => {
     render(wrap(<ActivityPage />));
 
     expect(screen.getByRole("heading", { name: /Activity/ })).toBeInTheDocument();
+    expect(
+      screen.getByText("Every change, tool call and daemon record, newest first."),
+    ).toBeVisible();
     expect(tab(/everything/i)).toHaveAttribute("data-state", "active");
     await screen.findByText("Added filesystem");
     const rows = within(list())
@@ -234,19 +246,21 @@ describe("ActivityPage", () => {
       "change",
     ]);
     expect(headers()).toEqual(["Time", "Event", "By", "Took"]);
+    // The day is a heading row inside the box; no summary line sits above it.
+    expect(screen.getByText(/^Today · /)).toBeInTheDocument();
+    expect(screen.queryByText(/in the last hour/)).not.toBeInTheDocument();
   });
 
-  test("each tab carries its count", async () => {
-    mockApi({
-      audit: [AUDIT_ENTRY],
-      invocations: [INVOCATION, { ...INVOCATION, id: 8 }],
-      daemon: [DAEMON_RECORD],
-    });
+  test("tabs carry no counts, and the header says Live or Reconnecting", async () => {
+    mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION], daemon: [DAEMON_RECORD] });
     render(wrap(<ActivityPage />));
-    await waitFor(() => expect(tab(/^Changes/)).toHaveTextContent("Changes1"));
-    expect(tab(/^MCP calls/)).toHaveTextContent("MCP calls2");
-    expect(tab(/^Daemon log/)).toHaveTextContent("Daemon log1");
-    expect(tab(/^Everything/)).toHaveTextContent("Everything4");
+    await screen.findByText("Added filesystem");
+    expect(tab(/^Changes/)).toHaveTextContent(/^Changes$/);
+    expect(tab(/^MCP calls/)).toHaveTextContent(/^MCP calls$/);
+    expect(tab(/^Everything/)).toHaveTextContent(/^Everything$/);
+    // The change feed is not open in a test: the dot says so in words.
+    expect(screen.getByText("Reconnecting…")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More" })).not.toBeInTheDocument();
   });
 
   test("the tab lives in the URL; the default needs no parameter", async () => {
@@ -278,24 +292,74 @@ describe("ActivityPage", () => {
     expect(tab(/^Changes/)).toHaveAttribute("data-state", "active");
   });
 
-  test("the free text narrows what is shown", async () => {
+  test("the free text narrows what is shown, and the URL keeps it", async () => {
     mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION] });
-    render(wrap(<ActivityPage />));
+    let query = "";
+    function Probe() {
+      query = useLocation().search;
+      return null;
+    }
+    render(
+      wrap(
+        <>
+          <ActivityPage />
+          <Probe />
+        </>,
+      ),
+    );
     await screen.findByText("Added filesystem");
-    fireEvent.change(screen.getByLabelText("Filter records"), {
+    fireEvent.change(search("Filter by name, tool or path"), {
       target: { value: "search_issues" },
     });
     await waitFor(() => expect(screen.queryByText("Added filesystem")).not.toBeInTheDocument());
     expect(await screen.findByText(target("github.search_issues"))).toBeInTheDocument();
+    expect(query).toBe("?q=search_issues");
   });
 
-  test("the agent filter narrows the calls to that agent's", async () => {
-    const { get } = mockApi({ invocations: [INVOCATION] });
-    render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
+  acceptance("web-ui", "a link opens already searching", async () => {
+    mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION] });
+    render(wrap(<ActivityPage />, ["/activity?tab=mcp&q=github"]));
+    expect(search("Tool, server or session")).toHaveValue("github");
     await screen.findByText(target("github.search_issues"));
-    fireEvent.click(screen.getByRole("button", { name: /^Agent:/ }));
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Claude Code" }));
-    expect(screen.getByRole("button", { name: /^Agent:/ })).toHaveTextContent("Claude Code");
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    await waitFor(() => expect(search("Tool, server or session")).toHaveValue(""));
+    expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
+  });
+
+  test("the filter row reads search, time range, By, Kind — and has no Server pill", async () => {
+    mockApi({ audit: [AUDIT_ENTRY] });
+    render(wrap(<ActivityPage />));
+    await screen.findByText("Added filesystem");
+    expect(pill("Last hour")).toBeInTheDocument();
+    expect(pill("By")).toBeInTheDocument();
+    expect(pill("Kind")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Server/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Agent/ })).not.toBeInTheDocument();
+    const order = [
+      search("Filter by name, tool or path"),
+      pill("Last hour"),
+      pill("By"),
+      pill("Kind"),
+    ];
+    for (let i = 1; i < order.length; i += 1) {
+      expect(
+        order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    }
+  });
+
+  test("the By pill groups agents and who else, with no counts, and filters the calls", async () => {
+    const { get } = mockApi({ invocations: [INVOCATION] });
+    render(wrap(<ActivityPage />));
+    await screen.findByText(target("github.search_issues"));
+    fireEvent.click(pill("By"));
+    const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
+    expect(options).toEqual(["Claude Code", "You", "CLI", "Coffer", "Sync"]);
+    expect(screen.getByText("Agents")).toBeInTheDocument();
+    expect(screen.getByText("Not an agent")).toBeInTheDocument();
+    expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("option", { name: "Claude Code" }));
+    expect(pill("By")).toHaveTextContent(/By:\s*Claude Code$/);
     await waitFor(() =>
       expect(
         get.mock.calls.some(
@@ -308,14 +372,41 @@ describe("ActivityPage", () => {
     );
   });
 
-  test("nothing yet says what to do next", async () => {
+  test("on MCP calls the By pill lists agents only", async () => {
+    mockApi({ invocations: [INVOCATION] });
+    render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
+    await screen.findByText(target("github.search_issues"));
+    fireEvent.click(pill("By"));
+    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual([
+      "Claude Code",
+    ]);
+  });
+
+  acceptance("web-ui", "nothing recorded hides the filter row and Export", async () => {
     mockApi();
     render(wrap(<ActivityPage />));
     expect(await screen.findByText("Nothing has happened yet")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Changes you make in Coffer and the tools agents call through it show up here.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Connect an agent" })).toHaveAttribute(
       "href",
       "/agents",
     );
+    expect(screen.getByRole("link", { name: "Add an MCP server" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Filter by name, tool or path")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
+    expect(tab(/^Changes/)).toBeInTheDocument();
+  });
+
+  test("an empty hour is not a first run when older records exist", async () => {
+    mockApi({ audit: [{ ...AUDIT_ENTRY, timestamp: ago(3 * 86_400_000) }] });
+    render(wrap(<ActivityPage />));
+    expect(await screen.findByText("Nothing in this time range")).toBeInTheDocument();
+    expect(pill("Last hour")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export" })).toBeInTheDocument();
   });
 
   test("a change announced on the event stream re-reads the audit log's newest page", async () => {
@@ -344,7 +435,23 @@ acceptance("web-ui", "activity gives each record its own tab", async () => {
   openTab(/^Changes/);
   expect(await screen.findByText("Added filesystem")).toBeInTheDocument();
   expect(screen.queryByText("resource_created")).not.toBeInTheDocument();
-  expect(headers()).toEqual(["Time", "Event", "By"]);
+  expect(headers()).toEqual(["Time", "Change", "By"]);
+  // Changes has its own Kind pill with the eleven kinds of change, flat.
+  fireEvent.click(pill("Kind"));
+  expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual([
+    "MCP servers",
+    "Skills",
+    "Agents",
+    "Model providers",
+    "Channels",
+    "Secrets",
+    "Sync",
+    "Settings",
+    "Knowledge",
+    "Memory",
+    "CLIs",
+  ]);
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
 
   openTab(/mcp calls/i);
   expect(await screen.findByText(target("github.search_issues"))).toBeInTheDocument();
@@ -366,25 +473,46 @@ acceptance("web-ui", "activity row expands to its raw record", async () => {
 
   const line = await screen.findByText("Added filesystem");
   fireEvent.click(line.closest("tr")!);
-  const drawer = await screen.findByRole("complementary", { name: "Details" });
+  const panel = await drawer();
+  // The raw JSON is folded until asked for.
+  expect(panel.querySelector(".cm-content")).toBeNull();
+  fireEvent.click(within(panel).getByRole("button", { name: "Raw log" }));
   await waitFor(() =>
-    expect(drawer.querySelector(".cm-content")?.textContent).toContain('"some_key": "some_value"'),
+    expect(panel.querySelector(".cm-content")?.textContent).toContain('"some_key": "some_value"'),
   );
-  expect(drawer.querySelector(".cm-content")?.textContent).toContain('"id": 42');
+  expect(panel.querySelector(".cm-content")?.textContent).toContain('"id": 42');
 
-  fireEvent.click(within(drawer).getByRole("button", { name: "Close details" }));
-  await waitFor(() =>
-    expect(screen.queryByRole("complementary", { name: "Details" })).not.toBeInTheDocument(),
-  );
+  fireEvent.click(within(panel).getByRole("button", { name: "Close" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
   // A daemon record on Everything opens in the drawer too.
   fireEvent.click((await screen.findByText("auto_sync_failed")).closest("tr")!);
-  const daemonDrawer = await screen.findByRole("complementary", { name: "Details" });
+  const daemonPanel = await drawer();
+  fireEvent.click(within(daemonPanel).getByRole("button", { name: "Raw log" }));
   await waitFor(() =>
-    expect(daemonDrawer.querySelector(".cm-content")?.textContent).toContain(
+    expect(daemonPanel.querySelector(".cm-content")?.textContent).toContain(
       '"error": "connection refused"',
     ),
   );
+});
+
+test("the drawer steps with the arrow keys and gives focus back to the row", async () => {
+  mockApi({
+    audit: [
+      AUDIT_ENTRY,
+      { ...AUDIT_ENTRY, id: 41, resource_name: "older", timestamp: ago(60_000) },
+    ],
+  });
+  render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
+  const row = (await screen.findByText("Added filesystem")).closest("tr")!;
+  row.focus();
+  fireEvent.click(row);
+  const panel = await drawer();
+  expect(within(panel).getByRole("heading", { name: "Added filesystem" })).toBeInTheDocument();
+  fireEvent.keyDown(panel, { key: "ArrowDown" });
+  expect(await within(panel).findByRole("heading", { name: "Added older" })).toBeInTheDocument();
+  fireEvent.keyDown(panel, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 });
 
 acceptance("web-ui", "a daemon log row opens in place", async () => {
@@ -394,12 +522,20 @@ acceptance("web-ui", "a daemon log row opens in place", async () => {
         ...DAEMON_RECORD,
         level: "error",
         event: "upstream call failed server=github tool=search_issues",
+        handoff: { prompt: "Please find out why the daemon logged this error" },
         record: {
           ...DAEMON_RECORD.record,
           level: "error",
           logger: "mcp.gateway",
           continuation: ["Traceback (most recent call last):", "httpx.ConnectError: refused"],
         },
+      },
+      {
+        ...DAEMON_RECORD,
+        offset: 2000,
+        level: "error",
+        event: "KeyError: 'uid'",
+        record: { level: "error", logger: "coffer.overview", event: "KeyError: 'uid'" },
       },
     ],
     invocations: [INVOCATION],
@@ -408,14 +544,25 @@ acceptance("web-ui", "a daemon log row opens in place", async () => {
   const row = (await screen.findByText(/upstream call failed/)).closest("tr")!;
   fireEvent.click(row);
   expect(row).toHaveAttribute("aria-expanded", "true");
-  expect(screen.queryByRole("complementary", { name: "Details" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(screen.getByText(/httpx\.ConnectError: refused/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Copy record" })).toBeInTheDocument();
+  // An error about the environment leads its button row with the hand-off.
+  const buttons = within(row.nextElementSibling as HTMLElement).getAllByRole("button");
+  expect(buttons[0]).toHaveAccessibleName(/Ask an agent|Copy prompt/);
+
+  // A Coffer-internal error offers only Copy record.
+  fireEvent.click(screen.getByText("KeyError: 'uid'").closest("tr")!);
+  expect(screen.getAllByRole("button", { name: "Copy record" })).toHaveLength(1);
+  expect(
+    screen.queryByRole("button", { name: /Ask an agent|Copy prompt/ }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(row);
 
   // "Show the MCP call" lands on the MCP calls tab, looking for that call.
   fireEvent.click(screen.getByRole("button", { name: "Show the MCP call" }));
   await waitFor(() => expect(tab(/mcp calls/i)).toHaveAttribute("data-state", "active"));
-  expect(screen.getByLabelText("Filter records")).toHaveValue("github.search_issues");
+  expect(search("Tool, server or session")).toHaveValue("github.search_issues");
   expect(await screen.findByText(target("github.search_issues"))).toBeInTheDocument();
 });
 
@@ -425,13 +572,55 @@ test("a failed call opens with its error first", async () => {
   });
   render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
   fireEvent.click((await screen.findByText(target("github.search_issues"))).closest("tr")!);
-  const drawer = await screen.findByRole("complementary", { name: "Details" });
-  expect(within(drawer).getByRole("alert")).toHaveTextContent("Couldn't reach github");
-  expect(within(drawer).getByRole("alert")).toHaveTextContent("Connection refused");
-  expect(within(drawer).getByRole("link", { name: "Open github" })).toHaveAttribute(
+  const panel = await drawer();
+  expect(within(panel).getByRole("alert")).toHaveTextContent("Couldn't reach github");
+  expect(within(panel).getByRole("alert")).toHaveTextContent("Connection refused");
+  expect(within(panel).getByRole("link", { name: "Open github" })).toHaveAttribute(
     "href",
     "/mcp-servers/github",
   );
+});
+
+acceptance("web-ui", "an unanswered call and an environment error carry the hand-off", async () => {
+  mockApi({
+    invocations: [
+      {
+        ...INVOCATION,
+        status: "error",
+        error_message: "Connection refused",
+        handoff: { prompt: "Please find out why a call to github could not reach it" },
+      },
+    ],
+  });
+  render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
+  fireEvent.click((await screen.findByText(target("github.search_issues"))).closest("tr")!);
+  const card = within(await drawer()).getByRole("alert");
+  expect(within(card).getAllByRole("button")[0]).toHaveAccessibleName(/Ask an agent|Copy prompt/);
+  // The drawer's footer is the server's page; the old "Daemon log records" step is gone.
+  expect(screen.queryByRole("button", { name: "Daemon log records" })).not.toBeInTheDocument();
+});
+
+test("a denied call and an upstream's own error get no hand-off", async () => {
+  mockApi({
+    invocations: [
+      { ...INVOCATION, id: 8, status: "denied", error_message: null },
+      {
+        ...INVOCATION,
+        id: 9,
+        status: "error",
+        error_message: "upstream tool returned an error result (isError)",
+      },
+    ],
+  });
+  render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
+  const rows = await screen.findAllByText(target("github.search_issues"));
+  for (const r of rows) {
+    fireEvent.click(r.closest("tr")!);
+    const card = within(await drawer()).getByRole("alert");
+    expect(within(card).queryByRole("button")).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  }
 });
 
 acceptance("resource-framework", "the Activity drawer shows a record's trace id", async () => {
@@ -441,14 +630,14 @@ acceptance("resource-framework", "the Activity drawer shows a record's trace id"
   });
   const { unmount } = render(wrap(<ActivityPage />));
   fireEvent.click((await screen.findByText(/filesystem/)).closest("tr")!);
-  const change = await screen.findByRole("complementary", { name: "Details" });
+  const change = await drawer();
   expect(within(change).getByText("Trace id")).toBeInTheDocument();
   expect(within(change).getByText("req-a1b2")).toBeInTheDocument();
   unmount();
 
   render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
   fireEvent.click((await screen.findByText(target("github.search_issues"))).closest("tr")!);
-  const call = await screen.findByRole("complementary", { name: "Details" });
+  const call = await drawer();
   expect(within(call).getByText("mcp-c3d4")).toBeInTheDocument();
 });
 
@@ -456,11 +645,10 @@ test("a record written with no trace id shows no trace row", async () => {
   mockApi({ audit: [AUDIT_ENTRY] });
   render(wrap(<ActivityPage />));
   fireEvent.click((await screen.findByText(/filesystem/)).closest("tr")!);
-  const drawer = await screen.findByRole("complementary", { name: "Details" });
-  expect(within(drawer).queryByText("Trace id")).not.toBeInTheDocument();
+  expect(within(await drawer()).queryByText("Trace id")).not.toBeInTheDocument();
 });
 
-test("a change's before and after read as a diff", async () => {
+test("a change's before and after read as a diff, with Copy details and Open in the footer", async () => {
   mockApi({
     audit: [
       {
@@ -472,9 +660,12 @@ test("a change's before and after read as a diff", async () => {
   });
   render(wrap(<ActivityPage />));
   fireEvent.click((await screen.findByText(/filesystem/)).closest("tr")!);
-  const drawer = await screen.findByRole("complementary", { name: "Details" });
-  expect(drawer.querySelector('[data-line="remove"]')?.textContent).toContain("https://old");
-  expect(drawer.querySelector('[data-line="add"]')?.textContent).toContain("https://new");
+  const panel = await drawer();
+  expect(panel.querySelector('[data-line="remove"]')?.textContent).toContain("https://old");
+  expect(panel.querySelector('[data-line="add"]')?.textContent).toContain("https://new");
+  expect(within(panel).getByText("Secret values are never recorded.")).toBeInTheDocument();
+  expect(within(panel).getByRole("button", { name: "Copy details" })).toBeInTheDocument();
+  expect(within(panel).getByRole("link", { name: "Open filesystem" })).toBeInTheDocument();
 });
 
 acceptance("web-ui", "a failing record shows its error inside its own tab", async () => {
@@ -485,6 +676,11 @@ acceptance("web-ui", "a failing record shows its error inside its own tab", asyn
   expect(await screen.findByText("MCP calls couldn't be loaded")).toBeInTheDocument();
   expect(await screen.findByText("Added filesystem")).toBeInTheDocument();
   expect(screen.getByText("auto_sync_failed")).toBeInTheDocument();
+  // The failed record's tab carries a warning icon.
+  expect(
+    within(tab(/^MCP calls/)).getByRole("img", { name: "Couldn't be loaded" }),
+  ).toBeInTheDocument();
+  expect(within(tab(/^Changes/)).queryByRole("img")).not.toBeInTheDocument();
 
   openTab(/mcp calls/i);
   expect(await screen.findByText("Not found.")).toBeInTheDocument();
@@ -494,22 +690,42 @@ acceptance("web-ui", "a failing record shows its error inside its own tab", asyn
   expect(screen.queryByText("Not found.")).not.toBeInTheDocument();
 });
 
+acceptance("web-ui", "a failed log is one banner that retries only that log", async () => {
+  const { get } = mockApi({
+    audit: [AUDIT_ENTRY],
+    daemon: [DAEMON_RECORD],
+    failing: "/mcp/invocations",
+  });
+  render(wrap(<ActivityPage />));
+  const note = await screen.findByRole("status");
+  expect(note).toHaveTextContent("MCP calls couldn't be loaded");
+  expect(note).toHaveTextContent("Changes and daemon records below are complete.");
+  expect(within(note).queryByRole("button", { name: /close|dismiss|ignore/i })).toBeNull();
+  const reads = (path: string) => get.mock.calls.filter((c: unknown[]) => c[0] === path).length;
+  const audit = reads("/audit");
+  const calls = reads("/mcp/invocations");
+  fireEvent.click(within(note).getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(reads("/mcp/invocations")).toBeGreaterThan(calls));
+  expect(reads("/audit")).toBe(audit);
+  expect(screen.queryByText("Changes and daemon records")).not.toBeInTheDocument();
+});
+
 acceptance("web-ui", "each activity tab reads its owner's route", async () => {
   const { get } = mockApi({
     audit: [AUDIT_ENTRY],
     invocations: [INVOCATION],
     daemon: [DAEMON_RECORD],
   });
-  // The three owners' routes, plus the MCP server list the server filter
-  // offers (the resource framework's) and the attention list every page
-  // header reads for the items ignored on it. Anything else would be a route
-  // of the Activity page's own.
+  // The three owners' routes, plus the agent list the By pill offers and the
+  // attention list every page header reads for the items ignored on it.
+  // Anything else would be a route of the Activity page's own.
   const ALLOWED = new Set([
     "/audit",
     "/mcp/invocations",
     "/daemon/logs",
     "/resources",
     "/attention",
+    "/retention/policies",
   ]);
   const requested = () => get.mock.calls.map((c: unknown[]) => c[0] as string);
 
@@ -569,7 +785,7 @@ acceptance("web-ui", "new records are held while the user reads", async () => {
   ];
   await pollHeads();
 
-  const pill = await screen.findByRole("button", { name: "3 new" });
+  const pillButton = await screen.findByRole("button", { name: "3 new" });
   expect(screen.queryByText("Added three")).not.toBeInTheDocument();
   const rows = () =>
     within(list())
@@ -577,7 +793,7 @@ acceptance("web-ui", "new records are held while the user reads", async () => {
       .filter((r) => r.hasAttribute("data-record"));
   expect(rows()).toHaveLength(1);
 
-  fireEvent.click(pill);
+  fireEvent.click(pillButton);
   await waitFor(() => expect(rows()).toHaveLength(4));
   expect(rows()[0]).toHaveTextContent("Added three");
   expect(screen.queryByRole("button", { name: /new$/ })).not.toBeInTheDocument();
@@ -587,13 +803,14 @@ test("an open record holds new ones too", async () => {
   const { data } = mockApi({ audit: [AUDIT_ENTRY] });
   render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
   fireEvent.click((await screen.findByText("Added filesystem")).closest("tr")!);
-  await screen.findByRole("complementary", { name: "Details" });
+  await drawer();
   data.audit = [
     { ...AUDIT_ENTRY, id: 50, timestamp: ago(1_000), resource_name: "later" },
     AUDIT_ENTRY,
   ];
   await pollHeads();
-  expect(await screen.findByRole("button", { name: "1 new" })).toBeInTheDocument();
+  // The drawer's scrim covers the page, so the pill is in the document but not reachable by role.
+  expect(await screen.findByRole("button", { name: "1 new", hidden: true })).toBeInTheDocument();
   expect(screen.queryByText("Added later")).not.toBeInTheDocument();
 });
 
@@ -601,7 +818,7 @@ test("a new record the filters exclude is neither inserted nor counted", async (
   const { data, get } = mockApi({ audit: [AUDIT_ENTRY] });
   render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
   await screen.findByText("Added filesystem");
-  fireEvent.change(screen.getByLabelText("Filter records"), { target: { value: "filesystem" } });
+  fireEvent.change(search("Filter changes"), { target: { value: "filesystem" } });
   // The text reaches the route once typing pauses.
   await waitFor(() =>
     expect(
@@ -629,25 +846,25 @@ acceptance("web-ui", "export from the menu honours the filters", async () => {
     invocations: [
       { ...INVOCATION, id: 1, status: "error", error_message: "boom" },
       { ...INVOCATION, id: 2, status: "ok" },
-      { ...INVOCATION, id: 3, status: "error", resource_uid: "u-linear", resource_name: "linear" },
+      { ...INVOCATION, id: 3, status: "ok", resource_uid: "u-linear", resource_name: "linear" },
     ],
   });
-  render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
+  render(wrap(<ActivityPage />, ["/activity?tab=mcp&q=github"]));
   await waitFor(() => expect(screen.getAllByText(target("github.search_issues")).length).toBe(2));
 
-  fireEvent.click(screen.getByRole("button", { name: /^Server:/ }));
-  fireEvent.click(await screen.findByRole("option", { name: "github" }));
-  // Let the first popover finish closing (it hands focus back to its pill).
-  await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
-  await waitFor(() => expect(screen.getAllByText(target("github.search_issues"))).toHaveLength(2));
-  fireEvent.click(screen.getByRole("button", { name: /^Status:/ }));
-  fireEvent.click(await screen.findByRole("option", { name: "Error" }));
+  // Status is the first control of the row: All / OK / Failed.
+  const group = screen.getByRole("group", { name: "Call status" });
+  expect(
+    within(group)
+      .getAllByRole("button")
+      .map((b) => b.textContent),
+  ).toEqual(["All", "OK", "Failed"]);
+  fireEvent.click(within(group).getByRole("button", { name: "Failed" }));
   await waitFor(() => expect(screen.getAllByText(target("github.search_issues"))).toHaveLength(1));
 
-  // No export button in the header: it lives in the ⋯ menu.
-  expect(screen.queryByRole("button", { name: /export/i })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "More" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Export as CSV" }));
+  // Export is a visible ghost button with a JSON / CSV menu — not a ⋯ menu.
+  fireEvent.click(screen.getByRole("button", { name: "Export" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "CSV" }));
   await waitFor(() => expect(saved).toHaveLength(1));
   const lines = saved[0].content.trim().split("\r\n");
   expect(lines).toHaveLength(2);
@@ -659,75 +876,17 @@ acceptance("web-ui", "export from the menu honours the filters", async () => {
       (c[1] as { params: { query: Record<string, unknown> } }).params.query.limit === 500,
   );
   expect(exportRead.at(-1)?.[1]).toMatchObject({
-    params: { query: { uid: "u-github", status: "error" } },
+    params: { query: { q: "github", status: "failed" } },
   });
 
-  fireEvent.click(screen.getByRole("button", { name: "More" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Export as JSON" }));
+  fireEvent.click(screen.getByRole("button", { name: "Export" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "JSON" }));
   await waitFor(() => expect(saved).toHaveLength(2));
   const json = JSON.parse(saved[1].content) as { id: number }[];
   expect(json.map((r) => r.id)).toEqual([1]);
 });
 
-test("the kind filter chooses several kinds, and the tabs keep their counts", async () => {
-  mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION], daemon: [DAEMON_RECORD] });
-  render(wrap(<ActivityPage />));
-  await screen.findByText("auto_sync_failed");
-  await waitFor(() => expect(tab(/^Everything/)).toHaveTextContent("Everything3"));
-
-  fireEvent.click(screen.getByRole("button", { name: /^Kind:/ }));
-  fireEvent.click(await screen.findByRole("checkbox", { name: "MCP calls" }));
-  fireEvent.click(screen.getByRole("checkbox", { name: "Changes" }));
-  // Every change kind sits under Changes, ticked with it.
-  expect(screen.getByRole("checkbox", { name: "MCP servers" })).toHaveAttribute(
-    "aria-checked",
-    "true",
-  );
-  expect(screen.getByText("Everything except daemon records")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /^Kind:/ })).toHaveTextContent("Calls, changes");
-  await waitFor(() => expect(screen.queryByText("auto_sync_failed")).not.toBeInTheDocument());
-  expect(screen.getByText("Added filesystem")).toBeInTheDocument();
-  await waitFor(() => expect(tab(/^Everything/)).toHaveTextContent("Everything3"));
-
-  // Unticking one kind keeps the others.
-  fireEvent.click(screen.getByRole("checkbox", { name: "MCP servers" }));
-  expect(screen.getByRole("checkbox", { name: "Changes" })).toHaveAttribute(
-    "aria-checked",
-    "false",
-  );
-  await waitFor(() => expect(screen.queryByText("Added filesystem")).not.toBeInTheDocument());
-});
-
-test("the agent filter lists who else made changes, with counts", async () => {
-  mockApi({
-    audit: [AUDIT_ENTRY, { ...AUDIT_ENTRY, id: 43, actor: "ui", resource_name: "linear" }],
-    invocations: [INVOCATION],
-  });
-  render(wrap(<ActivityPage />));
-  await screen.findByText("Added linear");
-  fireEvent.click(screen.getByRole("button", { name: /^Agent:/ }));
-  const you = await screen.findByRole("checkbox", { name: "You" });
-  expect(you).toHaveTextContent("1");
-  expect(screen.getByRole("checkbox", { name: "Claude Code" })).toHaveTextContent("1");
-  fireEvent.click(you);
-  expect(screen.getByText("1 selected")).toBeInTheDocument();
-  await waitFor(() =>
-    expect(screen.queryByText(target("github.search_issues"))).not.toBeInTheDocument(),
-  );
-  expect(screen.getByText("Added linear")).toBeInTheDocument();
-  expect(screen.queryByText("Added filesystem")).not.toBeInTheDocument();
-});
-
-test("the list says what it holds above the rows", async () => {
-  mockApi({ audit: [AUDIT_ENTRY], daemon: [DAEMON_RECORD] });
-  render(wrap(<ActivityPage />));
-  expect(await screen.findByText("1 warning in the last hour")).toBeInTheDocument();
-
-  openTab(/mcp calls/i);
-  expect(await screen.findByText("Last hour")).toBeInTheDocument();
-});
-
-test("the MCP calls tab counts failed and denied calls", async () => {
+test("Failed means error, timeout and denied", async () => {
   mockApi({
     invocations: [
       INVOCATION,
@@ -736,71 +895,120 @@ test("the MCP calls tab counts failed and denied calls", async () => {
       { ...INVOCATION, id: 10, status: "denied" },
     ],
   });
+  render(wrap(<ActivityPage />, ["/activity?tab=mcp&status=failed"]));
+  await waitFor(() => expect(screen.getAllByText(target("github.search_issues"))).toHaveLength(3));
+  expect(screen.getAllByText(/^(Error|Timeout|Denied)$/).map((e) => e.textContent)).toEqual(
+    ["Error", "Timeout", "Denied"].sort((a, b) => 0 * a.length * b.length),
+  );
+  expect(screen.queryByText(/calls · /)).not.toBeInTheDocument();
+});
+
+test("MCP calls sorts by Took, right-aligned, with the day heading gone while sorted", async () => {
+  mockApi({
+    invocations: [
+      { ...INVOCATION, id: 8, duration_ms: 5 },
+      { ...INVOCATION, id: 9, duration_ms: 900 },
+      { ...INVOCATION, id: 10, duration_ms: 50 },
+    ],
+  });
   render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
-  expect(await screen.findByText("4 calls · 2 failed · 1 denied")).toBeInTheDocument();
+  await screen.findAllByText(target("github.search_issues"));
+  const times = () =>
+    within(list())
+      .getAllByRole("row")
+      .filter((r) => r.hasAttribute("data-record"))
+      .map((r) => r.querySelector("td:nth-child(4)")?.textContent);
+  expect(times()).toEqual(["5 ms", "900 ms", "50 ms"]);
+  fireEvent.click(screen.getByRole("button", { name: "Took" }));
+  expect(times()).toEqual(["900 ms", "50 ms", "5 ms"]);
+  fireEvent.click(screen.getByRole("button", { name: "Took" }));
+  expect(times()).toEqual(["5 ms", "50 ms", "900 ms"]);
+  fireEvent.click(screen.getByRole("button", { name: "Took" }));
+  expect(times()).toEqual(["5 ms", "900 ms", "50 ms"]);
 });
 
-test("a tab with nothing in it shows no count", async () => {
-  mockApi();
+test("the Kind pill on Everything has three flat values and no counts", async () => {
+  mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION], daemon: [DAEMON_RECORD] });
   render(wrap(<ActivityPage />));
-  await screen.findByText("Nothing has happened yet");
-  expect(tab(/^Everything/)).toHaveTextContent(/^Everything$/);
-  expect(tab(/^MCP calls/)).toHaveTextContent(/^MCP calls$/);
+  await screen.findByText("auto_sync_failed");
+
+  fireEvent.click(pill("Kind"));
+  expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual([
+    "MCP calls",
+    "Changes",
+    "Daemon records",
+  ]);
+  fireEvent.click(screen.getByRole("option", { name: "MCP calls" }));
+  fireEvent.click(screen.getByRole("option", { name: "Changes" }));
+  expect(pill("Kind")).toHaveTextContent(/Kind:\s*MCP calls, Changes/);
+  await waitFor(() => expect(screen.queryByText("auto_sync_failed")).not.toBeInTheDocument());
+  expect(screen.getByText("Added filesystem")).toBeInTheDocument();
+  expect(screen.getByText(target("github.search_issues"))).toBeInTheDocument();
 });
 
-test("a log that failed on Everything names what is still shown", async () => {
-  mockApi({ audit: [AUDIT_ENTRY], daemon: [DAEMON_RECORD], failing: "/mcp/invocations" });
-  render(wrap(<ActivityPage />));
-  const note = await screen.findByRole("status");
-  expect(note).toHaveTextContent("MCP calls couldn't be loaded");
-  expect(note).toHaveTextContent("Showing changes and daemon records only; they are complete.");
-  expect(within(note).getByRole("button", { name: "Retry" })).toBeInTheDocument();
-  expect(screen.getByText("Changes and daemon records")).toBeInTheDocument();
-});
-
-test("the time range offers its windows and a custom range", async () => {
+test("the time range offers its windows and a custom range, and the URL keeps the choice", async () => {
   mockApi({ audit: [AUDIT_ENTRY] });
-  render(wrap(<ActivityPage />));
+  let query = "";
+  function Probe() {
+    query = useLocation().search;
+    return null;
+  }
+  render(
+    wrap(
+      <>
+        <ActivityPage />
+        <Probe />
+      </>,
+    ),
+  );
   await screen.findByText("Added filesystem");
-  const pill = screen.getByRole("button", { name: "Time range: Last hour" });
-  fireEvent.click(pill);
+  fireEvent.click(pill("Last hour"));
   const options = await screen.findAllByRole("option");
   expect(options.map((o) => o.textContent)).toEqual([
-    "Last 15 minutes",
     "Last hour",
-    "Last 24 hours",
+    "Last 24 h",
     "Last 7 days",
-    "Everything kept",
+    "Last 30 days",
+    "Custom range…",
   ]);
-  expect(screen.getByRole("button", { name: "Apply range" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("option", { name: "Last 15 minutes" }));
-  expect(
-    await screen.findByRole("button", { name: "Time range: Last 15 minutes" }),
-  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("option", { name: "Last 7 days" }));
+  expect(await screen.findByRole("button", { name: /Last 7 days/ })).toBeInTheDocument();
+  expect(query).toBe("?range=7d");
 });
 
-test("the daemon log opens on the last 24 hours and names its file", async () => {
+test("the daemon log opens on the last 24 h and names its file with a link to Finder", async () => {
   mockApi({ daemon: [DAEMON_RECORD] });
   render(wrap(<ActivityPage />, ["/activity?tab=daemon"]));
-  expect(
-    await screen.findByRole("button", { name: "Time range: Last 24 hours" }),
-  ).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: /Last 24 h/ })).toBeInTheDocument();
   expect(await screen.findByText("~/.coffer/logs/daemon.log")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Open log file" })).toBeEnabled();
+  expect(screen.getByText("newest first")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Open in Finder" })).toBeEnabled();
+  expect(screen.queryByRole("button", { name: "Open log file" })).not.toBeInTheDocument();
+  // Level first, then search, time, Logger.
+  const group = screen.getByRole("group", { name: "Log level" });
+  expect(
+    within(group)
+      .getAllByRole("button")
+      .map((b) => b.textContent),
+  ).toEqual(["All", "Info", "Warnings", "Errors"]);
+  expect(pill("Logger")).toBeInTheDocument();
 });
 
-test("load older says what comes next and how long records are kept", async () => {
+acceptance("web-ui", "the box ends with what is shown and what is kept", async () => {
   mockApi({ audit: [AUDIT_ENTRY], olderAudit: true });
+  const { unmount } = render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
+  expect(await screen.findByRole("button", { name: "Load 50 more" })).toBeInTheDocument();
+  expect(screen.getByText(/Showing 1 of 201 · next 50 from before \d\d:\d\d/)).toBeInTheDocument();
+  expect(screen.queryByText(/MCP calls are kept/)).not.toBeInTheDocument();
+  unmount();
+  mockApi({ audit: [AUDIT_ENTRY] });
   render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
-  expect(await screen.findByRole("button", { name: "Load older" })).toBeInTheDocument();
-  expect(
-    await screen.findByText(/MCP calls are kept 30 days and changes 1 year/),
-  ).toBeInTheDocument();
+  expect(await screen.findByText(/That's everything kept\./)).toBeInTheDocument();
+  expect(await screen.findByText(/MCP calls are kept 30 days/)).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Settings › Data" })).toHaveAttribute(
     "href",
     "/settings/data",
   );
-  expect(screen.getByText("1 loaded of 201")).toBeInTheDocument();
 });
 
 test("a failed call says how its server has been doing", async () => {
@@ -809,15 +1017,12 @@ test("a failed call says how its server has been doing", async () => {
   });
   render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
   fireEvent.click((await screen.findByText(target("github.search_issues"))).closest("tr")!);
-  const drawer = await screen.findByRole("complementary", { name: "Details" });
+  const panel = await drawer();
   await waitFor(() =>
-    expect(within(drawer).getByRole("alert")).toHaveTextContent(
+    expect(within(panel).getByRole("alert")).toHaveTextContent(
       /github has been failing since \d\d:\d\d — 1 error in the last 24 hours\./,
     ),
   );
-  fireEvent.click(within(drawer).getByRole("button", { name: "Daemon log records" }));
-  await waitFor(() => expect(tab(/daemon log/i)).toHaveAttribute("data-state", "active"));
-  expect(screen.getByLabelText("Filter records")).toHaveValue("github");
 });
 
 test("a change of a kind this page has no words for still reads as a change", async () => {
@@ -835,9 +1040,9 @@ test("a change of a kind this page has no words for still reads as a change", as
   });
   render(wrap(<ActivityPage />));
   fireEvent.click((await screen.findByText("provider_failed_over")).closest("tr")!);
-  const drawer = await screen.findByRole("complementary", { name: "Details" });
-  expect(within(drawer).getByText("Coffer")).toBeInTheDocument();
-  expect(drawer.querySelector('[data-line="add"]')?.textContent).toContain("anthropic-api");
+  const panel = await drawer();
+  expect(within(panel).getByText("Coffer")).toBeInTheDocument();
+  expect(panel.querySelector('[data-line="add"]')?.textContent).toContain("anthropic-api");
 });
 
 acceptance("web-ui", "who and kind choose several values", async () => {
@@ -851,23 +1056,16 @@ acceptance("web-ui", "who and kind choose several values", async () => {
   });
   render(wrap(<ActivityPage />));
   await screen.findByText("auto_sync_failed");
-  await waitFor(() => expect(tab(/^Everything/)).toHaveTextContent("Everything4"));
 
-  fireEvent.click(screen.getByRole("button", { name: /^Agent:/ }));
-  fireEvent.click(await screen.findByRole("checkbox", { name: "Claude Code" }));
-  fireEvent.click(screen.getByRole("checkbox", { name: "You" }));
+  fireEvent.click(pill("By"));
+  fireEvent.click(await screen.findByRole("option", { name: "Claude Code" }));
+  fireEvent.click(screen.getByRole("option", { name: "You" }));
+  expect(pill("By")).toHaveTextContent(/By:\s*Claude Code, You/);
   fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
-  await waitFor(() => expect(screen.queryByRole("checkbox")).not.toBeInTheDocument());
-
-  fireEvent.click(screen.getByRole("button", { name: /^Kind:/ }));
-  fireEvent.click(await screen.findByRole("checkbox", { name: "MCP calls" }));
-  fireEvent.click(screen.getByRole("checkbox", { name: "Changes" }));
-  expect(screen.getByText("Everything except daemon records")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /^Kind:/ })).toHaveTextContent("Calls, changes");
+  await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
 
   await waitFor(() => expect(screen.queryByText("Added jira")).not.toBeInTheDocument());
   expect(screen.getByText("Added linear")).toBeInTheDocument();
   expect(screen.getByText(target("github.search_issues"))).toBeInTheDocument();
   expect(screen.queryByText("auto_sync_failed")).not.toBeInTheDocument();
-  await waitFor(() => expect(tab(/^Everything/)).toHaveTextContent("Everything4"));
 });

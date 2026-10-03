@@ -87,7 +87,7 @@ Coffer 保留三类设计文本，各司其职：
 | Coffer 的智能体 Hook 按标记划定范围、显式安装、有审计，过期时会被修复 | [`agent-hook-installation`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-hook-installation.md) |
 | LLM 连接被投影进每个智能体自己的配置文件 | [`provider-connections-projected-into-agent-config`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-connections-projected-into-agent-config.md) |
 | API 密钥类提供商经由一个独立的本地模型代理访问，代理原样转发字节 | [`api-key-providers-are-reached-through-a-separate-local-model-proxy`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md) |
-| 用量在代理处计量；订阅制智能体只显示官方的剩余额度 | [`usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md) |
+| 用量在代理处计量；订阅制智能体不计量 | [`usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md) |
 | 模型目录从已安装的智能体读回 | [`model-catalogue-read-from-the-agent`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/model-catalogue-read-from-the-agent.md) |
 | Coffer 自己的模型是内部引擎，不是角色，也不是工具 | [`coffer-model-is-an-internal-engine`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-model-is-an-internal-engine.md) |
 | 引擎拥有自己的模型；它的接入地址借自一个被标记的连接 | [`internal-engine-settings`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/internal-engine-settings.md) |

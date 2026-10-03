@@ -1,8 +1,10 @@
 // frontend/src/pages/sync/SyncRemoteFields.tsx
 //
-// The remote's fields, shared by first-run setup (6.5.16) and the Remote tab
-// (6.5.22): Repository URL; Branch beside Secret; User name, for an HTTPS URL
-// only; Run a round; Include encrypted secrets.
+// The remote's rows, shared by first-run setup (6.4.20) and the Remote tab
+// (6.4.27): Repository URL, Branch, Secret, User name (for an HTTPS URL only)
+// and Run a round, as hairline rows in a "Remote" section. Include encrypted
+// secrets joins the section in setup and gets its own section on the Remote tab
+// (`SyncSecretsSection`).
 //
 // Presentational — it owns no draft and saves nothing. Every edit reaches the
 // parent as `onEdit(patch, commit)`: text fields send each keystroke with
@@ -12,14 +14,13 @@
 //
 // There is deliberately no password field: the remote names its secret by
 // reference, so a secret has no reason to exist in this component's tree.
-import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { SyncIncludeSecrets } from "./SyncIncludeSecrets";
 import { SyncRoundCadence } from "./SyncRoundCadence";
 import { SyncSecretPicker } from "./SyncSecretPicker";
+import { SettingsRow, SettingsSection } from "./SyncSettingsParts";
 import { isHttpsUrl, type FormErrors, type FormState } from "./syncRemoteForm";
 
 interface Props {
@@ -29,7 +30,7 @@ interface Props {
   busy: boolean;
   /** How many encrypted secrets this vault holds — what the switch would push. */
   secrets: number;
-  /** First run: the longer hints under each field. */
+  /** First run: the longer hints, and the secrets switch inside this section. */
   setup?: boolean;
   /** Ask before including secrets — the remote is stored. */
   confirmSecrets?: boolean;
@@ -37,34 +38,53 @@ interface Props {
   focusSecret?: boolean;
 }
 
-function Field({
-  id,
-  label,
-  hint,
-  children,
-  className,
-}: {
-  id: string;
-  label: string;
-  hint?: ReactNode;
-  children: ReactNode;
-  className?: string;
-}) {
+/** "Include encrypted secrets": the switch row, in setup and on the Remote tab. */
+function SyncSecretsRow({
+  form,
+  onEdit,
+  busy,
+  secrets,
+  confirmSecrets,
+}: Pick<Props, "form" | "onEdit" | "busy" | "secrets" | "confirmSecrets">) {
+  const { t } = useTranslation();
   return (
-    <div className={className ?? "flex flex-col gap-1.5"}>
-      <Label htmlFor={id}>{label}</Label>
-      {children}
-      {hint ? (
-        <p id={`${id}-hint`} className="text-xs text-text-muted">
-          {hint}
-        </p>
-      ) : null}
-    </div>
+    <SettingsRow
+      label={t("sync.remote.includeSecret")}
+      labelFor="sync-with-secret"
+      hint={t("sync.remote.includeSecretHint")}
+      hintId="sync-with-secret-hint"
+      wide={false}
+      control={
+        <SyncIncludeSecrets
+          id="sync-with-secret"
+          checked={form.includeSecret}
+          confirm={confirmSecrets ?? false}
+          secrets={secrets}
+          url={form.url}
+          disabled={busy}
+          describedBy="sync-with-secret-hint"
+          onChange={(includeSecret) => onEdit({ includeSecret }, true)}
+        />
+      }
+    />
+  );
+}
+
+/** The Remote tab's "Encrypted secrets" section. */
+export function SyncSecretsSection(props: Props) {
+  const { t } = useTranslation();
+  return (
+    <SettingsSection
+      title={t("sync.remote.secretsSection.title")}
+      description={t("sync.remote.secretsSection.hint")}
+    >
+      <SyncSecretsRow {...props} confirmSecrets />
+    </SettingsSection>
   );
 }
 
 export function SyncRemoteFields(props: Props) {
-  const { form, onEdit, errors, busy, secrets, setup = false } = props;
+  const { form, onEdit, errors, busy, setup = false } = props;
   const { t } = useTranslation();
   const text = (key: "url" | "branch" | "username") => ({
     value: form[key],
@@ -77,38 +97,45 @@ export function SyncRemoteFields(props: Props) {
   });
 
   return (
-    <div className="flex flex-col gap-4">
-      <Field
-        id="sync-url"
+    <SettingsSection
+      title={t("sync.remote.section.title")}
+      description={t(setup ? "sync.remote.section.setup" : "sync.remote.section.saves")}
+      testId="sync-remote-section"
+    >
+      <SettingsRow
         label={t("sync.remote.url")}
+        labelFor="sync-url"
+        hintId="sync-url-hint"
         hint={
           errors.url ? (
             <span className="text-danger" role="alert">
               {t(`sync.remote.errors.${errors.url}`)}
             </span>
-          ) : setup ? (
+          ) : (
             t("sync.setup.urlHint")
-          ) : undefined
+          )
         }
-      >
-        <Input
-          id="sync-url"
-          className="font-mono"
-          placeholder="git@github.com:you/coffer-vault.git"
-          aria-invalid={errors.url ? true : undefined}
-          {...text("url")}
-        />
-      </Field>
-
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-        <Field id="sync-branch" label={t("sync.remote.branch")}>
-          <Input id="sync-branch" className="font-mono" {...text("branch")} />
-        </Field>
-        <Field
-          id="sync-secret"
-          label={t("sync.remote.secret")}
-          hint={setup ? t("sync.setup.secretHint") : t("sync.remote.secretHint")}
-        >
+        control={
+          <Input
+            id="sync-url"
+            className="w-full font-mono"
+            placeholder="git@github.com:you/coffer-vault.git"
+            aria-invalid={errors.url ? true : undefined}
+            {...text("url")}
+          />
+        }
+      />
+      <SettingsRow
+        label={t("sync.remote.branch")}
+        labelFor="sync-branch"
+        control={<Input id="sync-branch" className="w-full font-mono" {...text("branch")} />}
+      />
+      <SettingsRow
+        label={t("sync.remote.secret")}
+        labelFor="sync-secret"
+        hintId="sync-secret-hint"
+        hint={t("sync.setup.secretHint")}
+        control={
           <SyncSecretPicker
             value={form.secretRef}
             disabled={busy}
@@ -116,56 +143,40 @@ export function SyncRemoteFields(props: Props) {
             describedBy="sync-secret-hint"
             onChange={(secretRef) => onEdit({ secretRef }, true)}
           />
-        </Field>
-      </div>
-
+        }
+      />
       {isHttpsUrl(form.url) ? (
-        <Field
-          id="sync-username"
+        <SettingsRow
           label={t("sync.remote.username")}
+          labelFor="sync-username"
+          hintId="sync-username-hint"
           hint={t("sync.remote.usernameHint")}
-        >
-          <Input
-            id="sync-username"
-            placeholder="coffer"
-            aria-describedby="sync-username-hint"
-            {...text("username")}
-          />
-        </Field>
+          control={
+            <Input
+              id="sync-username"
+              className="w-full"
+              placeholder="coffer"
+              aria-describedby="sync-username-hint"
+              {...text("username")}
+            />
+          }
+        />
       ) : null}
-
-      <Field
-        id="sync-cadence"
+      <SettingsRow
         label={t("sync.remote.cadence.label")}
-        hint={setup ? t("sync.setup.cadenceHint") : undefined}
-      >
-        <SyncRoundCadence
-          id="sync-cadence"
-          intervalSeconds={form.intervalSeconds}
-          enabled={form.enabled}
-          disabled={busy}
-          onChange={(next) => onEdit(next, true)}
-        />
-      </Field>
-
-      <div className="flex items-start justify-between gap-6 border-t border-border-subtle pt-4">
-        <div className="flex max-w-[460px] flex-col gap-0.5">
-          <Label htmlFor="sync-with-secret">{t("sync.remote.includeSecret")}</Label>
-          <p id="sync-with-secret-hint" className="text-xs text-text-muted">
-            {t("sync.remote.includeSecretHint")}
-          </p>
-        </div>
-        <SyncIncludeSecrets
-          id="sync-with-secret"
-          checked={form.includeSecret}
-          confirm={props.confirmSecrets ?? false}
-          secrets={secrets}
-          url={form.url}
-          disabled={busy}
-          describedBy="sync-with-secret-hint"
-          onChange={(includeSecret) => onEdit({ includeSecret }, true)}
-        />
-      </div>
-    </div>
+        labelFor="sync-cadence"
+        hint={t("sync.setup.cadenceHint")}
+        control={
+          <SyncRoundCadence
+            id="sync-cadence"
+            intervalSeconds={form.intervalSeconds}
+            enabled={form.enabled}
+            disabled={busy}
+            onChange={(next) => onEdit(next, true)}
+          />
+        }
+      />
+      {setup ? <SyncSecretsRow {...props} /> : null}
+    </SettingsSection>
   );
 }

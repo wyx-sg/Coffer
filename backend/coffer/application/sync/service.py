@@ -35,6 +35,8 @@ from coffer.application.sync.round_paging import page_rounds
 from coffer.application.sync.round_ports import RemoteStorePort, RoundHistoryPort, TokenPort
 from coffer.application.sync.service_key import KeyMixin
 from coffer.application.sync.service_machines import MachinesMixin
+from coffer.application.sync.service_merge import MergeMixin
+from coffer.application.sync.service_move import MoveMixin
 from coffer.application.sync.service_plaintext import PlaintextMixin
 from coffer.application.sync.service_ports import (
     AgentInventoryPort,
@@ -42,6 +44,7 @@ from coffer.application.sync.service_ports import (
     MasterKeyPort,
     RemoteProbePort,
     SecretFilesPort,
+    VaultMoverPort,
 )
 from coffer.application.sync.service_remote import RemoteMixin
 from coffer.application.sync.service_status import StatusMixin
@@ -71,7 +74,9 @@ _QUIET = frozenset(
 )
 
 
-class SyncService(PlaintextMixin, RemoteMixin, MachinesMixin, StatusMixin, KeyMixin):
+class SyncService(
+    MoveMixin, PlaintextMixin, RemoteMixin, MachinesMixin, StatusMixin, KeyMixin, MergeMixin
+):
     def __init__(
         self,
         *,
@@ -87,6 +92,7 @@ class SyncService(PlaintextMixin, RemoteMixin, MachinesMixin, StatusMixin, KeyMi
         set_machine_name: Callable[[str], None],
         vault_path: Callable[[], Path],
         inventory: AgentInventoryPort | None = None,
+        mover: VaultMoverPort | None = None,
         after_apply: Callable[[], Awaitable[object]] | None = None,
         hold: Callable[[], contextlib.AbstractAsyncContextManager[object]] | None = None,
         lock: asyncio.Lock | None = None,
@@ -106,6 +112,7 @@ class SyncService(PlaintextMixin, RemoteMixin, MachinesMixin, StatusMixin, KeyMi
         self._set_machine_name = set_machine_name
         self._vault_path = vault_path
         self._inventory = inventory
+        self._mover = mover
         self._after_apply = after_apply
         # The reconciler's hold: a round's checkout hints every resource it
         # changed, and a pass that judged the vault before the round's own
@@ -294,19 +301,10 @@ class SyncService(PlaintextMixin, RemoteMixin, MachinesMixin, StatusMixin, KeyMi
     async def answer(self, path: str, choice: Answer) -> Stop:
         return await self._locked(lambda: round_answers.answer(self._engine, path, choice))
 
-    async def open_editor(self, path: str) -> str:
+    async def open_editor(self, path: str, *, join: bool = False) -> str:
         """The absolute path of ``path``'s hand-merge copy, written when first
         asked for; the OS-open action opens it."""
-        return await self._locked(lambda: round_answers.editor_copy(self._engine, path))
-
-    async def mark_merged(self) -> Stop:
-        """ "I merged it": answer every file handed to an agent with its copy."""
-        return await self._locked(lambda: round_answers.mark_merged(self._engine))
-
-    async def conflict_handoff(self) -> str | None:
-        """The prompt handing the stopped round's mergeable files to an agent."""
-        found = await self.stopped()
-        return found.handoff if found else None
+        return await self._locked(lambda: round_answers.editor_copy(self._engine, path, join=join))
 
     async def confirm_hold(self) -> Stop:
         return await self._locked(lambda: round_answers.confirm_hold(self._engine))

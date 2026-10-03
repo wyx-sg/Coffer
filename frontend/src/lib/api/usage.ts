@@ -1,4 +1,4 @@
-// src/lib/api/usage.ts — request functions for /api/v1/usage/*: the metered summary, its CSV, and subscription quota.
+// src/lib/api/usage.ts — request functions for /api/v1/usage/*: the metered summary and its CSV.
 //
 // Every wire type is an alias of the provider-switching contract's generated
 // schemas; transport is the typed openapi-fetch client (agents/frontend.md §4).
@@ -12,10 +12,6 @@ export type UsageSummary = Schemas["UsageSummaryOut"];
 export type UsageSummaryRow = Schemas["UsageSummaryRowOut"];
 export type UsageTotals = Schemas["UsageTotalsOut"];
 export type UsageGroupBy = Schemas["GroupBy"];
-export type QuotaList = Schemas["QuotaListOut"];
-export type AgentQuota = Schemas["AgentQuotaOut"];
-export type QuotaWindow = Schemas["QuotaWindowOut"];
-export type QuotaRefresh = Schemas["QuotaRefreshOut"];
 
 /** The named ranges the summary resolves in local days. */
 export type UsageRangeName = "today" | "24h" | "7d" | "30d" | "month" | "custom";
@@ -61,19 +57,4 @@ export async function fetchUsageCsv(q: UsageQuery): Promise<string> {
   });
   if (error) throwApiError(error, "INTERNAL_ERROR", "usage export failed");
   return typeof data === "string" ? data : "";
-}
-
-export async function fetchUsageQuota(): Promise<QuotaList> {
-  const { data, error } = await getApiClient().GET("/usage/quota");
-  if (error) throwApiError(error, "INTERNAL_ERROR", "usage quota failed");
-  if (!data) throw new ApiError("INTERNAL_ERROR", "empty usage quota");
-  return data;
-}
-
-/** Ask Codex's app-server now; `reason` says why nothing was read. */
-export async function refreshUsageQuota(): Promise<QuotaRefresh> {
-  const { data, error } = await getApiClient().POST("/usage/quota/refresh");
-  if (error) throwApiError(error, "INTERNAL_ERROR", "usage quota refresh failed");
-  if (!data) throw new ApiError("INTERNAL_ERROR", "empty quota refresh");
-  return data;
 }

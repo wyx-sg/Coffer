@@ -1,12 +1,12 @@
 ---
 title: coffer usage
-description: "Model usage through Coffer's proxy, and subscription quota"
+description: "Model usage through Coffer's proxy"
 pageClass: cli-ref
 ---
 
 # coffer usage
 
-Model usage through Coffer's proxy, and subscription quota
+Model usage through Coffer's proxy
 
 ```sh
 coffer usage [OPTIONS] COMMAND [ARGS]...
@@ -30,8 +30,6 @@ This page matches what `coffer usage --help` prints. Add `--help` to any command
 | Command | What it does |
 | --- | --- |
 | [`usage requests`](#usage-requests) | List recent metered requests, newest first. |
-| [`usage quota`](#usage-quota) | Show each subscription agent's official remaining quota. |
-| [`usage statusline`](#usage-statusline) | Opt-in Claude Code statusLine wrapper: forward rate limits, then chain. |
 
 ## usage requests
 
@@ -50,37 +48,3 @@ coffer usage requests [OPTIONS]
 | `--limit` <span class="cli-chip">option</span> | integer (1-500) | `20` | Most requests to print |
 | `--cursor` <span class="cli-chip">option</span> | text |  | The next_cursor a read printed |
 | `--json` <span class="cli-chip">option</span> | flag |  | JSON output for scripts |
-
-## usage quota
-
-Show each subscription agent's official remaining quota.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer usage quota [OPTIONS]
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `--refresh` <span class="cli-chip">option</span> | flag |  | Read Codex's windows now |
-| `--json` <span class="cli-chip">option</span> | flag |  | JSON output for scripts |
-| `--prompt` <span class="cli-chip">option</span> | flag |  | Print the prompt that has your agent set up the statusline wrapper |
-
-## usage statusline
-
-Opt-in Claude Code statusLine wrapper: forward rate limits, then chain.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer usage statusline [OPTIONS] [COMMAND]...
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `COMMAND` <span class="cli-chip">argument</span> | text (variadic) |  | The original statusLine command to run after forwarding |

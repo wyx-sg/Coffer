@@ -74,7 +74,7 @@ describe("Conversations selection", () => {
   test("ticking a row shows the selection bar; the row itself does not open", async () => {
     renderPage();
     fireEvent.click(await screen.findByRole("checkbox", { name: "Select Conv a" }));
-    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    expect(screen.getByText("1 of 4 selected")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Archive" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
     // Still on the list: the checkbox click did not navigate.
@@ -88,7 +88,7 @@ describe("Conversations selection", () => {
     fireEvent.click(rowBox("Conv a"));
     expect(all).toHaveProperty("indeterminate", true);
     fireEvent.click(all);
-    expect(screen.getByText("4 selected")).toBeInTheDocument();
+    expect(screen.getByText("4 of 4 selected")).toBeInTheDocument();
     fireEvent.click(all);
     expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
   });
@@ -98,7 +98,7 @@ describe("Conversations selection", () => {
     await screen.findByRole("link", { name: "Conv a" });
     fireEvent.click(rowBox("Conv a"));
     fireEvent.click(rowBox("Conv c"), { shiftKey: true });
-    expect(screen.getByText("3 selected")).toBeInTheDocument();
+    expect(screen.getByText("3 of 4 selected")).toBeInTheDocument();
     expect(rowBox("Conv d")).not.toBeChecked();
   });
 
@@ -106,7 +106,7 @@ describe("Conversations selection", () => {
     renderPage();
     await screen.findByRole("link", { name: "Conv a" });
     fireEvent.click(rowBox("Conv a"));
-    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    expect(screen.getByText("1 of 4 selected")).toBeInTheDocument();
     // Clear (×) ends the selection and brings the filters back.
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));
     fireEvent.click(await screen.findByRole("button", { name: "Coffer" }));

@@ -1,42 +1,34 @@
-// src/components/activity/ActivityHeader.tsx — Activity's title with its live mark and ⋯ menu, and the four tabs with their counts.
+// src/components/activity/ActivityHeader.tsx — Activity's title with its live mark and Export, and the four tabs.
+//
+// Design 6.2.01: the title, "● Live" (a dot and the word; "Reconnecting…" when
+// the daemon's change feed is closed), the one-line description, a ghost
+// "Export ⌄" on the right. Tabs carry no counts; a tab whose log failed to
+// load shows a warning icon.
+import { AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { PageHeader } from "@/components/PageHeader";
 import { StatusDot } from "@/components/status/StatusDot";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SourceParams } from "@/lib/api/activity";
 import { ACTIVITY_TABS, type ActivityRecord, type ActivityTab } from "@/lib/activity/records";
-import type { TabCount } from "@/lib/hooks/useActivityFeed";
-import { ActivityMenu } from "./ActivityMenu";
-
-function CountBadge({ count }: { count: TabCount }) {
-  const { i18n, t } = useTranslation();
-  // A tab with nothing in the window, or whose log failed, shows no number
-  // (design 6.1.06, 6.1.10).
-  if (!count.value) return null;
-  const n = count.value.toLocaleString(i18n.language);
-  return (
-    // How many records exist differs run to run; screenshot tests mask it and
-    // give it a fixed width.
-    <span data-visual-volatile="count" className="text-2xs font-book text-text-subtle">
-      {count.floor ? t("activity.countFloor", { value: n }) : n}
-    </span>
-  );
-}
+import { ExportMenu } from "./ExportMenu";
 
 interface Props {
   tab: ActivityTab;
   onTab: (tab: string) => void;
-  counts: Record<ActivityTab, TabCount>;
+  /** Tabs whose log could not be loaded. */
+  failedTabs: ReadonlySet<ActivityTab>;
   /** The daemon's change feed is open. */
   live: boolean;
-  /** For the ⋯ menu's export. */
+  /** No records at all yet: there is nothing to export. */
+  empty: boolean;
+  /** For the export. */
   specs: SourceParams[];
   keep: (r: ActivityRecord) => boolean;
 }
 
-export function ActivityHeader({ tab, onTab, counts, live, specs, keep }: Props) {
+export function ActivityHeader({ tab, onTab, failedTabs, live, empty, specs, keep }: Props) {
   const { t } = useTranslation();
   return (
     <>
@@ -44,29 +36,25 @@ export function ActivityHeader({ tab, onTab, counts, live, specs, keep }: Props)
         title={t("activity.title")}
         subtitle={t("activity.subtitle")}
         badges={
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span
-                role="img"
-                aria-label={live ? t("activity.live") : t("activity.notLive")}
-                className="inline-flex p-1"
-              >
-                <StatusDot tone={live ? "ok" : "off"} />
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              {live ? t("activity.liveHint") : t("activity.notLiveHint")}
-            </TooltipContent>
-          </Tooltip>
+          <span className="inline-flex items-center gap-[5px] text-xs text-text-muted">
+            <StatusDot tone={live ? "ok" : "off"} />
+            {live ? t("activity.live") : t("activity.reconnecting")}
+          </span>
         }
-        actions={<ActivityMenu tab={tab} specs={specs} keep={keep} />}
+        actions={empty ? null : <ExportMenu tab={tab} specs={specs} keep={keep} />}
       />
       <Tabs value={tab} onValueChange={onTab}>
         <TabsList>
           {ACTIVITY_TABS.map((value) => (
             <TabsTrigger key={value} value={value}>
               {t(`activity.tabs.${value}`)}
-              <CountBadge count={counts[value]} />
+              {failedTabs.has(value) ? (
+                <AlertTriangle
+                  role="img"
+                  aria-label={t("activity.tabFailed")}
+                  className="size-[13px] text-warning"
+                />
+              ) : null}
             </TabsTrigger>
           ))}
         </TabsList>

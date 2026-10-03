@@ -156,9 +156,9 @@ describe("CommandPalette", () => {
     renderPalette();
     await settled();
     const pages = () => within(group("Pages")).getAllByRole("option");
-    // An empty query lists every page: 15 sidebar entries + 6 Settings tabs.
+    // An empty query lists every page: 14 sidebar entries + 6 Settings tabs.
     const count = pages().length;
-    expect(count).toBe(21);
+    expect(count).toBe(20);
     const seen: string[] = [];
     for (let i = 0; i < count; i += 1) {
       fireEvent.click(screen.getByText("reopen"));
@@ -189,13 +189,13 @@ describe("CommandPalette", () => {
     renderPalette();
     await settled();
     // Their pages are not listed, and nothing of theirs is asked for: no
-    // provider, knowledge, memory, sync or usage list is read.
-    for (const name of ["Model providers", "Usage", "Knowledge", "Memory", "Sync"]) {
+    // provider, knowledge, memory or sync list is read.
+    for (const name of ["Model providers", "Knowledge", "Memory", "Sync"]) {
       type(name);
       expect(options()).toEqual([]);
     }
     const asked = call.mock.calls.map(([path]) => path as string);
-    expect(asked.filter((p) => /^\/(providers|knowledge|memory|sync|usage)/.test(p))).toEqual([]);
+    expect(asked.filter((p) => /^\/(providers|knowledge|memory|sync)/.test(p))).toEqual([]);
     const kinds = api.GET.mock.calls
       .filter(([path]) => path === "/resources")
       .map(([, init]) => (init as { params: { query: { kind?: string } } }).params.query.kind);
@@ -235,7 +235,7 @@ describe("CommandPalette", () => {
     callAnswers["/skills"] = () => Promise.reject(new ApiError("INTERNAL_ERROR", "boom"));
     renderPalette();
     await settled();
-    expect(within(group("Pages")).getAllByRole("option")).toHaveLength(21);
+    expect(within(group("Pages")).getAllByRole("option")).toHaveLength(20);
     type("o");
     expect(within(group("Skills")).getByText("Skill: couldn't load the list")).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /pdf/ })).not.toBeInTheDocument();
@@ -294,16 +294,16 @@ describe("CommandPalette", () => {
     type("octo");
     fireEvent.keyDown(input(), { key: "Enter" });
     fireEvent.click(screen.getByText("reopen"));
-    type("usage");
+    type("secrets");
     fireEvent.keyDown(input(), { key: "Enter" });
     fireEvent.click(screen.getByText("reopen"));
     await waitFor(() => expect(group("Recent")).toBeInTheDocument());
     const recent = within(group("Recent")).getAllByRole("option");
     expect(recent.map((r) => within(r).getByTestId("palette-row-label").textContent)).toEqual([
-      "Usage",
+      "Secrets",
       "Octo bridge",
     ]);
-    expect(within(group("Pages")).getAllByRole("option")).toHaveLength(21);
+    expect(within(group("Pages")).getAllByRole("option")).toHaveLength(20);
   });
 
   acceptance("web-ui", "a skill result names the agents that get it", async () => {
@@ -344,9 +344,9 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(input(), { key: "Enter" });
     fireEvent.click(screen.getByText("reopen"));
     await waitFor(() => expect(group("Recent")).toBeInTheDocument());
-    type("usage");
+    type("secrets");
     expect(screen.queryByRole("group", { name: "Recent" })).not.toBeInTheDocument();
-    expect(options()).toEqual(expect.arrayContaining(["Usage"]));
+    expect(options()).toEqual(expect.arrayContaining(["Secrets"]));
     expect(options()).not.toContain("Octo bridge");
   });
 

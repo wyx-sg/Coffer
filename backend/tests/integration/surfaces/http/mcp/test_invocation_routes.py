@@ -591,3 +591,54 @@ async def test_q_matches_the_tool_the_error_and_the_servers_current_name(
         "/api/v1/mcp/invocations", params={"q": "jira", "limit": 1, "cursor": paged["next_cursor"]}
     )
     assert other.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Hand-off for a call the server never answered
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="an unanswered call carries a hand-off without arguments"
+)
+@pytest.mark.asyncio
+async def test_an_unanswered_call_carries_a_handoff_without_arguments(inv_client: tuple) -> None:
+    """spec mcp-gateway "Hand a failing MCP call's diagnosis to an agent": a call
+    that failed or timed out gets a prompt naming the server, tool, error, the
+    24 h failure count, session and call id; a success, a denial or an upstream's
+    own error gets none."""
+    client, _engine, repo, _rsvc, uids = inv_client
+    fs = uids["fs"]
+    await repo.insert(
+        _make_invocation(fs, capability_key="read_file", status="error", session_id="sess-9")
+    )
+    await repo.insert(_make_invocation(fs, capability_key="slow", status="timeout"))
+    await repo.insert(_make_invocation(fs, capability_key="fine"))
+    await repo.insert(_make_invocation(fs, capability_key="refused", status="denied"))
+    answered = _make_invocation(fs, capability_key="said_no", status="error")
+    answered.error_message = "upstream tool returned an error result (isError)"
+    await repo.insert(answered)
+
+    rows = (await client.get("/api/v1/mcp/invocations")).json()["invocations"]
+    by_key = {r["capability_key"]: r for r in rows}
+    assert by_key["fine"]["handoff"] is None
+    assert by_key["refused"]["handoff"] is None
+    failed = by_key["read_file"]["handoff"]["prompt"]
+    assert "fs" in failed and "read_file" in failed and "boom" in failed
+    assert "sess-9" in failed and str(by_key["read_file"]["id"]) in failed
+    assert "3 times in the last 24 hours" in failed
+    assert by_key["said_no"]["handoff"] is None
+    assert "timed out" in by_key["slow"]["handoff"]["prompt"]
+
+
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="status failed is every outcome but ok")
+@pytest.mark.asyncio
+async def test_status_failed_is_every_outcome_but_ok(inv_client: tuple) -> None:
+    """The Activity page's "Failed" filter: an error, a timeout and a denial."""
+    client, _engine, repo, _rsvc, uids = inv_client
+    fs = uids["fs"]
+    for key, status in (("a", "ok"), ("b", "error"), ("c", "timeout"), ("d", "denied")):
+        await repo.insert(_make_invocation(fs, capability_key=key, status=status))
+    body = (await client.get("/api/v1/mcp/invocations?status=failed")).json()
+    assert {r["capability_key"] for r in body["invocations"]} == {"b", "c", "d"}
+    assert body["total"] == 3

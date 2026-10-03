@@ -4,16 +4,17 @@
 // happened around it, actions); this file is the body each record source
 // brings. Answer first: a failed call leads with its error and how its server
 // has been doing, a change with who made it and what it touched, then its
-// before and after as a diff (design 6.1.01, 6.1.08). A change whose event
+// before and after as a diff (design 6.2.01). A change whose event
 // this page has no words for — a new kind of record, such as a model
 // failover — still reads through the same facts and diff.
 import type { ReactNode } from "react";
 import type { TFunction } from "i18next";
-import { Info, ShieldCheck } from "lucide-react";
+import { AlertCircle, AlertTriangle, Info, ShieldCheck } from "lucide-react";
 
 import { Section } from "@/components/Section";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { daemonContinuation, describeDaemonRecord } from "@/lib/activity/activityText";
 import {
   callServerLabel,
@@ -33,7 +34,7 @@ import { ValueDiffBlock } from "./ValueDiffBlock";
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[84px_minmax(0,1fr)] items-baseline gap-4 border-t border-border-subtle py-[7px] first:border-t-0">
+    <div className="grid grid-cols-[96px_minmax(0,1fr)] items-baseline gap-x-3 py-1">
       <span className="text-xs text-text-subtle">{label}</span>
       <span className="min-w-0 break-words text-sm text-text">{children}</span>
     </div>
@@ -151,14 +152,26 @@ export function CallBody({
         <div
           role="alert"
           className={cn(
-            "flex flex-col gap-1.5 rounded-lg p-3",
-            failed ? "bg-danger-soft" : "bg-warning-soft",
+            "flex gap-2.5 rounded-lg border px-3.5 py-3",
+            failed ? "border-danger/25 bg-danger-soft" : "border-warning/30 bg-warning-soft",
           )}
         >
-          <span className="text-sm font-label text-text">{callProblemTitle(t, call)}</span>
-          {outcome ? (
-            <span className="text-xs leading-[1.45] text-text-muted">{outcome}</span>
-          ) : null}
+          {failed ? (
+            <AlertCircle className="mt-px size-[15px] shrink-0 text-danger" aria-hidden />
+          ) : (
+            <AlertTriangle className="mt-px size-[15px] shrink-0 text-warning" aria-hidden />
+          )}
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-sm font-label text-text">{callProblemTitle(t, call)}</span>
+            {outcome ? (
+              <span className="text-xs leading-[1.45] text-text-muted">{outcome}</span>
+            ) : null}
+            {call.handoff ? (
+              <span className="mt-2">
+                <AgentHandoff prompt={call.handoff.prompt} size="sm" />
+              </span>
+            ) : null}
+          </div>
         </div>
       ) : null}
       <div>
@@ -196,7 +209,7 @@ export function CallBody({
         </Fact>
         <TraceFact t={t} traceId={call.trace_id} />
       </div>
-      <p className="flex items-start gap-2 rounded-lg bg-surface-sunken px-3 py-2.5 text-xs leading-[1.45] text-text-muted">
+      <p className="flex items-start gap-1.5 text-xs leading-[1.45] text-text-muted">
         <Info className="mt-px size-3.5 shrink-0 text-text-subtle" aria-hidden />
         {t("activity.drawer.callNote")}
       </p>

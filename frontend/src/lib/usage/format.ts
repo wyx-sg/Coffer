@@ -43,34 +43,18 @@ export function allUnpriced(totals: { requests: number; unpriced_requests: numbe
   return totals.requests > 0 && totals.unpriced_requests >= totals.requests;
 }
 
-/** The clock time of an instant, 24-hour: 14:02. */
-export function formatClock(at: string | Date, lang: string): string {
-  return new Intl.DateTimeFormat(intlLocale(lang), {
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).format(typeof at === "string" ? new Date(at) : at);
-}
-
-function sameLocalDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
 /**
- * A local day for display. `short` is the chart's axis ("Wed 23"), `long` the
- * tooltip and table ("Wed 23 Sep"), `date` a picker field ("1 Sep 2026").
+ * A local day for display. `short` is the chart's axis for a short range
+ * ("Wed 23"), `long` the table and tooltip ("Wed Sep 23"), `month` the axis of
+ * a long range ("Sep 23").
  */
-export function formatDay(day: Date, lang: string, style: "short" | "long" | "date"): string {
+export function formatDay(day: Date, lang: string, style: "short" | "long" | "month"): string {
   const options: Intl.DateTimeFormatOptions =
     style === "short"
       ? { weekday: "short", day: "numeric" }
       : style === "long"
         ? { weekday: "short", day: "numeric", month: "short" }
-        : { day: "numeric", month: "short", year: "numeric" };
+        : { day: "numeric", month: "short" };
   const fmt = new Intl.DateTimeFormat(intlLocale(lang), options);
   if (lang.startsWith("zh")) return fmt.format(day);
   const part = Object.fromEntries(fmt.formatToParts(day).map((p) => [p.type, p.value]));
@@ -78,16 +62,9 @@ export function formatDay(day: Date, lang: string, style: "short" | "long" | "da
     style === "short"
       ? [part.weekday, part.day]
       : style === "long"
-        ? [part.weekday, part.day, part.month]
-        : [part.day, part.month, part.year];
+        ? [part.weekday, part.month, part.day]
+        : [part.month, part.day];
   return order.join(" ");
-}
-
-/** An instant near now: the clock time when it is today, else its day and time ("Thu 1 Oct 09:00"). */
-export function formatMoment(iso: string, now: Date, lang: string): string {
-  const at = new Date(iso);
-  const clock = formatClock(at, lang);
-  return sameLocalDay(at, now) ? clock : `${formatDay(at, lang, "long")} ${clock}`;
 }
 
 /** A span split into whole days, hours and minutes (negative spans are zero). */

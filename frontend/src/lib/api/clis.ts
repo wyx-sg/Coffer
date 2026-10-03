@@ -12,12 +12,10 @@ import type { components } from "@/lib/api/types";
 type Schemas = components["schemas"];
 
 export type Cli = Schemas["CliOut"];
-export type CliList = Schemas["CliListOut"];
 export type CliWarning = Schemas["CliWarningOut"];
 export type CliStatus = Cli["status"];
 export type CliAddInput = Schemas["CliAddIn"];
 export type CliEditInput = Schemas["CliEditIn"];
-export type CliPreview = Schemas["CliPreviewOut"];
 export type CliInterface = Schemas["CliInterfaceOut"];
 export type CliHelpNode = Schemas["CliHelpNodeOut"];
 export type CliHelpOption = Schemas["CliHelpOptionOut"];

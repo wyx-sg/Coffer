@@ -21,7 +21,7 @@
         { "text": { "en": "MCP servers", "zh": "MCP 服务器" }, "link": "/guides/mcp-servers" },
         { "text": { "en": "Custom tools", "zh": "自定义工具" }, "link": "/guides/custom-tools" },
         { "text": { "en": "Model providers", "zh": "模型提供商" }, "link": "/guides/providers" },
-        { "text": { "en": "Usage and quota", "zh": "用量与额度" }, "link": "/guides/usage" },
+        { "text": { "en": "Usage", "zh": "用量" }, "link": "/guides/usage" },
         { "text": { "en": "Secret store", "zh": "密钥存储" }, "link": "/guides/secret-store" },
         { "text": { "en": "Secrets", "zh": "密钥" }, "link": "/guides/secrets" }
       ]

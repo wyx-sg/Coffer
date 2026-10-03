@@ -134,7 +134,7 @@ acceptance("skill-manager", "a skill opens on its files with SKILL.md rendered",
     "History",
   ]);
   // Files counts the folder's files.
-  await waitFor(() => expect(screen.getByRole("tab", { name: "Files" })).toHaveTextContent("· 2"));
+  expect(screen.getByRole("tab", { name: "Files" })).toHaveTextContent(/^Files$/);
   expect(screen.getByRole("tab", { name: "Files" })).toHaveAttribute("aria-selected", "true");
   expect(screen.queryByRole("tab", { name: "SKILL.md" })).not.toBeInTheDocument();
   // SKILL.md is open and rendered, not raw.
@@ -219,7 +219,7 @@ acceptance("skill-manager", "a skill's requires tab links each command", async (
   expect(jq).toHaveAttribute("href", "/clis/jq");
   const gh = screen.getByRole("link", { name: /^gh/ });
   expect(gh).toHaveAttribute("href", "/clis/gh");
-  expect(screen.getByRole("tab", { name: "Requires" })).toHaveTextContent("· 2");
+  expect(screen.getByRole("tab", { name: "Requires" })).toHaveTextContent(/^Requires$/);
   fireEvent.click(gh);
   // The route for /clis/:command renders in the Skills page's place.
   expect(await screen.findByText("cli page")).toBeInTheDocument();

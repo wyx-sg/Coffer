@@ -1,5 +1,5 @@
-"""``coffer sync`` hand-offs: ``conflicts --prompt``, ``resolve --merged`` and
-``status --prompt`` (spec vault-sync "Hand a conflict's merge to an agent",
+"""``coffer sync`` hand-offs: ``conflicts --prompt``, ``resolve --edited`` and
+``status --prompt`` (spec vault-sync "Hand conflicting files to an agent",
 "Hand a remote's failure to an agent")."""
 
 from __future__ import annotations
@@ -26,9 +26,9 @@ def _cli(monkeypatch: pytest.MonkeyPatch, box: Box) -> None:
 
 @pytest.mark.acceptance(
     spec="vault-sync",
-    scenario="a conflict's merge is handed to an agent and recorded with I merged it",
+    scenario="an agent's merge is shown to be checked and marked resolved",
 )
-def test_an_agent_merge_is_handed_off_and_recorded_from_the_command_line(
+def test_an_agent_merge_is_handed_off_and_resolved_from_the_command_line(
     monkeypatch: pytest.MonkeyPatch, pair: tuple[Box, Box]
 ) -> None:
     mac, mini = pair
@@ -40,15 +40,17 @@ def test_an_agent_merge_is_handed_off_and_recorded_from_the_command_line(
     listed = runner.invoke(app, ["conflicts"])
     assert "coffer sync conflicts --prompt" in listed.output
     prompt = runner.invoke(app, ["conflicts", "--prompt"])
-    assert prompt.exit_code == 0 and "coffer sync resolve --merged" in prompt.output
+    assert prompt.exit_code == 0 and DOC in prompt.output
+    assert "coffer sync" not in prompt.output and "git -C" not in prompt.output
     copy = Path(runner.invoke(app, ["edit", DOC]).output.strip())
     assert str(copy) in prompt.output
-    refused = runner.invoke(app, ["resolve", "--merged"])
+    assert "with an agent" in runner.invoke(app, ["conflicts"]).output
+    refused = runner.invoke(app, ["resolve", DOC, "--edited"])
     assert refused.exit_code != 0, "a copy with markers left is refused"
     copy.write_text("Mac on Mondays, Mini on Fridays.\n")
-    assert runner.invoke(app, ["resolve", DOC, "--merged"]).exit_code == 2
-    merged = runner.invoke(app, ["resolve", "--merged"])
-    assert merged.exit_code == 0 and "1 of 1 resolved" in merged.output
+    assert "merged by an agent" in runner.invoke(app, ["conflicts"]).output
+    resolved = runner.invoke(app, ["resolve", DOC, "--edited"])
+    assert resolved.exit_code == 0 and "1 of 1 resolved" in resolved.output
     assert runner.invoke(app, ["continue"]).exit_code == 0
     assert mini.disk(DOC) == b"Mac on Mondays, Mini on Fridays.\n"
     assert runner.invoke(app, ["conflicts", "--prompt"]).exit_code == 5

@@ -1,7 +1,7 @@
 // src/lib/hooks/useServerFailures.ts — how a failed call's server has been doing: since when it fails, and how often today.
 //
 // The MCP-call drawer answers "is this one call, or is the server down?"
-// under a failed call's error (design 6.1.08: "sentry has been failing since
+// under a failed call's error (design 6.2.07: "sentry has been failing since
 // 14:20 — 7 errors in the last 24 hours"). Two reads of the invocation log the
 // Activity page already reads — the server's newest calls of the last 24
 // hours, and the count of its errors in that window — and no route of its own.

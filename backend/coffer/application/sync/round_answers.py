@@ -9,26 +9,40 @@ opens a marked-up copy under ``derived/sync-conflicts/`` — the vault's own
 file never receives a conflict marker — and saving it back is refused while a
 marker is left in it.
 
-An agent may merge the files both machines edited: it edits the same
-marked-up copies, and the person records every copy it merged at once with
-**I merged it** (:func:`mark_merged`, spec vault-sync "Hand a conflict's merge
-to an agent"). An encrypted secret is never hand-merged: it is answered with
-one side or the other.
+An agent may merge the files both machines edited: the hand-off is recorded
+(:func:`hand_off`), the agent writes its merge into the same marked-up copy, and
+the file is then shown as merged by an agent. It is an answer only once the
+person marks it resolved — the ``edited`` answer, read from the copy — or goes
+:func:`discard_copy` back to the two choices (spec vault-sync "Hand conflicting files to
+an agent"). An encrypted secret is never hand-merged: it is answered
+with one side or the other.
 """
 
 from __future__ import annotations
 
-import re
+import dataclasses
+from collections.abc import Sequence
 
 from coffer.application.sync.round_engine import RoundEngine
+from coffer.application.sync.round_merge import (
+    MERGED_BY_AGENT,
+    marked_up,
+    marker_line,
+    merge_info,
+)
 from coffer.domain.error_base import CofferError
 from coffer.domain.sync.handoffs import agent_mergeable, is_secret_file
-from coffer.domain.sync.stops import Answer, ConflictFile, Stop, StopKind
+from coffer.domain.sync.stops import (
+    Answer,
+    ConflictFile,
+    Stop,
+    StopKind,
+    with_handoff,
+    without_handoff,
+)
 from coffer.domain.vault.content_ids import fingerprint
 from coffer.domain.vault.writers import OP_UPDATE, WRITER_USER, CommitMeta
 from coffer.domain.vault.writes import CommitResult, Expect
-
-_MARKER = re.compile(rb"^(<{7}|={7}|>{7})( |$)", re.M)
 
 
 class SyncNothingStopped(CofferError):  # noqa: N818
@@ -63,11 +77,6 @@ class SyncSecretNotEditable(CofferError):  # noqa: N818
         )
 
 
-def _marker_line(data: bytes) -> int | None:
-    match = _MARKER.search(data)
-    return data[: match.start()].count(b"\n") + 1 if match else None
-
-
 def answer(engine: RoundEngine, path: str, choice: Answer) -> Stop:
     """Record ``choice`` for ``path`` in the stopped round. For ``edited``,
     the person's saved copy is read and checked for markers now."""
@@ -82,7 +91,7 @@ def answer(engine: RoundEngine, path: str, choice: Answer) -> Stop:
         data = d.scratch.read(path) if d.scratch else None
         if data is None:
             raise SyncNothingStopped(f"open {path} in the editor first")
-        line = _marker_line(data)
+        line = marker_line(data)
         if line is not None:
             raise SyncConflictMarkersLeft(path, line)
         edited = d.git.hash(data)
@@ -94,54 +103,103 @@ def answer(engine: RoundEngine, path: str, choice: Answer) -> Stop:
     return updated
 
 
-def editor_copy(engine: RoundEngine, path: str) -> str:
+def editor_copy(engine: RoundEngine, path: str, *, join: bool = False) -> str:
     """Write git's marked-up merge of ``path`` to the scratch area; answer
-    where it is, for "Open in editor"."""
+    where it is, for "Open in editor" and for an agent's hand-off. ``join``
+    reads a join's differing files instead of the stopped round's."""
     d = engine.d
-    stop = d.state.stop()
-    found = _find(stop.conflicts if stop else (), path)
-    if stop is None or found is None or d.scratch is None:
+    found = _find(_open_files(engine, join), path)
+    if found is None or d.scratch is None:
         raise SyncNothingStopped(f"{path} is not one of the stopped round's files")
     if is_secret_file(path):
         raise SyncSecretNotEditable(path)
-    existing = d.scratch.read(path)
+    existing = d.scratch.where(path)
     if existing is not None:
-        return d.scratch.write(path, existing)
-    blobs = d.git.blobs([b for b in (found.ours, found.base, found.theirs) if b])
-    ours = blobs.get(found.ours or "", b"")
-    base = blobs.get(found.base or "", b"")
-    theirs = blobs.get(found.theirs or "", b"")
-    marked = d.git.merge_file(
-        ours, base, theirs, (d.machine.label(), found.theirs_machine or "the other machine")
-    )
-    return d.scratch.write(path, marked)
+        return existing
+    return d.scratch.write(path, marked_up(d, found))
 
 
-def mark_merged(engine: RoundEngine) -> Stop:
-    """ "I merged it": record ``edited`` for every unanswered file an agent may
-    merge, from its marked-up copy. Every copy is checked before any answer is
-    recorded, so a copy with a marker left refuses the whole request."""
+def hand_off(
+    engine: RoundEngine,
+    paths: Sequence[str] | None,
+    *,
+    join: bool,
+    agent: str | None,
+    conversation: str | None,
+) -> tuple[str, ...]:
+    """Record ``paths`` (every file an agent may merge when ``None``) as handed
+    to an agent, writing each one's marked-up copy, and answer those paths. A
+    file already merged is asked again from the marked-up text; one only handed
+    over keeps its time and takes the agent or conversation now named."""
     d = engine.d
-    stop = d.state.stop()
-    if stop is None or stop.kind is not StopKind.CONFLICTS:
-        raise SyncNothingStopped("no round is stopped on conflicts")
-    handed = [c for c in stop.unanswered if agent_mergeable(c)]
-    if not handed:
-        raise SyncNothingStopped("no file of the stopped round is waiting for an agent's merge")
-    blobs: dict[str, str] = {}
-    for c in handed:
-        data = d.scratch.read(c.path) if d.scratch else None
-        if data is None:
-            raise SyncNothingStopped(f"{c.path} has no marked-up copy to merge yet")
-        line = _marker_line(data)
-        if line is not None:
-            raise SyncConflictMarkersLeft(c.path, line)
-        blobs[c.path] = d.git.hash(data)
-    updated = stop
-    for path, blob in blobs.items():
-        updated = updated.with_answer(path, Answer.EDITED, blob)
-    d.state.set_stop(updated)
-    return updated
+    open_files = _open_files(engine, join)
+    by_path = {c.path: c for c in open_files}
+    wanted = (
+        [c.path for c in open_files if agent_mergeable(c) and c.answer is None]
+        if paths is None
+        else list(paths)
+    )
+    if not wanted:
+        raise SyncNothingStopped("no file is waiting for an agent's merge")
+    for path in wanted:
+        found = by_path.get(path)
+        if found is None:
+            raise SyncNothingStopped(f"{path} is not one of the files waiting on you")
+        if is_secret_file(path):
+            raise SyncSecretNotEditable(path)
+        if not agent_mergeable(found):
+            raise SyncNothingStopped(f"{path} is a decision, not a merge an agent can make")
+    for path in wanted:
+        info = merge_info(d, by_path[path])
+        if info is not None and info.state == MERGED_BY_AGENT:
+            discard_copy(engine, path, join=join)
+        editor_copy(engine, path, join=join)
+    _store(
+        engine,
+        join,
+        with_handoff(
+            _open_files(engine, join),
+            wanted,
+            at=d.now(),
+            agent=agent,
+            conversation=conversation,
+        ),
+    )
+    return tuple(wanted)
+
+
+def discard_copy(engine: RoundEngine, path: str, *, join: bool) -> tuple[ConflictFile, ...]:
+    """Back to two choices: forget the marked-up copy, the hand-off and any
+    answer for ``path``, which is unresolved again. What the person or the
+    agent wrote in the copy is gone."""
+    d = engine.d
+    open_files = _open_files(engine, join)
+    if _find(open_files, path) is None:
+        raise SyncNothingStopped(f"{path} is not one of the files waiting on you")
+    if d.scratch is not None:
+        d.scratch.discard(path)
+    return _store(engine, join, without_handoff(open_files, path))
+
+
+def _open_files(engine: RoundEngine, join: bool) -> tuple[ConflictFile, ...]:
+    state = engine.d.state
+    if join:
+        return state.join_choices()
+    stop = state.stop()
+    return stop.conflicts if stop is not None and stop.kind is StopKind.CONFLICTS else ()
+
+
+def _store(
+    engine: RoundEngine, join: bool, files: tuple[ConflictFile, ...]
+) -> tuple[ConflictFile, ...]:
+    state = engine.d.state
+    if join:
+        state.set_join_choices(files)
+        return files
+    stop = state.stop()
+    assert stop is not None  # _open_files found files only because a stop exists
+    state.set_stop(dataclasses.replace(stop, conflicts=files))
+    return files
 
 
 def confirm_hold(engine: RoundEngine) -> Stop:
@@ -204,13 +262,24 @@ def choose_join(
     engine: RoundEngine, path: str, choice: Answer, *, actor: str
 ) -> tuple[ConflictFile, ...]:
     """Settle one of a join's differing files: keep this machine's version
-    (committed now, pushed by the next round) or take the other's (written
-    here, nothing to commit)."""
+    (committed now, pushed by the next round), take the other's (written here,
+    nothing to commit), or take the merge in its marked-up copy (committed
+    now, like keeping this machine's)."""
     d = engine.d
     choices = list(d.state.join_choices())
     found = _find(choices, path)
     if found is None:
         raise SyncNothingStopped(f"{path} is not waiting for a join choice")
+    merged: bytes | None = None
+    if choice is Answer.EDITED:
+        if is_secret_file(path):
+            raise SyncSecretNotEditable(path)
+        merged = d.scratch.read(path) if d.scratch else None
+        if merged is None:
+            raise SyncNothingStopped(f"open {path} in the editor first")
+        line = marker_line(merged)
+        if line is not None:
+            raise SyncConflictMarkersLeft(path, line)
     remaining = [c for c in choices if c.path != path]
     d.state.set_join_choices(remaining)
     head = d.git.head() or ""
@@ -225,6 +294,19 @@ def choose_join(
                 (path,),
             )
         )
+        return tuple(remaining)
+    if merged is not None:
+        meta = CommitMeta(
+            writer=WRITER_USER,
+            operation=OP_UPDATE,
+            summary=f"Merged {path} from both machines",
+            actor=actor,
+        )
+        with d.writer.begin(meta) as txn:
+            held = d.writer.read_disk(path)
+            txn.write(path, merged, fingerprint(held) if held is not None else Expect.ABSENT)
+        if d.scratch is not None:
+            d.scratch.discard(path)
         return tuple(remaining)
     meta = CommitMeta(
         writer=WRITER_USER, operation=OP_UPDATE, summary=f"Kept this machine's {path}", actor=actor
@@ -247,7 +329,8 @@ __all__ = [
     "answer",
     "choose_join",
     "confirm_hold",
+    "discard_copy",
     "editor_copy",
-    "mark_merged",
+    "hand_off",
     "restore_held",
 ]

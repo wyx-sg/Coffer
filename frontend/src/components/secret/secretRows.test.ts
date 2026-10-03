@@ -12,7 +12,7 @@ import {
   referenceOf,
   refsWaiting,
 } from "./secretRows";
-import { lastUsedLabel } from "./secretTimes";
+import { shortDate } from "./secretTimes";
 
 function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
   return {
@@ -118,17 +118,10 @@ describe("secretRows", () => {
     expect([...waiting].sort()).toEqual(["secret/a", "secret/b"]);
   });
 
-  test("last used reads the way a person says it", () => {
-    const t = ((key: string, vars?: Record<string, unknown>) =>
-      `${key}${vars ? JSON.stringify(vars) : ""}`) as never;
+  test("a created day is the US short date, with the year once it is a past year", () => {
     const now = new Date(2026, 8, 30, 15, 0, 0);
-    const at = (d: Date) => d.toISOString();
-    expect(lastUsedLabel(null, now, t, "en")).toBe("secrets.time.never");
-    expect(lastUsedLabel(at(new Date(2026, 8, 30, 14, 58)), now, t, "en")).toContain("minutesAgo");
-    expect(lastUsedLabel(at(new Date(2026, 8, 30, 9, 5)), now, t, "en")).toContain("09:05");
-    expect(lastUsedLabel(at(new Date(2026, 8, 29, 9, 5)), now, t, "en")).toBe(
-      "secrets.time.yesterday",
-    );
-    expect(lastUsedLabel(at(new Date(2026, 6, 3, 9, 5)), now, t, "en")).toBe("Jul 3");
+    expect(shortDate(new Date(2026, 7, 12, 9).toISOString(), "en", now)).toBe("Aug 12");
+    expect(shortDate(new Date(2025, 6, 3, 9).toISOString(), "en", now)).toBe("Jul 3, 2025");
+    expect(shortDate("not a date", "en", now)).toBe("not a date");
   });
 });

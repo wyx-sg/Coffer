@@ -1,14 +1,17 @@
 // src/components/usage/UsageTiles.tsx — the range's headline numbers: estimated cost, input, output, cache read, cache write.
 //
-// Cost is always labelled estimated, and a range whose every request is
-// unpriced reads "—" — never $0.00.
+// Five tiles in one row, no frame. Cost is always labelled estimated, its "?"
+// carries the daemon's note on which prices costed the range, and a range whose
+// every request is unpriced reads "—" — never $0.00.
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import { HelpTip } from "@/components/HelpTip";
 import type { UsageTotals } from "@/lib/api/usage";
 import { allUnpriced, formatCost, formatCount, formatTokens } from "@/lib/usage/format";
 
 interface TileProps {
-  label: string;
+  label: ReactNode;
   value: string;
   note?: string;
 }
@@ -16,16 +19,18 @@ interface TileProps {
 function Tile({ label, value, note }: TileProps) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <span className="whitespace-nowrap text-xs text-text-muted">{label}</span>
-      <span className="whitespace-nowrap text-xl font-bold tracking-[-0.01em] text-text">
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-text-muted">
+        {label}
+      </span>
+      <span className="whitespace-nowrap text-[22px] font-bold tracking-[-0.01em] text-text">
         {value}
       </span>
-      {note ? <span className="text-2xs leading-snug text-text-muted">{note}</span> : null}
+      {note ? <span className="text-xs leading-snug text-text-subtle">{note}</span> : null}
     </div>
   );
 }
 
-export function UsageTiles({ totals }: { totals: UsageTotals }) {
+export function UsageTiles({ totals, priceNote }: { totals: UsageTotals; priceNote: string }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const costNote = [
@@ -41,9 +46,17 @@ export function UsageTiles({ totals }: { totals: UsageTotals }) {
     .join(" · ");
   const cacheWrite = totals.cache_write_5m_tokens + totals.cache_write_1h_tokens;
   return (
-    <div className="grid grid-cols-2 content-start gap-x-5 gap-y-3.5">
+    <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-5">
       <Tile
-        label={t("usage.tiles.cost")}
+        label={
+          <>
+            {t("usage.tiles.cost")}
+            <HelpTip label={t("usage.tiles.costHelp")}>
+              {/* The daemon's own note on which prices costed this range (server copy). */}
+              <p>{priceNote}</p>
+            </HelpTip>
+          </>
+        }
         value={
           allUnpriced(totals) ? t("usage.noPrice") : formatCost(totals.estimated_cost_usd, lang)
         }

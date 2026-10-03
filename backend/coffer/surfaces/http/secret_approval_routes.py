@@ -1,13 +1,13 @@
-"""The secret boundary's approval routes: list, read, approve, reject, ask again,
+"""The secret boundary's approval routes: list, read, approve, reject,
 and approve or reject several at once.
 
 Spec secret "Hold a secret for a new destination until a person approves it".
 Mounted on the secret boundary's router (``secret_boundary_routes``), whose
 prefix and token check they share. Approving takes a presence grant the desktop
-shell signs; refusing and asking again need none, because they only narrow or
-re-ask. Approving several takes ONE grant, signed over a digest of exactly the
-``(id, fingerprint)`` pairs the person was shown: an item whose target moved
-since, or that is no longer pending, is skipped and reported, never approved.
+shell signs; refusing needs none, because it only narrows. Approving several
+takes ONE grant, signed over a digest of exactly the ``(id, fingerprint)`` pairs
+the person was shown: an item whose target moved since, or that is no longer
+pending, is skipped and reported, never approved.
 """
 
 from __future__ import annotations
@@ -105,32 +105,6 @@ async def reject(
         details={"approval_id": rejected.id, "op": rejected.op, "ref": rejected.ref},
     )
     return approval_out(rejected)
-
-
-@router.post("/approvals/{approval_id}/ask-again", response_model=ApprovalListOut)
-async def ask_again(
-    approval_id: str,
-    audit: AuditService = Depends(get_audit_service),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> ApprovalListOut:
-    """Lift a refusal so the same binding is put to a person again.
-
-    Asking widens nothing: the new approval still waits for a presence grant.
-    Answers what now waits for the refused binding's destination.
-    """
-    boundary = get_secret_boundary()
-    refused = await asyncio.to_thread(boundary.get, approval_id)
-    await asyncio.to_thread(boundary.ask_again, approval_id, actor=actor)
-    for created in await refresh_approvals():
-        await audit.record(
-            AuditEventType.SECRET_APPROVAL_REQUESTED.value,
-            actor=created.requested_by,
-            details={"approval_id": created.id, "op": created.op, "ref": created.ref},
-        )
-    rows = await asyncio.to_thread(
-        lambda: boundary.list(status="pending", destination_uid=refused.destination_uid)
-    )
-    return ApprovalListOut(approvals=[approval_out(a) for a in rows])
 
 
 @router.post("/approvals/approve", response_model=BatchOut)

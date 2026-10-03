@@ -28,7 +28,12 @@ const server: AttentionItem = {
   reason: "Can't start: uvx isn't found on this machine.",
   severity: "error",
   since: null,
-  action: { verb: "test", method: "POST", path: "/api/v1/resources/mcp_server/u1/test", body: null },
+  action: {
+    verb: "test",
+    method: "POST",
+    path: "/api/v1/resources/mcp_server/u1/test",
+    body: null,
+  },
   handoff: { prompt: "p" },
 };
 const agent: AttentionItem = {
@@ -40,7 +45,12 @@ const agent: AttentionItem = {
   reason: "Not connected to Coffer.",
   severity: "warning",
   since: null,
-  action: { verb: "connect", method: "POST", path: "/api/v1/agents/a1/coffer-connection", body: null },
+  action: {
+    verb: "connect",
+    method: "POST",
+    path: "/api/v1/agents/a1/coffer-connection",
+    body: null,
+  },
   handoff: { prompt: "p" },
 };
 

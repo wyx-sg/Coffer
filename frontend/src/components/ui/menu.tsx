@@ -43,9 +43,14 @@ interface Props {
   actions: readonly MenuAction[];
   align?: "start" | "center" | "end";
   className?: string;
+  /**
+   * A visible button to open the menu instead of the ⋯ icon (a ghost
+   * "Export ⌄"): it carries its own label, so no "More actions" tooltip.
+   */
+  trigger?: React.ReactElement;
 }
 
-export function ActionMenu({ label, actions, align = "end", className }: Props) {
+export function ActionMenu({ label, actions, align = "end", className, trigger }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = React.useState(false);
   const listRef = React.useRef<HTMLDivElement>(null);
@@ -73,25 +78,29 @@ export function ActionMenu({ label, actions, align = "end", className }: Props) 
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <TooltipProvider>
-        <Tooltip open={open ? false : undefined}>
-          <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={label}
-                aria-haspopup="menu"
-                className={className}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <MoreHorizontal className="size-4" aria-hidden />
-              </Button>
-            </PopoverTrigger>
-          </TooltipTrigger>
-          <TooltipContent>{t("common.moreActions")}</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      {trigger ? (
+        <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      ) : (
+        <TooltipProvider>
+          <Tooltip open={open ? false : undefined}>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={label}
+                  aria-haspopup="menu"
+                  className={className}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <MoreHorizontal className="size-4" aria-hidden />
+                </Button>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent>{t("common.moreActions")}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
       <PopoverContent
         align={align}
         className={cn("p-1", described ? "w-[300px]" : "w-auto min-w-[180px]")}

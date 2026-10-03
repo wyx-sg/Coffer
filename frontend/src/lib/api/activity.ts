@@ -33,7 +33,8 @@ export interface AuditParams {
 export interface CallParams {
   since?: string;
   uid?: string;
-  status?: "ok" | "error" | "timeout" | "denied";
+  /** One outcome, or "failed" for every one but ok (an error, a timeout, a denial). */
+  status?: "ok" | "error" | "timeout" | "denied" | "failed";
   agentUid?: string;
   q?: string;
 }

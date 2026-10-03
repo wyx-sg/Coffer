@@ -48,7 +48,7 @@ class KindWirings:
     knowledge: KnowledgeWiring
     memory: MemoryWiring
     mcp: McpWiring
-    #: Usage metering and subscription quota (spec provider-switching).
+    #: Usage metering (spec provider-switching).
     usage: UsageWiring
     #: Coffer's own skill. Built here rather than by either kind because it is
     #: the knowledge layer's text written through the skill layer's store, and
@@ -99,11 +99,10 @@ async def wire_resource_kinds(
         reconciler,
     )
 
-    # What the proxy metered, and the official quota of subscription agents.
+    # What the proxy metered.
     usage = await wire_model_usage(
         sm,
         provider.service,
-        agent_skill.agent_service,
         prices=provider.prices,
         audit=audit,
         is_enabled=lambda: app.state.feature_service.is_enabled(MODELS),

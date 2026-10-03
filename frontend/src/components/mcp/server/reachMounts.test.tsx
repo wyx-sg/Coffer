@@ -78,7 +78,7 @@ acceptance("web-ui", "row, header and selection bar mount the same reach control
             onTurn={vi.fn()}
             onDelete={vi.fn()}
           />
-          <McpServersBulkBar servers={[FILES]} allChecked onToggleAll={vi.fn()} onDone={vi.fn()} />
+          <McpServersBulkBar servers={[FILES]} total={1} onDone={vi.fn()} />
         </MemoryRouter>
       </TooltipProvider>
     </QueryClientProvider>,

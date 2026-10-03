@@ -77,7 +77,7 @@ give the status each code is actually sent with.
 | `MASTER_KEY_PASSPHRASE_WRONG` | 422 | A passphrase-protected key backup (`.cfk`) was imported with a wrong passphrase, or none. | Type the passphrase set when the key was exported on the other Mac. |
 | `MASTER_KEY_PASSPHRASE_TOO_SHORT` | 422 | A key backup was asked for with a passphrase under eight characters. Nothing was written. | Choose a longer passphrase. |
 | `SECRET_BINDING_PENDING` | 409 | A secret would go to a destination, or a target, no person has approved. Nothing was sent. `details.approval_ids` names the waiting approvals. | Approve it in the Coffer desktop app, or reject it with `coffer secret reject <id>`. See [Secrets → Approvals](/guides/secrets#approvals). |
-| `SECRET_BINDING_REJECTED` | 409 | A person refused this secret for this destination and target, and nothing waits. Nothing was sent. `details.approval_ids` names the refused approvals. | Change the destination, or ask again from the Secrets page (`POST /api/v1/secrets/approvals/{id}/ask-again`). See [Secrets → Approvals](/guides/secrets#approvals). |
+| `SECRET_BINDING_REJECTED` | 409 | A person refused this secret for this destination and target, and nothing waits. Nothing was sent. `details.approval_ids` names the refused approvals. | Change the destination to put the question afresh. See [Secrets → Approvals](/guides/secrets#approvals). |
 | `APPROVAL_NOT_FOUND` | 404 | No approval has that id. | List them with `coffer secret approvals --all`. |
 | `APPROVAL_NOT_PENDING` | 409 | The approval was already approved, rejected or superseded. | Nothing to do; a new change raises a new approval. |
 | `PRESENCE_GRANT_INVALID` | 403 | A reveal, key backup or approval came without a valid presence grant: missing, expired, already used, for another operation or target, or not signed by the desktop app. | Do it in the Coffer desktop app, which runs the presence check and signs the grant. |
@@ -240,12 +240,18 @@ give the status each code is actually sent with.
 | `SYNC_REMOTE_FAILED` | 502 | A git operation against the remote failed. The message is redacted. | Check network access, the remote URL and the token's permissions. |
 | `SYNC_NOTHING_STOPPED` | 409 | You answered a conflict, a hold or a join choice, but no round is waiting for that answer. | Nothing to do. |
 | `SYNC_CONFLICT_MARKERS_LEFT` | 422 | The hand-merged copy still has conflict markers; the message names the line. | Remove them, save, then mark the file resolved. |
-| `SYNC_SECRET_NOT_EDITABLE` | 422 | An encrypted secret in a stopped round was opened in the editor or answered as edited. | Keep this Mac's version or take the other's. |
+| `SYNC_SECRET_NOT_EDITABLE` | 422 | An encrypted secret in a stopped round or a join was opened in the editor, handed to an agent or answered as edited. | Keep this Mac's version or take the other's. |
 | `SYNC_ROUND_NOT_FOUND` | 404 | No round with that id. | Pick one from `coffer sync history`. |
 | `SYNC_NOTHING_TO_ROLL_BACK` | 409 | The round applied nothing, or is itself a rollback. | Nothing to do. |
 | `SYNC_MACHINE_NOT_FOUND` | 404 | No machine with that id shares this vault. | List them with `coffer sync machine list`. |
 | `SYNC_MACHINE_NAME_INVALID` | 422 | The machine name is empty or too long. | Choose another name. |
-| `SYNC_CANNOT_RETIRE_SELF` | 422 | You tried to retire the machine you are on. | Retire it from another machine, or clear the sync remote here. |
+| `SYNC_CANNOT_RETIRE_SELF` | 422 | You tried to retire the machine you are on. | Retire it from another machine, or stop syncing here. |
+| `SYNC_NOTHING_TO_RESTORE` | 409 | Undo was asked for a stopped sync or a retired machine, but nothing is kept, or another remote was set since. | Nothing to do; set the remote up again or join again. |
+| `SYNC_REMOTE_EXISTS` | 409 | Stop syncing was undone while a remote is set. | Stop syncing first, or leave the remote as it is. |
+| `SYNC_VAULT_TARGET_INVALID` | 422 | The folder to move the vault to is not an absolute path, is inside or around the current vault, or its parent cannot be written. | Choose another folder. |
+| `SYNC_VAULT_TARGET_IN_CLOUD` | 422 | The folder to move the vault to is itself inside a folder another tool synchronises. | Choose a folder outside iCloud Drive, Dropbox and Syncthing. |
+| `SYNC_VAULT_TARGET_NOT_EMPTY` | 409 | The folder to move the vault to already holds files. | Choose an empty or absent folder. |
+| `SYNC_VAULT_MOVE_FAILED` | 500 | The move or the check of the vault at its new place failed; the vault is back where it was. | Read the daemon log for the cause, then try again. |
 
 ## The daemon
 

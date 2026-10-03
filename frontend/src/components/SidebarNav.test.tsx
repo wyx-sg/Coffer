@@ -26,8 +26,8 @@ vi.mock("@/lib/hooks/useSync", () => ({
 }));
 
 // The four experimental features (knowledge, memory, sync, models) own five of
-// the fifteen entries. All are on unless a test says otherwise, so every other
-// assertion here is about the full fifteen.
+// the fourteen entries. All are on unless a test says otherwise, so every other
+// assertion here is about the full fourteen.
 const ALL_ON: Record<string, boolean> = {
   knowledge: true,
   memory: true,
@@ -164,7 +164,7 @@ describe("SidebarNav", () => {
         "命令行工具",
       ]);
       expect(group("上下文").map(([name]) => name)).toEqual(["知识", "记忆"]);
-      expect(group("系统").map(([name]) => name)).toEqual(["密钥", "活动", "用量", "同步"]);
+      expect(group("系统").map(([name]) => name)).toEqual(["密钥", "活动", "同步"]);
     } finally {
       await i18n.changeLanguage("en");
     }
@@ -203,14 +203,14 @@ acceptance("web-ui", "the sidebar groups entries by what the user comes to do", 
     "CLIs",
   ]);
   expect(group("Context").map(([name]) => name)).toEqual(["Knowledge", "Memory"]);
-  expect(group("System").map(([name]) => name)).toEqual(["Secrets", "Activity", "Usage", "Sync"]);
+  expect(group("System").map(([name]) => name)).toEqual(["Secrets", "Activity", "Sync"]);
 });
 
 acceptance("web-ui", "every resource entry opens a list page of its own", () => {
   renderNav();
 
   const hrefs = Array.from(document.querySelectorAll("nav a")).map((a) => a.getAttribute("href")!);
-  expect(hrefs).toHaveLength(15);
+  expect(hrefs).toHaveLength(14);
   const resolved = hrefs.map((href) => leafRoute(href));
   // Each entry is its own route — the path itself, never the catch-all.
   resolved.forEach((route, i) => {
@@ -226,7 +226,7 @@ acceptance("web-ui", "the sidebar carries no placeholder entries", () => {
   renderNav();
 
   const links = Array.from(document.querySelectorAll("nav a"));
-  expect(links.length).toBe(15);
+  expect(links.length).toBe(14);
   for (const link of links) {
     const href = link.getAttribute("href");
     expect(href).toBeTruthy();
@@ -349,7 +349,7 @@ const hrefs = () =>
 
 /** Which addresses each feature owns. */
 const OWNED: Record<string, string[]> = {
-  models: ["/model-providers", "/usage"],
+  models: ["/model-providers"],
   knowledge: ["/knowledge"],
   memory: ["/memory"],
   sync: ["/sync"],
@@ -370,7 +370,7 @@ describe("a switched-off experimental feature", () => {
         for (const [other, entries] of Object.entries(OWNED)) {
           if (other !== feature) for (const to of entries) expect(shown).toContain(to);
         }
-        expect(shown).toHaveLength(15 - owned.length);
+        expect(shown).toHaveLength(14 - owned.length);
         view.unmount();
       }
     },
@@ -425,7 +425,7 @@ describe("an experimental feature's entry", () => {
     async () => {
       const expanded = renderNav();
       // The expanded row stays plain: no tag beside the label.
-      for (const name of ["Knowledge", "Memory", "Sync", "Model providers", "Usage"]) {
+      for (const name of ["Knowledge", "Memory", "Sync", "Model providers"]) {
         expect(expanded.getByRole("link", { name })).toHaveTextContent(new RegExp(`^${name}$`));
       }
       expanded.unmount();

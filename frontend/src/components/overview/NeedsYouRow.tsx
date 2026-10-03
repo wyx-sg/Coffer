@@ -20,7 +20,8 @@
 // <name>… it leaves this list once it answers", until the list has refetched
 // (board 1.2.09). Connecting an agent, repairing its config, adding a secret
 // and every other verb keep their link: those write outside Coffer's own
-// state or need input, and their page holds the preview.
+// state or need input, and their page holds the preview. Review on "N changes waiting for approval"
+// opens the global approvals dialog, wherever the person is.
 import { Copy, EyeOff, MessageSquarePlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -37,10 +38,12 @@ import {
   inPlaceVerb,
   itemActionLabelKey,
   itemPage,
+  opensApprovals,
   severityTone,
 } from "@/lib/overview/attention";
 import { kindMeta } from "@/lib/overview/kinds";
 import { describeSince } from "@/lib/overview/time";
+import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
 import { cn } from "@/lib/utils";
 
 /** Dot · name 168 · reason · since 96 · action 212, 14 apart (board 1.2.09). */
@@ -139,7 +142,16 @@ export function NeedsYouRow({ item, agentType, onIgnore, onRun, running = false 
         {since ? <SinceText since={since} iso={item.since ?? ""} /> : null}
       </p>
       <div className={cn(CELL, "flex items-center gap-1.5 md:justify-self-end")}>
-        {verb && onRun ? (
+        {opensApprovals(item) ? (
+          <Button
+            variant="outline"
+            onClick={openApprovalsSheet}
+            aria-label={t("overview.needsYou.actionFor", { action, name: item.title })}
+          >
+            {ActionIcon ? <ActionIcon aria-hidden /> : null}
+            {action}
+          </Button>
+        ) : verb && onRun ? (
           <Button
             variant="outline"
             loading={running}

@@ -132,12 +132,36 @@ export function useSaveSyncRemote() {
   });
 }
 
-/** "Stop syncing": forget the remote. Reached only from a ConfirmDialog. */
+/** "Move vault": relocate the vault out of a synchronised folder. Reached only from its
+ *  dialog, which renders a failure in place. */
+export function useMoveVault() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (to: string) => syncApi.moveVault(to),
+    onSuccess: () => invalidateSync(qc),
+  });
+}
+
+/** "Stop syncing": forget the remote. It runs at once; the caller's toast offers Undo
+ *  (`useRestoreSyncRemote`) when the answer says it is `restorable`. */
 export function useClearSyncRemote() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => syncApi.clearRemote(),
     onSuccess: () => invalidateSync(qc),
+  });
+}
+
+/** Undo "Stop syncing": the forgotten remote comes back as it was. A refusal
+ *  (nothing to restore, or a remote set up since) is a toast. */
+export function useRestoreSyncRemote() {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: () => syncApi.restoreRemote(),
+    onSuccess: () => invalidateSync(qc),
+    onError: (error) => toast.error(translateApiError(t, error)),
   });
 }
 

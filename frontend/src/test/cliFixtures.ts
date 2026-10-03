@@ -94,7 +94,7 @@ export const DEMO_ADDED = cli({
   needed_by: [],
 });
 
-export function helpNode(path: string[], over: Partial<CliHelpNode> = {}): CliHelpNode {
+function helpNode(path: string[], over: Partial<CliHelpNode> = {}): CliHelpNode {
   return {
     path,
     usage: null,

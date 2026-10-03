@@ -5,7 +5,7 @@
 // call one outcome two things.
 import type { TFunction } from "i18next";
 
-import type { RoundStatus, SyncChange } from "@/lib/api/sync";
+import type { RoundStatus } from "@/lib/api/sync";
 import type { Tone } from "@/lib/statusColors";
 
 /**
@@ -44,9 +44,3 @@ export function statusLabel(t: TFunction, status: string): string {
   return t(`sync.round.status.${status}`, { defaultValue: status });
 }
 
-/** `+ path`, `~ path`, `− path` — one mark per change kind, the same in a
- *  round's detail and in the rollback dialog. */
-export function changeLine(change: SyncChange): string {
-  const mark = change.status === "added" ? "+" : change.status === "removed" ? "−" : "~";
-  return `${mark} ${change.path}`;
-}

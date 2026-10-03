@@ -82,6 +82,7 @@ export function ConversationsIndex({
             <ConversationsBulkBar
               selected={sel.selectedRows}
               archivedView={c.filters.archived}
+              total={c.listConversations.length}
               onClear={sel.clear}
             />
           ) : (

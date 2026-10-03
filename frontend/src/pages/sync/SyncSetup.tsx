@@ -1,24 +1,25 @@
 // frontend/src/pages/sync/SyncSetup.tsx — the not-set-up / not-joined body
-// (boards 6.5.16, 6.5.17, 6.5.18).
+// (boards 6.4.20, 6.4.21, 6.4.22).
 //
 // First run is three steps, and nothing is stored until the repository has
 // been looked at:
 //
-//   1. the form (6.5.16) — Repository URL, Branch, Secret, User name for an
+//   1. the form (6.4.20) — Repository URL, Branch, Secret, User name for an
 //      HTTPS URL, Run a round, Include encrypted secrets — and Check
 //      repository, asked of the draft;
-//   2. an EMPTY repository (6.5.17) says what the first round pushes; Push
+//   2. an EMPTY repository (6.4.21) says what the first round pushes; Push
 //      and start syncing stores the remote and joins it;
 //   3. a repository that already holds a VAULT stores the remote at once and
-//      shows the join preview (6.5.18), whose Back forgets it again.
+//      shows the join preview (6.4.22), whose Back forgets it again.
 //
+// The page header carries the lead ("Keep this vault in step with a git
+// repository you own…"); the body is sections and hairline rows, no card.
 // Anything else the check finds is said under the form. A remote stored but
 // not joined (set from the CLI, or a reload mid-setup) opens on the preview.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import type { SyncStatus } from "@/lib/api/sync";
@@ -52,16 +53,14 @@ export function SyncSetup({ status }: { status: SyncStatus }) {
 
   if (empty) {
     return (
-      <Intro>
-        <SyncEmptyRemote
-          status={status}
-          url={draft.url.trim()}
-          includeSecret={draft.includeSecret}
-          pending={save.isPending || join.isPending}
-          onBack={() => setEmpty(false)}
-          onPush={() => save.mutate(input(), { onSuccess: () => join.mutate() })}
-        />
-      </Intro>
+      <SyncEmptyRemote
+        status={status}
+        url={draft.url.trim()}
+        includeSecret={draft.includeSecret}
+        pending={save.isPending || join.isPending}
+        onBack={() => setEmpty(false)}
+        onPush={() => save.mutate(input(), { onSuccess: () => join.mutate() })}
+      />
     );
   }
 
@@ -101,57 +100,40 @@ export function SyncSetup({ status }: { status: SyncStatus }) {
   };
 
   return (
-    <Intro>
-      <Card className="max-w-[680px]" data-testid="sync-setup">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            runCheck();
+    <form
+      className="flex flex-col gap-4"
+      data-testid="sync-setup"
+      onSubmit={(e) => {
+        e.preventDefault();
+        runCheck();
+      }}
+    >
+      <SyncRemoteFields
+        form={draft}
+        onEdit={(patch) => setDraft((d) => ({ ...d, ...patch }))}
+        errors={errors}
+        busy={busy}
+        secrets={status.areas.secrets}
+        setup
+      />
+      <SyncRemoteCheck result={check.data} error={check.error} />
+      <div className="flex items-center gap-2">
+        <Button type="submit" disabled={!draft.url.trim()} loading={busy}>
+          {check.isPending ? t("sync.setup.checking") : t("sync.setup.checkRepo")}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy}
+          onClick={() => {
+            setDraft(EMPTY_FORM);
+            setErrors({});
+            check.reset();
           }}
         >
-          <div className="flex flex-col gap-4 p-4">
-            <SyncRemoteFields
-              form={draft}
-              onEdit={(patch) => setDraft((d) => ({ ...d, ...patch }))}
-              errors={errors}
-              busy={busy}
-              secrets={status.areas.secrets}
-              setup
-            />
-            <SyncRemoteCheck result={check.data} error={check.error} />
-          </div>
-          <div className="flex items-center gap-2 rounded-b-xl border-t border-border-subtle bg-surface-footer px-4 py-3">
-            <Button type="submit" disabled={!draft.url.trim()} loading={busy}>
-              {check.isPending ? t("sync.setup.checking") : t("sync.setup.checkRepo")}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={busy}
-              onClick={() => {
-                setDraft(EMPTY_FORM);
-                setErrors({});
-                check.reset();
-              }}
-            >
-              {t("common.cancel")}
-            </Button>
-          </div>
-        </form>
-      </Card>
-    </Intro>
-  );
-}
-
-function Intro({ children }: { children: React.ReactNode }) {
-  const { t } = useTranslation();
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex max-w-[680px] flex-col gap-1">
-        <h2 className="text-base font-semibold text-text">{t("sync.setup.title")}</h2>
-        <p className="text-sm text-text-muted">{t("sync.setup.lead")}</p>
+          {t("common.cancel")}
+        </Button>
       </div>
-      {children}
-    </div>
+    </form>
   );
 }

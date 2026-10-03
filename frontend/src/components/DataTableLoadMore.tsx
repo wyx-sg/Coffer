@@ -3,7 +3,7 @@
 // Foundations-Tables "Load more": a list is never paged by number. It shows
 // the first N rows and grows by N at a time — N is the table's page size (the
 // `pageSize` prop, else the Settings default). The count reads "Showing x of
-// y" when the total is known; the button is a small secondary one whose
+// y" when the total is known and more remain — a list shown whole has no footer; the button is a small secondary one whose
 // spinner replaces it while the next rows load. `useLoadMore` holds how many
 // rows are shown, in either mode:
 // - client (the caller passes every row): a limit over the filtered rows;
@@ -79,6 +79,8 @@ interface Props {
 /** The table's footer: the shared `LoadMoreFooter`, labelled with how many the next click adds. */
 export function DataTableLoadMore({ shown, total, size, hasMore, loading, onMore }: Props) {
   const { t } = useTranslation();
+  // Everything already on screen: a count would answer no question (principle 9).
+  if (!hasMore) return null;
   return (
     <LoadMoreFooter
       loaded={shown}

@@ -1,4 +1,4 @@
-"""/api/v1/usage — metered API-key usage and official subscription quota (ADR
+"""/api/v1/usage — metered API-key usage (ADR
 usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota).
 
 * ``GET /summary`` — the daily rollup summed over a range, grouped by model,
@@ -8,21 +8,15 @@ usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota).
   shared opaque cursor (spec resource-framework "Page growing lists by an
   opaque cursor").
 * ``GET /export.csv`` — a summary as CSV.
-* ``GET /quota`` — each subscription agent's latest official windows, each
-  "as of" when its source produced it; an agent with none says so.
-* ``POST /quota/refresh`` — read Codex's windows now (rate-limited).
-* ``POST /quota/statusline`` — what the opt-in statusline wrapper forwards.
 """
 
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 
-from coffer.application.resource_service import ResourceService
 from coffer.application.usage.ports import RequestFilters, StoredUsage
 from coffer.application.usage.query import (
     GroupBy,
@@ -31,26 +25,10 @@ from coffer.application.usage.query import (
     UsageQueryService,
     UsageTotals,
 )
-from coffer.application.usage.quota import AgentQuotaView, QuotaService
-from coffer.application.usage.statusline_handoff import statusline_handoff
-from coffer.domain.agent.config import AgentConfig
-from coffer.domain.agent.types import AgentType
-from coffer.domain.usage.quota import CLAUDE_AGENT_TYPE
 from coffer.domain.usage.ranges import InvalidRange
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_resource_service_optional
-from coffer.surfaces.http.handoff_schemas import handoff_out
-from coffer.surfaces.http.usage_dependencies import (
-    get_quota_service,
-    get_usage_query_service,
-)
+from coffer.surfaces.http.usage_dependencies import get_usage_query_service
 from coffer.surfaces.http.usage_schemas import (
-    AgentQuotaOut,
-    QuotaListOut,
-    QuotaRefreshOut,
-    QuotaWindowOut,
-    StatuslineQuotaIn,
-    StatuslineQuotaOut,
     UsageRequestListOut,
     UsageRequestOut,
     UsageSummaryOut,
@@ -143,43 +121,6 @@ def _request(s: StoredUsage) -> UsageRequestOut:
     )
 
 
-def _has_value(v: AgentQuotaView) -> bool:
-    return any(w.used_percent is not None for w in v.windows)
-
-
-def quota_out(views: list[AgentQuotaView], claude_config_dir: Path) -> list[AgentQuotaOut]:
-    """The wire rows. Claude Code's row with no value carries the statusline
-    wrapper's opt-in hand-off (spec provider-switching "Offer an opt-in
-    statusline wrapper")."""
-    return [
-        AgentQuotaOut(
-            agent_type=v.agent_type,
-            has_value=_has_value(v),
-            handoff=handoff_out(
-                statusline_handoff(claude_config_dir)
-                if v.agent_type == CLAUDE_AGENT_TYPE and not _has_value(v)
-                else None
-            ),
-            plan=v.plan,
-            last_observed_at=v.last_observed_at,
-            windows=[
-                QuotaWindowOut(
-                    key=w.key,
-                    label=w.label,
-                    used_percent=w.used_percent,
-                    window_minutes=w.window_minutes,
-                    resets_at=w.resets_at,
-                    as_of=w.as_of,
-                    source=w.source,
-                    stale=w.stale,
-                )
-                for w in v.windows
-            ],
-        )
-        for v in views
-    ]
-
-
 @router.get("/summary", response_model=UsageSummaryOut)
 async def usage_summary(
     range_name: str = _RANGE,
@@ -253,46 +194,3 @@ async def usage_export_csv(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
-
-
-async def _claude_config_dir(
-    resources: ResourceService | None = Depends(get_resource_service_optional),  # noqa: B008
-) -> Path:
-    """The config dir of the agent whose statusline the wrapper feeds (the
-    registered one's), else that type's standard one."""
-    statusline_type = AgentType(CLAUDE_AGENT_TYPE)
-    if resources is not None:
-        for row in await resources.list(kind="agent"):
-            cfg = AgentConfig.model_validate(row.config)
-            if cfg.type is statusline_type:
-                return cfg.resolved_config_dir()
-    return statusline_type.config_dir()
-
-
-@router.get("/quota", response_model=QuotaListOut)
-async def usage_quota(
-    svc: QuotaService = Depends(get_quota_service),  # noqa: B008
-    claude_dir: Path = Depends(_claude_config_dir),  # noqa: B008
-) -> QuotaListOut:
-    return QuotaListOut(agents=quota_out(await svc.latest(), claude_dir))
-
-
-@router.post("/quota/refresh", response_model=QuotaRefreshOut)
-async def usage_quota_refresh(
-    svc: QuotaService = Depends(get_quota_service),  # noqa: B008
-    claude_dir: Path = Depends(_claude_config_dir),  # noqa: B008
-) -> QuotaRefreshOut:
-    outcome = await svc.refresh_codex(force=True)
-    return QuotaRefreshOut(
-        refreshed=outcome.refreshed,
-        reason=outcome.reason,
-        agents=quota_out(await svc.latest(), claude_dir),
-    )
-
-
-@router.post("/quota/statusline", response_model=StatuslineQuotaOut)
-async def usage_quota_statusline(
-    body: StatuslineQuotaIn,
-    svc: QuotaService = Depends(get_quota_service),  # noqa: B008
-) -> StatuslineQuotaOut:
-    return StatuslineQuotaOut(accepted=await svc.observe_statusline(body.rate_limits))

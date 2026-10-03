@@ -3,8 +3,9 @@
 // "What changes on this Mac" when the other Mac's version is taken: the
 // daemon's unified diff from this Mac's version to theirs (`take_theirs` of
 // `GET /sync/stop/files/versions`), as rows with old and new line numbers —
-// the same diff table the change previews draw. A binary file has no
-// line-by-line diff and says so.
+// the same diff table the change previews draw. For a file an agent merged,
+// `which="merged"` shows the merge (`merged_diff`) against this Mac's version
+// instead. A binary file has no line-by-line diff and says so.
 import { useTranslation } from "react-i18next";
 
 import { LineCounts } from "@/components/change-preview/LineCounts";
@@ -61,14 +62,21 @@ function Row({ line, first }: { line: DiffLine; first: boolean }) {
   );
 }
 
-export function SyncConflictDiff({ path }: { path: string }) {
+export function SyncConflictDiff({
+  path,
+  which = "theirs",
+}: {
+  path: string;
+  which?: "theirs" | "merged";
+}) {
   const { t } = useTranslation();
   const versions = useFileVersions(path, true);
   const data = versions.data;
-  const diff = data && !data.binary ? parseUnifiedDiff(data.take_theirs) : null;
+  const text = which === "merged" ? (data?.merged_diff ?? "") : data?.take_theirs;
+  const diff = data && !data.binary ? parseUnifiedDiff(text ?? "") : null;
   // Taking a deletion removes the file here; taking a file this Mac lacks adds it.
   const op =
-    !data || data.binary
+    !data || data.binary || which === "merged"
       ? "modify"
       : data.theirs === null
         ? "remove"

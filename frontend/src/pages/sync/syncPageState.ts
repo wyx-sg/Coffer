@@ -102,14 +102,9 @@ export function syncState(status: SyncStatus, pending = false): SyncState {
   return { kind, count, tone: PILL_TONE[kind] };
 }
 
-/** The header's primary button for a state. */
-export function primaryAction(kind: SyncStateKind): {
-  label: "syncNow" | "syncing" | "tryAgain";
-  disabled: boolean;
-} {
-  if (kind === "syncing") return { label: "syncing", disabled: true };
-  if (kind === "unreachable" || kind === "auth_failed" || kind === "waiting_approval")
-    return { label: "tryAgain", disabled: false };
+/** The header's primary button: always "Sync now", which turns to "Syncing…" while a round runs. */
+export function primaryAction(kind: SyncStateKind): { syncing: boolean; disabled: boolean } {
+  if (kind === "syncing") return { syncing: true, disabled: true };
   // A stopped round is answered on its own page; another round would only stop again.
-  return { label: "syncNow", disabled: kind === "conflicts" || kind === "held" };
+  return { syncing: false, disabled: kind === "conflicts" || kind === "held" };
 }

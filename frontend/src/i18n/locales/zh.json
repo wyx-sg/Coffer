@@ -86,8 +86,19 @@
     },
     "summaryWithCoffer": "{{agents}}和 Coffer 中的{{changes}}"
   },
+  "drawer": {
+    "previous": "上一条",
+    "next": "下一条"
+  },
   "common": {
+    "experimental": "实验",
     "time": {
+      "justNow": "刚刚",
+      "minAgo_one": "{{count}} 分钟前",
+      "minAgo_other": "{{count}} 分钟前",
+      "hAgo_one": "{{count}} 小时前",
+      "hAgo_other": "{{count}} 小时前",
+      "yesterday": "昨天",
       "todayAt": "今天 {{time}}",
       "dayAt": "{{day}} {{time}}"
     },
@@ -103,6 +114,10 @@
     "disabled": "已关闭",
     "saving": "正在保存…",
     "deleting": "正在删除…",
+    "longList": {
+      "showing": "显示 {{shown}} / {{total}}",
+      "showAll": "显示全部"
+    },
     "retry": "重试",
     "clear": "清除",
     "rawLog": "原始日志",
@@ -110,7 +125,6 @@
     "saved": "已保存",
     "showPassword": "显示",
     "hidePassword": "隐藏",
-    "dateTimeFormatHint": "YYYY-MM-DD HH:mm:ss",
     "secretKeepBlank": "留空则保留当前值",
     "discardChanges": {
       "title": "放弃未保存的修改？",
@@ -131,7 +145,10 @@
     "couldntDeleteConversation": "无法删除该对话",
     "bulk": {
       "selected": "已选 {{count}} 项",
+      "selectedOf": "已选 {{count}} / {{total}}",
+      "bar": "已选行",
       "pageSelected": "已选中本页全部",
+      "selectAll": "全选",
       "selectAllMatching": "选择全部 {{count}} 项",
       "allSelected": "已选中全部 {{count}} 项",
       "selectRow": "选择此行",
@@ -154,6 +171,27 @@
     "details": "详情",
     "lessDetails": "收起",
     "earlierToasts": "还有 {{count}} 条"
+  },
+  "filters": {
+    "clear": "清除",
+    "clearLabel": "清除 {{label}}",
+    "clearAll": "清除筛选",
+    "only": "仅此项",
+    "noMatches": "没有匹配项",
+    "timeRange": {
+      "label": "时间范围",
+      "custom": "自定义范围…",
+      "customHeading": "自定义范围",
+      "from": "起",
+      "to": "止",
+      "now": "现在",
+      "hint": "本地时间 · 最多回溯 {{days}} 天",
+      "hintDate": "本地日期 · 最多回溯 {{days}} 天",
+      "invalidTime": "请输入 HH:MM，例如 14:00。",
+      "endBeforeStart": "结束早于开始。",
+      "cancel": "取消",
+      "apply": "应用"
+    }
   },
   "picker": {
     "browse": "选择…"
@@ -201,7 +239,6 @@
     "customTools": "自定义工具",
     "clis": "命令行工具",
     "secrets": "密钥",
-    "usage": "用量",
     "search": "搜索或跳转…",
     "resizeSidebar": "调整侧边栏宽度",
     "attentionCount_one": "{{count}} 项待处理",
@@ -218,9 +255,7 @@
     "title": "MCP 服务器",
     "subtitle": "Coffer 运行的 MCP 服务器，通过同一个端点提供给你的智能体。",
     "addServer": "添加服务器",
-    "status": {
-      "all": "全部"
-    },
+    "status": {},
     "cols": {
       "reach": "生效范围"
     },
@@ -453,7 +488,11 @@
       "help": "自动：Coffer 按使用频率把最常用的工具直接列给智能体，其余通过搜索找到。始终列出：该工具一直出现在智能体的工具列表里。仅搜索：智能体只能通过 coffer__search_tools 找到它。无论哪种，已开启的工具都仍可调用。",
       "autoNow": "自动 · {{now}}",
       "aria": "{{key}} 的暴露方式",
-      "mode": { "auto": "自动", "listed": "始终列出", "search": "仅搜索" },
+      "mode": {
+        "auto": "自动",
+        "listed": "始终列出",
+        "search": "仅搜索"
+      },
       "reason": {
         "pinned": "你已固定：始终在智能体的工具列表里。",
         "search_only": "你已设置：智能体通过搜索找到它。",
@@ -527,14 +566,13 @@
         "missing": "缺失",
         "stored": "已存储",
         "lastSuccess": "上次成功",
-        "never": "还没有成功调用"
+        "never": "从未"
       },
       "agents": "智能体",
       "allOff": "全部关闭",
       "allOn": "全部开启",
       "behindSearch": "通过搜索",
       "bulkLabel": "已选的 MCP 服务器",
-      "selectAll": "全选当前列出的服务器",
       "calledBy": "调用方",
       "calls_one": "次调用",
       "calls_other": "次调用",
@@ -586,9 +624,9 @@
         "all": "全部",
         "calls": "调用",
         "callsFootnote": "Coffer 只记录谁调用了什么、结果如何 — 从不记录参数或返回内容。",
-        "callsTab": "调用 · {{count}}",
+        "callsTab": "调用",
         "errorLines": "错误",
-        "errors": "错误 · {{count}}",
+        "errors": "错误",
         "everything": "全部",
         "logFootnote": "服务器在 stderr 上的输出，以及 Coffer 启动和停止它的记录。最新的在前。",
         "logTab": "服务器日志",
@@ -789,13 +827,9 @@
     "agentFallback": "智能体"
   },
   "activity": {
-    "subtitle": "审计日志、MCP 调用和守护进程日志。",
+    "subtitle": "每一次改动、工具调用和守护进程记录，最新的在前。",
     "title": "活动",
     "live": "实时",
-    "notLive": "未实时更新",
-    "liveHint": "新记录发生时即出现。",
-    "notLiveHint": "正在重新连接守护进程；新记录仍会每隔几秒到达。",
-    "countFloor": "{{value}}+",
     "tabs": {
       "everything": "全部",
       "changes": "改动",
@@ -832,14 +866,10 @@
       "denied": "被拒绝"
     },
     "filters": {
-      "any": "任意",
-      "by": "智能体",
+      "by": "操作者",
       "notAnAgent": "非智能体",
-      "server": "服务器",
       "kind": "类型",
-      "status": "状态",
       "logger": "记录器",
-      "clear": "清除",
       "clearAll": "清除筛选",
       "levelLabel": "日志级别",
       "level": {
@@ -848,7 +878,6 @@
         "warning": "警告",
         "error": "错误"
       },
-      "searchLabel": "筛选记录",
       "search": {
         "everything": "按名称、工具或路径筛选",
         "changes": "筛选改动",
@@ -858,8 +887,7 @@
       "kinds": {
         "calls": "MCP 调用",
         "changes": "改动",
-        "daemon": "守护进程记录",
-        "notDaemon": "除守护进程记录外的全部"
+        "daemon": "守护进程记录"
       },
       "changeKinds": {
         "mcp_server": "MCP 服务器",
@@ -875,19 +903,15 @@
         "cli": "命令行工具"
       },
       "findAgent": "查找智能体",
-      "selected": "已选 {{count}} 项",
-      "noOption": "没有匹配项。",
-      "kindCount": "{{count}} 种类型",
-      "kindPill": {
-        "calls": "调用",
-        "changes": "改动",
-        "daemon": "守护进程记录"
+      "agents": "智能体",
+      "statusLabel": "调用状态",
+      "statusOption": {
+        "all": "全部",
+        "ok": "成功",
+        "failed": "失败"
       },
-      "kindInline": {
-        "calls": "调用",
-        "changes": "改动",
-        "daemon": "守护进程记录"
-      }
+      "findKind": "查找类型",
+      "findLogger": "查找记录器"
     },
     "table": {
       "time": "时间",
@@ -899,7 +923,8 @@
       "status": "状态",
       "level": "级别",
       "logger": "记录器",
-      "message": "消息"
+      "message": "消息",
+      "change": "改动"
     },
     "day": {
       "today": "今天 · {{date}}",
@@ -908,38 +933,27 @@
     },
     "pending_one": "{{count}} 条新记录",
     "pending_other": "{{count}} 条新记录",
-    "loadOlder": "加载更早的记录",
-    "end": "这个时间范围内的记录已全部显示。",
+    "loadOlder": "再加载 {{count}} 条",
+    "end": "已保留的记录都在这里了。",
     "empty": {
       "title": "还没有任何活动",
-      "body": "你在 Coffer 里做的改动、智能体经 Coffer 调用的工具都会出现在这里。接入一个智能体，就能在这里看到它的第一次调用。",
+      "body": "你在 Coffer 里做的改动、智能体经 Coffer 调用的工具都会出现在这里。",
       "connect": "连接智能体",
       "addServer": "添加 MCP 服务器",
       "noMatch": "没有符合筛选条件的记录",
-      "noMatchBody": "放宽时间范围或清除筛选。"
+      "noMatchBody": "放宽时间范围或清除筛选。",
+      "window": "这个时间范围内没有记录",
+      "windowBody": "放宽时间范围可以看到更早的记录。"
     },
     "failed": {
       "title": "{{sources}}加载失败",
-      "partial": "只显示{{sources}}；它们是完整的。",
+      "partial": "下面的{{sources}}是完整的。",
       "retry": "重试"
     },
-    "menu": {
-      "label": "更多",
-      "heading": "导出筛选后的记录…",
-      "json": "导出为 JSON",
-      "csv": "导出为 CSV",
-      "note": "此标签页中符合筛选条件的全部记录。",
-      "done_one": "已导出 {{count}} 条记录",
-      "done_other": "已导出 {{count}} 条记录",
-      "title": "导出筛选后的记录…（JSON / CSV）"
-    },
     "drawer": {
-      "label": "详情",
-      "previous": "上一个事件",
-      "next": "下一个事件",
-      "close": "关闭详情",
       "kinds": {
         "change": "改动",
+        "call": "MCP 调用",
         "daemon": "守护进程记录"
       },
       "who": "操作者",
@@ -980,7 +994,6 @@
       "around": "同一时间前后",
       "open": "打开 {{name}}",
       "copyDetails": "复制详情",
-      "copyCallId": "复制调用 ID",
       "copyRecord": "复制记录",
       "copied": "已复制",
       "copyFailed": "无法复制到剪贴板",
@@ -988,7 +1001,6 @@
       "failingSince_other": "{{server}} 从 {{since}} 起一直失败——最近 24 小时有 {{count}} 个错误。",
       "errorsToday_one": "这个服务器最近 24 小时有 {{count}} 个错误。",
       "errorsToday_other": "这个服务器最近 24 小时有 {{count}} 个错误。",
-      "daemonRecords": "守护进程日志记录",
       "offsetSeconds": "{{sign}}{{n}} 秒",
       "offsetMinutes": "{{sign}}{{n}} 分钟",
       "whenToday": "今天 {{time}}",
@@ -1009,65 +1021,44 @@
       "channel": "消息渠道"
     },
     "time": {
-      "label": "时间范围：{{range}}",
-      "heading": "时间范围",
-      "15m": "最近 15 分钟",
       "1h": "最近 1 小时",
       "24h": "最近 24 小时",
       "7d": "最近 7 天",
-      "all": "保留的全部记录",
-      "custom": "自定义范围",
-      "from": "从",
-      "to": "到",
-      "now": "现在",
-      "start": "最早",
-      "apply": "应用范围",
-      "customLabel": "{{from}} → {{to}}",
-      "phrase": {
-        "15m": "（最近 15 分钟）",
-        "1h": "（最近 1 小时）",
-        "24h": "（最近 24 小时）",
-        "7d": "（最近 7 天）",
-        "all": "",
-        "custom": "（此范围内）"
-      }
+      "30d": "最近 30 天"
     },
     "summary": {
       "sources": {
         "change": "改动",
         "call": "MCP 调用",
         "daemon": "守护进程记录"
-      },
-      "calls_one": "{{n}} 次调用",
-      "calls_other": "{{n}} 次调用",
-      "failed_one": "{{n}} 次失败",
-      "failed_other": "{{n}} 次失败",
-      "denied_one": "{{n}} 次被拒绝",
-      "denied_other": "{{n}} 次被拒绝",
-      "errors_one": "{{n}} 个错误",
-      "errors_other": "{{n}} 个错误",
-      "warnings_one": "{{n}} 个警告",
-      "warnings_other": "{{n}} 个警告",
-      "problems": "{{problems}}{{range}}",
-      "all_one": "{{n}} 条记录",
-      "all_other": "{{n}} 条记录",
-      "loadedOf": "已加载 {{loaded}} / {{total}}"
+      }
     },
     "older": {
-      "hint_one": "再加载 {{count}} 条，{{before}} 之前的。MCP 调用保留{{calls}}，改动保留{{changes}}——可在此修改：",
-      "hint_other": "再加载 {{count}} 条，{{before}} 之前的。MCP 调用保留{{calls}}，改动保留{{changes}}——可在此修改：",
+      "showing": "已显示 {{shown}} 条",
+      "showingOf": "已显示 {{shown}} / {{total}} 条",
+      "next": "下 {{count}} 条来自 {{before}} 之前",
+      "kept": "MCP 调用保留 {{calls}} —",
       "settings": "设置 › 数据",
       "forever": "永久",
-      "days_one": " {{count}} 天",
-      "days_other": " {{count}} 天",
-      "years_one": " 1 年",
-      "years_other": " {{count}} 年"
+      "days_one": "{{count}} 天",
+      "days_other": "{{count}} 天",
+      "years_one": "1 年",
+      "years_other": "{{count}} 年"
     },
     "daemonLog": {
-      "open": "打开日志文件",
-      "following": "· 最新的在最上面 · 实时跟随",
-      "newestFirst": "· 最新的在最上面",
-      "showCall": "查看这次 MCP 调用"
+      "following": "实时跟随",
+      "newestFirst": "最新在前",
+      "reveal": "在访达中打开",
+      "showCall": "查看 MCP 调用"
+    },
+    "reconnecting": "正在重新连接…",
+    "tabFailed": "无法加载",
+    "export": {
+      "label": "导出",
+      "json": "JSON",
+      "csv": "CSV",
+      "done_one": "已导出 {{count}} 条记录",
+      "done_other": "已导出 {{count}} 条记录"
     }
   },
   "settings": {
@@ -1332,7 +1323,7 @@
         "passphraseHint": "在另一台 Mac 上导出主密钥时设置的口令。",
         "current": "当前主密钥",
         "inFile": "文件中的主密钥",
-        "none": "无",
+        "none": "—",
         "same": "相同",
         "different": "不同",
         "recorded": "记录在「活动」中",
@@ -1736,6 +1727,12 @@
     "SYNC_MACHINE_NAME_INVALID": "无法使用这个机器名。请使用简短、非空的名字。",
     "SYNC_MACHINE_NOT_FOUND": "没有使用该 id 与此远端同步的机器。",
     "SYNC_NOTHING_STOPPED": "没有等待这个回答的同步轮次。",
+    "SYNC_NOTHING_TO_RESTORE": "没有可以恢复的已停止远端。",
+    "SYNC_REMOTE_EXISTS": "已经设置了远端，请先停止与它同步。",
+    "SYNC_VAULT_MOVE_FAILED": "金库没能移动，仍留在原处。",
+    "SYNC_VAULT_TARGET_INVALID": "请为金库选择本机上的一个空文件夹。",
+    "SYNC_VAULT_TARGET_IN_CLOUD": "该文件夹位于 iCloud Drive、Dropbox 或 Syncthing 中，请选择它们之外的文件夹。",
+    "SYNC_VAULT_TARGET_NOT_EMPTY": "该文件夹不是空的，请选择一个空文件夹。",
     "SYNC_NO_REMOTE": "这台机器尚未设置同步远端。",
     "SYNC_NO_PLAINTEXT_FOUND": "上一轮没有发现明文密钥，没有可以「仍然推送」的内容。",
     "SYNC_REMOTE_FAILED": "远端无法连接、拒绝了凭据，或拒绝了推送。",
@@ -2607,7 +2604,6 @@
     "title": "技能",
     "add": "添加技能",
     "searchPlaceholder": "筛选技能",
-    "selectAll": "全选当前列出的技能",
     "group": {
       "inUse": "已启用",
       "unused": "未使用",
@@ -3408,7 +3404,7 @@
     "waiting_other": "已从 {{agents}} 读取 {{count}} 条，等待提炼",
     "distil": {
       "done": "{{when}}提炼",
-      "never": "尚未提炼",
+      "never": "从未",
       "running": "正在提炼…"
     },
     "status": {
@@ -3432,7 +3428,6 @@
     "subtitle": "你与智能体的对话，包括来自消息渠道的。",
     "bulk": {
       "label": "已选对话",
-      "selected": "已选 {{count}} 个",
       "selectAll": "全选对话",
       "selectRow": "选择 {{title}}",
       "andMore_one": "等 {{count}} 个",
@@ -3606,7 +3601,6 @@
       "source": "来源",
       "allSources": "全部来源",
       "agent": "智能体",
-      "allAgents": "全部智能体",
       "search": "搜索标题…",
       "channel": "消息渠道：{{channel}}",
       "clearChannel": "清除消息渠道筛选",
@@ -3824,9 +3818,15 @@
       }
     },
     "settings": {
-      "connection": { "title": "连接" },
-      "receiving": { "title": "接收消息" },
-      "replying": { "title": "回复与会话" },
+      "connection": {
+        "title": "连接"
+      },
+      "receiving": {
+        "title": "接收消息"
+      },
+      "replying": {
+        "title": "回复与会话"
+      },
       "unavailable": "这个渠道已保存的设置无效，无法在此显示。请用 `coffer channel edit` 更正。",
       "saveState": {
         "saving": "正在保存…",
@@ -4073,7 +4073,6 @@
     "bulkReach": "所选项的生效范围"
   },
   "sync": {
-    "subtitle": "让这份保险库与你自己的 git 远端保持同步。",
     "title": "同步",
     "loadFailed": "无法加载同步",
     "tabs": {
@@ -4084,12 +4083,12 @@
     "problem": {
       "auth_failed": {
         "title": "远端拒绝了这个密钥",
-        "body": "被 {{host}} 拒绝了。这个密钥可能已从仓库中移除，或已在「密钥」中被替换。请选择另一个密钥，或在「密钥」中更新它。",
+        "body": "被 {{host}} 拒绝了。这个密钥可能已从仓库中移除，或已在「密钥」中被替换。请选择另一个密钥，或更新它。",
         "bodyNoSecret": "{{host}} 拒绝登录，而这个远端没有设置密钥。请为它选择一个。"
       },
       "waiting_approval": {
         "title": "推送令牌正在等待你的批准",
-        "body": "尚未被批准发送到 {{host}}，所以没有发送任何内容。请在 Coffer 桌面应用（密钥）中批准；下一轮就会正常进行。"
+        "body": "尚未被批准发送到 {{host}}，所以没有发送任何内容。批准后，下一轮就会正常进行。"
       },
       "unreachable": {
         "title": "无法连接 {{host}}",
@@ -4097,31 +4096,35 @@
         "keepsWorking": "这台 Mac 上一切照常。",
         "keepsWorkingWaiting_one": "这台 Mac 上一切照常；{{count}} 项改动等待推送。",
         "keepsWorkingWaiting_other": "这台 Mac 上一切照常；{{count}} 项改动等待推送。",
-        "retry": "Coffer 会在下一轮重试，也可以现在点「重试」。"
+        "retry": "Coffer 会在下一轮重试，也可以现在点「立即同步」。"
       },
       "plaintext_found": {
-        "title": "没有推送任何内容：有文件含明文密钥",
-        "body": "密钥一旦推送到远端，就会永久留在它的历史里，所以这一轮什么也没推送。把每个值移入密钥，并让文件引用它，然后重试。如果它只是示例而不是真的密钥，可以仍然推送。",
+        "body": "密钥一旦推送到远端，就会永久留在它的历史里。把每个值移入密钥，文件就会按名字引用它，然后再同步一次。如果它只是示例，可以仍然推送。",
         "where": "{{path}}，第 {{line}} 行",
         "key": "{{key}} 的值",
         "token": "一个形似令牌的值",
-        "pushAnyway": "仍然推送",
+        "pushAnyway": "仍然推送…",
         "confirmTitle": "仍然推送这些文件？",
         "confirmBody": "Coffer 会按文件现在的样子推送，并在审计日志中记下是你操作的。只有在确认每一处都不是真实密钥时才这样做：一旦推送，这个值就在远端的历史里了。",
-        "confirmLabel": "我已确认，仍然推送"
+        "confirmLabel": "我已确认，仍然推送",
+        "title_one": "没有推送任何内容：{{count}} 个文件含明文密钥",
+        "title_other": "没有推送任何内容：{{count}} 个文件含明文密钥",
+        "move": "移入密钥…"
       },
       "push_failed": {
         "title": "推送被拒绝",
         "titlePulled": "已拉取并应用，但推送被拒绝",
-        "body_one": "这台 Mac 的 {{count}} 项改动没有推送出去，其他 Mac 因此落后。下一轮会再试；如果一直失败，先修改分支规则。",
-        "body_other": "这台 Mac 的 {{count}} 项改动没有推送出去，其他 Mac 因此落后。下一轮会再试；如果一直失败，先修改分支规则。",
-        "bodyPulled_one": "这台 Mac 已接收远端的 {{pulled}} 项改动，但自己的 {{count}} 项改动没有推送出去，其他 Mac 因此落后。下一轮会再试；如果一直失败，先修改分支规则。",
-        "bodyPulled_other": "这台 Mac 已接收远端的 {{pulled}} 项改动，但自己的 {{count}} 项改动没有推送出去，其他 Mac 因此落后。下一轮会再试；如果一直失败，先修改分支规则。"
+        "body_one": "这台 Mac 的 {{count}} 项改动没有推送出去，其他 Mac 因此落后。点「立即同步」会再试；如果一直失败，请检查远端的分支规则。",
+        "body_other": "这台 Mac 的 {{count}} 项改动没有推送出去，其他 Mac 因此落后。点「立即同步」会再试；如果一直失败，请检查远端的分支规则。",
+        "bodyPulled_one": "这台 Mac 已接收远端的 {{pulled}} 项改动，但自己的 {{count}} 项改动没有推送出去，其他 Mac 因此落后。点「立即同步」会再试；如果一直失败，请检查远端的分支规则。",
+        "bodyPulled_other": "这台 Mac 已接收远端的 {{pulled}} 项改动，但自己的 {{count}} 项改动没有推送出去，其他 Mac 因此落后。点「立即同步」会再试；如果一直失败，请检查远端的分支规则。"
       },
       "cloud_folder": {
         "title": "你的 vault 位于 {{tool}} 中",
-        "body": "同时也被 {{tool}} 同步。两个工具同步同一个 git 文件夹可能会损坏它，所以各轮已暂停。请把 vault 移出 {{tool}}；Syncthing 和 Dropbox 文件夹也是同样的情况。",
-        "someTool": "一个云同步文件夹"
+        "body": "同时也被 {{tool}} 同步。两个工具同步同一个 git 文件夹可能会损坏它，所以各轮已暂停。",
+        "someTool": "一个云同步文件夹",
+        "move": "移动 vault…",
+        "moved": "已把 vault 移到 {{to}}"
       },
       "layout": {
         "title": "远端使用了另一种 vault 布局",
@@ -4132,16 +4135,19 @@
         "body": "这一轮在完成前停止了。git 的消息见下方。"
       },
       "showMessage": "显示 git 的消息",
-      "retry": "重试",
-      "openRemote": "打开远端设置",
       "chooseSecret": "选择密钥",
       "openSecrets": "在密钥中打开",
       "reveal": "在访达中显示",
       "theRemote": "远端",
       "git_missing": {
         "title": "这台 Mac 没有安装 Git",
-        "body": "同步需要用 git 拉取和推送，但这台 Mac 上找不到它。安装之后各轮会重新开始。"
-      }
+        "body": "同步需要用 git 拉取和推送，但这台 Mac 上找不到它。安装之后各轮会重新开始。",
+        "bodyWaiting_one": "同步需要用 git 拉取和推送，但这台 Mac 上找不到它。这里一切照常；{{count}} 项改动等待推送。安装之后各轮会重新开始。",
+        "bodyWaiting_other": "同步需要用 git 拉取和推送，但这台 Mac 上找不到它。这里一切照常；{{count}} 项改动等待推送。安装之后各轮会重新开始。"
+      },
+      "ignore": "忽略",
+      "review": "查看",
+      "checkAgain": "重新检查"
     },
     "round": {
       "status": {
@@ -4177,24 +4183,18 @@
       "rolledBack_other": "已把 {{count}} 个文件回滚到 {{snapshot}}"
     },
     "rollback": {
-      "action": "回滚",
       "title": "回滚到 {{time}} 那一轮之前？",
       "description": "把这台 Mac 恢复到这一轮应用任何内容之前拍下的安全快照。",
       "reverses": "回滚会撤销以下改动",
-      "morePaths": "……还有 {{count}} 项",
       "kept": "此后编辑过的文件，保持原样",
       "confirm": "回滚",
       "rollingBack": "正在回滚…",
-      "pulled_one": "拉取 {{count}}",
-      "pulled_other": "拉取 {{count}}",
-      "pushed_one": "推送 {{count}}",
-      "pushed_other": "推送 {{count}}",
       "wasAdded": "添加的",
       "wasRemoved": "恢复",
       "backTo": "回到 {{time}}",
       "backToSnapshot": "回到快照",
-      "followTitle": "其他 Mac 会跟上",
-      "followBody": "回滚是这台 Mac 上的一次新改动。下一轮会把它推送出去，其他 Mac 也会收到。你在 {{time}} 之后做的编辑会保留。"
+      "descriptionSnapshot": "把这台 Mac 恢复到这一轮应用任何内容之前拍下的安全快照（{{snapshot}}，{{time}}）。",
+      "follow": "回滚是这台 Mac 上的一次新改动。下一轮会把它推送出去，其他 Mac 也会收到。你在 {{time}} 之后做的编辑会保留。"
     },
     "waiting": {
       "writer": {
@@ -4231,14 +4231,18 @@
       "title": "解决冲突",
       "pill": "推送已阻塞",
       "subline": "这一轮在 {{time}} · 从 {{machine}} 拉取 · 为每个文件选一个版本，然后继续这一轮。",
-      "files": "文件 · {{count}}",
+      "files": "文件",
       "filesLabel": "冲突的文件",
       "state": {
         "mine": "保留了本机的",
         "theirs": "采用 {{machine}} 的 · 尚未应用",
         "edited": "已在编辑器中改好",
         "editing": "正在编辑器中编辑",
-        "open": "选一个版本"
+        "open": "选一个版本",
+        "secret": "加密 secret · 选一个版本",
+        "handedOff": "已交给智能体",
+        "merged": "智能体已合并 · 请检查",
+        "agentResolved": "智能体合并的"
       },
       "changed": "{{area}} · 你在本机 {{mine}} 改过，{{machine}} 在 {{theirs}} 改过",
       "editingMeta": "{{area}} · 已在编辑器中打开",
@@ -4254,6 +4258,9 @@
       "whatChanges": "本机会发生的变化",
       "nothingChanges": "本机不会有任何变化。下次推送时 {{machine}} 会拿到本机的版本。",
       "flipNote": "切换选择时，差异会随之翻转。继续这一轮之前不会写入任何内容。",
+      "flipNoteJoin": "切换选择时，差异会随之翻转。应用选择之前不会改动任何内容。",
+      "resolvedByAgent": "已采用智能体的合并结果 · 本机保留并推送保存后的文件。",
+      "handedOff": "已在 {{time}} 交给 {{agent}}。它合并完成后会显示在这里。",
       "binary": "这是二进制文件，没有逐行差异可以显示。",
       "noDiff": "两个版本相同。",
       "secret": "这是加密的 secret：不显示其内容。请选择保留哪台 Mac 的值。",
@@ -4266,13 +4273,26 @@
         "saved": "保存后的文件",
         "notSaved": "带冲突标记的副本还没有写出。"
       },
-      "merge": {
-        "title": "交给智能体合并",
-        "body": "智能体编辑带冲突标记的副本，由 Coffer 提交结果。",
-        "done": "我已合并"
+      "merged": {
+        "anAgent": "智能体",
+        "title": "{{agent}} 已在 {{time}} 合并两个版本",
+        "body": "先看看本机会发生什么变化，再标记为已解决。下次推送时 {{machine}} 会拿到合并结果。",
+        "openConversation": "打开对话"
       },
       "progress": "已解决 {{resolved}} / {{total}} 个文件",
+      "progressJoin": "已选定 {{resolved}} / {{total}} 个文件",
       "continueHint": "每个文件都选定版本后才能继续",
+      "applyHint": "至少选一个版本才能应用",
+      "apply": "应用选择",
+      "join": {
+        "title": "选择版本",
+        "pill": "尚未推送",
+        "subline": "首次加入 · 从 {{machine}} 拉取 · 在你为每个文件选定版本之前，这些文件保持本机的样子。",
+        "empty": {
+          "title": "没有需要选择的",
+          "body": "加入之后没有文件在等待选版本。"
+        }
+      },
       "later": "稍后处理",
       "continue": "继续这一轮",
       "continuing": "正在继续…",
@@ -4285,17 +4305,15 @@
       "title": "查看暂扣的删除",
       "pill": "这一轮已暂停",
       "subline": {
-        "incoming": "这一轮在 {{time}} · 你做出决定后，拉取到的其余内容才会应用。",
-        "outgoing": "这一轮在 {{time}} · 你做出决定前不会推送任何内容。"
+        "incoming": "这一轮在 {{time}} · {{folders}}里的{{files}}，在 {{machine}} 上被删除 · 你做出决定后，拉取到的其余内容才会应用。",
+        "outgoing": "这一轮在 {{time}} · {{folders}}里的{{files}}，在 {{machine}} 上被删除 · 你做出决定前不会推送任何内容。"
       },
       "files_one": "{{count}} 个文件",
       "files_other": "{{count}} 个文件",
       "folders_one": "{{count}} 个文件夹",
       "folders_other": "{{count}} 个文件夹",
-      "deletedOn": "在 {{machine}} 上删除",
       "thisMac": "本机",
       "anotherMachine": "另一台 Mac",
-      "more": "……另有 {{count}} 个",
       "delete": {
         "title": {
           "incoming": "本机也删除",
@@ -4371,20 +4389,16 @@
       },
       "more": "{{name}} 的更多操作",
       "rename": "重命名",
-      "renameTitle": "重命名 {{name}}",
+      "renameTitle": "重命名这台 Mac",
       "nameLabel": "名称",
       "renameHint": "只改这个列表里的名称。其他 Mac 在它们的下一轮之后看到新名称。",
       "retire": "退役",
-      "retireTitle": "让 {{name}} 退役？",
-      "retireSeen": "最近出现：{{when}}，Coffer {{version}}。",
-      "retireSafeTitle": "不会删除任何东西",
-      "retireSafe": "退役只会把它从这个列表里移除。它的同步轮次留在历史里，那台 Mac 和仓库里的东西都不会改变。如果它上面的 Coffer 再次同步，它会作为一台新机器重新出现在这里。"
+      "retired": "已让 {{name}} 退役"
     },
     "remote": {
       "url": "仓库 URL",
       "branch": "分支",
       "secret": "密钥",
-      "secretHint": "来自「密钥」页面的一个密钥。",
       "secretNone": "不使用",
       "secretMissing": "本机没有它的值",
       "secretPlaceholder": "选择一个密钥",
@@ -4402,7 +4416,7 @@
         "manual": "只在我点「立即同步」时"
       },
       "includeSecret": "包含加密的密钥",
-      "includeSecretHint": "关闭：API key 和令牌留在本机。开启：它们加密后推送，另一台 Mac 只有导入本机的主密钥后才能读取。主密钥本身从不离开本机。",
+      "includeSecretHint": "关闭：API key 和令牌留在本机。开启：它们加密后推送，另一台 Mac 导入本机的主密钥后才能读取。",
       "errors": {
         "url": "请输入 git 远端 URL（https://… 或 git@…）"
       },
@@ -4416,25 +4430,29 @@
         "confirm": "包含密钥"
       },
       "vaultPath": "本机上的金库",
-      "notCloudFolder": "不在 iCloud Drive、Dropbox 或 Syncthing 目录中",
+      "notCloudFolder": "不在 iCloud Drive、Dropbox 或 Syncthing 里面。",
       "cloudFolder": "{{tool}} 也在同步这个文件夹。两个工具同时同步一个 git 仓库会把它弄坏，所以在金库移出之前同步会暂停。",
       "reveal": "在访达中显示",
       "stop": {
         "label": "停止同步本机",
         "hint": "在本机忘掉这个远端。金库、它的历史和仓库都保持原样。",
-        "open": "停止同步…",
-        "title": "停止同步本机？",
-        "body": "Coffer 会在本机忘掉这个远端并停止同步。金库、它的历史和仓库都保持原样，你的其他 Mac 会继续同步。之后可以用同一个 URL 重新设置。",
         "confirm": "停止同步",
-        "remote": "远端",
-        "lastRound": "上一轮"
+        "done": "已停止同步本机"
+      },
+      "section": {
+        "title": "远端",
+        "saves": "每个字段在你离开时自动保存。",
+        "setup": "这个金库同步到哪里。"
+      },
+      "secretsSection": {
+        "title": "加密密钥",
+        "hint": "API key 和令牌是否随金库一起同步。"
       }
     },
     "setup": {
-      "title": "把这个金库放进你自己的 git 仓库",
-      "lead": "每一轮先拉取其他 Mac 推送的内容，能干净合并就应用，然后推送本机的改动。遇到冲突时这一轮会停下来等你处理。",
+      "lead": "让这个金库与你自己的 git 仓库保持同步。每一轮先拉取、应用能干净合并的内容，然后推送。",
       "urlHint": "一个你自己的 git 仓库，SSH 或 HTTPS 均可。空仓库也可以。",
-      "secretHint": "来自「密钥」页面的一个密钥。Coffer 用它来拉取和推送；它从不写进金库。",
+      "secretHint": "Coffer 用它来拉取和推送；它从不写进金库。",
       "cadenceHint": "另外，每次点「立即同步」时也会同步。",
       "checkRepo": "检查仓库",
       "checking": "正在检查…",
@@ -4506,7 +4524,6 @@
       "waiting": {
         "title": "推送令牌正在等待批准",
         "body": "Coffer 扣留了令牌 {{secret}}，直到你在桌面应用中批准把它发送到这个远端。目前没有发送任何内容。批准后回到这里：本页会自动重新检查。",
-        "openSecrets": "打开密钥",
         "checkAgain": "重新检查"
       },
       "snapshot": "会先拍一个安全快照",
@@ -4521,19 +4538,9 @@
     },
     "joinChoices": {
       "title": "与本机不同",
-      "body": "在你选择之前不会推送或替换",
-      "apply_one": "应用 {{count}} 个选择",
-      "apply_other": "应用 {{count}} 个选择",
-      "edited": "本机修改于 {{mine}} · {{who}} 修改于 {{theirs}}",
-      "otherMac": "另一台 Mac",
-      "open": "打开 {{path}}",
-      "choiceFor": "{{path}} 保留哪个版本",
-      "keepMine": "保留本机的",
-      "takeTheirs": "采用 {{who}} 的",
-      "more_one": "…还有 {{count}} 个",
-      "more_other": "…还有 {{count}} 个",
-      "showDiff": "查看 {{path}} 会有什么变化",
-      "diffCaption": "如果采用 {{who}} 的版本，本机会发生的变化"
+      "body": "在你选定版本之前不会推送或替换。",
+      "choose": "选择版本",
+      "chooseVersion": "选一个版本"
     },
     "header": {
       "copyUrl": "复制仓库地址",
@@ -4544,7 +4551,7 @@
       "everyMinutes_other": "每 {{count}} 分钟",
       "syncNow": "立即同步",
       "syncing": "正在同步…",
-      "tryAgain": "重试"
+      "keeps": "让这个金库与以下仓库保持同步"
     },
     "pill": {
       "setup": "未设置",
@@ -4607,7 +4614,7 @@
       "pausedHint": "在「远端」里恢复之前不会自动运行任何一轮；「立即同步」仍会运行一轮。",
       "stoppedConflicts_one": "本轮因 {{count}} 处冲突停止",
       "stoppedConflicts_other": "本轮因 {{count}} 处冲突停止",
-      "stoppedConflictsBody": "这台 Mac 和 {{peer}} 改了相同的行。没有检出任何内容，也没有推送任何内容。在你为每个文件选定版本之前，推送会一直被阻止；这台 Mac 在此期间照常工作。",
+      "stoppedConflictsBody": "这台 Mac 和 {{peer}} 改了相同的行。没有检出或推送任何内容；这台 Mac 在此期间照常工作。",
       "resolveConflicts": "解决冲突",
       "heldIncoming_one": "{{peer}} 删除了 {{count}} 个文件，超过了一轮允许删除的数量",
       "heldIncoming_other": "{{peer}} 删除了 {{count}} 个文件，超过了一轮允许删除的数量",
@@ -4617,33 +4624,28 @@
       "reviewDeletions": "查看删除"
     },
     "areas": {
-      "knowledge": "知识",
-      "documents_one": "{{count}} 篇文档",
-      "documents_other": "{{count}} 篇文档",
-      "skills": "技能",
+      "documents_one": "{{count}} 篇知识文档",
+      "documents_other": "{{count}} 篇知识文档",
       "skillCount_one": "{{count}} 个技能",
       "skillCount_other": "{{count}} 个技能",
-      "resources": "MCP 服务器与工具",
-      "definitions_one": "{{count}} 个定义",
-      "definitions_other": "{{count}} 个定义",
-      "secrets": "加密密钥",
-      "synced": "已同步",
-      "notSynced": "不同步"
+      "definitions_one": "{{count}} 个 MCP 服务器和工具定义",
+      "definitions_other": "{{count}} 个 MCP 服务器和工具定义",
+      "synced": "密钥已同步",
+      "notSynced": "密钥未同步",
+      "line": "同步 {{documents}} · {{skills}} · {{definitions}} · {{secrets}}"
     },
     "rounds": {
       "today": "今天",
       "yesterday": "昨天",
       "title": "轮次",
       "loadFailed": "无法加载同步轮次",
-      "hint": "每一轮先拉取、再应用、最后推送。无事可做的轮次会折叠起来。",
       "empty": "还没有运行过任何一轮。",
       "folded": "{{label}} ×{{count}}",
       "columns": {
         "when": "时间",
         "round": "轮次",
         "pulled": "拉取",
-        "pushed": "推送",
-        "commits": "提交"
+        "pushed": "推送"
       },
       "label": {
         "nothing_to_do": "无事可做",
@@ -4701,6 +4703,16 @@
       "nothingPushed": "这台 Mac 没有需要推送的内容。",
       "rollBack": "回滚到这一轮之前",
       "viewActivity": "在活动中查看"
+    },
+    "moveVault": {
+      "title": "把 vault 移出 {{tool}}",
+      "lead": "Coffer 会暂停各轮同步和智能体的写入，移动文件夹、检查 git 仓库，然后恢复。只需几秒钟。",
+      "from": "从",
+      "to": "到",
+      "rule": "不能在 iCloud Drive、Dropbox 或 Syncthing 里面。",
+      "oldFolder": "旧文件夹会留空；请自己删除。",
+      "failed": "无法移动 vault",
+      "confirm": "移动 vault"
     }
   },
   "overview": {
@@ -4762,6 +4774,7 @@
       "repairHook": "修复钩子",
       "reconnectChannel": "重新连接渠道",
       "reviewHeld": "查看被暂缓的变更",
+      "openSecrets": "打开密钥",
       "turn_on": "开启"
     },
     "kinds": {
@@ -4920,7 +4933,8 @@
       },
       "usage": {
         "period": "过去 24 小时",
-        "unit": "tokens"
+        "unit": "tokens",
+        "label": "用量"
       }
     },
     "activity": {
@@ -5456,62 +5470,36 @@
   },
   "secrets": {
     "title": "密钥",
-    "subtitle": "API 密钥与令牌，加密保存在这台 Mac 的保险库中。",
+    "subtitle": "你的 MCP 服务器和提供商使用的 API 密钥与令牌，加密保存在这台 Mac 的保险库中。",
     "search": "查找密钥",
     "loadFailed": "无法加载密钥",
     "noMatch": "没有匹配的密钥。",
     "empty": {
       "title": "还没有密钥",
-      "body": "把 API 密钥和令牌放在这里，而不是写在配置文件里。服务器、提供商、skill 和渠道按名称引用它们，值始终加密。"
+      "body": "把 API 密钥和令牌放在这里，而不是写在配置文件里。所有用到它们的地方都按名称引用。"
     },
-    "groups": {
-      "unused": "未被使用"
-    },
-    "sort": "按{{column}}排序",
     "filters": {
       "status": {
         "label": "状态",
         "all": "全部",
         "inUse": "使用中",
-        "unused": "未被使用",
-        "pending": "待批准",
-        "refused": "已拒绝"
-      },
-      "kind": {
-        "label": "使用方类型",
-        "all": "全部类型"
-      },
-      "view": {
-        "label": "视图",
-        "list": "列表",
-        "byOwner": "按使用方"
+        "unused": "未被使用"
       }
-    },
-    "owner": {
-      "mcp_server": "MCP 服务器",
-      "channel": "渠道",
-      "provider": "模型提供商",
-      "sync": "同步",
-      "custom_tool": "自定义工具",
-      "other": "其他",
-      "standalone": "独立密钥",
-      "syncToken": "备份令牌"
-    },
-    "byOwner": {
-      "more_one": "显示更多使用方（还有 {{count}} 个）",
-      "more_other": "显示更多使用方（还有 {{count}} 个）"
     },
     "bulk": {
       "label": "已选密钥",
-      "selectAll": "选择全部密钥",
-      "blocked": "有 {{count}} 个正在使用或待批准",
-      "deleteUnused": "删除未使用的…",
       "deleteTitle_one": "删除 {{count}} 个密钥？",
       "deleteTitle_other": "删除 {{count}} 个密钥？",
-      "deleteBody": "将删除 {{names}}。每个值会在这台 Mac 上销毁；若加密密钥已同步，也会在其他 Mac 下一轮同步时销毁。此操作无法撤销。",
-      "deleteBodyMore": "将删除 {{names}} 等另外 {{count}} 个。每个值会在这台 Mac 上销毁；若加密密钥已同步，也会在其他 Mac 下一轮同步时销毁。此操作无法撤销。",
+      "deleteBody": "将删除 {{names}}。它们的值会在这台 Mac 上销毁；若加密密钥已同步，也会在其他 Mac 上销毁。此操作无法撤销。",
+      "deleteBodyMore": "将删除 {{names}} 等另外 {{count}} 个。它们的值会在这台 Mac 上销毁；若加密密钥已同步，也会在其他 Mac 上销毁。此操作无法撤销。",
       "deleteConfirm_one": "删除 {{count}} 个密钥",
-      "deleteConfirm_other": "删除 {{count}} 个密钥"
+      "deleteConfirm_other": "删除 {{count}} 个密钥",
+      "delete": "删除…",
+      "nothingToDelete": "所选密钥都不能删除",
+      "skippedInUse_one": "{{names}} 正在使用，将被跳过。",
+      "skippedInUse_other": "{{names}} 正在使用，将被跳过。",
+      "skippedWaiting_one": "{{names}} 正在等待批准，将被跳过。",
+      "skippedWaiting_other": "{{names}} 正在等待批准，将被跳过。"
     },
     "cols": {
       "name": "名称",
@@ -5522,10 +5510,9 @@
     },
     "row": {
       "select": "选择 {{name}}",
-      "missing": "这台 Mac 上缺失",
+      "missing": "这台 Mac 上没有值",
       "pending": "等待批准",
       "localReadable": "本机进程可读",
-      "localReadableHint": "Coffer 会把这个值放进子进程的环境变量，你运行的其他进程可以读到它。",
       "addValue": "添加值",
       "addValueFor": "为 {{name}} 添加值"
     },
@@ -5543,8 +5530,9 @@
       "nothing": "无",
       "trigger_one": "{{name}} 被 {{count}} 处使用",
       "trigger_other": "{{name}} 被 {{count}} 处使用",
-      "title": "{{name}} 的使用方",
-      "note": "它们都以 {{reference}} 读取。替换值会同时更新所有使用处。"
+      "title": "使用方",
+      "note": "它们都以 {{reference}} 读取。替换值会同时更新所有使用处。",
+      "find": "查找…"
     },
     "menu": {
       "label": "{{name}} 的操作",
@@ -5576,7 +5564,6 @@
     "replace": {
       "title": "替换 {{name}} 的值",
       "storeTitle": "为 {{name}} 添加值",
-      "secret": "密钥",
       "value": "新值",
       "hint": "旧值会被销毁，所有使用处都会拿到新值。",
       "submit": "替换值",
@@ -5593,9 +5580,8 @@
       "checking": "正在等待 Touch ID…",
       "revealedAt": "显示于 {{time}}",
       "valueLabel": "{{name}} 的值",
-      "hide": "隐藏",
       "copied": "已复制值",
-      "hidesIn": "{{seconds}} 秒后隐藏 · 记录为 secret_revealed"
+      "hidesIn": "{{seconds}} 秒后隐藏 · 已记录在活动中"
     },
     "delete": {
       "title": "删除 {{name}}？",
@@ -5633,7 +5619,7 @@
       "ticked": "已选 {{count}} / {{total}}",
       "mentions_one": "{{count}} 个 skill 仍从 ~/.coffer/secrets/ 读取密钥。可以手动更新，也可以交给智能体：",
       "mentions_other": "{{count}} 个 skill 仍从 ~/.coffer/secrets/ 读取密钥。可以手动更新，也可以交给智能体：",
-      "hint": "每个选中的值会移入加密存储，文件改为按名称引用它。这里不会显示任何值。",
+      "hint": "每个选中的值会移入加密存储，文件改为按名称引用它。与已有密钥相同的值会复用该密钥。",
       "review_one": "查看 {{count}} 项改动",
       "review_other": "查看 {{count}} 项改动",
       "reviewing": "正在检查…",
@@ -5643,7 +5629,7 @@
       "previewFiles": "文件",
       "add": "+ 添加",
       "modify": "~ 修改",
-      "previewNote": "应用之前不会写入任何内容。每个文件中的值会替换为 coffer://secret/<name> 引用，文件权限保持不变。",
+      "previewNote": "这里的值已遮盖。每个文件保持原位置和权限，只有含密钥的那几行会改动。",
       "back": "返回",
       "apply_one": "应用 {{count}} 项改动",
       "apply_other": "应用 {{count}} 项改动",
@@ -5652,44 +5638,29 @@
       "applied_other": "已将 {{count}} 个密钥移入密钥库",
       "resultTitle_one": "已移入 {{moved}}/{{count}} 个 key",
       "resultTitle_other": "已移入 {{moved}}/{{count}} 个 key",
-      "skippedSummary_one": "{{count}} 项被跳过，文件保持原样：",
-      "skippedSummary_other": "{{count}} 项被跳过，文件保持原样：",
       "skipped": "已跳过",
       "noneBody_one": "Coffer 检查了 {{count}} 个文件，没有发现以明文写入的 API key 或 token。",
       "noneBody_other": "Coffer 检查了 {{count}} 个文件，没有发现以明文写入的 API key 或 token。",
       "checked": "已检查",
-      "checkedWhere": "~/.coffer/secrets/、skill",
-      "unwrittenSummary": "{{path}} {{reason}}。该 key 已保存为密钥 {{name}}，但文件里仍以明文保留着它。",
+      "checkedWhere": "智能体配置、MCP 服务器定义、自定义工具、skill、~/.coffer",
       "notChanged": "未修改",
       "inActivity": "每项改动都记录在 Activity 中",
-      "tryAgain": "重试"
+      "unwrittenTitle": "无法改写 {{path}}",
+      "unwrittenTitleMany_one": "{{count}} 个文件无法改写",
+      "unwrittenTitleMany_other": "{{count}} 个文件无法改写",
+      "unwrittenBody": "{{reason}}。该 key 已保存为密钥 {{name}}，但文件里仍以明文保留着它。",
+      "unwrittenBodyMany": "这些 key 已保存为密钥，但这些文件里仍以明文保留着它们。",
+      "moved": "已移入",
+      "savedNotChanged": "已保存 · 文件未修改",
+      "retry": "重试"
     },
     "pending": {
       "toast": "已保存，等待批准 · 新值已密封保存，在 Coffer 桌面应用中批准后生效"
     },
     "time": {
-      "never": "从未",
-      "justNow": "刚刚",
-      "minutesAgo_one": "{{count}} 分钟前",
-      "minutesAgo_other": "{{count}} 分钟前",
-      "hoursAgo_one": "{{count}} 小时前",
-      "hoursAgo_other": "{{count}} 小时前",
-      "today": "今天 {{time}}",
-      "yesterday": "昨天"
-    },
-    "missing": {
-      "title_one": "{{count}} 个密钥在这台 Mac 上没有值",
-      "title_other": "{{count}} 个密钥在这台 Mac 上没有值",
-      "body": "它们随 vault 而来，但加密的密钥没有同步到这里。使用它们的服务器在有值之前无法启动。",
-      "importKey": "导入主密钥…"
+      "never": "从未"
     },
     "savedAwaitingApproval": "已保存。新密钥在 Coffer 应用中批准后生效。",
-    "refused": {
-      "title_one": "{{count}} 项被拒绝的改动",
-      "title_other": "{{count}} 项被拒绝的改动",
-      "askAgain": "重新请求",
-      "asked": "已重新请求，现在等待批准。"
-    },
     "approvals": {
       "title_one": "{{count}} 项改动等待批准",
       "title_other": "{{count}} 项改动等待批准",
@@ -5697,8 +5668,6 @@
       "hintBrowser": "请在 Coffer 桌面应用中批准；这里可以拒绝。",
       "requestedBy": "请求方",
       "secret": "密钥",
-      "destination": "发送到",
-      "target": "目标",
       "approve": "批准",
       "reject": "拒绝",
       "op": {
@@ -5709,27 +5678,12 @@
       },
       "review": "查看",
       "change": "改动",
-      "question": {
-        "add_secret": "批准新密钥 {{name}}？",
-        "replace_value": "批准 {{name}} 的新值？",
-        "bind": "批准把 {{name}} 发送给 {{destination}}？",
-        "disable_protection": "关闭密钥改动的批准要求？"
-      },
-      "body": {
-        "add_secret": "值已密封保存。批准之后才能使用。",
-        "replace_value": "新值已密封保存。批准之前，{{users}} 继续使用当前值。",
-        "replace_value_unused": "新值已密封保存。批准之前，当前值保持不变。",
-        "bind": "批准之前不会发送任何东西。",
-        "disable_protection": "批准之前，每个新密钥、新值和新的使用处都继续等待批准。"
-      },
-      "requestedAt": "{{who}}，{{time}}",
       "via": {
         "ui": "你 · 在 Coffer 界面中",
         "cli": "你 · 在命令行中",
         "api": "通过 API"
       },
       "nothingYet": "暂无",
-      "openApp": "请在这台 Mac 上打开 Coffer 应用来批准——它会要求 Touch ID 或登录密码。",
       "approveEllipsis": "批准…",
       "approveInApp": "请在 Coffer 桌面应用中批准",
       "approved": {
@@ -5746,120 +5700,95 @@
       },
       "select": "选择 {{name}}",
       "batch": {
-        "selectAll": "全选（{{count}}）",
-        "selected": "已选 {{count}} 项",
-        "approveSelected_one": "批准所选（{{count}}）…",
-        "approveSelected_other": "批准所选（{{count}}）…",
-        "rejectSelected_one": "拒绝所选（{{count}}）",
-        "rejectSelected_other": "拒绝所选（{{count}}）",
         "rejectedCount_one": "已拒绝 {{count}} 项改动",
         "rejectedCount_other": "已拒绝 {{count}} 项改动",
-        "reviewTitle_one": "批准这 {{count}} 项改动？",
-        "reviewTitle_other": "批准这 {{count}} 项改动？",
-        "resultTitle": "批准已完成",
-        "reviewHint": "一次确认只批准下面这份清单。",
-        "resultHint": "每项改动的结果。",
-        "help": "Touch ID 或登录密码只需验证一次，Coffer 应用会列出这次覆盖的改动。你打开清单之后目标发生变化的改动会被跳过并继续等待；清单之外的任何东西都不会被批准。",
-        "back": "返回",
-        "confirm_one": "批准 {{count}} 项改动…",
-        "confirm_other": "全部批准（{{count}}）…",
-        "done": "完成",
+        "resultTitle": "已批准 {{approved}}/{{count}} 项改动",
+        "resultHint": "被跳过的改动仍在等待，请再次查看。",
         "approved": "已批准",
         "skipped": {
-          "changed": "已跳过 · 你查看之后它发生了变化，仍在等待",
-          "not_pending": "已跳过 · 它已不在等待",
-          "not_found": "已跳过 · 它已不存在",
-          "not_batchable": "已跳过 · 请单独批准这一项",
-          "failed": "已跳过 · 无法应用，仍在等待"
+          "changed": "你查看之后它又变了，仍在等待。",
+          "not_pending": "它已不在等待中。",
+          "not_found": "它已不存在。",
+          "not_batchable": "请单独批准这一项。",
+          "failed": "无法应用，仍在等待。"
+        },
+        "recorded": "每项改动都记录在活动中。",
+        "skippedWord": "已跳过"
+      },
+      "subtitleShell": "批准之前不会生效。批准时会要求一次 Touch ID 或登录密码。",
+      "subtitleBrowser": "要在 Coffer 桌面应用中批准后才会生效。你可以在这里拒绝。",
+      "goesTo": "去向",
+      "at": "时间",
+      "result": "结果",
+      "usedBy": "使用方：{{names}}",
+      "sentTo": "发送到 {{where}}",
+      "selectAll": "全选改动",
+      "selectHint": "选择改动后可只处理其中几项",
+      "selectedOf": "已选 {{count}} / {{total}}",
+      "approveN": "批准 {{count}} 项…",
+      "approveAll": "全部批准（{{count}}）…",
+      "rejectN": "拒绝 {{count}} 项",
+      "rejectAll": "全部拒绝"
+    },
+    "selectAll": "全选密钥",
+    "banner": {
+      "ignore": "忽略",
+      "missing": {
+        "title_one": "{{n}} 个密钥在这台 Mac 上没有值",
+        "title_other": "{{n}} 个密钥在这台 Mac 上没有值",
+        "body_one": "在它有值之前，{{names}} 无法启动。",
+        "body_other": "在它们有值之前，{{names}} 无法启动。",
+        "noUsers": "请在每一行里添加值。",
+        "action_one": "添加值",
+        "action_other": "添加值"
+      },
+      "waiting": {
+        "title_one": "{{n}} 项改动等待批准",
+        "title_other": "{{n}} 项改动等待批准",
+        "andMore": "{{names}} 等另外 {{n}} 个",
+        "what": {
+          "replace_value_one": "{{names}} 的新值。",
+          "replace_value_other": "{{names}} 的新值。",
+          "add_secret_one": "新密钥 {{names}}。",
+          "add_secret_other": "新密钥 {{names}}。",
+          "bind_one": "{{names}} 的新用途。",
+          "bind_other": "{{names}} 的新用途。",
+          "disable_protection_one": "正在关闭密钥改动的批准要求。",
+          "disable_protection_other": "正在关闭密钥改动的批准要求。",
+          "mixed_one": "对 {{names}} 的改动。",
+          "mixed_other": "对 {{names}} 的改动。"
         }
       }
+    },
+    "addValues": {
+      "title": "在这台 Mac 上添加值",
+      "body": "这些密钥随保险库而来，但这台 Mac 读不到它们的值。",
+      "usedBy": "使用方：{{names}}",
+      "placeholder": "粘贴值",
+      "valueFor": "{{name}} 的值",
+      "encrypted": "每个值都用这台 Mac 的主密钥加密。留空的密钥仍然没有值。",
+      "save_one": "保存 {{count}} 个值",
+      "save_other": "保存 {{count}} 个值",
+      "saved_one": "已保存 {{count}} 个值",
+      "saved_other": "已保存 {{count}} 个值"
     }
   },
   "usage": {
-    "subtitle": "经 Coffer 本地中转的模型用量与订阅额度。",
-    "title": "用量",
-    "updated": "更新于 {{time}}",
-    "refresh": "刷新",
-    "more": "更多操作",
     "exportCsv": "导出 CSV",
     "noPrice": "—",
-    "editPrices": "在模型提供商中编辑价格",
-    "quota": {
-      "title": "订阅额度",
-      "subtitle": "由每个智能体为自己的登录上报 · 从不估算",
-      "help1": "每个智能体上报自己的额度：Codex 通过它的 app-server，Claude Code 在 Coffer 驱动的会话（对话与消息渠道）中上报。Coffer 显示厂商自己的数字，并注明读取时间——从不估算。",
-      "help2": "重置时间已过的窗口不显示数字，直到智能体再次上报。",
-      "plan": {
-        "claude_code": "Claude {{plan}} 登录",
-        "codex": "ChatGPT {{plan}} 登录",
-        "other": "{{plan}} 登录",
-        "none": "订阅登录",
-        "apiKey": "API 密钥 · {{vendor}}"
-      },
-      "used": "已用 {{percent}}%",
-      "limitReached": "已达上限",
-      "noReading": "暂无当前读数",
-      "resetPassed": "上次读取后已重置",
-      "resets": "{{when}} 重置",
-      "resetsIn": "{{when}} 重置 · {{in}}后",
-      "in": {
-        "dh": "{{days}} 天 {{hours}} 小时",
-        "hm": "{{hours}} 小时 {{minutes}} 分钟",
-        "m": "{{minutes}} 分钟"
-      },
-      "asOf": "截至 {{time}}",
-      "source": {
-        "codex_app_server": "app-server",
-        "claude_rate_limit_event": "最近一次回复",
-        "claude_statusline": "状态栏"
-      },
-      "empty": {
-        "title": "还没有额度读数",
-        "body": "下一次 {{agent}} 回复后显示。"
-      },
-      "statusline": {
-        "lead": "要读取你在自己终端里的会话，可以让智能体把 Claude Code 的状态栏接到 Coffer 的包装命令上。",
-        "helpLabel": "关于状态栏包装命令",
-        "help": "这个包装命令把 Claude Code 的额度信息转给 Coffer，再用相同的输入运行你自己的状态栏命令并打印其输出，Coffer 没在运行时也一样。Coffer 从不替你安装：提示词会请智能体在 Claude Code 的 settings.json 中包装你的 statusLine 命令，并先给你看改动。"
-      },
-      "refreshFailed": {
-        "title": "无法连接 Codex 的 app-server",
-        "read_failed": "codex app-server 在应答前退出了。",
-        "codex_unavailable": "这台机器上没有可用的 Codex。",
-        "no_subscription": "Codex 没有用 ChatGPT 订阅登录。",
-        "no_windows": "app-server 的应答里没有任何额度窗口。",
-        "other": "没有读到任何内容。"
-      },
-      "lastTried": "上次尝试于 {{time}}。",
-      "tryAgain": "重试",
-      "error": "无法加载订阅额度。",
-      "apiKey": {
-        "title": "没有订阅额度",
-        "body": "{{agent}} 在这里使用来自 {{vendor}} 的 API 密钥，所以没有套餐上限。它的请求在下方「API 密钥提供商」中按实际使用的提供商计量。"
-      },
-      "metered": "已计量",
-      "noReadingShort": "无读数",
-      "waiting": "等待中",
-      "rereadLabel": "刷新 {{agent}} 的额度",
-      "someRequests": "部分请求"
+    "editPrices": "编辑价格",
+    "error": "无法加载 API 密钥用量。",
+    "presets": {
+      "today": "今天",
+      "7d": "过去 7 天",
+      "30d": "过去 30 天",
+      "month": "本月"
     },
-    "providers": {
-      "title": "API 密钥提供商",
-      "subtitle": "经 Coffer 本地中转的请求的精确计数",
-      "period": "时间段",
-      "range": {
-        "today": "今天",
-        "7d": "7 天",
-        "30d": "30 天",
-        "month": "本月",
-        "custom": "自定义…"
-      },
-      "customRange": "自定义范围",
-      "from": "开始",
-      "to": "结束",
-      "detailNote": "{{date}} 之前只保留每日汇总。",
-      "apply": "应用",
-      "error": "无法加载 API 密钥用量。"
+    "range": {
+      "today": "今天",
+      "7d": "7 天",
+      "30d": "30 天",
+      "month": "本月"
     },
     "tiles": {
       "cost": "费用（估算）",
@@ -5873,7 +5802,8 @@
       "cacheRead": "缓存读取",
       "cacheWrite": "缓存写入",
       "cacheWriteNote": "仅 Anthropic",
-      "requests_one": "{{n}} 次请求"
+      "requests_one": "{{n}} 次请求",
+      "costHelp": "关于费用估算"
     },
     "chart": {
       "title": "每日费用",
@@ -5902,35 +5832,31 @@
         "cost": "费用",
         "second": {
           "model": "使用者",
-          "agent": "经由",
           "day": "主要智能体"
         }
       },
       "unknownModel": "未知模型",
       "unknownAgent": "未知智能体",
-      "noPriceTip": "这个模型没有已知价格：它的提供商上没有设置，提供商也没有报告，Coffer 的价格表里也没有。在“模型提供商”中设置一个价格。",
+      "noPriceTip": "这个模型没有已知价格。请在它的提供商上设置一个。",
       "partlyPricedTip_other": "{{n}} 次请求没有价格，未计入此费用。",
       "unknownTip_other": "{{n}} 次请求在上报用量前结束，其 token 未计入。",
-      "total": "合计 · {{range}} · 已定价模型的费用",
+      "total": "合计 · {{range}}",
       "partlyPricedTip_one": "{{n}} 次请求没有价格，未计入此费用。",
       "unknownTip_one": "{{n}} 次请求在上报用量前结束，其 token 未计入。",
-      "noPriceTipOn": "这个模型没有已知价格：它的提供商上没有设置，提供商也没有报告，Coffer 的价格表（更新于 {{date}}）里也没有。在“模型提供商”中设置一个价格。",
       "today": "{{day}} · 今天",
-      "earlierDays_one": "更早的 {{count}} 天 ·",
-      "earlierDays_other": "更早的 {{count}} 天 ·",
-      "showAllDays": "显示全部 {{count}} 天"
+      "footer": "仅含有价格的模型的费用。"
     },
     "empty": {
       "firstTitle": "还没有 API 密钥用量",
-      "firstBody": "智能体通过 Coffer 使用 API 密钥提供商发送请求后，这里会显示 token 与费用。订阅登录不经过 Coffer，所以只显示额度。",
-      "openProviders": "打开模型提供商",
+      "firstBody": "智能体通过 API 密钥提供商发出的请求会显示在这里，含 token 和费用。",
+      "openProviders": "打开提供商",
       "rangeTitle": "此范围内没有请求",
       "rangeBody": "选一个更长的范围，或在智能体通过 API 密钥提供商发送请求后再来看。"
     },
-    "viaApiKey": "经 API 密钥",
     "filters": {
       "agent": "智能体",
-      "provider": "提供商"
+      "provider": "提供商",
+      "findProvider": "查找提供商"
     }
   },
   "splitView": {
@@ -5981,7 +5907,7 @@
   },
   "providers": {
     "title": "模型提供商",
-    "subtitle": "智能体和 Coffer 使用的模型端点，顺序即故障切换优先级。",
+    "subtitle": "智能体所用模型的来源，以及经 Coffer 的请求花费多少。",
     "loadFailed": "无法加载模型提供商",
     "protocols": {
       "anthropic": "Anthropic",
@@ -6175,8 +6101,6 @@
         "keyless": "无需密钥。检测只读取信息——不会拉取或加载任何模型。"
       },
       "models": {
-        "search_one": "搜索 {{count}} 个模型",
-        "search_other": "搜索 {{count}} 个模型",
         "count_one": "已选 {{n}} 个 · 不选则提供全部 {{count}} 个",
         "count_other": "已选 {{n}} 个 · 不选则提供全部 {{count}} 个",
         "empty": "接入地址没有列出任何模型。直接添加，它接受的每个模型都可用。",
@@ -6251,6 +6175,10 @@
       },
       "optional": "可选",
       "perMillion": "每 100 万 token 的美元价格。留空的缓存价格按输入价格计。"
+    },
+    "tabs": {
+      "providers": "提供商",
+      "usage": "用量"
     }
   },
   "skillSources": {
@@ -6409,14 +6337,13 @@
   },
   "handoff": {
     "copyPrompt": "复制提示词",
-    "copyPromptHint": "复制到剪贴板，交给 Coffer 外部的智能体处理",
+    "copyPromptHint": "用于 Coffer 外部的智能体",
     "askAgentHint": "在 Coffer 内的对话里处理，点发送后才会执行",
-    "copied": "已复制",
+    "moreOptions": "更多选项",
+    "promptCopied": "已复制提示词",
     "askAgent": "交给智能体",
     "help": "Coffer 不会自己执行：交给你的智能体，由它选择适合这台机器的做法。",
-    "promptCopied": "已复制提示词",
-    "moreWays": "更多交接方式",
-    "forOutsideAgent": "给 Coffer 之外的智能体"
+    "copied": "已复制"
   },
   "upkeep": {
     "every": "每隔",

@@ -13,6 +13,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
 
+import { ListSelectAll } from "@/components/ListSelectAll";
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { ReachFilter } from "@/components/reach/ReachFilter";
 import { SearchInput } from "@/components/SearchInput";
@@ -84,18 +85,8 @@ export function SkillLibrary({
   }, [skills, query, filter]);
   const shown = GROUP_ORDER.reduce((n, g) => n + groups[g].length, 0);
 
-  // What select-all covers: the listed skills the filters show, never a built-in one.
+  // The listed skills the filters show, never a built-in one: the bar's "of M".
   const visibleUids = [...groups.inUse, ...groups.unused].map((s) => s.uid);
-  const allVisiblePicked = visibleUids.length > 0 && visibleUids.every((u) => picked.has(u));
-  const toggleAll = (on: boolean) => {
-    const next = new Set(picked);
-    for (const u of visibleUids) {
-      if (on) next.add(u);
-      else next.delete(u);
-    }
-    onPickedChange(next);
-  };
-
   const toggle = (uid: string, on: boolean) => {
     const next = new Set(picked);
     if (on) next.add(uid);
@@ -103,14 +94,15 @@ export function SkillLibrary({
     onPickedChange(next);
   };
 
+  const setAll = (all: boolean) => onPickedChange(all ? new Set(visibleUids) : new Set());
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-col gap-2.5 px-3 pb-2.5 pt-3.5">
         {selected.length > 0 ? (
           <SkillsBulkBar
             skills={selected}
-            allChecked={allVisiblePicked}
-            onToggleAll={toggleAll}
+            total={visibleUids.length}
             onDone={() => onPickedChange(new Set())}
           />
         ) : (
@@ -122,7 +114,7 @@ export function SkillLibrary({
               ariaLabel={t("skills.searchPlaceholder")}
             />
             <div className="flex flex-wrap items-center gap-2">
-              <ReachFilter value={filter} onChange={setFilter} compact />
+              <ReachFilter value={filter} onChange={setFilter} />
               <Button
                 variant="ghost"
                 size="sm"
@@ -139,6 +131,11 @@ export function SkillLibrary({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        <ListSelectAll
+          count={visibleUids.filter((u) => picked.has(u)).length}
+          total={visibleUids.length}
+          onChange={setAll}
+        />
         {error ? (
           <ListLoadError kind="skills" error={error} onRetry={() => onRetry?.()} />
         ) : isLoading ? (

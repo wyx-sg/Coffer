@@ -15,10 +15,10 @@ import { useSearchParams, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { History } from "lucide-react";
 
-import { FilterPill } from "@/components/activity/FilterPill";
+import { FilterPill } from "@/components/filters";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadErrorRow } from "@/components/LoadErrorRow";
-import { AskAgentButton } from "@/components/handoff/AskAgentButton";
+import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { KnowledgeChangeRow } from "@/components/knowledge/KnowledgeChangeRow";
 import { KnowledgeWaitingList } from "@/components/knowledge/KnowledgeWaitingList";
 import { Button } from "@/components/ui/button";
@@ -82,25 +82,19 @@ export function KnowledgeRecentChanges({ collections, modelSet }: Props) {
         {changes.error ? null : (
           <span className="ml-auto flex flex-wrap items-center gap-2">
             <FilterPill
+              mode="single"
               label={t("knowledge.recent.collectionFilter")}
-              value={collection ?? ANY_COLLECTION}
-              anyValue={ANY_COLLECTION}
-              groups={[
-                {
-                  options: collections.map((c) => ({
-                    value: c.name,
-                    label: <span className="font-mono text-xs">{c.name}</span>,
-                  })),
-                },
-              ]}
-              onChange={(v) => setFilter("collection", v, ANY_COLLECTION)}
+              value={collection}
+              options={collections.map((c) => ({ value: c.name, label: c.name }))}
+              onChange={(v) => setFilter("collection", v ?? ANY_COLLECTION, ANY_COLLECTION)}
             />
             <FilterPill
+              mode="single"
               label={t("knowledge.recent.authorFilter")}
-              value={author}
-              anyValue={ANY_AUTHOR}
-              groups={[{ options: authors }]}
-              onChange={(v) => setFilter("author", v, ANY_AUTHOR)}
+              value={author === ANY_AUTHOR ? null : author}
+              options={authors}
+              fixedOrder
+              onChange={(v) => setFilter("author", v ?? ANY_AUTHOR, ANY_AUTHOR)}
             />
             {filtered ? (
               <button
@@ -142,7 +136,7 @@ export function KnowledgeRecentChanges({ collections, modelSet }: Props) {
                     >
                       {t("knowledge.recent.checkAgain")}
                     </Button>
-                    <AskAgentButton prompt={gitHandoff} />
+                    <AgentHandoff size="sm" help={false} prompt={gitHandoff} />
                   </>
                 }
               />

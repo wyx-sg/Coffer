@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from coffer.domain.sync.remote import (
     BRANCH_PATTERN,
@@ -154,6 +154,8 @@ class SyncRemoteStateOut(BaseModel):
 
 class SyncRemoteClearedOut(BaseModel):
     cleared: bool
+    #: Whether ``POST /sync/remote/restore`` can put it back (Undo).
+    restorable: bool = False
 
 
 class RemoteCheckIn(BaseModel):
@@ -255,6 +257,24 @@ class SyncStatusOut(BaseModel):
     #: other way round — the Overview's "1 behind · 0 ahead".
     ahead: int = 0
     behind: int = 0
+    #: Where the vault's files really are (``vault_path`` is the path Coffer
+    #: uses and may be a link to it): the "From" of Move the vault.
+    vault_real_path: str | None = None
+    #: The folder Move the vault offers: ``~/.coffer/vault`` as a real folder.
+    default_vault_path: str | None = None
+
+
+class VaultMoveIn(BaseModel):
+    #: The folder to move the vault to: absolute (``~`` allowed), empty or absent.
+    to: str
+
+
+class VaultMoveOut(BaseModel):
+    #: The folder the vault was in; it is left empty for the person to delete.
+    origin: str = Field(alias="from")
+    to: str
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class SyncPluginOut(BaseModel):
