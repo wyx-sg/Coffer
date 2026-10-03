@@ -6423,7 +6423,10 @@
     "askAgentHint": "Handle it in a Coffer conversation; nothing runs until you press Send",
     "copied": "Copied",
     "askAgent": "Ask an agent",
-    "help": "Coffer doesn't run this itself: hand it to your agent, which picks the right way for this machine."
+    "help": "Coffer doesn't run this itself: hand it to your agent, which picks the right way for this machine.",
+    "promptCopied": "Prompt copied",
+    "moreWays": "More ways to hand it off",
+    "forOutsideAgent": "For an agent outside Coffer"
   },
   "upkeep": {
     "every": "Every",

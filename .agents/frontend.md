@@ -419,6 +419,11 @@ merge and repair flows.
 - **The prompt comes from the backend**, as a `handoff: {prompt}` field on the
   response (`HandoffOut`, built by `backend/coffer/domain/handoff.py`). The
   frontend never assembles or edits the text; it only shows or passes it on.
+- **`AskAgentButton`** (`components/handoff/`) is the same hand-off as one
+  split control, **Ask an agent ▾**: the main half opens the draft, the ▾
+  menu holds Copy prompt; with no managed agent it is a plain Copy prompt.
+  Knowledge and Memory use it, after the problem's own buttons (Retry, Check
+  again), with no "?" help tip beside it.
 - **Ask an agent** opens the New conversation dialog, then the draft through
   `openHandoffDraft` (`lib/conversations/handoff.ts`): the agent, folder and
   prompt ride in router location state (never the URL), `useChatController`
