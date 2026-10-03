@@ -374,10 +374,8 @@ describe("overview lists what needs the user, most severe first", () => {
     );
     expect(within(jira).getByText(/Since/)).toBeInTheDocument();
 
-    expect(within(rows[1]).getByRole("link", { name: /^Test again/ })).toHaveAttribute(
-      "href",
-      "/mcp-servers/github",
-    );
+    // Testing a server again runs in place: a button, not a link.
+    expect(within(rows[1]).getByRole("button", { name: /^Test again/ })).toBeEnabled();
     expect(within(rows[2]).getByRole("link", { name: /^Repair drift/ })).toHaveAttribute(
       "href",
       "/skills/code-review",
@@ -710,7 +708,7 @@ acceptance("web-ui", "overview flags a required CLI that needs attention", async
   const row = name.closest("li") as HTMLElement;
   expect(within(row).getByText(/older than 2\.40/)).toBeInTheDocument();
   expect(within(row).getByRole("link", { name: /^gh/ })).toHaveAttribute("href", "/clis/gh");
-  expect(within(row).getByRole("link", { name: /^Check/ })).toHaveAttribute("href", "/clis/gh");
+  expect(within(row).getByRole("button", { name: /^Check/ })).toBeEnabled();
 
   // Once the command is current the daemon's list has no such item, and the row goes.
   state.attention = EMPTY_ATTENTION;

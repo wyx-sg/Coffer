@@ -4,7 +4,8 @@
 // the sidebar's badges and the menu bar all read the same list: an ignored
 // item leaves `items` and `counts_by_kind` and is listed under `ignored` (spec
 // web-ui "Let the user ignore any item on Overview"). It refetches the
-// attention list; a failure is a toast.
+// attention list; a failure is a toast. `useUnignoreAttention` puts one back
+// (DELETE), from the item's own page.
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -25,3 +26,18 @@ export function useIgnoreAttention() {
   });
 }
 
+
+/** Stop ignoring one item by its `key`: it is back on Overview. */
+export function useUnignoreAttention() {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (key: string) => attentionApi.unignore(key),
+    onSuccess: () => {
+      toast.success(t("overview.needsYou.backOnOverview"));
+      void qc.invalidateQueries({ queryKey: attentionKey });
+    },
+    onError: (e) => toast.error(translateApiError(t, e)),
+  });
+}

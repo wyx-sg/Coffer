@@ -19,6 +19,7 @@ import { translateApiError } from "@/lib/api/errors";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useAttention, type AttentionItem } from "@/lib/hooks/useAttention";
 import { useIgnoreAttention } from "@/lib/hooks/useAttentionIgnore";
+import { useInPlaceActions } from "@/lib/hooks/useInPlaceAction";
 import { sortAttention } from "@/lib/overview/attention";
 import { formatClock } from "@/lib/overview/time";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,7 @@ export function NeedsYouList() {
   const agentType = (item: AttentionItem) =>
     item.kind === "agent" ? agents.data?.find((a) => a.uid === item.uid)?.type : undefined;
   const ignore = useIgnoreAttention();
+  const inPlace = useInPlaceActions();
   const items = attention.data ? sortAttention(attention.data.items) : [];
   const errors = attention.data?.errors ?? [];
 
@@ -102,6 +104,8 @@ export function NeedsYouList() {
                   item={item}
                   agentType={agentType(item)}
                   onIgnore={() => ignore.mutate(item.key)}
+                  onRun={() => void inPlace.run(item)}
+                  running={inPlace.running.has(item.key)}
                 />
               ))}
             </ul>

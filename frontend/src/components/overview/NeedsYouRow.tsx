@@ -9,6 +9,15 @@
 // an agent (the daemon gives every item a hand-off prompt), then Ignore, which
 // takes the item off the Overview, the sidebar badges and the menu-bar count
 // whatever its severity (Overview boards, 1.2.01 / 1.2.02).
+//
+// The action runs in place when it is a non-GET call into Coffer's own state
+// that needs no preview — testing an MCP server again, probing a command
+// again (lib/overview/attention inPlaceVerb). Then the button reads
+// "Retrying…" (disabled) and the reason carries an accent sub-line, "Starting
+// <name>… it leaves this list once it answers", until the list has refetched
+// (board 1.2.09). Connecting an agent, repairing its config, adding a secret
+// and every other verb keep their link: those write outside Coffer's own
+// state or need input, and their page holds the preview.
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
@@ -18,7 +27,13 @@ import { StatusDot } from "@/components/status/StatusDot";
 import { Button } from "@/components/ui/button";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import type { AttentionItem } from "@/lib/hooks/useAttention";
-import { actionPage, itemActionLabelKey, itemPage, severityTone } from "@/lib/overview/attention";
+import {
+  actionPage,
+  inPlaceVerb,
+  itemActionLabelKey,
+  itemPage,
+  severityTone,
+} from "@/lib/overview/attention";
 import { kindMeta } from "@/lib/overview/kinds";
 import { describeSince } from "@/lib/overview/time";
 import { cn } from "@/lib/utils";
@@ -37,14 +52,19 @@ interface Props {
   /** The type of the agent an agent item is about — its pages' address. */
   agentType?: string;
   onIgnore: () => void;
+  /** Runs the item's in-place action (see inPlaceVerb). */
+  onRun?: () => void;
+  /** The in-place action has been called and the list has not refetched yet. */
+  running?: boolean;
 }
 
-export function NeedsYouRow({ item, agentType, onIgnore }: Props) {
+export function NeedsYouRow({ item, agentType, onIgnore, onRun, running = false }: Props) {
   const { t } = useTranslation();
   const meta = kindMeta(item.kind);
   const KindIcon = meta.icon;
   const since = describeSince(item.since);
   const action = t(itemActionLabelKey(item));
+  const verb = inPlaceVerb(item);
   const handoff = useAgentHandoff(item.handoff.prompt);
   const menu: MenuAction[] = [
     {
@@ -95,19 +115,40 @@ export function NeedsYouRow({ item, agentType, onIgnore }: Props) {
           {t(meta.labelKey)}
         </span>
       </Link>
-      <TruncatedText text={item.reason} className={cn(CELL, "min-w-0 text-sm text-text")} />
+      <div className={cn(CELL, "flex min-w-0 flex-col gap-0.5")}>
+        <TruncatedText text={item.reason} className="min-w-0 text-sm text-text" />
+        {running && verb ? (
+          <p className="text-xs text-accent-text">
+            {t(`overview.needsYou.doing.${verb}`, { name: item.title })}
+          </p>
+        ) : null}
+      </div>
       <p className={cn(CELL, "whitespace-nowrap text-xs text-text-subtle")}>
         {since ? <SinceText since={since} iso={item.since ?? ""} /> : null}
       </p>
       <div className={cn(CELL, "flex items-center gap-1.5 md:justify-self-end")}>
-        <Button asChild variant="outline">
-          <Link
-            to={actionPage(item, agentType)}
-            aria-label={t("overview.needsYou.actionFor", { action, name: item.title })}
+        {verb && onRun ? (
+          <Button
+            variant="outline"
+            loading={running}
+            onClick={onRun}
+            aria-label={t("overview.needsYou.actionFor", {
+              action: running ? t(`overview.needsYou.pending.${verb}`) : action,
+              name: item.title,
+            })}
           >
-            {action}
-          </Link>
-        </Button>
+            {running ? t(`overview.needsYou.pending.${verb}`) : action}
+          </Button>
+        ) : (
+          <Button asChild variant="outline">
+            <Link
+              to={actionPage(item, agentType)}
+              aria-label={t("overview.needsYou.actionFor", { action, name: item.title })}
+            >
+              {action}
+            </Link>
+          </Button>
+        )}
         <ActionMenu label={t("overview.needsYou.moreFor", { name: item.title })} actions={menu} />
       </div>
     </li>
