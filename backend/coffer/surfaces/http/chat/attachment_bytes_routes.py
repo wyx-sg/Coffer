@@ -26,7 +26,7 @@ router = APIRouter(
 _INLINE_IMAGE_MIMES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
 
 
-@router.get("/conversations/{id}/attachments/{attachment_id}")
+@router.get("/conversations/{id}/attachments/{attachment_id}", response_class=FileResponse)
 async def get_attachment_bytes(
     id: str,
     attachment_id: str,

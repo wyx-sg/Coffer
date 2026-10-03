@@ -594,9 +594,6 @@ paths:
           title: X-Coffer-Token
       responses:
         '200':
-          content:
-            application/json:
-              schema: {}
           description: Successful Response
         '422':
           content:
