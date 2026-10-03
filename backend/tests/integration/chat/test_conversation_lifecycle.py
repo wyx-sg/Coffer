@@ -8,6 +8,7 @@ Covers:
 
 from __future__ import annotations
 
+import dataclasses
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -608,5 +609,83 @@ async def test_next_seq_with_gap_is_correct(tmp_path):  # type: ignore[no-untype
         # COUNT(*) would return 1, but MAX(seq)+1 must return 6.
         next_s = await msg_repo.next_seq(c.id)
         assert next_s == 6
+    finally:
+        await engine.dispose()
+
+
+# ---------------------------------------------------------------------------
+# Listing: search over titles and message text, and the total
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(spec="chat", scenario="search matches titles and message text")
+async def test_the_listing_search_reads_titles_and_message_text(tmp_path):  # type: ignore[no-untyped-def]
+    engine, conv_repo, msg_repo = await _setup(tmp_path)
+    try:
+        by_title = _conv("Deploy plan", offset_secs=0)
+        by_text = _conv("Untitled", offset_secs=1)
+        by_cjk = _conv("Other", offset_secs=2)
+        by_tool = _conv("Tools", offset_secs=3)
+        for c in (by_title, by_text, by_cjk, by_tool):
+            await conv_repo.create(c)
+
+        def text_msg(conv: Conversation, text: str) -> Message:
+            return dataclasses.replace(_msg(conv.id), content=[TextBlock(text=text)])
+
+        await msg_repo.append(text_msg(by_text, 'Please roll back the "Deploy" of 100%_done'))
+        await msg_repo.append(text_msg(by_cjk, "部署到测试环境"))
+        await msg_repo.append(
+            dataclasses.replace(
+                _msg(by_tool.id),
+                content=[
+                    ToolUseBlock(tool_use_id="u", tool_name="deploy", tool_input={"k": "text"})
+                ],
+            )
+        )
+
+        async def titles(contains: str | None, *, archived: bool = False) -> list[str]:
+            rows = await conv_repo.list(archived=archived, contains=contains)
+            assert await conv_repo.count(archived=archived, contains=contains) == len(rows)
+            return [c.title for c in rows]
+
+        assert await titles("DEPLOY") == ["Untitled", "Deploy plan"]  # title OR message text
+        assert await titles("部署") == ["Other"]
+        assert await titles("100%_") == ["Untitled"]  # wildcards are text
+        assert await titles("%") == ["Untitled"]
+        assert await titles("nothing here") == []
+        # Tool names and JSON keys are not message text.
+        assert await titles("tool_use") == []
+        assert await titles("deploy", archived=True) == []
+        assert await conv_repo.count() == 4
+    finally:
+        await engine.dispose()
+
+
+async def test_finalize_records_when_the_reply_ended(tmp_path):  # type: ignore[no-untyped-def]
+    engine, conv_repo, msg_repo = await _setup(tmp_path)
+    try:
+        conv = _conv()
+        await conv_repo.create(conv)
+        placeholder = _msg(conv.id, role=Role.ASSISTANT, status="streaming")
+        saved = await msg_repo.append(placeholder)
+        assert saved.finished_at is None
+
+        ended = datetime.now(tz=UTC)
+        await msg_repo.finalize(
+            placeholder.id,
+            content=[
+                ToolResultBlock(
+                    tool_use_id="u", tool_name="t", output=None, error=None, duration_ms=300
+                )
+            ],
+            status="stopped",
+            model_id=None,
+            prompt_tokens=None,
+            completion_tokens=None,
+            finished_at=ended,
+        )
+        (row,) = await msg_repo.list_by_conversation(conv.id)
+        assert (row.status, row.finished_at) == ("stopped", ended)
+        assert row.content[0].duration_ms == 300  # type: ignore[union-attr]
     finally:
         await engine.dispose()

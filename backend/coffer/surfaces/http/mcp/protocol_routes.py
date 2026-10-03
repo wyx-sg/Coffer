@@ -16,6 +16,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.runtime import correlation
+from coffer.application.turn_ask import TURN_HEADER
 from coffer.domain.errors import CofferError
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.mcp.dependencies import get_mcp_session_factory
@@ -185,6 +186,8 @@ async def handle_post(
     session_id = mcp_session_id or str(uuid.uuid4())
     correlation.bind(session_id=session_id)
     session = await _get_or_create_session(session_id, factory)
+    # The Coffer-run turn this agent process belongs to, when the shim reports one.
+    session.turn_token = request.headers.get(TURN_HEADER) or None
 
     # Hold a refcount across the request so a concurrent SSE-close-triggered
     # _drop_session waits for us to finish before disposing the session.

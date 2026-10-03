@@ -17,21 +17,21 @@ Application layer only: no infrastructure import here.
 
 from __future__ import annotations
 
-import contextlib
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from coffer.application.channel.bot_label import bot_name
 from coffer.application.channel.commands import ChannelCommands, SafeSend
 from coffer.application.channel.inbound_burst import InboundBurst
-from coffer.application.channel.needs_you import reply_text
 from coffer.application.channel.ports import ChannelBinding
+from coffer.application.channel.question_card import parse_callback
+from coffer.application.channel.question_flow import QuestionPort, handle_tap
 from coffer.application.channel.store_ports import ChannelPeerRepoPort
 from coffer.application.channel.turn_driver import SessionAccessor
 from coffer.domain.channel.commands import command_name
 from coffer.domain.channel.envelopes import (
-    ChoiceButton,
     InboundCallback,
     InboundLifecycle,
     InboundStop,
@@ -46,9 +46,14 @@ _logger = logging.getLogger(__name__)
 #: what Coffer will keep doing, and the one lever the owner has.
 EXTERNAL_GROUP_WARNING = (
     "⚠️ This group is now an external group — people from other organisations "
-    "may be in it. Coffer keeps answering here; unbind the channel if that is "
-    "not what you want."
+    "may be in it. Coffer keeps answering here; remove the bot from the "
+    "group if that is not what you want."
 )
+
+
+#: The callback namespace the retired ``NEEDS YOU:`` buttons used; old cards in a
+#: chat may still carry it, and a tap on one does nothing.
+_OLD_REPLY_PREFIX = "reply:"
 
 
 @dataclass(frozen=True)
@@ -71,11 +76,10 @@ class InboundEvents:
     #: command runs, which settles whatever the chat is still holding first
     #: (``inbound_commands.route_slash``).
     burst: InboundBurst
-    #: Sends an answer tapped on a question's button into the conversation as the
-    #: owner's own message (see "Turn a question for the owner into buttons") —
-    #: the processor's ordinary inbound path, so it is gated and queued like any
-    #: message. ``None`` ignores such taps.
-    submit_reply: Callable[[ChannelBinding, InboundCallback, str], Awaitable[None]] | None = None
+    #: The chat platform's questions: a tap on a question's button answers it
+    #: (see "Ask the owner in the chat and take the answer back to the agent").
+    #: ``None`` ignores such taps.
+    questions: QuestionPort | None = None
 
     async def on_callback(
         self, binding: ChannelBinding, cb: InboundCallback, *, conversation_thread_id: str
@@ -100,7 +104,7 @@ class InboundEvents:
                 await self.safe_send(
                     binding,
                     cb.chat_id,
-                    "🚫 Not authorized — only people paired with this channel can use me here.",
+                    f"🚫 Only {bot_name(binding)}\u2019s owners can use it here.",
                     thread_id=cb.thread_id,
                     chat_kind="group",
                 )
@@ -114,9 +118,21 @@ class InboundEvents:
                 return
             if not cb.sender_id or peer.sender_id != cb.sender_id:
                 return
-        answer = reply_text(cb.data)
-        if answer is not None:
-            await self._answer(binding, cb, answer)
+        if cb.data.startswith(_OLD_REPLY_PREFIX):
+            return  # a button of the retired NEEDS YOU: sentinel — nothing to answer
+        tap = parse_callback(cb.data)
+        if tap is not None:
+            if self.questions is not None:
+                await handle_tap(
+                    self.questions,
+                    tap,
+                    adapter=binding.adapter,
+                    chat_id=cb.chat_id,
+                    chat_kind=cb.chat_kind,
+                    message_id=cb.platform_message_id,
+                    via=binding.resource.uid,
+                    by=cb.sender_display or "owner",
+                )
             return
         kind, _, value = cb.data.partition(":")
         name = command_name(f"/{value}") if kind == "cmd" and value else None
@@ -139,25 +155,6 @@ class InboundEvents:
             conversation_thread_id=conversation_thread_id,
             card_message_id=cb.platform_message_id,
         )
-
-    async def _answer(self, binding: ChannelBinding, cb: InboundCallback, answer: str) -> None:
-        """The owner tapped an option on a question the agent asked. The card is
-        rewritten first to show the answer and offer nothing more — a second
-        tap must not send it twice — then the answer enters the conversation as
-        the owner's own reply."""
-        caps = binding.adapter.capabilities
-        if cb.platform_message_id and caps.supports_card_update:
-            chosen = [ChoiceButton(label=f"{answer} ✓", value="answered:", selected=True)]
-            with contextlib.suppress(Exception):
-                await binding.adapter.update_card(
-                    cb.chat_id,
-                    cb.platform_message_id,
-                    f"Answered: {answer}",
-                    chosen,
-                    chat_kind=cb.chat_kind,
-                )
-        if self.submit_reply is not None:
-            await self.submit_reply(binding, cb, answer)
 
     async def on_lifecycle(self, binding: ChannelBinding, event: InboundLifecycle) -> None:
         """The bot's own standing in a chat changed.

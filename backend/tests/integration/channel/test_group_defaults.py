@@ -76,7 +76,7 @@ async def test_a_main_chat_setting_becomes_the_default_for_new_threads(
     answers = [(text, thread) for _chat, text, thread, _kind in adapter.sent_routed]
     assert answers == [
         ("🔀 Agent set to Codex — default for new threads in this group.", "m-1"),
-        ("🧠 Model set to gpt-5, effort high — default for new threads in this group.", "m-2"),
+        ("Model: gpt-5 · effort High — default for new threads in this group", "m-2"),
         (f"📁 Directory set to {tmp_path} — default for new threads in this group.", "m-3"),
     ]
 
@@ -142,7 +142,7 @@ async def test_stop_in_the_main_chat_stops_every_turn_in_the_group(env: ChannelE
     await env.processor.on_message(_main("/stop", "m-2"))
 
     reply = adapter.texts()[-1].splitlines()
-    assert reply[0] == "⏹ Stopping 2 turns:"
+    assert reply[0] == "⏹ Stopping 2 conversations:"
     assert sorted(reply[1:]) == sorted(f"• {t}" for t in titles)
     await wait_until(
         lambda: env.processor._running_in_chat(uid_of("tg"), GROUP) == [],

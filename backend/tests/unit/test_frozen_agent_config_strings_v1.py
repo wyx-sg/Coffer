@@ -103,6 +103,7 @@ def _mcp_text(agent_type: AgentType, config_dir: str) -> str:
         container_key=injection.container_key,
         entry_style=injection.entry_style,
         agent_uid=_AGENT_UID,
+        extras=injection.entry_extras,
     )
 
 
@@ -151,6 +152,7 @@ def test_claude_code_mcp_entry_is_frozen() -> None:
 def test_codex_mcp_entry_is_frozen() -> None:
     assert _mcp_text(AgentType.CODEX, "/h/.codex") == (
         f'[mcp_servers.coffer]\ncommand = "{_SHIM}"\nargs = ["--agent-uid", "{_AGENT_UID}"]\n'
+        'env_vars = ["COFFER_TURN_TOKEN"]\ntool_timeout_sec = 86400\n'
     )
 
 

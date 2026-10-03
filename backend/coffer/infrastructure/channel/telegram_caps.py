@@ -42,6 +42,7 @@ def telegram_capabilities(features: FeatureSet) -> ChannelCapabilities:
         max_message_chars=RICH_MESSAGE_LIMIT if rich else _CHUNK_LIMIT,
         supports_buttons=True,
         supports_card_update=True,  # editMessageText rewrites text + keyboard
+        edits_text=True,
         supports_media=True,
         supports_reactions=True,
         reactions=TELEGRAM_REACTIONS,

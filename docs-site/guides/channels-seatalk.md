@@ -175,7 +175,7 @@ If the bot is removed from a group or the group is disbanded, that group's sessi
 
 ## Cards
 
-A bare `/model`, `/dir`, `/resume` or `/kb` answers with an interactive card, and `/status` carries **New**, **Model**, **Resume** and **Dir** buttons (and **Stop** while a turn runs), `/help` **New**, **Stop**, **Model**, **Status** and **Resume**, and `/new` **Agent**, **Model** and **Dir**. A tap on one of those does exactly what typing the command does. A question the agent ends on arrives as a card too, with one button per answer; a tap sends that answer as your reply.
+A bare `/model`, `/dir`, `/resume` or `/kb` answers with an interactive card, and `/status` carries **New**, **Model**, **Resume** and **Dir** buttons (and **Stop** while a turn runs), `/help` **New**, **Stop**, **Model**, **Status** and **Resume**, and `/new` **Agent**, **Model** and **Dir**. A tap on one of those does exactly what typing the command does. A question the agent asks arrives as a card too, with one button per option on its own line (multi-select options toggle a `✓`, and **Submit** sends); a tap or a typed reply is the answer, and the card is rewritten to `✓ Answered: …` afterwards.
 
 - Buttons are laid out in up to three rows. Short labels share a row; a long one such as "Claude Code" gets its own.
 - A card has at most six buttons; longer lists page with **← Prev** and **Next →**.
@@ -194,7 +194,7 @@ The agent sends a file back with a `MEDIA:/absolute/path` line. It arrives as an
 
 ## Rotate the app secret
 
-On the channel's page choose **Replace secret** (in the **⋯** menu, or under **Settings** → **Secrets**), paste **New app secret** and choose **Replace and restart**. The secret is written under the channel's existing reference, so pairing and machine binding are unchanged. The **App ID** is edited in place under **Settings** → **Secrets**.
+On the channel's page choose **Replace secret** (in the **⋯** menu, or under **Settings** → **Secrets**), paste the secret in **App secret** and choose **Replace and restart**. Coffer checks the App ID and secret with SeaTalk as you paste, and a secret SeaTalk rejects is named under the field. The secret is written under the channel's existing reference, so pairing and machine binding are unchanged. The **App ID** is edited in place under **Settings** → **Secrets**.
 
 ## Limits
 

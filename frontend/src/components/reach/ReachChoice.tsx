@@ -4,7 +4,7 @@
 // the native input restyled (`appearance-none`), so its checked state is the
 // one assistive tech reads; the 6px on-accent dot is layered over it by the
 // input's own :checked. It is NAMED by the title alone (aria-labelledby) and
-// DESCRIBED by the sub line, so "Disabled" is still found as /^disabled$/.
+// DESCRIBED by the sub line, so "Off" is still found as /^off$/.
 //
 // `onClick`, not `onChange`: re-picking the live choice is a real gesture (it
 // is how a user confirms and closes) and an already-checked radio fires no

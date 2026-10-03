@@ -15,5 +15,5 @@ export function channelPath(uid: string, tab: string = DEFAULT_CHANNEL_TAB): str
 /** Where "Conversations from this channel" leads: the Conversations page
  *  filtered to the conversations this channel started. */
 export function channelConversationsHref(uid: string): string {
-  return `/conversations?channel=${encodeURIComponent(uid)}`;
+  return `/conversations?source=${encodeURIComponent(uid)}`;
 }

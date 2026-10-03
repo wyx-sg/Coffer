@@ -31,8 +31,8 @@ __all__ = ["NO_DIRECTORIES", "apply_dir", "cmd_dir", "current_dir_card", "resolv
 
 #: What `/dir` says for a channel whose allow-list is empty: `/dir` is off.
 NO_DIRECTORIES = (
-    "/dir is off for this channel — no directories are allowed for it. In Coffer, open "
-    "Channels, the channel, Settings, and add them under Working directories; or run "
+    "/dir is off for this bot — no directories are allowed for it. In Coffer, open "
+    "Channels, the bot, Settings, and add them under Working directories; or run "
     "`coffer channel edit <name> --dir PATH`."
 )
 
@@ -102,9 +102,7 @@ async def apply_dir(ctx: CommandContext, path: str | None) -> None:
         await ctx.say(f"📁 Directory set to {shown}{GROUP_DEFAULT_SUFFIX}.")
         return
     if await open_fresh(ctx):
-        await ctx.say(
-            f"📁 Now in {shown} — started a fresh conversation (the previous one is in /resume)."
-        )
+        await ctx.say(f"📁 Now in {shown} — started a fresh conversation.")
 
 
 async def current_dir_card(ctx: CommandContext, *, page: int | None = None) -> SelectionCard:

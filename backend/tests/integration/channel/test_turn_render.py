@@ -130,9 +130,8 @@ async def test_without_edit_support_no_progress_traffic_is_sent() -> None:
     assert adapter.deleted == []
 
 
-async def test_summary_reports_duration_and_tokens() -> None:
-    # An abnormal ending (here an interrupt) still sends a summary — and it
-    # reports tool count, duration, and token usage.
+async def test_an_interrupt_ends_with_the_stopped_line() -> None:
+    # The turn's real duration, in the short form — and no separate fact summary.
     adapter = FakeChannelAdapter(supports_edit=False)
     events = [
         TextDelta(text="partial"),
@@ -141,7 +140,7 @@ async def test_summary_reports_duration_and_tokens() -> None:
 
     await _render(adapter, events, now=_clock(100.0, 101.5))
 
-    assert adapter.sent[-1] == ("owner", "⏹ stopped · 0 tools · 1.5s · 80 tok")
+    assert adapter.sent == [("owner", "partial\n\n⏹ Stopped after 1s.")]
 
 
 @pytest.mark.acceptance(
@@ -154,8 +153,7 @@ async def test_error_turn_ends_with_a_failed_summary() -> None:
 
     await _render(adapter, events)
 
-    assert adapter.sent[0] == ("owner", "⚠️ upstream timed out [PROVIDER_TIMEOUT]")
-    assert adapter.sent[-1] == ("owner", "⚠️ failed · 0 tools · 0.0s")
+    assert adapter.sent == [("owner", "⚠️ upstream timed out. Send it again to retry.")]
 
 
 @pytest.mark.acceptance(spec="chat", scenario="an errored turn still delivers what it streamed")
@@ -174,21 +172,10 @@ async def test_error_turn_still_delivers_what_was_streamed_before_it() -> None:
 
     assert adapter.sent[0] == (
         "owner",
-        "The answer is forty-two, because\n\n⚠️ the agent stopped responding [stream_ended]",
+        "The answer is forty-two, because\n\n⚠️ the agent stopped responding. "
+        "Send it again to retry.",
     )
-    assert adapter.sent[-1] == ("owner", "⚠️ failed · 0 tools · 0.0s")
-
-
-async def test_interrupted_turn_ends_with_a_stopped_summary() -> None:
-    adapter = FakeChannelAdapter(supports_edit=False)
-    events = [
-        TextDelta(text="partial"),
-        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="interrupted"),
-    ]
-
-    await _render(adapter, events)
-
-    assert adapter.sent[-1] == ("owner", "⏹ stopped · 0 tools · 0.0s")
+    assert len(adapter.sent) == 1
 
 
 @pytest.mark.acceptance(
@@ -782,7 +769,7 @@ async def test_streaming_transport_grows_one_message_instead_of_sending_fragment
 
 async def test_streaming_transport_delivers_an_interrupted_reply_in_place() -> None:
     # The stream is the message: an abnormal ending still closes it with the
-    # final body, and only the fact summary follows as its own message.
+    # final body, and no separate summary follows.
     adapter = _streaming_adapter()
 
     await _render(
@@ -795,10 +782,10 @@ async def test_streaming_transport_delivers_an_interrupted_reply_in_place() -> N
     )
 
     [live] = adapter.live_handles
-    assert live.final == "partial\n\n⏹ Stopped."
+    assert live.final.startswith("partial\n\n⏹ Stopped after ")
     texts = adapter.texts()
     assert _is_status(texts[0])  # opened at once, then grown
-    assert texts[1].startswith("⏹ stopped · 0 tools ·")  # the summary follows it
+    assert len(texts) == 1  # no separate summary follows it
 
 
 async def test_a_transport_that_refuses_a_live_surface_is_asked_once_and_degrades() -> None:

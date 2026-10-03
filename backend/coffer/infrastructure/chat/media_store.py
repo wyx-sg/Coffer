@@ -93,7 +93,14 @@ class FileChatMediaStore:
         path = self._root / stored
         if not path.is_file():
             return None
-        return Attachment(path=str(path), mime=mime, filename=filename)
+        size = meta.get("size")
+        return Attachment(
+            path=str(path),
+            mime=mime,
+            filename=filename,
+            id=attachment_id,
+            size=size if isinstance(size, int) else None,
+        )
 
 
 __all__ = ["FileChatMediaStore", "default_chat_media_dir"]

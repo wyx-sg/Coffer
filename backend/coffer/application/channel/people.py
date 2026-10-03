@@ -6,7 +6,7 @@ channel is later addressed in inherits the identity of the paired person who
 addressed it ("Treat an addressed group chat as its own peer"). So a person is a
 distinct ``sender_id`` across the channel's peer rows, and their rows are their
 direct chat plus every group they brought the bot into — removing the person drops
-all of them (spec channels "Serve several paired people").
+all of them (spec channels "Gate inbound traffic on sender identity").
 
 Application layer only; the rows themselves are persistence's.
 """

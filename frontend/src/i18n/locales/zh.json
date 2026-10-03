@@ -86,10 +86,6 @@
     },
     "summaryWithCoffer": "{{agents}}和 Coffer 中的{{changes}}"
   },
-  "drawer": {
-    "previous": "上一条",
-    "next": "下一条"
-  },
   "common": {
     "experimental": "实验",
     "time": {
@@ -171,27 +167,6 @@
     "details": "详情",
     "lessDetails": "收起",
     "earlierToasts": "还有 {{count}} 条"
-  },
-  "filters": {
-    "clear": "清除",
-    "clearLabel": "清除 {{label}}",
-    "clearAll": "清除筛选",
-    "only": "仅此项",
-    "noMatches": "没有匹配项",
-    "timeRange": {
-      "label": "时间范围",
-      "custom": "自定义范围…",
-      "customHeading": "自定义范围",
-      "from": "起",
-      "to": "止",
-      "now": "现在",
-      "hint": "本地时间 · 最多回溯 {{days}} 天",
-      "hintDate": "本地日期 · 最多回溯 {{days}} 天",
-      "invalidTime": "请输入 HH:MM，例如 14:00。",
-      "endBeforeStart": "结束早于开始。",
-      "cancel": "取消",
-      "apply": "应用"
-    }
   },
   "picker": {
     "browse": "选择…"
@@ -1702,6 +1677,9 @@
     "ATTACHMENT_TYPE_UNSUPPORTED": "不支持此文件类型。请添加图片、文档、音频或文本文件。",
     "ATTACHMENT_NOT_FOUND": "某个附件已不可用，请重新添加。",
     "ATTACHMENT_EXPIRED": "这条消息携带的文件已超过 30 天被清理，无法重新发送。请重新添加文件后发送新消息。",
+    "QUESTION_CLOSED": "这个问题已经被回答，或其任务已停止，所以这次回答没有发送。",
+    "ATTACHMENT_UNAVAILABLE": "这个附件已不可用。",
+    "QUESTION_ANSWER_INVALID": "这个回答与问题不符。请从选项中选择，或输入你自己的回答。",
     "MESSAGE_NOT_FOUND": "该消息已不在此对话中。",
     "SECRET_BINDING_PENDING": "该密钥需在 Coffer 应用中批准后才会发送到这里。",
     "PRESENCE_GRANT_INVALID": "无法验证这次批准，请在 Coffer 应用中重试。",
@@ -1727,12 +1705,6 @@
     "SYNC_MACHINE_NAME_INVALID": "无法使用这个机器名。请使用简短、非空的名字。",
     "SYNC_MACHINE_NOT_FOUND": "没有使用该 id 与此远端同步的机器。",
     "SYNC_NOTHING_STOPPED": "没有等待这个回答的同步轮次。",
-    "SYNC_NOTHING_TO_RESTORE": "没有可以恢复的已停止远端。",
-    "SYNC_REMOTE_EXISTS": "已经设置了远端，请先停止与它同步。",
-    "SYNC_VAULT_MOVE_FAILED": "金库没能移动，仍留在原处。",
-    "SYNC_VAULT_TARGET_INVALID": "请为金库选择本机上的一个空文件夹。",
-    "SYNC_VAULT_TARGET_IN_CLOUD": "该文件夹位于 iCloud Drive、Dropbox 或 Syncthing 中，请选择它们之外的文件夹。",
-    "SYNC_VAULT_TARGET_NOT_EMPTY": "该文件夹不是空的，请选择一个空文件夹。",
     "SYNC_NO_REMOTE": "这台机器尚未设置同步远端。",
     "SYNC_NO_PLAINTEXT_FOUND": "上一轮没有发现明文密钥，没有可以「仍然推送」的内容。",
     "SYNC_REMOTE_FAILED": "远端无法连接、拒绝了凭据，或拒绝了推送。",
@@ -1759,7 +1731,13 @@
     "MASTER_KEY_PASSPHRASE_TOO_SHORT": "口令至少需要 8 个字符。",
     "KNOWLEDGE_RESTORE_CONFLICT": "没有恢复：这个路径上又有了文档。请先重命名或删除它。",
     "KNOWLEDGE_NOT_A_DELETE": "只有删除操作可以在最近改动中恢复。",
-    "SYNC_SECRET_NOT_EDITABLE": "加密的 secret 不能手动编辑。请保留本机的版本，或采用另一台的版本。"
+    "SYNC_SECRET_NOT_EDITABLE": "加密的 secret 不能手动编辑。请保留本机的版本，或采用另一台的版本。",
+    "SYNC_NOTHING_TO_RESTORE": "没有可以恢复的已停止远端。",
+    "SYNC_REMOTE_EXISTS": "已经设置了远端，请先停止与它同步。",
+    "SYNC_VAULT_MOVE_FAILED": "金库没能移动，仍留在原处。",
+    "SYNC_VAULT_TARGET_INVALID": "请为金库选择本机上的一个空文件夹。",
+    "SYNC_VAULT_TARGET_IN_CLOUD": "该文件夹位于 iCloud Drive、Dropbox 或 Syncthing 中，请选择它们之外的文件夹。",
+    "SYNC_VAULT_TARGET_NOT_EMPTY": "该文件夹不是空的，请选择一个空文件夹。"
   },
   "pagination": {
     "showing": "显示 {{shown}} / {{total}} 条",
@@ -3425,16 +3403,17 @@
     }
   },
   "conversations": {
-    "subtitle": "你与智能体的对话，包括来自消息渠道的。",
+    "subtitle": "所有对话，来自 Coffer 和你的消息渠道。",
     "bulk": {
       "label": "已选对话",
-      "selectAll": "全选对话",
       "selectRow": "选择 {{title}}",
-      "andMore_one": "等 {{count}} 个",
-      "andMore_other": "等 {{count}} 个",
       "deleteTitle_one": "删除 {{count}} 个对话？",
       "deleteTitle_other": "删除 {{count}} 个对话？",
-      "deleteBody": "{{titles}} 及其消息会从 Coffer 中永久删除；智能体改过的文件和它自己的会话文件不受影响。正在运行的对话会被跳过。如需保留，请改用归档。",
+      "deleteBody": "这些对话及其消息会从 Coffer 中删除；智能体改过的文件会保留。",
+      "deleteConfirm_one": "删除 {{count}} 个对话",
+      "deleteConfirm_other": "删除 {{count}} 个对话",
+      "showing": "显示 {{shown}} / {{count}}",
+      "showAll": "显示全部",
       "done": {
         "archive_one": "已归档 {{count}} 个对话",
         "archive_other": "已归档 {{count}} 个对话",
@@ -3452,18 +3431,15 @@
     "title": "对话",
     "thinking": "正在思考…",
     "message": {
-      "failed": "该回复未完成。",
       "tokens": "输入 {{prompt}} · 输出 {{completion}}"
     },
     "history": {
       "rename": "重命名",
-      "renameAria": "重命名对话",
       "delete": "删除…",
       "unarchive": "取消归档",
       "unarchived": "已取消归档",
       "archive": "归档",
-      "archivedEmpty": "没有已归档的对话",
-      "archivedHelp": "已归档的对话是只读的。打开它并选择「取消归档」即可继续。"
+      "archivedEmpty": "没有已归档的对话"
     },
     "thread": {
       "empty": "发送消息开始对话。",
@@ -3496,6 +3472,9 @@
       "unknown": "未知工具",
       "running": "运行中",
       "done": "完成",
+      "doneIn": "完成 · {{duration}}",
+      "stopped": "已停止",
+      "lost": "未知",
       "error": "出错",
       "input": "输入",
       "result": "结果",
@@ -3518,15 +3497,14 @@
     "effortPicker": {
       "label": "推理强度",
       "placeholder": "强度（可选）",
-      "inheritNoEffort": "智能体默认"
+      "inheritNoEffort": "智能体默认",
+      "shown": "{{effort}} 推理强度"
     },
     "draft": {
-      "title": "与 {{agent}} 的新对话",
-      "details": "{{details}}——发送一条消息即可开始。",
-      "effort": "{{effort}} 推理强度",
-      "noAgentTitle": "没有可用的托管智能体",
-      "noAgentInstall": "对话需要一个由 Coffer 管理的智能体，而本机还没有安装。复制提示词给任意助手，让它安装 Claude Code 或 Codex。",
-      "noAgentAdd": "对话需要一个由 Coffer 管理的智能体。请在「智能体」页面添加 Claude Code 或 Codex。",
+      "line": "与 {{agent}} 在 <mono>{{dir}}</mono> 中的新对话——发送一条消息即可开始。",
+      "handoffNote": "按下发送之前不会发出任何内容。",
+      "noAgentTitle": "还没有连接智能体",
+      "noAgentBody": "对话运行在由 Coffer 管理的智能体上。请先在「智能体」页面连接 Claude Code 或 Codex。",
       "openAgents": "打开智能体",
       "workspace": "Coffer 的工作区",
       "workspaceFull": "Coffer 的工作区（~/.coffer/content/workspace）",
@@ -3538,8 +3516,8 @@
       }
     },
     "delete": {
-      "title": "删除此对话？",
-      "body": "「{{title}}」及其消息将从 Coffer 中删除。智能体改过的文件和 {{agent}} 自己的会话文件会保留。此操作无法撤销——如需保留，请改用归档。",
+      "title": "删除「{{title}}」？",
+      "body": "「{{title}}」及其消息将从 Coffer 中删除；智能体改过的文件会保留。如果只是想让它不碍事，请改用归档。",
       "confirm": "删除对话"
     },
     "jumpToLatest": "跳到最新",
@@ -3556,7 +3534,6 @@
       "listLabel": "已添加的附件"
     },
     "mirror": {
-      "alsoSends": "同时发送到 {{target}}",
       "staysInCoffer": "回复只留在 Coffer",
       "reason": {
         "group_main": "这个对话是群的主聊天，从这里发的回复不会发到群主聊天里。",
@@ -3564,8 +3541,7 @@
         "chat_kind_unknown": "这个对话没有关联到 Coffer 能写入的聊天线程。",
         "channel_deleted": "这个对话来自的渠道已被删除。"
       },
-      "notDelivered": "尚未投递到 {{platform}}",
-      "notDeliveredHelp": "渠道恢复运行后，Coffer 会发送这条消息以及智能体的回答。"
+      "notDelivered": "尚未投递到 {{platform}} · 将重试"
     },
     "source": {
       "coffer": "Coffer",
@@ -3573,37 +3549,29 @@
       "dm": "私聊",
       "group": "群聊",
       "thread": "话题",
-      "topic": "话题",
-      "viaChannel": "来自消息渠道 {{channel}}"
+      "threadN": "话题 {{n}}",
+      "topic": "话题"
     },
     "group": {
       "today": "今天",
       "yesterday": "昨天",
-      "week": "过去 7 天",
-      "month": "过去 30 天",
       "earlier": "更早"
     },
     "list": {
       "running": "运行中",
       "ariaLabel": "对话",
-      "cols": {
-        "conversation": "对话",
-        "source": "来源",
-        "agent": "智能体",
-        "lastActivity": "最近活动"
-      },
+      "needsYou": "等你处理",
+      "loadFailed": "无法加载对话",
       "emptyTitle": "还没有对话",
-      "emptyBody": "所有对话都会出现在这里——在 Coffer 里发起的，以及通过 SeaTalk 或 Telegram 进来的。",
+      "emptyBody": "在这里发起一个，或从 SeaTalk、Telegram 给你的消息渠道发消息。",
       "noMatches": "没有匹配的对话",
       "clearFilters": "清除筛选"
     },
     "filters": {
+      "view": "视图",
       "source": "来源",
-      "allSources": "全部来源",
       "agent": "智能体",
-      "search": "搜索标题…",
-      "channel": "消息渠道：{{channel}}",
-      "clearChannel": "清除消息渠道筛选",
+      "search": "搜索标题和消息",
       "showArchived": "已归档",
       "showActive": "进行中"
     },
@@ -3612,12 +3580,38 @@
       "title": "新建对话"
     },
     "header": {
-      "more": "这个对话的更多操作",
-      "archived": "已归档",
-      "agentFixed": "这个对话的智能体已固定——要换用其他智能体，请新建对话"
+      "more": "更多操作",
+      "titleAria": "对话标题",
+      "renameHint": "回车保存 · Esc 取消"
     },
     "files": {
       "title": "改动的文件"
+    },
+    "question": {
+      "needsYou": "等你处理",
+      "progress": "第 {{current}} 个，共 {{total}} 个问题",
+      "submit": "提交",
+      "waitingFor": "{{agent}} 正在等你的回答。",
+      "alsoAsked": "也已在 {{platform}} 中询问。",
+      "placeholder": "直接回复，或点上面的按钮回答",
+      "answered": "已回答：",
+      "inPlatform": "在 {{platform}}",
+      "notAnswered": "未回答"
+    },
+    "turn": {
+      "working": "处理中 · {{duration}}",
+      "workingNoTime": "处理中",
+      "waiting": "等待你的回复",
+      "stopped": "已停止",
+      "stoppedAfter": "运行 {{duration}} 后停止",
+      "failedWord": "失败",
+      "failedAfter": "运行 {{duration}} 后失败",
+      "stoppedByYou": "已被你停止。",
+      "editNotFinished": "这次编辑没有完成；发一条消息即可继续。",
+      "commandNotFinished": "这条命令没有执行完；发一条消息即可继续。",
+      "copyReply": "复制回复",
+      "failed": "这一轮失败了：{{reason}}",
+      "failedHint": "重试会再发送同一条消息。"
     },
     "queueHeld": {
       "message": "排队的消息无法开始，队列已暂停：{{error}}",
@@ -3647,7 +3641,7 @@
         "line": "正在检查…"
       },
       "unavailable": {
-        "word": "未知",
+        "word": "状态未知",
         "line": "状态不可用"
       },
       "unbound": {
@@ -3683,7 +3677,7 @@
         "line": "未找到 SeaTalk SDK"
       },
       "connectFailed": {
-        "word": "无法连接",
+        "word": "Token 被拒",
         "line": "连接被拒绝"
       },
       "waitingApproval": {
@@ -3695,7 +3689,7 @@
         "line": "密钥已被拒绝"
       },
       "stopped": {
-        "word": "已停止",
+        "word": "Token 被拒",
         "line": "已停止"
       },
       "notPaired": {
@@ -3707,75 +3701,87 @@
         "line": "已连接"
       }
     },
+    "header": {
+      "sendTestWhy": {
+        "kicked": "先把连接拿回来，才能发送测试",
+        "sdkMissing": "安装 SDK 并重试后，才能发送测试",
+        "replace_token": "更换 token 后，才能发送测试",
+        "replace_secret": "更换密钥后，才能发送测试",
+        "waitingApproval": "批准密钥后，才能发送测试",
+        "unavailable": "请先重试——Coffer 读不到这个渠道的状态",
+        "reconnecting": "请等连接恢复",
+        "off": "开启这个渠道后，才能发送测试",
+        "elsewhere": "运行在 {{machine}}——请在那边发送测试",
+        "unbound": "在本机运行后，才能发送测试",
+        "notPaired": "请先配对一位所有者——测试会发给所有者"
+      }
+    },
+    "quiet": {
+      "off": "{{name}} 已关闭——开启之前它不会回应任何消息。",
+      "elsewhere": "运行在 {{machine}}。这台 Mac 保持安静，确保只有一台应答。"
+    },
     "banner": {
       "unavailable": {
         "title": "读不到这个消息渠道的状态",
-        "body": "其他消息渠道不受影响。请重试，或打开「活动」查看守护进程最近的日志。"
-      },
-      "unbound": {
-        "title": "没有绑定任何机器",
-        "body": "没有指明机器的消息渠道不会被任何机器启动，机器人永远不会回话。在本机运行它，或在「设置」里选择应该运行它的机器。"
+        "body": "Coffer 读不到 {{platform}} 的状态。其他消息渠道不受影响。"
       },
       "unknownMachine": {
-        "title": "绑定到了 Coffer 不认识的机器（{{id}}）",
-        "body": "同步组里没有机器认领这个 id，所以没有机器会启动机器人，它永远不会回话。请选择应该运行它的机器。"
-      },
-      "elsewhere": {
-        "title": "在本机保持安静是有意为之——{{machine}} 在运行这个机器人",
-        "body": "一个机器人只能有一个连接，所以只有一台机器应答它。设置和配对会同步，连接不会。"
-      },
-      "off": {
-        "title": "这个消息渠道已关闭",
-        "body": "开启它即可重新连接——设置和配对都会保留。"
+        "title": "设置为在一台不在你同步组里的 Mac 上运行",
+        "body": "你同步的 Mac 里没有一台接手这个渠道，所以没有 Mac 会启动机器人，它永远不会回话。在本机运行它，或在「设置」里选择应该运行它的 Mac。"
       },
       "reconnecting": {
         "title": "与 {{platform}} 的连接已断开——正在重新连接",
-        "body": "通常是网络或 {{platform}} 那边的短暂故障。期间发送的消息会在恢复后送达。"
+        "body": "通常是网络或 {{platform}} 的短暂故障。期间发送的消息会留在 {{platform}} 那边，恢复后送达。"
       },
       "kicked": {
         "title": "{{platform}} 把这个机器人的连接交给了另一个进程",
-        "body": "SeaTalk 每个应用只允许一个连接。有别的程序在运行应用 {{appId}}——常见的是另一台机器上的 Coffer，或测试脚本。请在那边停掉它，或在这里把连接拿回来。"
+        "body": "{{platform}} 每个应用只允许一个连接。有别的程序在运行应用 {{appId}}——多半是另一台 Mac 上的 Coffer，或使用同一 App ID 的本地脚本。请在那边停掉它，或在这里把连接拿回来。"
       },
       "sdkMissing": {
         "title": "未安装 SeaTalk 的 Python SDK",
         "body": "请从 <portal>SeaTalk 开放平台</portal>下载 SeaTalk 的 WebSocket SDK，其余步骤交给智能体，放好后点击重试。"
       },
-      "connectFailed": {
-        "title": "{{platform}} 拒绝了连接",
-        "body": "通常是 App ID 有误，或 App Secret 已在 SeaTalk 开放平台重新生成。请更换密钥——配对和设置都会保留。"
+      "tokenRejected": {
+        "telegram": {
+          "title": "Telegram 拒绝了这个 bot token",
+          "body": "这个 token 已在 @BotFather 中撤销或重新生成。粘贴新的 token 即可——配对和设置都会保留。"
+        },
+        "seatalk": {
+          "title": "SeaTalk 拒绝了连接",
+          "body": "通常是 App ID 有误，或 App Secret 已在 SeaTalk 开放平台重新生成。请更换密钥——配对和设置都会保留。"
+        }
       },
       "notPaired": {
         "title": "把它与你的 {{platform}} 账号配对",
-        "body": "生成一个配对码，用你自己的账号发给机器人。这个账号将成为它唯一回应的账号。"
+        "body": "用你自己的账号给机器人发一个配对码。这个账号将成为它回应的账号；之后可以再添加更多所有者。",
+        "action": "生成配对码"
       },
       "waitingApproval": {
         "title": "正在 Coffer 应用里等你批准",
-        "body": "这个渠道的密钥还没有获得批准，所以无法连接 {{platform}}。在 Coffer 应用的密钥页批准后它会自行启动——配对和设置都会保留。"
+        "body": "这个渠道的密钥还没有获得批准，所以无法连接 {{platform}}。在密钥页批准后它会自行启动——配对和设置都会保留。"
       },
       "approvalRefused": {
         "title": "这个渠道的密钥被拒绝了",
         "body": "你在 Coffer 应用里拒绝了它的密钥，所以渠道无法连接 {{platform}}。打开密钥页点击“重新请求”可以重新发起——配对和设置都会保留。"
       },
-      "stopped": {
-        "title": "{{platform}} 适配器没有在运行",
-        "body": {
-          "telegram": "常见原因是 bot token 已在 @BotFather 中撤销或重新生成。粘贴新的 token 即可——配对和设置都会保留。",
-          "seatalk": "常见原因是 App Secret 已在 SeaTalk 开放平台重新生成。更换它即可——配对和设置都会保留。"
-        }
-      }
+      "moreHandoff": "更多交接方式"
     },
     "meta": {
       "seatalkApp": "SeaTalk 应用 {{appId}}",
       "websocket": "WebSocket",
+      "websocketConnected": "WebSocket 已连接",
       "longPolling": "长轮询",
-      "runsHere": "运行在本机"
+      "runsHere": "运行在这台 Mac 上",
+      "runsOn": "运行在 {{machine}}",
+      "off": "已关闭——设置和配对都会保留",
+      "unknownMachine": "设置为在一台不在你同步组里的 Mac 上运行"
     },
     "tabs": {
       "overview": "总览",
       "settings": "设置"
     },
     "actions": {
-      "more": "{{name}} 的更多操作",
+      "more": "更多操作",
       "sendTest": "发送测试",
       "reconnect": "立即重新连接",
       "takeBack": "拿回连接",
@@ -3799,7 +3805,7 @@
         "remove": "移除",
         "ownerLine": "主人 · 私聊 · 配对于 {{date}}",
         "nobody": "还没有人。配对之前，机器人会忽略所有消息。",
-        "onlyOwner": "只回应已配对的主人；陌生人得不到任何回复。",
+        "onlyOwner": "只回应这些人和群；其他人得不到任何回复。",
         "search": "搜索主人",
         "noMatch": "没有匹配的主人。"
       },
@@ -3807,22 +3813,23 @@
         "title": "智能体",
         "default": "默认智能体",
         "reach": "可驱动的智能体",
-        "help": "每条消息都会成为「对话」里的一个对话。"
+        "help": "每条消息都会成为「对话」里的一个对话，默认由默认智能体处理，除非 /new 指定了别的。",
+        "reachHint": "在聊天里用 /new 指定智能体时，只能从这些里选。"
       },
       "conversations": "来自 {{name}} 的对话",
-      "allConversations": "全部",
-      "noConversations": "还没有对话。",
-      "commands": {
-        "title": "支持的命令",
-        "help": "机器人在聊天里能回应的命令，来自 /help 和平台命令菜单背后的同一份清单。"
-      }
+      "allConversations": "打开对话",
+      "noConversations": "还没有对话。"
     },
     "settings": {
       "connection": {
         "title": "连接"
       },
       "receiving": {
-        "title": "接收消息"
+        "title": "接收消息",
+        "description": "机器人如何在群里收听，并把连发的消息合成一个回合。"
+      },
+      "directories": {
+        "description": "新对话从哪里开始，以及 /dir 可以切换到哪里。一个都没有时 /dir 关闭。"
       },
       "replying": {
         "title": "回复与会话"
@@ -3835,7 +3842,7 @@
       },
       "machine": {
         "runsOn": "运行在",
-        "hint": "只有一台机器持有机器人的连接。"
+        "hint": "只有一台 Mac 持有机器人的连接。"
       },
       "danger": {
         "body": "停止机器人并移除配对。对话仍保留在「对话」中。",
@@ -3843,21 +3850,20 @@
       },
       "secrets": {
         "replace": "更换",
-        "hint": "保存在 Coffer 的密钥库中；消息渠道配置只保存引用。"
+        "hint": "密钥保存在 Coffer 的密钥库中；渠道只保存引用。"
       }
     },
     "add": {
       "button": "添加消息渠道",
       "title": "添加消息渠道",
       "connectTitle": "添加 {{platform}} 消息渠道",
-      "pairTitle": "配对 {{name}}",
+      "pairTitle": "配对 {{platform}} · {{name}}",
       "stepsLabel": "步骤",
       "steps": {
         "platform": "平台",
         "connect": "连接",
         "pair": "配对"
       },
-      "filter": "按名称或功能筛选",
       "platformHint": "一个消息渠道就是一个机器人。它只回应你，每条消息都会成为与你的某个智能体的对话。",
       "next": "下一步",
       "back": "上一步",
@@ -3866,20 +3872,19 @@
       "pairLater": "稍后配对",
       "paired": {
         "title": "已与 {{owner}} 配对",
-        "body": "{{name}} 只回应你，其他人都会被静默忽略。"
+        "body": "{{name}} 只回应你，其他人都会被静默忽略。",
+        "tryIt": "试一下：给 {{bot}} 发一句「hi」，{{agent}} 会回复。",
+        "yourAgent": "你的智能体"
       }
     },
     "platforms": {
-      "count_one": "{{count}} 个平台",
-      "count_other": "{{count}} 个平台",
-      "toConnect": "连接需要：",
       "seatalk": {
         "body": "工作私聊和群聊，通过 SeaTalk 开放平台上的应用接入。",
-        "needs": "App ID + Secret"
+        "needs": "需要 App ID + Secret"
       },
       "telegram": {
         "body": "来自 @BotFather 的机器人。随时随地用手机就能找到它。",
-        "needs": "Bot token"
+        "needs": "需要 Bot token"
       },
       "capabilities": {
         "privateChat": "私聊",
@@ -3893,27 +3898,12 @@
     },
     "firstRun": {
       "title": "在聊天应用里和你的智能体对话",
-      "body": "连接一个机器人，与你的账号配对，你的消息就会送到本机上的智能体。",
-      "choose": "选择平台",
-      "benefits": {
-        "chat": {
-          "title": "随处聊天",
-          "body": "每条消息都会成为「对话」里的一个对话；回复会发回聊天应用。"
-        },
-        "onlyYou": {
-          "title": "只回应你",
-          "body": "一次性配对码绑定你的账号。陌生人得不到任何回复。"
-        },
-        "groups": {
-          "title": "群聊也行",
-          "body": "把机器人拉进群，你 @ 它时它就会在群里回答。"
-        }
-      }
+      "body": "连接一个机器人，与你的账号配对，你的消息就会送到这台 Mac 上的智能体。",
+      "choose": "选择平台"
     },
     "pair": {
       "title": "添加主人",
       "intro": "对方在与机器人的私聊里发送这个配对码即可；陌生人仍得不到任何回复。",
-      "waiting": "等待对方发送配对码…",
       "added": "已添加 {{owner}}"
     },
     "pairing": {
@@ -3923,16 +3913,16 @@
       "copied": "已复制",
       "expiresIn_one": "{{count}} 分钟后过期 · 仅限一次",
       "expiresIn_other": "{{count}} 分钟后过期 · 仅限一次",
-      "expiresSoon": "不到一分钟后过期",
+      "expiresSoon": "不到一分钟后过期 · 仅限一次",
       "expired": "已过期",
-      "expiredBody": "配对码已过期，或被猜错太多次。猜错不会得到回复，所以没人会知道这个机器人存在。",
-      "instruction": "在 {{platform}} 里打开与机器人的私聊，原样发送这个配对码。",
+      "expiredBody": "配对码已过一小时，或被猜错太多次。猜错不会得到回复，所以没人会知道这个机器人存在。",
+      "instruction": "在 {{platform}} 里打开与 {{name}} 的私聊，原样发送这个配对码。",
       "openIn": "在 {{platform}} 中打开",
       "openInHint": "打开聊天并自动填好配对码。",
       "waiting": "等待你的消息…",
       "newCode": "新配对码",
       "newCodeAfterExpiry": "生成新的配对码",
-      "cancel": "取消"
+      "instructionHandle": "用你自己的 {{platform}} 账号把这个配对码发给 @{{handle}}。"
     },
     "removePerson": {
       "title": "从 {{name}} 移除 {{owner}}？",
@@ -3941,27 +3931,33 @@
       "confirm": "移除"
     },
     "runHere": {
-      "title": "在本机运行 {{name}}？",
-      "body": "{{machine}} 仍在运行这个机器人。如果可以，请先在那边停掉它——否则在 {{machine}} 同步之前，两台机器可能会同时应答。"
+      "title": "在这台 Mac 上运行 {{name}}？",
+      "body": "{{machine}} 仍在运行这个机器人。如果可以，请先在那边停掉它——否则在 {{machine}} 同步之前（最长 5 分钟），两台 Mac 可能会同时应答。"
     },
     "delete": {
       "title": "删除 {{name}}？",
-      "body": "机器人将停止回应，其配对会被移除。对话仍保留在「对话」中。{{platform}} 那边的应用不受影响。",
-      "bodyUnpaired": "机器人将停止回应。对话仍保留在「对话」中。{{platform}} 那边的应用不受影响。"
+      "body": "机器人将停止回应，其配对会被移除；对话仍保留在「对话」中。{{platform}} 那边的应用不受影响。",
+      "bodyUnpaired": "机器人将停止回应；对话仍保留在「对话」中。{{platform}} 那边的应用不受影响。"
     },
     "replace": {
       "token": {
         "title": "更换 bot token",
         "body": "粘贴 @BotFather 给出的新 token。配对和设置都会保留；机器人会用新 token 重启。",
-        "label": "新的 bot token"
+        "label": "Bot token"
       },
       "secret": {
         "title": "更换 App Secret",
         "body": "粘贴 SeaTalk 开放平台上的新密钥。配对和设置都会保留；机器人会用新密钥重启。",
-        "label": "新的 App Secret"
+        "label": "App Secret"
       },
       "hint": "存入 Coffer 密钥库；旧值会被覆盖。",
-      "submit": "更换并重启"
+      "submit": "更换并重启",
+      "works": "可用——这是 @{{handle}}",
+      "worksPlain": "可用",
+      "worksSeatalk": "可用——App ID 和 Secret 有效。",
+      "sameBot": "和之前是同一个机器人，所以与 {{owner}} 的配对仍然有效。",
+      "sameBotPlain": "和之前是同一个机器人。",
+      "differentBot": "与之前不是同一个机器人，现有的配对不会保留。"
     },
     "test": {
       "title": "发送测试消息",
@@ -3979,56 +3975,61 @@
       "appId": "App ID",
       "appSecret": "App Secret",
       "errors": {
-        "name": "请输入名称",
-        "nameTooLong": "最多 80 个字符",
-        "botToken": "请输入 bot token",
-        "appId": "请输入 App ID",
-        "appSecret": "请输入 App Secret",
+        "name": "请输入名称。",
+        "nameTooLong": "最多 80 个字符。",
+        "botToken": "请输入 bot token。",
+        "appId": "请输入 App ID。",
+        "appSecret": "请输入 App Secret。",
         "agent": "请先添加一个智能体——渠道必须指明它驱动的智能体。"
       },
-      "telegramHint": "BotFather 给你的机器人 token。",
-      "seatalkHint": "来自 SeaTalk 开放平台应用的 App ID 和 App Secret。",
+      "telegramHint": "BotFather 给你的 token。存入 Coffer 密钥库。",
       "created": "消息渠道 {{name}} 已添加",
       "machineUnknown": "Coffer 暂时读不到本机的机器 id，这个消息渠道就没有可运行的机器。请稍后重试。",
       "agent": "默认智能体",
       "agentHint": "此渠道中的新会话都会在该智能体上开始。",
       "seatalkDelivery": {
-        "title": "在 SeaTalk 开发者后台把事件投递方式设为 WebSocket",
+        "title": "在 SeaTalk 开放平台把事件投递方式设为 WebSocket",
         "body": "请在这里连接之后再设置——后台会检查连接是否已存在。"
-      }
+      },
+      "nameHint": "名称随意；消息渠道靠 ID 区分，之后可以改名。",
+      "botTokenPlaceholder": "粘贴 bot token",
+      "appSecretPlaceholder": "粘贴 App Secret",
+      "telegramFound": "找到 @{{handle}}",
+      "telegramFoundPlain": "Token 可用",
+      "telegramFoundBody": "Token 可用。它将在这台 Mac（{{machine}}）上运行。"
     },
     "edit": {
       "saved": "消息渠道 {{name}} 已更新",
       "groups": {
         "requireMention": "仅在被 @ 时回复",
-        "requireMentionHint": "机器人在群里保持沉默，直到有人 @ 它或回复它。关闭后，它会处理你在群里发的每一条消息——这需要先在 BotFather 里关闭机器人的隐私模式。",
+        "requireMentionHint": "在群里保持沉默，直到有人 @ 它或回复它。关闭后会处理你在群里发的每一条消息，这需要先在 BotFather 里关闭机器人的隐私模式。",
         "ignoreOtherMentions": "忽略同时 @ 了其他人的消息",
-        "ignoreOtherMentionsHint": "群消息只要 @ 了其他人，即使也 @ 了机器人，机器人也不回应。"
+        "ignoreOtherMentionsHint": "即使它们也 @ 了机器人。"
       },
       "burst": {
         "unit": "秒",
         "waitAfterText": "文字消息后等待",
-        "waitAfterTextHint": "这段时间内再发的消息会合成一个回合。设为 0 则每条消息单独回答。",
+        "waitAfterTextHint": "这段时间内的消息合成一个回合。0 表示逐条回答。",
         "waitAfterForward": "转发记录或附件后等待",
-        "waitAfterForwardHint": "转发的聊天记录、不带文字的文件很少是完整的问题，所以多等一会儿。",
+        "waitAfterForwardHint": "它们很少是完整的问题，所以多等一会儿。",
         "invalid": "请输入 {{min}} 到 {{max}} 之间的秒数。"
       },
       "replies": {
         "notifyAfter": "长任务完成提醒",
-        "notifyAfterHint": "运行达到这个时长的回合结束时发一条简短的“完成”消息，群里会 @ 提问人。0 表示关闭。",
+        "notifyAfterHint": "运行达到这个时长的回合结束时发一条简短的“完成”消息。0 表示关闭。",
         "showSteps": "显示步骤行",
-        "showStepsHint": "工作中在状态行下显示最近 3 个步骤。关闭后只保留状态行。"
+        "showStepsHint": "工作中在状态行下显示最近 3 个步骤。"
       },
       "idle": {
         "label": "闲置多久后开新对话",
-        "hint": "聊天安静这么久之后，下一条消息会开一个新对话；旧对话仍保留在“对话”里。0 表示不自动开新对话。",
+        "hint": "安静这么久之后的下一条消息会开一个新对话。0 表示不自动开。",
         "unit": "小时",
         "invalid": "请输入 {{min}} 到 {{max}} 之间的小时数。"
       },
       "directories": {
         "title": "工作目录",
         "default": "默认",
-        "defaultHint": "新对话从这里开始。",
+        "defaultHint": "新对话从哪里开始。",
         "defaultPlaceholder": "Coffer 工作区（~/.coffer/content/workspace）",
         "allowed": "/dir 可用的目录",
         "allowedHint": "/dir 只提供这些目录及其子目录。一个都没有时 /dir 关闭。",
@@ -4042,14 +4043,20 @@
     },
     "machine": {
       "pickerLabel": "运行 {{name}} 的机器",
-      "thisMachine": "本机",
-      "self": "{{name}} · 本机",
+      "thisMachine": "这台 Mac",
+      "self": "{{name}} · 这台 Mac",
       "unbound": "未绑定",
       "unknown": "未知机器（{{id}}）",
       "handover": "重新绑定不需要重启。失去该渠道的机器会在一两秒内停掉适配器；获得它的机器会在下一轮同步把改动带过去之后启动。从你当前所在的这台机器上「绑出去」交接得最干净——反过来，在另一台机器仍然持有该渠道时把它绑到本机，可能会出现两边同时应答，直到那台机器完成下一轮同步。",
       "notReach": "这里决定的是「哪台机器运行适配器」。总览里的「可驱动的智能体」决定的是「这个渠道可以驱动哪些智能体」。",
       "rebound": "{{name}} 现在运行在 {{machine}} 上",
       "helpLabel": "关于运行机器"
+    },
+    "credentials": {
+      "checking": "正在检查…",
+      "rejected": "平台拒绝了这些凭据。",
+      "unreachable": "连不上平台，无法检查。",
+      "timeout": "平台没有及时响应。"
     }
   },
   "scope": {
@@ -4058,19 +4065,22 @@
     "everywhereSub": "包括以后添加的智能体",
     "restrictedSub": "只有下面勾选的",
     "countOf": "{{selected}} / {{total}} 个智能体",
-    "machineLocal": "生效范围只在本机设置——它不参与同步，你用的每台机器都要各自设置。",
     "choicesLabel": "生效范围",
     "setReach": "设置生效范围…",
     "everywhere": "所有智能体",
-    "restricted": "只限选中的",
+    "restricted": "指定的智能体",
+    "filterAgents": "筛选智能体",
     "agentCount_one": "{{count}} 个智能体",
     "agentCount_other": "{{count}} 个智能体",
-    "noneSelected": "未选中智能体",
-    "dormant": "一个智能体都没选——处于休眠状态。它依然保留，但在至少选中一个智能体之前不会到达任何地方。",
+    "noneSelected": "没有智能体",
     "noAgents": "还没有添加任何智能体。",
     "unknownAgent": "本机未添加",
     "inactiveHereAgent": "在此未生效——它的生效范围没有包含本机添加的任何智能体。",
-    "bulkReach": "所选项的生效范围"
+    "bulkReach": "所选项的生效范围",
+    "apply": "应用",
+    "bulkPartial": "成功 {{ok}} 项，失败 {{failed}} 项",
+    "rowFailed": "失败",
+    "saveFailed": "未能保存"
   },
   "sync": {
     "title": "同步",
@@ -6342,8 +6352,7 @@
     "moreOptions": "更多选项",
     "promptCopied": "已复制提示词",
     "askAgent": "交给智能体",
-    "help": "Coffer 不会自己执行：交给你的智能体，由它选择适合这台机器的做法。",
-    "copied": "已复制"
+    "help": "Coffer 不会自己执行：交给你的智能体，由它选择适合这台机器的做法。"
   },
   "upkeep": {
     "every": "每隔",
@@ -6363,6 +6372,31 @@
       "daily": "每天",
       "every": "每 {{interval}}",
       "off": "已关闭"
+    }
+  },
+  "drawer": {
+    "previous": "上一条",
+    "next": "下一条"
+  },
+  "filters": {
+    "clear": "清除",
+    "clearLabel": "清除 {{label}}",
+    "clearAll": "清除筛选",
+    "only": "仅此项",
+    "noMatches": "没有匹配项",
+    "timeRange": {
+      "label": "时间范围",
+      "custom": "自定义范围…",
+      "customHeading": "自定义范围",
+      "from": "起",
+      "to": "止",
+      "now": "现在",
+      "hint": "本地时间 · 最多回溯 {{days}} 天",
+      "hintDate": "本地日期 · 最多回溯 {{days}} 天",
+      "invalidTime": "请输入 HH:MM，例如 14:00。",
+      "endBeforeStart": "结束早于开始。",
+      "cancel": "取消",
+      "apply": "应用"
     }
   }
 }

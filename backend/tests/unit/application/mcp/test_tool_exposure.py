@@ -1,5 +1,5 @@
 """The effective exposure of a server's tools and why (spec mcp-gateway
-"Choose how each tool is exposed"), with a fake invocation log."""
+"Forward tools, resources and prompts"), with a fake invocation log."""
 
 from __future__ import annotations
 

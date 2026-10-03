@@ -110,6 +110,10 @@ class Attachment:
     path: str  # absolute local path to the bytes
     mime: str  # e.g. "image/jpeg", "application/pdf", "audio/ogg"
     filename: str  # best-effort original name, for display / the agent's benefit
+    #: A web upload's id in the chat media store (what the thread's thumbnail is
+    #: fetched by); ``None`` for channel media, which has no id.
+    id: str | None = None
+    size: int | None = None  # bytes, when the store recorded it
 
     @property
     def is_image(self) -> bool:

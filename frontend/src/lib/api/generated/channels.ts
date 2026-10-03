@@ -4,6 +4,28 @@
  */
 
 export interface paths {
+    "/api/v1/channels/validate-credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate Credentials
+         * @description Check credentials against the platform without storing anything (spec
+         *     channels "Check credentials before they are saved"). A refusal is a normal
+         *     answer (``ok: false`` with a reason), not an error response.
+         */
+        post: operations["validate_credentials_api_v1_channels_validate_credentials_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/channels/{uid}/notify": {
         parameters: {
             query?: never;
@@ -127,8 +149,8 @@ export interface components {
         };
         /**
          * ChannelPersonOut
-         * @description A person paired to the channel (spec channels "Serve several paired
-         *     people"): every one is answered with identical rights.
+         * @description A person paired to the channel (spec channels "Gate inbound traffic on
+         *     sender identity"): every one is answered with identical rights.
          */
         ChannelPersonOut: {
             /** Active Conversation Id */
@@ -188,6 +210,21 @@ export interface components {
             title: string | null;
             /** Uid */
             uid: string;
+        };
+        /** CredentialCheckOut */
+        CredentialCheckOut: {
+            /** Bot Handle */
+            bot_handle: string | null;
+            /** Bot Name */
+            bot_name: string | null;
+            /** Detail */
+            detail: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Reason */
+            reason: ("missing" | "rejected" | "unreachable" | "timeout") | null;
+            /** Same Bot */
+            same_bot: boolean | null;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -399,6 +436,25 @@ export interface components {
              */
             wait_after_text_seconds: number;
         };
+        /**
+         * ValidateCredentialsIn
+         * @description Credentials to check, as typed. Which fields apply depends on the platform.
+         */
+        ValidateCredentialsIn: {
+            /** App Id */
+            app_id?: string | null;
+            /** App Secret */
+            app_secret?: string | null;
+            /** Bot Token */
+            bot_token?: string | null;
+            /** Channel Uid */
+            channel_uid?: string | null;
+            /**
+             * Platform
+             * @enum {string}
+             */
+            platform: "telegram" | "seatalk";
+        };
     };
     responses: never;
     parameters: never;
@@ -408,6 +464,50 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    validate_credentials_api_v1_channels_validate_credentials_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateCredentialsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialCheckOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     notify_channel_api_v1_channels__uid__notify_post: {
         parameters: {
             query?: never;

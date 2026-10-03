@@ -253,7 +253,7 @@ acceptance("channels", "rotating a channel secret keeps its refs and pairing", a
   wrap(<ChannelReplaceSecretDialog channel={TG} open onOpenChange={() => {}} />);
 
   const dialog = screen.getByRole("dialog");
-  fireEvent.change(within(dialog).getByLabelText(/new bot token/i), {
+  fireEvent.change(within(dialog).getByLabelText(/bot token/i), {
     target: { value: "999:rotated" },
   });
   fireEvent.click(within(dialog).getByRole("button", { name: /replace and restart/i }));

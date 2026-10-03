@@ -111,11 +111,11 @@ afterEach(() => vi.clearAllMocks());
 const header = () => screen.getByTestId("channel-header");
 
 describe("the list", () => {
-  test("groups channels by state, each group with its count", async () => {
+  test("groups channels by state, headings carry no count", async () => {
     renderChannelsPage(`/channels/${TEAM.uid}`);
     const attention = await screen.findByTestId("channel-group-attention");
     await waitFor(() => expect(within(attention).getAllByTestId("channel-row")).toHaveLength(2));
-    expect(attention).toHaveTextContent("Needs attention2");
+    expect(attention).toHaveTextContent(/^Needs attention(?!\d)/);
     expect(attention).toHaveTextContent("SeaTalk · kicked-bot");
     expect(attention).toHaveTextContent("Another process took the connection");
     expect(attention).toHaveTextContent("Not paired yet");
@@ -143,7 +143,7 @@ describe("the list", () => {
     expect(await screen.findByText("Talk to your agents from a chat app")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /telegram/i }));
     // A card opens Add channel straight at its Connect step.
-    expect(await screen.findByRole("heading", { name: "Add Telegram channel" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Add a Telegram channel" })).toBeVisible();
     expect(screen.getByLabelText(/bot token/i)).toBeInTheDocument();
   });
 });
@@ -163,7 +163,7 @@ describe("the header says what state the channel is in", () => {
     string | null,
     string | null,
   ][] = [
-    ["connected", TEAM, makeStatus(TEAM), "Connected", null, "Send test"],
+    ["connected", TEAM, makeStatus(TEAM), "Connected", null, null],
     [
       "connecting",
       TEAM,
@@ -204,7 +204,7 @@ describe("the header says what state the channel is in", () => {
       "connection error",
       TEAM,
       makeStatus(TEAM, { inbound: { websocket_state: "error", websocket_error: "auth failed" } }),
-      "Can't connect",
+      "Token rejected",
       "connectFailed",
       "Replace secret",
     ],
@@ -212,7 +212,7 @@ describe("the header says what state the channel is in", () => {
       "telegram stopped",
       tg,
       makeStatus(tg, { running: false }),
-      "Stopped",
+      "Token rejected",
       "stopped",
       "Replace token",
     ],
@@ -243,7 +243,7 @@ describe("the header says what state the channel is in", () => {
       OPS,
       makeStatus(OPS, { runs_here: false }),
       "Runs on Mac mini",
-      "elsewhere",
+      "quiet:elsewhere",
       "Run it here…",
     ],
     [
@@ -259,7 +259,7 @@ describe("the header says what state the channel is in", () => {
       "status unavailable",
       TEAM,
       new Error("adapter did not answer"),
-      "Unknown",
+      "Status unknown",
       "unavailable",
       "Retry",
     ],
@@ -269,13 +269,22 @@ describe("the header says what state the channel is in", () => {
     serve([[channel, status]]);
     renderChannelsPage(`/channels/${channel.uid}`);
     await waitFor(() => expect(screen.getByTestId("channel-state-word")).toHaveTextContent(word));
-    const banners = screen.queryAllByTestId("channel-banner").map((b) => b.dataset.state);
-    expect(banners).toEqual(banner ? [banner] : []);
+    // A problem is a banner holding its fix; off and "runs elsewhere" are a quiet box.
+    const quiet = banner?.startsWith("quiet:") ?? false;
+    const testId = quiet ? "channel-quiet" : "channel-banner";
+    const found = screen.queryAllByTestId(testId).map((b) => b.dataset.state);
+    expect(found).toEqual(banner ? [banner.replace("quiet:", "")] : []);
+    // The header never changes with the state: Send test, then the ⋯ menu.
     const buttons = within(header())
       .getAllByRole("button")
       .map((b) => b.textContent)
       .filter((text) => text !== "");
-    expect(buttons).toEqual(primary ? [primary] : []);
+    expect(buttons).toEqual(["Send test"]);
+    if (primary && !banner) throw new Error("a fix needs a banner");
+    if (primary) {
+      const box = screen.getByTestId(testId);
+      expect(within(box).getByRole("button", { name: primary })).toBeInTheDocument();
+    }
   });
 });
 
@@ -284,7 +293,7 @@ acceptance(
   "a missing sdk is handed to an agent from the channel page",
   async () => {
     // The download stays with the person (a link to SeaTalk's portal); the
-    // rest is the daemon's hand-off, offered beside the header's Retry.
+    // rest is the daemon's hand-off, offered beside the banner's Retry.
     serve([
       [
         TEAM,
@@ -303,7 +312,7 @@ acceptance(
     );
     expect(within(banner).getByRole("button", { name: /Copy prompt/ })).toBeInTheDocument();
     expect(within(banner).queryByText("not found in /v")).not.toBeInTheDocument();
-    expect(within(header()).getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(within(banner).getByRole("button", { name: "Retry" })).toBeInTheDocument();
   },
 );
 
@@ -325,9 +334,9 @@ acceptance(
     ]);
     renderChannelsPage(`/channels/${TEAM.uid}`);
     expect(await screen.findByText("register rejected: bad app id")).toBeInTheDocument();
-    expect(screen.getByTestId("channel-state-word")).toHaveTextContent("Can't connect");
+    expect(screen.getByTestId("channel-state-word")).toHaveTextContent("Token rejected");
     expect(screen.getByTestId("channel-meta")).toHaveTextContent(
-      "SeaTalk app 8231 · WebSocket · runs on this machine",
+      "SeaTalk app 8231 · WebSocket · runs on this Mac",
     );
     expect(screen.getByTestId("channel-owner")).toHaveTextContent("Alex Chen");
     expect(screen.getByTestId("channel-diagnostic")).toHaveTextContent("Privacy mode is on");
@@ -349,7 +358,7 @@ acceptance("channels", "a channel links to its conversations instead of showing 
   renderChannelsPage(`/channels/${TEAM.uid}`);
   expect(await screen.findByTestId("channel-conversations-link")).toHaveAttribute(
     "href",
-    `/conversations?channel=${TEAM.uid}`,
+    `/conversations?source=${TEAM.uid}`,
   );
   // Setup and connection status on Overview, settings on Settings — and no
   // tab, table or list of the channel's conversations.
@@ -368,13 +377,10 @@ acceptance("channels", "a channel links to its conversations instead of showing 
   );
 });
 
-test("the Overview lists every command the channel answers, in the UI's language", async () => {
+test("the Overview has no Commands section: the list lives in the reference docs", async () => {
   renderChannelsPage(`/channels/${TEAM.uid}`);
-  const list = await screen.findByTestId("channel-commands");
-  expect(within(list).getByText("/new [agent]")).toBeInTheDocument();
-  expect(within(list).getByText(/Interrupt the running turn/)).toBeInTheDocument();
-  // /kb needs the Knowledge feature; the page's feature flags do not turn it on here.
-  expect(within(list).queryByText(/^\/kb/)).toBeNull();
+  await screen.findByTestId("channel-overview");
+  expect(screen.queryByTestId("channel-commands")).toBeNull();
 });
 
 test("reconnect asks the daemon to restart the channel's adapter", async () => {
@@ -383,7 +389,7 @@ test("reconnect asks the daemon to restart the channel's adapter", async () => {
   ]);
   renderChannelsPage(`/channels/${KICKED.uid}`);
   fireEvent.click(
-    await within(await screen.findByTestId("channel-header")).findByRole("button", {
+    await within(await screen.findByTestId("channel-banner")).findByRole("button", {
       name: /take it back/i,
     }),
   );
@@ -452,14 +458,14 @@ describe("several owners", () => {
     expect(screen.queryByTestId("channel-pairing-code")).not.toBeInTheDocument();
   });
 
-  test("Add owner opens the dialog, and Cancel withdraws the code", async () => {
+  test("Add owner opens the dialog, and Esc withdraws the code", async () => {
     renderChannelsPage(`/channels/${TEAM.uid}`);
     fireEvent.click(await screen.findByRole("button", { name: "Add owner" }));
     expect(await screen.findByText("K7QM 4XPT")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toHaveTextContent("Add an owner");
     // An add carries no target: whoever sends the code joins the others.
     expect(issuePairingCode).toHaveBeenCalledWith(TEAM.uid, undefined);
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     await waitFor(() => expect(cancelPairingCode).toHaveBeenCalledWith(TEAM.uid));
     await waitFor(() => expect(screen.queryByText("K7QM 4XPT")).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Add owner" })).toBeInTheDocument();
@@ -492,7 +498,7 @@ test("delete confirms, keeps conversations, and leaves the channel's address", a
   renderChannelsPage(`/channels/${TEAM.uid}/settings`);
   fireEvent.click(await screen.findByRole("button", { name: "Delete…" }));
   const dialog = await screen.findByRole("dialog");
-  expect(dialog).toHaveTextContent("Conversations stay in Conversations");
+  expect(dialog).toHaveTextContent("conversations stay in Conversations");
   h.channels = h.channels.filter((c) => (c as ResourceOut).uid !== TEAM.uid);
   fireEvent.click(within(dialog).getByRole("button", { name: "Delete channel" }));
   await waitFor(() =>

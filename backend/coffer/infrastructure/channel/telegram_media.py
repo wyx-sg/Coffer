@@ -123,6 +123,8 @@ def _button(button: ChoiceButton) -> dict[str, Any]:
     if button.selected:
         entry["style"] = "success"
         entry["disabled"] = {}
+    elif button.disabled:
+        entry["disabled"] = {}
     return entry
 
 

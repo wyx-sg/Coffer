@@ -15,13 +15,12 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from coffer.application.channel.details_card import details_buttons, save_details
-from coffer.application.channel.needs_you import Question, extract_question, question_buttons
 from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.reply_shape import ReplyFile, shape_reply, split_details
 from coffer.application.channel.turn_media import deliver_media, send_reply_files
 from coffer.application.channel.turn_status import format_elapsed
 from coffer.application.channel.turn_surface import TurnSurface
-from coffer.domain.channel.envelopes import ChoiceButton
+from coffer.domain.channel.envelopes import ChoiceButton, SentMessage
 from coffer.domain.chat.events import TurnError
 
 __all__ = [
@@ -30,9 +29,10 @@ __all__ = [
     "TurnEnd",
     "TurnOutcome",
     "deliver_reply",
+    "failure_line",
     "first_line",
     "ping_line",
-    "summary_line",
+    "stopped_line",
 ]
 
 #: How much of the answer's first line a completion ping quotes.
@@ -43,10 +43,8 @@ _MENTION_MARKUP = re.compile(r"<mention-tag[^>]*/>|\[([^\]]*)\]\(tg://user\?id=\
 _LINE_MARKER = re.compile(r"^\s*(?:#{1,6}\s+|[-*+]\s+|>\s*|\d+[.)]\s+)")
 _EMPHASIS = re.compile(r"[*_`~]+")
 
-#: How a turn ended, in the words the reactions and the ping use. ``waiting``
-#: is a clean end on a question for the owner (see "Turn a question for the
-#: owner into buttons").
-TurnOutcome = Literal["done", "failed", "stopped", "waiting"]
+#: How a turn ended, in the words the reactions and the ping use.
+TurnOutcome = Literal["done", "failed", "stopped"]
 
 
 class SendCard(Protocol):
@@ -55,7 +53,10 @@ class SendCard(Protocol):
 
     async def __call__(
         self, text: str, buttons: Sequence[ChoiceButton], *, title: str = ""
-    ) -> None: ...
+    ) -> SentMessage | None:
+        """The sent message's handle, which a later rewrite needs; ``None``
+        when nothing went out."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -66,11 +67,6 @@ class Delivered:
     body: str = ""
     #: Its head went out by finishing the live surface in place.
     in_place: bool = False
-    #: The question the agent ended on, if any.
-    question: Question | None = None
-    #: That question went out as its own message with buttons — a new message,
-    #: which notifies by itself.
-    question_sent: bool = False
 
 
 @dataclass(frozen=True)
@@ -96,21 +92,16 @@ class TurnEnd:
         return "done"
 
 
-def summary_line(end: TurnEnd) -> str:
-    """``⚠️ failed · 7 tools · 42.1s · 18000 tok`` — for a turn that did not end
-    normally (see "Summarise a turn that did not end normally")."""
-    facts = [
-        f"{end.tool_count} tool" + ("" if end.tool_count == 1 else "s"),
-        f"{end.duration:.1f}s",
-    ]
-    if end.tokens is not None:
-        facts.append(f"{end.tokens} tok")
-    detail = " · ".join(facts)
-    if end.error is not None:
-        return f"⚠️ failed · {detail}"
-    if end.stop_reason == "interrupted":
-        return f"⏹ stopped · {detail}"
-    return f"✅ done · {detail}"
+def failure_line(message: str) -> str:
+    """``⚠️ <what happened>. Send it again to retry.`` — the reason in plain words,
+    never the internal error code."""
+    reason = message.strip().rstrip(".") or "Something went wrong"
+    return f"⚠️ {reason}. Send it again to retry."
+
+
+def stopped_line(duration: float) -> str:
+    """``⏹ Stopped after 12s.``"""
+    return f"⏹ Stopped after {format_elapsed(duration)}."
 
 
 def first_line(body: str) -> str:
@@ -125,15 +116,13 @@ def first_line(body: str) -> str:
     return ""
 
 
-def ping_line(end: TurnEnd, body: str, question: Question | None = None) -> str:
+def ping_line(end: TurnEnd, body: str) -> str:
     """The one line a long turn ends with where its answer does not notify (see
     "Ping the asker when a long turn ends"): ``✅ Done · 4m 12s — <first line>``.
 
     A turn that did not end normally carries the summary's facts — tool count
     and tokens — because the ping stands in for the summary there."""
     elapsed = format_elapsed(end.duration)
-    if question is not None and end.clean:
-        return f"❓ Needs you · {elapsed} — {question.text}"
     if end.outcome == "done":
         line = first_line(body)
         return f"✅ Done · {elapsed} — {line}" if line else f"✅ Done · {elapsed}"
@@ -158,12 +147,12 @@ async def deliver_reply(
     text: str,
     end: TurnEnd,
     send_card: SendCard | None = None,
+    stop_noted: bool = False,
 ) -> Delivered:
     """Deliver the finished reply and say what it turned out to be.
 
-    A clean reply ending on a ``NEEDS YOU:`` line loses the line; its question
-    follows the answer as its own message with one button per option, or stays
-    in the reply as ``❓ …`` where there are no buttons.
+    ``stop_noted``: the "Stopping…" message was already rewritten into the
+    stop result, so the reply does not repeat it.
 
     The @mention is added HERE, to the body, exactly once: whichever of the
     surface or the ordinary send delivers the head carries it, and the overflow
@@ -185,19 +174,6 @@ async def deliver_reply(
             attach=caps.supports_media,
         )
         text, files = shaped.body, shaped.files
-    question: Question | None = None
-    if end.clean:
-        text, question = extract_question(text)
-    buttons = (
-        question_buttons(question)
-        if question is not None and send_card is not None and adapter.capabilities.supports_buttons
-        else []
-    )
-    if question is not None and not buttons:
-        # No buttons to tap: the question stays in the reply, marked.
-        text = f"{text}\n\n❓ {question.text}".strip()
-        if question.options:
-            text += " (" + " / ".join(question.options) + ")"
     details = ""
     caps = adapter.capabilities
     if end.clean and send_card is not None and caps.supports_buttons and not caps.collapses_details:
@@ -212,10 +188,14 @@ async def deliver_reply(
     if end.error is not None:
         # What the agent streamed before failing is still the user's — a stalled
         # or dropped turn often has most of an answer in it.
-        notice = f"⚠️ {end.error.message} [{end.error.code}]"
+        notice = failure_line(end.error.message)
         body = f"{text}\n\n{notice}" if text else notice
     elif end.stop_reason == "interrupted":
-        body = f"{text}\n\n⏹ Stopped." if text else "⏹ Stopped."
+        notice = stopped_line(end.duration)
+        if stop_noted and not text:
+            await surface.close("")
+            return Delivered()
+        body = text if stop_noted else f"{text}\n\n{notice}" if text else notice
     elif not text and media_sent:
         # The uploaded file(s) are the reply — no placeholder text, but the live
         # surface still has to be closed. One that persists as a message must
@@ -233,14 +213,7 @@ async def deliver_reply(
     await send_reply_files(adapter, chat_id, files, thread_id=thread_id, chat_kind=chat_kind)
     if details and send_card is not None:
         await _send_details_card(send_card, send, text, details)
-    sent = False
-    if question is not None and buttons and send_card is not None:
-        try:
-            await send_card(f"❓ {question.text}", buttons)
-            sent = True
-        except Exception:
-            await send(f"❓ {question.text}")
-    return Delivered(body, was_open and leftover != mentioned, question, sent)
+    return Delivered(body, was_open and leftover != mentioned)
 
 
 async def _send_details_card(

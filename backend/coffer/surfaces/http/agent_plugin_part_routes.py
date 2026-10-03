@@ -1,6 +1,6 @@
 """/api/v1/agents/{uid}/plugins/{plugin_id}/... read-only routes for what a plugin provides.
 
-Spec agent-registry "Read what a plugin provides, item by item". The plugin
+Spec agent-registry "Read one installed plugin's detail read-only". The plugin
 detail page lists a plugin's skills, commands, subagents and MCP servers; these
 routes open each one: a skill's folder (tree + file contents, the same shapes as
 a managed skill's), a command's or subagent's markdown file, an MCP server's

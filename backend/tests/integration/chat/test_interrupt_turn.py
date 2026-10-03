@@ -64,9 +64,10 @@ async def test_interrupt_route_stops_turn_and_keeps_partial_output() -> None:
     assert any(isinstance(e, TurnDone) and e.stop_reason == "interrupted" for e in rest)
     assert conv.id not in active_turns()
 
-    # The partial assistant message was persisted (status complete).
+    # The partial assistant message was persisted (status stopped).
     msgs = await chat_svc.list_messages(conv.id)
     assistant = next(m for m in msgs if m.role == Role.ASSISTANT)
-    assert assistant.status == "complete"
+    assert assistant.status == "stopped"
+    assert assistant.finished_at is not None
     text = "".join(b.text for b in assistant.content if isinstance(b, TextBlock))
     assert "partial answer" in text

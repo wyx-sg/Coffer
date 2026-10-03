@@ -1,7 +1,7 @@
 // frontend/src/components/channel/ChannelList.tsx
 // The left pane of the Channels page: a filter field over the channels, then
 // the channels in groups — Needs attention, Connected, Elsewhere (another
-// machine runs them) and Off — each with its count. Grouping is by state
+// machine runs them) and Off. Grouping is by state
 // (channelState.ts), so a broken channel always sits at the top.
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -69,10 +69,7 @@ export function ChannelList({
             const heading = t(`channels.list.groups.${group}`);
             return (
               <section key={group} aria-label={heading} data-testid={`channel-group-${group}`}>
-                <h2 className="flex items-center px-2.5 pb-1 text-2xs font-semibold text-text-muted">
-                  {heading}
-                  <span className="ml-auto font-book">{rows.length}</span>
-                </h2>
+                <h2 className="px-2.5 pb-1 text-2xs font-semibold text-text-muted">{heading}</h2>
                 <ul className="flex flex-col gap-px">
                   {rows.map((c) => {
                     const view = views.get(c.uid);

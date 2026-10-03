@@ -30,7 +30,7 @@ _NAMESPACE_SEP = "__"
 
 #: A tool's exposure setting. ``auto`` lets the budget decide by usage;
 #: ``listed`` pins it into ``tools/list``; ``search`` leaves it to
-#: ``coffer__search_tools`` only (spec mcp-gateway "Choose how each tool is exposed").
+#: ``coffer__search_tools`` only (spec mcp-gateway "Forward tools, resources and prompts").
 ToolExposure = Literal["auto", "listed", "search"]
 EXPOSURE_MODES: tuple[str, ...] = ("auto", "listed", "search")
 

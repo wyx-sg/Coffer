@@ -66,6 +66,13 @@ export type ConversationPatch = Schemas["ConversationPatch"];
  */
 export type AgentConfigOut = Schemas["AgentConfigOut"];
 
+/** A question the agent asked the owner: the `question` block of a reply
+ *  (spec chat "Pause a turn on a question for the owner"). */
+export type Question = Schemas["QuestionOut"];
+
+/** The owner's answer to one question: option labels and/or free text. */
+export type QuestionAnswerIn = Schemas["QuestionAnswerIn"];
+
 /** The pending-message queue after a replace (spec chat "Queue messages sent during a turn"). */
 export type PendingQueue = Schemas["PendingQueueOut"];
 
@@ -145,6 +152,26 @@ export const chatApi = {
   deleteConversation: (id: string): Promise<void> =>
     unwrapVoid(getApiClient().DELETE("/chat/conversations/{id}", conv(id))),
 
+  // How many conversations wait on an answer (the sidebar's Conversations badge).
+  needsYouCount: (): Promise<{ count: number }> =>
+    unwrap(getApiClient().GET("/chat/conversations/needs-you-count")),
+
+  // Answer the question's next unanswered question. `index` names the one being
+  // answered, so a late answer is refused (409 QUESTION_CLOSED) instead of landing
+  // on the next one. Free text goes as `text` with no `selected`.
+  answerQuestion: (
+    conversationId: string,
+    questionId: string,
+    answers: QuestionAnswerIn[],
+    index?: number,
+  ): Promise<Question> =>
+    unwrap(
+      getApiClient().POST("/chat/conversations/{id}/questions/{question_id}/answer", {
+        params: { path: { id: conversationId, question_id: questionId } },
+        body: index === undefined ? { answers } : { answers, index },
+      }),
+    ),
+
   // Messages
   listMessages: (conversationId: string): Promise<MessageListOut> =>
     unwrap(getApiClient().GET("/chat/conversations/{id}/messages", conv(conversationId))),
@@ -172,6 +199,20 @@ export const chatApi = {
         params: { path: { id: conversationId, message_id: messageId } },
       }),
     ),
+
+  // The bytes of a file attached to one of this conversation's messages (the
+  // thread's thumbnail). Fetched here, not through an <img src>, because the
+  // request needs the X-Coffer-Token header; a pruned or foreign file is 404.
+  attachmentBlob: async (conversationId: string, attachmentId: string): Promise<Blob> => {
+    const result = await getApiClient().GET(
+      "/chat/conversations/{id}/attachments/{attachment_id}",
+      {
+        params: { path: { id: conversationId, attachment_id: attachmentId } },
+        parseAs: "blob",
+      },
+    );
+    return unwrap(Promise.resolve(result)) as Promise<Blob>;
+  },
 
   // Upload one file for a later send. Not tied to a conversation, so a draft
   // can attach before its conversation exists. `signal` cancels it (the

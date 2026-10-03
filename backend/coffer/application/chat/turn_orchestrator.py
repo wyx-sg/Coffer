@@ -36,6 +36,7 @@ import logging
 from collections.abc import Callable, Sequence
 from datetime import datetime
 
+from coffer.application.chat import questions
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService, MessageRepo
 from coffer.application.chat.turn_persistence import DEFAULT_PARTIAL_FLUSH_SECONDS
@@ -315,6 +316,10 @@ class TurnOrchestrator:
         # Reserve synchronously — no ``await`` before this assignment.
         state.active = active
         state.bus.begin_turn()
+        # The turn's token, minted before the adapter is built: the provider puts
+        # it into the agent process's environment (``COFFER_TURN_TOKEN``) so the
+        # agent's ``coffer__ask`` calls resolve to this turn.
+        turn = questions.register_turn(conversation_id)
         try:
             conv = await self._chat.get_conversation(conversation_id)
             provider = self._registry.get(conv.agent_key)
@@ -327,7 +332,9 @@ class TurnOrchestrator:
                 content=[
                     TextBlock(text=message.text),
                     *(
-                        AttachmentBlock(path=a.path, mime=a.mime, filename=a.filename)
+                        AttachmentBlock(
+                            path=a.path, mime=a.mime, filename=a.filename, id=a.id, size=a.size
+                        )
                         for a in message.attachments
                     ),
                 ],
@@ -336,6 +343,7 @@ class TurnOrchestrator:
             )
         except BaseException:
             # Anything failed before the task spawned — release the reservation.
+            questions.release_turn(turn)
             if state.active is active:
                 state.active = None
             if primary_queue is not None:
@@ -353,6 +361,7 @@ class TurnOrchestrator:
                     chat=self._chat,
                     idle_timeout=self._idle_timeout,
                     flush_interval=self._flush_interval,
+                    turn=turn,
                 ),
                 name=f"turn:{conversation_id}",
             )

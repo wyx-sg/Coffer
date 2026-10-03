@@ -89,7 +89,8 @@ async def test_turn_error_is_delivered_as_a_short_notice(env: ChannelEnv) -> Non
 
     notice = next(t for t in adapter.texts() if t.startswith("⚠️"))
     assert "upstream timed out" in notice
-    assert "PROVIDER_TIMEOUT" in notice
+    assert "PROVIDER_TIMEOUT" not in notice
+    assert notice.endswith("Send it again to retry.")
     # The channel stays up: the binding is still live and answers commands.
     assert env.processor.binding(uid_of("tg")) is not None
 

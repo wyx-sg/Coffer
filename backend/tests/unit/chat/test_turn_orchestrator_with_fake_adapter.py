@@ -129,6 +129,8 @@ async def test_happy_path_persists_assistant_message() -> None:
     assistant = messages[1]
     assert assistant.role == Role.ASSISTANT
     assert assistant.status == "complete"
+    assert assistant.finished_at is not None
+    assert messages[0].finished_at is None  # a user message never streams
     assert assistant.prompt_tokens == 20
     assert assistant.completion_tokens == 8
     texts = [b.text for b in assistant.content if isinstance(b, TextBlock)]
@@ -420,9 +422,10 @@ async def test_interrupt_persists_the_partial_message() -> None:
     # A terminal TurnDone(stop_reason="interrupted") closes the stream.
     assert any(isinstance(e, TurnDone) and e.stop_reason == "interrupted" for e in rest)
 
-    # The partial assistant message is persisted (status complete).
+    # The partial assistant message is persisted (status stopped).
     assistant = next(m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT)
-    assert assistant.status == "complete"
+    assert assistant.status == "stopped"
+    assert assistant.finished_at is not None
     texts = [b.text for b in assistant.content if isinstance(b, TextBlock)]
     assert "partial answer" in "".join(texts)
     assert conv.id not in active_turns()

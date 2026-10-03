@@ -91,7 +91,7 @@ paths:
     get:
       description: |-
         Conversations newest activity first (id breaks ties), paged by cursor;
-        ``archived=true`` lists the archived ones, ``q`` filters by title.
+        ``archived=true`` lists the archived ones, ``q`` filters by title or message text.
       operationId: list_conversations_api_v1_chat_conversations_get
       parameters:
       - in: query
@@ -120,7 +120,7 @@ paths:
           - type: 'null'
           description: The previous page's next_cursor. Bound to the listing (active or archived) it was issued for; any other value is 400 CURSOR_INVALID.
           title: Cursor
-      - description: Title contains this text (case-insensitive); a cursor is bound to it.
+      - description: Title or any message's text contains this text (case-insensitive); a cursor is bound to it.
         in: query
         name: q
         required: false
@@ -129,7 +129,7 @@ paths:
           - maxLength: 200
             type: string
           - type: 'null'
-          description: Title contains this text (case-insensitive); a cursor is bound to it.
+          description: Title or any message's text contains this text (case-insensitive); a cursor is bound to it.
           title: Q
       - in: header
         name: x-coffer-token
@@ -245,6 +245,41 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Batch Conversations
+      tags:
+      - chat
+  /api/v1/chat/conversations/needs-you-count:
+    get:
+      description: How many conversations have a question waiting on the owner.
+      operationId: needs_you_count_api_v1_chat_conversations_needs_you_count_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NeedsYouCountOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Needs You Count
       tags:
       - chat
   /api/v1/chat/conversations/{id}:
@@ -527,6 +562,54 @@ paths:
       summary: Archive Conversation
       tags:
       - chat
+  /api/v1/chat/conversations/{id}/attachments/{attachment_id}:
+    get:
+      description: |-
+        The bytes of a file attached to one of this conversation's messages, for
+        the thread's thumbnail (spec chat "Show a message's attachments in the
+        thread"). Only an id a message of THIS conversation references resolves, and
+        only through the media store, so no client-supplied path is ever read; an
+        unknown id, another conversation's file or a pruned one is 404.
+      operationId: get_attachment_bytes_api_v1_chat_conversations__id__attachments__attachment_id__get
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          title: Id
+          type: string
+      - in: path
+        name: attachment_id
+        required: true
+        schema:
+          title: Attachment Id
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Attachment Bytes
+      tags:
+      - chat
   /api/v1/chat/conversations/{id}/events:
     get:
       description: |-
@@ -574,7 +657,7 @@ paths:
                 required:
                 - data
                 type: object
-          description: A Server-Sent Events stream of the seven turn events (`turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_done`, `turn_error`, `queue_changed`) that stays open across turns until the client disconnects.
+          description: A Server-Sent Events stream of the nine turn events (`turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_done`, `turn_error`, `queue_changed`, `question_asked`, `question_closed`) that stays open across turns until the client disconnects.
         '422':
           content:
             application/json:
@@ -843,6 +926,74 @@ paths:
       summary: Set Pending
       tags:
       - chat
+  /api/v1/chat/conversations/{id}/questions/{question_id}/answer:
+    post:
+      description: |-
+        Answer the question's next unanswered question(s) from the Conversations page.
+
+        404 ``CONVERSATION_NOT_FOUND`` for an unknown conversation; 409
+        ``QUESTION_CLOSED`` when the question was already answered (the first answer
+        wins), cancelled, or its turn ended; 422 ``QUESTION_ANSWER_INVALID`` for an
+        option the question does not offer, several options on a single-choice
+        question, or an empty answer. Returns the question as it now stands.
+      operationId: answer_question_api_v1_chat_conversations__id__questions__question_id__answer_post
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          title: Id
+          type: string
+      - in: path
+        name: question_id
+        required: true
+        schema:
+          title: Question Id
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerQuestionIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Answer Question
+      tags:
+      - chat
   /api/v1/chat/conversations/{id}/unarchive:
     post:
       description: Restore an archived conversation back into the active list.
@@ -964,6 +1115,32 @@ components:
       - display_name
       - available
       title: AgentProviderOut
+      type: object
+    AnswerQuestionIn:
+      description: |-
+        Body for POST .../questions/{question_id}/answer.
+
+        ``answers`` answer the question's still-unanswered questions in order (one
+        for the first, or several at once). ``index``, when given, names the question
+        being answered: if that one was answered meanwhile the request is refused as
+        ``QUESTION_CLOSED`` rather than answering the next.
+      properties:
+        answers:
+          items:
+            $ref: '#/components/schemas/QuestionAnswerIn'
+          maxItems: 4
+          minItems: 1
+          title: Answers
+          type: array
+        index:
+          anyOf:
+          - minimum: 0.0
+            type: integer
+          - type: 'null'
+          title: Index
+      required:
+      - answers
+      title: AnswerQuestionIn
       type: object
     Body_upload_attachment_api_v1_chat_attachments_post:
       properties:
@@ -1123,10 +1300,20 @@ components:
     ContentBlockOut:
       description: |-
         Wire representation of a ContentBlock (text | tool_use | tool_result |
-        attachment). ``filename``/``mime`` describe an ``attachment`` reference; the
+        attachment | question). ``filename``/``mime`` describe an ``attachment`` reference; the
         local ``path`` is deliberately NOT surfaced (leak/security — spec chat
         "Re-materialise attachments from persisted history").
       properties:
+        attachment_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Attachment Id
+        duration_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Duration Ms
         error:
           anyOf:
           - type: string
@@ -1148,6 +1335,15 @@ components:
             type: object
           - type: 'null'
           title: Output
+        question:
+          anyOf:
+          - $ref: '#/components/schemas/QuestionOut'
+          - type: 'null'
+        size:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Size
         text:
           anyOf:
           - type: string
@@ -1175,6 +1371,7 @@ components:
           - tool_use
           - tool_result
           - attachment
+          - question
           title: Type
           type: string
       required:
@@ -1185,8 +1382,12 @@ components:
       - tool_input
       - output
       - error
+      - duration_ms
       - filename
       - mime
+      - attachment_id
+      - size
+      - question
       title: ContentBlockOut
       type: object
     ConversationBatchIn:
@@ -1283,9 +1484,13 @@ components:
           - type: string
           - type: 'null'
           title: Next Cursor
+        total:
+          title: Total
+          type: integer
       required:
       - conversations
       - next_cursor
+      - total
       title: ConversationListOut
       type: object
     ConversationOut:
@@ -1311,6 +1516,10 @@ components:
         id:
           title: Id
           type: string
+        needs_you:
+          default: false
+          title: Needs You
+          type: boolean
         preview:
           anyOf:
           - type: string
@@ -1337,6 +1546,7 @@ components:
       - channel_binding
       - preview
       - running
+      - needs_you
       title: ConversationOut
       type: object
     ConversationPatch:
@@ -1411,6 +1621,12 @@ components:
           format: date-time
           title: Created At
           type: string
+        finished_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Finished At
         id:
           title: Id
           type: string
@@ -1437,6 +1653,7 @@ components:
           enum:
           - complete
           - streaming
+          - stopped
           - failed
           title: Status
           type: string
@@ -1451,7 +1668,18 @@ components:
       - prompt_tokens
       - completion_tokens
       - created_at
+      - finished_at
       title: MessageOut
+      type: object
+    NeedsYouCountOut:
+      description: How many conversations wait on an answer.
+      properties:
+        count:
+          title: Count
+          type: integer
+      required:
+      - count
+      title: NeedsYouCountOut
       type: object
     PendingQueueIn:
       description: Body for PUT /conversations/{id}/pending — replaces the ordered queue.
@@ -1479,6 +1707,178 @@ components:
       required:
       - pending
       title: PendingQueueOut
+      type: object
+    QuestionAnswerIn:
+      description: 'The owner''s answer to one question: option labels and/or free text.'
+      properties:
+        selected:
+          items:
+            type: string
+          maxItems: 4
+          title: Selected
+          type: array
+        text:
+          anyOf:
+          - maxLength: 4000
+            type: string
+          - type: 'null'
+          title: Text
+      title: QuestionAnswerIn
+      type: object
+    QuestionAnswerOut:
+      description: 'The answer to one question: the chosen option labels and/or typed text.'
+      properties:
+        header:
+          title: Header
+          type: string
+        selected:
+          items:
+            type: string
+          title: Selected
+          type: array
+        text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Text
+      required:
+      - header
+      - selected
+      - text
+      title: QuestionAnswerOut
+      type: object
+    QuestionAskedEventOut:
+      description: |-
+        The data of a `question_asked` event: the agent asked the owner a question
+        and the turn is waiting. Sent again with the same `question_id` as the owner
+        answers one question of several; the card is replaced by `question_id`.
+      properties:
+        question:
+          $ref: '#/components/schemas/QuestionOut'
+        type:
+          const: question_asked
+          title: Type
+          type: string
+      required:
+      - type
+      - question
+      title: QuestionAskedEventOut
+      type: object
+    QuestionClosedEventOut:
+      description: |-
+        The data of a `question_closed` event: the question was answered in full,
+        or cancelled (the turn stopped or ended).
+      properties:
+        question:
+          $ref: '#/components/schemas/QuestionOut'
+        type:
+          const: question_closed
+          title: Type
+          type: string
+      required:
+      - type
+      - question
+      title: QuestionClosedEventOut
+      type: object
+    QuestionOptionOut:
+      properties:
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        label:
+          title: Label
+          type: string
+      required:
+      - label
+      - description
+      title: QuestionOptionOut
+      type: object
+    QuestionOut:
+      description: |-
+        A question the agent asked the owner (spec chat "Pause a turn on a
+        question for the owner") — the ``question`` block of a reply, also the
+        payload of the ``question_asked`` / ``question_closed`` events.
+
+        ``answers`` holds the answers given so far, in order (a prefix of
+        ``questions`` while ``status`` is ``pending``). ``answered_via`` is ``web`` or
+        the answering channel's uid; ``answered_at`` is an ISO-8601 UTC instant.
+      properties:
+        answered_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Answered At
+        answered_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Answered By
+        answered_via:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Answered Via
+        answers:
+          items:
+            $ref: '#/components/schemas/QuestionAnswerOut'
+          title: Answers
+          type: array
+        context:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Context
+        question_id:
+          title: Question Id
+          type: string
+        questions:
+          items:
+            $ref: '#/components/schemas/QuestionSpecOut'
+          title: Questions
+          type: array
+        status:
+          enum:
+          - pending
+          - answered
+          - cancelled
+          title: Status
+          type: string
+      required:
+      - question_id
+      - context
+      - questions
+      - status
+      - answers
+      - answered_via
+      - answered_by
+      - answered_at
+      title: QuestionOut
+      type: object
+    QuestionSpecOut:
+      description: One question of an ask.
+      properties:
+        header:
+          title: Header
+          type: string
+        multi_select:
+          title: Multi Select
+          type: boolean
+        options:
+          items:
+            $ref: '#/components/schemas/QuestionOptionOut'
+          title: Options
+          type: array
+        question:
+          title: Question
+          type: string
+      required:
+      - header
+      - question
+      - multi_select
+      - options
+      title: QuestionSpecOut
       type: object
     QueueChangedEventOut:
       description: 'The data of a `queue_changed` event: the pending-message queue changed.'
@@ -1590,6 +1990,12 @@ components:
     ToolResultEventOut:
       description: 'The data of a `tool_result` event: the result or error of a prior `tool_call`.'
       properties:
+        duration_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: How long the tool ran, in milliseconds; null when unknown.
+          title: Duration Ms
         error:
           anyOf:
           - type: string
@@ -1617,6 +2023,7 @@ components:
       - tool_name
       - output
       - error
+      - duration_ms
       title: ToolResultEventOut
       type: object
     TurnDoneEventOut:
@@ -1676,6 +2083,8 @@ components:
       - $ref: '#/components/schemas/TurnDoneEventOut'
       - $ref: '#/components/schemas/TurnErrorEventOut'
       - $ref: '#/components/schemas/QueueChangedEventOut'
+      - $ref: '#/components/schemas/QuestionAskedEventOut'
+      - $ref: '#/components/schemas/QuestionClosedEventOut'
       description: |-
         The `data:` of one event on `GET /api/v1/chat/conversations/{id}/events`,
         chosen by its SSE `event:` name (which equals the model's `type`).

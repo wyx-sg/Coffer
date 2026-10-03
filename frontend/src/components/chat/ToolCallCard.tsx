@@ -1,6 +1,8 @@
 // components/chat/ToolCallCard.tsx
 // One tool call in an agent's reply: collapsed, its name, what it was called on
-// (lib/conversations/toolSummary) and how it went — Running, Done or Error;
+// (lib/conversations/toolSummary) and how it went — Running (muted, spinning),
+// "Done · 0.3s", Error; a call with no result in a reply that was stopped or
+// whose stream was lost reads "Stopped" / "Unknown" instead of Running;
 // expanded, its input and its result (or error). A result is drawn only inside
 // its own call's card.
 import { useState } from "react";
@@ -8,6 +10,8 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, Wrench } from "lucide-react";
 
 import { StatusWord } from "@/components/status/StatusWord";
+import { Spinner } from "@/components/ui/spinner";
+import { formatToolDuration } from "@/lib/format/duration";
 import { CodeView } from "@/components/preview/CodeView";
 import type { ContentBlock } from "@/lib/api/chat";
 import { toolSummary } from "@/lib/conversations/toolSummary";
@@ -16,9 +20,11 @@ import { cn } from "@/lib/utils";
 interface Props {
   toolUse: ContentBlock;
   toolResult?: ContentBlock;
+  /** Why a call with no result is not running: its reply was stopped, or the live stream was lost. */
+  unfinished?: "stopped" | "lost";
 }
 
-export function ToolCallCard({ toolUse, toolResult }: Props) {
+export function ToolCallCard({ toolUse, toolResult, unfinished }: Props) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const hasResult = toolResult !== undefined;
@@ -44,13 +50,26 @@ export function ToolCallCard({ toolUse, toolResult }: Props) {
           {toolUse.tool_name ?? t("conversations.toolCard.unknown")}
         </span>
         <span className="min-w-0 flex-1 truncate font-mono text-text-muted">{summary}</span>
-        <StatusWord tone={!hasResult ? "off" : isError ? "err" : "ok"}>
-          {!hasResult
-            ? t("conversations.toolCard.running")
-            : isError
-              ? t("conversations.toolCard.error")
+        {!hasResult ? (
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-text-muted">
+            {unfinished ? null : <Spinner />}
+            {unfinished === "stopped"
+              ? t("conversations.toolCard.stopped")
+              : unfinished === "lost"
+                ? t("conversations.toolCard.lost")
+                : t("conversations.toolCard.running")}
+          </span>
+        ) : isError ? (
+          <StatusWord tone="err">{t("conversations.toolCard.error")}</StatusWord>
+        ) : (
+          <StatusWord tone="ok">
+            {toolResult.duration_ms != null
+              ? t("conversations.toolCard.doneIn", {
+                  duration: formatToolDuration(toolResult.duration_ms),
+                })
               : t("conversations.toolCard.done")}
-        </StatusWord>
+          </StatusWord>
+        )}
         {expanded ? (
           <ChevronDown className="size-3.5 shrink-0 text-text-subtle" aria-hidden />
         ) : (

@@ -30,7 +30,7 @@ describe("sourceText", () => {
   test("a direct chat, its parallel thread and a thread in it", () => {
     expect(text({ place: place({}) })).toBe("SeaTalk · DM");
     expect(text({ place: place({ parallel_mark: "🧵#2 deploy check", thread: true }) })).toBe(
-      "SeaTalk · DM · 🧵#2",
+      "SeaTalk · DM · Thread 2",
     );
     expect(text({ place: place({ thread: true }) })).toBe("SeaTalk · DM › thread");
   });

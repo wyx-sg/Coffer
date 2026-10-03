@@ -54,7 +54,11 @@ export function useResourceScope(uid: string, enabled = true) {
  * list key to refresh afterwards — the same reason `useResourceMutations`
  * carries it.
  */
-export function useUpdateResourceScope(kind: string, uid: string) {
+export function useUpdateResourceScope(
+  kind: string,
+  uid: string,
+  options: { quiet?: boolean } = {},
+) {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -73,7 +77,10 @@ export function useUpdateResourceScope(kind: string, uid: string) {
         void qc.invalidateQueries({ queryKey: own });
       }
     },
-    onError: (error) => toast.error(translateApiError(t, error)),
+    // `quiet`: the caller shows the failure itself (the reach panel, inline).
+    onError: (error) => {
+      if (!options.quiet) toast.error(translateApiError(t, error));
+    },
   });
 }
 
@@ -87,6 +94,8 @@ export function useUpdateResourceScope(kind: string, uid: string) {
 export function useBulkReach(invalidate: QueryKey[] = []) {
   const bulk = useBulkMutate({
     invalidate: [resourcesKey, scopeKey, agentsKey, ...invalidate],
+    // The reach panel says a partial failure itself, with a Retry.
+    quietFailures: true,
   });
   const { run } = bulk;
   const disable = useCallback(

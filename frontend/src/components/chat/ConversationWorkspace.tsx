@@ -1,8 +1,11 @@
 // src/components/chat/ConversationWorkspace.tsx — an open conversation (or the
-// draft), full width: no list beside it. It is the thread with its header and
-// reply box, the draft, a loading line, or — for a link to a conversation that
-// no longer exists — a notice with a way to start a new one.
+// draft), full width: no list beside it. It is the title row (in the window
+// title bar) over the thread and its reply box, the draft, a loading line, or —
+// for a link to a conversation that no longer exists — a notice with a way to
+// start a new one.
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation, useNavigate } from "react-router-dom";
 import { MessageSquareOff } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
@@ -23,49 +26,56 @@ interface Props {
 export function ConversationWorkspace({ c, onNew, agentNames }: Props) {
   const { t } = useTranslation();
   const conv = c.activeConv;
+  const navigate = useNavigate();
+  const { pathname, search, state } = useLocation();
+  // The list's Rename opens the conversation with its title already being edited.
+  const renameRequested = (state as { rename?: boolean } | null)?.rename === true;
+  useEffect(() => {
+    if (renameRequested && conv) navigate(`${pathname}${search}`, { replace: true, state: null });
+  }, [renameRequested, conv, pathname, search, navigate]);
   const agentLabel = conv ? (c.activeAgent?.display_name ?? agentNames.get(conv.agent_key)) : "";
 
   let detail: JSX.Element;
   if (conv) {
     detail = (
-      <MessageThread
-        conversation={conv}
-        header={
-          <ConversationHeader
-            conversation={conv}
-            archived={c.activeArchived}
-            onRename={(title) => c.renameConversation(conv.id, title)}
-            onArchive={() => c.archiveConversation(conv.id)}
-            onUnarchive={() => c.unarchiveConversation(conv.id)}
-            unarchivePending={c.unarchivePending}
-            onDelete={() => c.requestDelete(conv.id)}
-          />
-        }
-        agentLabel={agentLabel}
-        liveMessage={c.turn.liveMessage}
-        pendingEchoes={c.turn.pendingEchoes}
-        isStreaming={c.turn.isStreaming}
-        turnError={c.turn.error}
-        streamLost={c.turn.streamLost}
-        onReload={c.turn.reload}
-        onStop={() => void c.turn.interrupt()}
-        onSend={(text, attachments) => {
-          c.turn.clearError();
-          return c.turn.send(text, attachments);
-        }}
-        onClearTurnError={c.turn.clearError}
-        retryable={c.turn.retryable}
-        restore={c.refusedFirst}
-        onRestored={c.clearRefusedFirst}
-        onResend={c.turn.resend}
-        pending={c.turn.pending}
-        onSetPending={(texts) => void c.turn.setPending(texts)}
-        queueHeld={c.turn.queueHeld}
-        onResumeQueue={() => void c.turn.resumeQueue()}
-        readOnly={c.activeArchived}
-        onUnarchive={() => c.unarchiveConversation(conv.id)}
-        unarchivePending={c.unarchivePending}
-      />
+      <>
+        <ConversationHeader
+          key={conv.id}
+          conversation={conv}
+          archived={c.activeArchived}
+          startRenaming={renameRequested}
+          onRename={(title) => c.renameConversation(conv.id, title)}
+          onArchive={() => c.archiveConversation(conv.id)}
+          onDelete={() => c.requestDelete(conv.id)}
+        />
+        <MessageThread
+          conversation={conv}
+          agentLabel={agentLabel}
+          liveMessage={c.turn.liveMessage}
+          pendingEchoes={c.turn.pendingEchoes}
+          isStreaming={c.turn.isStreaming}
+          turnError={c.turn.error}
+          streamLost={c.turn.streamLost}
+          onReload={c.turn.reload}
+          onStop={() => void c.turn.interrupt()}
+          onSend={(text, attachments) => {
+            c.turn.clearError();
+            return c.turn.send(text, attachments);
+          }}
+          onClearTurnError={c.turn.clearError}
+          retryable={c.turn.retryable}
+          restore={c.refusedFirst}
+          onRestored={c.clearRefusedFirst}
+          onResend={c.turn.resend}
+          pending={c.turn.pending}
+          onSetPending={(texts) => void c.turn.setPending(texts)}
+          queueHeld={c.turn.queueHeld}
+          onResumeQueue={() => void c.turn.resumeQueue()}
+          readOnly={c.activeArchived}
+          onUnarchive={() => c.unarchiveConversation(conv.id)}
+          unarchivePending={c.unarchivePending}
+        />
+      </>
     );
   } else if (c.activeLoading) {
     detail = (
@@ -109,6 +119,7 @@ export function ConversationWorkspace({ c, onNew, agentNames }: Props) {
         creating={c.creating}
         restore={c.draftPrefill}
         onRestored={c.clearDraftPrefill}
+        fromHandoff={c.draftFromHandoff}
       />
     );
   }

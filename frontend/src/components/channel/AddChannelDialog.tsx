@@ -20,6 +20,7 @@ import {
 import { useToast } from "@/components/ui/toast";
 import type { ChannelType } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
+import { channelPlatform } from "@/lib/channels/channelState";
 import { channelPath } from "@/lib/channels/tabs";
 import { displayName } from "@/lib/resourceTitle";
 import { AddChannelConnectStep } from "./AddChannelConnectStep";
@@ -57,14 +58,17 @@ export function AddChannelDialog({ open, onOpenChange, initialPlatform = null }:
 
   const title =
     step === "pair" && created
-      ? t("channels.add.pairTitle", { name: displayName(created) })
+      ? t("channels.add.pairTitle", {
+          platform: platformLabel(channelPlatform(created.config)),
+          name: displayName(created),
+        })
       : step === "connect" && platform
         ? t("channels.add.connectTitle", { platform: platformLabel(platform) })
         : t("channels.add.title");
 
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
-      <DialogContent className="max-w-[560px]">
+      <DialogContent className="max-w-[640px]">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription asChild>

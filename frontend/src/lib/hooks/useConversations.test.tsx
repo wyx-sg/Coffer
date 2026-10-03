@@ -51,6 +51,7 @@ function makeConversation(overrides?: Partial<Conversation>): Conversation {
     updated_at: "2026-05-22T00:00:00Z",
     preview: null,
     running: false,
+    needs_you: false,
     ...overrides,
   };
 }

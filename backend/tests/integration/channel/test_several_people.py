@@ -1,5 +1,5 @@
 """A channel answers every person paired to it, and nobody else (spec channels
-"Serve several paired people")."""
+"Gate inbound traffic on sender identity")."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ async def test_a_second_person_pairs_and_both_are_served_and_a_stranger_is_not(
     await env.processor.on_message(
         inbound("tg", "grp", "@bot hi", chat_kind="group", sender_id="x", thread_id="t2")
     )
-    assert "Not authorized" in adapter.sent[-1][1]
+    assert "owners can use it here" in adapter.sent[-1][1]
 
 
 async def test_removing_one_person_leaves_the_other_and_the_last_may_go(env: ChannelEnv) -> None:

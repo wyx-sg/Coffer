@@ -56,25 +56,26 @@ export function liveMode(mode: ReachMode | null, scope: Scope | null): ReachMode
 }
 
 /**
- * The button's text: the state, said plainly.
+ * The button's text: the state, said plainly — "Off", "All agents", and for a
+ * chosen list the empty case only ("No agent"; a non-empty list is drawn as
+ * agent badges, with no count in words).
  *
  * `null` names no state — the bulk bar, where a mixed selection has no single
- * reach — so it names the action instead: "Set reach…". Where the control has
- * a row in hand it can be more specific than `reachModeName` and count the
- * agents; the states it cannot count it names through that function, so the
- * button and the filter option for one state can never read differently.
+ * reach — so it names the action instead: "Set reach…". The states go through
+ * `reachModeName`, so the button and the filter option for one state can never
+ * read differently.
  *
- * An empty agent list is reported as its own thing, never as "Disabled": the
- * user did not switch that resource off, its list currently names nobody, and
- * those are different states with different ways back.
+ * An empty agent list is reported as its own thing, never as "Off": the user
+ * did not switch that resource off, its list currently names nobody, and those
+ * are different states with different ways back.
  */
 export function reachLabel(t: TFunction, live: ReachMode | null, scope: Scope | null): string {
   if (live === null) return t("scope.setReach");
-  if (live === "disabled") return reachModeName(t, "disabled");
-  if (live === "everywhere") return reachModeName(t, "everywhere");
+  if (live !== "restricted") return reachModeName(t, live);
   const agents = scope?.agents ?? [];
-  if (agents.length === 0) return t("scope.noneSelected");
-  return t("scope.agentCount", { count: agents.length });
+  return agents.length === 0
+    ? t("scope.noneSelected")
+    : t("scope.agentCount", { count: agents.length });
 }
 
 /** One agent the pick-list can offer: what a tick WRITES (the uid), what it

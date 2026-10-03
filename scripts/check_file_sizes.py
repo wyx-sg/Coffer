@@ -103,9 +103,7 @@ def is_excluded(path: Path) -> bool:
     # genuine *.test.ts/.tsx / *.spec.ts/.tsx names qualify (a bare ".test."
     # substring elsewhere does not), so a production module can't dodge the cap
     # by smuggling ".test." into its name.
-    if path.suffix in _GENERATED_SUFFIXES and (
-        ".test." in path.name or ".spec." in path.name
-    ):
+    if path.suffix in _GENERATED_SUFFIXES and (".test." in path.name or ".spec." in path.name):
         return True
     if any(part in EXCLUDED_DIR_PARTS for part in path.parts):
         return True

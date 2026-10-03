@@ -119,7 +119,7 @@ vi.mock("@/components/mcp/EditMcpServerDialog", () => ({
     <div role="dialog">{`edit dialog ${focus ?? ""}`}</div>
   ),
 }));
-vi.mock("@/components/ScopeControl", () => ({ ScopeControl: () => <button>Every agent</button> }));
+vi.mock("@/components/ScopeControl", () => ({ ScopeControl: () => <button>All agents</button> }));
 
 const { secretsApi } = await import("@/lib/api/secret");
 const { resourcesApi } = await import("@/lib/api/resources");

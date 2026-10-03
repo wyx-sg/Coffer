@@ -35,6 +35,7 @@ from coffer.domain.agent.plugin_capability import (
     UninstallStrategy,
 )
 from coffer.domain.agent.types import AgentType
+from coffer.domain.channel_turn import TURN_TOKEN_ENV
 
 if TYPE_CHECKING:
     from coffer.application.chat.ports import AgentDriver
@@ -148,6 +149,13 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             container_key="mcp_servers",
             format=ConfigFileFormat.TOML,
             entry_style=McpEntryStyle.COMMAND_MAP,
+            # Codex hands an MCP server only a default environment and cuts a
+            # tool call off after 60 s: pass the turn token through and let
+            # ``coffer__ask`` wait a day.
+            entry_extras=(
+                ("env_vars", (TURN_TOKEN_ENV,)),
+                ("tool_timeout_sec", 24 * 60 * 60),
+            ),
         ),
         mcp_source_keys=("config",),
         plugins=PluginCapability(

@@ -81,10 +81,12 @@ const closePanel = () =>
 /** One agent's row in the pick-list, by the NAME it is labelled with. */
 const agentRow = (name: string) => within(screen.getByTestId(`scope-agent-${name}`));
 
-/** Open the panel and pick one whole-value choice, which also closes it. */
+/** Open the panel, pick a mode and Apply it: a bulk write is staged, then
+ *  written once. */
 const pick = (label: RegExp) => {
   openPanel();
   fireEvent.click(choice(label));
+  fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 };
 
 afterEach(() => vi.clearAllMocks());
@@ -96,7 +98,7 @@ describe("BulkReachActions", () => {
     mount();
     expect(trigger()).toHaveTextContent(/set reach/i);
     openPanel();
-    for (const label of [/^off$/i, /every agent/i, /only selected agents/i]) {
+    for (const label of [/^off$/i, /all agents/i, /chosen agents/i]) {
       expect(choice(label)).not.toBeChecked();
     }
   });
@@ -132,7 +134,7 @@ describe("BulkReachActions", () => {
     scope.put.mockResolvedValue(undefined);
     mount();
 
-    pick(/every agent/i);
+    pick(/all agents/i);
 
     await waitFor(() => expect(scope.put).toHaveBeenCalledTimes(2));
     expect(resources.enable).toHaveBeenCalledTimes(2);
@@ -145,7 +147,7 @@ describe("BulkReachActions", () => {
     mount();
 
     openPanel();
-    fireEvent.click(choice(/only selected agents/i));
+    fireEvent.click(choice(/chosen agents/i));
     // The panel opens on an EMPTY draft: a bulk write is a new intent, not an
     // edit of whichever row happened to be first.
     expect(agentRow("claude").getByRole("checkbox")).not.toBeChecked();
@@ -153,7 +155,7 @@ describe("BulkReachActions", () => {
     fireEvent.click(agentRow("claude").getByRole("checkbox"));
     expect(scope.put).not.toHaveBeenCalled();
 
-    closePanel();
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     await waitFor(() => expect(scope.put).toHaveBeenCalledTimes(2));
     // Ticked by name, written as a uid, addressed by a uid — both halves of
     // the translation in one assertion.
@@ -163,7 +165,7 @@ describe("BulkReachActions", () => {
     ]);
   });
 
-  test("one failed row does not abort the rest, and the partial is reported", async () => {
+  test("one failed row does not abort the rest; the panel stays open and says so, with no toast", async () => {
     resources.disable.mockImplementation((uid: string) =>
       uid === WRITING_UID
         ? Promise.reject(new ApiError("RESOURCE_NOT_FOUND", "gone"))
@@ -175,12 +177,13 @@ describe("BulkReachActions", () => {
 
     // Both attempted — allSettled, not Promise.all.
     await waitFor(() => expect(resources.disable).toHaveBeenCalledTimes(2));
-    // One summary toast, naming the split; never silence, never one per row.
-    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
-    expect(toastError.mock.calls[0][0]).toMatch(/1 succeeded, 1 failed/i);
+    const failed = await screen.findByTestId("scope-mode-failed");
+    expect(failed).toHaveTextContent(/1 succeeded, 1 failed/i);
+    expect(toastError).not.toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
-    // The selection still clears: the bar must not sit stuck with no message.
-    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    // The selection is kept so Retry has something to retry.
+    expect(onDone).not.toHaveBeenCalled();
+    expect(within(failed).getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 
   test("a row that enables but fails its scope write counts as failed, not half-done", async () => {
@@ -192,10 +195,12 @@ describe("BulkReachActions", () => {
     );
     mount();
 
-    pick(/every agent/i);
+    pick(/all agents/i);
 
-    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
-    expect(toastError.mock.calls[0][0]).toMatch(/1 succeeded, 1 failed/i);
+    expect(await screen.findByTestId("scope-mode-failed")).toHaveTextContent(
+      /1 succeeded, 1 failed/i,
+    );
+    expect(toastError).not.toHaveBeenCalled();
   });
 
   test("all rows succeeding reports a single success summary", async () => {
@@ -207,6 +212,22 @@ describe("BulkReachActions", () => {
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
     expect(toastSuccess.mock.calls[0][0]).toMatch(/2 succeeded/i);
     expect(toastError).not.toHaveBeenCalled();
+  });
+
+  test("rows that say what they hold give tri-state ticks: all, some, none", () => {
+    mount({
+      rows: [
+        { kind: "skill", uid: WRITING_UID, scope: { agents: [CLAUDE, "u-agent-be04"] } },
+        { kind: "skill", uid: REVIEWING_UID, scope: { agents: [CLAUDE] } },
+      ],
+    });
+    openPanel();
+    fireEvent.click(choice(/chosen agents/i));
+    const claude = agentRow("claude").getByRole("checkbox") as HTMLInputElement;
+    const codex = agentRow("codex").getByRole("checkbox") as HTMLInputElement;
+    expect(claude.checked).toBe(true);
+    expect(codex.checked).toBe(false);
+    expect(codex.indeterminate).toBe(true);
   });
 
   test("the batch refreshes the generic lists plus the kind's own key, once each", async () => {
@@ -226,7 +247,7 @@ describe("BulkReachActions", () => {
 
 acceptance(
   "web-ui",
-  "a bulk reach write starts blank and reports failures in one summary",
+  "a bulk reach write starts blank and reports a failure in the panel",
   async () => {
     resources.disable.mockImplementation((uid: string) =>
       uid === REVIEWING_UID
@@ -242,13 +263,17 @@ acceptance(
     expect(radios.filter((r) => (r as HTMLInputElement).checked)).toHaveLength(0);
 
     fireEvent.click(choice(/^off$/i));
+    expect(resources.disable).not.toHaveBeenCalled(); // staged until Apply
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
     await waitFor(() => expect(resources.disable).toHaveBeenCalledTimes(2));
     expect(resources.disable.mock.calls.map((c) => c[0]).sort()).toEqual(
       [WRITING_UID, REVIEWING_UID].sort(),
     );
-    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
-    expect(toastError.mock.calls[0][0]).toMatch(/1 succeeded, 1 failed/i);
+    expect(await screen.findByTestId("scope-mode-failed")).toHaveTextContent(
+      /1 succeeded, 1 failed/i,
+    );
+    expect(toastError).not.toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
   },
 );

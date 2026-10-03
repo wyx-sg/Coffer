@@ -264,7 +264,7 @@ describe("SkillAddDialog", () => {
     expect(await screen.findByText(/must be at the top or one folder down/)).toBeInTheDocument();
   });
 
-  test("Available to defaults to every agent and writes nothing extra", async () => {
+  test("Available to defaults to all agents and writes nothing extra", async () => {
     const { resourcesApi } = await import("@/lib/api/resources");
     api.stageArchive.mockResolvedValue(stage([staged({ folder: ".", name: "changelog" })]));
     api.confirmStage.mockResolvedValue({
@@ -275,7 +275,7 @@ describe("SkillAddDialog", () => {
     await screen.findByText("Found SKILL.md at the top level");
     expect(screen.getByText("Available to", { selector: "label" })).toBeInTheDocument();
     expect(within(screen.getByTestId("skill-add-reach")).getByRole("button")).toHaveTextContent(
-      "Every agent",
+      "All agents",
     );
     fireEvent.click(screen.getByRole("button", { name: "Add skill" }));
     await waitFor(() => expect(api.confirmStage).toHaveBeenCalled());

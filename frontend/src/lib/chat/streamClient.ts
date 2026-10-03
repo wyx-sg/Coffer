@@ -45,6 +45,8 @@ const KNOWN_EVENTS: Record<EventName, true> = {
   turn_done: true,
   turn_error: true,
   queue_changed: true,
+  question_asked: true,
+  question_closed: true,
 };
 
 function isKnownEvent(name: string): name is EventName {

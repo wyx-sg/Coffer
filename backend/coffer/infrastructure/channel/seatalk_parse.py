@@ -57,6 +57,8 @@ CARD_DESCRIPTION_MAX_CHARS = 1000
 #: checkable.
 CARD_BUTTONS_PER_GROUP = 3
 CARD_BUTTON_GROUPS_MAX = 3
+#: The most bare ``button`` elements a card holds (each is one full-width line).
+CARD_BARE_BUTTONS_MAX = 5
 
 #: The widest label, in display columns, a button shows untruncated when its row
 #: holds 1, 2 or 3 buttons. SeaTalk splits a row evenly and sizes the card to its
@@ -316,15 +318,25 @@ def interactive_card(
             "description": {"format": 1, "text": _clamp(text, CARD_DESCRIPTION_MAX_CHARS)},
         }
     )
-    elements.extend(
-        {
-            "element_type": "button_group",
-            "button_group": [
-                {"button_type": "callback", "text": b.label, "value": b.value} for b in row
-            ],
-        }
-        for row in button_rows(buttons)
-    )
+    if buttons and all(b.own_row for b in buttons) and len(buttons) <= CARD_BARE_BUTTONS_MAX:
+        # A question's options: bare buttons, one full-width line each.
+        elements.extend(
+            {
+                "element_type": "button",
+                "button": {"button_type": "callback", "text": b.label, "value": b.value},
+            }
+            for b in buttons
+        )
+    else:
+        elements.extend(
+            {
+                "element_type": "button_group",
+                "button_group": [
+                    {"button_type": "callback", "text": b.label, "value": b.value} for b in row
+                ],
+            }
+            for row in button_rows(buttons)
+        )
     return {"tag": "interactive_message", "interactive_message": {"elements": elements}}
 
 

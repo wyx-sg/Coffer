@@ -56,8 +56,7 @@ GROUP_DEFAULT_SUFFIX = " — default for new threads in this group"
 #: the runtime has not yet stopped the (now dormant) channel — it must still
 #: name the cause rather than answering with an empty list.
 NO_AGENT_IN_SCOPE = (
-    "This channel is scoped to no agent, so it can drive nothing. "
-    "Widen its scope in Coffer to use it."
+    "This bot is scoped to no agent, so it can run nothing. Widen its scope in Coffer to use it."
 )
 
 
@@ -105,16 +104,18 @@ def dir_display(path: str | None) -> str:
 
 
 def age(when: datetime, *, now: datetime | None = None) -> str:
-    """How long ago ``when`` was, in one short word: ``now``, ``5m``, ``3h``, ``2d``."""
+    """How long ago ``when`` was: ``just now``, ``5m ago``, ``2h ago``,
+    ``yesterday``, ``3d ago``."""
     moment = when if when.tzinfo is not None else when.replace(tzinfo=UTC)
     seconds = max(0.0, ((now or datetime.now(tz=UTC)) - moment).total_seconds())
     if seconds < 60:
-        return "now"
+        return "just now"
     if seconds < 3600:
-        return f"{int(seconds // 60)}m"
+        return f"{int(seconds // 60)}m ago"
     if seconds < 86400:
-        return f"{int(seconds // 3600)}h"
-    return f"{int(seconds // 86400)}d"
+        return f"{int(seconds // 3600)}h ago"
+    days = int(seconds // 86400)
+    return "yesterday" if days == 1 else f"{days}d ago"
 
 
 @dataclass(frozen=True)

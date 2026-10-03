@@ -1,5 +1,4 @@
 // The props of MessageThread, split out so the component file stays small.
-import type { ReactNode } from "react";
 import type { LiveMessage, PendingEcho } from "@/lib/hooks/useChatTurn";
 import type { EchoAttachment } from "@/lib/chat/echoes";
 import type { Conversation } from "@/lib/api/chat";
@@ -30,8 +29,6 @@ export interface MessageThreadProps {
   /** The queue is held after a queued message failed to start: the banner offers Resume, not Retry. */
   queueHeld?: boolean;
   onResumeQueue?: () => void;
-  /** The conversation's header (title, source, agent / model / effort, menu). */
-  header?: ReactNode;
   /** Display name of the conversation's agent — the composer's placeholder. */
   agentLabel?: string;
   /** The live stream was lost mid-turn after every reconnect: say so, offer Reload. */
@@ -41,4 +38,7 @@ export interface MessageThreadProps {
   readOnly?: boolean;
   onUnarchive?: () => void;
   unarchivePending?: boolean;
+  /** A "Files changed" row was pressed (the diff drawer opens from it); `selectedPath` is the open one. */
+  onOpenFile?: (path: string) => void;
+  selectedPath?: string | null;
 }

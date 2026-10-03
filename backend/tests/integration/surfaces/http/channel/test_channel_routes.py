@@ -375,7 +375,7 @@ async def test_management_surface_reports_status_owner_agent_and_health(ctx: _Ct
 
 
 async def test_several_people_are_listed_and_one_can_be_removed(ctx: _Ctx) -> None:
-    """Spec channels "Serve several paired people": the status lists everyone paired,
+    """Spec channels "Gate inbound traffic on sender identity": the status lists everyone paired,
     earliest first; removing one leaves the rest, and removing a stranger is a 404."""
     await _pair(ctx, ctx.tg_uid, chat_id="emp-1", display="Yu")
     await _pair(ctx, ctx.tg_uid, chat_id="emp-2", display="Ann")

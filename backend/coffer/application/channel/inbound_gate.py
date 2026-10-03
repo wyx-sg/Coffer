@@ -1,5 +1,5 @@
 """The person gate for a group message: who may drive a turn from a shared chat
-(spec channels "Act in a group only on an addressed message from a paired person" and
+(spec channels "Act in a group only on an addressed message from the owner" and
 "Configure when the bot answers in a group").
 
 Split out of ``inbound`` for that module's size budget. Application layer only.
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from coffer.application.channel.bot_label import bot_name
 from coffer.application.channel.ephemeral import safe_send
 from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.store_ports import ChannelPeer, ChannelPeerRepoPort
@@ -55,7 +56,7 @@ async def group_peer(
             await safe_send(
                 binding,
                 msg.chat_id,
-                "🚫 Not authorized — only people paired with this channel can use me here.",
+                f"🚫 Only {bot_name(binding)}\u2019s owners can use it here.",
                 thread_id=msg.thread_id,
                 chat_kind="group",
             )

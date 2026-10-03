@@ -68,7 +68,7 @@ async def test_an_agent_tap_outside_the_scope_switches_nothing(env: ChannelEnv) 
 
     await env.processor.on_callback(tap_event("tg", "owner", "agent:codex"))
 
-    assert adapter.texts() == ["That agent is no longer one this channel may drive — send /new."]
+    assert adapter.texts() == ["That agent is no longer one this bot may use — send /new."]
     assert await env.thread_preferred_agent(resource) is None
     assert await env.active_conversation(resource) is None
 

@@ -1,11 +1,11 @@
 // src/components/reach/ReachButton.tsx — ReachControl's one trigger: the current reach as its label, with the chosen agents' badges.
 //
-// Foundations-Reach "Button": h26, a secondary look, 12/550, a 12px chevron.
-// The label IS the reach and stays the button's whole accessible name — the
-// badges and the Disabled dot beside it are decoration (aria-hidden), because
-// the words already say what they show. "Every agent" shows no badges (it is a
-// rule, not a list); a restricted reach shows one sm badge per chosen agent, in
-// Agents-page order; Disabled shows a neutral dot before the word.
+// Foundations 0.7.02 "Button": h26, a secondary look, 12/550, a 12px chevron.
+// The label stays the button's whole accessible name. Off shows a neutral dot
+// and "Off"; All agents shows "All agents" (a rule, not a list); Chosen agents
+// shows ONLY one sm badge per chosen agent, in Agents-page order, with no count
+// in words (the badges are decoration, so the count is screen-reader text);
+// Chosen with nothing ticked shows "No agent" in muted grey.
 //
 // A plain <button>, not ui/Button: that one resizes every descendant svg, which
 // would redraw the agent marks at chevron size.
@@ -68,7 +68,14 @@ export const ReachButton = forwardRef<HTMLButtonElement, Props>(function ReachBu
       {live === "disabled" ? (
         <span aria-hidden className="mr-1.5 size-[7px] shrink-0 rounded-full bg-neutral" />
       ) : null}
-      <span className="px-px">{label}</span>
+      <span
+        className={cn(
+          badges.length > 0 ? "sr-only" : "px-px",
+          live === "restricted" && badges.length === 0 && !warn && "text-text-muted",
+        )}
+      >
+        {label}
+      </span>
       <ChevronDown aria-hidden className="ml-1 size-3 shrink-0 text-text-subtle" />
     </button>
   );

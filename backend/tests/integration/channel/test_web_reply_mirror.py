@@ -160,7 +160,7 @@ async def test_a_web_reply_reaches_the_chat_marked_as_from_coffer(
     ack = await web.reply(conversation_id, "check the deploy")
 
     assert ack["mirror"] == "sent"
-    assert ("owner", "(from Coffer) check the deploy", "", "direct") in adapter.sent_routed
+    assert ("owner", "Owner · from Coffer\ncheck the deploy", "", "direct") in adapter.sent_routed
 
 
 @pytest.mark.acceptance(
@@ -177,7 +177,7 @@ async def test_the_answer_to_a_web_reply_is_delivered_to_the_chat(
 
     await wait_until(lambda: "the deploy is green" in adapter.texts())
     texts = adapter.texts()
-    assert texts.index("(from Coffer) check the deploy") < texts.index("the deploy is green")
+    assert texts.index("Owner · from Coffer\ncheck the deploy") < texts.index("the deploy is green")
     routed = [r for r in adapter.sent_routed if r[1] == "the deploy is green"]
     assert routed == [("owner", "the deploy is green", "", "direct")]
 
@@ -221,7 +221,7 @@ async def test_a_reply_the_channel_cannot_send_is_kept_and_retried(
     )
     view = await web.mirror_view(conversation_id)
     assert [(u["kind"], u["text"]) for u in view["undelivered"]] == [
-        ("reply", "(from Coffer) are you there"),
+        ("reply", "Owner · from Coffer\nare you there"),
         ("answer", "answered while away"),
     ]
 
@@ -236,7 +236,7 @@ async def test_a_reply_the_channel_cannot_send_is_kept_and_retried(
     web.mirror._failed_at.clear()  # past the backoff
     await web.mirror.flush(_binding(env, resource))
     assert back.sent_routed == [
-        ("owner", "(from Coffer) are you there", "", "direct"),
+        ("owner", "Owner · from Coffer\nare you there", "", "direct"),
         ("owner", "answered while away", "", "direct"),
     ]
     assert await web.outbox.pending_for_conversation(conversation_id) == []
@@ -252,7 +252,7 @@ async def test_a_refused_send_keeps_the_reply_pending(env: ChannelEnv, web: _Web
 
     assert ack["mirror"] == "pending"
     owed = await web.outbox.pending_for_conversation(conversation_id)
-    assert owed[0].kind == "reply" and owed[0].text == "(from Coffer) try this"
+    assert owed[0].kind == "reply" and owed[0].text == "Owner · from Coffer\ntry this"
 
 
 async def test_a_flush_after_a_failure_waits_out_the_backoff(env: ChannelEnv, web: _Web) -> None:

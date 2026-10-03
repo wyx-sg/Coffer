@@ -72,15 +72,18 @@ class FakeConversationRepo:
         archived: bool = False,
         limit: int | None = None,
         after: tuple[datetime, str] | None = None,
-        title_contains: str | None = None,
+        contains: str | None = None,
     ) -> list[Conversation]:
         rows = [c for c in self._store.values() if (c.archived_at is not None) == archived]
-        if title_contains:
-            rows = [c for c in rows if title_contains.casefold() in (c.title or "").casefold()]
+        if contains:
+            rows = [c for c in rows if contains.casefold() in (c.title or "").casefold()]
         rows.sort(key=lambda c: (c.updated_at, c.id), reverse=True)
         if after is not None:
             rows = [c for c in rows if (c.updated_at, c.id) < after]
         return rows if limit is None else rows[:limit]
+
+    async def count(self, *, archived: bool = False, contains: str | None = None) -> int:
+        return len(await self.list(archived=archived, contains=contains))
 
     async def rename(self, conversation_id: str, new_title: str) -> Conversation:
         conv = self._store[conversation_id]
@@ -140,6 +143,7 @@ class FakeMessageRepo:
         model_id: str | None,
         prompt_tokens: int | None,
         completion_tokens: int | None,
+        finished_at: datetime | None = None,
     ) -> None:
         for i, m in enumerate(self._messages):
             if m.id == message_id:
@@ -150,6 +154,7 @@ class FakeMessageRepo:
                     model_id=model_id if model_id is not None else m.model_id,
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
+                    finished_at=finished_at,
                 )
                 return
 

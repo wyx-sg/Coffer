@@ -1,45 +1,52 @@
-// src/components/reach/ReachPanelFooter.tsx — the foot of ReachControl's panel: the count, Done, and the machine-local line.
+// src/components/reach/ReachPanelFooter.tsx — the foot of ReachControl's panel: the summary on the left, the save state (or Apply) on the right.
 //
-// Foundations-Reach "Footer": the count on the left, the way out on the right,
-// over a border-subtle rule. Split out of ReachControl to keep that file inside
-// its size budget; it owns no state.
+// Foundations 0.7.02 "Footer": left, what the reach is in a few words (Off /
+// All agents / "1 of 2 agents"); right, whether the last change landed
+// (Saving… / ✓ Saved / Couldn't save). A bulk panel has no save state — it
+// applies on a button — so it shows Apply there instead. Split out of
+// ReachControl to keep that file inside its size budget; it owns no state.
 import { useTranslation } from "react-i18next";
 
-import type { ReachMode } from "@/lib/reach/reachState";
 import { Button } from "@/components/ui/button";
 
+export type SaveState = "idle" | "saving" | "saved" | "failed";
+
 interface Props {
-  /** The choice that reads as picked; `null` for an untouched bulk panel. */
-  picked: ReachMode | null;
-  selected: number;
-  total: number;
-  busy: boolean;
-  onDone: () => void;
+  summary: string;
+  save: SaveState;
+  /** Set on a bulk panel: shows Apply (disabled while `busy`) in place of the
+   *  save state. */
+  onApply?: () => void;
+  applyDisabled?: boolean;
+  busy?: boolean;
 }
 
-export function ReachPanelFooter({ picked, selected, total, busy, onDone }: Props) {
+export function ReachPanelFooter({ summary, save, onApply, applyDisabled, busy }: Props) {
   const { t } = useTranslation();
-  // Under "Every agent" the ticks are not the reach, so they get no count.
-  const counted = picked === "restricted" || picked === "disabled";
   return (
-    <>
-      <div className="flex min-h-control-sm items-center justify-between gap-3 border-t border-border-subtle pt-2">
-        <span className="text-xs text-text-muted">
-          {counted ? t("scope.countOf", { selected, total }) : null}
+    <div className="flex min-h-control-sm items-center justify-between gap-3 border-t border-border-subtle pt-2">
+      <span className="text-xs text-text-muted" data-testid="reach-summary">
+        {summary}
+      </span>
+      {onApply ? (
+        <Button type="button" size="sm" disabled={busy || applyDisabled} onClick={onApply}>
+          {t("scope.apply")}
+        </Button>
+      ) : (
+        <span
+          role="status"
+          data-testid="reach-save-state"
+          className={save === "failed" ? "text-xs text-danger" : "text-xs text-text-muted"}
+        >
+          {save === "saving"
+            ? t("common.saving")
+            : save === "saved"
+              ? `✓ ${t("common.saved")}`
+              : save === "failed"
+                ? t("scope.saveFailed")
+                : null}
         </span>
-        {/* The one choice that stays open needs an explicit way out: Done
-            commits the staged list exactly as closing does. */}
-        {picked === "restricted" ? (
-          <Button type="button" size="sm" disabled={busy} onClick={onDone}>
-            {t("common.done")}
-          </Button>
-        ) : null}
-      </div>
-      {/* Quiet, not amber: a standing fact about where reach is kept, not a
-          fault. Amber is for a scope that reaches nobody. */}
-      <p className="text-xs text-text-muted" data-testid="reach-machine-local">
-        {t("scope.machineLocal")}
-      </p>
-    </>
+      )}
+    </div>
   );
 }

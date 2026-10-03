@@ -37,7 +37,7 @@ export function AddChannelSecretFields({
 
   if (channelType === "telegram") {
     return (
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <Label required htmlFor="channel-bot-token">
           {t("channels.dialog.botToken")}
         </Label>
@@ -46,19 +46,20 @@ export function AddChannelSecretFields({
           value={draft.botToken}
           onChange={(e) => onChange({ botToken: e.target.value })}
           autoComplete="off"
+          placeholder={t("channels.dialog.botTokenPlaceholder")}
           aria-required
           aria-invalid={errors.botToken ? true : undefined}
           aria-describedby="channel-bot-token-error"
         />
         <FieldError id="channel-bot-token-error" message={errors.botToken} />
-        <p className="text-xs text-muted-foreground">{t("channels.dialog.telegramHint")}</p>
+        <p className="text-xs text-text-muted">{t("channels.dialog.telegramHint")}</p>
       </div>
     );
   }
 
   return (
-    <>
-      <div className="space-y-2">
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1.5">
         <Label required htmlFor="channel-app-id">
           {t("channels.dialog.appId")}
         </Label>
@@ -73,7 +74,7 @@ export function AddChannelSecretFields({
         />
         <FieldError id="channel-app-id-error" message={errors.appId} />
       </div>
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <Label required htmlFor="channel-app-secret">
           {t("channels.dialog.appSecret")}
         </Label>
@@ -82,13 +83,13 @@ export function AddChannelSecretFields({
           value={draft.appSecret}
           onChange={(e) => onChange({ appSecret: e.target.value })}
           autoComplete="off"
+          placeholder={t("channels.dialog.appSecretPlaceholder")}
           aria-required
           aria-invalid={errors.appSecret ? true : undefined}
           aria-describedby="channel-app-secret-error"
         />
         <FieldError id="channel-app-secret-error" message={errors.appSecret} />
       </div>
-      <p className="text-xs text-muted-foreground">{t("channels.dialog.seatalkHint")}</p>
-    </>
+    </div>
   );
 }

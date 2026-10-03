@@ -58,7 +58,7 @@ describe("McpCapabilityTab", () => {
     expect(screen.queryByRole("button", { name: /Show \d+ more/ })).toBeNull();
   });
 
-  acceptance("mcp-gateway", "a server's resources and prompts are listed in full", () => {
+  acceptance("mcp-gateway", "resources forward through the gateway", () => {
     renderTab("prompt", 120);
     expect(rowCount()).toBe(50);
     fireEvent.click(screen.getByRole("button", { name: "Show 50 more" }));

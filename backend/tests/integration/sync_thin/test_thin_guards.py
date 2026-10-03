@@ -182,7 +182,7 @@ def _old_layout_remote(mac: Machine) -> str:
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="a remote at an older layout is replaced by this vault"
+    spec="vault-sync", scenario="an old remote is rebuilt from the first upgraded machine"
 )
 def test_a_round_replaces_a_remote_at_an_older_layout(pair: tuple[Machine, Machine]) -> None:
     mac, mini = pair
@@ -207,7 +207,7 @@ def test_a_round_replaces_a_remote_at_an_older_layout(pair: tuple[Machine, Machi
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="a remote at an older layout is replaced by this vault"
+    spec="vault-sync", scenario="an old remote is rebuilt from the first upgraded machine"
 )
 def test_the_join_preview_reports_the_replace_and_the_join_does_it(
     pair: tuple[Machine, Machine],
@@ -227,7 +227,7 @@ def test_the_join_preview_reports_the_replace_and_the_join_does_it(
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="a remote at an older layout is replaced by this vault"
+    spec="vault-sync", scenario="an old remote is rebuilt from the first upgraded machine"
 )
 def test_replacing_an_older_remote_still_refuses_a_plaintext_secret(
     pair: tuple[Machine, Machine],
