@@ -15,6 +15,7 @@ import { RefreshCw } from "lucide-react";
 
 import { ListSelectAll } from "@/components/ListSelectAll";
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
+import { AgentFilterPill } from "@/components/agents/tabs/AgentFilterPill";
 import { ReachFilter } from "@/components/reach/ReachFilter";
 import { SearchInput } from "@/components/SearchInput";
 import { SkillLibraryRow } from "@/components/skills/SkillLibraryRow";
@@ -22,6 +23,7 @@ import { SkillOrphanList } from "@/components/skills/SkillOrphanList";
 import { SkillsBulkBar } from "@/components/skills/SkillsBulkBar";
 import { Button } from "@/components/ui/button";
 import type { SkillDriftEntry, SkillOut } from "@/lib/api/skills";
+import { useAgentFilter } from "@/lib/agents/agentFilter";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useClis } from "@/lib/hooks/useClis";
 import { GROUP_ORDER, skillGroup, type SkillGroup } from "@/lib/skills/groups";
@@ -72,17 +74,19 @@ export function SkillLibrary({
   const clis = useClis().data?.items ?? [];
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ReachFilterValue>("all");
+  const agentFilter = useAgentFilter();
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
     const out: Record<SkillGroup, SkillOut[]> = { inUse: [], unused: [], builtin: [] };
     for (const s of skills) {
       if (!matchesReach(filter, s)) continue;
+      if (agentFilter && !agentFilter.matches(s)) continue;
       if (q && !`${s.name} ${s.description}`.toLowerCase().includes(q)) continue;
       out[skillGroup(s)].push(s);
     }
     return out;
-  }, [skills, query, filter]);
+  }, [skills, query, filter, agentFilter]);
   const shown = GROUP_ORDER.reduce((n, g) => n + groups[g].length, 0);
 
   // The listed skills the filters show, never a built-in one: the bar's "of M".
@@ -114,6 +118,7 @@ export function SkillLibrary({
               ariaLabel={t("skills.searchPlaceholder")}
             />
             <div className="flex flex-wrap items-center gap-2">
+              <AgentFilterPill filter={agentFilter} />
               <ReachFilter value={filter} onChange={setFilter} />
               <Button
                 variant="ghost"

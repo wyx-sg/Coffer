@@ -1,4 +1,4 @@
-// src/lib/hooks/useUsage.ts — every query and mutation of the Usage page: the metered summary and its CSV export.
+// src/lib/hooks/useUsage.ts — the queries and mutation of Model providers › Usage: the metered summary and its CSV export.
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 

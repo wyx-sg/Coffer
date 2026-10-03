@@ -30,6 +30,9 @@ from coffer.surfaces.http.provider_schemas import (
     ActivateIn,
     ActivateOut,
     DeactivateOut,
+    DeletePreviewAgentOut,
+    DeletePreviewFileOut,
+    DeletePreviewLine,
     DetectLocalIn,
     DetectLocalOut,
     LocalModelOut,
@@ -38,6 +41,7 @@ from coffer.surfaces.http.provider_schemas import (
     ModelPricesIn,
     ModelPricesOut,
     ProviderCreate,
+    ProviderDeletePreviewOut,
     ProviderListOut,
     ProviderModel,
     ProviderOrderIn,
@@ -277,6 +281,39 @@ async def model_prices(
     return ModelPricesOut(
         prices=[price_out(model, r) for model, r in resolved.items()],
         bundled_version=resolver.bundled_version,
+    )
+
+
+@router.get("/{uid}/delete-preview", response_model=ProviderDeletePreviewOut)
+async def delete_preview(
+    uid: str,
+    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
+) -> ProviderDeletePreviewOut:
+    """The agent config changes deleting this profile would make (404 if absent);
+    nothing is written."""
+    result = await svc.delete_preview(uid)
+    return ProviderDeletePreviewOut(
+        agents=[
+            DeletePreviewAgentOut(
+                agent_uid=a.agent_uid,
+                agent_type=AgentType(a.agent_type),
+                agent_name=a.agent_name,
+                files=[
+                    DeletePreviewFileOut(
+                        path=f.path,
+                        op="remove" if f.op == "remove" else "modify",
+                        diff=[
+                            DeletePreviewLine(
+                                kind=r.kind, text=r.text, old_no=r.old_no, new_no=r.new_no
+                            )
+                            for r in f.diff
+                        ],
+                    )
+                    for f in a.files
+                ],
+            )
+            for a in result.agents
+        ]
     )
 
 

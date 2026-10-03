@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from coffer.application.provider.line_diff import DiffRow
+
 
 @dataclass(frozen=True)
 class ActivateResult:
@@ -24,3 +26,28 @@ class DeactivateResult:
     agent_type: str
     deprojected: list[str]
     previous: str | None
+
+
+@dataclass(frozen=True)
+class DeletePreviewFile:
+    """One agent file that deleting a connection would change."""
+
+    path: str
+    #: ``modify`` or ``remove`` (the whole file goes).
+    op: str
+    diff: list[DiffRow]
+
+
+@dataclass(frozen=True)
+class DeletePreviewAgent:
+    agent_uid: str
+    agent_type: str
+    agent_name: str
+    files: list[DeletePreviewFile]
+
+
+@dataclass(frozen=True)
+class DeletePreview:
+    """What deleting a connection would do to the agents running on it."""
+
+    agents: list[DeletePreviewAgent]

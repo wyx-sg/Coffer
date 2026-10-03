@@ -666,7 +666,7 @@ drift that a pass could not fix, MCP servers whose last test failed (a server
 whose key the upstream refused reads `mcp_key_rejected` and offers
 `replace_key`, which opens the server's page where the key is replaced),
 whose launcher is missing or whose cited secret is absent, agents whose program is
-missing, whose connection is partial or who are not connected, a sync stopped on
+missing, whose connection is partial or who are not connected, whose Coffer memory hook the agent has not approved or has never run, a sync stopped on
 a conflict or holding deletions, channels reconnecting, disconnected or not
 running, and commands a skill requires that are missing, older than a skill's
 minimum or not logged in (kind `cli`, the command as the uid). Each item MUST carry its kind, the resource's uid and title, a stable

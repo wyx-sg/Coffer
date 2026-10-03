@@ -29,6 +29,9 @@ class NativeHookOut(BaseModel):
     command: str
     type: str
     timeout: int | None
+    #: Position in the file: ``hooks.<event>[group_index].hooks[hook_index]``.
+    group_index: int
+    hook_index: int
     #: ``user`` (a file in the agent's config dir) or ``plugin``.
     source: HookSource
     #: The file that declares the hook.
@@ -78,6 +81,8 @@ async def list_agent_hooks(
                 command=h.command,
                 type=h.type,
                 timeout=h.timeout,
+                group_index=h.group_index,
+                hook_index=h.hook_index,
                 source=h.source,
                 path=h.path,
                 plugin=h.plugin,

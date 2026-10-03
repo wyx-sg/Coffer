@@ -35,18 +35,13 @@
     }
   },
   "changePreview": {
-    "summary": "{{agents}}，共 {{changes}}",
-    "changes_one": "{{count}} 项改动",
-    "changes_other": "{{count}} 项改动",
-    "agents_one": "{{count}} 个智能体",
-    "agents_other": "{{count}} 个智能体",
     "op": {
       "add": "添加",
       "modify": "修改",
       "remove": "移除"
     },
     "whatWillHappen": "将会发生什么",
-    "changesHeading": "改动",
+    "changesHeading": "改动 · {{count}}",
     "reassurance": "只改动显示出来的这些行，每个文件的其余内容保持不变。",
     "diffLabel": "{{path}} 的改动",
     "computing": "正在与各智能体的文件比对…",
@@ -83,8 +78,7 @@
       "applied": "已应用",
       "applying": "正在应用",
       "pending": "等待中"
-    },
-    "summaryWithCoffer": "{{agents}}和 Coffer 中的{{changes}}"
+    }
   },
   "common": {
     "experimental": "实验",
@@ -99,7 +93,6 @@
       "dayAt": "{{day}} {{time}}"
     },
     "moreActions": "更多操作",
-    "enabled": "已启用",
     "close": "关闭",
     "save": "保存",
     "cancel": "取消",
@@ -136,7 +129,6 @@
       "saveFailed": "无法保存 {{file}}"
     },
     "couldntDelete": "无法删除 {{name}}",
-    "couldntRemove": "无法移除 {{name}}",
     "couldntDeleteSelected": "无法删除所选项",
     "couldntDeleteConversation": "无法删除该对话",
     "bulk": {
@@ -179,7 +171,17 @@
     "emptyDir": "此处没有子文件夹。"
   },
   "files": {
-    "discardAndReload": "放弃我的修改并重新加载"
+    "readOnly": "只读",
+    "unsaved": "有未保存的修改",
+    "unsavedChanges": "有未保存的修改",
+    "notSaved": "未保存",
+    "viewLabel": "显示为",
+    "preview": "预览",
+    "source": "源码",
+    "truncated": "内容已截断，只显示文件开头。",
+    "loadFailed": "无法读取这个文件",
+    "binaryTitle": "二进制文件 · {{size}}",
+    "binaryBody": "Coffer 只显示文本文件。请用它自己的应用打开。"
   },
   "nav": {
     "skipToContent": "跳到正文",
@@ -1748,129 +1750,143 @@
     "loadMoreShort": "加载更多"
   },
   "agents": {
-    "hooksTab": {
-      "cofferHook": "Coffer 的记忆钩子",
+    "hooks": {
       "parseError": "无法读取 {{file}}：{{error}}",
-      "emptyTitle": "{{agent}} 没有钩子",
-      "emptyBody": "{{agent}} 自己配置里的钩子会只读显示在这里。",
-      "summary": {
-        "hooks_one": "{{count}} 个钩子",
-        "hooks_other": "{{count}} 个钩子",
-        "files_one": "分布在 {{count}} 个文件中",
-        "files_other": "分布在 {{count}} 个文件中",
-        "coffer_one": "{{count}} 个是 Coffer 的",
-        "coffer_other": "{{count}} 个是 Coffer 的",
-        "cofferMissing": "Coffer 的钩子缺失",
-        "own_one": "{{count}} 个是智能体自己的",
-        "own_other": "{{count}} 个是智能体自己的"
-      },
-      "matcher": "匹配器 {{matcher}}",
-      "matcherAny": "任意",
+      "openInConfig": "在配置文件中打开",
       "state": {
-        "active": "生效中",
         "current": "最新",
         "stale": "已过期",
         "missing": "缺失",
         "neverFired": "从未触发",
         "untrusted": "未批准",
-        "modified": "信任后已变更",
+        "modified": "批准后已变更",
         "disabled": "已在 Codex 中关闭"
       },
-      "fired": "{{time}}触发",
-      "missing": {
-        "title": "记忆钩子缺失",
-        "body": "已从 {{file}} 中移除，{{agent}} 开始会话时没有记忆。"
-      },
-      "trustNote": "新的或改动过的钩子，要你在 Codex 里用 /hooks 信任后 Codex 才会运行。Coffer 不会替你信任。",
-      "neverFired": {
-        "title": "已安装但从未触发",
-        "body": "钩子已在 {{file}} 中，但还没有任何会话触发过它，所以 {{agent}} 开始会话时一直没有记忆。",
-        "causeLabel": "可能原因：",
-        "cause": {
-          "codex": "这个版本的 Codex 不加载 {{file}}，所以钩子从未运行。",
-          "claude_code": "安装钩子后 {{agent}} 还没有开始过会话。"
-        },
+      "coffer": {
+        "title": "Coffer 的记忆钩子",
+        "state": "状态",
+        "command": "命令",
+        "events": "事件",
+        "file": "文件",
+        "fired": "{{time}}触发",
+        "lastFired": "上次触发 {{time}}",
+        "neverFiredSub": "从未触发",
+        "repair": "修复",
         "checkAgain": "再次检查",
-        "openActivity": "打开活动"
+        "viewActivity": "在活动中查看",
+        "reason": {
+          "current_one": "让每个会话都带上 Coffer 的记忆。一个钩子，挂在 {{count}} 个事件上。",
+          "current_other": "让每个会话都带上 Coffer 的记忆。一个钩子，挂在 {{count}} 个事件上。",
+          "stale": "由旧版 Coffer 写入，命令已失效，会话开始时没有记忆。",
+          "missing": "它已从 {{file}} 中被移除，所以 {{agent}} 开始会话时没有记忆。",
+          "untrusted": "{{agent}} 会跳过你没有批准的钩子。请在 {{agent}} 的 /hooks 中批准它，然后再检查一次。",
+          "modified": "命令在你批准之后变了，所以 {{agent}} 会跳过它。请在 {{agent}} 的 /hooks 中重新批准，然后再检查一次。",
+          "disabled": "该钩子在 {{agent}} 中被关闭，从不运行。请在 {{agent}} 的 /hooks 中打开它，然后再检查一次。",
+          "neverFired": {
+            "codex": "可能原因：这个版本的 {{agent}} 不加载 {{file}}，所以还没有会话运行过它。",
+            "claude_code": "可能原因：安装钩子后 {{agent}} 还没有开始过会话。"
+          }
+        }
       },
-      "repair": "修复 Coffer 的记忆 hook",
-      "search": "搜索钩子",
-      "footnote": "{{agent}} 自己配置中的所有钩子，只读。要改就去它所在的文件改；这里只照看 Coffer 自己的钩子。",
-      "noMatches": "没有匹配的钩子",
-      "untrustedSub": "未在 Codex 中批准",
-      "untrusted": {
-        "title": "{{agent}} 还没有批准这个 hook",
-        "body": "{{agent}} 只运行你批准过的 hook。在你批准 Coffer 的 hook 之前，{{agent}} 会跳过它，每个会话都不带记忆启动。在 {{agent}} 中运行 /hooks 并批准 coffer memory index，然后再检查一次。"
+      "own": {
+        "title": "{{agent}} 自己的钩子",
+        "help": "这里只读。要改钩子就去它所在的文件改；Coffer 只照看自己的记忆钩子。",
+        "hooks_one": "{{count}} 个钩子",
+        "hooks_other": "{{count}} 个钩子",
+        "files_one": "{{count}} 个文件",
+        "files_other": "{{count}} 个文件",
+        "summary": "{{hooks}}，分布在 {{files}} 中，来自 {{agent}} 自己的配置。点一个查看详情。",
+        "search": "搜索命令或文件",
+        "event": "事件",
+        "eventFilter": "按事件筛选",
+        "allEvents": "全部事件",
+        "showing": "显示 {{shown}} / {{total}}",
+        "colEvent": "事件",
+        "colCommand": "命令",
+        "colMatcher": "匹配器",
+        "colFile": "文件",
+        "matcherAny": "任意",
+        "noMatches": "没有匹配的钩子。",
+        "emptyTitle": "{{agent}} 没有自己的钩子",
+        "emptyBody": "{{agent}} 自己配置里的钩子会只读显示在这里。"
+      },
+      "details": {
+        "title": "{{event}} 钩子",
+        "description": "来自 {{agent}} 自己的配置。这里只读：要改请到它所在的文件。",
+        "command": "命令",
+        "event": "事件",
+        "matcher": "匹配器",
+        "anyTool": "任意工具",
+        "type": "类型",
+        "shellCommand": "Shell 命令",
+        "timeout": "超时",
+        "seconds": "{{count}} 秒",
+        "timeoutDefault": "默认",
+        "file": "文件",
+        "entry": "条目",
+        "copy": "复制命令"
+      },
+      "eventHelp": {
+        "SessionStart": "会话开始或恢复时。",
+        "UserPromptSubmit": "你发送提示词时，在处理之前。",
+        "PreToolUse": "工具调用之前。可以拦截该调用。",
+        "PostToolUse": "工具调用结束之后。",
+        "Stop": "智能体回复完成时。",
+        "Notification": "智能体发出通知时。",
+        "SubagentStop": "子智能体完成时。",
+        "PreCompact": "对话被压缩之前。",
+        "SessionEnd": "会话结束时。"
       }
     },
     "pluginsTab": {
-      "summary": {
-        "plugins_one": "{{count}} 个插件",
-        "plugins_other": "{{count}} 个插件",
-        "allOwn": "全部是智能体自己的",
-        "enabled_one": "{{count}} 个已启用",
-        "enabled_other": "{{count}} 个已启用"
-      },
-      "cols": {
-        "plugin": "插件",
-        "version": "版本",
-        "marketplace": "插件市场",
-        "state": "状态"
+      "search": "搜索插件",
+      "aboutAria": "关于插件",
+      "help": {
+        "claude": "Coffer 只读列出 Claude Code 的插件。开关用来启用或停用插件；卸载会运行 Claude Code 自己的插件命令。",
+        "codex": "Coffer 只读列出 Codex 的插件。开关用来启用或停用插件；卸载会从 config.toml 移除该插件的条目并删除它的缓存。"
       },
       "cacheMissing": "缓存缺失",
       "enabledAria": "启用：{{name}}",
       "uninstall": "卸载",
-      "uninstallAria": "卸载 {{name}}",
+      "menu": {
+        "uninstall": "卸载…"
+      },
+      "uninstallDisabled": "这台 Mac 上没有 {{agent}}",
       "uninstallTitle": "卸载 {{name}}？",
       "uninstallBody": {
-        "claudeLead": "Claude Code 会运行",
-        "claudeTail": "，移除它的配置条目和缓存。",
-        "codex": "Coffer 会从 config.toml 中移除",
-        "codexTail": " 条目（保留 .bak 备份），并删除它的缓存目录。",
+        "claude": "Claude Code 会运行它自己的 <code>plugin uninstall</code> 命令，移除该插件的条目和缓存。",
+        "codex": "Coffer 会从 <code>config.toml</code> 中移除该插件的条目（保留 .bak 备份），并删除它的缓存。",
         "skills_one": "它自带的 {{count}} 个技能也会一并移除。",
         "skills_other": "它自带的 {{count}} 个技能也会一并移除。"
       },
-      "programMissing": "本机找不到 {{agent}} 的程序，所以无法卸载。可以交给智能体重新安装。",
-      "footnote": {
-        "claude": "Coffer 只读展示插件；卸载会运行 Claude Code 自己的插件命令。",
-        "claudeNoCli": "卸载要运行 Claude Code 自己的 claude plugin 命令，但本机 PATH 上找不到它。",
-        "codex": "Coffer 只读展示插件；卸载会从 config.toml 移除该插件的条目并删除它的缓存。"
-      },
+      "programMissing": "这台 Mac 上没有 {{agent}}，所以无法在这里卸载它的插件。",
       "parseError": "无法读取 {{file}}：{{error}}",
-      "search": "搜索插件",
       "emptyTitle": "{{agent}} 没有插件",
-      "emptyBody": "{{agent}} 安装的插件会只读显示在这里。",
+      "emptyBody": "你在 {{agent}} 中安装的插件会显示在这里。",
       "noMatches": "没有匹配的插件"
     },
     "pluginDetail": {
       "loadFailed": "无法加载此插件",
-      "homepage": "主页",
-      "installPath": "安装位置",
-      "notOnDisk": "不在磁盘上——插件的缓存目录缺失",
-      "contents": "内容",
+      "notOnDisk": "不在磁盘上",
       "skills": "技能",
       "commands": "命令",
       "agents": "子智能体",
-      "hooks": "钩子",
+      "hooks": "钩子事件",
       "mcpServers": "MCP 服务器",
-      "noContents": "此插件未提供任何技能、命令、子智能体、钩子或 MCP 服务器。",
-      "author": "作者"
+      "noContents": "此插件未提供任何技能、命令、子智能体、钩子或 MCP 服务器。"
     },
     "title": "智能体",
     "loadFailed": "加载智能体失败。",
-    "type": "类型",
     "configDir": "配置目录",
     "detail": {
       "back": "返回智能体列表",
       "notFound": "没有这个智能体",
       "newConversation": "新对话",
       "connect": "连接",
-      "enable": "开启",
-      "add": "添加",
       "moreActions": "{{name}} 的更多操作",
       "notAdded": {
-        "title": "{{name}} 尚未添加",
-        "body": "Coffer 在 {{dir}} 找到了 {{name}}。添加后，它通过一个入口和一个钩子获得你的 MCP 服务器、技能和记忆——写入前你会先看到确切的改动行。"
+        "title": "{{name}} 未连接",
+        "body": "Coffer 在 {{dir}} 找到了 {{name}}。连接后，它通过一个入口和一个钩子获得你的 MCP 服务器、技能和记忆——写入前你会先看到确切的改动行。"
       },
       "notInstalled": {
         "title": "{{name}} 未安装",
@@ -1880,17 +1896,15 @@
         "title": "{{name}} 的配置残留",
         "body": "{{dir}} 还在，但 PATH 上没有这个程序。用提示词把重新安装交给智能体，装好后它会自动回来。"
       },
-      "checkAgain": "重新检查",
-      "repair": "修复",
-      "repairHook": "修复 Coffer 的记忆 hook"
+      "rotateToken": {
+        "label": "轮换中转令牌",
+        "done": "令牌已轮换。智能体会在下一次请求时获取新令牌。"
+      }
     },
     "workspace": {
       "skills": "技能",
       "mcp": {
         "detail": {
-          "hint": "直接配置在该智能体自己的配置文件里，不由 Coffer 管理。此处只读展示——Coffer 不会启动它，也不列出它的工具。",
-          "origin": "来自 {{file}} · {{source}}",
-          "copy": "复制 JSON",
           "loadFailed": "无法加载该 MCP 服务器"
         }
       }
@@ -1898,15 +1912,29 @@
     "memoryTab": {
       "search": "搜索项目",
       "noMatch": "没有匹配的项目。",
-      "colProject": "项目",
-      "colPath": "路径",
-      "colItems": "条目数",
-      "title": "原生记忆库",
-      "subtitle": "智能体自己的记忆文件，只读。Coffer 读取它们来构建共享记忆，从不写入。",
+      "files_one": "{{count}} 个文件",
+      "files_other": "{{count}} 个文件",
       "emptyTitle": "{{agent}} 还没有记忆文件",
-      "emptyBody": "{{agent}} 在学习过程中会写入 {{path}}。文件出现后会以只读方式显示在这里。",
-      "loadFailed": "无法读取记忆库",
-      "open": "打开"
+      "emptyBody": "{{agent}} 在学习过程中会写入 {{path}}。文件出现后会显示在这里。",
+      "coffer": {
+        "title": "Coffer 的记忆",
+        "open": "打开记忆",
+        "repair": "修复",
+        "description": "Coffer 在每个会话开始时，把你的智能体共享的记忆交给 {{agent}}。",
+        "hook": "记忆钩子",
+        "eventsIn_one": "{{count}} 个事件，位于",
+        "eventsIn_other": "{{count}} 个事件，位于",
+        "oneEventIn": "{{event}}，位于",
+        "lastFired": "上次触发",
+        "never": "从未",
+        "delivers": "交付内容",
+        "deliversBody": "共享记忆索引，让 {{agent}} 能查到你的智能体学到的东西"
+      },
+      "own": {
+        "title": "{{agent}} 自己的记忆",
+        "descriptionClaude": "每个项目一个记忆库，由 {{agent}} 写入。只读：Coffer 只读取，从不写入。",
+        "descriptionCodex": "由 {{agent}} 写入。只读：Coffer 只读取，从不写入。"
+      }
     },
     "config": {
       "none": "未找到配置文件。",
@@ -1916,121 +1944,130 @@
       "emptyDir": "暂无文件。",
       "desc": {
         "settings": "{{agent}} 设置：权限、模型和钩子。",
-        "settings_local": "叠加在共享设置之上的个人覆盖项；不提交到仓库。",
+        "settings_local": "叠加在 settings.json 之上的个人覆盖项，不提交到 git。",
         "global": "Claude Code 的全局状态及用户级 MCP 服务器（.claude.json：默认在 ~/.claude 旁边，自定义配置目录时在该目录内）。",
         "instructions": "{{agent}} 在每次会话开始时读取的指令。",
-        "subagents": "自定义子智能体定义，每个子智能体一个 Markdown 文件。",
+        "subagents": "自定义子智能体，每个一个 Markdown 文件。",
         "config": "Codex CLI 配置：模型、供应商与工具设置。",
         "hooks": "围绕 Codex 事件运行命令的生命周期钩子。"
       }
     },
     "skillsTab": {
       "unmanagedBadge": "未托管",
-      "unmanagedDetail": {
-        "invalidTitle": "不是有效的技能——该文件夹目前无法纳入托管",
-        "path": "路径",
-        "location": "位置",
-        "readOnlyHint": "Coffer 未托管该文件夹，此处仅供只读预览。纳入托管后即可在 Coffer 中管理，或打开文件夹自行修改。",
-        "notFound": "该未托管技能已不在智能体的技能目录中。"
-      },
       "adopt": "纳入托管",
-      "adoptDisabledInvalid": "SKILL.md 无效，无法纳入托管",
-      "adoptDisabledForeign": "外部符号链接，无法纳入托管",
-      "deleteConfirm": "确认删除该未托管技能？此操作不可恢复。",
-      "foreignLink": "外部链接",
-      "locationSkills": "技能目录",
-      "locationAgentsDir": "~/.agents/skills",
       "adoptSuccess": "已纳入托管 {{name}}",
-      "openFolder": "打开文件夹",
-      "openFolderFailed": "无法打开该文件夹。",
-      "summary_one": "{{count}} 个技能 · {{coffer}} 个由 Coffer 投递 · {{own}} 个为智能体自己的",
-      "summary_other": "{{count}} 个技能 · {{coffer}} 个由 Coffer 投递 · {{own}} 个为智能体自己的",
       "search": "搜索技能",
-      "footnoteBefore": "在",
-      "footnoteLink": "技能",
-      "footnoteAfter": "页面选择哪些智能体获得某个 Coffer 技能。",
-      "cols": {
-        "skill": "技能",
-        "path": "路径",
-        "state": "状态",
-        "owner": "归属",
-        "actions": "操作"
+      "fromCoffer": {
+        "description": "Coffer 把这些技能安装到 {{agent}}，并保持同步。到「技能」页管理它们。",
+        "title_one": "来自 Coffer 的 {{count}} 个技能",
+        "title_other": "来自 Coffer 的 {{count}} 个技能",
+        "open": "打开技能"
       },
-      "builtIn": "内置",
+      "own": {
+        "title": "{{agent}} 自己的技能",
+        "description": "{{agent}} 的技能目录里 Coffer 没有托管的技能。纳入托管后即可在 Coffer 中管理。",
+        "help": "Coffer 从智能体的技能目录读取这些技能。可以在这里修复或纳入托管；确认之前不会有任何改动。"
+      },
       "state": {
-        "linked": "已链接",
-        "notManaged": "未托管",
         "invalid": "SKILL.md 无效",
+        "foreign": "外部链接",
         "duplicate": "重复",
-        "adoptFailed": "纳入托管失败"
+        "unmanaged": "未托管"
       },
       "foreignDescription": "链接到 Coffer 主库之外",
-      "duplicateOf": "与 Coffer 中的 {{name}} 重复",
-      "openFile": "打开文件",
-      "openFileFailed": "无法打开该文件。",
+      "duplicateOf": "与 Coffer 的 {{name}} 同名，该智能体已经拿到它了",
       "removeDuplicate": "删除重复项",
       "removeDuplicateTitle": "删除智能体自己的 {{name}} 副本？",
       "removeDuplicateBody": "这会从磁盘删除 {{path}}。Coffer 会继续投递它自己的 {{name}}，{{agent}} 仍然拥有该技能。",
-      "adoptFailedBanner": "无法纳入托管 {{name}}：{{reason}}",
-      "adoptFailedOpen": "打开它",
-      "emptyTitle": "{{agent}} 没有技能",
-      "emptyDescription": "{{agent}} 安装的技能会显示在这里，只读。",
+      "emptyTitle": "{{agent}} 没有自己的技能",
+      "emptyDescription": "{{agent}} 的技能目录里 Coffer 没有托管的技能会显示在这里。",
       "noMatch": "没有匹配的技能。",
       "menu": {
         "delete": "删除…"
       },
       "deleteTitle": "删除 {{name}}？",
-      "deleteBody_one": "这会从磁盘删除 {{path}} 及其 {{count}} 个文件。它不在 Coffer 里，没有副本可以恢复。",
-      "deleteBody_other": "这会从磁盘删除 {{path}} 及其 {{count}} 个文件。它不在 Coffer 里，没有副本可以恢复。",
-      "deleteBodyNoCount": "这会从磁盘删除 {{path}}。它不在 Coffer 里，没有副本可以恢复。"
+      "deleteBody_one": "这会删除 {{path}} 及其 {{count}} 个文件。Coffer 没有副本，无法恢复。",
+      "deleteBody_other": "这会删除 {{path}} 及其 {{count}} 个文件。Coffer 没有副本，无法恢复。",
+      "deleteBodyNoCount": "这会删除 {{path}}。Coffer 没有副本，无法恢复。",
+      "adoptDialog": {
+        "title": "纳入托管 {{name}}",
+        "description": "Coffer 会把这个文件夹复制进它的技能库，再链接回这里，并保留一份 .bak。",
+        "name": "在 Coffer 中的名称",
+        "nameHint": "所有智能体里的文件夹名。纳入托管后不能再改。",
+        "nameTaken": "Coffer 里已经有名为 {{name}} 的技能。请换一个名称。",
+        "openTaken": "打开 Coffer 的 {{name}}",
+        "from": "来源",
+        "copyPath": "复制路径",
+        "files_one": "{{count}} 个文件：{{names}}",
+        "files_other": "{{count}} 个文件：{{names}}",
+        "reach": "可用范围",
+        "reachHint": "谁能用到它。之后可在「技能」页修改。",
+        "failedTitle": "无法纳入托管 {{name}}"
+      },
+      "unmanagedDetail": {
+        "invalidTitle": "不是有效的技能——该文件夹目前无法纳入托管",
+        "notFound": "该未托管技能已不在智能体的技能目录中。",
+        "readOnlyHint": "Coffer 会读取这个文件夹，但不管理它。采用它即可与你的其他智能体共享。",
+        "ownSkill": "{{agent}} 自己的技能",
+        "files_one": "{{count}} 个文件",
+        "files_other": "{{count}} 个文件",
+        "description": "描述",
+        "folder": "文件夹",
+        "foundIn": "位于",
+        "foundInSkills": "{{agent}} 的技能目录",
+        "foundInAgentsDir": "共享的 ~/.agents/skills 目录",
+        "filesLabel": "文件"
+      }
     },
     "mcpTab": {
-      "summary_one": "{{count}} 个服务器 · {{coffer}} 个经 Coffer 网关 · {{own}} 个直接写在 {{file}}",
-      "summary_other": "{{count}} 个服务器 · {{coffer}} 个经 Coffer 网关 · {{own}} 个直接写在 {{file}}",
-      "ownConfig": "智能体自己的配置",
-      "search": "搜索服务器",
-      "footnote": "纳入托管会把条目移进 Coffer，提供给你选择的每个智能体，并从该文件中移除；移除前会先写入 .bak。",
-      "cols": {
-        "server": "服务器",
-        "command": "命令或网关",
-        "where": "位置",
-        "state": "状态",
-        "owner": "归属",
-        "actions": "操作"
+      "fromCoffer": {
+        "description": "{{agent}} 通过 Coffer 唯一的那条 MCP 条目使用这些服务器。到「MCP 服务器」页管理它们。",
+        "title_one": "经 Coffer 的 {{count}} 个服务器",
+        "title_other": "经 Coffer 的 {{count}} 个服务器",
+        "open": "打开 MCP 服务器"
       },
-      "gateway": "coffer 网关",
-      "cofferEntry": "coffer 条目",
+      "own": {
+        "title": "{{agent}} 自己的 MCP 服务器",
+        "description": "{{agent}} 自己配置里绕过 Coffer 的条目。纳入托管后即可经由 Coffer 提供。",
+        "help": "Coffer 从智能体的配置里读取这些条目。可以在这里纳入托管或移除；你审阅改动之前不会有任何变化。"
+      },
+      "search": "搜索服务器",
       "state": {
-        "connected": "已连接",
-        "notConnected": "未连接",
         "bypasses": "绕过 Coffer",
         "duplicate": "重复",
         "readOnly": "只读"
       },
-      "readOnlyReason": "文件无法解析",
       "secretsInEnv_one": "环境变量中有 {{count}} 个密钥",
       "secretsInEnv_other": "环境变量中有 {{count}} 个密钥",
-      "duplicateOf": "与 Coffer 中的 {{name}} 重复",
-      "manage": "管理",
+      "duplicateOfLead": "与 Coffer 中的",
+      "duplicateOfTail": "重复",
       "adopt": "纳入托管",
       "remove": "移除",
       "removeDuplicate": "移除重复项",
+      "menu": {
+        "remove": "移除…"
+      },
       "removeTitle": "从 {{file}} 移除 {{name}}？",
-      "removeBody": "{{agent}} 在下一个会话中将不再有这个服务器。移除前会先写入 .bak 备份，Coffer 中的内容不会改变。",
-      "removeDuplicateBody": "{{agent}} 仍会通过 Coffer 网关获得 {{name}}。移除前会先写入 .bak 备份，Coffer 中的内容不会改变。",
-      "parseErrorTitle": "无法解析 {{file}}——以只读方式显示",
-      "parseErrorBody": "{{error}}。在该文件能被正常读取之前，Coffer 不会纳入托管或移除其中的条目。",
+      "removeBody": "{{agent}} 在下一个会话中将不再有这个服务器。会保留一份 .bak，Coffer 中的内容不会改变。",
+      "removeDuplicateBody": "{{agent}} 仍会通过 Coffer 获得 {{name}}。会保留一份 .bak，Coffer 中的内容不会改变。",
+      "parseError": "无法读取 {{file}}：{{error}}。在文件恢复有效之前，其中的条目只读。",
       "openConfigFiles": "在配置文件中打开",
-      "emptyTitle": "{{agent}} 没有 MCP 服务器",
-      "emptyDescription": "{{agent}} 安装的 MCP 服务器会显示在这里，只读。",
-      "directOf": "{{agent}} 的直连服务器",
+      "emptyTitle": "{{agent}} 没有自己的 MCP 服务器",
+      "emptyDescription": "{{agent}} 自己配置里绕过 Coffer 的服务器会显示在这里。",
+      "entry": {
+        "description": "{{agent}} 自己的服务器，配置在它的配置文件里。Coffer 不会启动它，也不会列出它的工具。",
+        "from": "来源",
+        "copy": "复制 JSON"
+      },
       "adoptDialog": {
         "title": "纳入托管 {{name}}",
-        "description": "Coffer 会把它提供给每个智能体，然后从 {{file}} 中移除该条目，并保留一份 .bak。",
+        "description": "Coffer 通过网关提供它，并把该条目从 <file>{{file}}</file> 中移除，这样 {{agent}} 不会拿到两份。会保留一份 .bak。",
         "name": "在 Coffer 中的名称",
-        "nameConflict": "Coffer 中已有名为 {{name}} 的服务器——请给这个改名后重试。",
+        "nameHint": "所有智能体看到的名称。",
+        "nameConflict": "Coffer 里已经有名为 {{name}} 的服务器。请换一个名称。",
         "command": "命令",
         "url": "URL",
+        "copy": "复制",
         "env": "环境变量",
         "headers": "请求头",
         "key": "键",
@@ -2039,39 +2076,35 @@
         "secret": "密钥",
         "plain": "普通值",
         "unchanged": "保持原值",
-        "secretNote_one": "{{keys}} 看起来是密钥——它的值会移入 Coffer 的加密密钥库，配置中只保留引用。",
-        "secretNote_other": "{{keys}} 看起来是密钥——它们的值会移入 Coffer 的加密密钥库，配置中只保留引用。",
-        "leaves": "Coffer 开始提供该服务器后，条目会从 {{file}} 中移除，{{agent}} 不会拿到两份同样的服务器。",
+        "secretNote_one": "{{keys}} 看起来是密钥，所以它的值会移入 Coffer 的加密密钥库，配置里只保留引用。",
+        "secretNote_other": "{{keys}} 看起来是密钥，所以它们的值会移入 Coffer 的加密密钥库，配置里只保留引用。",
         "pending": "正在纳入托管…",
         "success": "已纳入托管 {{name}}——Coffer 现在通过网关提供它"
       },
       "noMatch": "没有匹配的服务器。"
     },
-    "removeConfirmTitle": "移除 {{name}}？",
     "memoryStore": {
       "tree": "文件",
       "selectFile": "选择一个文件查看。",
-      "binary": "二进制文件（{{size}} 字节）",
-      "truncated": "内容已截断——只显示文件开头。",
       "missingDir": "没有指定记忆存储——请从该智能体的「记忆」标签页进入。",
-      "treeCount_one": "文件 · {{count}}",
-      "treeCount_other": "文件 · {{count}}",
-      "subtitle_one": "{{agent}} 原生记忆库 · {{count}} 个文件",
-      "subtitle_other": "{{agent}} 原生记忆库 · {{count}} 个文件",
-      "subtitleNoCount": "{{agent}} 原生记忆库",
-      "readOnly": "只读",
-      "indexHint": "{{agent}} 在会话开始时加载的索引",
-      "ownedBy": "这些文件归 {{agent}} 所有并由它改写；要修改请在你的编辑器中打开。",
+      "subtitle_one": "{{agent}} 记忆 · {{count}} 个文件 · 只读",
+      "subtitle_other": "{{agent}} 记忆 · {{count}} 个文件 · 只读",
+      "subtitleNoCount": "{{agent}} 记忆 · 只读",
       "unavailable": "无法显示这个记忆库",
-      "notAdded": "{{agent}} 尚未添加到 Coffer。"
+      "notAdded": "{{agent}} 尚未添加到 Coffer。",
+      "moreFor": "{{name}} 的更多操作",
+      "copyPath": "复制路径",
+      "copyFailed": "无法复制路径。"
+    },
+    "fromCoffer": {
+      "title": "来自 Coffer",
+      "more": "另有 {{count}} 个"
+    },
+    "filterPill": {
+      "agent": "智能体",
+      "remove": "移除 {{name}} 筛选"
     },
     "kindTab": {
-      "owner": {
-        "label": "归属",
-        "all": "全部",
-        "coffer": "Coffer 的",
-        "own": "智能体自己的"
-      },
       "loadFailed": "无法读取此列表",
       "moreFor": "{{name}} 的更多操作"
     },
@@ -2079,8 +2112,6 @@
       "not_installed": "未安装",
       "config_left_behind": "配置残留",
       "not_found": "找不到",
-      "never_run": "已安装，未运行过",
-      "not_added": "已检测到，未添加",
       "disabled": "已关闭",
       "connected": "已连接",
       "needs_repair": "需要修复",
@@ -2088,14 +2119,13 @@
       "checking": "正在检查…"
     },
     "stateHeader": {
-      "connected": "已连接到 Coffer",
       "hook_untrusted": "Hook 未获批准"
     },
     "tabs": {
+      "more": "更多",
       "hooks": "钩子",
       "plugins": "插件",
       "overview": "总览",
-      "model": "模型",
       "skills": "技能",
       "mcpServers": "MCP 服务器",
       "config": "配置文件",
@@ -2105,35 +2135,32 @@
     "overviewTab": {
       "connection": {
         "heading": "连接",
+        "help": "Coffer 只添加一个 MCP 条目和一个记忆 hook，两者都标记为 Coffer 所有；智能体配置里的其他内容一概不动。",
         "loadFailed": "读取 Coffer 连接失败，请刷新页面重试。",
-        "title": {
-          "connected": "已连接到 Coffer",
-          "not_connected": "未连接",
-          "needs_repair": "需要修复",
-          "disabled": "已关闭"
-        },
         "body": {
-          "connected": "{{name}} 通过一个 MCP 条目连到 Coffer，并通过一个 hook 获取记忆。两者都标记为 Coffer 所有；它配置里的其他内容一概不动。",
-          "connectedMcpOnly": "{{name}} 通过一个标记为 Coffer 所有的 MCP 条目连到 Coffer；它配置里的其他内容一概不动。",
-          "notConnected": "连接会在 <code>{{mcpFile}}</code> 里添加一个 <code>coffer</code> 条目，并在 <code>{{hookFile}}</code> 里添加一个记忆 hook。写入之前你会先查看具体改动。",
-          "notConnectedMcpOnly": "连接会在 <code>{{mcpFile}}</code> 里添加一个 <code>coffer</code> 条目。写入之前你会先查看具体改动。",
+          "connected": "{{name}} 通过一个 MCP 条目连到 Coffer，并通过一个 hook 获取记忆。",
+          "connectedMcpOnly": "{{name}} 通过一个 MCP 条目连到 Coffer。",
+          "notConnected": "连接会在它的配置里添加一个条目和一个 hook。写入之前你会先查看具体改动。",
+          "notConnectedMcpOnly": "连接会在它的配置里添加一个条目。写入之前你会先查看具体改动。",
           "mcpMissing": "<code>{{mcpFile}}</code> 里缺少 <code>coffer</code> 条目，所以 {{name}} 用不了 Coffer 的工具。",
-          "hookStale": "MCP 条目是最新的，但 <code>{{hookFile}}</code> 里的记忆 hook 运行的命令已不被当前 Coffer 接受，所以 {{name}} 开会话时没有记忆。",
-          "hookMissing": "MCP 条目是最新的，但 <code>{{hookFile}}</code> 里缺少记忆 hook，所以 {{name}} 开会话时没有记忆。",
-          "disabled": "关闭期间 Coffer 不向 {{name}} 提供任何东西：网关对它不返回工具，也不链接技能。它的条目和 hook 保持原样，所以重新开启不需要任何写入。"
+          "hookStale": "记忆 hook 运行的命令已不被当前 Coffer 接受，所以会话开始时没有记忆。",
+          "hookMissing": "<code>{{hookFile}}</code> 里缺少记忆 hook，所以会话开始时没有记忆。",
+          "hookUntrusted": "{{name}} 只运行你批准过的 hook。请在 {{name}} 的 /hooks 里批准 Coffer 的 hook，然后重新检查。",
+          "disabled": "关闭期间 Coffer 不向 {{name}} 提供任何东西。它的条目和 hook 保持原样。"
         },
         "action": {
-          "disconnect": "断开连接",
           "connect": "连接",
           "repair": "修复",
-          "enable": "开启"
+          "enable": "开启",
+          "checkAgain": "重新检查"
         },
         "part": {
           "mcp": "MCP 条目",
           "memoryHook": "记忆 hook",
           "mcpIn": "<code>coffer</code>，位于 <path>{{file}}</path>",
           "notIn": "不在 <path>{{file}}</path> 中",
-          "hookIn": "{{event}}，位于 <path>{{file}}</path>",
+          "hookIn_one": "{{count}} 个事件，位于 <path>{{file}}</path>",
+          "hookIn_other": "{{count}} 个事件，位于 <path>{{file}}</path>",
           "lastFired": " · {{age}}前触发过",
           "lastFiredNow": " · 刚刚触发过",
           "neverFired": " · 从未触发"
@@ -2142,7 +2169,9 @@
           "current": "最新",
           "stale": "已过期",
           "missing": "缺失",
-          "idle": "闲置"
+          "notSet": "未设置",
+          "idle": "闲置",
+          "untrusted": "未批准"
         }
       },
       "age": {
@@ -2155,6 +2184,7 @@
       },
       "summary": {
         "heading": "这个智能体能用什么",
+        "description": "所有能到达它的内容，无论经由 Coffer 还是它自己的配置。",
         "title": {
           "mcp-servers": "MCP 服务器",
           "skills": "技能",
@@ -2166,31 +2196,33 @@
         "disabledLine": "关闭期间没有 · 开启后会有 {{count}} 个",
         "toReview": "{{count}} 个待查看",
         "mcp": {
-          "line": "{{coffer}} 个经由 Coffer · {{own}} 个直接写在 {{file}} 里",
-          "lineCofferOnly": "{{coffer}} 个经由 Coffer"
+          "line": "{{coffer}} 个经由 Coffer · {{own}} 个在 {{file}} 里",
+          "lineCofferOnly": "{{coffer}} 个经由 Coffer",
+          "untilConnected": "连接前没有 · 连接后会有 {{count}} 个",
+          "direct": "{{own}} 个在 {{file}} 里"
         },
         "skills": {
-          "line": "{{coffer}} 个由 Coffer 投递 · 磁盘上另有 {{own}} 个不归 Coffer 管理",
-          "lineCofferOnly": "{{coffer}} 个由 Coffer 投递到 {{dir}}"
+          "line": "{{coffer}} 个来自 Coffer · {{own}} 个不归 Coffer 管理",
+          "lineCofferOnly": "来自 Coffer，在 {{dir}}"
         },
         "plugins": {
           "none": "未安装",
-          "line_one": "已从 {{count}} 个市场安装 {{total}} 个，{{enabled}} 个已开启",
-          "line_other": "已从 {{count}} 个市场安装 {{total}} 个，{{enabled}} 个已开启"
+          "line_one": "来自 {{count}} 个市场 · {{enabled}} 个已开启",
+          "line_other": "来自 {{count}} 个市场 · {{enabled}} 个已开启"
         },
         "hooks": {
           "none": "没有 hook",
-          "inFile_one": "{{file}} 里有 {{count}} 个 hook",
-          "inFile_other": "{{file}} 里有 {{count}} 个 hook",
-          "inPlaces_one": "{{places}} 处共 {{count}} 个 hook",
-          "inPlaces_other": "{{places}} 处共 {{count}} 个 hook",
+          "inFile": "在 {{file}} 里",
+          "inPlaces": "分布在 {{places}} 处",
           "coffer_one": "{{count}} 个属于 Coffer",
-          "coffer_other": "{{count}} 个属于 Coffer"
+          "coffer_other": "{{count}} 个属于 Coffer",
+          "cofferMissing": "Coffer 的 hook 缺失",
+          "cofferUntrusted": "Coffer 的 hook 未批准"
         },
         "memory": {
           "none": "没有原生记忆库",
-          "line_one": "{{count}} 个原生记忆库（只读）",
-          "line_other": "{{count}} 个原生记忆库（只读）"
+          "line_one": "原生记忆库 · 只读",
+          "line_other": "原生记忆库 · 只读"
         },
         "config": {
           "none": "还没有配置文件"
@@ -2198,38 +2230,39 @@
       },
       "model": {
         "heading": "模型",
-        "change": "更改",
+        "change": "更改…",
         "provider": "提供商",
-        "model": "默认模型",
-        "effort": "默认推理强度",
+        "model": "模型",
+        "effort": "推理强度",
+        "route": "路径",
+        "test": "测试",
         "auto": "由智能体自动选择",
+        "routeProxy": "经由 Coffer 的中转",
+        "reachable": "可连通",
+        "routeDirect": {
+          "claude_code": "直连 Anthropic，不经过 Coffer",
+          "codex": "直连 OpenAI，不经过 Coffer"
+        },
         "builtin": {
           "claude_code": "内置登录（Anthropic 账号）",
-          "codex": "内置登录（ChatGPT 登录）"
+          "codex": "内置登录（ChatGPT 账号）"
         }
       },
       "details": {
         "heading": "详情",
         "version": "版本",
         "uid": "UID",
-        "registered": "添加于"
-      },
-      "sessions": {
-        "heading": "最近会话",
-        "all": "全部",
-        "untitled": "未命名会话"
+        "registered": "注册于"
       },
       "problem": {
         "checkAgain": "重新检查",
         "waysToFix": "解决办法",
         "leftBehind": {
-          "title": "{{name}} 的配置还留着，但程序没有安装",
-          "body": "检查于 {{time}}：<code>{{dir}}</code> 还在，里面有 <code>{{files}}</code>，但 PATH 上没有 <code>{{program}}</code>。Coffer 无法连接未安装的智能体，也不会动这个文件夹。",
-          "bodyNoFiles": "检查于 {{time}}：<code>{{dir}}</code> 还在，但 PATH 上没有 <code>{{program}}</code>。Coffer 无法连接未安装的智能体，也不会动这个文件夹。"
+          "line": "{{dir}} 还在，但 PATH 上没有 {{program}}。安装之后 Coffer 会找到你现有的配置。"
         },
         "install": {
           "title": "安装 {{name}}",
-          "body": "然后重新检查。Coffer 会找到程序和你现有的配置，「连接」随之恢复可用。"
+          "help": "Coffer 自己不执行这件事：交给你的智能体，它会按这台机器的情况选合适的做法。"
         },
         "leftIn": "{{dir}} 中留下的内容",
         "files": "文件",
@@ -2254,48 +2287,24 @@
           "body": "把这个智能体指向 {{name}} 现在使用的配置目录。",
           "action": "更改配置目录"
         },
-        "notUsing": {
-          "title": "不再使用 {{name}} 了",
-          "body": "只把它从 Coffer 中移除。如果它再出现，会显示为「已检测到，未添加」。",
-          "action": "从 Coffer 中移除"
-        },
         "lastKnown": "最后已知的配置"
       }
     },
     "configTab": {
-      "home": "~（主目录）",
-      "role": {
-        "settings": "设置",
-        "settings_local": "设置",
-        "global": "全局",
-        "instructions": "指令",
-        "subagents": "子智能体",
-        "config": "设置",
-        "hooks": "钩子"
-      },
-      "markerReadOnly": "只读",
-      "markerDirty": "有未保存的修改",
-      "markerEditing": "编辑中",
-      "markerMissing": "未创建",
       "revert": "还原",
       "validJson": "JSON 有效",
-      "invalidJson": "第 {{line}} 行第 {{column}} 列：JSON 无效",
-      "noteViewing": "点「编辑」修改。保存时会留一份 .bak，文件在磁盘上被改过则拒绝保存",
-      "noteEditing": "保存时会留一份 .bak，文件在磁盘上被改过则拒绝保存",
-      "noteMissing": "创建之前为只读",
-      "staleTitle": "保存被拒绝——打开之后 {{name}} 在磁盘上被改过",
-      "staleBody": "你的修改还在。先把它们复制到安全的地方，再重新加载以获取当前文件。",
+      "invalidJson": "JSON 无效 · 修好之前无法保存",
+      "staleTitle": "打开之后 {{name}} 在磁盘上被改过",
+      "staleBody": "你的修改尚未保存。先把它们复制到安全的地方，再重新加载当前文件。",
       "copyEdits": "复制我的修改",
       "copyFailed": "复制失败——请选中文本手动复制。",
-      "missingTitle": "这个文件还不存在",
-      "missingBody": "文件存在时 {{agent}} 会读取它。创建它即可为 {{agent}} 添加配置。",
+      "missingTitle": "{{name}} 还不存在",
+      "missingBody": "文件存在时 {{agent}} 会读取它。想往里面写配置时再创建它。",
       "create": "创建 {{name}}",
-      "directoryCount_one": "目录 · {{count}} 个文件",
-      "directoryCount_other": "目录 · {{count}} 个文件",
       "directoryHint": "选择一个文件以打开。",
       "deleteTitle": "删除 {{name}}？",
       "deleteBody": "这会从磁盘删除 {{path}}，{{agent}} 将失去它。没有副本可以恢复。",
-      "deleteFile": "删除 {{name}}",
+      "deleteFile": "删除…",
       "newFile": "新建文件",
       "newFileTitle": "在 {{dir}} 中新建文件",
       "newFileBody": "每个子智能体一个 Markdown 文件。Coffer 会用一个简短的模板创建它，你可以再编辑。",
@@ -2303,11 +2312,16 @@
       "newFileSavedAs": "保存为 {{path}}",
       "newFileInvalid": "请使用以 .md 结尾、不含斜杠的文件名。",
       "newFileExists": "已经有同名文件。",
-      "newFileCreate": "创建"
+      "newFileCreate": "创建",
+      "title": "配置文件 · {{agent}}",
+      "treeLabel": "配置文件",
+      "invalidAt": "第 {{line}} 行第 {{column}} 列：JSON 无效",
+      "discardAndReload": "放弃并重新加载",
+      "folder": "文件夹",
+      "openFile": "打开文件",
+      "moreFor": "{{name}} 的更多操作"
     },
     "sessionsTab": {
-      "count_one": "{{count}} 个会话",
-      "count_other": "{{count}} 个会话",
       "rowMeta_one": "{{project}} · {{count}} 条消息",
       "rowMeta_other": "{{project}} · {{count}} 条消息",
       "untitled": "未命名会话",
@@ -2326,172 +2340,126 @@
       "turnRange": "第 {{from}}–{{to}} 轮，共 {{total}} 轮",
       "earlier": "更早的轮次",
       "later": "更晚的轮次",
-      "readOnly": "只读——Coffer 从不写入会话记录",
-      "outline": "你的提问",
-      "outlineEmpty": "此窗口中没有提示。",
+      "readOnly": "只读",
       "roleUser": "你",
       "noTurns": "这个会话没有对话轮次。",
-      "turnTruncated": "这一轮太长，无法完整显示——打开文件阅读其余部分。",
+      "turnTruncated": "这一轮太长，无法完整显示。打开文件阅读其余部分。",
       "harnessPrefix": "运行环境上下文",
       "loadFailed": "无法加载这个会话",
-      "loadFailedBody": "{{file}} 在读取列表后被移动或删除了。",
-      "tryAgain": "重试",
+      "loadFailedBody": "读取列表之后，这个文件被移动或删除了。",
       "refreshList": "刷新列表",
       "listFailed": "无法读取会话",
       "emptyTitle": "还没有会话",
-      "emptyBody": "{{agent}} 把会话保存在 {{dir}}。在项目中运行 {{program}}，会话就会出现在这里。",
-      "refresh": "刷新"
+      "emptyBody": "{{agent}} 把会话保存在 {{dir}}。在项目里运行 {{program}}，会话就会出现在这里。",
+      "search": "搜索会话",
+      "project": "项目",
+      "projectChosen": "项目：{{project}}",
+      "allProjects": "所有项目"
     },
-    "modelTab": {
+    "changeModel": {
+      "title": "更改 {{name}} 的模型",
+      "description": "审阅改动之前不会写入任何内容。新会话会采用它。",
+      "reviewButton": "审阅改动",
+      "review": {
+        "title": "审阅改动",
+        "subtitle": {
+          "provider": "把 {{agent}} 切换到 {{provider}}",
+          "builtin": "把 {{agent}} 切换到内置登录"
+        },
+        "summary": {
+          "provider": "经由 Coffer 的中转把请求发到 {{provider}}，并用 {{model}}{{effort}} 回答。不写入提供商密钥。",
+          "atEffort": "，推理强度 {{effort}}",
+          "catalog": "Coffer 还会重写它的模型列表，让 {{agent}} 知道这个模型的上下文窗口和档位。",
+          "builtin": "回到 {{agent}} 自己的登录。Coffer 只移除它写入的键；你自己设置的模型或推理强度会保留。"
+        },
+        "staleTitle": "{{file}} 在磁盘上已变化",
+        "staleBody": "它在这份预览生成之后被保存过，所以没有写入任何内容。重新加载后会按当前文件重新预览。",
+        "reload": "重新加载预览",
+        "note": "只有所示的行会改变。文件里的其他内容原样保留，并保留一份 .bak 副本。",
+        "noteCatalog": "只有所示的行会改变。模型列表文件是 Coffer 自己的；config.toml 会保留一份 .bak 副本。",
+        "testFailed": "连接测试失败：{{message}} 你仍可以应用。"
+      },
       "provider": {
-        "title": "提供商",
-        "builtin": "内置登录",
-        "builtinDetail": {
-          "claude_code": "Claude Code 自己的 Anthropic 账号",
-          "codex": "Codex 自己的 ChatGPT 登录"
-        },
-        "current": "当前",
-        "keyInVault": "密钥在 Coffer 保管库中",
-        "modelCount_one": "{{count}} 个模型",
-        "modelCount_other": "{{count}} 个模型",
-        "noneTitle": "还没有其他兼容的提供商",
-        "noneBody": {
-          "claude_code": "添加一个兼容 Anthropic 的提供商，让 Claude Code 不走它自己的登录。",
-          "codex": "添加一个兼容 OpenAI 的提供商，让 Codex 不走它自己的登录。"
-        },
-        "addConnection": "添加提供商",
-        "livesOn": "提供商在“模型提供商”页面管理。",
-        "manage": "管理提供商",
-        "custom": "自定义提供商",
-        "customDetail": "从列表中选一个你自己的提供商",
-        "customNone": "还没有兼容的提供商——先到“模型提供商”页面添加。",
-        "customPick": "选择提供商",
-        "customSearchEmpty": "没有匹配的提供商。",
-        "helpByType": {
-          "claude_code": "更改对新会话生效。Claude Code 中的 /effort 会覆盖推理强度。这个提供商的其余设置都由 Coffer 写入；需要更多设置时在配置文件页编辑文件。",
-          "codex": "更改对新会话生效。受信任项目的配置可以覆盖模型和推理强度。这个提供商的其余设置都由 Coffer 写入；需要更多设置时在配置文件页编辑文件。"
+        "label": "提供商",
+        "none": "还没有其他兼容的提供商。<link>在「模型提供商」中添加</link>",
+        "hint": {
+          "claude_code": "内置登录，或来自「模型提供商」的提供商。",
+          "codex": "内置登录（ChatGPT 账号），或来自「模型提供商」的提供商。"
         }
       },
+      "builtinNote": {
+        "claude_code": "使用自己的登录时，{{agent}} 自行选择模型和推理强度（<code>/model</code>、<code>/effort</code>）。只有你添加的提供商，Coffer 才会设置它们。",
+        "codex": "使用自己的登录时，{{agent}} 自行选择模型和推理强度（<code>/model</code>）。只有你添加的提供商，Coffer 才会设置它们。"
+      },
       "model": {
-        "title": "模型",
-        "label": "默认模型",
-        "placeholder": "选择默认模型",
-        "hint": "智能体回答所用的模型，来自提供商的模型列表。",
-        "builtinDefault": "{{model}} · {{agent}} 的默认模型",
-        "builtinHint": "在 {{agent}} 里自行设置——会话中用 /model。"
+        "label": "模型",
+        "placeholder": "选择模型"
+      },
+      "window": {
+        "label": "上下文窗口",
+        "tokens": "tokens",
+        "hint": "{{runtime}} 不上报这个值。Coffer 会写入它，让智能体在合适的位置压缩。",
+        "small": "{{runtime}} 不上报这个值。低于 64k tokens 时智能体会频繁压缩。"
       },
       "effort": {
         "label": "推理强度",
-        "modelDefault": "模型默认",
+        "default": "默认",
+        "none": "这个模型没有上报档位。",
+        "choose": "选择模型后可查看它的档位。",
         "levels": {
           "minimal": "最低",
           "low": "低",
           "medium": "中",
           "high": "高",
-          "xhigh": "很高",
+          "xhigh": "超高",
           "max": "最高"
         },
-        "hint": "这个模型支持的级别。对话里仍可为每个对话单独设置。",
-        "builtinHint": "在 {{agent}} 里自行设置——会话中用 /effort。",
-        "choose": "选择默认模型后，这里会显示它的推理级别。",
-        "hidden": "未显示推理强度：这个模型没有提供可选级别。"
+        "hint": {
+          "claude_code": "这个模型上报的档位。",
+          "codex": "这个模型上报的档位。Codex 每个会话只有一个模型，没有分档。"
+        }
       },
       "tiers": {
-        "title": "高级：档位映射",
-        "helpLabel": "关于档位映射",
-        "help": "Claude Code 会请求 Opus、Sonnet 或 Haiku。这里把每个档位翻译成该提供商的真实模型，按档位覆盖默认模型。",
-        "reset": "恢复建议值",
-        "suggested": "由 Coffer 建议",
+        "label": "各档位的模型",
+        "hint": "Claude Code 按任务选择档位；Coffer 已根据提供商预填。",
         "names": {
           "opus": "Opus",
           "sonnet": "Sonnet",
           "haiku": "Haiku",
           "fable": "Fable"
-        },
-        "hint": "已按提供商的模型预填；只有提供商列出 Fable 时才会出现 Fable 一行。"
-      },
-      "test": "测试连接",
-      "testing": "正在测试…",
-      "review": {
-        "title": "检查这次切换",
-        "fileCount_one": "{{count}} 个文件",
-        "fileCount_other": "{{count}} 个文件",
-        "route": "Coffer 到 {{host}} 的路由",
-        "keyHelper": "Coffer 的密钥助手（从不写入密钥本身）",
-        "modelList_one": "提供商的 {{count}} 个模型",
-        "modelList_other": "提供商的 {{count}} 个模型",
-        "footnote": {
-          "claude_code": "只改这些行；文件的其余部分保持不变。Coffer 只写顶层模型和档位变量。不会写入提供商密钥：Claude Code 用自己的令牌通过 Coffer 的本地中转访问提供商。会保留一个 .bak。",
-          "codex": "只改这几行，文件其余部分保持不变。原始 API 密钥从不写入。会保留一份 .bak。"
-        },
-        "footnoteBuiltin": "Coffer 只删除它写入的键；你自己用 /model 或 /effort 设置的模型和推理强度会保留。会保留一份 .bak。",
-        "effortLeftOut": "这个模型没有可选级别，所以不写推理强度。",
-        "nothingTitle": "没有要应用的改动",
-        "nothingBuiltin": "使用内置登录时没有按档位的模型。选择另一个提供商，在任何改动之前预览 Coffer 将写入 {{path}} 的内容。",
-        "nothingConnection": "左侧的选择与当前生效的一致。改动其中一项，即可在任何改动发生前预览 Coffer 将写入 {{path}} 的内容。",
-        "staleTitle": "切换被拒绝 —— {{file}} 在磁盘上已被修改",
-        "staleBody": "生成这份预览后，有人（或智能体自己）保存了这个文件。没有写入任何内容。重新加载，按当前文件再预览一次。",
-        "reload": "重新加载预览",
-        "testFirst": "确认前先测试提供商。",
-        "discard": "放弃",
-        "confirm": "确认切换"
-      },
-      "builtinTarget": "它的内置登录",
-      "switchedToast": "已将 {{agent}} 切换到 {{target}}",
-      "proxy": {
-        "fallbackLabel": "故障切换",
-        "fallback": "{{provider}} 失败时：{{fallbacks}}——它也提供 {{model}}",
-        "noFallback": "{{provider}} 失败时：没有备用",
-        "noFallbackLocal": "{{provider}} 失败时：没有备用——本地提供商从不切换",
-        "tokenLabel": "中转令牌",
-        "token": "{{agent}} 访问 Coffer 中转（{{address}}）的专属令牌",
-        "rotate": "轮换",
-        "rotated": "令牌已轮换。智能体会在下次请求时取用新令牌。"
+        }
       }
     },
     "list": {
-      "subtitle": "这台 Mac 上的 Claude Code 和 Codex，Coffer 自动发现。",
-      "addBoth": "全部添加",
-      "firstRunNote": "添加会在每个智能体的配置里写入一个 MCP 条目和一个记忆钩子；写入前你会先逐行查看。Coffer 会在打开本页、窗口重新获得焦点时以及每隔几分钟查找一次智能体。",
-      "footnote": "数量是实际送达每个智能体的内容。要选择谁能用某个资源，请到它自己的页面：",
-      "footnoteMcp": "MCP 服务器",
-      "footnoteSkills": "技能",
+      "subtitle": "这台 Mac 上的 Claude Code 和 Codex，以及通过 Coffer 送达各自的内容。",
+      "connectBoth": "全部连接",
+      "countsLabel": "数量是什么意思",
+      "countsHelp": "数量是通过 Coffer 实际送达每个智能体的内容。要选择谁能用某个资源，请到它自己的页面（MCP 服务器、技能）。",
       "empty": "没有可显示的智能体。",
       "col": {
         "plugins": "插件",
         "agent": "智能体",
         "configDir": "配置目录",
-        "model": "默认模型",
+        "model": "模型",
         "skills": "技能",
         "mcp": "MCP",
         "coffer": "Coffer",
         "actions": "操作"
       },
       "sub": {
-        "installed": "已安装",
-        "installedVersion": "已安装 · v{{version}}",
-        "leftBehind": "配置残留 — 找不到程序"
+        "version": "v{{version}}"
       },
       "autoModel": "由智能体自动选择",
-      "notCreated": "尚未创建",
       "detail": {
-        "lastDelivery": "上次投递记忆 {{when}}",
-        "noDelivery": "尚未投递记忆",
+        "lastDelivery": "上次投递 {{when}}",
+        "noDelivery": "尚未投递",
         "mcpMissing": "缺少 MCP 条目",
         "hookStale": "记忆钩子已过期",
         "hookMissing": "记忆钩子未写入",
-        "notConnected": "配置里没有 Coffer 条目",
-        "found": "已找到 {{dir}} · 未连接",
-        "notCreatedYet": "{{dir}} 尚未创建",
         "gone": "{{dir}} 和它的程序都不在了",
         "disabled": "已在 Coffer 中关闭",
-        "installByAgent": "可以交给智能体安装——复制提示词",
-        "reinstallByAgent": "{{dir}} 已保留 · 可以交给智能体重新安装"
-      },
-      "leftBehind": {
-        "body": "<code>{{dir}}</code> 还在，但 PATH 上没有 <code>{{program}}</code>，所以 Coffer 无法连接它。重新安装后，它会自动回来。",
-        "reveal": "在访达中显示文件夹",
-        "remove": "从列表移除"
+        "notOnThisMac": "这台 Mac 上没有",
+        "keptNotOnPath": "{{dir}} 已保留 · PATH 上没有 {{program}}"
       }
     },
     "pending": {
@@ -2507,13 +2475,11 @@
       "reveal": "在访达中显示配置目录",
       "revealFailed": "无法显示该文件夹。",
       "copyUid": "复制 uid",
-      "add": "添加",
       "connect": "连接",
       "repair": "修复",
-      "disconnect": "断开连接",
+      "disconnect": "断开连接…",
       "enable": "开启",
-      "disable": "关闭",
-      "remove": "从 Coffer 移除"
+      "disable": "关闭"
     },
     "change": {
       "title": "查看改动",
@@ -2550,7 +2516,10 @@
       "title": "使用其他配置目录",
       "subtitle": "{{name}} · 除非你选择其他文件夹，Coffer 会在 {{standard}} 中查找。",
       "field": "配置目录",
-      "hint": "Coffer 会从这里重新读取每个文件。智能体的名称仍为“{{name}}”。",
+      "hint": "Coffer 会从这里重新读取每个文件。",
+      "review": "查看改动",
+      "reviewSubtitle": "把 {{name}} 与 Coffer 的连接移到 {{dir}}",
+      "reviewSummary": "Coffer 的条目和记忆钩子会从旧目录取出，写入新目录。两个目录里的其余内容保持不变。",
       "foundThere": "在该目录中找到",
       "found": "已找到",
       "notHere": "不在这里",
@@ -2567,14 +2536,6 @@
         "codexConfig": "模型、提供商和 MCP 条目",
         "hooks": "钩子"
       }
-    },
-    "removeDialog": {
-      "title": "从 Coffer 移除 {{name}}？",
-      "body": "Coffer 会把它的条目和钩子从 {{dir}} 中取出，并停止为它服务。{{name}} 仍然安装着，其余配置、会话和它自己的记忆都保留。它会以“已检测到，未添加”留在列表中；点击添加即可恢复。",
-      "confirm": "移除"
-    },
-    "hookApproval": {
-      "copy": "复制 /hooks"
     }
   },
   "skills": {
@@ -2618,7 +2579,6 @@
       "preview": "预览",
       "source": "源码",
       "openDefault": "用默认应用打开",
-      "moreFor": "{{path}} 的更多操作",
       "binaryTitle": "二进制文件 · {{size}}",
       "binaryBody": "Coffer 只显示文本文件。请用它自己的应用打开。",
       "truncatedTitle": "只显示前 {{size}}",
@@ -5795,7 +5755,6 @@
   "usage": {
     "exportCsv": "导出 CSV",
     "noPrice": "—",
-    "editPrices": "编辑价格",
     "error": "无法加载 API 密钥用量。",
     "presets": {
       "today": "今天",
@@ -5811,8 +5770,10 @@
     },
     "tiles": {
       "cost": "费用（估算）",
+      "requests_one": "{{n}} 次请求",
       "requests_other": "{{n}} 次请求",
-      "unpriced": "{{n}} 次无价格",
+      "unpriced_one": "{{count}} 个模型无价格",
+      "unpriced_other": "{{count}} 个模型无价格",
       "unknown": "{{n}} 次用量未知",
       "input": "输入",
       "inputNote": "不含缓存",
@@ -5821,7 +5782,6 @@
       "cacheRead": "缓存读取",
       "cacheWrite": "缓存写入",
       "cacheWriteNote": "仅 Anthropic",
-      "requests_one": "{{n}} 次请求",
       "costHelp": "关于费用估算"
     },
     "chart": {
@@ -5850,20 +5810,19 @@
         "cacheWrite": "缓存写入",
         "cost": "费用",
         "second": {
-          "model": "使用者",
+          "model": "智能体",
           "day": "主要智能体"
         }
       },
       "unknownModel": "未知模型",
       "unknownAgent": "未知智能体",
       "noPriceTip": "这个模型没有已知价格。请在它的提供商上设置一个。",
+      "partlyPricedTip_one": "{{n}} 次请求没有价格，未计入此费用。",
       "partlyPricedTip_other": "{{n}} 次请求没有价格，未计入此费用。",
+      "unknownTip_one": "{{n}} 次请求在上报用量前结束，其 token 未计入。",
       "unknownTip_other": "{{n}} 次请求在上报用量前结束，其 token 未计入。",
       "total": "合计 · {{range}}",
-      "partlyPricedTip_one": "{{n}} 次请求没有价格，未计入此费用。",
-      "unknownTip_one": "{{n}} 次请求在上报用量前结束，其 token 未计入。",
-      "today": "{{day}} · 今天",
-      "footer": "仅含有价格的模型的费用。"
+      "today": "{{day}} · 今天"
     },
     "empty": {
       "firstTitle": "还没有 API 密钥用量",
@@ -5926,7 +5885,7 @@
   },
   "providers": {
     "title": "模型提供商",
-    "subtitle": "智能体所用模型的来源，以及经 Coffer 的请求花费多少。",
+    "subtitle": "智能体的模型从哪里来，以及经由 Coffer 的请求花了多少钱。",
     "loadFailed": "无法加载模型提供商",
     "protocols": {
       "anthropic": "Anthropic",
@@ -5964,8 +5923,8 @@
       "unreachable": "无法连接"
     },
     "list": {
-      "filter": "筛选",
-      "heading": "提供商",
+      "filter": "筛选提供商",
+      "heading": "故障切换顺序",
       "engineOnly": "仅供 Coffer 引擎",
       "allModels": "全部模型",
       "models_one": "{{count}} 个模型",
@@ -5973,7 +5932,8 @@
       "dragToReorder": "拖动以调整顺序",
       "reorderAria": "移动 {{name}}（↑ / ↓）",
       "orderHelpLabel": "关于提供商列表",
-      "orderHelp": "顺序 = 故障切换优先级。如果一个智能体的模型由多个提供商提供，Coffer 的中转会在首字节前按这个顺序切换。拖动以调整顺序。"
+      "orderHelp": "顺序 = 故障切换优先级。如果一个智能体的模型由多个提供商提供，Coffer 的中转会在首字节前按这个顺序切换。拖动以调整顺序。",
+      "localRuntime": "本地运行时"
     },
     "detail": {
       "notFound": "未找到该模型提供商",
@@ -5982,7 +5942,8 @@
     "actions": {
       "test": "测试",
       "delete": "删除提供商",
-      "more": "{{name}} 的更多操作"
+      "more": "{{name}} 的更多操作",
+      "deleteShort": "删除"
     },
     "fields": {
       "name": "名称",
@@ -5999,19 +5960,17 @@
     "rejected": {
       "title": "接入地址拒绝了已保存的密钥（{{status}}）",
       "titleNoStatus": "接入地址拒绝了已保存的密钥",
-      "bodyUsed": "在更换密钥之前，{{users}} 的每个请求都会失败。",
-      "bodyUnused": "在更换密钥之前，发往这个提供商的请求都会失败。"
+      "body": "在更换密钥之前，所有使用它的地方都会失败。"
     },
     "usedBy": {
       "title": "使用方",
       "engine": "Coffer 引擎",
       "transcribe": "语音转文字",
-      "runs": "正在使用这个提供商",
-      "failing": "请求失败 · 密钥被拒",
-      "changeInAgent": "在「{{agent}} › 模型」中更改",
-      "changeInSettings": "在「设置 › 通用」中更改",
-      "none": "目前没有任何东西使用这个提供商。",
-      "readOnly": "只读。智能体的提供商和模型在它自己的「模型」页切换；Coffer 引擎和语音转文字在「设置 › 通用」中切换。"
+      "none": "目前没有东西使用它。在智能体页面用「更改模型」选它。",
+      "lead": "在智能体页面用「更改模型」更换它的提供商；Coffer 引擎和语音转文字在「设置 › 通用」中更换。",
+      "changeIt": "在这里更改：",
+      "changeModel": "{{agent}} › 更改模型",
+      "settingsGeneral": "设置 › 通用"
     },
     "endpoint": {
       "title": "接入地址",
@@ -6019,23 +5978,31 @@
       "runtime": "运行时",
       "wires": "提供 {{wires}}",
       "route": "路由",
-      "routeValue": "智能体通过 Coffer 的中转访问它 · {{address}}",
       "fallback": "故障切换",
-      "fallbackSwitch": "作为其他提供商的备用",
-      "fallbackLocal": "本地提供商从不作为备用"
+      "fallbackSwitch": "作为备用",
+      "fallbackLocal": "本地提供商从不作为备用",
+      "lead": "请求发往哪里，以及如何签名。",
+      "unreachableTitle": "无法连接 {{host}}",
+      "unreachableBody": "{{reason}} 在它恢复应答之前，所有使用它的地方都会失败。",
+      "unreachablePrompt": "Coffer 无法连接模型提供商「{{name}}」（{{url}}）。最近一次的结果是：{{reason}}。请查明原因——网络、VPN、网关宕机、地址错误——并修复，或告诉我该改什么。未经询问不要改动 Coffer 的设置。",
+      "routeThrough": "经由 Coffer 的中转：",
+      "fallbackDescription": "其他提供商失败时接手请求，按故障切换顺序。",
+      "never": "从不"
     },
     "key": {
       "secretPrefix": "密钥：",
       "secretLabel": "API Key 对应的密钥",
-      "stored": "保存在这台 Mac 的钥匙串加密存储中。只写不读。",
+      "stored": "只写不读，保存在这台 Mac 的钥匙串加密存储中。",
       "storedChip": "已保存",
-      "manage": "在密钥中管理",
+      "manage": "打开密钥",
       "replace": "更换密钥",
       "rejected": "被拒",
-      "rejectedWith": "被拒（{{status}}）",
       "none": "无需密钥——这个提供商不需要。",
       "pending": "等待在 Coffer 应用中批准",
-      "review": "查看"
+      "review": "查看",
+      "noneValue": "无",
+      "noneLocal": "本地运行时不需要密钥。",
+      "replaceOpen": "更换密钥…"
     },
     "overview": {
       "models": "模型"
@@ -6049,15 +6016,21 @@
       "listing": "正在列出该接入地址的模型…",
       "listedAgo": "{{ago}}列出",
       "refresh": "刷新",
-      "hint": "只有开启的模型会出现在智能体、对话和渠道的选择器里。价格按每 100 万 token 计（输入 · 输出）；没有价格的模型在用量里显示“—”。",
       "failedTitle": "无法列出该接入地址的模型",
-      "failedBody": "{{reason}} 下面的选择保持不变，仍然提供。",
+      "failedBody": "{{reason}} 下面的选择仍然有效。",
       "noneTitle": "该接入地址没有列出任何模型",
-      "noneBody": "保持现状，接入地址接受的每个模型都可用——智能体会传你输入的名称。或者等网关管理员添加模型后再刷新。",
+      "noneBody": "它接受的每个模型都可用：智能体会传你输入的名称。等网关管理员添加模型后再刷新。",
       "noMatch": "没有匹配的模型。",
       "showMore_one": "再显示 {{count}} 个",
       "showMore_other": "再显示 {{count}} 个",
-      "agentDefault": "{{agent}} 默认"
+      "agentDefault": "{{agent}} 默认",
+      "help": "只有开启的模型会出现在智能体、对话和渠道的选择器里。点击价格可设置你自己的价格。",
+      "priceBundled": "价格按每 100 万 token 计（输入 · 输出），内置于 Coffer，更新于 {{date}}，标注的除外。",
+      "priceFromProvider": "价格按每 100 万 token 计（输入 · 输出），来自 {{name}}，{{when}}更新，标注的除外。",
+      "priceLocal": "本地模型不计费。",
+      "listingFailed": "列出失败",
+      "lastListed": "上次列出 {{date}}",
+      "showing": "显示 {{shown}} / {{total}}"
     },
     "test": {
       "running": "正在测试接入地址…",
@@ -6112,20 +6085,25 @@
         }
       },
       "local": {
-        "title": "这台 Mac 上的运行时",
-        "detect": "检测",
+        "title": "在这台 Mac 上找到",
         "looking": "正在查找这台 Mac 上的模型运行时…",
-        "none": "默认端口（Ollama 11434、LM Studio 1234、llama-server 8080）上都没有应答。可以让智能体装好一个运行时后重新检测，或输入已在运行的运行时地址。",
+        "none": "Ollama 11434 · LM Studio 1234 · llama-server 8080。启动一个后重新检测，或在下面输入它的地址。",
         "noWires": "不提供智能体协议",
-        "keyless": "无需密钥。检测只读取信息——不会拉取或加载任何模型。"
+        "running": "运行中",
+        "notRunning": "未运行",
+        "notRunningBody": "localhost:{{port}} 上没有应答。",
+        "noneTitle": "默认端口上都没有应答",
+        "urlHint": "必须在这台 Mac 上：localhost 或 127.0.0.1。",
+        "detectAgain": "重新检测",
+        "defaultName": "{{runtime}} · 本机"
       },
       "models": {
-        "count_one": "已选 {{n}} 个 · 不选则提供全部 {{count}} 个",
-        "count_other": "已选 {{n}} 个 · 不选则提供全部 {{count}} 个",
         "empty": "接入地址没有列出任何模型。直接添加，它接受的每个模型都可用。",
-        "window": "{{tokens}} tokens",
-        "noTools": "不支持工具"
-      }
+        "noTools": "不支持工具",
+        "selected": "已选 {{n}} / {{count}}",
+        "hint": "全部不勾选则提供接入地址接受的所有模型。之后可以更改。"
+      },
+      "vendorHintLocal": "这台 Mac 上的运行时无需密钥；Coffer 会列出它提供的所有模型。"
     },
     "edit": {
       "title": "编辑 {{name}}",
@@ -6144,48 +6122,49 @@
       "title": "删除 {{name}}？",
       "confirm": "删除 {{name}}？此操作无法撤销。",
       "confirmWithSecret": "删除 {{name}}？它的密钥 {{ref}} 也会从这台 Mac 上删除。此操作无法撤销。",
-      "blocked": "{{name}} 正在使用，暂时不能删除。请先把下面这些从它上面移走："
+      "agentTitle": "{{agent}} 回到自己的登录",
+      "agentBody": "Coffer 会从 {{path}} 中移除它的模型、思考强度和提供商配置",
+      "agentBodyNoFile": "Coffer 会清除它与这个提供商的连接",
+      "engineTitle": "Coffer 引擎暂停",
+      "engineBody": "直到你在「设置 › 通用」中选了别的模型",
+      "transcribeTitle": "语音转文字关闭",
+      "transcribeBody": "语音消息将不带转写文本送达",
+      "keyTitle": "它的密钥会从这台 Mac 上删除",
+      "reviewSubtitle_other": "审阅更改 · {{count}} 个文件",
+      "note": "只移除 Coffer 自己写入的行。密钥也会被删除，所以无法撤销。",
+      "reviewSubtitle_one": "审阅更改 · {{count}} 个文件"
     },
     "welcome": {
-      "title": "带上你自己的模型接入地址",
-      "body": "接入地址和 API Key 只保存一次。Coffer 让你的智能体使用它，并让你选择它们可以用哪些模型。",
+      "title": "还没有模型提供商",
+      "body": "接入地址和密钥只保存一次；之后你的智能体和 Coffer 引擎就能使用它。从下面选一个开始。",
       "anthropic": {
         "title": "Anthropic 或兼容",
-        "body": "Claude Code、对话和 Coffer 引擎。Anthropic API、Bedrock 类网关。"
+        "body": "Claude Code、对话和 Coffer 引擎都能用。"
       },
       "openai": {
         "title": "OpenAI 或兼容",
-        "body": "Codex、对话和 Coffer 引擎。OpenAI、Gemini、DeepSeek、OpenRouter、公司网关。"
+        "body": "Codex、对话和 Coffer 引擎。Gemini、DeepSeek、OpenRouter、网关。"
       },
       "local": {
-        "title": "这台 Mac 上的本地运行时",
-        "body": "Ollama、LM Studio、vLLM 或 llama.cpp。无需密钥。"
-      },
-      "rightNow": "当前",
-      "ownLogin": {
-        "claude_code": "自身登录（Anthropic）",
-        "codex": "自身登录（ChatGPT）"
-      },
-      "engineUnset": "Coffer 自用模型尚未设置，提炼和整理已暂停。",
-      "engineLink": "Coffer 自用模型"
+        "title": "这台 Mac 上的运行时",
+        "body": "Ollama 或 LM Studio。无需密钥。"
+      }
     },
     "prices": {
-      "help": "模型的价格取以下第一个有的来源：你设置的价格（你设置）、列出模型时提供商自己的 API 报告的价格（来自 <提供商>）、Coffer 的价格表（内置）——随每个版本附带，并且每天从 genai-prices 刷新一次，除非在“设置 › 通用”中关闭。没有已知价格的模型显示“—”；设置一个价格，用量页才能显示费用。",
       "rates": "{{input}} · {{output}} / 100 万",
       "source": {
         "user": "你设置",
         "provider": "来自 {{name}}",
-        "bundled": "内置",
-        "bundledOn": "内置 · 更新于 {{date}}"
+        "bundled": "内置"
       },
       "tiered": "基础档：输入 token 超过阈值后，长请求更贵",
       "local": "本地 · 不计费",
       "set": "设置价格…",
-      "reset": "重置",
+      "reset": "恢复默认",
       "noneAria": "{{id}} 没有已知价格",
       "editAria": "{{id}}：{{rates}}，修改价格",
       "dialogTitle": "{{id}} 的价格",
-      "dialogBody": "这个提供商向你收取的价格。它优先于提供商 API 和内置价格表。",
+      "dialogBody": "这个提供商向你收取的价格。它优先于提供商的价格表和 Coffer 内置价格。",
       "fields": {
         "input": "输入",
         "output": "输出",
@@ -6198,7 +6177,8 @@
     "tabs": {
       "providers": "提供商",
       "usage": "用量"
-    }
+    },
+    "latency": "{{ms}} 毫秒"
   },
   "skillSources": {
     "add": {

@@ -24,9 +24,9 @@ interface Props {
   provider: Provider;
   use: ProviderUse;
   selected: boolean;
-  /** Set on the open row when its probe found the key rejected ("401"/"403", or ""). */
-  rejected?: string | null;
-  /** The drag handle: a quiet affordance shown on hover or focus at the row's end (list order is fallback priority). */
+  /** Set on the open row when its probe found a problem: the sub-line says so, in red. */
+  problem?: "keyRejected" | "unreachable" | null;
+  /** The drag handle: a quiet grip at the row's start (list order is fallback priority). */
   handle?: ReactNode;
 }
 
@@ -37,13 +37,19 @@ function useOfferLabel(provider: Provider): string {
   return n === 0 ? t("providers.list.allModels") : t("providers.list.models", { count: n });
 }
 
-export function ProviderListRow({ provider, use, selected, rejected, handle }: Props) {
+/** "Anthropic", "OpenAI-compatible" or "Local runtime": what the sub-line leads with. */
+function useKindLabel(provider: Provider): string {
+  const { t } = useTranslation();
+  return provider.local_runtime
+    ? t("providers.list.localRuntime")
+    : t(PROTOCOL_LABEL_KEY[provider.protocol]);
+}
+
+export function ProviderListRow({ provider, use, selected, problem, handle }: Props) {
   const { t } = useTranslation();
   const offer = useOfferLabel(provider);
-  const sub =
-    rejected != null
-      ? [t("providers.status.keyRejected"), rejected].filter(Boolean).join(" · ")
-      : `${t(PROTOCOL_LABEL_KEY[provider.protocol])} · ${offer}`;
+  const kind = useKindLabel(provider);
+  const sub = problem ? t(`providers.status.${problem}`) : `${kind} · ${offer}`;
   const link = (
     <Link
       to={`/model-providers/${encodeURIComponent(provider.uid)}`}
@@ -52,7 +58,7 @@ export function ProviderListRow({ provider, use, selected, rejected, handle }: P
       className={cn(
         "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-text no-underline outline-none",
         "transition-colors duration-fast hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring",
-        handle && "pr-7",
+        handle && "pl-6",
         selected && "bg-surface-selected hover:bg-surface-selected",
       )}
     >
@@ -61,7 +67,7 @@ export function ProviderListRow({ provider, use, selected, rejected, handle }: P
         <TruncatedText text={displayName(provider)} className="text-sm font-label" />
         <TruncatedText
           text={sub}
-          className={cn("text-xs", rejected != null ? toneTextClass("error") : "text-text-muted")}
+          className={cn("text-xs", problem ? toneTextClass("error") : "text-text-muted")}
         />
       </span>
       <span className="inline-flex shrink-0 items-center gap-1">
@@ -77,7 +83,7 @@ export function ProviderListRow({ provider, use, selected, rejected, handle }: P
   return (
     <div className="group relative">
       {link}
-      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity duration-fast focus-within:opacity-100 group-hover:opacity-100">
+      <span className="absolute left-1 top-1/2 -translate-y-1/2 opacity-60 transition-opacity duration-fast focus-within:opacity-100 group-hover:opacity-100">
         {handle}
       </span>
     </div>

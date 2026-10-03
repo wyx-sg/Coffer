@@ -1,32 +1,29 @@
 // src/components/agents/AgentOverviewTab.tsx — the agent detail page's Overview tab (boards 2.1.08–2.1.14).
 //
-// Two columns. Left: the Coffer connection (state, one sentence, its one
-// action, one row per part) and "What this agent can use" — a summary row per
-// kind opening its tab. Right: the model read-out (chosen on the Model tab), the
-// agent's details (no Title or Name field — spec agent-registry, revise-web-ui-ia)
-// and its recent sessions. Detection wins: an agent whose program is gone
-// replaces the whole tab with the config-left-behind or not-found fix card.
-// Every write goes through `actions`, which the page wires to its dialogs.
+// One column, 920 wide: Connection (its one fix at the title's right) → What
+// this agent can use (six tiles) → Model (with Change…) → Details. Detection
+// wins: an agent whose program is gone replaces the tab with the config-left-
+// behind or not-found sections. Every write goes through `actions`, which the
+// page wires to its dialogs.
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
 import { agentRowState } from "@/lib/agents/rowState";
 import { useAgentConnection, useAgentHooks } from "@/lib/hooks/useAgents";
+import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { useResource } from "@/lib/hooks/useResources";
 
-import { SectionStack } from "@/components/Section";
+import { OverviewModelSection } from "./model/OverviewModelSection";
 import { AgentNotFoundCard } from "./overview/AgentNotFoundCard";
 import { ConfigLeftBehindCard } from "./overview/ConfigLeftBehindCard";
 import { OverviewConnection } from "./overview/OverviewConnection";
-import { OverviewDetails, OverviewModel, OverviewRecentSessions } from "./overview/OverviewSide";
+import { OverviewDetails } from "./overview/OverviewDetails";
 import { OverviewSummary } from "./overview/OverviewSummary";
 
 export interface OverviewActions {
   /** Open the connection-change preview: connect (also Repair) or disconnect. */
   onConnection: (kind: "connect" | "disconnect") => void;
   onEnable: () => void;
-  /** "Change config directory" / "Use a different config directory…" */
+  /** "Use a different config directory…" */
   onChangeConfigDir: () => void;
-  /** "Remove from Coffer" / "Remove from list" (the confirm dialog is the integrator's). */
-  onRemove: () => void;
   /** Connect / disconnect / enable is running on the agent: its buttons wait. */
   busy?: boolean;
 }
@@ -48,6 +45,7 @@ export function AgentOverviewTab({ agent, typeRow, actions }: Props) {
 function OverviewBody({ agent, typeRow, actions }: Props) {
   const connection = useAgentConnection(agent.uid);
   const hooks = useAgentHooks(agent.uid);
+  const memoryOn = useFeatureEnabled("memory") === true;
   const resource = useResource(agent.uid);
   const enabled = resource.data?.enabled ?? true;
   const state = agentRowState(
@@ -57,29 +55,26 @@ function OverviewBody({ agent, typeRow, actions }: Props) {
   );
 
   return (
-    <div className="flex flex-col gap-10 lg:flex-row">
-      <SectionStack className="min-w-0 flex-[1.35_1_0]">
-        <OverviewConnection
-          agent={agent}
-          typeRow={typeRow}
-          state={state}
-          connection={connection.data}
-          hook={hooks.data?.coffer_hook}
-          failed={connection.isError}
-          actions={actions}
-        />
-        <OverviewSummary
-          agent={agent}
-          typeRow={typeRow}
-          disabled={!enabled}
-          notConnected={state === "not_connected"}
-        />
-      </SectionStack>
-      <SectionStack className="min-w-0 flex-1">
-        <OverviewModel agent={agent} />
-        <OverviewDetails agent={agent} version={typeRow.version ?? agent.version ?? null} />
-        <OverviewRecentSessions agent={agent} />
-      </SectionStack>
+    <div className="flex max-w-[920px] flex-col gap-8">
+      <OverviewConnection
+        agent={agent}
+        typeRow={typeRow}
+        state={state}
+        connection={connection.data}
+        hook={memoryOn ? hooks.data?.coffer_hook : undefined}
+        failed={connection.isError}
+        actions={actions}
+        onCheckHook={() => void hooks.refetch()}
+        checking={hooks.isFetching}
+      />
+      <OverviewSummary
+        agent={agent}
+        typeRow={typeRow}
+        disabled={!enabled}
+        notConnected={state === "not_connected"}
+      />
+      <OverviewModelSection agent={agent} />
+      <OverviewDetails agent={agent} version={typeRow.version ?? agent.version ?? null} />
     </div>
   );
 }

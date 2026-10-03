@@ -1,111 +1,57 @@
 // src/components/providers/ProviderWelcome.tsx — first run: no provider yet.
 //
-// Three ways in — an Anthropic-compatible endpoint, an OpenAI-compatible one,
-// or a local runtime on this Mac — each opening Add with that preset; what
-// the registered agents run on right now (their own login); and, while no
-// provider carries Coffer's engine, the line saying distil and curation are
-// paused, linking Settings › General where it is chosen.
+// A centred empty state — "No model providers yet" — and three ways in: an
+// Anthropic-compatible endpoint, an OpenAI-compatible one, or a runtime on this
+// Mac, each opening Add with that vendor chosen. The header's Add provider is
+// the page's primary button, so none repeats it here.
+import { Box, Laptop, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { ChevronRight } from "lucide-react";
 
-import { Section } from "@/components/Section";
-import { AgentBadge } from "@/components/agent/AgentBadge";
-import { Button } from "@/components/ui/button";
-import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
-import type { AgentOut } from "@/lib/api/agents";
-import type { Provider } from "@/lib/api/providers";
 import type { PresetId } from "@/lib/providers/presets";
-import { useOpenSettings } from "@/lib/settingsModal";
-import { ProviderMark } from "./ProviderMark";
 
 interface Props {
-  agents: AgentOut[];
-  /** Whether any provider carries Coffer's engine. */
-  engineSet: boolean;
   onAdd: (preset: PresetId) => void;
 }
 
-type MarkOf = Pick<Provider, "base_url" | "protocol" | "local_runtime">;
-
-const OPTIONS: { preset: PresetId; key: string; mark: MarkOf }[] = [
-  {
-    preset: "anthropic",
-    key: "anthropic",
-    mark: { base_url: "https://api.anthropic.com", protocol: "anthropic", local_runtime: null },
-  },
-  {
-    preset: "openai",
-    key: "openai",
-    mark: { base_url: "https://api.openai.com/v1", protocol: "openai", local_runtime: null },
-  },
-  {
-    preset: "ollama",
-    key: "local",
-    mark: { base_url: "http://localhost:11434", protocol: "ollama", local_runtime: null },
-  },
+const OPTIONS: { preset: PresetId; key: string; icon: LucideIcon }[] = [
+  { preset: "anthropic", key: "anthropic", icon: Box },
+  { preset: "openai", key: "openai", icon: Box },
+  { preset: "ollama", key: "local", icon: Laptop },
 ];
 
-export function ProviderWelcome({ agents, engineSet, onAdd }: Props) {
+export function ProviderWelcome({ onAdd }: Props) {
   const { t } = useTranslation();
-  const openSettings = useOpenSettings();
   return (
-    <div className="flex max-w-3xl flex-col gap-6 rounded-xl border border-border bg-surface-raised px-7 py-6">
-      <div className="flex flex-col gap-1.5">
-        <h2 className="text-md font-bold text-text">{t("providers.welcome.title")}</h2>
-        <p className="max-w-prose text-sm text-text-muted">{t("providers.welcome.body")}</p>
+    <div className="mx-auto flex max-w-3xl flex-col items-center gap-6 px-8 pb-10 pt-20">
+      <div className="flex flex-col items-center gap-2 text-center">
+        <span className="inline-flex size-10 items-center justify-center rounded-lg bg-chip text-text-muted">
+          <Box className="size-[18px]" aria-hidden />
+        </span>
+        <h2 className="mt-2 text-md font-bold text-text">{t("providers.welcome.title")}</h2>
+        <p className="max-w-md text-sm text-text-muted">{t("providers.welcome.body")}</p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid w-full gap-3 sm:grid-cols-3">
         {OPTIONS.map((o) => (
           <button
             key={o.key}
             type="button"
             onClick={() => onAdd(o.preset)}
-            className="flex flex-col items-start gap-2 rounded-xl border border-border p-3.5 text-left outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-focus-ring"
+            className="flex items-start gap-2.5 rounded-lg border border-border-subtle bg-surface-raised p-3.5 text-left outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-focus-ring"
           >
-            <ProviderMark provider={o.mark} size="md" />
-            <span className="text-sm font-label text-text">
-              {t(`providers.welcome.${o.key}.title`)}
+            <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-chip text-text-muted">
+              <o.icon className="size-3.5" aria-hidden />
             </span>
-            <span className="text-xs text-text-muted">{t(`providers.welcome.${o.key}.body`)}</span>
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-sm font-label text-text">
+                {t(`providers.welcome.${o.key}.title`)}
+              </span>
+              <span className="text-xs text-text-muted">
+                {t(`providers.welcome.${o.key}.body`)}
+              </span>
+            </span>
           </button>
         ))}
       </div>
-      {agents.length > 0 ? (
-        <Section title={t("providers.welcome.rightNow")} gap="tight">
-          <div className="flex flex-col">
-            {agents.map((a) => (
-              <div
-                key={a.uid}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-border-subtle py-2"
-              >
-                <span className="inline-flex min-w-0 items-center gap-2.5">
-                  <AgentBadge type={a.type} size="md" tooltip={false} />
-                  <span className="text-sm font-label">{agentTypeLabel(a.type)}</span>
-                  <span className="truncate font-mono text-xs text-text-muted">
-                    {abbreviateHomePath(a.config_dir)}
-                  </span>
-                </span>
-                <span className="text-xs text-text-muted">
-                  {t(`providers.welcome.ownLogin.${a.type === "codex" ? "codex" : "claude_code"}`)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </Section>
-      ) : null}
-      {engineSet ? null : (
-        <p className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
-          {t("providers.welcome.engineUnset")}
-          <Button
-            variant="link"
-            size="sm"
-            className="h-auto px-0"
-            onClick={() => openSettings("general")}
-          >
-            {t("providers.welcome.engineLink")} <ChevronRight aria-hidden />
-          </Button>
-        </p>
-      )}
     </div>
   );
 }

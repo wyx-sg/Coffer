@@ -41,7 +41,7 @@ import { UsageTiles } from "./UsageTiles";
 const DAILY_TOTALS_DAYS = 365;
 
 interface Props {
-  /** Switch the page to its Providers tab ("Open Providers", "Edit prices"). */
+  /** Switch the page to its Providers tab ("Open Providers"). */
   onOpenProviders: () => void;
 }
 
@@ -52,6 +52,8 @@ export function UsageTab({ onOpenProviders }: Props) {
   const query = readUsageQuery(params);
   const summary = useUsageSummary(query);
   const byDay = useUsageSummary({ ...query, group_by: "day" });
+  // Per model, whatever the breakdown: which models have no known price.
+  const byModel = useUsageSummary({ ...query, group_by: "model" });
   // Whether anything ever went through the proxy: the first-run state.
   const today = new Date();
   const ever = useUsageSummary({
@@ -71,6 +73,18 @@ export function UsageTab({ onOpenProviders }: Props) {
   const proxied = (providers.data ?? []).filter((p) => !p.local_runtime);
   const filtered = !!query.agent_type || !!query.connection_uid;
   const data = summary.data;
+  const unpricedRows = (byModel.data?.rows ?? []).filter(
+    (r) => r.model && r.totals.unpriced_requests > 0,
+  );
+  const firstUnpriced = unpricedRows.find((r) => r.connection_uid) ?? unpricedRows[0];
+  const unpriced = unpricedRows.length
+    ? {
+        count: unpricedRows.length,
+        to: firstUnpriced?.connection_uid
+          ? `/model-providers?provider=${encodeURIComponent(firstUnpriced.connection_uid)}&model=${encodeURIComponent(firstUnpriced.model ?? "")}`
+          : "/model-providers",
+      }
+    : null;
 
   if (ever.isLoading) {
     return <Skeleton className="h-48 w-full rounded-xl" data-testid="usage-loading" />;
@@ -126,7 +140,7 @@ export function UsageTab({ onOpenProviders }: Props) {
     }
     return (
       <>
-        <UsageTiles totals={data.totals} priceNote={data.price_note} />
+        <UsageTiles totals={data.totals} priceNote={data.price_note} unpriced={unpriced} />
         {byDay.data ? (
           <CostChart byDay={byDay.data} />
         ) : byDay.isError ? (
@@ -142,7 +156,7 @@ export function UsageTab({ onOpenProviders }: Props) {
             onChange={(g) => setQuery({ ...query, group_by: g })}
             className="self-start"
           />
-          <BreakdownTable summary={data} totalLabel={rangeLabel} onEditPrices={onOpenProviders} />
+          <BreakdownTable summary={data} totalLabel={rangeLabel} />
         </div>
       </>
     );

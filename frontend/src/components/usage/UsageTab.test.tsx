@@ -103,7 +103,11 @@ const BY_MODEL = summary(
       connection_name: "Anthropic API",
       agent_types: ["claude_code"],
     }),
-    row("m2", ACME, { model: "acme-coder-large", connection_name: "Acme AI gateway" }),
+    row("m2", ACME, {
+      model: "acme-coder-large",
+      connection_uid: "conn-2",
+      connection_name: "Acme AI gateway",
+    }),
   ],
   ALL,
 );
@@ -178,10 +182,15 @@ describe("API-key usage", () => {
     "a model with no price reads as a dash, never zero",
     async () => {
       install();
-      const { onOpenProviders } = renderTab();
+      renderTab();
       expect((await screen.findAllByText("$25.81")).length).toBeGreaterThan(0);
       expect(screen.getByText("Cost (estimated)")).toBeInTheDocument();
-      expect(screen.getByText("3,092 requests · 47 unpriced")).toBeInTheDocument();
+      expect(screen.getByText(/^3,092 requests/)).toBeInTheDocument();
+      // The unpriced fact is one link in the Cost block, to the model on its provider.
+      expect(screen.getByRole("link", { name: "1 model unpriced" })).toHaveAttribute(
+        "href",
+        "/model-providers?provider=conn-2&model=acme-coder-large",
+      );
       expect(screen.getAllByText("6.00M").length).toBeGreaterThan(0);
       expect(screen.getAllByText("1.06M").length).toBeGreaterThan(0);
       // The price-source explanation sits behind the Cost label's "?".
@@ -203,10 +212,10 @@ describe("API-key usage", () => {
       expect(dash).toHaveTextContent(/^—$/);
       expect(within(rows[2]).queryByText("$0.00")).not.toBeInTheDocument();
       expect(within(rows[3]).getByText("Total · 7 days")).toBeInTheDocument();
-      expect(screen.getByText("Cost of priced models only.")).toBeInTheDocument();
-      // "Edit prices" is the Providers tab, not a navigation away.
-      fireEvent.click(screen.getByRole("button", { name: "Edit prices" }));
-      expect(onOpenProviders).toHaveBeenCalled();
+      // In By model the second column is the agent; no footer repeats the price caveat.
+      expect(within(table).getByRole("columnheader", { name: "Agent" })).toBeInTheDocument();
+      expect(screen.queryByText(/Cost of priced models only/)).toBeNull();
+      expect(screen.queryByRole("button", { name: "Edit prices" })).toBeNull();
     },
   );
 

@@ -1,7 +1,7 @@
 // src/lib/agents/hookRows.test.ts — the state Coffer's hook reads as, and how long ago it fired.
 import { describe, expect, test } from "vitest";
 
-import { cofferHookState, timeAgo } from "./hookRows";
+import { cofferHookState, hookNotApproved, timeAgo } from "./hookRows";
 import type { CofferHook } from "@/lib/api/agents";
 
 const HOOK: CofferHook = {
@@ -30,6 +30,17 @@ describe("cofferHookState", () => {
 
   test("an unknown trust makes no claim of its own", () => {
     expect(cofferHookState({ ...HOOK, trust: "unknown" }).word).toBe("current");
+  });
+});
+
+describe("hookNotApproved", () => {
+  test("a current hook the agent has not approved, or approved for another command", () => {
+    expect(hookNotApproved({ ...HOOK, trust: "untrusted" })).toBe(true);
+    expect(hookNotApproved({ ...HOOK, trust: "modified" })).toBe(true);
+    expect(hookNotApproved({ ...HOOK, trust: "trusted" })).toBe(false);
+    // Out of date or missing is a repair, not an approval.
+    expect(hookNotApproved({ ...HOOK, trust: "untrusted", health: "stale" })).toBe(false);
+    expect(hookNotApproved(null)).toBe(false);
   });
 });
 

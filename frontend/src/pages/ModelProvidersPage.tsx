@@ -1,34 +1,46 @@
-// src/pages/ModelProvidersPage.tsx — Model providers (spec provider-switching "Offer every connection operation on REST, CLI and web").
+// src/pages/ModelProvidersPage.tsx — Model providers: one header over two tabs, Providers | Usage.
 //
-// Two tabs under one header: Providers (a list + detail page: a provider is an
-// endpoint, a protocol, the models it offers and a key taken from a secret
-// reference) and Usage (what the proxy metered for API-key requests). The tab
-// is in the URL: `/model-providers` is Providers, `/model-providers?tab=usage`
-// is Usage. At `/model-providers` the list opens on its first provider; with
-// none yet, the page is the welcome panel. There are no library tabs: which
-// agent runs on what is shown and switched on each agent's Model tab, and
-// Coffer's own model is chosen in Settings › General. The Providers layout is
-// ProvidersSplit, shared with the detail route so the list does not re-lay out
-// between the two.
+// Three addresses render this one page, so moving between them keeps the
+// header and the open dialog: `/model-providers` (the list opens on its first
+// provider), `/model-providers/<uid>` (a provider open) and
+// `/model-providers?tab=usage` (the Usage tab). Providers is a split — the list is
+// the fallback order, the detail stacks Used by → Endpoint → Models; with no
+// provider yet it is the first-run state. Which agent runs on what is changed
+// on each agent's Change model; Coffer's own model in Settings › General.
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
-import { ProvidersHeader } from "@/components/providers/ProvidersHeader";
+import { ModelProvidersHeader } from "@/components/providers/ModelProvidersHeader";
 import { ProvidersSplit } from "@/components/providers/ProvidersSplit";
 import { UsageTab } from "@/components/usage/UsageTab";
 import type { PresetId } from "@/lib/providers/presets";
 import { providersTabPath } from "@/lib/providers/tabs";
 
-function UsageView() {
+export function ModelProvidersPage() {
+  const { uid } = useParams<{ uid: string }>();
+  const [params] = useSearchParams();
   const navigate = useNavigate();
   const [adding, setAdding] = useState<PresetId | null>(null);
+  const usage = !uid && params.get("tab") === "usage";
+
   return (
-    <div className="flex flex-col gap-4">
-      <ProvidersHeader tab="usage" onAdd={() => setAdding("anthropic")} />
-      <UsageTab
-        onOpenProviders={() => navigate(providersTabPath("providers"), { replace: true })}
+    // Full-bleed like Skills and Knowledge: Layout pads every page, and this
+    // one is a workspace whose panes scroll on their own.
+    <div className="-mx-8 -mb-10 -mt-4 flex h-screen flex-col overflow-hidden">
+      <ModelProvidersHeader
+        tab={usage ? "usage" : "providers"}
+        onAdd={() => setAdding("anthropic")}
       />
+      {usage ? (
+        <div className="min-h-0 flex-1 overflow-y-auto px-8 pb-10 pt-5">
+          <UsageTab
+            onOpenProviders={() => navigate(providersTabPath("providers"), { replace: true })}
+          />
+        </div>
+      ) : (
+        <ProvidersSplit uid={uid} onAdd={setAdding} />
+      )}
       <AddProviderDialog
         preset={adding}
         onClose={() => setAdding(null)}
@@ -36,9 +48,4 @@ function UsageView() {
       />
     </div>
   );
-}
-
-export function ModelProvidersPage() {
-  const [params] = useSearchParams();
-  return params.get("tab") === "usage" ? <UsageView /> : <ProvidersSplit />;
 }

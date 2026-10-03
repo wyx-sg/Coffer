@@ -55,7 +55,7 @@ class ExperimentalFeature:
 #:
 #: ``knowledge`` — the knowledge collections. ``memory`` — agent memory.
 #: ``sync`` — vault sync. ``models`` — Model providers, the local model proxy
-#: and Usage. Every one is off until the person switches it on, on this
+#: and the Usage tab. Every one is off until the person switches it on, on this
 #: machine. A feature joins by adding one entry here and tagging its other
 #: surfaces with its key; it leaves by deleting that entry and every gate that
 #: names it (and, once released, a migration that strips its stored setting).

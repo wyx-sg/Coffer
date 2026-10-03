@@ -15,7 +15,7 @@ The sidebar is grouped **by what the person comes to do**: Overview on top,
 then five groups — **Agents** (the agents and the model providers they run on),
 **Run** (conversations and channels), **Capabilities** (MCP servers, custom
 tools, skills, CLIs), **Context** (knowledge and memory) and **System**
-(secrets, activity, usage, sync) — with Settings a modal opened from the sidebar
+(secrets, activity, sync) — with Settings a modal opened from the sidebar
 footer. See
 [The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md)
 for the decision behind it, and the earlier
@@ -156,7 +156,7 @@ nothing else:
 | System (group) | 系统 |
 | Secrets | 密钥 |
 | Activity | 活动 |
-| Usage | 用量 |
+| Usage (a tab of Model providers) | 用量 |
 | Sync | 同步 |
 | Settings | 设置 |
 
@@ -1473,12 +1473,11 @@ page (agent-registry "Report every supported type's detection state", `install_u
 
 ### Requirement: Hand an agent's missing program to an agent on the agent pages
 Wherever the web UI shows an agent type whose program is not found — its Agents list row and
-the notice under a config-left-behind row, its detail page while it is not added, and the
+its ⋯ menu, its detail page while it is not added, and the
 Overview tab's problem states (config left behind, not found) — it MUST offer the daemon's
 `install_handoff` prompt for that type (agent-registry "Hand installing an agent's program to an
 agent") through **Copy prompt**, and through **Ask an agent** only while another managed agent
-is available to run the conversation: the missing agent itself cannot. A list row, which has
-room for one action, MUST make Copy prompt its action and put Ask an agent in its ⋯ menu. None
+is available to run the conversation: the missing agent itself cannot. A list row has no button for it: Copy prompt, then Ask an agent, head the row's ⋯ menu, above a separator and the rest of the menu, because a button that copies text does not belong in a row. None
 of these surfaces MUST show an install command or tell the person to restart Coffer. The
 Plugins tab of a Claude Code agent whose program is not found, where Uninstall cannot run, MUST
 say so and offer the same prompt. The Connect review MUST offer the hand-off a `SHIM_NOT_FOUND`
@@ -1487,8 +1486,8 @@ action").
 
 #### Scenario: an agent whose program is not found offers its install prompt
 - **GIVEN** Codex not installed and no managed agent available
-- **WHEN** the user chooses Copy prompt on the Codex row, then opens the row's ⋯ menu
-- **THEN** the daemon's prompt is copied as given, no install command is shown anywhere
+- **WHEN** the user opens the Codex row's ⋯ menu and chooses Copy prompt
+- **THEN** the daemon's prompt is copied as given, no install command is shown anywhere, and the row carries no button of its own
 - **AND** the menu offers no Ask an agent
 
 #### Scenario: ask an agent is offered only while another managed agent is available
@@ -1640,7 +1639,7 @@ word a user navigates by:
 - **Model providers** is filed under Agents, not Capabilities or Settings: a
   `provider` is `{protocol, base_url, secret_ref}`, the endpoint and key an
   agent's model is served from, and the connection and model are chosen per
-  agent on that agent's page (spec
+  agent in that agent's Change model dialog (spec
   [provider-switching](../provider-switching/spec.md) "Offer every connection operation on REST, CLI and web").
 - **Channels** is filed under Run, beside Conversations and not merged into it:
   Conversations is where a person reads and continues every conversation, a
@@ -1733,7 +1732,7 @@ never stands down on its own.
 Settings › General MUST carry a **Coffer's model** section that sets what Coffer's
 own machinery runs on (spec [internal-engine](../internal-engine/spec.md) "Show and change Coffer's model in Settings › General").
 It is machine-level configuration of Coffer itself rather than of any agent, so
-it is a Settings section, not a tab of the Model providers page. The section
+it is a Settings section, not a tab of the Model providers page, whose tabs are Providers and Usage. The section
 MUST carry two pickers — **Engine model** and **Speech to text** — each choosing
 a provider first and then a model from that provider's list, and a **Test**
 action for each that tries the chosen pair and shows the result beside it. Each
@@ -2106,7 +2105,7 @@ the row's tooltip carries the count ("MCP servers · 1 needs you").
 
 What raises a signal and what clears it belongs to the capability that owns the
 kind: the entries of Agents, Model providers, MCP servers, Skills and Channels
-count the non-informational items the cross-kind attention list reports for their kind
+count the non-informational items the cross-kind attention list reports for their kind — so Agents counts an agent that needs repair, one whose config directory is left behind and one whose Coffer hook needs the person, and not one that is merely not connected
 (spec [resource-framework](../resource-framework/spec.md) "Report what needs a
 person across every kind"); Sync keeps its own signal, one situation cleared by
 visiting the page (spec [vault-sync](../vault-sync/spec.md) "Say a vault needs a
@@ -2501,9 +2500,8 @@ the delivery hook's state:
   (spec [memory](../memory/spec.md) "Deliver the index and the notes path at session start"), with a
   switch between agents.
 - The delivery hook's state — installed and current, stale, missing, never fired, and Repair — MUST
-  appear only on the agent detail page, on its Hooks tab and in the Overview's Coffer connection
-  block ([agent-registry](../agent-registry/spec.md) "Show the Coffer connection on the agent pages"). The
-  agent's Memory tab shows only the agent's own native memory stores.
+  appear only on the agent detail page — on its Hooks tab, in the Overview's Coffer connection
+  block ([agent-registry](../agent-registry/spec.md) "Show the Coffer connection on the agent pages") and, while the `memory` feature is on, in the **Coffer's memory** section that opens the agent's Memory tab, which links back to this page. Below that section the Memory tab lists the agent's own native memory stores.
 
 #### Scenario: the memory overview lists deliveries per agent
 - **GIVEN** Claude Code with 12 delivery fires in the last seven days, and transcripts recording reads of 5 distinct memories, and Codex with no delivery in that time
@@ -2518,7 +2516,8 @@ the delivery hook's state:
 #### Scenario: hook state appears only on the agent page
 - **GIVEN** Claude Code's delivery hook stale
 - **WHEN** the user opens the Memory page and then Claude Code's Memory tab
-- **THEN** neither shows the hook's state or a Repair action, and the Memory tab lists only Claude Code's own native memory stores
+- **THEN** the Memory page shows no hook state or Repair action
+- **AND** the Memory tab's Coffer's memory section shows the hook's state with Repair, above Claude Code's own native memory stores
 
 ### Requirement: Stream new Activity records while the list is at the top
 The visible Activity tab MUST show new records as they are written, newest first, with no Pause /
@@ -2590,7 +2589,7 @@ a warning, one nothing uses is plain subtle text with no dot; Usage shows its
 period, "Last 24 h", and no health), a count from its own list and a one-line
 summary, opening the area's page — Usage, which is a tab of Model providers, opening that tab; an area with no backend has no tile. Agents
 and Channels count "1 of 2" with the unit "connected" — for Agents only the
-items about connecting count, so a hook edited by hand does not make an agent
+items about connecting count, so a hook edited by hand or one the agent has not approved does not make an agent
 "not connected" — and Channels names the reconnecting one ("SeaTalk
 reconnecting since 13:41"), otherwise the names joined with " · ". Knowledge's
 line reads "4 collections · edited today 13:30", Memory's "Last update 14 min

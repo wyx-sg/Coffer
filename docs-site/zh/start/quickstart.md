@@ -60,7 +60,7 @@ registered: agent claude-code
 
 （`coffer scan` 列出检测到的智能体时，给的就是这条命令。）每种类型只有一个智能体，名字就是它的类型 `claude-code`。它注册在 `~/.claude`；如果你的 Claude Code 配置在别处，传 `--config-dir <path>`。装了 Claude Code 但从没运行过也没关系：注册时会创建 `~/.claude`。
 
-**在 Web 界面中：** 打开**智能体**。这个页面总会列出 Claude Code 和 Codex；在 Claude Code 那一行选择**添加**，检查 Coffer 将要写入的内容，然后应用。如果两个智能体都装了、都还没添加，**全部添加**可以一次加两个。
+**在 Web 界面中：** 打开**智能体**。这个页面总会列出 Claude Code 和 Codex；在 Claude Code 那一行选择**连接**，检查 Coffer 将要写入的内容，然后应用。如果两个智能体都装了、都还没连接，**全部连接**可以一次连两个。
 
 ### 把 Claude Code 连到 Coffer {#connect-claude-code-to-coffer}
 

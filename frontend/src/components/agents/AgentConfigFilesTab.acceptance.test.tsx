@@ -89,8 +89,14 @@ describe("Config files tab — acceptance", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /open in editor/i }));
     await waitFor(() => expect(fsApi.open).toHaveBeenCalledWith(INSTRUCTIONS.path, undefined));
-    fireEvent.click(screen.getByRole("button", { name: /reveal/i }));
+    // Two Reveal icons: the tree header's (the config directory) and the
+    // toolbar's (this file).
+    const reveals = screen.getAllByRole("button", { name: /reveal in finder/i });
+    expect(reveals).toHaveLength(2);
+    fireEvent.click(reveals[1]);
     await waitFor(() => expect(fsApi.reveal).toHaveBeenCalledWith(INSTRUCTIONS.path));
+    fireEvent.click(reveals[0]);
+    await waitFor(() => expect(fsApi.reveal).toHaveBeenCalledWith(AGENT.config_dir));
 
     expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();
   });

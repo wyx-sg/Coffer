@@ -3429,6 +3429,12 @@ components:
         event:
           title: Event
           type: string
+        group_index:
+          title: Group Index
+          type: integer
+        hook_index:
+          title: Hook Index
+          type: integer
         matcher:
           anyOf:
           - type: string
@@ -3458,6 +3464,8 @@ components:
       - command
       - type
       - timeout
+      - group_index
+      - hook_index
       - source
       - path
       - plugin

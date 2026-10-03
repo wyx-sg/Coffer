@@ -1,5 +1,5 @@
 // frontend/src/components/skills/SkillFileTree.tsx
-// File browsers for a skill folder.
+// File browser for a skill folder.
 //
 // `SkillFileTree` is the managed skill's Files tab (canvas 4.3.01): one card,
 // the folder's files on the left — SKILL.md first, then folders, then files,
@@ -7,9 +7,6 @@
 // SKILL.md and keeps the open file in `?file=`, so a reload or a link lands on
 // the same file; a file with unsaved edits wears a dot in the tree.
 //
-// `SkillFileBrowser` is the same card for a folder Coffer does not own (an
-// unmanaged skill, a skill a plugin provides): the same tree and the same
-// `?file=` address, with the file pane the caller renders (ReadOnlyFileView).
 import { useState, type ReactNode } from "react";
 import { useSearchParamsKeepingState as useSearchParams } from "@/lib/hooks/useSearchParamsKeepingState";
 import { useTranslation } from "react-i18next";
@@ -141,30 +138,8 @@ export function SkillFileTree({
 }
 
 /** The tree query's state, whichever route it came from. */
-export interface SkillFileTreeQuery {
+interface SkillFileTreeQuery {
   isPending: boolean;
   error: unknown;
   data: SkillFileNode | undefined;
-}
-
-export function SkillFileBrowser({
-  tree,
-  renderFile,
-}: {
-  tree: SkillFileTreeQuery;
-  renderFile: (path: string) => ReactNode;
-}) {
-  const { selected, select } = useSelectedFile();
-  return (
-    <SkillFileSplit
-      tree={tree}
-      selected={selected}
-      onSelect={select}
-      detail={
-        <div key={selected} className="flex min-h-0 flex-1 flex-col">
-          {renderFile(selected)}
-        </div>
-      }
-    />
-  );
 }

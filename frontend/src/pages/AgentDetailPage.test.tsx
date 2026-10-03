@@ -1,10 +1,10 @@
-// src/pages/AgentDetailPage.test.tsx — the agent page: nine path tabs, the header's action per state, a type not added.
+// src/pages/AgentDetailPage.test.tsx — the agent page: eight path tabs behind a More overflow, the header's action per state, a type not added.
 //
 // The page's collaborators are stubbed at their module boundary: the route
 // (type → uid), the row actions (the dialogs and menu the list shares), the
 // counts, and each tab — every tab has its own test next to it.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import "@/i18n";
@@ -22,16 +22,21 @@ vi.mock("@/lib/hooks/useAgents", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/hooks/useAgents")>()),
   useAgentHooks: () => ({ data: undefined, refetch: vi.fn(), isFetching: false }),
   useAgentConnection: () => ({ data: undefined }),
+  useAgent: () => ({ data: undefined }),
+  useAgentPlugins: () => ({ data: pluginsData }),
+}));
+let pluginsData: { items: { cache_present: boolean }[] } | undefined;
+// Rotate proxy token is in ⋯ only while the agent routes through Coffer's proxy.
+let rotateAction: { key: string; label: string; onSelect: () => void } | null = null;
+vi.mock("@/components/agents/detail/useRotateProxyToken", () => ({
+  useRotateProxyAction: () => rotateAction,
 }));
 vi.mock("@/components/agents/list/useAgentRowActions", () => ({ useAgentRowActions: vi.fn() }));
-// The Models feature decides whether the Model tab exists.
-let modelsOn: boolean | undefined = true;
-vi.mock("@/lib/hooks/useFeatures", () => ({ useFeatureEnabled: () => modelsOn }));
+vi.mock("@/lib/hooks/useFeatures", () => ({ useFeatureEnabled: () => true }));
 // No managed agent to ask: a hand-off offers Copy prompt only.
 vi.mock("@/lib/hooks/useAgentProviders", () => ({ useAgentProviders: () => ({ data: [] }) }));
 
 vi.mock("@/components/agents/AgentOverviewTab", () => ({ AgentOverviewTab: stub("overview") }));
-vi.mock("@/components/agents/model/AgentModelTab", () => ({ AgentModelTab: stub("model") }));
 vi.mock("@/components/agents/AgentSkillsTab", () => ({ AgentSkillsTab: stub("skills") }));
 vi.mock("@/components/agents/AgentMcpServersTab", () => ({ AgentMcpServersTab: stub("mcp") }));
 vi.mock("@/components/agents/AgentPluginsTab", () => ({ AgentPluginsTab: stub("plugins") }));
@@ -90,7 +95,7 @@ function mockRoute(opts: { added?: boolean; rowState?: AgentRowState; typeRow?: 
     actions: [{ key: "copy-uid", label: "Copy uid", onSelect: vi.fn() }],
     primary: null,
     dialogs: null,
-    open: { change, enable, configDir: vi.fn(), remove: vi.fn() },
+    open: { change, enable, configDir: vi.fn() },
   } as unknown as ReturnType<typeof actionsMod.useAgentRowActions>);
 }
 
@@ -112,27 +117,27 @@ function renderAt(path = "/agents/claude_code") {
 
 afterEach(() => {
   vi.clearAllMocks();
-  modelsOn = true;
+  pluginsData = undefined;
+  rotateAction = null;
 });
 
 describe("AgentDetailPage", () => {
   // Tabs and paths here; Overview's summary rows and Config files' instructions
   // file are asserted under the same scenario in their own tab tests.
-  acceptance("agent-registry", "the agent detail page carries nine tabs", () => {
+  acceptance("agent-registry", "the agent detail page carries six tabs and a More menu", () => {
     mockRoute();
     renderAt("/agents/claude_code/skills");
+    // Six in the strip, no counts, and no Model tab; Plugins and Memory sit behind More.
     const tabs = screen.getAllByRole("tab").map((tab) => tab.textContent);
     expect(tabs).toEqual([
       "Overview",
-      "Model",
       "Skills",
       "MCP servers",
-      "Plugins",
       "Hooks",
-      "Memory",
-      "Sessions",
       "Config files",
+      "Sessions",
     ]);
+    expect(screen.getByRole("button", { name: "More" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /Skills/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByTestId("tab-body")).toHaveTextContent("skills");
     // Radix activates a tab on mousedown.
@@ -142,13 +147,28 @@ describe("AgentDetailPage", () => {
     expect(screen.getByTestId("where")).toHaveTextContent(/^\/agents\/claude_code$/);
   });
 
-  test("with Models off the Model tab is absent and its address opens Overview", () => {
-    modelsOn = false;
+  test("an open tab inside More gives More its name; a hidden tab that needs you adds a dot", () => {
+    mockRoute();
+    renderAt("/agents/claude_code");
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
+    expect(items.map((i) => i.textContent)).toEqual(["Plugins", "Memory"]);
+    fireEvent.click(items[1]);
+    expect(screen.getByTestId("where")).toHaveTextContent("/agents/claude_code/memory");
+    expect(screen.getByRole("button", { name: "Memory" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More" })).not.toBeInTheDocument();
+  });
+
+  test("a plugin whose files are gone puts a warning dot on More", () => {
+    pluginsData = { items: [{ cache_present: false }] };
+    mockRoute();
+    const { container } = renderAt("/agents/claude_code");
+    expect(container.querySelector("button[aria-haspopup='menu'] .bg-warning")).not.toBeNull();
+  });
+
+  test("the removed Model address opens Overview", () => {
     mockRoute();
     renderAt("/agents/claude_code/model");
-    const tabs = screen.getAllByRole("tab").map((tab) => tab.textContent);
-    expect(tabs).not.toContain("Model");
-    expect(tabs).toHaveLength(8);
     expect(screen.getByTestId("where")).toHaveTextContent(/^\/agents\/claude_code$/);
     expect(screen.getByTestId("tab-body")).toHaveTextContent("overview");
   });
@@ -160,44 +180,62 @@ describe("AgentDetailPage", () => {
     expect(screen.queryByText(/v2\.1\.281/)).not.toBeInTheDocument();
   });
 
-  acceptance("agent-registry", "the header offers the action the state calls for", () => {
-    mockRoute({ rowState: "not_connected" });
-    const { unmount } = renderAt();
-    expect(screen.getByText("Not connected")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
-    expect(change).toHaveBeenCalledWith("connect");
-    unmount();
-
-    // Connected: the header's action is a new conversation; Disconnect is the
-    // Overview's button, not repeated in the ⋯ menu.
-    mockRoute({ rowState: "connected" });
-    const connected = renderAt();
-    expect(screen.getByText("Connected to Coffer")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "More actions for Claude Code" }));
-    expect(screen.queryByRole("menuitem", { name: "Disconnect" })).not.toBeInTheDocument();
-    connected.unmount();
-
-    // Partial: reads Needs repair and offers Repair (which puts the rest back).
-    mockRoute({ rowState: "needs_repair" });
-    renderAt();
-    expect(screen.getByText("Needs repair")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Repair" })).toBeInTheDocument();
+  acceptance("agent-registry", "the header carries one status pill and a fixed action pair", () => {
+    // The header never turns into a fix button: Connect, Repair and Turn on are the Overview's.
+    for (const [rowState, word] of [
+      ["not_connected", "Not connected"],
+      ["connected", "Connected"],
+      ["needs_repair", "Needs repair"],
+      ["disabled", "Off"],
+    ] as const) {
+      mockRoute({ rowState });
+      const { unmount } = renderAt();
+      expect(screen.getByText(word)).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "New conversation" })).toBeInTheDocument();
+      for (const name of ["Connect", "Repair", "Turn on", "Check again"]) {
+        expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+      }
+      unmount();
+    }
   });
 
-  test("a disabled agent offers Turn on", () => {
-    mockRoute({ rowState: "disabled" });
+  test("an agent left behind has ⋯ only", () => {
+    mockRoute({ rowState: "config_left_behind", typeRow: { state: "config_only" } });
     renderAt();
-    fireEvent.click(screen.getByRole("button", { name: "Turn on" }));
-    expect(enable).toHaveBeenCalled();
+    expect(screen.getByText("Config left behind")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "New conversation" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "More actions for Claude Code" }),
+    ).toBeInTheDocument();
   });
 
-  test("a type not added yet shows the header and Add, and no tabs", () => {
+  acceptance(
+    "provider-switching",
+    "Rotate proxy token is offered only while the agent routes through the proxy",
+    () => {
+      mockRoute({ rowState: "connected" });
+      const first = renderAt();
+      fireEvent.click(screen.getByRole("button", { name: "More actions for Claude Code" }));
+      expect(
+        screen.queryByRole("menuitem", { name: "Rotate proxy token" }),
+      ).not.toBeInTheDocument();
+      first.unmount();
+
+      const onSelect = vi.fn();
+      rotateAction = { key: "rotate-token", label: "Rotate proxy token", onSelect };
+      renderAt();
+      fireEvent.click(screen.getByRole("button", { name: "More actions for Claude Code" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Rotate proxy token" }));
+      expect(onSelect).toHaveBeenCalled();
+    },
+  );
+
+  test("a type not added yet shows the header and Connect, and no tabs", () => {
     mockRoute({ added: false, rowState: "not_added", typeRow: { addable: true } });
     renderAt("/agents/claude_code");
     expect(screen.queryAllByRole("tab")).toHaveLength(0);
-    expect(screen.getByText("Claude Code isn’t added yet")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "Add" })[0]);
+    expect(screen.getByText("Claude Code isn’t connected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
     expect(change).toHaveBeenCalledWith("add");
   });
 

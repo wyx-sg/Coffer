@@ -29,7 +29,7 @@ from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceNotFound
-from coffer.domain.provider.config import Protocol
+from coffer.domain.provider.config import Protocol, ProviderConfig
 from coffer.domain.provider.errors import ProviderDoesNotReachAgent, ProviderInternalOnly
 from coffer.domain.resource import Resource
 
@@ -48,21 +48,18 @@ def agent_of_type(agents: list[Resource], agent_type: AgentType) -> Resource | N
     return None
 
 
-async def activate(
-    service: ProviderService, uid: str, agent_type: AgentType, *, actor: str
-) -> ActivateResult:
-    """Make ``uid`` the connection the agent of ``agent_type`` runs on, and
-    project it into that agent's native config."""
-    resource = await service.get(uid)
-    cfg = service._cfg(resource)
+async def activate_checks(
+    service: ProviderService,
+    resource: Resource,
+    cfg: ProviderConfig,
+    agent: Resource,
+    agent_type: AgentType,
+) -> None:
+    """Refuse a switch that cannot take effect, before anything is touched."""
     # ollama is internal-only: it reaches no agent and switching one onto it
-    # writes nothing. Refused before anything is touched.
+    # writes nothing.
     if cfg.protocol is Protocol.OLLAMA:
         raise ProviderInternalOnly(resource.name)
-    agents = await service._agents.list()
-    agent = agent_of_type(agents, agent_type)
-    if agent is None:
-        raise ResourceNotFound(agent_type.default_name())
     if not agent.enabled:
         # Coffer writes nothing into an agent the user switched off.
         raise ProviderDoesNotReachAgent(
@@ -76,6 +73,21 @@ async def activate(
         raise ProviderDoesNotReachAgent(
             resource.name, agent_type.value, "its scope does not name the agent"
         )
+
+
+async def activate(
+    service: ProviderService, uid: str, agent_type: AgentType, *, actor: str
+) -> ActivateResult:
+    """Make ``uid`` the connection the agent of ``agent_type`` runs on, and
+    project it into that agent's native config."""
+    resource = await service.get(uid)
+    cfg = service._cfg(resource)
+    if cfg.protocol is Protocol.OLLAMA:
+        raise ProviderInternalOnly(resource.name)
+    agent = agent_of_type(await service._agents.list(), agent_type)
+    if agent is None:
+        raise ResourceNotFound(agent_type.default_name())
+    await activate_checks(service, resource, cfg, agent, agent_type)
     previous = connection_for_agent(agent, await service.list())
 
     # The file is the agent's own; the record write that follows could still
@@ -163,4 +175,4 @@ async def deactivate(
     )
 
 
-__all__ = ["activate", "agent_of_type", "deactivate"]
+__all__ = ["activate", "activate_checks", "agent_of_type", "deactivate"]

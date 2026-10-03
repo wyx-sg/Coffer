@@ -1,4 +1,4 @@
-// src/lib/usage/format.ts — how the Usage page writes numbers, money, clock times and days, per UI language.
+// src/lib/usage/format.ts — how the Usage tab and the daemon status write numbers, money, spans and days, per UI language.
 //
 // Pure functions over `Intl`, so the tiles, the chart and the table agree and
 // each rule is unit-tested without a component. English days are assembled

@@ -1,15 +1,15 @@
-// src/components/providers/ModelPriceCell.tsx — one model's price on a provider and where it came from.
+// src/components/providers/ModelPriceCell.tsx — one model's price on a provider, marked only when it is not the provider's usual.
 //
-// "$1.25 · $10.00 / 1M" (input · output per 1M tokens) and a source tag: You
-// set (with Reset), From <provider> (its own API reported it), Bundled (the
-// price list shipped with the release). A local runtime reads "Local · no
-// cost"; a model nothing prices reads "—" with Set price… (spec
-// provider-switching "Resolve each model's price from the provider, its API,
-// or the bundled list").
+// "$1.25 · $10.00 / 1M" (input · output per 1M tokens); clicking it opens the
+// price dialog. Where prices come from is said once, in the Models line under
+// the title (`providerPriceSource`), so a row carries a tag only when it is
+// the exception: You set (your own price), or a source other than the
+// provider's usual. A model nothing prices reads "—" with Set price…; a local
+// runtime reads "Local · no cost" (spec provider-switching "Resolve each
+// model's price from the provider, its API, or the bundled list").
 import { useTranslation } from "react-i18next";
 
 import type { ModelPrice } from "@/lib/api/providers";
-import { formatPriceDate } from "@/lib/providers/priceDate";
 
 const TAG =
   "inline-flex h-[18px] items-center whitespace-nowrap rounded-sm bg-chip px-1.5 text-2xs font-label text-text-muted";
@@ -30,13 +30,14 @@ function formatRate(value: number | null | undefined, lang: string): string {
 interface Props {
   id: string;
   price: ModelPrice | undefined;
+  /** The source most of this provider's prices come from; a row with another is tagged. */
+  usual: ModelPrice["source"];
   /** Opens the price dialog; absent on a local runtime. */
   onEdit?: () => void;
-  onReset?: () => void;
   disabled?: boolean;
 }
 
-export function ModelPriceCell({ id, price, onEdit, onReset, disabled }: Props) {
+export function ModelPriceCell({ id, price, usual, onEdit, disabled }: Props) {
   const { t, i18n } = useTranslation();
   if (price?.source === "local") {
     return <span className="text-xs text-text-muted">{t("providers.prices.local")}</span>;
@@ -60,12 +61,10 @@ export function ModelPriceCell({ id, price, onEdit, onReset, disabled }: Props) 
   const tag =
     price.source === "user"
       ? t("providers.prices.source.user")
-      : price.source === "provider"
-        ? t("providers.prices.source.provider", { name: price.source_name ?? "" })
-        : price.source_updated
-          ? t("providers.prices.source.bundledOn", {
-              date: formatPriceDate(price.source_updated, i18n.language),
-            })
+      : price.source === usual
+        ? null
+        : price.source === "provider"
+          ? t("providers.prices.source.provider", { name: price.source_name ?? "" })
           : t("providers.prices.source.bundled");
   return (
     <span className="inline-flex items-center justify-end gap-1.5 whitespace-nowrap text-xs text-text">
@@ -75,6 +74,7 @@ export function ModelPriceCell({ id, price, onEdit, onReset, disabled }: Props) 
           className="whitespace-nowrap font-mono text-xs outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring"
           onClick={onEdit}
           disabled={disabled}
+          title={price.tiered ? t("providers.prices.tiered") : undefined}
           aria-label={t("providers.prices.editAria", { id, rates })}
         >
           {rates}
@@ -82,15 +82,7 @@ export function ModelPriceCell({ id, price, onEdit, onReset, disabled }: Props) 
       ) : (
         <span className="whitespace-nowrap font-mono">{rates}</span>
       )}
-      <span className={TAG} title={price.tiered ? t("providers.prices.tiered") : undefined}>
-        {tag}
-        {price.tiered ? "+" : ""}
-      </span>
-      {price.source === "user" && onReset ? (
-        <button type="button" className={LINK} onClick={onReset} disabled={disabled}>
-          {t("providers.prices.reset")}
-        </button>
-      ) : null}
+      {tag ? <span className={TAG}>{tag}</span> : null}
     </span>
   );
 }

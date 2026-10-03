@@ -1,28 +1,26 @@
 ---
 title: Usage
-description: What your agents spent through API-key and local providers, by model, agent or day, on the Usage tab of Model providers.
+description: What your agents spent on API-key and local providers, by model, agent or day — the Usage tab of Model providers and the coffer usage command.
 ---
 
 # Usage
 
-What your agents spent through an API-key or local provider is counted by Coffer, because every such request goes through the [local model proxy](/architecture/model-proxy).
-
-An agent on its own subscription login (a Claude or ChatGPT plan) never passes through Coffer, so Coffer shows nothing for it. How much of a plan's allowance is left is something only the vendor knows; read it in the vendor's own app.
+Usage is the second tab of **Model providers**, at `/model-providers?tab=usage`. It answers one question: what did the requests your agents sent through an API-key or local provider cost? An agent on a provider pays per token, and Coffer counts every request it makes, because every such request goes through the [local model proxy](/architecture/model-proxy). Agents on their own subscription login never pass through Coffer, so they do not appear here.
 
 ## The Usage tab
 
-Open **Model providers** in the sidebar and switch to its **Usage** tab (address `/model-providers?tab=usage`). The page covers every request that went through Coffer's local proxy:
+Open **Model providers** and choose **Usage** beside **Providers**. The page header — the title, the **Experimental** tag and **Add provider** — is the same one the Providers tab has. There is no Usage entry in the sidebar.
 
-- The period control picks **Today**, **Last 7 days** (the default), **Last 30 days**, **This month** or **Custom range…**. A custom range is picked on a calendar and reaches up to 90 days back; the picker notes the first day that still has per-request detail, because older days keep only their daily totals. Beside it, the **Agent** and **Provider** pills narrow everything below to one agent and one provider. The range, the filters and the breakdown are part of the page's address, so a refresh, a bookmark or Back keeps them.
-- Four figures sum up the range: **Cost (estimated)** with the request count and how many models were unpriced, **Input** (uncached), **Output** (reasoning included), **Cache read** and **Cache write** (a category only Anthropic's wire reports).
+- The filter row starts with the **time range** — **Today**, **Last 7 days** (the default), **Last 30 days**, **This month** or **Custom range…**, picked as dates on a calendar that reaches up to 90 days back; the picker notes the first day that still has per-request detail, since older days keep only their daily totals, which the page still reports. Next come **Agent** and **Provider**, which narrow everything below to one agent and one provider, and **Export CSV** at the right, which downloads exactly the range, filters and breakdown you are looking at — the same file `coffer usage --csv` writes with the same options. The range, the filters and the breakdown are part of the page's address, so a refresh, a bookmark or Back keeps them. There is no Refresh button: the numbers are Coffer's own.
+- Five figures sum up the range: **Cost (estimated)** — its help tip says how the estimate is worked out — with the request count, **Input** (uncached), **Output** (reasoning included), **Cache read** and **Cache write** (a category only Anthropic's wire reports). If some models have no price, **1 model unpriced** appears once, in the Cost figure, as a link to that model on its provider, where you set one; nothing else on the page repeats it.
 - **Cost per day** draws one bar per day of the range; hover a bar for its day and cost. Today's bar is lighter because the day is not over.
-- The table breaks the range down **By model** (with the provider that served it, and in **By** the agents that used it), **By agent** or **By day** (newest first, with each day's top agent; the latest week shows first, "Showing 7 of N days", and **Show all** lists the rest), and ends with a Total row, the cost of the priced models. A model with no price reads **—**, never $0.00, and its tooltip says why and where to set one; a cost marked `*` leaves out some unpriced requests, and a request count marked `*` includes requests whose usage never arrived. Hover the marker for the count.
-- **Edit prices** at the foot of the table takes you to the providers, where a model's own price is set.
-- **Export CSV** next to the filters downloads the current range, filters and breakdown, the same file `coffer usage --csv` writes with the same options.
+- The table breaks the range down **By model** (with the provider that served it, and the agents that used it), **By agent** or **By day** (newest first; the latest week shows first and **Show all** lists the rest), and ends with a Total row — the cost of the priced models. A model with no price reads **—** — never $0.00 — and its tooltip says why and where to set one; a cost marked `*` leaves out some unpriced requests, and a request count marked `*` includes requests whose usage never arrived. Hover the marker for the count.
 
-On a machine where nothing has gone through the proxy yet, the tab is only its empty state, **No API-key usage yet**, with no range or filters to narrow, and a link to **Providers**: switching an agent onto an API-key provider is what starts the counting.
+On a machine where nothing has gone through the proxy yet, the tab is only its empty state — **No API-key usage yet**, with **Open Providers** and no range or filters to narrow: switching an agent onto an API-key provider is what starts the counting. With the Models [experimental feature](/guides/experimental-features) off, the tab and the page are absent like the rest of the feature.
 
-## What is counted
+## Usage of API-key and local providers
+
+### What is counted
 
 The proxy records one row per request it sends upstream — failed-over attempts too — with:
 
@@ -55,7 +53,7 @@ Cost is an **estimate**, worked out per model and per token category:
 
 - Each request is priced at the price of the provider that actually answered it, taken from the first source that has one: the price **you set** on the provider (relays and resellers charge differently), free for a **local** runtime, the price the provider's **own API** reported when its models were listed, or Coffer's **bundled** price list (pydantic's genai-prices: per provider, with historical prices, long-context tiers and cache rates) — shipped with each release and refreshed once a day unless **Refresh model prices** is off in Settings › General. A price is never looked up while a request is being costed. See [Model prices](./providers.md#model-prices).
 - A cache category a price leaves out is charged at its input rate, so the estimate errs high.
-- A model no source prices is marked **unpriced** and counted separately — never costed at zero. Its cost reads `—` on the page and in `coffer usage` until you set a price on the provider; the dash's tooltip names the date of the price list in use.
+- A model no source prices is marked **unpriced** and counted separately — never costed at zero. Its cost reads `—` on the tab and in `coffer usage` until you set a price on the provider.
 - Each request's cost is stored with the price it was costed with, so a later price list never rewrites history.
 
 ## How long it is kept

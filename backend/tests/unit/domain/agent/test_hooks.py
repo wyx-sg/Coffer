@@ -29,7 +29,27 @@ def test_every_command_hook_becomes_a_row_in_file_order() -> None:
     assert parse_hooks(json.dumps(doc)) == [
         HookRow("SessionStart", "startup|resume", "a", "command", 10),
         HookRow("PreToolUse", None, "b", "command", None),
-        HookRow("PreToolUse", None, "c", "command", None),
+        HookRow("PreToolUse", None, "c", "command", None, group_index=1),
+    ]
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="list the hooks with their position in the file"
+)
+def test_a_row_carries_its_position_in_the_file() -> None:
+    doc = {
+        "hooks": {
+            "PreToolUse": [
+                {"hooks": [{"command": "a"}]},
+                {"matcher": "Bash", "hooks": [{"type": "http"}, {"command": "b", "timeout": 5}]},
+            ]
+        }
+    }
+    rows = parse_hooks(json.dumps(doc))
+    # The entry without a command is skipped but still counts for the index.
+    assert [(r.command, r.group_index, r.hook_index, r.timeout) for r in rows] == [
+        ("a", 0, 0, None),
+        ("b", 1, 1, 5),
     ]
 
 

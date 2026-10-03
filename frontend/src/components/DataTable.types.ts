@@ -124,6 +124,8 @@ export interface DataTableProps<T> extends ListLoading {
   sort?: TableSort | null;
   onSortChange?: (sort: TableSort | null) => void;
   emptyMessage: string;
+  /** false drops the "Showing x of y" footer (an always-short list). */
+  footer?: boolean;
   /** Rendered under the empty message, e.g. the primary "create" button. */
   emptyAction?: ReactNode;
 }

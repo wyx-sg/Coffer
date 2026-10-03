@@ -15,6 +15,7 @@ export type PresetId =
   | "deepseek"
   | "openrouter"
   | "ollama"
+  | "lmstudio"
   | "custom";
 
 export interface Preset {
@@ -25,6 +26,8 @@ export interface Preset {
   baseUrl: string;
   /** A runtime on this Mac: keyless, detected rather than typed. */
   local?: boolean;
+  /** The detected runtime this vendor stands for (a local preset). */
+  runtime?: "ollama" | "lmstudio";
 }
 
 /** In the order the Add dialog lists them. */
@@ -55,6 +58,15 @@ export const PRESETS: readonly Preset[] = [
     protocol: "ollama",
     baseUrl: "http://localhost:11434",
     local: true,
+    runtime: "ollama",
+  },
+  {
+    id: "lmstudio",
+    label: "LM Studio",
+    protocol: "openai",
+    baseUrl: "",
+    local: true,
+    runtime: "lmstudio",
   },
   { id: "custom", label: "Custom", protocol: "", baseUrl: "" },
 ];

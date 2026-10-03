@@ -35,10 +35,6 @@ export const FILE_PANE_COLUMN = "flex min-h-0 min-w-0 flex-col gap-2";
 /** The part of a column that scrolls — it takes whatever height is left. */
 export const FILE_PANE_SCROLL = "min-h-0 flex-1 overflow-auto";
 
-/** A viewer inside a column: itself a flex column taking the height left, so
- *  its own fixed rows stay put and its preview (`fill`) takes the rest. */
-export const FILE_PANE_BODY = "flex min-h-0 flex-1 flex-col gap-2";
-
 /** Below this the pane stops shrinking (px; 20rem). */
 const FILE_PANE_MIN_HEIGHT = 320;
 

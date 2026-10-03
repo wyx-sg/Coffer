@@ -79,7 +79,12 @@ describe("AgentsPage", () => {
     expect(second).toHaveTextContent("~/.codex");
     await waitFor(() => expect(first).toHaveTextContent("claude-opus-5-5"));
     await waitFor(() => expect(within(first).getByText("Connected")).toBeInTheDocument());
-    expect(within(first).getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
+    // A healthy row shows no button of its own, only its ⋯ menu.
+    expect(
+      within(first)
+        .getAllByRole("button")
+        .map((b) => b.getAttribute("aria-label")),
+    ).toEqual(["More actions for Claude Code"]);
     expect(screen.queryByRole("button", { name: /detect/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
@@ -92,17 +97,20 @@ describe("AgentsPage", () => {
         fakeDaemon({ types: [typeRow({ type: "claude_code" }), typeRow({ type: "codex" })] }),
       );
       renderPage();
-      const addBoth = await screen.findByRole("button", { name: "Add both" });
-      expect(within(rowOf("Claude Code")).getByRole("button", { name: "Add" })).toBeInTheDocument();
-      expect(within(rowOf("Codex")).getByRole("button", { name: "Add" })).toBeInTheDocument();
-      expect(screen.getByText(/you review the exact lines/i)).toBeInTheDocument();
+      const addBoth = await screen.findByRole("button", { name: "Connect both" });
+      // One off state: a newly found agent reads Not connected, with Connect.
+      expect(within(rowOf("Claude Code")).getByText("Not connected")).toBeInTheDocument();
+      expect(
+        within(rowOf("Claude Code")).getByRole("button", { name: "Connect" }),
+      ).toBeInTheDocument();
+      expect(within(rowOf("Codex")).getByRole("button", { name: "Connect" })).toBeInTheDocument();
+      // No note under the table.
+      expect(screen.queryByText(/you review the exact lines/i)).not.toBeInTheDocument();
 
       fireEvent.click(addBoth);
       const dialog = await screen.findByRole("dialog");
       expect(within(dialog).getByText("Connect 2 agents to Coffer")).toBeInTheDocument();
-      expect(within(dialog).getByTestId("change-summary")).toHaveTextContent(
-        "4 changes in 2 agents",
-      );
+      expect(within(dialog).getByTestId("changes-heading")).toHaveTextContent("Changes · 4");
       for (const path of ["~/.claude.json", "~/.claude/settings.json", "~/.codex/config.toml"]) {
         expect(within(dialog).getAllByText(path).length).toBeGreaterThan(0);
       }
@@ -119,9 +127,9 @@ describe("AgentsPage", () => {
       expect(writes()[0].body).toEqual({ type: "claude_code" });
       fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
       await waitFor(() =>
-        expect(screen.queryByRole("button", { name: "Add both" })).not.toBeInTheDocument(),
+        expect(screen.queryByRole("button", { name: "Connect both" })).not.toBeInTheDocument(),
       );
-      expect(screen.queryByRole("button", { name: "Add both" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Connect both" })).not.toBeInTheDocument();
     },
   );
 
@@ -138,7 +146,7 @@ describe("AgentsPage", () => {
       return undefined;
     };
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Add both" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Connect both" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Apply 4 changes" }));
     const retry = await within(dialog).findByRole("button", { name: "Retry 2 changes" });
@@ -174,22 +182,24 @@ describe("AgentsPage", () => {
     );
     renderPage();
     const claude = await waitFor(() => rowOf("Claude Code"));
-    await waitFor(() =>
-      expect(within(claude).getByRole("button", { name: "Copy prompt" })).toBeInTheDocument(),
-    );
-    expect(within(rowOf("Codex")).getByRole("button", { name: "Copy prompt" })).toBeInTheDocument();
+    await waitFor(() => expect(claude).toHaveTextContent("Not on this Mac"));
+    // Neither row has a visible button: Copy prompt heads each ⋯ menu.
+    expect(within(claude).queryByRole("button", { name: "Copy prompt" })).not.toBeInTheDocument();
     expect(within(claude).getAllByText("Not installed").length).toBeGreaterThan(0);
-    expect(claude).toHaveTextContent("An agent can install it — copy the prompt");
     expect(document.body).not.toHaveTextContent(/npm|install -g/);
-    expect(screen.queryByRole("button", { name: "Add" })).not.toBeInTheDocument();
-    expect(screen.getByText("Config left behind — program not found")).toBeInTheDocument();
-    // The warning under the Codex row names the folder and the program, and
-    // offers the reinstall prompt.
-    const notice = screen.getByText(/is still here but there is no/);
-    expect(notice).toHaveTextContent("~/.codex is still here but there is no codex on PATH");
-    expect(screen.getByRole("button", { name: "Reveal folder" })).toBeInTheDocument();
-    // Not added, so nothing to remove from the list.
-    expect(screen.queryByRole("button", { name: "Remove from list" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
+    expect(rowOf("Codex")).toHaveTextContent("~/.codex kept · codex not on PATH");
+    // The inline banner is gone, and so is the sub-line under the name.
+    expect(screen.queryByText(/is still here but there is no/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reveal folder" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Codex" }));
+    const menu = await screen.findByRole("menu");
+    const items = within(menu)
+      .getAllByRole("menuitem")
+      .map((i) => i.textContent);
+    expect(items.slice(0, 2)).toEqual(["Copy prompt", "Use a different config directory…"]);
+    expect(within(menu).getByRole("separator")).toBeInTheDocument();
+    expect(items).not.toContain("Remove from Coffer");
   };
   acceptance(
     "agent-registry",
@@ -212,8 +222,12 @@ describe("AgentsPage", () => {
       }),
     );
     renderPage();
-    await waitFor(() => expect(rowOf("Codex")).toHaveTextContent("not created"));
-    fireEvent.click(within(rowOf("Codex")).getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(rowOf("Codex")).toHaveTextContent("Not connected"));
+    const connect = within(rowOf("Codex")).getByRole("button", { name: "Connect" });
+    // The directory cell is just the path, and the button carries no icon.
+    expect(rowOf("Codex")).not.toHaveTextContent("not created");
+    expect(connect.querySelector("svg")).toBeNull();
+    fireEvent.click(connect);
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Connect Codex to Coffer")).toBeInTheDocument();
     expect(within(dialog).getAllByText("~/.codex/").length).toBeGreaterThan(0);
@@ -249,7 +263,7 @@ describe("AgentsPage", () => {
       fireEvent.click(repair);
       const dialog = await screen.findByRole("dialog");
       expect(within(dialog).getByText("Repair Claude Code’s connection")).toBeInTheDocument();
-      expect(within(dialog).getByTestId("change-summary")).toHaveTextContent("1 change in 1 agent");
+      expect(within(dialog).getByTestId("changes-heading")).toHaveTextContent("Changes · 1");
       fireEvent.click(within(dialog).getByRole("button", { name: "Apply 1 change" }));
       await waitFor(() => expect(within(dialog).getByText("Changes applied")).toBeInTheDocument());
       expect(writes().map((c) => `${c.method} ${c.path}`)).toEqual([
@@ -271,7 +285,7 @@ describe("AgentsPage", () => {
     );
     renderPage();
     await waitFor(() =>
-      expect(within(rowOf("Codex")).getByRole("button", { name: "Add" })).toBeInTheDocument(),
+      expect(within(rowOf("Codex")).getByRole("button", { name: "Connect" })).toBeInTheDocument(),
     );
     expect(screen.queryByRole("button", { name: /add agent/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /detect/i })).not.toBeInTheDocument();
@@ -285,7 +299,6 @@ describe("AgentsPage", () => {
       "Reveal config directory",
       "Copy uid",
       "Turn off",
-      "Remove from Coffer",
     ]);
     expect(screen.queryByRole("textbox", { name: /name|title/i })).not.toBeInTheDocument();
   };
@@ -315,7 +328,7 @@ describe("AgentsPage", () => {
     daemon.fail = undefined;
     daemon.types = [typeRow({ type: "claude_code" }), typeRow({ type: "codex" })];
     fireEvent.click(screen.getByRole("button", { name: /retry/i }));
-    expect(await screen.findByRole("button", { name: "Add both" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Connect both" })).toBeInTheDocument();
   });
 
   it("a built-in login shows the agent's own default, never a stale provider model", async () => {
@@ -364,12 +377,11 @@ describe("AgentsPage", () => {
     setDaemon(daemon);
     renderPage();
     const row = await screen.findByRole("row", { name: /Claude Code/ });
-    fireEvent.click(await within(row).findByRole("button", { name: "Disconnect" }));
+    fireEvent.click(within(row).getByRole("button", { name: "More actions for Claude Code" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Disconnect…" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(await within(dialog).findByRole("button", { name: /^disconnect/i }));
     await waitFor(() => expect(within(row).getByText("Disconnecting…")).toBeInTheDocument());
-    // The dialog's modal layer hides the row from the accessibility tree.
-    expect(within(row).getByRole("button", { name: "Disconnect", hidden: true })).toBeDisabled();
     release();
     await waitFor(() => expect(within(row).queryByText("Disconnecting…")).not.toBeInTheDocument());
   });

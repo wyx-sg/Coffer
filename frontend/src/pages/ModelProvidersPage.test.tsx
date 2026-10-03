@@ -14,7 +14,6 @@ import type { AgentOut } from "@/lib/api/agents";
 import type { Provider, ProviderModel } from "@/lib/api/providers";
 import { acceptance } from "@/test/acceptance";
 import { ModelProvidersPage } from "./ModelProvidersPage";
-import { ProviderDetailPage } from "./ProviderDetailPage";
 
 vi.mock("@/lib/api/providers", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/providers")>()),
@@ -28,6 +27,7 @@ vi.mock("@/lib/api/providers", async (orig) => ({
     detectLocal: vi.fn(),
   },
 }));
+vi.mock("@/components/usage/UsageTab", () => ({ UsageTab: () => <p>usage tab body</p> }));
 vi.mock("@/lib/api/resources", () => ({
   resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn(), rename: vi.fn() },
 }));
@@ -120,8 +120,8 @@ function renderAt(path = "/model-providers") {
       <QueryClientProvider client={qc}>
         <Routes>
           <Route path="/model-providers" element={<ModelProvidersPage />} />
-          <Route path="/model-providers/:uid" element={<ProviderDetailPage />} />
-          <Route path="/model-providers/:uid/:tab" element={<ProviderDetailPage />} />
+          <Route path="/model-providers/:uid" element={<ModelProvidersPage />} />
+          <Route path="/model-providers/:uid/:tab" element={<ModelProvidersPage />} />
           <Route path="*" element={null} />
         </Routes>
         <Where />
@@ -243,6 +243,21 @@ describe("ModelProvidersPage", () => {
     // Radix tabs switch on mousedown.
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Usage" }));
     await waitFor(() => expect(where()).toBe("/model-providers?tab=usage"));
+    expect(await screen.findByText("usage tab body")).toBeInTheDocument();
+    // The header, with its Add provider, is the same one on both tabs.
+    expect(screen.getByRole("button", { name: /Add provider/ })).toBeInTheDocument();
+    expect(screen.getByText("Experimental")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Endpoint" })).toBeNull();
+  });
+
+  test("?provider= opens that provider and hands ?model= to its Models search", async () => {
+    serve([
+      makeProvider({ name: "official" }),
+      makeProvider({ name: "agnes", protocol: "openai" }),
+    ]);
+    renderAt(`/model-providers?provider=${UIDS.agnes}&model=gpt-9`);
+    await waitFor(() => expect(where()).toBe(`/model-providers/${UIDS.agnes}?model=gpt-9`));
+    await waitFor(() => expect(rowFor("agnes")).toHaveAttribute("aria-current", "page"));
   });
 
   test("a row says what the provider offers", async () => {
@@ -254,7 +269,7 @@ describe("ModelProvidersPage", () => {
     renderAt();
     await screen.findAllByTestId("provider-row");
     expect(rowFor("official")).toHaveTextContent("Anthropic · 2 models");
-    expect(rowFor("agnes")).toHaveTextContent("OpenAI-compatible · All models");
+    expect(rowFor("agnes")).toHaveTextContent("OpenAI-compatible · all models");
     expect(rowFor("local-llm")).toHaveTextContent("Ollama · Coffer's engine only");
   });
 
@@ -273,14 +288,14 @@ describe("ModelProvidersPage", () => {
     ]);
     renderAt();
     await screen.findAllByTestId("provider-row");
-    fireEvent.change(screen.getByRole("textbox", { name: "Filter" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter providers" }), {
       target: { value: "apihub" },
     });
     expect(screen.getAllByTestId("provider-row")).toHaveLength(1);
     expect(rowFor("agnes")).toBeInTheDocument();
   });
 
-  test("the header stays up while loading, and an empty library is the welcome panel", async () => {
+  test("the header stays up while loading, and an empty library is the first-run state", async () => {
     let resolve: (v: { providers: Provider[] }) => void = () => {};
     api.list.mockReturnValue(new Promise((r) => (resolve = r)));
     agentsState.data = [agent("claude_code"), agent("codex")];
@@ -288,17 +303,10 @@ describe("ModelProvidersPage", () => {
     expect(screen.getByRole("heading", { name: "Model providers" })).toBeInTheDocument();
 
     resolve({ providers: [] });
-    expect(await screen.findByText("Bring your own model endpoint")).toBeInTheDocument();
-    // What each registered agent runs on now: its own login.
-    expect(screen.getByText("Own login (Anthropic)")).toBeInTheDocument();
-    expect(screen.getByText("Own login (ChatGPT)")).toBeInTheDocument();
-    // No provider carries Coffer's engine, so say what that pauses.
-    expect(
-      screen.getByText("Coffer's model isn't set, so distil and curation are paused."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("No model providers yet")).toBeInTheDocument();
     // An option card opens Add on its preset: the local runtime path is keyless.
     api.detectLocal.mockResolvedValue({ found: [] });
-    fireEvent.click(screen.getByRole("button", { name: /A local runtime on this Mac/ }));
+    fireEvent.click(screen.getByRole("button", { name: /A runtime on this Mac/ }));
     const dialog = within(await screen.findByRole("dialog"));
     expect(dialog.getByRole("radio", { name: "Ollama" })).toHaveAttribute("aria-checked", "true");
     expect(dialog.queryByLabelText("API key")).toBeNull();
@@ -335,10 +343,8 @@ describe("ModelProvidersPage", () => {
     expect(await dialog.findByText(/^Connected in \d+ ms$/)).toBeInTheDocument();
     expect(api.create).not.toHaveBeenCalled();
 
-    fireEvent.click(dialog.getByRole("button", { name: "Next: models" }));
-    expect(
-      await dialog.findByText("0 selected · nothing selected means all 2 are offered"),
-    ).toBeInTheDocument();
+    fireEvent.click(dialog.getByRole("button", { name: "Next: Models" }));
+    expect(await dialog.findByText("0 of 2 selected")).toBeInTheDocument();
     fireEvent.click(dialog.getByRole("checkbox", { name: "gpt-5" }));
     fireEvent.click(dialog.getByRole("button", { name: "Add provider" }));
 
@@ -367,7 +373,7 @@ describe("ModelProvidersPage", () => {
     const dialog = await openAdd();
     fireEvent.click(dialog.getByRole("radio", { name: "Custom" }));
     fireEvent.change(dialog.getByLabelText("Base URL"), { target: { value: "gw.example" } });
-    fireEvent.click(dialog.getByRole("button", { name: "Next: models" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Next: Models" }));
     expect(await dialog.findByText("Enter a name.")).toBeInTheDocument();
     expect(
       dialog.getByText("Enter a full URL, e.g. https://api.openai.com/v1"),
@@ -395,8 +401,15 @@ describe("ModelProvidersPage", () => {
     // The local path is keyless: no API key field at all.
     expect(dialog.queryByLabelText("API key")).toBeNull();
     await waitFor(() => expect(api.detectLocal).toHaveBeenCalledWith(null));
+    // Nothing answered: no Name yet, and Next waits for an address.
+    expect(await dialog.findByText("Nothing answered on the default ports")).toBeInTheDocument();
+    expect(dialog.queryByLabelText("Name")).toBeNull();
+    expect(dialog.getByRole("button", { name: "Next: Models" })).toBeDisabled();
+    fireEvent.change(dialog.getByLabelText("Base URL"), {
+      target: { value: "http://localhost:11434" },
+    });
     fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "local-llm" } });
-    fireEvent.click(dialog.getByRole("button", { name: "Next: models" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Next: Models" }));
     fireEvent.click(await dialog.findByRole("button", { name: "Add provider" }));
 
     await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
@@ -430,9 +443,10 @@ describe("ModelProvidersPage", () => {
     fireEvent.click(dialog.getByRole("radio", { name: "Ollama" }));
 
     expect(await dialog.findByText(/Ollama 0\.14\.2/)).toBeInTheDocument();
-    fireEvent.click(dialog.getByRole("radio", { name: /^Anthropic-compatible/ }));
+    // The chosen runtime names the provider; the first wire it serves is used.
+    expect(dialog.getByLabelText("Name")).toHaveValue("Ollama · this Mac");
     fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "local-llm" } });
-    fireEvent.click(dialog.getByRole("button", { name: "Next: models" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Next: Models" }));
 
     // Tool-capable models start selected; one that cannot call tools does not.
     expect(await dialog.findByRole("checkbox", { name: "qwen3-coder" })).toBeChecked();

@@ -8,6 +8,7 @@
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import { HelpTip } from "@/components/HelpTip";
 import { DataTable, type Column } from "@/components/DataTable";
 import { agentTabPath } from "@/lib/agents/routes";
 import type { AgentRowState } from "@/lib/agents/rowState";
@@ -20,7 +21,6 @@ import {
   CountCell,
   ModelCell,
 } from "./AgentRowCells";
-import { ConfigLeftBehindNotice } from "./ConfigLeftBehindNotice";
 
 export interface AgentListRow {
   row: AgentTypeOut;
@@ -58,21 +58,26 @@ export function AgentsTable({ rows, isLoading }: Props) {
     },
     {
       key: "skills",
-      header: t("agents.list.col.skills"),
+      header: (
+        <span className="inline-flex items-center gap-1.5">
+          {t("agents.list.col.skills")}
+          <HelpTip label={t("agents.list.countsLabel")}>{t("agents.list.countsHelp")}</HelpTip>
+        </span>
+      ),
       className: "w-[44px]",
-      cell: ({ row }) => <CountCell uid={row.uid} kind="skills" />,
+      cell: ({ row }) => <CountCell row={row} kind="skills" />,
     },
     {
       key: "mcp",
       header: t("agents.list.col.mcp"),
       className: "w-[44px]",
-      cell: ({ row }) => <CountCell uid={row.uid} kind="mcp" />,
+      cell: ({ row }) => <CountCell row={row} kind="mcp" />,
     },
     {
       key: "plugins",
       header: t("agents.list.col.plugins"),
       className: "w-[44px]",
-      cell: ({ row }) => <CountCell uid={row.uid} kind="plugins" />,
+      cell: ({ row }) => <CountCell row={row} kind="plugins" />,
     },
     {
       key: "coffer",
@@ -95,10 +100,8 @@ export function AgentsTable({ rows, isLoading }: Props) {
       isLoading={isLoading}
       onRowClick={({ row }) => navigate(agentTabPath(row.type, "overview"))}
       isRowClickable={({ row }) => !!row.uid}
-      rowFooter={({ row, state }) =>
-        state === "config_left_behind" ? <ConfigLeftBehindNotice row={row} /> : null
-      }
       emptyMessage={t("agents.list.empty")}
+      footer={false}
     />
   );
 }

@@ -23,6 +23,8 @@ from typing import Protocol as _Protocol
 from uuid import uuid4
 
 from coffer.application.audit_service import AuditService
+from coffer.application.provider.delete_ops import delete as _delete_op
+from coffer.application.provider.delete_ops import preview as _delete_preview_op
 from coffer.application.provider.internal_default_ops import (
     internal_default_connection as _internal_default_connection_op,
 )
@@ -33,7 +35,7 @@ from coffer.application.provider.order_ops import ordered as _ordered
 from coffer.application.provider.order_ops import reorder as _reorder_op
 from coffer.application.provider.ports import EngineNotifyPort
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
-from coffer.application.provider.results import ActivateResult, DeactivateResult
+from coffer.application.provider.results import ActivateResult, DeactivateResult, DeletePreview
 from coffer.application.provider.secret_gate import ProviderSecretBoundary, require_key
 from coffer.application.provider.switch_ops import activate as _activate_op
 from coffer.application.provider.switch_ops import deactivate as _deactivate_op
@@ -261,10 +263,16 @@ class ProviderService:
         The secret goes with it when nothing else cites it — but that is
         ``ResourceService.delete``'s job, not this one's: the kind declares a
         ``secret_ref_extractor``, so the generic path already releases the
-        cited ref by citation count.
+        cited ref by citation count. Agents that run on the profile are first put
+        back on their built-in login (``delete_ops``); a refused de-projection
+        keeps the profile.
         """
-        await self.get(uid)  # 404 (and the kind check) before anything is removed
-        await self._resources.delete(uid, actor)
+        await _delete_op(self, uid, actor=actor)
+
+    async def delete_preview(self, uid: str) -> DeletePreview:
+        """What deleting this profile would change in the agents running on it
+        (their config files, with diffs); writes nothing."""
+        return await _delete_preview_op(self, uid)
 
     # There is deliberately no ``rename`` here. This kind had the only one in
     # Coffer, and it existed because the connection's NAME was written into
