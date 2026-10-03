@@ -27,8 +27,14 @@ from coffer.application.chat.preview import message_preview
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
-from coffer.domain.chat.errors import ConversationNotFound, MessageNotFound, UnknownAgent
+from coffer.domain.chat.errors import (
+    ConversationNotFound,
+    MessageNotFound,
+    ReplyFileNotFound,
+    UnknownAgent,
+)
 from coffer.domain.chat.message import ContentBlock, Message, Role, TextBlock
+from coffer.domain.chat.reply_file import ReplyFile, ReplyFileSummary
 from coffer.domain.pagination import Page
 
 _TITLE_MAX_CHARS = 60
@@ -326,6 +332,34 @@ class ChatService:
             if line is not None:
                 out[conversation_id] = line
         return out
+
+    async def record_reply_files(self, message_id: str, files: Sequence[ReplyFile]) -> None:
+        """Keep what a reply changed in each file (spec chat "Record what each reply
+        changed in each file"); a reply that changed nothing keeps no rows."""
+        if files:
+            await self._messages.record_files(message_id, files)
+
+    async def reply_files(self, conversation_id: str, message_id: str) -> list[ReplyFileSummary]:
+        """The files an assistant reply of the conversation changed, with counts
+        and no diffs; empty for a reply that recorded none. ``MessageNotFound``
+        when the conversation holds no assistant message with that id."""
+        await self._reply(conversation_id, message_id)
+        return await self._messages.list_files(message_id)
+
+    async def reply_file(self, conversation_id: str, message_id: str, path: str) -> ReplyFile:
+        """One changed file of a reply with its diff; ``ReplyFileNotFound`` when
+        the reply recorded nothing under ``path``."""
+        await self._reply(conversation_id, message_id)
+        found = await self._messages.get_file(message_id, path)
+        if found is None:
+            raise ReplyFileNotFound(message_id, path)
+        return found
+
+    async def _reply(self, conversation_id: str, message_id: str) -> Message:
+        for message in await self.list_messages(conversation_id):
+            if message.id == message_id and message.role is Role.ASSISTANT:
+                return message
+        raise MessageNotFound(conversation_id, message_id)
 
     async def get_user_message(self, conversation_id: str, message_id: str) -> Message:
         """One of the conversation's user messages, to send again; raises

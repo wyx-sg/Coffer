@@ -80,15 +80,28 @@ class AttachmentNotFound(CofferError):  # noqa: N818
 
 
 class MessageNotFound(CofferError):  # noqa: N818
-    """A resend names no user message of that conversation — never sent there,
-    deleted with its conversation, or an assistant reply rather than a prompt."""
+    """A route names no such message in that conversation — a resend of anything
+    but one of its user messages, or the files of anything but one of its
+    replies; never there, or deleted with its conversation."""
 
     code = "MESSAGE_NOT_FOUND"
 
     def __init__(self, conversation_id: str, message_id: str) -> None:
-        super().__init__(f"no user message {message_id!r} in conversation {conversation_id!r}")
+        super().__init__(f"no such message {message_id!r} in conversation {conversation_id!r}")
         self.conversation_id = conversation_id
         self.message_id = message_id
+
+
+class ReplyFileNotFound(CofferError):  # noqa: N818
+    """A reply's changed-file diff was asked for under a path the reply did not
+    record (spec chat "Record what each reply changed in each file")."""
+
+    code = "REPLY_FILE_NOT_FOUND"
+
+    def __init__(self, message_id: str, path: str) -> None:
+        super().__init__(f"reply {message_id!r} recorded no changes to {path!r}")
+        self.message_id = message_id
+        self.path = path
 
 
 class AttachmentExpired(CofferError):  # noqa: N818

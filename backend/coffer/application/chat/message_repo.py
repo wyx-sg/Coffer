@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Protocol
 
 from coffer.domain.chat.message import ContentBlock, Message
+from coffer.domain.chat.reply_file import ReplyFile, ReplyFileSummary
 
 
 class MessageRepo(Protocol):
@@ -32,6 +33,22 @@ class MessageRepo(Protocol):
     async def save_partial(self, message_id: str, *, content: list[ContentBlock]) -> None:
         """Overwrite a still-``streaming`` row's content (a mid-turn flush); a row
         already finalised is left untouched."""
+        ...
+
+    async def record_files(self, message_id: str, files: Sequence[ReplyFile]) -> None:
+        """Keep what a reply changed, one row per file in the order given; a
+        second call for the same reply replaces the first. Deleted with the
+        message."""
+        ...
+
+    async def list_files(self, message_id: str) -> list[ReplyFileSummary]:
+        """The reply's recorded files in recorded order, without their diffs;
+        empty for a reply with none."""
+        ...
+
+    async def get_file(self, message_id: str, path: str) -> ReplyFile | None:
+        """One recorded file with its diff, or ``None`` when the reply recorded
+        nothing under that path."""
         ...
 
     async def delete_message(self, message_id: str) -> None:

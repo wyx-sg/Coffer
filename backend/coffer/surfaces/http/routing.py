@@ -43,6 +43,7 @@ from coffer.surfaces.http.chat.attachment_routes import router as chat_attachmen
 from coffer.surfaces.http.chat.conversation_batch_routes import router as chat_batch_router
 from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
 from coffer.surfaces.http.chat.question_routes import router as chat_question_router
+from coffer.surfaces.http.chat.reply_file_routes import router as chat_reply_file_router
 from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
 from coffer.surfaces.http.cli_routes import router as cli_router
 from coffer.surfaces.http.daemon_port_routes import router as daemon_port_router
@@ -153,6 +154,7 @@ def include_all_routers(app: FastAPI) -> None:
         chat_turn_router,  # … and its turn/SSE half
         chat_attachment_router,  # … and the composer's file uploads
         chat_attachment_bytes_router,  # … and a thread thumbnail's bytes
+        chat_reply_file_router,  # … and what a reply changed in each file
         channel_router,  # spec channels
         price_list_router,  # spec provider-switching (before /providers/{uid})
         provider_router,  # spec provider-switching

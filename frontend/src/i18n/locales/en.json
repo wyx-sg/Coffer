@@ -1681,6 +1681,7 @@
     "ATTACHMENT_UNAVAILABLE": "This attachment is no longer available.",
     "QUESTION_ANSWER_INVALID": "That answer doesn't fit the question. Choose from the options, or type your own answer.",
     "MESSAGE_NOT_FOUND": "That message is no longer in this conversation.",
+    "REPLY_FILE_NOT_FOUND": "That file is not among the changes this reply recorded.",
     "SECRET_BINDING_PENDING": "That secret is waiting for approval in the Coffer app before it is sent here.",
     "PRESENCE_GRANT_INVALID": "The approval could not be verified. Try again from the Coffer app.",
     "APPROVAL_NOT_FOUND": "That approval no longer exists.",

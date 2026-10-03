@@ -1,9 +1,9 @@
 ## 1. Backend
 
-- [ ] 1.1 Table `chat_reply_files` + migration; repository
-- [ ] 1.2 Claude Code adapter: PreToolUse snapshot hook (shared hook registration with add-coffer-ask), diff at reply end
-- [ ] 1.3 Codex mapping: collect `file_change` diffs per reply
-- [ ] 1.4 Routes: list files, one file's diff; `make contracts`
+- [x] 1.1 Table `chat_reply_files` + migration; repository
+- [x] 1.2 Claude Code adapter: PreToolUse snapshot hook (shared hook registration with add-coffer-ask), diff at reply end
+- [x] 1.3 Codex mapping: collect `file_change` diffs per reply
+- [x] 1.4 Routes: list files, one file's diff; `make contracts`
 
 ## 2. Frontend
 
