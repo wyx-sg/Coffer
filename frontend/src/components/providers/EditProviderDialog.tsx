@@ -103,7 +103,7 @@ export function EditProviderDialog({ open, provider, use, onClose, onSaved }: Pr
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent aria-describedby={undefined} className="max-w-[560px]">
+      <DialogContent aria-describedby={undefined} className="max-w-[480px]">
         <DialogHeader>
           <DialogTitle>{t("providers.edit.title", { name: displayName(provider) })}</DialogTitle>
         </DialogHeader>

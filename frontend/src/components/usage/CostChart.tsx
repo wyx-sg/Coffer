@@ -1,4 +1,4 @@
-// src/components/usage/CostChart.tsx — "Cost per day": one accent bar per local day of the range, today's lighter.
+// src/components/usage/CostChart.tsx — "Cost per day": one `data`-colored bar per local day of the range, today's lighter.
 //
 // A single series, so no legend box beyond "Today, so far" (today's bar is
 // partial). Bars sit on the baseline with rounded tops and a 2px gap; each one
@@ -36,17 +36,17 @@ export function CostChart({ byDay }: { byDay: UsageSummary }) {
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-text-muted">{t("usage.chart.title")}</span>
+        <span className="text-[13px] font-semibold text-text">{t("usage.chart.title")}</span>
         {days.some((d) => d.today) ? (
           <span className="ml-auto inline-flex items-center gap-1.5 text-2xs text-text-muted">
-            <span aria-hidden className="size-2 rounded-xs bg-accent/55" />
+            <span aria-hidden className="size-2 rounded-xs bg-data/50" />
             {t("usage.chart.today")}
           </span>
         ) : null}
       </div>
       <figure aria-label={t("usage.chart.title")} className="m-0 flex min-w-0 flex-col gap-1.5">
         <div className="flex gap-2.5">
-          <div className="relative h-28 w-9 shrink-0" aria-hidden>
+          <div className="relative h-36 w-9 shrink-0" aria-hidden>
             {ticks.map((v) => (
               <span
                 key={v}
@@ -58,7 +58,7 @@ export function CostChart({ byDay }: { byDay: UsageSummary }) {
               </span>
             ))}
           </div>
-          <div className="relative h-28 flex-1">
+          <div className="relative h-36 flex-1">
             {ticks.map((v) => (
               <div
                 key={v}
@@ -90,7 +90,7 @@ export function CostChart({ byDay }: { byDay: UsageSummary }) {
                         <div
                           className={cn(
                             "w-full max-w-11 rounded-t-xs",
-                            d.today ? "bg-accent/55" : "bg-accent",
+                            d.today ? "bg-data/50" : "bg-data",
                           )}
                           // Theming bridge: the bar's height is the day's cost.
                           style={{ height: `${(d.cost / top) * 100}%` }}

@@ -107,3 +107,31 @@ def test_argv_form_and_a_missing_command(tmp_path: Path, monkeypatch: Any) -> No
     assert usage_cmd.run_original([str(tmp_path / "nope"), "x"], b"") == 127
     # Garbage on stdin is not Coffer's problem either.
     usage_cmd.forward_statusline(b"\xff not json")
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching", scenario="a quota read hands the statusline opt-in to an agent"
+)
+def test_quota_prompt_prints_the_hand_off_and_nothing_once_a_value_is_seen(
+    monkeypatch: Any,
+) -> None:
+    prompt = "Edit /home/me/.claude/settings.json: add statusLine ..."
+    served = {
+        "agents": [
+            {"agent_type": "claude_code", "windows": [], "handoff": {"prompt": prompt}},
+            {"agent_type": "codex", "windows": [], "handoff": None},
+        ]
+    }
+
+    def client() -> tuple[httpx.Client, None]:
+        transport = httpx.MockTransport(lambda request: httpx.Response(200, json=served))
+        return httpx.Client(base_url="http://coffer.test/api/v1", transport=transport), None
+
+    monkeypatch.setattr(usage_cmd._cli_client, "client_or_exit", client)
+    out = CliRunner().invoke(app, ["usage", "quota", "--prompt"])
+    assert (out.exit_code, out.output) == (0, prompt + "\n")
+
+    served["agents"][0] = {"agent_type": "claude_code", "windows": [], "handoff": None}
+    out = CliRunner().invoke(app, ["usage", "quota", "--prompt"])
+    assert out.exit_code == 0 and prompt not in out.output
+    assert "nothing to set up" in out.output

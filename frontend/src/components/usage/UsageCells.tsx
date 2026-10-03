@@ -8,8 +8,6 @@ import { useTranslation } from "react-i18next";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { UsageTotals } from "@/lib/api/usage";
-import { usePriceList } from "@/lib/hooks/useProviderFallback";
-import { formatPriceDate } from "@/lib/providers/priceDate";
 import { allUnpriced, formatCost, formatCount } from "@/lib/usage/format";
 
 function Marked({ text, tip, label }: { text: string; tip: string; label?: string }) {
@@ -31,10 +29,8 @@ function Marked({ text, tip, label }: { text: string; tip: string; label?: strin
 
 export function CostCell({ totals }: { totals: UsageTotals }) {
   const { t, i18n } = useTranslation();
-  const list = usePriceList();
   if (allUnpriced(totals)) {
-    const date = formatPriceDate(list.data?.updated, i18n.language);
-    const tip = date ? t("usage.table.noPriceTipOn", { date }) : t("usage.table.noPriceTip");
+    const tip = t("usage.table.noPriceTip");
     return <Marked text={t("usage.noPrice")} tip={tip} label={tip} />;
   }
   const cost = formatCost(totals.estimated_cost_usd, i18n.language);

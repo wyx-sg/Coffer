@@ -29,13 +29,7 @@ function renderDetect(data: DetectLocalOut) {
     <QueryClientProvider client={qc}>
       <TooltipProvider>
         <MemoryRouter>
-          <AddLocalRuntime
-            detect={detect}
-            requested
-            chosen={0}
-            onChoose={() => undefined}
-            onDetect={() => undefined}
-          />
+          <AddLocalRuntime detect={detect} requested chosen={0} onChoose={() => undefined} />
         </MemoryRouter>
       </TooltipProvider>
     </QueryClientProvider>,
@@ -54,18 +48,16 @@ describe("AddLocalRuntime with nothing found", () => {
     "nothing found hands setting up a runtime to an agent",
     async () => {
       renderDetect({ found: [], handoff: { prompt: PROMPT } });
-      expect(screen.getByText(/Nothing answered on the default ports/)).toHaveTextContent(
-        "type the address of a runtime that is already running",
-      );
+      expect(screen.getByText("Nothing answered on the default ports")).toBeInTheDocument();
+      expect(screen.getByText(/or type its address below/)).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
       expect(writeText).toHaveBeenCalledWith(PROMPT);
-      expect(screen.getByRole("button", { name: "Detect" })).toBeEnabled();
     },
   );
 
   test("without a hand-off only the note shows", () => {
     renderDetect({ found: [], handoff: null });
-    expect(screen.getByText(/Nothing answered on the default ports/)).toBeInTheDocument();
+    expect(screen.getByText("Nothing answered on the default ports")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Copy prompt" })).toBeNull();
   });
 });

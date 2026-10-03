@@ -159,7 +159,7 @@ class _Agents:
 
 
 @pytest.mark.acceptance(
-    spec="provider-switching", scenario="the quota page hands the statusline opt-in to an agent"
+    spec="provider-switching", scenario="a quota read hands the statusline opt-in to an agent"
 )
 async def test_claude_codes_empty_row_hands_the_statusline_opt_in_to_an_agent(  # type: ignore[no-untyped-def]
     wired, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

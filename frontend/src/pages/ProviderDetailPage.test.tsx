@@ -17,7 +17,6 @@ import { ApiError } from "@/lib/api/errors";
 import type { Provider, ProviderModel } from "@/lib/api/providers";
 import { acceptance } from "@/test/acceptance";
 import { ModelProvidersPage } from "./ModelProvidersPage";
-import { ProviderDetailPage } from "./ProviderDetailPage";
 
 vi.mock("@/lib/api/providers", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/providers")>()),
@@ -27,10 +26,12 @@ vi.mock("@/lib/api/providers", async (orig) => ({
     create: vi.fn(),
     update: vi.fn(),
     remove: vi.fn(),
+    deletePreview: vi.fn(),
     activate: vi.fn(),
     detectLocal: vi.fn(),
   },
 }));
+vi.mock("@/components/usage/UsageTab", () => ({ UsageTab: () => <p>usage tab body</p> }));
 vi.mock("@/lib/api/resources", () => ({
   resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn(), rename: vi.fn() },
 }));
@@ -135,7 +136,7 @@ function renderPage(path = `/model-providers/${UID}`) {
       <QueryClientProvider client={qc}>
         <Routes>
           <Route path="/model-providers" element={<ModelProvidersPage />} />
-          <Route path="/model-providers/:uid" element={<ProviderDetailPage />} />
+          <Route path="/model-providers/:uid" element={<ModelProvidersPage />} />
           <Route path="*" element={null} />
         </Routes>
         <Where />
@@ -146,7 +147,7 @@ function renderPage(path = `/model-providers/${UID}`) {
 
 const where = () => screen.getByTestId("where").textContent;
 const switchFor = (id: string) => screen.getByRole("switch", { name: `Offered: ${id}` });
-const typePickerFor = (id: string) => screen.getByRole("combobox", { name: `Type: ${id}` });
+const typePickerFor = (id: string) => screen.getByRole("button", { name: `Type: ${id}` });
 const heading = () => screen.findByRole("heading", { name: "acme", level: 2 });
 
 describe("ProviderDetailPage", () => {
@@ -177,12 +178,14 @@ describe("ProviderDetailPage", () => {
     await heading();
 
     const usedBy = screen.getByRole("heading", { name: "Used by" }).closest("section")!;
-    const claude = within(usedBy).getByRole("link", { name: /Claude Code/ });
-    expect(claude).toHaveAttribute("href", "/agents/claude_code/model");
-    expect(claude).toHaveTextContent("claude-opus-4-1");
-    expect(claude).toHaveTextContent("Change it in Claude Code › Model");
-    const engine = within(usedBy).getByRole("button", { name: /Coffer's engine/ });
-    expect(engine).toHaveTextContent("gpt-5-mini");
+    // Each row links to where it is changed: the agent's Change model, or Settings.
+    const claude = within(usedBy).getByRole("link", { name: "Claude Code › Change model" });
+    expect(claude).toHaveAttribute("href", "/agents/claude_code?change-model=1");
+    expect(within(usedBy).getByText("claude-opus-4-1")).toBeInTheDocument();
+    expect(within(usedBy).getByText("gpt-5-mini")).toBeInTheDocument();
+    // A healthy row carries no status word.
+    expect(within(usedBy).queryByText(/Runs on this provider|Requests fail/)).toBeNull();
+    const engine = within(usedBy).getByRole("button", { name: "Settings › General" });
     // No switch, activate or revert control in Used by.
     expect(within(usedBy).queryByRole("switch")).toBeNull();
     expect(
@@ -201,28 +204,25 @@ describe("ProviderDetailPage", () => {
 
     expect(screen.getByText("Reachable")).toBeInTheDocument();
     expect(screen.getByText("locked while Codex runs on it")).toBeInTheDocument();
-    expect(screen.getByText("provider/acme")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Manage in Secrets" })).toHaveAttribute(
-      "href",
-      "/secrets",
-    );
+    expect(screen.getByText("coffer://secret/provider/acme")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Secrets" })).toHaveAttribute("href", "/secrets");
     expect(screen.queryByText("2 of 3 offered")).not.toBeInTheDocument();
-    // One column, no tabs: the Models section sits under Used by and Endpoint.
-    expect(screen.queryByRole("tab")).toBeNull();
+    // One column: the Models section sits under Used by and Endpoint (the only
+    // tabs are the page's Providers | Usage).
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
     expect(screen.getByRole("switch", { name: /gpt-5-codex/ })).toBeInTheDocument();
   });
 
-  test("the detail is three card sections with a one-line header and truncated model rows", async () => {
+  test("the detail is three plain sections with a one-line header and unwrapped model names", async () => {
     serves(chat("gpt-5", "gpt-5-codex"));
     serve(makeProvider({ models: chat("gpt-5", "gpt-5-codex") }));
     const { container } = renderPage();
     await heading();
 
-    // Used by, Endpoint and Models are Sections divided by one hairline, not cards.
+    // Used by, Endpoint and Models are plain Sections (title + a line + hairline rows), not cards.
     for (const name of ["Used by", "Endpoint", "Models"]) {
       const section = screen.getByRole("heading", { name }).closest("section")!;
       expect(section).not.toHaveClass("border");
-      expect(section.parentElement).toHaveClass("divide-y");
     }
     // The header holds the actions in the sibling order: reach, test, edit, menu.
     const header = screen.getByTestId("provider-header");
@@ -238,8 +238,8 @@ describe("ProviderDetailPage", () => {
     fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
     // The page is no longer wrapped in one bordered box.
     expect(container.querySelector(".rounded-xl.border.overflow-hidden")).toBeNull();
-    // A model id is one truncated line.
-    expect(await screen.findByText("gpt-5-codex")).toHaveAttribute("data-truncated-text");
+    // A model name never wraps.
+    expect(await screen.findByText("gpt-5-codex")).toHaveClass("whitespace-nowrap");
     expect(screen.getAllByTestId("model-row")).toHaveLength(2);
   });
 
@@ -299,6 +299,8 @@ describe("ProviderDetailPage", () => {
       // The probe's guess pre-fills each row's type.
       expect(typePickerFor("gpt-4o")).toHaveTextContent("Text / chat");
       expect(typePickerFor("text-embedding-3-large")).toHaveTextContent("Embedding");
+      // The type is quiet text with a menu, not a bordered field.
+      expect(typePickerFor("gpt-4o")).not.toHaveClass("border");
 
       fireEvent.click(switchFor("text-embedding-3-large"));
       await waitFor(() => expect(api.update).toHaveBeenCalledTimes(1));
@@ -319,26 +321,31 @@ describe("ProviderDetailPage", () => {
     ]);
     renderPage();
     await screen.findByText("whisper-1");
-    fireEvent.click(screen.getByRole("button", { name: "Audio" }));
+    fireEvent.click(screen.getByRole("button", { name: "Type" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Audio" }));
     expect(screen.queryByText("gpt-5")).toBeNull();
     expect(screen.getByText("whisper-1")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "All" }));
+    fireEvent.click(screen.getByRole("button", { name: "Type: Audio" }));
+    fireEvent.click(await screen.findByRole("option", { name: "All" }));
     expect(screen.getByText("gpt-5")).toBeInTheDocument();
   });
 
   acceptance(
     "provider-switching",
-    "a failed model introspection says so and offers a retry",
+    "a failed model introspection says so, with Refresh in the title",
     async () => {
       serve(makeProvider({ models: chat("hand-typed-model") }));
       setEndpoint({ error: new ApiError("INTERNAL_ERROR", "endpoint refused") });
       renderPage();
 
       expect(await screen.findByText("Couldn't list this endpoint's models")).toBeInTheDocument();
+      expect(screen.getByText("Listing failed")).toBeInTheDocument();
+      // The box has no Retry of its own: Refresh is the title's.
+      expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
       // The curated list survives the failed probe.
       expect(switchFor("hand-typed-model")).toBeChecked();
       expect(api.update).not.toHaveBeenCalled();
-      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
       expect(refetch).toHaveBeenCalledTimes(1);
     },
   );
@@ -350,7 +357,7 @@ describe("ProviderDetailPage", () => {
     expect(await screen.findByText("This endpoint listed no models")).toBeInTheDocument();
   });
 
-  test("a rejected key shows in the header, a banner and Used by", async () => {
+  test("a rejected key shows in the header and in the Endpoint box, not row by row", async () => {
     agentsState.data = [agent("codex", "gpt-5-codex")];
     serve(makeProvider());
     setEndpoint({
@@ -365,10 +372,12 @@ describe("ProviderDetailPage", () => {
     expect(screen.getAllByText("Key rejected").length).toBeGreaterThan(0);
     expect(screen.getByText("The endpoint rejects the stored key (401)")).toBeInTheDocument();
     expect(
-      screen.getByText("Codex fail on every request until the key is replaced."),
+      screen.getByText("Everything that uses it fails until you replace the key."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Requests fail · key rejected")).toBeInTheDocument();
-    expect(screen.getByText("Rejected (401)")).toBeInTheDocument();
+    expect(screen.queryByText(/Requests fail/)).toBeNull();
+    expect(screen.getByText("Rejected")).toBeInTheDocument();
+    // Replace key lives in the box only, not on the key row as well.
+    expect(screen.getAllByRole("button", { name: "Replace key…" })).toHaveLength(1);
   });
 
   test("Edit renames first, then patches the endpoint; the protocol is locked while live", async () => {
@@ -424,7 +433,7 @@ describe("ProviderDetailPage", () => {
     expect(api.update).not.toHaveBeenCalled();
   });
 
-  test("Replace key tests the new key, then waits for approval when the key is in use", async () => {
+  test("Replace key checks the pasted key, then waits for approval when the key is in use", async () => {
     agentsState.data = [agent("codex", "gpt-5-codex")];
     serve(makeProvider());
     api.update.mockResolvedValue(makeProvider());
@@ -432,10 +441,11 @@ describe("ProviderDetailPage", () => {
     renderPage();
     await heading();
 
-    fireEvent.click(screen.getByRole("button", { name: "Replace key" }));
+    fireEvent.click(screen.getByRole("button", { name: "Replace key…" }));
     const dialog = within(await screen.findByRole("dialog"));
     fireEvent.change(dialog.getByLabelText("New key"), { target: { value: "sk-new" } });
-    fireEvent.click(dialog.getByRole("button", { name: "Test" }));
+    // No Test button: the key is checked as it is pasted.
+    expect(dialog.queryByRole("button", { name: "Test" })).toBeNull();
     await waitFor(() =>
       expect(listModels).toHaveBeenCalledWith(
         expect.objectContaining({ secret_value: "sk-new", base_url: "https://gw/v1" }),
@@ -456,18 +466,63 @@ describe("ProviderDetailPage", () => {
     window.removeEventListener("coffer:open-approvals", opened);
   });
 
-  test("Delete is blocked while Coffer's engine runs on the provider", async () => {
+  test("Deleting a provider Coffer's engine runs on names what changes, then deletes it", async () => {
     serve(makeProvider({ internal_default: true }));
+    api.deletePreview.mockResolvedValue({ agents: [] });
+    api.remove.mockResolvedValue(undefined);
     renderPage();
     await heading();
     fireEvent.click(screen.getByRole("button", { name: "More actions for acme" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete provider" }));
-    const dialog = within(await screen.findByRole("dialog"));
-    expect(dialog.getByText(/acme is in use/)).toBeInTheDocument();
-    expect(dialog.getByRole("button", { name: /Coffer's engine/ })).toBeInTheDocument();
-    expect(dialog.getByRole("button", { name: "Delete provider" })).toBeDisabled();
-    expect(api.remove).not.toHaveBeenCalled();
+    // Not blocked: the consequence is said, and Delete is available. (The review
+    // gives way to a plain confirmation once nothing in an agent's file changes.)
+    expect(await screen.findByText(/Coffer’s engine pauses/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete provider" }));
+    await waitFor(() => expect(api.remove).toHaveBeenCalledWith(UID));
   });
+
+  acceptance(
+    "provider-switching",
+    "deleting a provider an agent runs on is a review of its config diff, and Delete applies it",
+    async () => {
+      agentsState.data = [agent("codex", "gpt-5-codex")];
+      serve(makeProvider({ internal_default: true }));
+      api.deletePreview.mockResolvedValue({
+        agents: [
+          {
+            agent_uid: "a-codex",
+            agent_type: "codex",
+            agent_name: "codex",
+            files: [
+              {
+                path: "/Users/me/.codex/config.toml",
+                op: "modify",
+                diff: [
+                  { kind: "hunk", text: "@@ -1,3 +1,1 @@", old_no: null, new_no: null },
+                  { kind: "context", text: 'approval_policy = "on-request"', old_no: 1, new_no: 1 },
+                  { kind: "remove", text: 'model = "gpt-5-codex"', old_no: 2, new_no: null },
+                  { kind: "remove", text: 'model_provider = "coffer"', old_no: 3, new_no: null },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+      api.remove.mockResolvedValue(undefined);
+      renderPage();
+      await heading();
+      fireEvent.click(screen.getByRole("button", { name: "More actions for acme" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Delete provider" }));
+      const dialog = within(await screen.findByRole("dialog"));
+      expect(await dialog.findByText("Review changes · 1 file")).toBeInTheDocument();
+      expect(dialog.getByText("Codex goes back to its own login")).toBeInTheDocument();
+      expect(dialog.getByText("Coffer’s engine pauses")).toBeInTheDocument();
+      expect(dialog.getByText('model_provider = "coffer"')).toBeInTheDocument();
+      expect(api.remove).not.toHaveBeenCalled();
+      fireEvent.click(dialog.getByRole("button", { name: "Delete" }));
+      await waitFor(() => expect(api.remove).toHaveBeenCalledWith(UID));
+    },
+  );
 
   test("an unused provider is deleted after a confirmation, and the page returns to the list", async () => {
     serve(makeProvider());
@@ -483,7 +538,7 @@ describe("ProviderDetailPage", () => {
     fireEvent.click(dialog.getByRole("button", { name: "Delete provider" }));
     await waitFor(() => expect(api.remove).toHaveBeenCalledWith(UID));
     await waitFor(() => expect(where()).toBe("/model-providers"));
-    expect(await screen.findByText("Bring your own model endpoint")).toBeInTheDocument();
+    expect(await screen.findByText("No model providers yet")).toBeInTheDocument();
   });
 
   test("an unknown uid says the provider was not found", async () => {

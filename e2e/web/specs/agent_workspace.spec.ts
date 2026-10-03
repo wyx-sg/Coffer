@@ -105,9 +105,9 @@ test("agent workspace tabs render MCP entries, plugins and the delivered skill",
     });
 
     // Skills tab — Coffer's built-in manual skill is delivered to every agent,
-    // so it is listed as Coffer's.
+    // so it is named in the "From Coffer" row (Coffer's skills are not listed one by one).
     await page.getByRole("tab", { name: /^skills/i }).click();
-    await expect(page.getByRole("link", { name: "coffer-guide" })).toBeVisible({
+    await expect(page.getByTestId("from-coffer-skills").getByText(/coffer-guide/)).toBeVisible({
       timeout: 10_000,
     });
 

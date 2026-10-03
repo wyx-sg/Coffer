@@ -44,6 +44,6 @@ test("every sidebar area but Overview, Conversations and Activity has a tile, in
     "/custom-tools",
     "/clis",
     "/secrets",
-    "/usage",
+    "/model-providers/usage",
   ]);
 });

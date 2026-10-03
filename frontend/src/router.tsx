@@ -180,17 +180,16 @@ const pageRoutes: RouteObject[] = gateRoutes([
       "SyncDeletionReviewPage",
     ),
   },
+  // One page: the Providers list beside the open provider, and the Usage tab.
+  // `usage` is declared before `:uid` so it is never read as a provider.
   { path: "model-providers", element: <ModelProvidersPage /> },
-  {
-    path: "model-providers/:uid",
-    element: lazyPage(() => import("./pages/ProviderDetailPage"), "ProviderDetailPage"),
-  },
+  { path: "model-providers/usage", element: <ModelProvidersPage /> },
+  { path: "model-providers/:uid", element: <ModelProvidersPage /> },
   { path: "secrets", element: lazyPage(() => import("./pages/SecretsPage"), "SecretsPage") },
   {
     path: "activity",
     element: lazyPage(() => import("./pages/activity/ActivityPage"), "ActivityPage"),
   },
-  { path: "usage", element: lazyPage(() => import("./pages/UsagePage"), "UsagePage") },
   { path: "*", element: <NotFoundPage /> },
 ]);
 

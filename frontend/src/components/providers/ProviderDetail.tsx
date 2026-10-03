@@ -1,13 +1,13 @@
 // src/components/providers/ProviderDetail.tsx — the open provider: header, the key-rejected banner, then one column.
 //
-// No tabs (canvas 2.2): Used by, Endpoint and Models are three SettingsSection cards read top to bottom at
-// `/model-providers/<uid>`. The dialogs the header and the Endpoint open —
+// No tabs (canvas 2.2): Used by, Endpoint and Models are three sections read top to bottom at
+// `/model-providers/<uid>`; what is wrong shows inside the section that has it. The dialogs the header and the Endpoint open —
 // Edit, Replace key, Delete — are owned here, once.
 import { useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-import { SETTINGS_STACK } from "@/components/settings/SettingsLayout";
+import { translateApiError } from "@/lib/api/errors";
 import { useToast } from "@/components/ui/toast";
 import type { Provider } from "@/lib/api/providers";
 import type { EndpointModelsOut } from "@/lib/hooks/useModelIntrospection";
@@ -15,9 +15,7 @@ import { authStatusOf, probeStatus, type ProbeStatus } from "@/lib/providers/pro
 import type { ProviderUse } from "@/lib/providers/usedBy";
 import { DeleteProviderDialog } from "./DeleteProviderDialog";
 import { EditProviderDialog } from "./EditProviderDialog";
-import { KeyRejectedBanner } from "./KeyRejectedBanner";
 import { ProviderDetailHeader } from "./ProviderDetailHeader";
-import { SectionStack } from "@/components/Section";
 import { ProviderEndpoint } from "./ProviderEndpoint";
 import { ProviderModels } from "./ProviderModels";
 import { ProviderUsedBy } from "./ProviderUsedBy";
@@ -30,6 +28,9 @@ interface Props {
   status: ProbeStatus;
   engineModel: string | null;
   transcribeModel: string | null;
+  latencyMs: number | null;
+  /** A model id to find in Models (from the Usage tab's link). */
+  focusModel?: string | null;
 }
 
 type Open = "edit" | "replace" | "delete" | null;
@@ -41,6 +42,8 @@ export function ProviderDetail({
   status,
   engineModel,
   transcribeModel,
+  latencyMs,
+  focusModel,
 }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -65,28 +68,25 @@ export function ProviderDetail({
   };
 
   return (
-    <div className={SETTINGS_STACK}>
+    <div className="flex flex-col gap-8">
       <ProviderDetailHeader
         provider={provider}
         status={status}
+        latencyMs={latencyMs}
         onTest={() => void test()}
         onEdit={() => setOpen("edit")}
         onDelete={() => setOpen("delete")}
       />
-      {status === "keyRejected" ? (
-        <KeyRejectedBanner
-          status={rejectedStatus}
-          use={use}
-          onReplace={provider.secret_ref ? () => setOpen("replace") : undefined}
-        />
-      ) : null}
-
-      <SectionStack>
-        <ProviderUsedBy use={use} failing={status === "keyRejected"} />
+      <div className="flex flex-col gap-8">
+        <ProviderUsedBy use={use} />
         <ProviderEndpoint
           provider={provider}
           use={use}
+          status={status}
           rejectedStatus={rejectedStatus}
+          reason={
+            endpoint.error ? translateApiError(t, endpoint.error) : (endpoint.data?.message ?? "")
+          }
           onReplaceKey={() => setOpen("replace")}
         />
         <ProviderModels
@@ -95,8 +95,9 @@ export function ProviderDetail({
           endpoint={endpoint}
           engineModel={engineModel}
           transcribeModel={transcribeModel}
+          focusModel={focusModel}
         />
-      </SectionStack>
+      </div>
 
       <EditProviderDialog
         open={open === "edit"}

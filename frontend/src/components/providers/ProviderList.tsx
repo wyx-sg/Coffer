@@ -1,6 +1,7 @@
-// src/components/providers/ProviderList.tsx — the list pane: a filter, the count, one row per provider.
+// src/components/providers/ProviderList.tsx — the list pane: a filter, one row per provider.
 //
-// The filter matches the name, title, endpoint and description. There is no
+// The filter matches the name, title, endpoint and description. The label
+// "Fallback order ?" says what the order is; there is no count. There is no
 // per-row switch or reach control here: activation is per agent (its Model
 // tab), and reach is changed on the provider's own header. The order is
 // fallback priority (spec provider-switching "Order providers, and fail over
@@ -27,8 +28,8 @@ interface Props {
   onRetry?: () => void;
   selectedUid: string | undefined;
   usageOf: (provider: Provider) => ProviderUse;
-  /** The open provider's rejected-key status, when its probe found one. */
-  selectedRejected?: string | null;
+  /** What the open provider's probe found wrong, when it did: its row says so in place of its sub-line. */
+  selectedProblem?: "keyRejected" | "unreachable" | null;
 }
 
 export function ProviderList({
@@ -38,7 +39,7 @@ export function ProviderList({
   onRetry,
   selectedUid,
   usageOf,
-  selectedRejected,
+  selectedProblem,
 }: Props) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState("");
@@ -72,7 +73,6 @@ export function ProviderList({
           <HelpTip label={t("providers.list.orderHelpLabel")} className="ml-1.5">
             {t("providers.list.orderHelp")}
           </HelpTip>
-          <span className="ml-auto font-book">{providers.length}</span>
         </div>
         {error ? (
           <ListLoadError kind="providers" error={error} onRetry={() => onRetry?.()} />
@@ -99,7 +99,7 @@ export function ProviderList({
                 provider={p}
                 use={usageOf(p)}
                 selected={p.uid === selectedUid}
-                rejected={p.uid === selectedUid ? selectedRejected : undefined}
+                problem={p.uid === selectedUid ? selectedProblem : null}
                 handle={
                   <ReorderHandle
                     name={p.name}

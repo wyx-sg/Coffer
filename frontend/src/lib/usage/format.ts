@@ -1,4 +1,4 @@
-// src/lib/usage/format.ts — how the Usage page writes numbers, money, clock times and days, per UI language.
+// src/lib/usage/format.ts — how the Usage tab and the daemon status write numbers, money, spans and days, per UI language.
 //
 // Pure functions over `Intl`, so the tiles, the chart and the table agree and
 // each rule is unit-tested without a component. English days are assembled
@@ -43,23 +43,6 @@ export function allUnpriced(totals: { requests: number; unpriced_requests: numbe
   return totals.requests > 0 && totals.unpriced_requests >= totals.requests;
 }
 
-/** The clock time of an instant, 24-hour: 14:02. */
-export function formatClock(at: string | Date, lang: string): string {
-  return new Intl.DateTimeFormat(intlLocale(lang), {
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).format(typeof at === "string" ? new Date(at) : at);
-}
-
-function sameLocalDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
 /**
  * A local day for display. `short` is the chart's axis ("Wed 23"), `long` the
  * tooltip and table ("Wed 23 Sep"), `date` a picker field ("1 Sep 2026").
@@ -81,13 +64,6 @@ export function formatDay(day: Date, lang: string, style: "short" | "long" | "da
         ? [part.weekday, part.day, part.month]
         : [part.day, part.month, part.year];
   return order.join(" ");
-}
-
-/** An instant near now: the clock time when it is today, else its day and time ("Thu 1 Oct 09:00"). */
-export function formatMoment(iso: string, now: Date, lang: string): string {
-  const at = new Date(iso);
-  const clock = formatClock(at, lang);
-  return sameLocalDay(at, now) ? clock : `${formatDay(at, lang, "long")} ${clock}`;
 }
 
 /** A span split into whole days, hours and minutes (negative spans are zero). */

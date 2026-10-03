@@ -125,10 +125,8 @@ export const providerPricesKey = (uid: string, models: readonly string[], listed
 
 /** POST /providers/detect-local at a loopback URL (`null` = default ports); a runtime, not a connection. */
 export const localRuntimesKey = (baseUrl: string | null) => ["localRuntimes", baseUrl] as const;
-// usage — GET /usage/summary per range + grouping, GET /usage/quota
-export const usageKey = ["usage"] as const;
+// usage — GET /usage/summary per range + grouping
 export const usageSummaryKey = (p: Record<string, unknown>) => ["usage", "summary", p] as const;
-export const usageQuotaKey = ["usage", "quota"] as const;
 
 // --- channels — channel resources ride `resourcesKey`; only live status is here ---
 

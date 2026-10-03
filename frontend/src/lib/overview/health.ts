@@ -48,7 +48,7 @@ export const AREAS: readonly Area[] = [
   { id: "customTools", to: "/custom-tools", kinds: ["custom_tool"] },
   { id: "clis", to: "/clis", kinds: ["cli"] },
   { id: "secrets", to: "/secrets", kinds: [] },
-  { id: "usage", to: "/usage", kinds: [], feature: "models" },
+  { id: "usage", to: "/model-providers/usage", kinds: [], feature: "models" },
 ];
 
 /** Agent items that are only about connecting — the rest (a hook changed by

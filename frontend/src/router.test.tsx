@@ -135,7 +135,7 @@ test("the Settings addresses land on a live tab", async () => {
 
 test("every page the shell adds resolves to a page of its own", async () => {
   mockApi();
-  for (const path of ["/secrets", "/usage", "/custom-tools", "/clis"]) {
+  for (const path of ["/secrets", "/model-providers/usage", "/custom-tools", "/clis"]) {
     const location = renderAt(path);
     // Each page is code-split; wait until it has replaced the fallback.
     await waitFor(() => expect(location.pathname).toBe(path));

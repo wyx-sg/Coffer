@@ -6,24 +6,17 @@
 // what detection recorded (`local_runtime`) with its tool-capable models and
 // their windows, and no key. Add is `POST /providers` with the chosen
 // `models` (none chosen = every model offered). Failures render inline.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
-import { Plug } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { translateApiError } from "@/lib/api/errors";
 import type { Provider } from "@/lib/api/providers";
 import { useCreateProvider, useDetectLocalRuntimes } from "@/lib/hooks/useProviders";
 import { presetById, type PresetId } from "@/lib/providers/presets";
+import { AddProviderFooter } from "./AddProviderFooter";
 import { AddEndpointStep } from "./AddEndpointStep";
 import { AddLocalRuntime } from "./AddLocalRuntime";
 import { AddModelsStep, type CandidateModel } from "./AddModelsStep";
@@ -72,11 +65,46 @@ export function AddProviderDialog({ preset, onClose, onCreated }: Props) {
   const found = detect.data?.found ?? [];
   const runtime = found[chosen] ?? null;
   const localProtocols = localProtocolsOf(runtime);
+  const typedUrl = form.watch("baseUrl").trim();
+  const vendorRuntime = presetById(presetId).runtime;
+  // Name once a runtime is chosen (or an address typed); the address only when nothing answered.
+  const showName = local && (runtime !== null || typedUrl !== "");
+  const showUrl = local && !detect.isFetching && detect.data !== undefined && found.length === 0;
+  const nothingToAdd = local && runtime === null && typedUrl === "";
+
+  // Start on the runtime the vendor stands for, else the first that answered.
+  useEffect(() => {
+    const at = found.findIndex((f) => f.runtime.runtime === vendorRuntime);
+    setChosen(at >= 0 ? at : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detect.data, vendorRuntime]);
+
+  // The name follows the chosen runtime until the person types their own.
+  const autoName = useRef("");
+  useEffect(() => {
+    if (!runtime) return;
+    const next = t("providers.add.local.defaultName", {
+      runtime: t(`providers.runtimes.${runtime.runtime.runtime}`),
+    });
+    const current = form.getValues("name");
+    if (current === "" || current === autoName.current) {
+      form.setValue("name", next);
+      autoName.current = next;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runtime?.runtime.runtime, runtime?.base_url]);
+
+  const detectAgain = () => {
+    const url = form.getValues("baseUrl").trim() || null;
+    if (url === detectUrl) void detect.refetch();
+    else setDetectUrl(url);
+  };
 
   const pickPreset = (id: PresetId) => {
     const name = form.getValues("name");
     setPresetId(id);
-    form.reset({ ...seed(id), name });
+    // A name the person did not type follows the vendor, not the last one.
+    form.reset({ ...seed(id), name: name === autoName.current ? "" : name });
     test.reset();
     setChosen(0);
     setDetectUrl(presetById(id).local ? null : undefined);
@@ -96,8 +124,13 @@ export function AddProviderDialog({ preset, onClose, onCreated }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preset]);
 
-  // A detected runtime that does not serve the chosen wire moves to one it does.
+  // The chosen runtime sets the wire: the first an agent can use, else Ollama's own.
   const protocol = form.watch("protocol");
+  const runtimeKey = runtime ? `${runtime.runtime.runtime}@${runtime.base_url}` : "";
+  useEffect(() => {
+    if (local && localProtocols.length > 0) form.setValue("protocol", localProtocols[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runtimeKey, local]);
   useEffect(() => {
     if (local && localProtocols.length > 0 && !localProtocols.includes(protocol)) {
       form.setValue("protocol", localProtocols[0]);
@@ -160,7 +193,8 @@ export function AddProviderDialog({ preset, onClose, onCreated }: Props) {
             form={form}
             presetId={presetId}
             onPreset={pickPreset}
-            localProtocols={localProtocols}
+            showName={showName}
+            showUrl={showUrl}
             onEdited={test.reset}
             result={local ? null : testResult}
             localPanel={
@@ -169,11 +203,7 @@ export function AddProviderDialog({ preset, onClose, onCreated }: Props) {
                 requested={detectUrl !== undefined}
                 chosen={chosen}
                 onChoose={setChosen}
-                onDetect={() => {
-                  const url = form.getValues("baseUrl").trim() || null;
-                  if (url === detectUrl) void detect.refetch();
-                  else setDetectUrl(url);
-                }}
+                vendorRuntime={vendorRuntime}
               />
             }
           />
@@ -190,47 +220,21 @@ export function AddProviderDialog({ preset, onClose, onCreated }: Props) {
             {translateApiError(t, create.error)}
           </p>
         ) : null}
-        <DialogFooter>
-          {step === 1 ? (
-            <>
-              {local ? null : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="sm:mr-auto"
-                  disabled={test.isPending}
-                  onClick={() => void form.handleSubmit((v) => test.run(probe(v)))()}
-                >
-                  <Plug aria-hidden />{" "}
-                  {test.result ? t("providers.test.again") : t("providers.actions.test")}
-                </Button>
-              )}
-              <Button type="button" variant="ghost" onClick={onClose}>
-                {t("common.cancel")}
-              </Button>
-              <Button type="button" onClick={() => void next()} disabled={test.isPending}>
-                {t("providers.add.next")}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                className="sm:mr-auto"
-                onClick={() => setStep(1)}
-              >
-                {t("providers.add.back")}
-              </Button>
-              <Button type="button" variant="ghost" onClick={onClose}>
-                {t("common.cancel")}
-              </Button>
-              <Button type="button" onClick={() => void add()} disabled={create.isPending}>
-                {t("providers.add.submit")}
-              </Button>
-            </>
-          )}
-        </DialogFooter>
+        <AddProviderFooter
+          step={step}
+          local={local}
+          detecting={detect.isFetching}
+          testing={test.isPending}
+          tested={test.result !== null}
+          nothingToAdd={nothingToAdd}
+          adding={create.isPending}
+          onDetect={detectAgain}
+          onTest={() => void form.handleSubmit((v) => test.run(probe(v)))()}
+          onNext={() => void next()}
+          onBack={() => setStep(1)}
+          onAdd={() => void add()}
+          onClose={onClose}
+        />
       </DialogContent>
     </Dialog>
   );

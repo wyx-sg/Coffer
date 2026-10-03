@@ -12,11 +12,10 @@ import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
-import type { Protocol } from "@/lib/api/providers";
 import { CUSTOM_PROTOCOLS, PRESETS, type PresetId } from "@/lib/providers/presets";
-import { ChoiceChips } from "./ChoiceChips";
 import { FieldError } from "./FieldError";
 import { ProtocolCards } from "./ProtocolCards";
+import { VendorGrid } from "./VendorGrid";
 import type { EndpointValues } from "./providerSchemas";
 
 interface Props {
@@ -25,8 +24,10 @@ interface Props {
   onPreset: (id: PresetId) => void;
   /** The local path's detection panel, in place of the key field. */
   localPanel: ReactNode;
-  /** Protocols the local path offers (from what detection found). */
-  localProtocols: readonly Protocol[];
+  /** Local path: Name shows once a runtime is chosen (or an address typed). */
+  showName: boolean;
+  /** Local path: the address field shows only when detection found nothing. */
+  showUrl: boolean;
   /** The Test verdict. */
   result: ReactNode;
   /** Any edit invalidates the last Test. */
@@ -38,7 +39,8 @@ export function AddEndpointStep({
   presetId,
   onPreset,
   localPanel,
-  localProtocols,
+  showName,
+  showUrl,
   result,
   onEdited,
 }: Props) {
@@ -51,22 +53,24 @@ export function AddEndpointStep({
     value: p.id,
     label: p.id === "custom" ? t("providers.add.custom") : p.label,
   }));
-  const protocols = local ? localProtocols : presetId === "custom" ? CUSTOM_PROTOCOLS : [];
+  const protocols = presetId === "custom" ? CUSTOM_PROTOCOLS : [];
   const edited = { onChange: onEdited };
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <span className="text-xs font-label text-text">{t("providers.add.vendor")}</span>
-        <ChoiceChips
+        <VendorGrid
           label={t("providers.add.vendor")}
           value={presetId}
           options={vendors}
           onChange={onPreset}
         />
-        <p className="text-xs text-text-muted">{t("providers.add.vendorHint")}</p>
+        <p className="text-xs text-text-muted">
+          {local ? t("providers.add.vendorHintLocal") : t("providers.add.vendorHint")}
+        </p>
       </div>
-      {protocols.length > 1 || (presetId === "custom" && protocols.length > 0) ? (
+      {!local && presetId === "custom" ? (
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-label text-text">{t("providers.fields.protocol")}</span>
           <ProtocolCards
@@ -79,30 +83,36 @@ export function AddEndpointStep({
           />
         </div>
       ) : null}
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="pa-name" required>
-          {t("providers.fields.name")}
-        </Label>
-        <Input id="pa-name" aria-describedby="pa-name-error" {...register("name")} />
-        <FieldError id="pa-name-error" message={errors.name?.message} />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="pa-base" required={!local}>
-          {t("providers.fields.baseUrl")}
-        </Label>
-        <Input
-          id="pa-base"
-          inputMode="url"
-          className="font-mono text-xs"
-          placeholder={local ? t("providers.add.localUrlPlaceholder") : undefined}
-          aria-describedby="pa-base-error"
-          {...register("baseUrl", edited)}
-        />
-        <FieldError id="pa-base-error" message={errors.baseUrl?.message} />
-      </div>
-      {local ? (
-        localPanel
-      ) : (
+      {local ? localPanel : null}
+      {!local || showName ? (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="pa-name" required>
+            {t("providers.fields.name")}
+          </Label>
+          <Input id="pa-name" aria-describedby="pa-name-error" {...register("name")} />
+          <FieldError id="pa-name-error" message={errors.name?.message} />
+        </div>
+      ) : null}
+      {!local || showUrl ? (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="pa-base" required={!local}>
+            {t("providers.fields.baseUrl")}
+          </Label>
+          <Input
+            id="pa-base"
+            inputMode="url"
+            className="font-mono text-xs"
+            placeholder={local ? t("providers.add.localUrlPlaceholder") : undefined}
+            aria-describedby="pa-base-error"
+            {...register("baseUrl", edited)}
+          />
+          <FieldError id="pa-base-error" message={errors.baseUrl?.message} />
+          {local ? (
+            <p className="text-xs text-text-muted">{t("providers.add.local.urlHint")}</p>
+          ) : null}
+        </div>
+      ) : null}
+      {local ? null : (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="pa-secret" required>
             {t("providers.fields.apiKey")}

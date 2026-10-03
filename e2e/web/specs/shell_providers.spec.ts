@@ -1,9 +1,13 @@
 // e2e/web/specs/shell_providers.spec.ts
 //
-// The Model providers page against the real daemon: one list + detail (the
-// detail one column, no tabs), Used by naming Coffer's engine once the provider carries
+// The Model providers page against the real daemon: one page under two tabs,
+// Providers | Usage. Providers is a list + detail (the detail one column, no
+// tabs of its own), Used by naming Coffer's engine once the provider carries
 // it (and linking Settings › General), Edit renaming in place, and Delete —
-// blocked while the provider is the engine's, done for an unused one.
+// confirmed with a consequence line while the provider is the engine's, done
+// for an unused one. Usage (/model-providers/usage) is first-run on a fresh
+// daemon; the range, filters, tiles and breakdown are covered in
+// frontend/src/components/usage/UsageTab.test.tsx.
 //
 // Every provider here is created through the REST API with a loopback base
 // URL nothing listens on (127.0.0.1:9, the discard port) and a throwaway key,
@@ -78,21 +82,21 @@ test("the list opens a provider as one column, addressed by its uid", async ({
     // The endpoint and the key's secret reference, never the key.
     await expect(page.getByText("http://127.0.0.1:9/v1").first()).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Replace key" }),
+      page.getByRole("button", { name: /^Replace key/ }),
     ).toBeVisible();
 
-    // One column, no tabs: Used by, Endpoint, Models.
-    await expect(page.getByRole("tab")).toHaveCount(0);
+    // One column, no tabs of its own: only the page's Providers | Usage tabs.
+    await expect(page.getByRole("tab")).toHaveText(["Providers", "Usage"]);
     for (const section of ["Used by", "Endpoint", "Models"]) {
       await expect(
         page.getByRole("heading", { name: section, level: 3 }),
       ).toBeVisible();
     }
-    // Nothing listens on the discard port: the listing says so and offers Retry.
+    // Nothing listens on the discard port: the listing says so, and Refresh asks again.
     await expect(
       page.getByText("Couldn't list this endpoint's models"),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
 
     // A deep link lands on the same provider.
     await page.goto(`/model-providers/${uid}`);
@@ -102,7 +106,7 @@ test("the list opens a provider as one column, addressed by its uid", async ({
   }
 });
 
-test("Used by names Coffer's engine and links Settings › General; Delete is blocked", async ({
+test("Used by names Coffer's engine and links Settings › General; Delete names the consequence", async ({
   page,
 }) => {
   const name = generateUniqueName("e2eengine");
@@ -115,28 +119,24 @@ test("Used by names Coffer's engine and links Settings › General; Delete is bl
     const usedBy = page.locator("section").filter({
       has: page.getByRole("heading", { name: "Used by" }),
     });
-    const engine = usedBy.getByRole("button", { name: /Coffer's engine/ });
-    await expect(engine).toBeVisible();
+    await expect(usedBy.getByText("Coffer's engine")).toBeVisible();
+    const settings = usedBy.getByRole("button", { name: "Settings › General" });
+    await expect(settings).toBeVisible();
     await expect(
       row(page, name).getByRole("img", { name: "Coffer · background model" }),
     ).toBeVisible();
 
-    // While the engine runs on it, Delete names that and stays disabled.
+    // Deleting a provider the engine runs on says what pauses, and asks first.
     await page
       .getByRole("button", { name: `More actions for ${name}` })
       .click();
     await page.getByRole("menuitem", { name: "Delete provider" }).click();
     const dialog = page.getByRole("dialog");
-    await expect(
-      dialog.getByText(new RegExp(`${name} is in use`)),
-    ).toBeVisible();
-    await expect(
-      dialog.getByRole("button", { name: "Delete provider" }),
-    ).toBeDisabled();
+    await expect(dialog.getByText("Coffer’s engine pauses")).toBeVisible();
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog).toBeHidden();
 
-    await engine.click();
+    await settings.click();
     await expect(page).toHaveURL(/\/settings\/general$/);
   } finally {
     await removeProvider(uid);
@@ -184,4 +184,27 @@ test("an unused provider is deleted after a confirmation", async ({ page }) => {
   } finally {
     await removeProvider(uid);
   }
+});
+
+test("Usage is a tab of Model providers and starts empty on a fresh daemon", async ({
+  page,
+}) => {
+  await page.goto("/model-providers");
+  await page.getByRole("tab", { name: "Usage" }).click();
+  await expect(page).toHaveURL(/\/model-providers\/usage$/);
+  await expect(
+    page.getByRole("heading", { name: "Model providers" }),
+  ).toBeVisible();
+
+  // Nothing has gone through the local proxy: only the empty state, with no
+  // range, filters or export to narrow nothing, and a way back to Providers.
+  await expect(page.getByText("No API-key usage yet")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Open Providers" }),
+  ).toHaveAttribute("href", "/model-providers");
+  await expect(page.getByRole("button", { name: "Export CSV" })).toHaveCount(0);
+
+  // A range in the address still lands on the same state.
+  await page.goto("/model-providers/usage?range=30d");
+  await expect(page.getByText("No API-key usage yet")).toBeVisible();
 });
