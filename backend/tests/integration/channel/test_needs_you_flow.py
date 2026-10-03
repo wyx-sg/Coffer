@@ -127,7 +127,7 @@ async def test_a_tap_from_someone_else_in_the_group_is_refused(env: ChannelEnv) 
         )
     )
 
-    assert any("Not authorized" in t for t in adapter.texts())
+    assert any("owners can use it here" in t for t in adapter.texts())
     conversations = await env.chat.list_conversations()
     assert len(conversations) == before
     messages = await env.chat.list_messages(conversations[0].id)

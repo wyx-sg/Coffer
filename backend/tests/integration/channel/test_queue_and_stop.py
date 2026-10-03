@@ -76,6 +76,27 @@ async def test_new_command_switches_to_a_fresh_conversation(env: ChannelEnv) -> 
     assert fresh in listed
 
 
+async def test_stopping_is_edited_into_the_result_where_the_platform_can_edit(
+    env: ChannelEnv,
+) -> None:
+    gated = GatedAdapter()
+    env.provider.adapter = gated
+    resource = await env.register_channel("tg")
+    adapter = env.bind(resource, FakeChannelAdapter(edits_text=True, supports_card_update=True))
+    await env.pair(resource, "owner")
+
+    await env.processor.on_message(inbound("tg", "owner", "long job"))
+    await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
+    await env.processor.on_message(inbound("tg", "owner", "/stop"))
+
+    await wait_until(lambda: bool(adapter.card_updates))
+    [(_chat, _mid, text, buttons, _title)] = adapter.card_updates
+    assert text.startswith("⏹ Stopped after ")
+    assert buttons == []
+    # One message, rewritten: no second "Stopped" message follows the first.
+    assert not any(t.startswith("⏹ Stopped after") for t in adapter.texts())
+
+
 @pytest.mark.acceptance(spec="channels", scenario="/stop interrupts a running turn")
 async def test_stop_command_interrupts_the_running_turn(env: ChannelEnv) -> None:
     gated = GatedAdapter()
@@ -92,7 +113,7 @@ async def test_stop_command_interrupts_the_running_turn(env: ChannelEnv) -> None
 
     assert "⏹ Stopping…" in adapter.texts()
     # The interrupted turn ends and the renderer reports the stop.
-    await wait_until(lambda: "⏹ Stopped." in adapter.texts())
+    await wait_until(lambda: any(t.startswith("⏹ Stopped after") for t in adapter.texts()))
     # The orchestrator slot is freed — the chat is responsive again.
     await wait_until(lambda: conversation_id not in active_turns())
     # No echo was produced: the turn never reached its reply.
@@ -198,7 +219,7 @@ async def test_eleventh_queued_message_is_dropped_with_the_reason(env: ChannelEn
         await env.send(inbound("tg", "owner", text))
     # Each waiting message is told its place in the queue, and none is dropped.
     notices = [t for t in adapter.texts() if t.startswith("⏳ Queued")]
-    assert notices == [queued_notice(n) for n in range(1, 11)]
+    assert notices == [queued_notice() for _ in range(10)]
     assert DROPPED_NOTICE not in adapter.texts()
 
     await env.send(inbound("tg", "owner", "overflow"))
@@ -267,7 +288,7 @@ async def test_stop_holds_the_queued_messages_until_the_next_message(env: Channe
     await env.send(inbound("tg", "owner", "B"))
 
     await env.send(inbound("tg", "owner", "/stop"))
-    await wait_until(lambda: "⏹ Stopped." in adapter.texts())
+    await wait_until(lambda: any(t.startswith("⏹ Stopped after") for t in adapter.texts()))
     await wait_until(lambda: conversation_id not in active_turns())
     await asyncio.sleep(0.05)
     assert [turn_body(t) for t in env.orchestrator.pending(conversation_id)] == ["B"]
@@ -308,7 +329,7 @@ async def test_platform_stop_control_interrupts_like_a_typed_stop(env: ChannelEn
     await env.processor.on_stop(InboundStop(channel=uid_of("tg"), chat_id="owner"))
 
     assert "⏹ Stopping…" in adapter.texts()
-    await wait_until(lambda: "⏹ Stopped." in adapter.texts())
+    await wait_until(lambda: any(t.startswith("⏹ Stopped after") for t in adapter.texts()))
     await wait_until(lambda: conversation_id not in active_turns())
     assert not any(t.startswith("echo:") for t in adapter.texts())
     # Like a typed /stop it pauses the queue: the waiting message is held, not run.

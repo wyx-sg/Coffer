@@ -34,7 +34,7 @@ __all__ = ["cmd_help", "cmd_status"]
 async def cmd_help(ctx: CommandContext, _text: str = "") -> None:
     """The roster as text, with the five actions where the transport has buttons."""
     body = help_text(knowledge=ctx.commands._knowledge_enabled())
-    await ctx.answer(command_card(title="Coffer", text=body), body)
+    await ctx.answer(command_card(title="Commands", text=body), body)
 
 
 def _state(running: bool, queued: int) -> str:

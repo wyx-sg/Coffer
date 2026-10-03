@@ -12,14 +12,14 @@ The table lists the nine words. How each reads, where it works and the cards it 
 | Command | What it does |
 | --- | --- |
 | `/new [agent]` | Start a fresh conversation with this chat's settings. With an agent name, switch to that agent. |
-| `/stop` | Interrupt the running turn and pause the queue. |
+| `/stop` | Interrupt the running turn and pause the queue. “⏹ Stopping…” is edited into “⏹ Stopped after 12s.” where the platform can edit a message, and followed by a second message where it cannot. |
 | `/model [name] [level]` | Show or set the model and the reasoning effort. |
 | `/dir [path\|name]` | Show or switch the working directory, in a fresh conversation. |
 | `/status` | What this chat is running, as a card with quick actions. |
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
 | `/thread [title]` | In a direct chat, open a parallel conversation in its own thread. |
 | `/kb [collection]` | Save the document you just sent into a [knowledge](/guides/knowledge) collection. |
-| `/help` | List the commands, with New, Stop, Model, Status and Resume buttons. |
+| `/help` | List the commands, with New, Stop, Model, Status and Resume buttons, under the title **Commands**. |
 
 `/start`, which a Telegram start link sends, answers like `/help`. `/new` and `/stop` take effect even while a turn is running. A command first releases any messages still waiting out their pause, so they run before it; `/stop` discards them instead.
 
@@ -53,7 +53,7 @@ In a group, the answers to `/model`, `/dir`, `/status`, `/resume` and `/help`, a
 
 Only the nine words above are taken out of the conversation. `/compact`, a skill such as `/review`, or a message that opens with a path such as `/Users/me/app crashes on start` reaches the agent like any other message, so the agent's own slash commands keep working from your phone.
 
-A word that is one slip away from a command — `/stpo`, `/stat`, `/threads` — is answered with one line such as `Did you mean /stop?`, and nothing runs. Short commands (four letters or fewer) tolerate one wrong letter, longer ones two; a swap of two neighbouring letters counts as one.
+A word that is one slip away from a command — `/stpo`, `/stat`, `/threads` — is answered with one line, `Unknown command /stpo. Did you mean /stop? Send /help for all commands.`, and nothing runs. Short commands (four letters or fewer) tolerate one wrong letter, longer ones two; a swap of two neighbouring letters counts as one.
 
 ## Settings stick to the chat
 
@@ -70,7 +70,7 @@ This is why `/new` is safe to use often: it clears the context, not your choices
 - `/model <name>` sets the model. A name the agent's catalogue does not list is passed to the agent's CLI as is, so you can use a model the picker does not show; a name the agent cannot run comes back as the CLI's own error on the next turn.
 - `/model <level>` sets only the effort. The levels are `minimal`, `low`, `medium`, `high`, `xhigh` and `max`; no model is named after one.
 - `/model <name> <level>` sets both, and `/model default` clears both, returning to the agent's own defaults.
-- Bare `/model` shows the model and effort in effect. On a platform with buttons it is a two-step card: tap a model, and when that model has reasoning levels the same card turns into the level choice, with a button to keep the current effort.
+- Bare `/model` shows the model and effort in effect. On a platform with buttons it is a two-step card: tap a model (“Step 1 of 2”), and when that model has reasoning levels the same card turns into the level choice (“step 2 of 2”). The answer is one line, “Model: Claude Sonnet 5.5 · effort Medium — from your next message”.
 
 ## Working directory
 
@@ -89,12 +89,12 @@ coffer channel edit my-telegram --no-dirs                              # allows 
 - `/dir <path>` accepts an allowed path or one beneath it; `/dir <name>` accepts the base name of one allowed path (`/dir coffer`). The directory must exist.
 - Switching opens a fresh conversation there and remembers the directory for the chat.
 - `/dir default` returns to the channel's default directory.
-- Bare `/dir` shows the directory in effect and offers the allowed ones as a **Working directory** card, each by its path (`~/…` under your home folder), plus **Default** when the default is not one of them. A switch answers "📁 Now in `<path>` — started a fresh conversation".
+- Bare `/dir` shows the directory in effect and offers the allowed ones as a **Working directory** card, each by its path (`~/…` under your home folder), plus **Default** when the default is not one of them. The card says “A new directory starts a new conversation.” A switch answers “📁 Now in `<path>` — started a fresh conversation.”
 - A directory outside the list is refused, naming the allowed ones. A channel with no allowed directory answers how to add one.
 
 ## Resume an earlier conversation
 
-Every conversation a chat opens is remembered for that chat. `/resume` lists its last 20, newest first, each with its title, agent and age, and ticks the one in effect. `/resume 2`, or a tap on the card, makes that conversation the chat's active one again, so your next message continues it.
+Every conversation a chat opens is remembered for that chat. `/resume` lists its last 20, newest first, each as “1 · title — Agent · 2h ago”, with numbered buttons, and ticks the one in effect. `/resume 2`, or a tap on the card, makes that conversation the chat's active one again (“↩️ Resumed “title” with Codex.”), so your next message continues it.
 
 Only conversations this chat opened are offered — never one from the web page or from another chat — and a conversation deleted since is left out.
 
@@ -102,11 +102,11 @@ Only conversations this chat opened are offered — never one from the web page 
 
 `/status` answers in words, not ids, under the title **Status**: the conversation's title (or its `🧵#N` mark); one line with the agent, the model, the effort and the directory; then **Running**, **Running · 2 waiting** or **Idle**. In a direct chat it also lists the parallel threads on one line, each with whether it is running, waiting or idle.
 
-`/help` lists the commands on one line and says that anything else is a message to the agent.
+`/help` lists the commands on one line, `/new [agent] · /stop · /model [name] [level] · /dir · /status · /resume [n] · /thread · /kb · /help`, and says that anything else is a message to the agent.
 
 `/new` answers with one line — "🆕 New conversation · Codex · Default model · ~/src/coffer" — and, on a platform with buttons, **Agent**, **Model** and **Dir** buttons. **Agent** offers the agents this channel may drive; a tap starts a fresh conversation on it, as `/new <agent>` does.
 
-On a platform with buttons, `/status` is a card with **New**, **Model**, **Resume** and **Dir** buttons, and **Stop** while a turn runs; `/help` is a card with **New**, **Stop**, **Model**, **Status** and **Resume**. A tap does exactly what typing the command in that chat does, so remembering `/status` is enough to reach every action. The help also arrives once, right after you pair, which is how a platform with no command menu (SeaTalk) shows you what the bot accepts.
+On a platform with buttons, `/status` is a card with **New**, **Model**, **Resume** and **Dir** buttons, and **Stop** while a turn runs; `/help` is a card with **New**, **Stop**, **Model**, **Status** and **Resume**. A tap does exactly what typing the command in that chat does, so remembering `/status` is enough to reach every action. On a platform with no command menu (SeaTalk), `/help` is how you see what the bot accepts.
 
 ## Group defaults on SeaTalk
 
@@ -120,10 +120,24 @@ A Telegram group's main chat is itself one conversation, so commands there apply
 
 ## Command menus
 
-Telegram shows a command menu; Coffer registers it from the same list the help and the typo check use, so the three never disagree. Private chats get all nine commands; groups get `/new`, `/stop`, `/model`, `/status`, `/resume` and `/help`, the ones useful to tap in front of other people. Each menu is registered in English and Chinese. In a group, a menu tap arrives as `/status@your_bot`, which Coffer treats as `/status`. SeaTalk has no command menu; the help card after pairing takes its place.
+Telegram shows a command menu; Coffer registers it from the same list the help and the typo check use, so the three never disagree. Private chats get all nine commands; groups get `/new`, `/stop`, `/model`, `/status`, `/resume` and `/help`, the ones useful to tap in front of other people. Each menu is registered in English and Chinese. In a group, a menu tap arrives as `/status@your_bot`, which Coffer treats as `/status`. SeaTalk has no command menu; send `/help`.
+
+The English descriptions are:
+
+| Command | Menu description |
+| --- | --- |
+| `/new` | Start a fresh conversation [agent] |
+| `/stop` | Stop what’s running |
+| `/model` | Pick model, then effort |
+| `/dir` | Pick the working directory |
+| `/status` | What is running, threads |
+| `/resume` | Go back to a conversation |
+| `/thread` | Open a parallel thread |
+| `/kb` | Save a document to Knowledge |
+| `/help` | Commands |
 
 ## Selection cards
 
-On a platform with buttons, a bare `/model`, `/dir`, `/resume` and a `/kb` with no collection answer with a selection card. A card carries at most six buttons; a longer list is paged, four choices at a time with **← Prev** and **Next →**. Paging changes nothing — only tapping a choice does. After a tap, the card is rewritten in place so the tick moves to your new choice.
+On a platform with buttons, a bare `/model`, `/dir`, `/resume` and a `/kb` with no collection answer with a selection card. A card carries at most six buttons; a longer list is paged, four choices at a time with **← Prev** and **Next →**, shown inactive at either end. Paging changes nothing — only tapping a choice does. The choice in effect carries a ✓ in front. After a tap, the card is rewritten in place so the tick moves to your new choice.
 
 A button tap is checked exactly like a message: only the owner's taps count. If the platform refuses a card, the command answers in plain text instead.

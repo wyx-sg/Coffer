@@ -28,7 +28,7 @@ from coffer.application.channel.ephemeral import is_private
 from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.selection_cards import SelectionCard
 from coffer.application.channel.store_ports import ChannelPeer
-from coffer.domain.channel.envelopes import ChoiceButton, EphemeralTarget
+from coffer.domain.channel.envelopes import ChoiceButton, EphemeralTarget, SentMessage
 
 if TYPE_CHECKING:
     from coffer.application.channel.commands import ChannelCommands
@@ -57,7 +57,7 @@ class SafeSend(Protocol):
         thread_id: str = "",
         reply_to_message_id: str = "",
         ephemeral: EphemeralTarget | None = None,
-    ) -> None: ...
+    ) -> SentMessage | None: ...
 
 
 async def deliver_card(

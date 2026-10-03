@@ -46,15 +46,52 @@ export function useChannelStateWords(): (view: ChannelView) => { word: string; l
   };
 }
 
-/** "SeaTalk app 8231 · WebSocket · runs on this machine" / "Long polling". */
+/** "SeaTalk app 8231 · WebSocket · runs on this Mac" / "@bot · long polling · …":
+ *  the platform's identity and transport, then where it runs — or why it does not. */
 export function useChannelMeta(channel: ResourceOut, view: ChannelView): string {
   const { t } = useTranslation();
+  const machineName = useMachineName();
   const platform = channelPlatform(channel.config);
   const appId = typeof channel.config.app_id === "string" ? channel.config.app_id : "";
-  const parts =
-    platform === "seatalk"
-      ? [t("channels.meta.seatalkApp", { appId }), t("channels.meta.websocket")]
-      : [t("channels.meta.longPolling")];
-  if (view.runsHere) parts.push(t("channels.meta.runsHere"));
+  const seatalk = platform === "seatalk";
+  const transport =
+    seatalk && view.state === "notPaired"
+      ? t("channels.meta.websocketConnected")
+      : seatalk
+        ? t("channels.meta.websocket")
+        : t("channels.meta.longPolling");
+  const parts = seatalk ? [t("channels.meta.seatalkApp", { appId }), transport] : [transport];
+  if (view.state === "off") parts.push(t("channels.meta.off"));
+  else if (view.state === "unbound" || view.state === "unknownMachine")
+    parts.push(t("channels.meta.unknownMachine"));
+  else if (view.state === "elsewhere")
+    parts.push(t("channels.meta.runsOn", { machine: machineName(view.runsOn) }));
+  else if (view.runsHere) parts.push(t("channels.meta.runsHere"));
   return parts.join(" · ");
+}
+
+/** Why Send test is greyed out in this state; null when it can be pressed.
+ *  Only a connected, paired channel can send one. */
+export function useSendTestBlockedReason(channel: ResourceOut, view: ChannelView): string | null {
+  const { t } = useTranslation();
+  const machineName = useMachineName();
+  if (view.state === "connected") return null;
+  const secret = channelPlatform(channel.config) === "telegram" ? "token" : "secret";
+  switch (view.state) {
+    case "connectFailed":
+    case "stopped":
+      return t(`channels.header.sendTestWhy.replace_${secret}`);
+    case "elsewhere":
+      return t("channels.header.sendTestWhy.elsewhere", { machine: machineName(view.runsOn) });
+    case "unbound":
+    case "unknownMachine":
+      return t("channels.header.sendTestWhy.unbound");
+    case "approvalRefused":
+      return t("channels.header.sendTestWhy.waitingApproval");
+    case "connecting":
+    case "loading":
+      return t("channels.header.sendTestWhy.reconnecting");
+    default:
+      return t(`channels.header.sendTestWhy.${view.state}`);
+  }
 }

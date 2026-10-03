@@ -124,6 +124,10 @@ class ChannelCapabilities:
     # An already-delivered selection card can be rewritten in place, so a card
     # stops advertising the option the user just took.
     supports_card_update: bool = False
+    # An already-delivered PLAIN text message can be edited (Telegram): a short
+    # system line such as "Stopping…" is then rewritten into its result rather
+    # than followed by a second message.
+    edits_text: bool = False
     # A surface the core can keep updating during a turn — by edit (Telegram)
     # or by streaming (SeaTalk). Drives the progress/reply strategy of "Grow a
     # reply in place on one live surface".
@@ -193,6 +197,9 @@ class ChoiceButton:
     # something tapping cannot change; one whose buttons are plain labels
     # ignores it and relies on the tick in the label instead.
     selected: bool = False
+    # Shown but inactive (a page turn that runs off the end). A transport whose
+    # buttons have no disabled state shows it plain; the tap changes nothing.
+    disabled: bool = False
 
 
 @dataclass(frozen=True)

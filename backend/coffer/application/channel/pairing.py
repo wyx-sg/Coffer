@@ -202,7 +202,7 @@ async def _replaced_chats(
     (their DM and each group that inherited their ``sender_id``), none when the
     code only adds a person.
 
-    spec channels "Serve several paired people": a code issued without a target
+    spec channels "Gate inbound traffic on sender identity": a code issued without a target
     leaves everyone already paired in place; one issued to re-pair a person
     removes that person's authority — left in place, their DM would still pass
     the gate. The same sender claiming again keeps its rows (a rebind, not a

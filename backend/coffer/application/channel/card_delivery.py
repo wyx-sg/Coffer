@@ -93,16 +93,16 @@ async def dispatch_card_tap(ctx: CommandContext, data: str) -> None:
         return
     if kind == "agent":
         if not any(key == value for key, _ in _agent_choices(ctx)):
-            await ctx.say("That agent is no longer one this channel may drive — send /new.")
+            await ctx.say("That agent is no longer one this bot may use — send /new.")
             return
         await new_conversation.apply_agent(ctx, value)
     elif kind == "model":
-        await model_switch.apply_model(ctx, value)
+        await model_switch.apply_model(ctx, value, announce=False)
         if await model_switch.after_model_tap(ctx):
             return
+        await model_switch.say_model(ctx)
     elif kind == "effort" and value == KEEP_EFFORT:
-        settings = await ctx.settings()
-        await ctx.say(f"🎚 Effort kept at {settings.effort or 'default'}.")
+        await model_switch.say_model(ctx)
         kind = "model"
     elif kind == "effort":
         await model_switch.apply_effort(ctx, value)

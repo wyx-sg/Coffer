@@ -122,8 +122,8 @@ async def test_menus_are_registered_per_scope_and_language() -> None:
         assert set(menus[("all_group_chats", lang)]) == _GROUP
     # /start is what the start button sends — typed, never listed.
     assert all("start" not in menu for menu in menus.values())
-    assert menus[("all_private_chats", "")]["help"] == "List the commands"
-    assert menus[("all_private_chats", "zh")]["help"] == "列出所有命令"
+    assert menus[("all_private_chats", "")]["help"] == "Commands"
+    assert menus[("all_private_chats", "zh")]["help"] == "命令列表"
     assert call.params_for("setChatMenuButton")["menu_button"] == {"type": "commands"}
 
 

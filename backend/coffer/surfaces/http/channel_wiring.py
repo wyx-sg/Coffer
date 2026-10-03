@@ -45,7 +45,12 @@ from coffer.infrastructure.channel.seatalk_ws_controller import SeaTalkWebSocket
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.sync.identity import resolve_identity
-from coffer.surfaces.http.channel_routes import get_channel_service, set_channel_service
+from coffer.surfaces.http.channel_credential_wiring import build_credential_check
+from coffer.surfaces.http.channel_routes import (
+    get_channel_service,
+    set_channel_service,
+    set_credential_check,
+)
 from coffer.surfaces.http.chat.dependencies import set_channel_mirror, set_channel_note_reader
 from coffer.surfaces.http.chat_wiring import ChatWiring
 from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring
@@ -235,6 +240,7 @@ def wire_channel_kind(
         audit=audit,
     )
     set_channel_service(service)
+    set_credential_check(build_credential_check(resource_svc, materialize))
     return runtime
 
 

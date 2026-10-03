@@ -26,7 +26,12 @@ from typing import Any
 
 from coffer.application.channel.ports import ChannelBinding
 from coffer.domain.channel.commands import is_group_private
-from coffer.domain.channel.envelopes import ChoiceButton, EphemeralTarget, InboundMessage
+from coffer.domain.channel.envelopes import (
+    ChoiceButton,
+    EphemeralTarget,
+    InboundMessage,
+    SentMessage,
+)
 
 __all__ = ["is_private", "private_send", "safe_send", "target_for_command"]
 
@@ -86,7 +91,7 @@ async def safe_send(
     chat_kind: str = "direct",
     reply_to_message_id: str = "",
     ephemeral: EphemeralTarget | None = None,
-) -> None:
+) -> SentMessage | None:
     """Send one message through a binding, swallowing a transport failure.
 
     Every owner-gated reply goes through here — commands, errors, pairing
@@ -111,6 +116,7 @@ async def safe_send(
         "ephemeral": ephemeral,
     }
     try:
-        await binding.adapter.send_text(chat_id, text, **kwargs)
+        return await binding.adapter.send_text(chat_id, text, **kwargs)
     except Exception:
         _logger.exception("channel.send.failed", extra={"channel": binding.resource.name})
+        return None

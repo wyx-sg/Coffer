@@ -1,7 +1,7 @@
 """/api/v1/clis/* — the command-line tools Coffer knows: required by managed
 skills or MCP servers, or added by hand (spec skill-manager "Serve required
 commands on REST, the command line and the web", "Declare a command-line tool
-without a skill", "Show a command-line tool's full interface")."""
+without a skill", "Serve required commands on REST, the command line and the web")."""
 
 from __future__ import annotations
 

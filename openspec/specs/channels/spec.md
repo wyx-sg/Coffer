@@ -163,7 +163,11 @@ again) instead of "not running" or a suggestion to replace the key.
 The daemon MUST issue, per channel, an 8-character single-use pairing code
 (unambiguous alphabet, 1-hour TTL, bounded wrong-guess attempts). A message
 consisting of the code binds its sender as the channel's sole peer, replacing
-any previous peer, and the sender receives a confirmation. All other senders
+any previous peer, and the sender receives a three-line confirmation — "✅
+Paired — you own <bot>.", that only the owner can use it and how to use it in a
+group, and how to see the commands ("send /help", or on Telegram "tap /") —
+where <bot> is the channel's name on SeaTalk and `@username` on Telegram. The
+help card is not sent after it. All other senders
 MUST be ignored silently: a stranger messaging the bot produces zero observable
 response and zero turns, while the owner's traffic is unaffected, so the bot
 never reveals it is alive to strangers. A code that expires or suffers repeated
@@ -179,7 +183,7 @@ pairing again rebinds the channel to the new sender.
 #### Scenario: pair by sending the code
 - **GIVEN** an issued pairing code
 - **WHEN** a sender messages the bot with exactly that code
-- **THEN** the sender becomes the channel's peer and receives a confirmation
+- **THEN** the sender becomes the channel's peer and receives the confirmation "✅ Paired — you own <bot>."
 - **AND** the pairing is audited and the code cannot be reused
 
 #### Scenario: an expired or wrong code does not pair
@@ -277,9 +281,10 @@ chat's settings across its conversations" and "Switch the agent with /new"),
 a turn is running; other messages join the conversation's pending queue (spec
 `chat` — the one the web shows) and run in order, a burst of them arriving as one
 turn (see "Take a burst of messages as one turn"). A message that joins the
-queue behind a running turn MUST be answered with a "⏳ Queued (n)" notice, n
-being how many now wait. Up to 10 may wait; only a message arriving while 10
-already wait is dropped, and the chat MUST be told it was dropped and why.
+queue behind a running turn MUST be answered "⏳ Queued — runs when the current
+one finishes." Up to 10 may wait; only a message arriving while 10 already wait
+is dropped, and the chat MUST be told it was dropped and why (the only place the
+limit is mentioned).
 `/new` MUST answer with a one-line card — "🆕 New conversation · <agent> ·
 <model> · <directory>" — carrying Agent, Model and Dir buttons: Agent opens the
 agent card (see "Switch the agent with /new"), Model and Dir run `/model` and
@@ -308,6 +313,7 @@ the agent").
 - **GIVEN** a turn in progress
 - **WHEN** the peer sends `/stop`
 - **THEN** the turn ends as interrupted and the chat is responsive again
+- **AND** where the platform can edit a message, "⏹ Stopping…" is edited into "⏹ Stopped after 12s." (the turn's real duration) instead of a second message being sent
 
 #### Scenario: messages during a turn are queued in order
 - **GIVEN** a turn in progress
@@ -317,7 +323,7 @@ the agent").
 #### Scenario: the queue is bounded and overflow is reported
 - **GIVEN** a turn in progress
 - **WHEN** the peer sends ten more messages, each after the quiet window of the one before has closed (so none merges into another), and then an eleventh
-- **THEN** each of the ten is answered "⏳ Queued (n)" with its place, and all ten run in order
+- **THEN** each of the ten is answered "⏳ Queued — runs when the current one finishes.", and all ten run in order
 - **AND** the eleventh is dropped and the peer is told that ten were already waiting
 
 #### Scenario: /new answers with a one-line card
@@ -352,13 +358,24 @@ machine, off), filterable by name, with a way to register a new channel (storing
 secrets through the secret store); a row opens the channel. The **detail pane**
 MUST show the open channel's status (adapter running, paired peer, and the
 inbound state the channel's type reports — for SeaTalk, its websocket
-connection) in a header that offers the one action that state calls for, with
-the rest — send a test notification to its paired owner (see "Notify the paired
-owner on demand"), reconnect (see "Restart a channel's adapter on demand"), change
-the machine, replace the secret, delete — in a menu. The detail pane MUST split into two tabs, in this order: **Overview**, the
-default, at the bare `/channels/<uid>` — the paired owner and re-pairing, the
-default agent, the agents the channel may drive (its reach) and a link to the
-conversations it started — and **Settings**, at `/channels/<uid>/settings` — the
+connection) in a header that is the same in every state: the platform mark, the
+name, a status pill, a meta line saying where it runs, a secondary **Send test**
+(a test notification to its paired owner, see "Notify the paired owner on
+demand") and a ⋯ menu holding only **Reconnect** (see "Restart a channel's
+adapter on demand"). A control that cannot run in the current state MUST be
+disabled rather than hidden, and a disabled **Send test** MUST say why in its
+tooltip. The fix for a problem MUST sit in a banner between the header and the
+tabs — one banner, one fix button (Reconnect now, Replace token or secret, Take
+it back, Retry, Open Secrets, Run it here, Generate pairing code), and for a
+missing SeaTalk SDK also the hand-off "Ask an agent" with Copy prompt behind
+its chevron. A channel that is off, or run by another Mac, is not a problem: it
+MUST show a quiet grey box with one small button (Turn on, Run it here…, the
+latter confirming first) instead of a banner. Changing the machine, replacing
+the secret and deleting live in the Settings tab. The detail pane MUST split into two tabs, in this order: **Overview**, the
+default, at the bare `/channels/<uid>` — a single column of sections — who can use it (the paired owners as a bordered
+list, each with Remove, and Add owner below it), the default agent, the agents the
+channel may drive (its reach) and the latest conversations it started, with an
+Open Conversations link filtered by `?source=<uid>`; it lists no commands — and **Settings**, at `/channels/<uid>/settings` — the
 settings below, the machine that runs it (see "Bind each channel to the one
 machine that runs it") and its secrets, and the channel's deletion. Choosing a tab
 changes the address and nothing else.
@@ -523,27 +540,29 @@ an inbound message: no legacy reader is kept.
 - **THEN** no turn runs and no pairing is changed
 
 ### Requirement: Summarise a turn that did not end normally
-After a turn that did not end normally the channel MUST send one compact
-completion summary as a fresh message: a failure reports the error, an
-interrupt reports the stop, each
-with tool count, duration, and token usage. A turn error is reported to the IM
-chat as a short notice and the channel stays up. Where a long turn pings (see
-"Ping the asker when a long turn ends"), the ping carries these facts and takes
-the summary's place. A clean success MUST send **no** summary — the reply itself
-is the completion signal, so the fact line would only be noise (this holds
-regardless of whether the transport can edit messages); the one line a clean
-*long* turn may end with is its ping.
+After a turn that did not end normally the chat is told how it ended in one
+line, and nothing more: a failure says what happened and ends "Send it again to
+retry." (never an error code), an interrupt ends "⏹ Stopped after 12s." — the
+turn's real duration — and where the platform can edit a message that line
+replaces the "⏹ Stopping…" a `/stop` sent instead of following it. A turn error
+is reported to the IM chat as a short notice and the channel stays up. Where a
+long turn pings (see "Ping the asker when a long turn ends"), the ping carries
+the tool count and tokens too. A clean success MUST send **no** closing line —
+the reply itself is the completion signal, so a fact line would only be noise
+(this holds regardless of whether the transport can edit messages); the one
+line a clean *long* turn may end with is its ping.
 
 #### Scenario: a turn error is reported to the IM chat
 - **GIVEN** a scripted agent that fails mid-turn
 - **WHEN** the peer sends a message
-- **THEN** the IM chat receives a short error notice and the channel stays up
+- **THEN** the IM chat receives a short notice that says what happened and ends "Send it again to retry." — no error code — and the channel stays up
 
 #### Scenario: a turn that does not end normally sends a completion summary
 - **GIVEN** a paired channel
 - **WHEN** a turn fails or is interrupted
-- **THEN** a compact completion summary is sent to the chat reporting the outcome
-  (the error or the stop) with tool count, duration, and tokens
+- **THEN** the chat is told the outcome in one line — what failed with "Send it
+  again to retry.", or "⏹ Stopped after <duration>." — and no separate fact
+  summary follows
 
 #### Scenario: a clean success sends no completion summary
 - **GIVEN** a paired channel (whether or not the transport can edit messages)
@@ -578,8 +597,8 @@ remembered for the chat (see "Keep a chat's settings across its conversations").
   id, and a 1M-context variant says "1M", so `fable` and `claude-fable-5-1[1m]`
   read as two different choices. Tapping a model sets it; when that model
   reports reasoning levels the same card is rewritten into the **effort step**
-  — the levels of the model now in effect plus a button that keeps the current
-  effort — and tapping a level sets it. A model with no levels ends the choice
+  — the levels of the model now in effect — and tapping a level sets it,
+  answered "Model: <model> · effort <level> — from your next message". A model with no levels ends the choice
   at the model step. Where the card cannot be rewritten in place the effort step
   arrives as a fresh card. With no catalogue it falls back to the text report.
 
@@ -754,7 +773,7 @@ the owner's `sender_id`.
 The bot MUST act in a group ONLY on an addressed message (an @mention of the
 bot). Un-addressed group messages are ignored. An addressed message from a
 non-owner — including one whose `sender_id` the transport could not supply — is
-refused with a short "not authorized" reply and starts no turn. A non-owner
+refused with the short reply "🚫 Only <bot>’s owners can use it here." and starts no turn. A non-owner
 message that is **not** addressed — which reaches the gate only when the channel
 is set to answer without a mention — is dropped silently: the refusal is spoken
 to someone who spoke to the bot, never to the room's chatter.
@@ -767,7 +786,7 @@ to someone who spoke to the bot, never to the room's chatter.
 #### Scenario: a non-owner @mention in a group is refused
 - **GIVEN** a paired channel with a known owner
 - **WHEN** someone other than the owner @mentions the bot in a group chat
-- **THEN** the bot replies that the sender is not authorized and no turn is
+- **THEN** the bot replies "🚫 Only <bot>’s owners can use it here." and no turn is
   started
 
 #### Scenario: a non-owner's un-addressed group message is dropped silently
@@ -1319,7 +1338,7 @@ same group/thread, not a DM.
 - **WHEN** the owner taps a `/model` selection-card button in a group thread
 - **THEN** the model is applied to that group thread's conversation and the
   confirmation is routed back into the group/thread (never a DM); a non-owner's
-  tap is refused with a routed "not authorized" reply and no switch
+  tap is refused with the same routed "Only <bot>’s owners can use it here." reply and no switch
 
 ### Requirement: Configure when the bot answers in a group
 Per-group inbound gating MUST be configurable. A channel may set
@@ -2090,7 +2109,7 @@ the others reach the agent.
 #### Scenario: a near miss of a command is corrected, not sent
 - **GIVEN** a paired channel
 - **WHEN** the owner sends `/stpo`
-- **THEN** the channel answers `Did you mean /stop?` and no turn runs
+- **THEN** the channel answers `Unknown command /stpo. Did you mean /stop? Send /help for all commands.` and no turn runs
 
 #### Scenario: a removed command reaches the agent as text
 - **GIVEN** a paired channel
@@ -2201,10 +2220,9 @@ help card.
 ### Requirement: Offer the commands as a help card
 `/help` MUST list the commands from the roster on one line, each with its
 arguments, then say that anything else is a message to the agent; where the
-transport has buttons it is a card titled "Coffer" carrying New, Stop, Model,
-Status and Resume. The same help follows a successful pairing
-once, so a platform with no command menu (SeaTalk) still shows a new owner what
-the bot accepts.
+transport has buttons it is a card titled "Commands" carrying New, Stop, Model,
+Status and Resume. A platform with no command menu (SeaTalk) shows what the bot
+accepts through `/help`, which the pairing confirmation points to.
 
 #### Scenario: /help is a card with the five actions
 - **GIVEN** a paired chat on a button-capable transport
@@ -2212,10 +2230,10 @@ the bot accepts.
 - **THEN** a card lists the commands and carries the New, Stop, Model, Status
   and Resume actions as buttons
 
-#### Scenario: the help card follows pairing
+#### Scenario: pairing points to the help instead of sending it
 - **GIVEN** an unpaired channel with an issued pairing code
 - **WHEN** the owner pairs by sending the code
-- **THEN** the pairing is confirmed and the help follows it once
+- **THEN** the pairing is confirmed and no help card follows it
 
 ### Requirement: Set a group's defaults from its main chat
 On a platform where every @mention in a group's main chat roots a fresh thread
@@ -2437,7 +2455,7 @@ cannot send the answer twice.
 #### Scenario: a non-owner's tap is refused
 - **GIVEN** a question card in a paired group
 - **WHEN** a member who is not the owner taps an option
-- **THEN** the group is told they are not authorised and nothing enters the
+- **THEN** the group is told only the bot’s owners can use it and nothing enters the
   conversation
 
 #### Scenario: a long turn that waits on the owner pings
@@ -2509,3 +2527,77 @@ the display name with `--title`.
 - **WHEN** the owner names a new Telegram channel "Team bot!" and connects it
 - **THEN** the channel is registered with the title "Team bot!" and the name `team-bot`
 - **AND** a second channel named "Team bot!" is registered as `team-bot-2` rather than refused
+
+### Requirement: Check credentials before they are saved
+The daemon MUST offer `POST /api/v1/channels/validate-credentials`, which asks a
+chat platform whether a set of credentials works without storing, caching or
+logging them and without starting a channel. The request names the platform and
+the credentials as typed (a Telegram bot token, or a SeaTalk app secret with its
+app id) and MAY name an existing channel by `channel_uid`. The answer is `ok`,
+the bot it identified (`bot_handle`, `bot_name`; SeaTalk has no handle), and
+`same_bot`: whether the credentials are that channel's own bot — a Telegram
+token is compared by the bot id both tokens report, a SeaTalk secret by the app
+id, which a replacement that omits it takes from the stored channel — and null
+when there is nothing to compare, including when the stored secret cannot be
+read. A refusal is an ordinary answer, `ok: false` with a `reason` (`missing`,
+`rejected`, `unreachable` or `timeout`), never an error response. The platform
+call MUST be bounded by a timeout of about eight seconds.
+
+The Add channel and Replace token dialogs MUST call it once the person stops
+typing: Add channel for a pasted Telegram token ("Found @bot", "The token works.
+It will run on this Mac (name)."), Replace token or secret for the new value
+("Works — this is @bot", and for the same bot "Same bot as before, so the
+pairing with {owner} still holds."). A failure is stated under the field, and a
+rejected value cannot be replaced. Connecting is never disabled for a missing
+field: the form reports under each empty field when Connect is pressed.
+
+#### Scenario: check a token as it is pasted
+- **GIVEN** a Telegram bot token the platform accepts
+- **WHEN** it is sent to `POST /api/v1/channels/validate-credentials`
+- **THEN** the answer is `ok` with the bot's handle
+- **AND** nothing is stored
+
+#### Scenario: a replacement says whether it is the same bot
+- **GIVEN** a Telegram channel whose stored token belongs to bot A
+- **WHEN** a replacement token is checked against that channel
+- **THEN** `same_bot` is true for a token of bot A and false for a token of bot B
+- **AND** it is null when the stored token can no longer be read
+
+#### Scenario: a refused or unreachable platform is reported, not raised
+- **GIVEN** a token the platform rejects, and a platform that does not answer in time
+- **WHEN** each is checked
+- **THEN** the answers are `ok: false` with the reasons `rejected` and `timeout`, as normal responses
+
+### Requirement: Add a channel in three steps and pair from the dialog that shows the code
+The Add channel dialog MUST take three steps — Platform, Connect, Pair — under a
+stepper that carries no accent colour. **Platform** lists each platform with its
+logo, what connecting it needs, a one-line description and its capabilities, with
+no filter and no count. **Connect** asks for a name, the default agent and the
+platform's credentials, and registers the channel on Connect. **Pair** issues a
+pairing code and waits for the owner's message; when someone pairs it turns into a
+done state naming the owner, saying that the channel answers only them, and how
+to try it with the default agent. "Pair later" leaves the step. A channel's
+pairing codes appear only in this step and in the Add an owner dialog, which show
+the code with Copy, where to send it, how long it lasts, the platform's one-tap
+link where there is one, and a waiting line; an expired code is shown struck
+through, says why, and offers a new one in place. With no channel at all the
+Channels page keeps its header and offers the platforms as a bordered list that
+opens the dialog at Connect.
+
+#### Scenario: add a channel in three steps
+- **GIVEN** the Add channel dialog on its Platform step
+- **WHEN** a platform is chosen, the name and token are entered and Connect is pressed
+- **THEN** a pairing code is shown with a waiting line
+- **AND** when the owner sends it, the step names the owner and offers Done
+
+#### Scenario: an expired pairing code is struck through in place
+- **GIVEN** an Add an owner dialog whose code has expired
+- **WHEN** it is read
+- **THEN** the code is struck through and marked Expired with the reason
+- **AND** it offers Cancel and Generate a new code
+
+#### Scenario: a first run offers the platforms
+- **GIVEN** no channel exists
+- **WHEN** the Channels page is opened
+- **THEN** it keeps its header and lists the platforms with what each needs
+- **AND** choosing one opens Add channel at its Connect step

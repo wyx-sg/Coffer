@@ -25,11 +25,13 @@ from coffer.application.channel import (
     parallel_threads,
     resume_switch,
     status_card,
+    stop_notice,
 )
 from coffer.application.channel.card_delivery import dispatch_card_tap
 from coffer.application.channel.command_context import CommandContext, SafeSend
 from coffer.application.channel.ports import AgentCatalogPort, ChannelBinding, ModelSuggestionPort
 from coffer.application.channel.save_ports import CollectionCatalogPort, IngestPort
+from coffer.application.channel.stop_notice import StopNotice
 from coffer.application.channel.store_ports import ChannelPeer, ChannelThreadConversationRepoPort
 from coffer.domain.channel.commands import command_name
 from coffer.domain.chat.errors import ConversationNotFound
@@ -126,21 +128,6 @@ class ChannelCommands:
         elif name is not None:
             await _HANDLERS[name](ctx, text)
 
-    async def send_help(self, binding: ChannelBinding, peer: ChannelPeer, send: SafeSend) -> None:
-        """The help card, sent once after a chat pairs (spec channels "Offer the
-        commands as a help card")."""
-        ctx = CommandContext(
-            commands=self,
-            binding=binding,
-            peer=peer,
-            send=send,
-            session=None,
-            chat_kind="direct",
-            thread_id="",
-            conversation_thread_id="",
-        )
-        await status_card.cmd_help(ctx, "/help")
-
     async def _stop(self, ctx: CommandContext) -> None:
         if ctx.group_main:
             await self._stop_group(ctx)
@@ -185,7 +172,14 @@ class ChannelCommands:
         if target is not None:
             self._turns.interrupt_turn(target)
         answer = "⏹ Stopping…" if target is not None else "Nothing is running."
-        await send(binding, peer.chat_id, answer, chat_kind=chat_kind, thread_id=thread_id)
+        sent = await send(binding, peer.chat_id, answer, chat_kind=chat_kind, thread_id=thread_id)
+        if (
+            running is not None
+            and sent is not None
+            and sent.message_id
+            and binding.adapter.capabilities.edits_text
+        ):
+            stop_notice.remember(running, StopNotice(peer.chat_id, sent.message_id, chat_kind))
 
     async def running_titles(self, binding: ChannelBinding, peer: ChannelPeer) -> list[str]:
         """The titles of the conversations running a turn anywhere in this chat."""
@@ -210,7 +204,7 @@ class ChannelCommands:
         titles = [await self._title(conversation_id) for conversation_id in running]
         for conversation_id in running:
             self._turns.interrupt_turn(conversation_id)
-        noun = "turn" if len(running) == 1 else "turns"
+        noun = "conversation" if len(running) == 1 else "conversations"
         await ctx.say(f"⏹ Stopping {len(running)} {noun}:\n" + "\n".join(f"• {t}" for t in titles))
 
     async def dispatch_callback(

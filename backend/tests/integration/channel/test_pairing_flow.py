@@ -30,13 +30,13 @@ async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: Channe
     assert peer.chat_id == "chat-1"
     assert peer.display_name == "Alice"
 
-    # The confirmation, then the commands once (as text here: no buttons).
-    assert len(adapter.sent) == 2
+    # The three-line confirmation, and nothing after it (no help card).
+    assert len(adapter.sent) == 1
     chat_id, text = adapter.sent[0]
     assert chat_id == "chat-1"
-    assert text == "✅ Paired. This chat now controls Coffer channel 'tg'."
-    assert adapter.sent[1][0] == "chat-1"
-    assert "/help" in adapter.sent[1][1]
+    assert text.splitlines()[0] == "✅ Paired — you own tg."
+    assert "Only you can use it." in text
+    assert text.endswith("for the commands.")
 
     entries = await env.audit_entries("channel_paired", resource)
     assert len(entries) == 1
@@ -51,7 +51,7 @@ async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: Channe
     peer = await env.peers.owner_peer(resource.uid)
     assert peer is not None
     assert peer.chat_id == "chat-1"
-    assert len(adapter.sent) == 2  # no confirmation for the second chat
+    assert len(adapter.sent) == 1  # no confirmation for the second chat
     assert len(await env.audit_entries("channel_paired", resource)) == 1
 
 
@@ -114,7 +114,7 @@ async def _pair_owner_with_a_group(env: ChannelEnv) -> tuple[Resource, FakeChann
 
 @pytest.mark.acceptance(spec="channels", scenario="pairing from another account replaces the owner")
 async def test_pairing_from_another_account_replaces_the_owner(env: ChannelEnv) -> None:
-    """A code issued to re-pair a person ("Serve several paired people") hands that
+    """A code issued to re-pair a person ("Gate inbound traffic on sender identity") hands that
     person's place to its sender. Every trace of the previous person's authority
     goes; the new one gets all of it — DM gate, notify default target, group gate."""
     resource, adapter = await _pair_owner_with_a_group(env)
@@ -145,7 +145,7 @@ async def test_pairing_from_another_account_replaces_the_owner(env: ChannelEnv) 
     await env.processor.on_message(
         inbound("tg", "grp-1", "@bot again", chat_kind="group", sender_id="old-1", thread_id="t2")
     )
-    assert "Not authorized" in adapter.sent[-1][1]
+    assert "owners can use it here" in adapter.sent[-1][1]
     await env.processor.on_message(
         inbound(
             "tg", "grp-1", "@bot mine now", chat_kind="group", sender_id="new-1", thread_id="t3"
@@ -169,8 +169,8 @@ async def test_re_pairing_from_the_same_account_keeps_its_groups(env: ChannelEnv
     code, _ = env.pairing.issue(resource.uid)
     await env.processor.on_message(inbound("tg", "old-dm-2", code, sender_id="old-1"))
 
-    assert adapter.sent[-2][0] == "old-dm-2"
-    assert adapter.sent[-2][1].startswith("✅ Paired.")
+    assert adapter.sent[-1][0] == "old-dm-2"
+    assert adapter.sent[-1][1].startswith("✅ Paired — you own")
     peers = await env.peers.list_by_resource(resource.uid)
     assert sorted((p.chat_id, p.sender_id) for p in peers) == [
         ("grp-1", "old-1"),

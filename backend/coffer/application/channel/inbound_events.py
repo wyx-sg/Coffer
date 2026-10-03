@@ -23,6 +23,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
+from coffer.application.channel.bot_label import bot_name
 from coffer.application.channel.commands import ChannelCommands, SafeSend
 from coffer.application.channel.inbound_burst import InboundBurst
 from coffer.application.channel.needs_you import reply_text
@@ -46,8 +47,8 @@ _logger = logging.getLogger(__name__)
 #: what Coffer will keep doing, and the one lever the owner has.
 EXTERNAL_GROUP_WARNING = (
     "⚠️ This group is now an external group — people from other organisations "
-    "may be in it. Coffer keeps answering here; unbind the channel if that is "
-    "not what you want."
+    "may be in it. Coffer keeps answering here; remove the bot from the "
+    "group if that is not what you want."
 )
 
 
@@ -100,7 +101,7 @@ class InboundEvents:
                 await self.safe_send(
                     binding,
                     cb.chat_id,
-                    "🚫 Not authorized — only people paired with this channel can use me here.",
+                    f"🚫 Only {bot_name(binding)}\u2019s owners can use it here.",
                     thread_id=cb.thread_id,
                     chat_kind="group",
                 )

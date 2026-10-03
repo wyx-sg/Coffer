@@ -22,6 +22,7 @@ from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 
 from coffer.application.audit_service import AuditService
+from coffer.application.channel.bot_label import bot_handle
 from coffer.application.channel.commands import ChannelCommands
 from coffer.application.channel.ephemeral import safe_send
 from coffer.application.channel.inbound_burst import BurstPart, InboundBurst, window_for
@@ -361,14 +362,18 @@ class InboundProcessor:
         )
         if peer is None:
             return
+        hint = (
+            "tap / for the commands"
+            if binding.channel_type == "telegram"
+            else "send /help for the commands"
+        )
         await safe_send(
             binding,
             msg.chat_id,
-            f"✅ Paired. This chat now controls Coffer channel '{binding.resource.name}'.",
+            f"✅ Paired — you own {bot_handle(binding)}.\n"
+            "Only you can use it. To use it in a group, add it there and @mention it.\n"
+            f"Try a question, or {hint}.",
         )
-        # Then the commands, once, as a card where the transport has buttons
-        # (spec channels "Offer the commands as a help card").
-        await self._commands.send_help(binding, peer, safe_send)
 
     # -- helpers ---------------------------------------------------------------
 

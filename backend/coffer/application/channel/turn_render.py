@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from coffer.application.channel.ports import ChannelAdapter
+from coffer.application.channel.stop_notice import take as take_stop_notice
 from coffer.application.channel.turn_finish import (
     Delivered,
     SendCard,
@@ -35,7 +36,7 @@ from coffer.application.channel.turn_finish import (
     TurnOutcome,
     deliver_reply,
     ping_line,
-    summary_line,
+    stopped_line,
 )
 from coffer.application.channel.turn_status import LIVE_SEPARATOR, ReplyText, TurnStatus
 from coffer.application.channel.turn_surface import TurnSurface, typing_heartbeat
@@ -153,6 +154,7 @@ class TurnRenderer:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await ticker
         end = TurnEnd(stop_reason, error, len(tool_ids), self.now() - started, tokens)
+        stop_noted = await self._rewrite_stop_notice(end)
         delivered = await deliver_reply(
             adapter=self.adapter,
             chat_id=self.chat_id,
@@ -164,15 +166,33 @@ class TurnRenderer:
             text=self._reply.full(),
             end=end,
             send_card=self.send_card,
+            stop_noted=stop_noted,
         )
         if self._ping_due(end, delivered):
             # One new message where the answer's own message was created when
             # the turn began — it replaces the summary of an abnormal ending.
             line = ping_line(end, delivered.body, delivered.question)
             await self.send(self._with_mention(line))
-        elif not end.clean:
-            await self.send(summary_line(end))
         return "waiting" if delivered.question is not None and end.clean else end.outcome
+
+    async def _rewrite_stop_notice(self, end: TurnEnd) -> bool:
+        """Edit the "⏹ Stopping…" a ``/stop`` sent into "⏹ Stopped after 12s."
+        where the platform can edit it; ``False`` leaves the result to be said
+        in the reply."""
+        notice = take_stop_notice(self.conversation_id)
+        if notice is None or end.outcome != "stopped":
+            return False
+        try:
+            await self.adapter.update_card(
+                notice.chat_id,
+                notice.message_id,
+                stopped_line(end.duration),
+                [],
+                chat_kind=notice.chat_kind,
+            )
+        except Exception:
+            return False
+        return True
 
     def _ping_due(self, end: TurnEnd, delivered: Delivered) -> bool:
         """A long turn whose answer finished a message that PERSISTS from the

@@ -30,9 +30,10 @@ __all__ = [
     "TurnEnd",
     "TurnOutcome",
     "deliver_reply",
+    "failure_line",
     "first_line",
     "ping_line",
-    "summary_line",
+    "stopped_line",
 ]
 
 #: How much of the answer's first line a completion ping quotes.
@@ -96,21 +97,16 @@ class TurnEnd:
         return "done"
 
 
-def summary_line(end: TurnEnd) -> str:
-    """``⚠️ failed · 7 tools · 42.1s · 18000 tok`` — for a turn that did not end
-    normally (see "Summarise a turn that did not end normally")."""
-    facts = [
-        f"{end.tool_count} tool" + ("" if end.tool_count == 1 else "s"),
-        f"{end.duration:.1f}s",
-    ]
-    if end.tokens is not None:
-        facts.append(f"{end.tokens} tok")
-    detail = " · ".join(facts)
-    if end.error is not None:
-        return f"⚠️ failed · {detail}"
-    if end.stop_reason == "interrupted":
-        return f"⏹ stopped · {detail}"
-    return f"✅ done · {detail}"
+def failure_line(message: str) -> str:
+    """``⚠️ <what happened>. Send it again to retry.`` — the reason in plain words,
+    never the internal error code."""
+    reason = message.strip().rstrip(".") or "Something went wrong"
+    return f"⚠️ {reason}. Send it again to retry."
+
+
+def stopped_line(duration: float) -> str:
+    """``⏹ Stopped after 12s.``"""
+    return f"⏹ Stopped after {format_elapsed(duration)}."
 
 
 def first_line(body: str) -> str:
@@ -158,12 +154,16 @@ async def deliver_reply(
     text: str,
     end: TurnEnd,
     send_card: SendCard | None = None,
+    stop_noted: bool = False,
 ) -> Delivered:
     """Deliver the finished reply and say what it turned out to be.
 
     A clean reply ending on a ``NEEDS YOU:`` line loses the line; its question
     follows the answer as its own message with one button per option, or stays
     in the reply as ``❓ …`` where there are no buttons.
+
+    ``stop_noted``: the "Stopping…" message was already rewritten into the
+    stop result, so the reply does not repeat it.
 
     The @mention is added HERE, to the body, exactly once: whichever of the
     surface or the ordinary send delivers the head carries it, and the overflow
@@ -212,10 +212,14 @@ async def deliver_reply(
     if end.error is not None:
         # What the agent streamed before failing is still the user's — a stalled
         # or dropped turn often has most of an answer in it.
-        notice = f"⚠️ {end.error.message} [{end.error.code}]"
+        notice = failure_line(end.error.message)
         body = f"{text}\n\n{notice}" if text else notice
     elif end.stop_reason == "interrupted":
-        body = f"{text}\n\n⏹ Stopped." if text else "⏹ Stopped."
+        notice = stopped_line(end.duration)
+        if stop_noted and not text:
+            await surface.close("")
+            return Delivered()
+        body = text if stop_noted else f"{text}\n\n{notice}" if text else notice
     elif not text and media_sent:
         # The uploaded file(s) are the reply — no placeholder text, but the live
         # surface still has to be closed. One that persists as a message must

@@ -1,7 +1,7 @@
 // frontend/src/lib/channels/channelState.test.ts
 // The one answer to "what state is this channel in?" — where it runs first,
 // then whether it is on, then its connection, then pairing — and the list
-// group and primary action each state brings.
+// group and fix action each state brings.
 import { describe, expect, test } from "vitest";
 
 import type { ChannelStatus } from "@/lib/api/channels";
@@ -30,7 +30,7 @@ const ws = (websocket_state: string, websocket_error: string | null = null) =>
 
 describe("describeChannel", () => {
   test.each([
-    ["connected", {}, "connected", "connected", "ok", "sendTest"],
+    ["connected", {}, "connected", "connected", "ok", null],
     ["connecting", ws("connecting"), "connecting", "connected", "warn", null],
     [
       "reconnecting",

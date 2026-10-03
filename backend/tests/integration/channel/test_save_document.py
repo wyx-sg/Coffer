@@ -102,7 +102,7 @@ async def test_a_save_that_waits_to_be_merged_says_so(env: ChannelEnv, tmp_path:
     assert len(env.ingest.calls) == 1
     [confirmation] = [text for _chat, text in adapter.sent if "note.txt" in text]
     assert "research" in confirmation
-    assert "merging" in confirmation
+    assert confirmation.endswith("to research.")
     assert "→" not in confirmation and "None" not in confirmation
 
 

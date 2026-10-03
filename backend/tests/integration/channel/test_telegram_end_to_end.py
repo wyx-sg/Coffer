@@ -116,8 +116,16 @@ async def test_the_drafts_stop_button_interrupts_the_running_turn(env: ChannelEn
         # The same outcome a typed /stop produces: the turn is cancelled and the
         # chat hears the same acknowledgement.
         await wait_until(lambda: conversation_id not in active_turns())
-        await wait_until(lambda: any("Stopped." in t for t in _sent_texts(fake)))
+        # Telegram can edit a message, so "Stopping…" becomes the result in place.
+        await wait_until(
+            lambda: any(
+                "Stopped after" in str(p.get("text", ""))
+                for m, p in fake.calls
+                if m == "editMessageText"
+            )
+        )
         assert any("Stopping" in t for t in _sent_texts(fake))
+        assert not any("Stopped after" in t for t in _sent_texts(fake))
         assert not any("echo:" in t for t in _sent_texts(fake))
     finally:
         gated.release.set()
@@ -144,7 +152,7 @@ async def test_a_group_command_answer_goes_to_the_asker_alone(env: ChannelEnv) -
         assert answer["chat_id"] == str(_GROUP_ID)
         assert answer["ephemeral_message_parameters"] == {"receiver_user_id": _OWNER_ID}
         assert answer["reply_parameters"]["ephemeral_message_id"] == 77
-        assert "Effort set to high" in answer["text"]
+        assert "effort High — from your next message" in answer["text"]
 
         # /status is the asker's own business too: it goes privately, as text —
         # a card with buttons would be an ordinary message the room sees.

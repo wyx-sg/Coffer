@@ -72,18 +72,17 @@ async def test_help_without_buttons_is_the_roster_as_text(env: ChannelEnv) -> No
     assert adapter.texts() == [help_text()]
 
 
-@pytest.mark.acceptance(spec="channels", scenario="the help card follows pairing")
-async def test_the_help_card_follows_pairing(env: ChannelEnv) -> None:
+@pytest.mark.acceptance(
+    spec="channels", scenario="pairing points to the help instead of sending it"
+)
+async def test_pairing_points_to_the_help_instead_of_sending_it(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     adapter = env.bind(resource, FakeChannelAdapter(supports_buttons=True))
     code, _expires = env.pairing.issue(resource.uid)
 
     await env.processor.on_message(inbound("tg", "chat-1", code))
 
-    # The confirmation, then the help card — once.
-    assert adapter.texts()[0] == "✅ Paired. This chat now controls Coffer channel 'tg'."
-    assert len(adapter.sent) == 2
-    [(chat, text, buttons)] = adapter.cards
-    assert chat == "chat-1"
-    assert text == help_text()
-    assert [b.value for b in buttons] == HELP
+    # The three-line confirmation, and no help card after it.
+    assert adapter.texts()[0].startswith("✅ Paired — you own tg.")
+    assert len(adapter.sent) == 1
+    assert adapter.cards == []

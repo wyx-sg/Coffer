@@ -1,6 +1,7 @@
 // frontend/src/components/channel/ChannelDetailPane.tsx
 // The open channel in the Channels page's right pane: the header (state,
-// primary action, ⋯ menu), the banner that explains any failure, and two tabs
+// Send test, ⋯ menu), the banner (or grey box) that says what is wrong and
+// holds its fix, and two tabs
 // — Overview and Settings. The page owns the address (`/channels/<uid>` and
 // `/channels/<uid>/settings`); this pane runs the commands and owns their
 // dialogs: send test, replace secret, run it here, re-pair, delete.
@@ -11,7 +12,6 @@ import { useNavigate } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ChannelPerson } from "@/lib/api/channels";
-import { translateApiError } from "@/lib/api/errors";
 import type { ResourceOut } from "@/lib/api/resources";
 import type { ChannelTab } from "@/lib/channels/tabs";
 import {
@@ -118,7 +118,8 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
         channel={channel}
         view={view}
         status={status.data}
-        statusError={status.error ? translateApiError(t, status.error) : null}
+        busy={reconnect.isPending || rebind.isPending || enable.isPending}
+        onCommand={onCommand}
         onPair={openPair}
       />
 
@@ -171,7 +172,7 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
         open={dialog === "runHere"}
         onOpenChange={setDialogOpen("runHere")}
         variant="default"
-        title={t("channels.runHere.title", { name })}
+        title={t("channels.runHere.title", { name: displayName(channel) })}
         description={t("channels.runHere.body", { machine: machineName(view.runsOn) })}
         confirmLabel={t("channels.actions.runHere")}
         pending={rebind.isPending}

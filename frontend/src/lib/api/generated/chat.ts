@@ -56,7 +56,7 @@ export interface paths {
         /**
          * List Conversations
          * @description Conversations newest activity first (id breaks ties), paged by cursor;
-         *     ``archived=true`` lists the archived ones, ``q`` filters by title.
+         *     ``archived=true`` lists the archived ones, ``q`` filters by title or message text.
          */
         get: operations["list_conversations_api_v1_chat_conversations_get"];
         put?: never;
@@ -491,6 +491,8 @@ export interface components {
          *     "Re-materialise attachments from persisted history").
          */
         ContentBlockOut: {
+            /** Duration Ms */
+            duration_ms: number | null;
             /** Error */
             error: string | null;
             /** Filename */
@@ -573,6 +575,8 @@ export interface components {
             conversations: components["schemas"]["ConversationOut"][];
             /** Next Cursor */
             next_cursor: string | null;
+            /** Total */
+            total: number;
         };
         /**
          * ConversationOut
@@ -659,6 +663,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Finished At */
+            finished_at: string | null;
             /** Id */
             id: string;
             /** Model Id */
@@ -676,7 +682,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "complete" | "streaming" | "failed";
+            status: "complete" | "streaming" | "stopped" | "failed";
         };
         /**
          * PendingQueueIn
@@ -784,6 +790,11 @@ export interface components {
          * @description The data of a `tool_result` event: the result or error of a prior `tool_call`.
          */
         ToolResultEventOut: {
+            /**
+             * Duration Ms
+             * @description How long the tool ran, in milliseconds; null when unknown.
+             */
+            duration_ms: number | null;
             /** Error */
             error: string | null;
             /** Output */
@@ -975,7 +986,7 @@ export interface operations {
                 limit?: number;
                 /** @description The previous page's next_cursor. Bound to the listing (active or archived) it was issued for; any other value is 400 CURSOR_INVALID. */
                 cursor?: string | null;
-                /** @description Title contains this text (case-insensitive); a cursor is bound to it. */
+                /** @description Title or any message's text contains this text (case-insensitive); a cursor is bound to it. */
                 q?: string | null;
             };
             header?: {

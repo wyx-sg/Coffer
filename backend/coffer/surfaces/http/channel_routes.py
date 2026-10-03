@@ -14,6 +14,10 @@ from typing import TYPE_CHECKING, Any, Literal
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, Field
 
+from coffer.application.channel.credential_check import (
+    CredentialCheck,
+    CredentialCheckRequest,
+)
 from coffer.domain.channel.commands import COMMAND_ROSTER
 from coffer.domain.channel.config import ChannelConfig
 from coffer.domain.channel_type import ChannelType
@@ -28,11 +32,23 @@ if TYPE_CHECKING:
 router = APIRouter(prefix="/api/v1/channels", dependencies=[Depends(require_token)])
 
 _SERVICE: Any = None
+_CREDENTIAL_CHECK: CredentialCheck | None = None
 
 
 def set_channel_service(service: Any) -> None:
     global _SERVICE
     _SERVICE = service
+
+
+def set_credential_check(check: CredentialCheck) -> None:
+    global _CREDENTIAL_CHECK
+    _CREDENTIAL_CHECK = check
+
+
+def get_credential_check() -> CredentialCheck:
+    if _CREDENTIAL_CHECK is None:
+        raise RuntimeError("credential check not initialised")
+    return _CREDENTIAL_CHECK
 
 
 def get_channel_service() -> ChannelService:
@@ -52,8 +68,8 @@ class PairingCodeOut(BaseModel):
 
 
 class ChannelPersonOut(BaseModel):
-    """A person paired to the channel (spec channels "Serve several paired
-    people"): every one is answered with identical rights."""
+    """A person paired to the channel (spec channels "Gate inbound traffic on
+    sender identity"): every one is answered with identical rights."""
 
     #: The person's stable platform identity — what a removal or a re-pair names.
     sender_id: str
@@ -177,6 +193,57 @@ class NotifyOut(BaseModel):
 class RestartOut(BaseModel):
     #: Whether the channel's adapter is running once the restart has finished.
     running: bool
+
+
+class ValidateCredentialsIn(BaseModel):
+    """Credentials to check, as typed. Which fields apply depends on the platform."""
+
+    platform: ChannelType
+    bot_token: str | None = Field(default=None, max_length=512)
+    app_id: str | None = Field(default=None, max_length=128)
+    app_secret: str | None = Field(default=None, max_length=512)
+    #: An existing channel to compare with: answers "is this the same bot?", and
+    #: supplies the app id when a SeaTalk replacement does not repeat it.
+    channel_uid: str | None = None
+
+
+class CredentialCheckOut(BaseModel):
+    ok: bool
+    #: Without the at-sign; null where the platform has none (SeaTalk).
+    bot_handle: str | None
+    bot_name: str | None
+    #: Whether the credentials are the named channel's own bot; null when there
+    #: was nothing to compare with.
+    same_bot: bool | None
+    #: Why not ok: the platform said no (``rejected``), could not be asked
+    #: (``unreachable``, ``timeout``), or a needed field is empty (``missing``).
+    reason: Literal["missing", "rejected", "unreachable", "timeout"] | None
+    #: The platform's own words about a rejection, when it gave any.
+    detail: str | None
+
+
+@router.post("/validate-credentials", response_model=CredentialCheckOut)
+async def validate_credentials(body: ValidateCredentialsIn) -> CredentialCheckOut:
+    """Check credentials against the platform without storing anything (spec
+    channels "Check credentials before they are saved"). A refusal is a normal
+    answer (``ok: false`` with a reason), not an error response."""
+    result = await get_credential_check().check(
+        CredentialCheckRequest(
+            platform=body.platform,
+            bot_token=body.bot_token,
+            app_id=body.app_id,
+            app_secret=body.app_secret,
+            channel_uid=body.channel_uid,
+        )
+    )
+    return CredentialCheckOut(
+        ok=result.ok,
+        bot_handle=result.bot_handle,
+        bot_name=result.bot_name,
+        same_bot=result.same_bot,
+        reason=result.reason,
+        detail=result.detail,
+    )
 
 
 @router.post("/{uid}/pairing-code", response_model=PairingCodeOut)

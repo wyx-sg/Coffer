@@ -20,8 +20,10 @@ import {
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import type { ResourceOut } from "@/lib/api/resources";
-import { useUpdateChannel } from "@/lib/hooks/useChannels";
+import { useChannelStatus, useUpdateChannel } from "@/lib/hooks/useChannels";
+import { useCredentialCheck } from "@/lib/hooks/useCredentialCheck";
 import { planChannelEdit } from "@/lib/channels/editChannel";
+import { ChannelCredentialNote } from "./ChannelCredentialNote";
 
 interface Props {
   channel: ResourceOut;
@@ -36,6 +38,20 @@ export function ChannelReplaceSecretDialog({ channel, open, onOpenChange }: Prop
   const [value, setValue] = useState("");
   const telegram = channel.config.channel_type === "telegram";
   const which = telegram ? "token" : "secret";
+  const owner = useChannelStatus(channel.uid).data?.people[0]?.display_name ?? "";
+  // The pasted value is checked against the platform as it lands, and against
+  // the stored bot so the person is told whether the pairing will still hold.
+  const pasted = value.trim();
+  const check = useCredentialCheck(
+    open && pasted.length >= (telegram ? 10 : 4)
+      ? {
+          platform: telegram ? "telegram" : "seatalk",
+          channel_uid: channel.uid,
+          ...(telegram ? { bot_token: pasted } : { app_secret: pasted }),
+        }
+      : null,
+  );
+  const rejected = check.state === "done" && !check.result.ok && check.result.reason === "rejected";
 
   const close = (o: boolean) => {
     if (!o) setValue("");
@@ -83,11 +99,30 @@ export function ChannelReplaceSecretDialog({ channel, open, onOpenChange }: Prop
           />
           <p className="text-xs text-text-muted">{t("channels.replace.hint")}</p>
         </form>
+        <ChannelCredentialNote
+          id={`${id}-check`}
+          check={check}
+          success={(r) => ({
+            title: telegram
+              ? r.bot_handle
+                ? t("channels.replace.works", { handle: r.bot_handle })
+                : t("channels.replace.worksPlain")
+              : t("channels.replace.worksSeatalk"),
+            body:
+              r.same_bot === true
+                ? owner
+                  ? t("channels.replace.sameBot", { owner })
+                  : t("channels.replace.sameBotPlain")
+                : r.same_bot === false
+                  ? t("channels.replace.differentBot")
+                  : null,
+          })}
+        />
         <DialogFooter>
           <Button variant="ghost" onClick={() => close(false)}>
             {t("common.cancel")}
           </Button>
-          <Button disabled={update.isPending || value.trim() === ""} onClick={submit}>
+          <Button disabled={update.isPending || value.trim() === "" || rejected} onClick={submit}>
             {update.isPending ? t("common.saving") : t("channels.replace.submit")}
           </Button>
         </DialogFooter>

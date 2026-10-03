@@ -102,7 +102,7 @@ async def test_empty_sender_id_in_a_group_is_refused_not_treated_as_owner(
     assert len(adapter.sent) == 1
     chat_id, text = adapter.sent[0]
     assert chat_id == "grp-1"
-    assert "Not authorized" in text
+    assert "owners can use it here" in text
     assert adapter.sent_routed[0] == (chat_id, text, "th-1", "group")
     # No turn was started and no peer row was created for the unverified sender.
     assert await env.chat.list_conversations() == []
@@ -130,7 +130,7 @@ async def test_non_owner_mention_in_a_group_is_refused(env: ChannelEnv) -> None:
     assert len(adapter.sent) == 1
     chat_id, text = adapter.sent[0]
     assert chat_id == "grp-1"
-    assert "Not authorized" in text
+    assert "owners can use it here" in text
     assert adapter.sent_routed[0] == (chat_id, text, "th-1", "group")
     assert await env.chat.list_conversations() == []
     # No peer row was created for the intruder's turn attempt.
@@ -334,7 +334,7 @@ async def test_dm_still_pairs_and_drives_a_turn(env: ChannelEnv) -> None:
     await env.processor.on_message(inbound("tg", "owner", code, sender_display="Owner"))
     peer = await env.peers.get_by_chat(resource.uid, "owner")
     assert peer is not None
-    assert adapter.sent[0][1].startswith("✅ Paired.")
+    assert adapter.sent[0][1].startswith("✅ Paired — you own")
 
     await env.processor.on_message(inbound("tg", "owner", "hi"))
     await wait_until(lambda: "Hello world" in adapter.texts())

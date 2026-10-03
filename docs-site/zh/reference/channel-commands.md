@@ -12,14 +12,14 @@ description: 九个渠道命令、各命令在直接聊天、线程和群组中�
 | 命令 | 作用 |
 | --- | --- |
 | `/new [agent]` | 用这个聊天的设置开始一个新对话。带上智能体名则切换到那个智能体。 |
-| `/stop` | 中断正在运行的轮次，并暂停队列。 |
+| `/stop` | 中断正在运行的轮次，并暂停队列。在能编辑消息的平台上，「⏹ Stopping…」会被原地改成「⏹ Stopped after 12s.」；不能编辑的平台则另发一条。 |
 | `/model [name] [level]` | 查看或设置模型和推理强度。 |
 | `/dir [path\|name]` | 查看或切换工作目录，切换会开一个新对话。 |
 | `/status` | 这个聊天正在运行什么，以带快捷操作的卡片显示。 |
 | `/resume [n]` | 重新打开这个聊天之前的一个对话。 |
 | `/thread [title]` | 在私聊中，在单独的话题里打开一个并行对话。 |
 | `/kb [collection]` | 把你刚发的文档存进一个[知识](/zh/guides/knowledge)知识集。 |
-| `/help` | 列出命令，带 New、Stop、Model、Status 和 Resume 按钮。 |
+| `/help` | 列出命令，带 New、Stop、Model、Status 和 Resume 按钮，卡片标题为 **Commands**。 |
 
 Telegram 的 start 链接会发送 `/start`，它的回答和 `/help` 一样。`/new` 和 `/stop` 即使在轮次运行时也会立即生效。命令会先放行所有还在停顿等待中的消息，让它们在命令之前运行；`/stop` 则会丢弃它们。
 
@@ -53,7 +53,7 @@ Telegram 的 start 链接会发送 `/start`，它的回答和 `/help` 一样。`
 
 只有上面九个词会被从对话里拿出来。`/compact`、`/review` 这样的技能，或者以路径开头的消息，比如 `/Users/me/app crashes on start`，都和其他消息一样送到智能体那里，所以智能体自己的斜杠命令在手机上照样能用。
 
-和某个命令只差一点的词，比如 `/stpo`、`/stat`、`/threads`，会得到一行 `Did you mean /stop?` 这样的回答，什么都不运行。短命令（四个字母及以下）容许错一个字母，长命令容许错两个；相邻两个字母对调算错一个。
+和某个命令只差一点的词，比如 `/stpo`、`/stat`、`/threads`，会得到一行 `Unknown command /stpo. Did you mean /stop? Send /help for all commands.` 这样的回答，什么都不运行。短命令（四个字母及以下）容许错一个字母，长命令容许错两个；相邻两个字母对调算错一个。
 
 ## 设置跟着聊天走 {#settings-stick-to-the-chat}
 
@@ -70,7 +70,7 @@ Telegram 的 start 链接会发送 `/start`，它的回答和 `/help` 一样。`
 - `/model <name>` 设置模型。智能体目录里没有的名字会原样传给智能体的 CLI，所以你可以用选择器里没显示的模型；智能体跑不了的名字，会在下一个轮次以 CLI 自己的报错返回。
 - `/model <level>` 只设置推理强度。级别有 `minimal`、`low`、`medium`、`high`、`xhigh` 和 `max`；没有模型以这些词命名。
 - `/model <name> <level>` 同时设置两者，`/model default` 清除两者，回到智能体自己的默认值。
-- 不带参数的 `/model` 显示当前生效的模型和推理强度。在支持按钮的平台上，它是一张两步卡片：先点一个模型，如果该模型有推理级别，同一张卡片会变成级别选择，并带一个保留当前推理强度的按钮。
+- 不带参数的 `/model` 显示当前生效的模型和推理强度。在支持按钮的平台上，它是一张两步卡片：先点一个模型（「Step 1 of 2」），如果该模型有推理级别，同一张卡片会变成级别选择（「step 2 of 2」）。回答只有一行：「Model: Claude Sonnet 5.5 · effort Medium — from your next message」。
 
 ## 工作目录 {#working-directory}
 
@@ -89,12 +89,12 @@ coffer channel edit my-telegram --no-dirs                              # allows 
 - `/dir <path>` 接受一个允许的路径或它下面的路径；`/dir <name>` 接受某个允许路径的最后一级目录名（`/dir coffer`）。目录必须存在。
 - 切换会在那里开一个新对话，并为这个聊天记住该目录。
 - `/dir default` 回到消息渠道的默认目录。
-- 不带参数的 `/dir` 显示当前生效的目录，并以一张 **Working directory** 卡片列出允许的目录，每个显示路径（家目录下的写成 `~/…`）；默认目录不在其中时还有一个 **Default**。切换成功会回复「📁 Now in `<path>` — started a fresh conversation」。
+- 不带参数的 `/dir` 显示当前生效的目录，并以一张 **Working directory** 卡片列出允许的目录，每个显示路径（家目录下的写成 `~/…`）；默认目录不在其中时还有一个 **Default**。卡片上写着「A new directory starts a new conversation.」。切换成功会回复「📁 Now in `<path>` — started a fresh conversation.」。
 - 列表外的目录会被拒绝，并列出允许的目录。没有任何允许目录的消息渠道会回复如何添加。
 
 ## 恢复之前的对话 {#resume-an-earlier-conversation}
 
-一个聊天打开过的每个对话都会为这个聊天记住。`/resume` 按从新到旧列出最近 20 个，每个带标题、智能体和时间，当前生效的那个打勾。`/resume 2` 或点一下卡片，会让那个对话重新成为这个聊天的活动对话，你的下一条消息就接着它。
+一个聊天打开过的每个对话都会为这个聊天记住。`/resume` 按从新到旧列出最近 20 个，每个写成「1 · title — Agent · 2h ago」，配编号按钮，当前生效的那个打勾。`/resume 2` 或点一下卡片，会让那个对话重新成为这个聊天的活动对话（「↩️ Resumed “title” with Codex.」），你的下一条消息就接着它。
 
 只提供这个聊天自己打开过的对话，从不包括来自网页或其他聊天的对话，之后被删掉的对话也不会列出。
 
@@ -102,11 +102,11 @@ coffer channel edit my-telegram --no-dirs                              # allows 
 
 `/status` 用文字而不是 id 回答，标题是 **Status**：对话的标题（或它的 `🧵#N` 标记）；一行写着智能体、模型、推理强度和目录；然后是 **Running**、**Running · 2 waiting** 或 **Idle**。在私聊里，它还在一行里列出并行话题，每个标明是在运行、等待还是空闲。
 
-`/help` 在一行里列出所有命令，并说明其他任何内容都是发给智能体的消息。
+`/help` 在一行里列出所有命令，`/new [agent] · /stop · /model [name] [level] · /dir · /status · /resume [n] · /thread · /kb · /help`，并说明其他任何内容都是发给智能体的消息。
 
 `/new` 回复一行「🆕 New conversation · Codex · Default model · ~/src/coffer」，在支持按钮的平台上还带 **Agent**、**Model** 和 **Dir** 按钮。**Agent** 列出这个消息渠道可以驱动的智能体；点一个就在它上面开始新对话，和 `/new <agent>` 一样。
 
-在支持按钮的平台上，`/status` 是一张带 **New**、**Model**、**Resume** 和 **Dir** 按钮的卡片，轮次运行时还有 **Stop**；`/help` 是一张带 **New**、**Stop**、**Model**、**Status** 和 **Resume** 的卡片。点按钮的效果和在那个聊天里输入对应命令完全一样，所以记住 `/status` 就能到达所有操作。帮助还会在你配对后立刻发一次，对没有命令菜单的平台（SeaTalk）来说，这就是它告诉你机器人接受什么的方式。
+在支持按钮的平台上，`/status` 是一张带 **New**、**Model**、**Resume** 和 **Dir** 按钮的卡片，轮次运行时还有 **Stop**；`/help` 是一张带 **New**、**Stop**、**Model**、**Status** 和 **Resume** 的卡片。点按钮的效果和在那个聊天里输入对应命令完全一样，所以记住 `/status` 就能到达所有操作。对没有命令菜单的平台（SeaTalk），发 `/help` 就能看到机器人接受什么。
 
 ## SeaTalk 上的群组默认值 {#group-defaults-on-seatalk}
 
@@ -120,10 +120,24 @@ Telegram 群组的主聊天本身就是一个对话，所以在那里发的命�
 
 ## 命令菜单 {#command-menus}
 
-Telegram 会显示命令菜单；Coffer 用帮助和错拼检查所用的同一份列表来注册它，所以三者永远一致。私聊里有全部九个命令；群组里有 `/new`、`/stop`、`/model`、`/status`、`/resume` 和 `/help`，这些是适合当着别人面点的。每个菜单都用英文和中文各注册一遍。在群组里，从菜单点的命令会以 `/status@your_bot` 的形式到达，Coffer 把它当作 `/status`。SeaTalk 没有命令菜单，配对后的帮助卡片起到同样的作用。
+Telegram 会显示命令菜单；Coffer 用帮助和错拼检查所用的同一份列表来注册它，所以三者永远一致。私聊里有全部九个命令；群组里有 `/new`、`/stop`、`/model`、`/status`、`/resume` 和 `/help`，这些是适合当着别人面点的。每个菜单都用英文和中文各注册一遍。在群组里，从菜单点的命令会以 `/status@your_bot` 的形式到达，Coffer 把它当作 `/status`。SeaTalk 没有命令菜单，发 `/help` 即可。
+
+英文描述如下（中文菜单含义相同）：
+
+| 命令 | 菜单描述 |
+| --- | --- |
+| `/new` | Start a fresh conversation [agent] |
+| `/stop` | Stop what’s running |
+| `/model` | Pick model, then effort |
+| `/dir` | Pick the working directory |
+| `/status` | What is running, threads |
+| `/resume` | Go back to a conversation |
+| `/thread` | Open a parallel thread |
+| `/kb` | Save a document to Knowledge |
+| `/help` | Commands |
 
 ## 选择卡片 {#selection-cards}
 
-在支持按钮的平台上，不带参数的 `/model`、`/dir`、`/resume`，以及不带知识集的 `/kb`，会回复一张选择卡片。一张卡片最多六个按钮；更长的列表会分页，每页四个选项，加上 **← Prev** 和 **Next →**。翻页不改变任何东西，只有点选项才会。点过之后，卡片会原地重写，勾移到你的新选择上。
+在支持按钮的平台上，不带参数的 `/model`、`/dir`、`/resume`，以及不带知识集的 `/kb`，会回复一张选择卡片。一张卡片最多六个按钮；更长的列表会分页，每页四个选项，加上 **← Prev** 和 **Next →**，在首页或末页时对应按钮显示为不可点。翻页不改变任何东西，只有点选项才会。当前生效的选项前面带 ✓。点过之后，卡片会原地重写，勾移到你的新选择上。
 
 按钮点击和消息一样接受检查：只有所有者的点击才算数。如果平台拒绝了卡片，命令会改用纯文本回答。

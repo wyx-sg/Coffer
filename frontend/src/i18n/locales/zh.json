@@ -3663,7 +3663,7 @@
         "line": "正在检查…"
       },
       "unavailable": {
-        "word": "未知",
+        "word": "状态未知",
         "line": "状态不可用"
       },
       "unbound": {
@@ -3699,7 +3699,7 @@
         "line": "未找到 SeaTalk SDK"
       },
       "connectFailed": {
-        "word": "无法连接",
+        "word": "Token 被拒",
         "line": "连接被拒绝"
       },
       "waitingApproval": {
@@ -3711,7 +3711,7 @@
         "line": "密钥已被拒绝"
       },
       "stopped": {
-        "word": "已停止",
+        "word": "Token 被拒",
         "line": "已停止"
       },
       "notPaired": {
@@ -3723,75 +3723,87 @@
         "line": "已连接"
       }
     },
+    "header": {
+      "sendTestWhy": {
+        "kicked": "先把连接拿回来，才能发送测试",
+        "sdkMissing": "安装 SDK 并重试后，才能发送测试",
+        "replace_token": "更换 token 后，才能发送测试",
+        "replace_secret": "更换密钥后，才能发送测试",
+        "waitingApproval": "批准密钥后，才能发送测试",
+        "unavailable": "请先重试——Coffer 读不到这个渠道的状态",
+        "reconnecting": "请等连接恢复",
+        "off": "开启这个渠道后，才能发送测试",
+        "elsewhere": "运行在 {{machine}}——请在那边发送测试",
+        "unbound": "在本机运行后，才能发送测试",
+        "notPaired": "请先配对一位所有者——测试会发给所有者"
+      }
+    },
+    "quiet": {
+      "off": "{{name}} 已关闭——开启之前它不会回应任何消息。",
+      "elsewhere": "运行在 {{machine}}。这台 Mac 保持安静，确保只有一台应答。"
+    },
     "banner": {
       "unavailable": {
         "title": "读不到这个消息渠道的状态",
-        "body": "其他消息渠道不受影响。请重试，或打开「活动」查看守护进程最近的日志。"
-      },
-      "unbound": {
-        "title": "没有绑定任何机器",
-        "body": "没有指明机器的消息渠道不会被任何机器启动，机器人永远不会回话。在本机运行它，或在「设置」里选择应该运行它的机器。"
+        "body": "Coffer 读不到 {{platform}} 的状态。其他消息渠道不受影响。"
       },
       "unknownMachine": {
-        "title": "绑定到了 Coffer 不认识的机器（{{id}}）",
-        "body": "同步组里没有机器认领这个 id，所以没有机器会启动机器人，它永远不会回话。请选择应该运行它的机器。"
-      },
-      "elsewhere": {
-        "title": "在本机保持安静是有意为之——{{machine}} 在运行这个机器人",
-        "body": "一个机器人只能有一个连接，所以只有一台机器应答它。设置和配对会同步，连接不会。"
-      },
-      "off": {
-        "title": "这个消息渠道已关闭",
-        "body": "开启它即可重新连接——设置和配对都会保留。"
+        "title": "设置为在一台不在你同步组里的 Mac 上运行",
+        "body": "你同步的 Mac 里没有一台接手这个渠道，所以没有 Mac 会启动机器人，它永远不会回话。在本机运行它，或在「设置」里选择应该运行它的 Mac。"
       },
       "reconnecting": {
         "title": "与 {{platform}} 的连接已断开——正在重新连接",
-        "body": "通常是网络或 {{platform}} 那边的短暂故障。期间发送的消息会在恢复后送达。"
+        "body": "通常是网络或 {{platform}} 的短暂故障。期间发送的消息会留在 {{platform}} 那边，恢复后送达。"
       },
       "kicked": {
         "title": "{{platform}} 把这个机器人的连接交给了另一个进程",
-        "body": "SeaTalk 每个应用只允许一个连接。有别的程序在运行应用 {{appId}}——常见的是另一台机器上的 Coffer，或测试脚本。请在那边停掉它，或在这里把连接拿回来。"
+        "body": "{{platform}} 每个应用只允许一个连接。有别的程序在运行应用 {{appId}}——多半是另一台 Mac 上的 Coffer，或使用同一 App ID 的本地脚本。请在那边停掉它，或在这里把连接拿回来。"
       },
       "sdkMissing": {
         "title": "未安装 SeaTalk 的 Python SDK",
         "body": "请从 <portal>SeaTalk 开放平台</portal>下载 SeaTalk 的 WebSocket SDK，其余步骤交给智能体，放好后点击重试。"
       },
-      "connectFailed": {
-        "title": "{{platform}} 拒绝了连接",
-        "body": "通常是 App ID 有误，或 App Secret 已在 SeaTalk 开放平台重新生成。请更换密钥——配对和设置都会保留。"
+      "tokenRejected": {
+        "telegram": {
+          "title": "Telegram 拒绝了这个 bot token",
+          "body": "这个 token 已在 @BotFather 中撤销或重新生成。粘贴新的 token 即可——配对和设置都会保留。"
+        },
+        "seatalk": {
+          "title": "SeaTalk 拒绝了连接",
+          "body": "通常是 App ID 有误，或 App Secret 已在 SeaTalk 开放平台重新生成。请更换密钥——配对和设置都会保留。"
+        }
       },
       "notPaired": {
         "title": "把它与你的 {{platform}} 账号配对",
-        "body": "生成一个配对码，用你自己的账号发给机器人。这个账号将成为它唯一回应的账号。"
+        "body": "用你自己的账号给机器人发一个配对码。这个账号将成为它回应的账号；之后可以再添加更多所有者。",
+        "action": "生成配对码"
       },
       "waitingApproval": {
         "title": "正在 Coffer 应用里等你批准",
-        "body": "这个渠道的密钥还没有获得批准，所以无法连接 {{platform}}。在 Coffer 应用的密钥页批准后它会自行启动——配对和设置都会保留。"
+        "body": "这个渠道的密钥还没有获得批准，所以无法连接 {{platform}}。在密钥页批准后它会自行启动——配对和设置都会保留。"
       },
       "approvalRefused": {
         "title": "这个渠道的密钥被拒绝了",
         "body": "你在 Coffer 应用里拒绝了它的密钥，所以渠道无法连接 {{platform}}。打开密钥页点击“重新请求”可以重新发起——配对和设置都会保留。"
       },
-      "stopped": {
-        "title": "{{platform}} 适配器没有在运行",
-        "body": {
-          "telegram": "常见原因是 bot token 已在 @BotFather 中撤销或重新生成。粘贴新的 token 即可——配对和设置都会保留。",
-          "seatalk": "常见原因是 App Secret 已在 SeaTalk 开放平台重新生成。更换它即可——配对和设置都会保留。"
-        }
-      }
+      "moreHandoff": "更多交接方式"
     },
     "meta": {
       "seatalkApp": "SeaTalk 应用 {{appId}}",
       "websocket": "WebSocket",
+      "websocketConnected": "WebSocket 已连接",
       "longPolling": "长轮询",
-      "runsHere": "运行在本机"
+      "runsHere": "运行在这台 Mac 上",
+      "runsOn": "运行在 {{machine}}",
+      "off": "已关闭——设置和配对都会保留",
+      "unknownMachine": "设置为在一台不在你同步组里的 Mac 上运行"
     },
     "tabs": {
       "overview": "总览",
       "settings": "设置"
     },
     "actions": {
-      "more": "{{name}} 的更多操作",
+      "more": "更多操作",
       "sendTest": "发送测试",
       "reconnect": "立即重新连接",
       "takeBack": "拿回连接",
@@ -3815,7 +3827,7 @@
         "remove": "移除",
         "ownerLine": "主人 · 私聊 · 配对于 {{date}}",
         "nobody": "还没有人。配对之前，机器人会忽略所有消息。",
-        "onlyOwner": "只回应已配对的主人；陌生人得不到任何回复。",
+        "onlyOwner": "只回应这些人和群；其他人得不到任何回复。",
         "search": "搜索主人",
         "noMatch": "没有匹配的主人。"
       },
@@ -3823,19 +3835,22 @@
         "title": "智能体",
         "default": "默认智能体",
         "reach": "可驱动的智能体",
-        "help": "每条消息都会成为「对话」里的一个对话。"
+        "help": "每条消息都会成为「对话」里的一个对话，默认由默认智能体处理，除非 /new 指定了别的。",
+        "reachHint": "在聊天里用 /new 指定智能体时，只能从这些里选。"
       },
       "conversations": "来自 {{name}} 的对话",
-      "allConversations": "全部",
-      "noConversations": "还没有对话。",
-      "commands": {
-        "title": "支持的命令",
-        "help": "机器人在聊天里能回应的命令，来自 /help 和平台命令菜单背后的同一份清单。"
-      }
+      "allConversations": "打开对话",
+      "noConversations": "还没有对话。"
     },
     "settings": {
       "connection": { "title": "连接" },
-      "receiving": { "title": "接收消息" },
+      "receiving": {
+        "title": "接收消息",
+        "description": "机器人如何在群里收听，并把连发的消息合成一个回合。"
+      },
+      "directories": {
+        "description": "新对话从哪里开始，以及 /dir 可以切换到哪里。一个都没有时 /dir 关闭。"
+      },
       "replying": { "title": "回复与会话" },
       "unavailable": "这个渠道已保存的设置无效，无法在此显示。请用 `coffer channel edit` 更正。",
       "saveState": {
@@ -3845,7 +3860,7 @@
       },
       "machine": {
         "runsOn": "运行在",
-        "hint": "只有一台机器持有机器人的连接。"
+        "hint": "只有一台 Mac 持有机器人的连接。"
       },
       "danger": {
         "body": "停止机器人并移除配对。对话仍保留在「对话」中。",
@@ -3853,21 +3868,20 @@
       },
       "secrets": {
         "replace": "更换",
-        "hint": "保存在 Coffer 的密钥库中；消息渠道配置只保存引用。"
+        "hint": "密钥保存在 Coffer 的密钥库中；渠道只保存引用。"
       }
     },
     "add": {
       "button": "添加消息渠道",
       "title": "添加消息渠道",
       "connectTitle": "添加 {{platform}} 消息渠道",
-      "pairTitle": "配对 {{name}}",
+      "pairTitle": "配对 {{platform}} · {{name}}",
       "stepsLabel": "步骤",
       "steps": {
         "platform": "平台",
         "connect": "连接",
         "pair": "配对"
       },
-      "filter": "按名称或功能筛选",
       "platformHint": "一个消息渠道就是一个机器人。它只回应你，每条消息都会成为与你的某个智能体的对话。",
       "next": "下一步",
       "back": "上一步",
@@ -3876,20 +3890,19 @@
       "pairLater": "稍后配对",
       "paired": {
         "title": "已与 {{owner}} 配对",
-        "body": "{{name}} 只回应你，其他人都会被静默忽略。"
+        "body": "{{name}} 只回应你，其他人都会被静默忽略。",
+        "tryIt": "试一下：给 {{bot}} 发一句「hi」，{{agent}} 会回复。",
+        "yourAgent": "你的智能体"
       }
     },
     "platforms": {
-      "count_one": "{{count}} 个平台",
-      "count_other": "{{count}} 个平台",
-      "toConnect": "连接需要：",
       "seatalk": {
         "body": "工作私聊和群聊，通过 SeaTalk 开放平台上的应用接入。",
-        "needs": "App ID + Secret"
+        "needs": "需要 App ID + Secret"
       },
       "telegram": {
         "body": "来自 @BotFather 的机器人。随时随地用手机就能找到它。",
-        "needs": "Bot token"
+        "needs": "需要 Bot token"
       },
       "capabilities": {
         "privateChat": "私聊",
@@ -3903,27 +3916,12 @@
     },
     "firstRun": {
       "title": "在聊天应用里和你的智能体对话",
-      "body": "连接一个机器人，与你的账号配对，你的消息就会送到本机上的智能体。",
-      "choose": "选择平台",
-      "benefits": {
-        "chat": {
-          "title": "随处聊天",
-          "body": "每条消息都会成为「对话」里的一个对话；回复会发回聊天应用。"
-        },
-        "onlyYou": {
-          "title": "只回应你",
-          "body": "一次性配对码绑定你的账号。陌生人得不到任何回复。"
-        },
-        "groups": {
-          "title": "群聊也行",
-          "body": "把机器人拉进群，你 @ 它时它就会在群里回答。"
-        }
-      }
+      "body": "连接一个机器人，与你的账号配对，你的消息就会送到这台 Mac 上的智能体。",
+      "choose": "选择平台"
     },
     "pair": {
       "title": "添加主人",
       "intro": "对方在与机器人的私聊里发送这个配对码即可；陌生人仍得不到任何回复。",
-      "waiting": "等待对方发送配对码…",
       "added": "已添加 {{owner}}"
     },
     "pairing": {
@@ -3933,16 +3931,16 @@
       "copied": "已复制",
       "expiresIn_one": "{{count}} 分钟后过期 · 仅限一次",
       "expiresIn_other": "{{count}} 分钟后过期 · 仅限一次",
-      "expiresSoon": "不到一分钟后过期",
+      "expiresSoon": "不到一分钟后过期 · 仅限一次",
       "expired": "已过期",
-      "expiredBody": "配对码已过期，或被猜错太多次。猜错不会得到回复，所以没人会知道这个机器人存在。",
-      "instruction": "在 {{platform}} 里打开与机器人的私聊，原样发送这个配对码。",
+      "expiredBody": "配对码已过一小时，或被猜错太多次。猜错不会得到回复，所以没人会知道这个机器人存在。",
+      "instruction": "在 {{platform}} 里打开与 {{name}} 的私聊，原样发送这个配对码。",
       "openIn": "在 {{platform}} 中打开",
       "openInHint": "打开聊天并自动填好配对码。",
       "waiting": "等待你的消息…",
       "newCode": "新配对码",
       "newCodeAfterExpiry": "生成新的配对码",
-    "cancel": "取消"
+      "instructionHandle": "用你自己的 {{platform}} 账号把这个配对码发给 @{{handle}}。"
     },
     "removePerson": {
       "title": "从 {{name}} 移除 {{owner}}？",
@@ -3951,27 +3949,33 @@
       "confirm": "移除"
     },
     "runHere": {
-      "title": "在本机运行 {{name}}？",
-      "body": "{{machine}} 仍在运行这个机器人。如果可以，请先在那边停掉它——否则在 {{machine}} 同步之前，两台机器可能会同时应答。"
+      "title": "在这台 Mac 上运行 {{name}}？",
+      "body": "{{machine}} 仍在运行这个机器人。如果可以，请先在那边停掉它——否则在 {{machine}} 同步之前（最长 5 分钟），两台 Mac 可能会同时应答。"
     },
     "delete": {
       "title": "删除 {{name}}？",
-      "body": "机器人将停止回应，其配对会被移除。对话仍保留在「对话」中。{{platform}} 那边的应用不受影响。",
-      "bodyUnpaired": "机器人将停止回应。对话仍保留在「对话」中。{{platform}} 那边的应用不受影响。"
+      "body": "机器人将停止回应，其配对会被移除；对话仍保留在「对话」中。{{platform}} 那边的应用不受影响。",
+      "bodyUnpaired": "机器人将停止回应；对话仍保留在「对话」中。{{platform}} 那边的应用不受影响。"
     },
     "replace": {
       "token": {
         "title": "更换 bot token",
         "body": "粘贴 @BotFather 给出的新 token。配对和设置都会保留；机器人会用新 token 重启。",
-        "label": "新的 bot token"
+        "label": "Bot token"
       },
       "secret": {
         "title": "更换 App Secret",
         "body": "粘贴 SeaTalk 开放平台上的新密钥。配对和设置都会保留；机器人会用新密钥重启。",
-        "label": "新的 App Secret"
+        "label": "App Secret"
       },
       "hint": "存入 Coffer 密钥库；旧值会被覆盖。",
-      "submit": "更换并重启"
+      "submit": "更换并重启",
+      "works": "可用——这是 @{{handle}}",
+      "worksPlain": "可用",
+      "worksSeatalk": "可用——App ID 和 Secret 有效。",
+      "sameBot": "和之前是同一个机器人，所以与 {{owner}} 的配对仍然有效。",
+      "sameBotPlain": "和之前是同一个机器人。",
+      "differentBot": "与之前不是同一个机器人，现有的配对不会保留。"
     },
     "test": {
       "title": "发送测试消息",
@@ -3989,56 +3993,61 @@
       "appId": "App ID",
       "appSecret": "App Secret",
       "errors": {
-        "name": "请输入名称",
-        "nameTooLong": "最多 80 个字符",
-        "botToken": "请输入 bot token",
-        "appId": "请输入 App ID",
-        "appSecret": "请输入 App Secret",
+        "name": "请输入名称。",
+        "nameTooLong": "最多 80 个字符。",
+        "botToken": "请输入 bot token。",
+        "appId": "请输入 App ID。",
+        "appSecret": "请输入 App Secret。",
         "agent": "请先添加一个智能体——渠道必须指明它驱动的智能体。"
       },
-      "telegramHint": "BotFather 给你的机器人 token。",
-      "seatalkHint": "来自 SeaTalk 开放平台应用的 App ID 和 App Secret。",
+      "telegramHint": "BotFather 给你的 token。存入 Coffer 密钥库。",
       "created": "消息渠道 {{name}} 已添加",
       "machineUnknown": "Coffer 暂时读不到本机的机器 id，这个消息渠道就没有可运行的机器。请稍后重试。",
       "agent": "默认智能体",
       "agentHint": "此渠道中的新会话都会在该智能体上开始。",
       "seatalkDelivery": {
-        "title": "在 SeaTalk 开发者后台把事件投递方式设为 WebSocket",
+        "title": "在 SeaTalk 开放平台把事件投递方式设为 WebSocket",
         "body": "请在这里连接之后再设置——后台会检查连接是否已存在。"
-      }
+      },
+      "nameHint": "名称随意；消息渠道靠 ID 区分，之后可以改名。",
+      "botTokenPlaceholder": "粘贴 bot token",
+      "appSecretPlaceholder": "粘贴 App Secret",
+      "telegramFound": "找到 @{{handle}}",
+      "telegramFoundPlain": "Token 可用",
+      "telegramFoundBody": "Token 可用。它将在这台 Mac（{{machine}}）上运行。"
     },
     "edit": {
       "saved": "消息渠道 {{name}} 已更新",
       "groups": {
         "requireMention": "仅在被 @ 时回复",
-        "requireMentionHint": "机器人在群里保持沉默，直到有人 @ 它或回复它。关闭后，它会处理你在群里发的每一条消息——这需要先在 BotFather 里关闭机器人的隐私模式。",
+        "requireMentionHint": "在群里保持沉默，直到有人 @ 它或回复它。关闭后会处理你在群里发的每一条消息，这需要先在 BotFather 里关闭机器人的隐私模式。",
         "ignoreOtherMentions": "忽略同时 @ 了其他人的消息",
-        "ignoreOtherMentionsHint": "群消息只要 @ 了其他人，即使也 @ 了机器人，机器人也不回应。"
+        "ignoreOtherMentionsHint": "即使它们也 @ 了机器人。"
       },
       "burst": {
         "unit": "秒",
         "waitAfterText": "文字消息后等待",
-        "waitAfterTextHint": "这段时间内再发的消息会合成一个回合。设为 0 则每条消息单独回答。",
+        "waitAfterTextHint": "这段时间内的消息合成一个回合。0 表示逐条回答。",
         "waitAfterForward": "转发记录或附件后等待",
-        "waitAfterForwardHint": "转发的聊天记录、不带文字的文件很少是完整的问题，所以多等一会儿。",
+        "waitAfterForwardHint": "它们很少是完整的问题，所以多等一会儿。",
         "invalid": "请输入 {{min}} 到 {{max}} 之间的秒数。"
       },
       "replies": {
         "notifyAfter": "长任务完成提醒",
-        "notifyAfterHint": "运行达到这个时长的回合结束时发一条简短的“完成”消息，群里会 @ 提问人。0 表示关闭。",
+        "notifyAfterHint": "运行达到这个时长的回合结束时发一条简短的“完成”消息。0 表示关闭。",
         "showSteps": "显示步骤行",
-        "showStepsHint": "工作中在状态行下显示最近 3 个步骤。关闭后只保留状态行。"
+        "showStepsHint": "工作中在状态行下显示最近 3 个步骤。"
       },
       "idle": {
         "label": "闲置多久后开新对话",
-        "hint": "聊天安静这么久之后，下一条消息会开一个新对话；旧对话仍保留在“对话”里。0 表示不自动开新对话。",
+        "hint": "安静这么久之后的下一条消息会开一个新对话。0 表示不自动开。",
         "unit": "小时",
         "invalid": "请输入 {{min}} 到 {{max}} 之间的小时数。"
       },
       "directories": {
         "title": "工作目录",
         "default": "默认",
-        "defaultHint": "新对话从这里开始。",
+        "defaultHint": "新对话从哪里开始。",
         "defaultPlaceholder": "Coffer 工作区（~/.coffer/content/workspace）",
         "allowed": "/dir 可用的目录",
         "allowedHint": "/dir 只提供这些目录及其子目录。一个都没有时 /dir 关闭。",
@@ -4052,14 +4061,20 @@
     },
     "machine": {
       "pickerLabel": "运行 {{name}} 的机器",
-      "thisMachine": "本机",
-      "self": "{{name}} · 本机",
+      "thisMachine": "这台 Mac",
+      "self": "{{name}} · 这台 Mac",
       "unbound": "未绑定",
       "unknown": "未知机器（{{id}}）",
       "handover": "重新绑定不需要重启。失去该渠道的机器会在一两秒内停掉适配器；获得它的机器会在下一轮同步把改动带过去之后启动。从你当前所在的这台机器上「绑出去」交接得最干净——反过来，在另一台机器仍然持有该渠道时把它绑到本机，可能会出现两边同时应答，直到那台机器完成下一轮同步。",
       "notReach": "这里决定的是「哪台机器运行适配器」。总览里的「可驱动的智能体」决定的是「这个渠道可以驱动哪些智能体」。",
       "rebound": "{{name}} 现在运行在 {{machine}} 上",
       "helpLabel": "关于运行机器"
+    },
+    "credentials": {
+      "checking": "正在检查…",
+      "rejected": "平台拒绝了这些凭据。",
+      "unreachable": "连不上平台，无法检查。",
+      "timeout": "平台没有及时响应。"
     }
   },
   "scope": {
@@ -4068,19 +4083,22 @@
     "everywhereSub": "包括以后添加的智能体",
     "restrictedSub": "只有下面勾选的",
     "countOf": "{{selected}} / {{total}} 个智能体",
-    "machineLocal": "生效范围只在本机设置——它不参与同步，你用的每台机器都要各自设置。",
     "choicesLabel": "生效范围",
     "setReach": "设置生效范围…",
     "everywhere": "所有智能体",
-    "restricted": "只限选中的",
+    "restricted": "指定的智能体",
+    "filterAgents": "筛选智能体",
     "agentCount_one": "{{count}} 个智能体",
     "agentCount_other": "{{count}} 个智能体",
-    "noneSelected": "未选中智能体",
-    "dormant": "一个智能体都没选——处于休眠状态。它依然保留，但在至少选中一个智能体之前不会到达任何地方。",
+    "noneSelected": "没有智能体",
     "noAgents": "还没有添加任何智能体。",
     "unknownAgent": "本机未添加",
     "inactiveHereAgent": "在此未生效——它的生效范围没有包含本机添加的任何智能体。",
-    "bulkReach": "所选项的生效范围"
+    "bulkReach": "所选项的生效范围",
+    "apply": "应用",
+    "bulkPartial": "成功 {{ok}} 项，失败 {{failed}} 项",
+    "rowFailed": "失败",
+    "saveFailed": "未能保存"
   },
   "sync": {
     "subtitle": "让这份保险库与你自己的 git 远端保持同步。",

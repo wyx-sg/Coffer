@@ -1,6 +1,6 @@
 """``coffer cli add|edit|rm|show`` for tools added by hand and the interface
-read from their help (spec skill-manager "Declare a command-line tool without
-a skill", "Show a command-line tool's full interface")."""
+read from their help (spec skill-manager "Declare the commands a skill
+requires", "Serve required commands on REST, the command line and the web")."""
 
 from __future__ import annotations
 

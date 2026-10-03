@@ -219,8 +219,6 @@ export const upkeepRunsKey = ["upkeep", "runs"] as const;
 // --- chat — conversations, their messages and per-conversation agent config ---
 
 export const conversationsKey = ["conversations"] as const;
-/** Every list of conversations (pages, head and palette reads): one prefix. */
-export const conversationListsKey = ["conversations", "lists"] as const;
 /** Every conversation list's head (what a sent message refreshes without re-reading the pages). */
 export const conversationHeadsKey = ["conversations", "lists", "head"] as const;
 /** The pages a conversation list has read so far, for one view (archived, title search). */

@@ -3,7 +3,7 @@ the conversation came from (spec chat "Mirror a web reply into the channel it
 came from").
 
 Satisfies the chat kind's ``ChannelMirrorPort``. A reply goes to the chat at
-once, prefixed ``(from Coffer)``, and its turn is queued with the same render
+once, prefixed ``{user} · from Coffer``, and its turn is queued with the same render
 sink a channel-driven turn gets, so the answer lands in the chat as usual. When
 the chat cannot be written to right now — the channel is not running, the send
 raised, or earlier messages are still owed (order) — the reply waits in
@@ -23,8 +23,8 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from coffer.application.channel.mirror_target import (
-    FROM_COFFER,
     MirrorTarget,
+    from_coffer,
     resolve_target,
 )
 from coffer.application.channel.ports import ChannelBinding
@@ -119,9 +119,9 @@ class ChannelMirror:
         if target.resource is None or loc is None or loc.chat_kind is None:
             return MirrorResult("kept", None)
         resource = target.resource
-        body = FROM_COFFER + text
         binding = self._processor.binding(resource.uid)
         peer = await self._peers.get_by_chat(resource.uid, loc.chat_id)
+        body = from_coffer(peer.display_name if peer is not None else "", text)
         owed = await self._outbox.pending_for_conversation(conversation_id)
         if binding is not None and peer is not None and not owed:
             try:
